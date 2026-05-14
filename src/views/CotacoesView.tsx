@@ -61,9 +61,28 @@ export const CotacoesView = ({ showToast }: any) => {
       showToast(`Erro ao aprovar cotação: ${err?.message ?? 'verifique o console'}`, 'error', true);
       return;
     }
+    // Cancelar as demais cotações da mesma requisição para evitar pedidos duplicados
+    if (cotacao.requisicao_id) {
+      const concorrentes = data.filter((c: any) =>
+        c.id !== cotacao.id &&
+        c.requisicao_id === cotacao.requisicao_id &&
+        c.status === 'Em Cotação'
+      );
+      for (const c of concorrentes) {
+        try {
+          await dbUpdate('/api/cotacoesview', c.id, { status: 'Cancelado' });
+        } catch { /* melhor esforço — não bloqueia o fluxo */ }
+      }
+      if (concorrentes.length > 0) {
+        setData((prev: any[]) => prev.map(c =>
+          concorrentes.some((cc: any) => cc.id === c.id) ? { ...c, status: 'Cancelado' } : c
+        ));
+      }
+    }
     try {
       const pedido = await dbInsert('/api/pedidosview', {
         cotacao_id: cotacao.id,
+        requisicao_id: cotacao.requisicao_id ?? null,
         fornecedor_id: cotacao.fornecedor_id,
         valor_total: cotacao.valor_total,
         prazo_entrega: cotacao.prazo_entrega || null,

@@ -7,8 +7,8 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
 
-const statusNext = (s: string) =>
-  s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : 'Pendente';
+const statusNext = (s: string): string | null =>
+  s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : null;
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_bruto: '', descontos: '', status: 'Pendente' };
 
@@ -57,6 +57,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
 
   const handleStatusCycle = async (f: any) => {
     const next = statusNext(f.status);
+    if (!next) return; // 'Paga' é estado terminal — sem reversão
     try {
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
       setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? { ...x, status: next } : x));

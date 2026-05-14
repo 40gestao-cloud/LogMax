@@ -35,8 +35,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
         showToast("Requisição atualizada!", 'success', true);
       } else {
-        const today = new Date().toISOString().slice(0, 10);
-        const saved = await dbInsert('/api/requisicoesestoqueview', { ...form, qtd: Number(extras.qtd) || 1, destino: extras.destino, status: 'Pendente', data: today });
+        const saved = await dbInsert('/api/requisicoesestoqueview', { ...form, qtd: Number(extras.qtd) || 1, destino: extras.destino, status: 'Pendente' });
         if (saved) await dbInsert('/api/minhasaprovacoesestoqueview', { requisicao_estoque_id: (saved as any).id, status: 'Pendente' });
         setData([saved ?? { id: Date.now(), ...form, status: 'Pendente' }, ...data]);
         showToast("Requisição criada!", 'success', true);

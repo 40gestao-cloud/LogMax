@@ -96,11 +96,11 @@ export const FuncionariosView = ({ showToast }: any) => {
             </>
           )}
         </div>
-        <div className="flex gap-3 items-center">
-          <div className="relative">
+        <div className="flex gap-3 items-center w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar funcionário..." value={search} onChange={e => setSearch(e.target.value)}
-              className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-52" />
+              className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" />
           </div>
           <NeuButtonAccent variant="yellow" onClick={openNew}><Plus size={14} />Novo Funcionário</NeuButtonAccent>
         </div>

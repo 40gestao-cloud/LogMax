@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { Search, Plus, Save, CheckCircle2, ChevronDown } from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 
@@ -15,6 +15,10 @@ export const RecebimentosView = ({ showToast }: any) => {
   const [form, setForm] = useState({ pedido_id: '' });
   const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', status: 'Pendente', produto_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [confirmProduto, setConfirmProduto] = useState('');
+  const [confirmStatus, setConfirmStatus] = useState('Concluído');
+  const [confirmSaving, setConfirmSaving] = useState(false);
 
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
   const filtered = enriched.filter((r: any) => [r.status, String(r.pedido_id)].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
@@ -32,7 +36,7 @@ export const RecebimentosView = ({ showToast }: any) => {
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
 
-      if (extras.produto_id && extras.status === 'Concluído' && qtd > 0) {
+      if (extras.produto_id && (extras.status === 'Concluído' || extras.status === 'Parcial') && qtd > 0) {
         await dbInsert('/api/movimentacoesestoqueview', {
           produto_id: extras.produto_id,
           tipo: 'Entrada',
@@ -50,6 +54,34 @@ export const RecebimentosView = ({ showToast }: any) => {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleConfirmar = async (item: any) => {
+    if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
+    setConfirmSaving(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
+      setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
+      if (confirmStatus === 'Concluído' || confirmStatus === 'Parcial') {
+        await dbInsert('/api/movimentacoesestoqueview', {
+          produto_id: confirmProduto,
+          tipo: 'Entrada',
+          qtd: Number(item.qtd_recebida) || 0,
+          origem: `Pedido #${String(item.pedido_id ?? '').slice(0, 8).toUpperCase()}`,
+          destino: 'Almoxarifado',
+          data: today,
+        });
+      }
+      setConfirmando(null);
+      setConfirmProduto('');
+      setConfirmStatus('Concluído');
+      showToast('Recebimento confirmado e estoque atualizado!', 'success', true);
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setConfirmSaving(false);
     }
   };
 
@@ -92,18 +124,58 @@ export const RecebimentosView = ({ showToast }: any) => {
       <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4">Pedido</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Observação</th><th className="pb-4 font-bold px-4 text-center">Status</th></tr></thead>
+            <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4">Pedido</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Observação</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={5}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={5}><EmptyState /></td></tr>) : (
+              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>) : (
                 <AnimatePresence>
                   {filtered.map((item: any) => (
-                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-300">#{String(item.pedido_id ?? '').slice(0, 8)}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_recebida ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
-                      <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
-                    </motion.tr>
+                    <React.Fragment key={item.id}>
+                      <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-300">#{String(item.pedido_id ?? '').slice(0, 8)}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_recebida ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
+                        <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
+                        <td className="py-3 px-4 text-right">
+                          {item.status === 'Pendente' && (
+                            <button
+                              onClick={() => { setConfirmando(confirmando === item.id ? null : item.id); setConfirmProduto(''); setConfirmStatus('Concluído'); }}
+                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1 ml-auto opacity-0 group-hover:opacity-100"
+                            >
+                              <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
+                            </button>
+                          )}
+                        </td>
+                      </motion.tr>
+                      <AnimatePresence>
+                        {confirmando === item.id && (
+                          <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <td colSpan={6} className="pb-3 px-4">
+                              <div className="flex flex-wrap items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
+                                <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
+                                  <select className="neu-input py-2 px-3 rounded-xl text-xs" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
+                                    <option value="">Selecione o produto...</option>
+                                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
+                                  </select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
+                                  <select className="neu-input py-2 px-3 rounded-xl text-xs" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
+                                    {['Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                </div>
+                                <button onClick={() => handleConfirmar(item)} disabled={confirmSaving}
+                                  className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+                                  {confirmSaving ? 'Salvando...' : <><Save size={12} /> Confirmar e atualizar estoque</>}
+                                </button>
+                                <button onClick={() => setConfirmando(null)} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500">Cancelar</button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        )}
+                      </AnimatePresence>
+                    </React.Fragment>
                   ))}
                 </AnimatePresence>
               )}

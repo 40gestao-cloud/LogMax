@@ -59,4 +59,6 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/pontoeletronicoview':          'ponto_eletronico',
   '/api/beneficiosview':               'beneficios',
   '/api/treinamentosview':             'treinamentos',
+  '/api/vendasview':                   'vendas',
+  '/api/itensvendaview':               'itens_venda',
 };

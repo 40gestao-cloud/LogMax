@@ -144,16 +144,16 @@ export const DashboardAnalyticsView = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 h-full">
-      <div className="flex justify-between items-center shrink-0">
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Dashboard</h2>
           <p className="text-sm text-gray-400 mt-1">Visão geral da sua operação.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
             value={period}
             onChange={e => setPeriod(e.target.value as Period)}
-            className="neu-input py-2 px-4 rounded-xl text-xs text-gray-300"
+            className="neu-input py-2 px-3 rounded-xl text-xs text-gray-300"
           >
             <option value="7d">Últimos 7 dias</option>
             <option value="30d">Últimos 30 dias</option>
@@ -181,7 +181,7 @@ export const DashboardAnalyticsView = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[400px]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[280px] md:min-h-[400px]">
         <div className="lg:col-span-2 neu-flat p-6 rounded-3xl border border-white/5 flex flex-col">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide mb-6">Receitas vs Despesas</h3>
           <div className="flex-1 w-full">

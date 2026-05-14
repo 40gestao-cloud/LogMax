@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Check } from 'lucide-react';
-import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { EmptyState, StatusBadge } from '../components/ui';
+import { useWhatsApp } from '../hooks/useWhatsApp';
 
 export const AprovacoesEstoqueView = ({ showToast }: any) => {
   const { data: aprovacoes, setData: setAprovacoes } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' });
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { notify: wppNotify } = useWhatsApp();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
 
@@ -17,11 +19,31 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
   });
 
   const handleAprovar = async (ap: any) => {
+    if (ap.req?.produto_id && ap.req?.qtd) {
+      const saldoAtual = Number(ap.prod?.estoque ?? 0);
+      const qtdSolicitada = Number(ap.req.qtd);
+      if (saldoAtual < qtdSolicitada) {
+        showToast(`Saldo insuficiente: estoque atual é ${saldoAtual} un. (solicitado: ${qtdSolicitada}).`, 'error', true);
+        return;
+      }
+    }
     try {
       await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Aprovado', observacao: obs[ap.id] ?? '' });
       await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovada' });
+      if (ap.req?.produto_id && ap.req?.qtd) {
+        const today = new Date().toISOString().slice(0, 10);
+        await dbInsert('/api/movimentacoesestoqueview', {
+          produto_id: ap.req.produto_id,
+          tipo: 'Saída',
+          qtd: Number(ap.req.qtd),
+          origem: 'Requisição de Estoque',
+          destino: ap.req.destino || 'Solicitado',
+          data: today,
+        });
+      }
       setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
-      showToast("Requisição aprovada!", 'success', true);
+      showToast("Requisição aprovada e estoque atualizado!", 'success', true);
+      wppNotify(`📤 *LogMax — Requisição de Estoque aprovada*\n📦 Produto: ${ap.prod?.nome ?? '—'}\n🔢 Qtd: ${ap.req?.qtd ?? '—'}\n🏭 Destino: ${ap.req?.destino ?? '—'}`);
     } catch { showToast("Erro ao aprovar.", 'error', true); }
   };
 

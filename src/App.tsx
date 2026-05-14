@@ -1,6 +1,7 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
+import { useFetchData } from './hooks/useSupabaseData';
 import { LoginScreen } from './components/LoginScreen';
 import { Toast, LoadingSpinner, PlaceholderView } from './components/ui';
 import { motion, AnimatePresence } from 'motion/react';
@@ -93,7 +94,7 @@ const menuModules = [
   }
 ];
 
-const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile }: any) => (
+const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
   <>
     <div className="flex items-center gap-3 px-1 mb-2">
       <div className="w-9 h-9 neu-circle flex items-center justify-center text-accent">
@@ -152,9 +153,14 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
                           const isActive = activeView === viewId;
                           return (
                             <button key={sub} onClick={() => { setActiveView(viewId); onClose?.(); }}
-                              className={`text-left text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
+                              className={`flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
                               style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
-                              {sub}
+                              <span>{sub}</span>
+                              {(badges?.[viewId] ?? 0) > 0 && (
+                                <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
+                                  {badges[viewId] > 9 ? '9+' : badges[viewId]}
+                                </span>
+                              )}
                             </button>
                           );
                         })}
@@ -189,9 +195,23 @@ function ThemeToggle() {
   );
 }
 
+function ApprovalBadges({ onBadges }: { onBadges: (b: Record<string, number>) => void }) {
+  const { data: pendCompras } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' }, true);
+  const { data: pendEstoque } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' }, true);
+  useEffect(() => {
+    onBadges({
+      'compras-minhasaprovações': pendCompras.length,
+      'estoque-minhasaprovações': pendEstoque.length,
+    });
+  }, [pendCompras.length, pendEstoque.length, onBadges]);
+  return null;
+}
+
 function LogMaxAppInner() {
   const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
   const { profile, isLoading: profileLoading } = useUserProfile();
+  const [badges, setBadges] = useState<Record<string, number>>({});
+  const handleBadges = useCallback((b: Record<string, number>) => setBadges(b), []);
   const [activeView, setActiveView] = useState('inicio');
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
@@ -338,6 +358,7 @@ function LogMaxAppInner() {
 
   return (
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)' }}>
+      <ApprovalBadges onBadges={handleBadges} />
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
       {/* MOBILE SIDEBAR OVERLAY */}
@@ -354,7 +375,7 @@ function LogMaxAppInner() {
                 activeView={activeView} setActiveView={setActiveView}
                 openModules={openModules} toggleModule={toggleModule}
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
-                visibleModules={visibleModules} profile={profile}
+                visibleModules={visibleModules} profile={profile} badges={badges}
               />
             </motion.aside>
           </>
@@ -367,33 +388,33 @@ function LogMaxAppInner() {
           activeView={activeView} setActiveView={setActiveView}
           openModules={openModules} toggleModule={toggleModule}
           handleSignOut={handleSignOut}
-          visibleModules={visibleModules} profile={profile}
+          visibleModules={visibleModules} profile={profile} badges={badges}
         />
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-base p-8">
-        <header className="flex justify-between items-center shrink-0 mb-8 border-b border-white/5 pb-4">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-base p-4 sm:p-8">
+        <header className="flex justify-between items-center shrink-0 mb-4 sm:mb-8 border-b border-white/5 pb-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
               <Menu size={18} />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-gray-200 tracking-wide">Plataforma LogMax</h2>
-              <p className="text-[11px] text-gray-500 uppercase tracking-widest mt-1">Ambiente seguro</p>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide">Plataforma LogMax</h2>
+              <p className="hidden sm:block text-[11px] text-gray-500 uppercase tracking-widest mt-1">Ambiente seguro</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
 
-            <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-4 border border-white/5">
-              <div className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20"
+            <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-3 border border-white/5">
+              <div className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20 shrink-0"
                 style={{ background: 'var(--color-avatar-bg)' }}>
                 <User size={16} className="text-accent" />
               </div>
-              <div className="flex flex-col pr-2">
+              <div className="hidden sm:flex flex-col pr-2">
                 <span className="text-sm font-bold text-gray-200 capitalize">{displayName}</span>
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
                   <span className="text-gray-600">{userEmail}</span>
@@ -401,6 +422,7 @@ function LogMaxAppInner() {
                   <button onClick={handleSignOut} className="hover:text-red-400 transition-colors cursor-pointer">Sair</button>
                 </div>
               </div>
+              <button onClick={handleSignOut} className="sm:hidden text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors">Sair</button>
             </div>
           </div>
         </header>

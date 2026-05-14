@@ -48,7 +48,7 @@ export const Toast = ({ message, visible, type = 'info' }: any) => (
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.9 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="fixed bottom-8 right-8 z-50 neu-flat rounded-2xl px-6 py-4 flex items-center gap-3 border border-white/5"
+        className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-50 neu-flat rounded-2xl px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 border border-white/5 max-w-[calc(100vw-2rem)]"
       >
         {type === 'error'
           ? <AlertCircle size={18} className="text-red-400" />

@@ -26,10 +26,28 @@ export const ExpedicaoView = ({ showToast }: any) => {
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: Number(extras.qtd_expedida) || 0, data_expedicao: extras.data_expedicao || today, status: extras.status };
+      const qtd = Number(extras.qtd_expedida) || 0;
+      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: extras.status };
       const s = await dbInsert('/api/expedicao', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-      showToast("Expedição registrada!", 'success', true); closeForm();
+      // Baixa de estoque: só ocorre quando o status é 'Expedido' e há quantidade
+      if (extras.status === 'Expedido' && qtd > 0) {
+        const prod = produtos.find((p: any) => p.id === form.produto_id);
+        await dbInsert('/api/movimentacoesestoqueview', {
+          produto_id: form.produto_id,
+          tipo: 'Saída',
+          qtd,
+          origem: 'Expedição',
+          destino: extras.requisicao_id
+            ? requisicoes.find((r: any) => r.id === extras.requisicao_id)?.destino || 'Expedido'
+            : 'Expedido',
+          data: today,
+        });
+        showToast("Expedição registrada e estoque baixado!", 'success', true);
+      } else {
+        showToast("Expedição registrada!", 'success', true);
+      }
+      closeForm();
     } catch { showToast("Erro.", 'error', true); } finally { setIsSaving(false); }
   };
 

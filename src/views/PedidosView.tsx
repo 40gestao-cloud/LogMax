@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
+import { useWhatsApp } from '../hooks/useWhatsApp';
 
 export const PedidosView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/pedidosview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
   const { data: cotacoes } = useFetchData<any>('/api/cotacoesview');
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
+  const { notify: wppNotify } = useWhatsApp();
   const [processing, setProcessing] = useState<string | null>(null);
 
   const enriched = data.map((p: any) => {
@@ -43,6 +45,7 @@ export const PedidosView = ({ showToast }: any) => {
           pedido_id: pedido.id,
         });
         showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
+        wppNotify(`📦 *LogMax — Pedido aprovado*\n🛒 Item: ${pedido.req?.item ?? `#${pedido.id.slice(-6).toUpperCase()}`}\n🏢 Fornecedor: ${pedido.forn?.nome ?? '—'}\n💰 Valor: R$ ${Number(pedido.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
       } else if (pedido.status === 'Em Entrega') {
         const today = new Date().toISOString().slice(0, 10);
         await dbInsert('/api/recebimentosview', {
@@ -53,6 +56,7 @@ export const PedidosView = ({ showToast }: any) => {
           observacao: 'Gerado automaticamente. Selecione o produto em Recebimentos para atualizar o estoque.',
         });
         showToast('Pedido recebido! Acesse Recebimentos para confirmar o produto e dar entrada no estoque.', 'success', true);
+        wppNotify(`🚚 *LogMax — Pedido recebido*\n📦 Item: ${pedido.req?.item ?? `#${pedido.id.slice(-6).toUpperCase()}`}\n🏢 Fornecedor: ${pedido.forn?.nome ?? '—'}\n⚠️ Acesse Recebimentos para confirmar o produto no estoque.`);
       } else {
         showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
       }
