@@ -310,17 +310,30 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         </form>
 
         {/* Footer note */}
-        <p
-          style={{
-            textAlign: 'center',
-            fontSize: '0.65rem',
-            color: '#374151',
-            marginTop: '1.75rem',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Acesso restrito · LogMax © {new Date().getFullYear()}
-        </p>
+        <div style={{ marginTop: '1.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: '0.65rem',
+              color: '#374151',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Acesso restrito · LogMax © {new Date().getFullYear()}
+          </p>
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: '0.6rem',
+              color: '#1f2937',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}
+          >
+            Desenvolvido por Igor Souza
+          </p>
+        </div>
       </motion.div>
     </div>
   );
