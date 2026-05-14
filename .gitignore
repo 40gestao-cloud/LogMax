@@ -1,0 +1,17 @@
+# Vercel
+.vercel
+
+# Dependências
+node_modules
+
+# Build
+dist
+
+# Ambiente (não commitar credenciais)
+.env
+.env.local
+.env.production
+
+# Sistema
+.DS_Store
+Thumbs.db

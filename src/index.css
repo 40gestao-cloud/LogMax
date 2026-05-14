@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0A0A0A;
+  --color-bg-dark: #000000;
+  --color-bg-light: rgba(255, 255, 255, 0.05);
+  --color-accent: #10B981;
+  --color-accent-hover: #059669;
+  --animate-spin-slow: spin 6s linear infinite;
+}
+
+@layer utilities {
+  .bg-base {
+    background-color: var(--color-bg-base);
+  }
+  
+  .text-accent {
+    color: var(--color-accent);
+  }
+  
+  .neu-flat {
+    background: var(--color-bg-base);
+    box-shadow: 6px 6px 14px var(--color-bg-dark), 
+               -4px -4px 10px var(--color-bg-light);
+  }
+  
+  .neu-pressed {
+    background: var(--color-bg-base);
+    box-shadow: inset 4px 4px 10px var(--color-bg-dark), 
+                inset -2px -2px 6px var(--color-bg-light);
+  }
+  
+  .neu-button {
+    background: var(--color-bg-base);
+    box-shadow: 4px 4px 10px var(--color-bg-dark), 
+               -2px -2px 8px var(--color-bg-light);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .neu-button:active {
+    box-shadow: inset 4px 4px 8px var(--color-bg-dark), 
+                inset -2px -2px 6px var(--color-bg-light);
+  }
+
+  .neu-button-active {
+    background: var(--color-bg-base);
+    box-shadow: inset 3px 3px 6px var(--color-bg-dark), 
+                inset -2px -2px 5px var(--color-bg-light);
+  }
+  
+  .neu-button-accent {
+    background: var(--color-accent);
+    box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.8), 
+               -2px -2px 6px rgba(255, 255, 255, 0.04);
+    color: #0A0A0A;
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .neu-button-accent:hover {
+    background: var(--color-accent-hover);
+  }
+  
+  .neu-button-accent:active {
+    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.4), 
+                inset -2px -2px 6px rgba(255, 255, 255, 0.2);
+  }
+
+  .neu-input {
+    background: var(--color-bg-base);
+    box-shadow: inset 4px 4px 10px var(--color-bg-dark), 
+                inset -2px -2px 6px var(--color-bg-light);
+    color: #e0e0e0;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .neu-input:focus {
+    outline: none;
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow: inset 4px 4px 10px var(--color-bg-dark), 
+                inset -2px -2px 6px var(--color-bg-light),
+                0 0 8px rgba(16, 185, 129, 0.2);
+  }
+
+  .neu-circle {
+    border-radius: 50%;
+    background: var(--color-bg-base);
+    box-shadow: 4px 4px 10px var(--color-bg-dark), 
+               -2px -2px 8px var(--color-bg-light);
+  }
+
+  .neu-progress-bar {
+    background: #111111;
+    box-shadow: inset 2px 2px 5px var(--color-bg-dark);
+    overflow: hidden;
+  }
+
+  .neu-progress-fill {
+    background: var(--color-accent);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  }
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: #e0e0e0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #1a1a1a;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #333333;
+}
+
+.main-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.main-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #1f1f1f;
+  border-radius: 8px;
+}
+.main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #333333;
+}
