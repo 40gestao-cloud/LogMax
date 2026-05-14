@@ -5,8 +5,8 @@ import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
 
 export const AprovacoesComprasView = ({ showToast }: any) => {
-  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' });
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview');
+  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' }, true);
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', undefined, true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});

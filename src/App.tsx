@@ -223,7 +223,7 @@ export default function LogMaxApp() {
   const renderContent = () => {
     const st = showToast;
     switch (activeView) {
-      case 'inicio':                          return <InicioView onNavigate={setActiveView} showToast={st} />;
+      case 'inicio':                          return <InicioView onNavigate={setActiveView} showToast={st} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'empresa-colaboradores':           return <ColaboradoresView showToast={st} />;

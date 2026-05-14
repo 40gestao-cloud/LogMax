@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, ArrowRight, Boxes } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users } from 'lucide-react';
+import type { UserProfile } from '../hooks/useUserProfile';
 import {
   Bar,
   Line,
@@ -15,7 +16,7 @@ import {
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 
-export const InicioView = ({ onNavigate, showToast }: { onNavigate?: (view: string) => void; showToast?: (msg: string, type?: string) => void }) => {
+export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (view: string) => void; showToast?: (msg: string, type?: string) => void; profile?: UserProfile }) => {
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
   const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview');
   const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
@@ -27,6 +28,41 @@ export const InicioView = ({ onNavigate, showToast }: { onNavigate?: (view: stri
     .reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0)
     .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const notasCount = notasRecebidas.length;
+  const SHORTCUTS_BY_MODULE: Record<string, { label: string; desc: string; icon: any; view: string }[]> = {
+    empresa:    [
+      { label: 'Produtos',         desc: 'Catálogo de produtos',      icon: Package,       view: 'empresa-produtos'          },
+      { label: 'Filiais',          desc: 'Unidades e escritórios',    icon: Boxes,         view: 'empresa-filiais'           },
+    ],
+    compras:    [
+      { label: 'Requisições',      desc: 'Solicitações de compra',    icon: ClipboardList, view: 'compras-requisições'       },
+      { label: 'Pedidos',          desc: 'Pedidos em andamento',      icon: ShoppingCart,  view: 'compras-pedidos'           },
+    ],
+    estoque:    [
+      { label: 'Saldos',           desc: 'Estoque atual por produto', icon: Package,       view: 'estoque-saldos'            },
+      { label: 'Movimentações',    desc: 'Entradas e saídas',         icon: ArrowRight,    view: 'estoque-movimentações'     },
+    ],
+    financeiro: [
+      { label: 'Contas a Receber', desc: 'Títulos a receber',         icon: TrendingUp,    view: 'financeiro-contasareceber' },
+      { label: 'Contas a Pagar',   desc: 'Títulos a pagar',           icon: CreditCard,    view: 'financeiro-contasapagar'  },
+    ],
+    rh:         [
+      { label: 'Funcionários',     desc: 'Cadastro de funcionários',  icon: Users,         view: 'rh-funcionários'           },
+      { label: 'Ponto Eletrônico', desc: 'Registro de ponto',         icon: ClipboardList, view: 'rh-pontoeletrônico'        },
+    ],
+  };
+
+  const SETOR_MODS: Record<string, string[]> = {
+    all:        ['compras', 'estoque', 'financeiro', 'rh', 'empresa'],
+    logistica:  ['estoque', 'compras'],
+    vendas:     ['empresa'],
+    financeiro: ['financeiro'],
+    rh:         ['rh'],
+  };
+
+  const shortcuts = (SETOR_MODS[profile?.setor ?? 'all'] ?? [])
+    .flatMap(mod => SHORTCUTS_BY_MODULE[mod] ?? [])
+    .slice(0, 6);
+
   const chartData = (() => {
     const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const now = new Date();
@@ -43,32 +79,21 @@ export const InicioView = ({ onNavigate, showToast }: { onNavigate?: (view: stri
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 h-full">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
-        <div className="lg:col-span-5 neu-flat rounded-3xl p-8 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-200">Primeiros Passos</h3>
-          </div>
-          <div className="mb-6">
-            <div className="flex justify-between text-xs font-semibold mb-3">
-              <span className="text-accent tracking-wide">8/6 tarefas completadas</span>
-              <span className="text-gray-400">100%</span>
-            </div>
-            <div className="h-2 w-full rounded-full neu-progress-bar">
-              <div className="h-full rounded-full neu-progress-fill w-full"></div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            {["Conheça a plataforma", "Adicione membros", "Adicione filiais", "Conheça a operação"].map((text, i) => (
-              <div key={i} className="neu-pressed rounded-2xl p-4 flex items-center justify-between group cursor-pointer border border-transparent hover:border-white/5 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 neu-circle flex items-center justify-center bg-accent shrink-0">
-                    <CheckCircle2 size={12} className="text-[#0A0A0A]" />
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">{text}</span>
+        <div className="lg:col-span-5 neu-flat rounded-3xl p-8 flex flex-col gap-5">
+          <h3 className="text-lg font-bold text-gray-200 shrink-0">Acesso Rápido</h3>
+          <div className="grid grid-cols-2 gap-3 flex-1">
+            {shortcuts.map(({ label, desc, icon: Icon, view }) => (
+              <button
+                key={view}
+                onClick={() => onNavigate?.(view)}
+                className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left hover:border-accent/20 border border-transparent transition-all group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent/20 transition-colors">
+                  <Icon size={16} />
                 </div>
-                <div className="w-7 h-3.5 rounded-full bg-[#111] relative flex items-center px-0.5 shrink-0 shadow-inner">
-                  <div className="w-2.5 h-2.5 rounded-full bg-accent absolute right-0.5 shadow-[0_0_5px_var(--color-accent)]"></div>
-                </div>
-              </div>
+                <span className="text-xs font-bold text-gray-200 group-hover:text-white transition-colors leading-tight">{label}</span>
+                <span className="text-[10px] text-gray-600 leading-tight">{desc}</span>
+              </button>
             ))}
           </div>
         </div>

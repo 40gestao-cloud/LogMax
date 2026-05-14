@@ -8,28 +8,49 @@ import { useFormValidation } from '../lib/viewUtils';
 export const RecebimentosView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/recebimentosview');
   const { data: pedidos } = useFetchData<any>('/api/pedidosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ pedido_id: '' });
-  const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', status: 'Pendente' });
+  const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', status: 'Pendente', produto_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
   const filtered = enriched.filter((r: any) => [r.status, String(r.pedido_id)].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
-  const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '', status: 'Pendente' }); setErrors({}); };
+  const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '', status: 'Pendente', produto_id: '' }); setErrors({}); };
 
   const handleSave = async () => {
     if (!validate()) return;
-    setIsSaving(true); showToast("Salvando...", 'info', false);
+    setIsSaving(true);
+    showToast("Salvando...", 'info', false);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const payload = { ...form, qtd_recebida: Number(extras.qtd_recebida) || 0, observacao: extras.observacao, status: extras.status, data: today };
+      const qtd = Number(extras.qtd_recebida) || 0;
+      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: extras.status, data: today };
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-      showToast("Recebimento registrado!", 'success', true); closeForm();
-    } catch { showToast("Erro ao salvar.", 'error', true); } finally { setIsSaving(false); }
+
+      if (extras.produto_id && extras.status === 'Concluído' && qtd > 0) {
+        await dbInsert('/api/movimentacoesestoqueview', {
+          produto_id: extras.produto_id,
+          tipo: 'Entrada',
+          qtd,
+          origem: `Pedido #${form.pedido_id.slice(0, 8).toUpperCase()}`,
+          destino: 'Almoxarifado',
+          data: today,
+        });
+        showToast("Recebimento registrado e estoque atualizado!", 'success', true);
+      } else {
+        showToast("Recebimento registrado!", 'success', true);
+      }
+      closeForm();
+    } catch (err: any) {
+      showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -49,6 +70,12 @@ export const RecebimentosView = ({ showToast }: any) => {
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(0, 8)} — {p.status}</option>)}</select></FormField>
+                <FormField label="Produto recebido">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.produto_id} onChange={e => setExtras(x => ({ ...x, produto_id: e.target.value }))}>
+                    <option value="">Selecionar para atualizar estoque...</option>
+                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo atual: {p.estoque ?? 0})</option>)}
+                  </select>
+                </FormField>
                 <FormField label="Qtd Recebida"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Pendente', 'Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
                 <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>

@@ -4,6 +4,7 @@ import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const SETOR_LABEL: Record<string, string> = {
@@ -36,6 +37,7 @@ const EMPTY_FORM = { nome: '', email: '', password: '', role: 'colaborador', set
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
+  const { data: funcionarios } = useFetchData<any>('/api/funcionariosview');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -58,6 +60,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // KPIs
   const totalGerentes     = users.filter(u => u.role === 'gerente').length;
   const totalColaboradores = users.filter(u => u.role === 'colaborador').length;
+
+  const handleLinkFuncionario = async (userId: string, funcionarioId: string) => {
+    if (!supabase) return;
+    try {
+      await supabase.from('user_profiles').update({ funcionario_id: funcionarioId || null }).eq('id', userId);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, funcionario_id: funcionarioId || null } : u));
+      showToast(funcionarioId ? 'Funcionário vinculado!' : 'Vínculo removido.', 'success');
+    } catch {
+      showToast('Erro ao vincular funcionário.', 'error');
+    }
+  };
 
   const handleDelete = async (userId: string) => {
     if (!session?.access_token) { showToast('Sessão expirada.', 'error'); return; }
@@ -222,6 +235,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4">E-mail</th>
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
+                  <th className="pb-4 font-bold px-4">Funcionário (Ponto QR)</th>
                   <th className="pb-4 font-bold px-4 text-center">Criado em</th>
                   <th className="pb-4 px-4"></th>
                 </tr>
@@ -242,6 +256,18 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${roleCls(u.role)}`}>
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <select
+                          value={u.funcionario_id ?? ''}
+                          onChange={e => handleLinkFuncionario(u.id, e.target.value)}
+                          className="neu-input rounded-lg px-2 py-1.5 text-xs w-full max-w-[160px]"
+                        >
+                          <option value="">Sem vínculo</option>
+                          {funcionarios.map((f: any) => (
+                            <option key={f.id} value={f.id}>{f.nome}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}

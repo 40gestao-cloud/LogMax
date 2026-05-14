@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, ENDPOINT_TABLE_MAP, isSupabaseConfigured } from '../lib/supabase';
 
-export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<string, any>) {
+export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<string, any>, realtime?: boolean) {
   const table = ENDPOINT_TABLE_MAP[endpoint];
   const [data, setData]         = useState<T[]>([]);
   const [isLoading, setLoading] = useState(true);
@@ -41,7 +41,15 @@ export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<str
     setLoading(false);
   }, [table, JSON.stringify(extraFilter)]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (!realtime || !supabase || !table) return;
+    const channel = supabase
+      .channel(`rt-${table}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [load, realtime]);
 
   return { data, setData, isLoading, error, reload: load };
 }

@@ -43,6 +43,16 @@ export const PedidosView = ({ showToast }: any) => {
           pedido_id: pedido.id,
         });
         showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
+      } else if (pedido.status === 'Em Entrega') {
+        const today = new Date().toISOString().slice(0, 10);
+        await dbInsert('/api/recebimentosview', {
+          pedido_id: pedido.id,
+          data: today,
+          qtd_recebida: pedido.req?.qtd ?? 0,
+          status: 'Pendente',
+          observacao: 'Gerado automaticamente. Selecione o produto em Recebimentos para atualizar o estoque.',
+        });
+        showToast('Pedido recebido! Acesse Recebimentos para confirmar o produto e dar entrada no estoque.', 'success', true);
       } else {
         showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
       }

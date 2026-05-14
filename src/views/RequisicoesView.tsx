@@ -6,7 +6,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Ur
 import { useFormValidation } from '../lib/viewUtils';
 
 export const RequisicoesView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesview');
+  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesview', undefined, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);

@@ -9,7 +9,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
     colorClass = "bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]";
   } else if (["Em Cotação","Em Faturamento","Emitida","Em Andamento","Aberto","Pendente"].includes(status)) {
     colorClass = "bg-accent/10 text-accent";
-  } else if (["Cancelado","Negado","Divergente","Atrasado"].includes(status)) {
+  } else if (["Cancelado","Negado","Negada","Divergente","Atrasado"].includes(status)) {
     colorClass = "bg-red-900/30 text-red-500";
   }
   return (
