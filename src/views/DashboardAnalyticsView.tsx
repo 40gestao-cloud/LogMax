@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert } from 'lucide-react';
+import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet } from 'lucide-react';
 import {
   Bar,
   Line,
@@ -12,7 +12,8 @@ import {
   Legend,
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
+import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type Period = '7d' | '30d' | 'year';
 
@@ -114,6 +115,33 @@ export const DashboardAnalyticsView = () => {
     })),
   ].slice(0, 5);
 
+  const periodLabel = period === '7d' ? '7dias' : period === '30d' ? '30dias' : 'ano';
+
+  const buildExportData = () => {
+    const cols = ['Indicador / Período', 'Valor / Receita (R$)', 'Despesas (R$)', 'Saldo (R$)'];
+    const rows: any[][] = [
+      ['— RESUMO —',       '',                              '',  ''],
+      ['Receita Total',    receitaTotal,                    '',  ''],
+      ['Despesas',         despesasTotal,                   '',  ''],
+      ['Ordens de Compra', ordensCount,                     '',  ''],
+      ['Estoque Crítico',  `${estoqueCritico} produtos`,    '',  ''],
+      ['',                 '',                              '',  ''],
+      ['— GRÁFICO —',      'Receita (R$)', 'Despesas (R$)', 'Saldo (R$)'],
+      ...bars.map(b => [b.name, b.receita, b.despesa, b.saldo]),
+    ];
+    return { cols, rows };
+  };
+
+  const handleExportPDF = () => {
+    const { cols, rows } = buildExportData();
+    exportToPDF(`Dashboard LogMax — ${periodLabel}`, cols, rows, `logmax-dashboard-${periodLabel}`);
+  };
+
+  const handleExportExcel = () => {
+    const { cols, rows } = buildExportData();
+    exportToExcel('Dashboard', cols, rows, `logmax-dashboard-${periodLabel}`);
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 h-full">
       <div className="flex justify-between items-center shrink-0">
@@ -131,7 +159,8 @@ export const DashboardAnalyticsView = () => {
             <option value="30d">Últimos 30 dias</option>
             <option value="year">Este ano</option>
           </select>
-          <button className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors">Exportar Relatório</button>
+          <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />
+          <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 shrink-0">
