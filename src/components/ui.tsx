@@ -4,22 +4,30 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Package } from 'lucide-react';
 
 export const StatusBadge = ({ status }: { status: string }) => {
-  let colorClass = "bg-[#111] text-gray-400";
-  if (["Aprovado","Vinculada","Entregue","Autorizado","Despachado","Recebido","Pago"].includes(status)) {
-    colorClass = "bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]";
-  } else if (["Em Cotação","Em Faturamento","Emitida","Em Andamento","Aberto","Pendente"].includes(status)) {
-    colorClass = "bg-accent/10 text-accent";
-  } else if (["Cancelado","Negado","Negada","Divergente","Atrasado"].includes(status)) {
-    colorClass = "bg-red-900/30 text-red-500";
+  let colorClass = 'text-gray-400';
+  let style: React.CSSProperties = { background: 'var(--color-badge-neutral-bg)' };
+
+  if (['Aprovado','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
+    colorClass = 'bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]';
+    style = {};
+  } else if (['Em Cotação','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
+    colorClass = 'bg-accent/10 text-accent';
+    style = {};
+  } else if (['Cancelado','Negado','Negada','Divergente','Atrasado'].includes(status)) {
+    colorClass = 'bg-red-900/30 text-red-500';
+    style = {};
   }
+
   return (
-    <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest ${colorClass}`}>
+    <span
+      className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest ${colorClass}`}
+      style={style}
+    >
       {status}
     </span>
   );
 };
 
-// ✅ NeuButtonAccent com suporte a disabled e spinner
 export const NeuButtonAccent = ({ children, onClick, isLoading, type = 'button', disabled = false, variant }: any) => (
   <button
     type={type}
@@ -39,7 +47,7 @@ export const Toast = ({ message, visible, type = 'info' }: any) => (
         initial={{ opacity: 0, y: 50, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.9 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         className="fixed bottom-8 right-8 z-50 neu-flat rounded-2xl px-6 py-4 flex items-center gap-3 border border-white/5"
       >
         {type === 'error'
@@ -48,7 +56,7 @@ export const Toast = ({ message, visible, type = 'info' }: any) => (
           ? <CheckCircle size={18} className="text-accent" />
           : <div className="w-3 h-3 rounded-full bg-accent animate-pulse shadow-[0_0_8px_var(--color-accent)]" />
         }
-        <span className="text-sm font-semibold text-white tracking-wide">{message}</span>
+        <span className="text-sm font-semibold text-gray-200 tracking-wide">{message}</span>
       </motion.div>
     )}
   </AnimatePresence>
@@ -61,14 +69,19 @@ export const LoadingSpinner = () => (
   </div>
 );
 
-export const EmptyState = ({ message = "Nenhum registro encontrado" }: { message?: string }) => (
-  <div className="flex flex-col items-center justify-center p-12 w-full text-center border-dashed border-2 border-white/5 rounded-2xl bg-white/[0.02]">
+export const EmptyState = ({ message = 'Nenhum registro encontrado' }: { message?: string }) => (
+  <div
+    className="flex flex-col items-center justify-center p-12 w-full text-center rounded-2xl border-dashed border-2"
+    style={{
+      borderColor: 'var(--color-border-md)',
+      background: 'var(--color-surface)',
+    }}
+  >
     <Search size={32} className="text-gray-600 mb-4" />
     <span className="text-sm font-semibold text-gray-400">{message}</span>
   </div>
 );
 
-// ✅ Componente de campo de formulário com validação inline
 export const FormField = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
   <div className="flex flex-col gap-1.5">
     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
@@ -81,7 +94,6 @@ export const FormField = ({ label, error, children }: { label: string; error?: s
   </div>
 );
 
-// Botão compacto para exportação
 export const ExportButton = ({ label, onClick, icon: Icon }: { label: string; onClick: () => void; icon: any }) => (
   <button
     onClick={onClick}
@@ -92,21 +104,25 @@ export const ExportButton = ({ label, onClick, icon: Icon }: { label: string; on
   </button>
 );
 
-// --- Badge de urgência para requisições ---
 export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
   const cls: Record<string, string> = {
-    'Normal': 'bg-[#111] text-gray-400',
-    'Alta': 'bg-yellow-900/30 text-yellow-400',
+    'Normal':  'text-gray-400',
+    'Alta':    'bg-yellow-900/30 text-yellow-400',
     'Urgente': 'bg-red-900/30 text-red-400',
   };
+  const style: React.CSSProperties =
+    urgencia === 'Normal' ? { background: 'var(--color-badge-neutral-bg)' } : {};
+
   return (
-    <span className={`px-2 py-1 rounded text-[10px] uppercase tracking-widest font-bold ${cls[urgencia] ?? cls['Normal']}`}>
+    <span
+      className={`px-2 py-1 rounded text-[10px] uppercase tracking-widest font-bold ${cls[urgencia] ?? cls['Normal']}`}
+      style={style}
+    >
       {urgencia}
     </span>
   );
 };
 
-// --- Placeholder genérico para views sem implementação completa ---
 export const PlaceholderView = ({ title, desc }: { title: string; desc?: string }) => (
   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
     <div>
@@ -119,7 +135,9 @@ export const PlaceholderView = ({ title, desc }: { title: string; desc?: string 
       </div>
       <div>
         <h2 className="text-lg font-bold text-gray-300">Módulo em Desenvolvimento</h2>
-        <p className="text-sm text-gray-500 mt-2 max-w-sm">Esta visualização estará disponível em breve. Continue navegando pela plataforma.</p>
+        <p className="text-sm text-gray-500 mt-2 max-w-sm">
+          Esta visualização estará disponível em breve. Continue navegando pela plataforma.
+        </p>
       </div>
     </div>
   </motion.div>

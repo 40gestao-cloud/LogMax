@@ -4,9 +4,11 @@ import { useUserProfile } from './hooks/useUserProfile';
 import { LoginScreen } from './components/LoginScreen';
 import { Toast, LoadingSpinner, PlaceholderView } from './components/ui';
 import { motion, AnimatePresence } from 'motion/react';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
-  LogOut, User, ChevronDown, Loader2, Menu, X, UserCog
+  LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
+  Sun, Moon
 } from 'lucide-react';
 
 // --- lazy views ---
@@ -50,12 +52,14 @@ const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHV
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
 const QRTotemView                  = lazy(() => import('./views/QRTotemView').then(m => ({ default: m.QRTotemView })));
+const PDVView                      = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
+const HistoricoVendasView          = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 
 // --- acesso por setor ---
 const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh'],
+  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas'],
   logistica:  ['estoque', 'compras'],
-  vendas:     ['empresa'],
+  vendas:     ['vendas', 'empresa'],
   financeiro: ['financeiro'],
   rh:         ['rh'],
 };
@@ -81,6 +85,11 @@ const menuModules = [
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
     submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Gerenciamento', 'Relatórios']
+  },
+  {
+    id: 'vendas', label: 'Vendas', icon: ShoppingBag,
+    submenus: ['PDV', 'Histórico de Vendas'],
+    color: '#FACC15',
   }
 ];
 
@@ -125,10 +134,14 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
               <div key={mod.id} className="flex flex-col">
                 <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'neu-flat text-gray-200 border border-white/5' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
                   <div className="flex items-center gap-3">
-                    <Icon size={16} className={isOpen ? 'text-accent' : ''} />
+                    <Icon size={16}
+                      className={isOpen && !mod.color ? 'text-accent' : ''}
+                      style={isOpen && mod.color ? { color: mod.color } : {}} />
                     <span>{mod.label}</span>
                   </div>
-                  <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-accent' : 'text-gray-500'}`} />
+                  <ChevronDown size={14}
+                    className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : 'text-gray-500'} ${isOpen && !mod.color ? 'text-accent' : ''}`}
+                    style={isOpen && mod.color ? { color: mod.color } : {}} />
                 </button>
                 <AnimatePresence>
                   {isOpen && (
@@ -139,7 +152,8 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
                           const isActive = activeView === viewId;
                           return (
                             <button key={sub} onClick={() => { setActiveView(viewId); onClose?.(); }}
-                              className={`text-left text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? 'text-accent font-bold border-accent bg-white/5' : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}>
+                              className={`text-left text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
+                              style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                               {sub}
                             </button>
                           );
@@ -162,7 +176,20 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
   </>
 );
 
-export default function LogMaxApp() {
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+      className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
+    >
+      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
+}
+
+function LogMaxAppInner() {
   const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
   const { profile, isLoading: profileLoading } = useUserProfile();
   const [activeView, setActiveView] = useState('inicio');
@@ -183,7 +210,7 @@ export default function LogMaxApp() {
 
   if (authLoading || (isAuthenticated && profileLoading)) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0A0A' }}>
+      <div className="min-h-screen flex items-center justify-center bg-base">
         <div className="flex flex-col items-center gap-4">
           <Loader2 size={32} className="text-accent animate-spin" />
           <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">
@@ -200,7 +227,7 @@ export default function LogMaxApp() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4" style={{ background: '#0A0A0A' }}>
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
         <UserCog size={40} className="text-gray-600" />
         <h2 className="text-lg font-bold text-gray-300">Acesso não configurado</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
@@ -288,7 +315,9 @@ export default function LogMaxApp() {
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
-      case 'usuarios':            return <UsuariosView showToast={st} profile={profile} />;
+      case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
+      case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
+      case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
@@ -308,7 +337,7 @@ export default function LogMaxApp() {
   const displayName = userEmail.split('@')[0];
 
   return (
-    <div className="flex h-screen w-full bg-base overflow-hidden text-[#e0e0e0]">
+    <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)' }}>
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
       {/* MOBILE SIDEBAR OVERLAY */}
@@ -356,16 +385,21 @@ export default function LogMaxApp() {
             </div>
           </div>
 
-          <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-4 border border-white/5">
-            <div className="w-9 h-9 rounded-full bg-[#111] neu-pressed flex items-center justify-center border border-accent/20">
-              <User size={16} className="text-accent" />
-            </div>
-            <div className="flex flex-col pr-2">
-              <span className="text-sm font-bold text-gray-200 capitalize">{displayName}</span>
-              <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
-                <span className="text-gray-600">{userEmail}</span>
-                <span className="text-accent">•</span>
-                <button onClick={handleSignOut} className="hover:text-red-400 transition-colors cursor-pointer">Sair</button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+
+            <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-4 border border-white/5">
+              <div className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20"
+                style={{ background: 'var(--color-avatar-bg)' }}>
+                <User size={16} className="text-accent" />
+              </div>
+              <div className="flex flex-col pr-2">
+                <span className="text-sm font-bold text-gray-200 capitalize">{displayName}</span>
+                <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
+                  <span className="text-gray-600">{userEmail}</span>
+                  <span className="text-accent">•</span>
+                  <button onClick={handleSignOut} className="hover:text-red-400 transition-colors cursor-pointer">Sair</button>
+                </div>
               </div>
             </div>
           </div>
@@ -378,5 +412,13 @@ export default function LogMaxApp() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LogMaxApp() {
+  return (
+    <ThemeProvider>
+      <LogMaxAppInner />
+    </ThemeProvider>
   );
 }
