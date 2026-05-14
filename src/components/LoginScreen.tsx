@@ -325,7 +325,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             style={{
               textAlign: 'center',
               fontSize: '0.6rem',
-              color: '#1f2937',
+              color: '#4b5563',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               fontWeight: 600,
