@@ -15,15 +15,16 @@ export const SugestoesComprasView = ({ showToast }: any) => {
   const [isSaving, setIsSaving] = useState(false);
 
   const ativos = produtos.filter((p: any) => p.status === 'Ativo');
+  const limiteMin = (p: any) => Number(p.estoque_minimo ?? 0) || 10;
   const criticos = ativos.filter((p: any) => p.estoque === 0);
-  const baixos = ativos.filter((p: any) => p.estoque > 0 && p.estoque < 10);
+  const baixos = ativos.filter((p: any) => p.estoque > 0 && p.estoque <= limiteMin(p));
 
   const sugestoes = ativos
-    .filter((p: any) => p.estoque < 10)
+    .filter((p: any) => p.estoque <= limiteMin(p))
     .filter((p: any) => filtroMode === 'zerados' ? p.estoque === 0 : true)
     .filter((p: any) => [p.codigo, p.nome, p.categoria].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())))
     .map((p: any) => {
-      const qtd_sugerida = Math.max(20 - p.estoque, 10);
+      const qtd_sugerida = Math.max((limiteMin(p) * 2) - p.estoque, limiteMin(p));
       const valor_est = qtd_sugerida * Number(p.preco || 0);
       return { ...p, qtd_sugerida, valor_est };
     });

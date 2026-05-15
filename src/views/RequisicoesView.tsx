@@ -151,7 +151,7 @@ export const RequisicoesView = ({ showToast }: any) => {
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState message="Nenhuma requisição encontrada" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Item</th>

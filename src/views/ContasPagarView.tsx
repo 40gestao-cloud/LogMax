@@ -16,14 +16,14 @@ export const ContasPagarView = ({ showToast }: any) => {
   const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  const filtered = data.filter((c: any) =>
-    [c.descricao, c.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const enriched = filtered.map((c: any) => ({
+  const enriched = data.map((c: any) => ({
     ...c,
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
   }));
+
+  const filtered = enriched.filter((c: any) =>
+    [c.descricao, c.status, c.forn?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -150,7 +150,7 @@ export const ContasPagarView = ({ showToast }: any) => {
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhuma conta a pagar" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[580px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Descrição</th>

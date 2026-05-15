@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, Check, Settings, Loader2, X, MessageCircle, ShoppingBag } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, Check, Settings, Loader2, X, MessageCircle, ShoppingBag, DollarSign, Megaphone } from 'lucide-react';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import type { UserProfile } from '../hooks/useUserProfile';
 import {
@@ -43,8 +43,9 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
       { label: 'Movimentações',    desc: 'Entradas e saídas',         icon: ArrowRight,    view: 'estoque-movimentações'     },
     ],
     financeiro: [
-      { label: 'Contas a Receber', desc: 'Títulos a receber',         icon: TrendingUp,    view: 'financeiro-contasareceber' },
-      { label: 'Contas a Pagar',   desc: 'Títulos a pagar',           icon: CreditCard,    view: 'financeiro-contasapagar'  },
+      { label: 'Controle de Caixa', desc: 'Abertura e fechamento',    icon: DollarSign,    view: 'financeiro-controledecaixa' },
+      { label: 'Contas a Receber',  desc: 'Títulos a receber',        icon: TrendingUp,    view: 'financeiro-contasareceber'  },
+      { label: 'Contas a Pagar',    desc: 'Títulos a pagar',          icon: CreditCard,    view: 'financeiro-contasapagar'    },
     ],
     rh:         [
       { label: 'Funcionários',     desc: 'Cadastro de funcionários',  icon: Users,         view: 'rh-funcionários'           },
@@ -54,6 +55,10 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
       { label: 'PDV',              desc: 'Ponto de venda',            icon: ShoppingBag,   view: 'vendas-pdv'                },
       { label: 'Histórico',        desc: 'Histórico de vendas',       icon: TrendingUp,    view: 'vendas-históricodevendas'  },
     ],
+    marketing:  [
+      { label: 'Promoções',        desc: 'Campanhas e descontos',     icon: Megaphone,     view: 'marketing-promoções'       },
+      { label: 'Tarefas',          desc: 'Tarefas de conteúdo',       icon: ClipboardList, view: 'marketing-tarefas'         },
+    ],
   };
 
   const SETOR_MODS: Record<string, string[]> = {
@@ -62,6 +67,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
     vendas:     ['empresa', 'vendas'],
     financeiro: ['financeiro'],
     rh:         ['rh'],
+    marketing:  ['marketing'],
   };
 
   const shortcuts = (SETOR_MODS[profile?.setor ?? 'all'] ?? [])

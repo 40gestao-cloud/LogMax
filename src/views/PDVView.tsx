@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock } from 'lucide-react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
+import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { LoadingSpinner } from '../components/ui';
 import { supabase } from '../lib/supabase';
 
@@ -18,6 +19,7 @@ interface CartItem {
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
 
 export const PDVView = ({ showToast, profile }: any) => {
+  const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto();
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
@@ -135,23 +137,31 @@ export const PDVView = ({ showToast, profile }: any) => {
         status: 'Concluída',
       }) as any;
 
-      for (const item of cart) {
-        await dbInsert('/api/itensvendaview', {
-          venda_id: venda.id,
-          produto_id: item.produto_id,
-          nome_produto: item.nome_produto,
-          qtd: item.qtd,
-          preco_unitario: item.preco_unitario,
-          subtotal: item.subtotal,
-        });
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: item.produto_id,
-          tipo: 'Saída',
-          qtd: item.qtd,
-          origem: 'PDV',
-          destino: `Venda #${venda.id.slice(-6).toUpperCase()}`,
-          data: today,
-        });
+      try {
+        for (const item of cart) {
+          await dbInsert('/api/itensvendaview', {
+            venda_id: venda.id,
+            produto_id: item.produto_id,
+            nome_produto: item.nome_produto,
+            qtd: item.qtd,
+            preco_unitario: item.preco_unitario,
+            subtotal: item.subtotal,
+          });
+          await dbInsert('/api/movimentacoesestoqueview', {
+            produto_id: item.produto_id,
+            tipo: 'Saída',
+            qtd: item.qtd,
+            origem: 'PDV',
+            destino: `Venda #${venda.id.slice(-6).toUpperCase()}`,
+            data: today,
+          });
+        }
+      } catch (itemErr) {
+        // Rollback: remove the orphaned venda header (best-effort)
+        if (supabase && venda?.id) {
+          try { await supabase.from('vendas').delete().eq('id', venda.id); } catch { /* silent */ }
+        }
+        throw itemErr;
       }
 
       if (formaPagamento === 'Fiado' && clienteId) {
@@ -189,7 +199,27 @@ export const PDVView = ({ showToast, profile }: any) => {
     }
   };
 
-  if (loadingProd) return <LoadingSpinner />;
+  if (loadingProd || caixaLoading) return <LoadingSpinner />;
+
+  if (!caixa) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
+      <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
+        <Lock size={28} className="text-gray-600" />
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-gray-300">Caixa não aberto</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs">
+          O caixa do dia ainda não foi aberto. Vá até{' '}
+          <span className="text-accent font-bold">Financeiro → Controle de Caixa</span>{' '}
+          para realizar a abertura.
+        </p>
+      </div>
+      <button onClick={refreshCaixa}
+        className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
+        Verificar novamente
+      </button>
+    </div>
+  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">
@@ -233,7 +263,7 @@ export const PDVView = ({ showToast, profile }: any) => {
             )}
           </AnimatePresence>
 
-          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto main-scrollbar pr-1 pb-4">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 max-h-[45vh] lg:max-h-none">
             {filtered.length === 0 ? (
               <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm">
                 {search ? 'Nenhum produto encontrado.' : 'Nenhum produto ativo cadastrado.'}

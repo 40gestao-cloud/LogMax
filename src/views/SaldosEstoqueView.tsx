@@ -28,7 +28,7 @@ export const SaldosEstoqueView = () => {
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Código</th>

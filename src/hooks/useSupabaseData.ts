@@ -47,7 +47,11 @@ export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<str
     const channel = supabase
       .channel(`rt-${table}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => load())
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn(`[Realtime] Erro no canal ${table} — dados podem estar desatualizados.`);
+        }
+      });
     return () => { supabase.removeChannel(channel); };
   }, [load, realtime]);
 
@@ -57,10 +61,7 @@ export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<str
 export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): Promise<T | null> {
   if (!supabase) throw new Error('Supabase não configurado');
   const table = ENDPOINT_TABLE_MAP[endpoint];
-  if (!table) {
-    console.warn(`[dbInsert] Tabela não mapeada para "${endpoint}"`);
-    return null;
-  }
+  if (!table) throw new Error(`[dbInsert] Tabela não mapeada para "${endpoint}"`);
 
   console.debug(`[dbInsert] → ${table}`, payload);
 
@@ -82,7 +83,7 @@ export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): 
 export async function dbUpdate<T = any>(endpoint: string, id: string, payload: Partial<T>): Promise<T | null> {
   if (!supabase) throw new Error('Supabase não configurado');
   const table = ENDPOINT_TABLE_MAP[endpoint];
-  if (!table) return null;
+  if (!table) throw new Error(`[dbUpdate] Tabela não mapeada para "${endpoint}"`);
 
   const { data, error } = await supabase
     .from(table)

@@ -52,10 +52,20 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
   useEffect(() => {
     if (!supabase) { setIsLoading(false); return; }
-    let q = supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
-    if (isGerente) q = q.eq('setor', callerProfile.setor);
-    q.then(({ data }) => { setUsers(data ?? []); setIsLoading(false); });
-  }, []);
+    (async () => {
+      try {
+        let q = supabase!.from('user_profiles').select('*').order('created_at', { ascending: false });
+        if (isGerente) q = q.eq('setor', callerProfile.setor);
+        const { data, error } = await q;
+        if (error) showToast('Erro ao carregar usuários.', 'error');
+        setUsers(data ?? []);
+      } catch {
+        showToast('Erro de conexão ao carregar usuários.', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [isGerente, callerProfile.setor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // KPIs
   const totalGerentes     = users.filter(u => u.role === 'gerente').length;
@@ -159,7 +169,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       </div>
 
       <div className="flex justify-end shrink-0">
-        <NeuButtonAccent variant="yellow" onClick={() => setShowForm(v => !v)}>
+        <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
           <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
         </NeuButtonAccent>
       </div>
@@ -217,7 +227,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>
+              <NeuButtonAccent onClick={handleSave} disabled={saving}>
                 {saving ? 'Criando...' : 'Criar Usuário'}
               </NeuButtonAccent>
             </div>

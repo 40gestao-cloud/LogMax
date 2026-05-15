@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useFetchData } from './hooks/useSupabaseData';
 import { LoginScreen } from './components/LoginScreen';
 import { Toast, LoadingSpinner, PlaceholderView } from './components/ui';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
@@ -59,6 +60,7 @@ const PromocoesMarketingView               = lazy(() => import('./views/Promocoe
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
 const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
+const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 
 // --- acesso por setor ---
 const SETOR_MODULES: Record<string, string[]> = {
@@ -86,7 +88,7 @@ const menuModules = [
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios']
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -257,17 +259,20 @@ function LogMaxAppInner() {
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleModule = (id: string) => setOpenModules(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const showToast = (message: string, type = 'info', autoHide = true) => {
+  const showToast = useCallback((message: string, type = 'info', autoHide = true) => {
+    if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
     setToast({ show: true, message, type });
     if (autoHide) {
-      setTimeout(() => {
-        setToast(prev => prev.message === message ? { ...prev, show: false } : prev);
+      toastTimerRef.current = setTimeout(() => {
+        setToast(prev => ({ ...prev, show: false }));
+        toastTimerRef.current = null;
       }, 3000);
     }
-  };
+  }, []);
 
   if (authLoading || (isAuthenticated && profileLoading && !profile)) {
     return (
@@ -351,6 +356,7 @@ function LogMaxAppInner() {
       case 'estoque-previsãodevencimentos':   return <VencimentosEstoqueView showToast={st} />;
       case 'estoque-gerenciamento':            return <GerenciamentoEstoqueView />;
       case 'estoque-relatórios':              return <RelatoriosEstoqueView showToast={st} />;
+      case 'financeiro-controledecaixa':      return <ControleCaixaView showToast={st} profile={profile} />;
       case 'financeiro-contasareceber':       return <ContasReceberView showToast={st} />;
       case 'financeiro-contasapagar':         return <ContasPagarView showToast={st} />;
       case 'financeiro-previsões':            return <GenericCRUDView showToast={st} title="Previsões Financeiras" subtitle="Gerencie previsões de receitas e despesas." endpoint="/api/previsoesview"
@@ -438,8 +444,8 @@ function LogMaxAppInner() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 h-full overflow-y-auto bg-base p-4 sm:p-8 main-scrollbar">
-        <header className="flex justify-between items-center sticky top-0 z-10 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
+      <main className="flex-1 h-full overflow-y-auto flex flex-col bg-base p-4 sm:p-8 main-scrollbar">
+        <header className="shrink-0 flex justify-between items-center sticky top-0 z-10 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
@@ -473,10 +479,12 @@ function LogMaxAppInner() {
           </div>
         </header>
 
-        <div>
-          <Suspense fallback={<LoadingSpinner />}>
-            {renderContent()}
-          </Suspense>
+        <div className="flex-1 min-h-0">
+          <ErrorBoundary key={activeView}>
+            <Suspense fallback={<LoadingSpinner />}>
+              {renderContent()}
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
     </div>

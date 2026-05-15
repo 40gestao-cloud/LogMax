@@ -63,4 +63,5 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/itensvendaview':               'itens_venda',
   '/api/marketingpromocoesview':       'marketing_promocoes',
   '/api/marketingtarefasview':         'marketing_tarefas',
+  '/api/controlecaixaview':            'controle_caixa',
 };

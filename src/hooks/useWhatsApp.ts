@@ -23,12 +23,16 @@ export function useWhatsApp() {
         .eq('chave', CHAVE)
         .maybeSingle();
       if (data?.valor) {
-        const parsed: WppConfig = JSON.parse(data.valor);
-        setConfig(parsed);
-        setIsActive(!!(parsed.instance && parsed.token && parsed.phone));
+        try {
+          const parsed: WppConfig = JSON.parse(data.valor);
+          setConfig(parsed);
+          setIsActive(!!(parsed.instance && parsed.token && parsed.phone));
+        } catch {
+          console.warn('[WhatsApp] Configuração com JSON inválido no banco — integração desativada.');
+        }
       }
     } catch {
-      // tabela não existe — desativado
+      // tabela não existe ou erro de rede — desativado
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +42,8 @@ export function useWhatsApp() {
 
   const saveConfig = async (c: WppConfig) => {
     if (!supabase) return;
-    await supabase.from('configuracoes').upsert({ chave: CHAVE, valor: JSON.stringify(c) });
+    const { error } = await supabase.from('configuracoes').upsert({ chave: CHAVE, valor: JSON.stringify(c) });
+    if (error) { console.error('[WhatsApp] Erro ao salvar configuração:', error.message); return; }
     setConfig(c);
     setIsActive(!!(c.instance && c.token && c.phone));
   };

@@ -42,7 +42,11 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      const payload = editItem ? formState : { ...formState, status: formState.status || defaultStatus };
+      const numericKeys = new Set(fields.filter(f => f.type === 'number').map(f => f.key));
+      const parsed = Object.fromEntries(
+        Object.entries(formState).map(([k, v]) => [k, numericKeys.has(k) ? (Number(v) || 0) : v])
+      );
+      const payload = editItem ? parsed : { ...parsed, status: (parsed.status as string) || defaultStatus };
       if (editItem) {
         const updated = await dbUpdate(endpoint, editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));

@@ -23,13 +23,13 @@ export function useAuth() {
     }
 
     // Busca a sessão atual ao montar
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthState({
-        user: session?.user ?? null,
-        session,
-        isLoading: false,
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setAuthState({ user: session?.user ?? null, session, isLoading: false });
+      })
+      .catch(() => {
+        setAuthState({ user: null, session: null, isLoading: false });
       });
-    });
 
     // Escuta mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {

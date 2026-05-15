@@ -46,7 +46,10 @@ export const DashboardAnalyticsView = () => {
   const ordensNovas = filteredPed.filter((p: any) =>
     new Date(p.created_at).toDateString() === new Date().toDateString()
   ).length;
-  const estoqueCritico = String(produtos.filter((p: any) => (p.estoque ?? 0) <= 10).length);
+  const estoqueCritico = String(produtos.filter((p: any) => {
+    const minimo = Number(p.estoque_minimo ?? 0) || 10;
+    return (p.estoque ?? 0) <= minimo;
+  }).length);
 
   const bars = useMemo(() => {
     const now = new Date();
@@ -189,7 +192,7 @@ export const DashboardAnalyticsView = () => {
               <ComposedChart data={bars} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val / 1000}k`} />
-                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }} itemStyle={{ color: '#fff', fontSize: '12px' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border-md)', borderRadius: '12px' }} labelStyle={{ color: 'var(--color-text-muted)', fontSize: '11px' }} itemStyle={{ color: 'var(--color-text-primary)', fontSize: '12px' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: '#9ca3af' }} />
                 <Bar dataKey="receita" fill="#10B981" name="Receita" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 <Bar dataKey="despesa" fill="#ef4444" name="Despesa" radius={[4, 4, 0, 0]} maxBarSize={40} />

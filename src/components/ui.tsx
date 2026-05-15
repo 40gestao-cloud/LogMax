@@ -14,7 +14,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
     colorClass = 'bg-accent/10 text-accent';
     style = {};
   } else if (['Cancelado','Negado','Negada','Divergente','Atrasado'].includes(status)) {
-    colorClass = 'bg-red-950/50 text-red-500';
+    colorClass = 'bg-red-500/15 text-red-500';
     style = {};
   }
 
@@ -107,8 +107,8 @@ export const ExportButton = ({ label, onClick, icon: Icon }: { label: string; on
 export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
   const cls: Record<string, string> = {
     'Normal':  'text-gray-400',
-    'Alta':    'bg-yellow-900/30 text-yellow-400',
-    'Urgente': 'bg-red-950/50 text-red-500',
+    'Alta':    'bg-yellow-500/15 text-yellow-500',
+    'Urgente': 'bg-red-500/15 text-red-500',
   };
   const style: React.CSSProperties =
     urgencia === 'Normal' ? { background: 'var(--color-badge-neutral-bg)' } : {};

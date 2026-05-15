@@ -12,17 +12,17 @@ export const ColaboradoresView = ({ showToast }: any) => {
   const [editItem, setEditItem] = useState<any | null>(null);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ matricula: '', nome: '' });
-  const [extras, setExtras] = useState({ cargo: '', departamento: '' });
+  const [extras, setExtras] = useState({ cargo: '', departamento: '', celular: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const filtered = data.filter((item: any) =>
-    [item.nome, item.cargo, item.departamento].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+    [item.nome, item.cargo, item.departamento, item.celular].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ matricula: item.matricula ?? '', nome: item.nome ?? '' });
-    setExtras({ cargo: item.cargo ?? '', departamento: item.departamento ?? '' });
+    setExtras({ cargo: item.cargo ?? '', departamento: item.departamento ?? '', celular: item.celular ?? '' });
     setErrors({});
     setShowForm(false);
   };
@@ -31,7 +31,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
     setShowForm(false);
     setEditItem(null);
     setForm({ matricula: '', nome: '' });
-    setExtras({ cargo: '', departamento: '' });
+    setExtras({ cargo: '', departamento: '', celular: '' });
     setErrors({});
   };
 
@@ -93,12 +93,15 @@ export const ColaboradoresView = ({ showToast }: any) => {
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Colaborador' : 'Novo Colaborador'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <FormField label="Matrícula *" error={errors.matricula}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.matricula ? 'border border-red-500/40' : ''}`} value={form.matricula} onChange={e => { setForm(f => ({ ...f, matricula: e.target.value })); clearError('matricula'); }} placeholder="Ex: MAT-001" />
                 </FormField>
                 <FormField label="Nome *" error={errors.nome}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`} value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }} placeholder="Ex: João Silva" />
+                </FormField>
+                <FormField label="Celular">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular} onChange={e => setExtras(x => ({ ...x, celular: e.target.value }))} placeholder="(11) 99999-9999" />
                 </FormField>
                 <FormField label="Cargo">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.cargo} onChange={e => setExtras(x => ({ ...x, cargo: e.target.value }))} placeholder="Ex: Analista de Compras" />
@@ -118,19 +121,20 @@ export const ColaboradoresView = ({ showToast }: any) => {
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar pr-2 pb-2">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Matrícula</th>
-                <th className="pb-4 font-bold px-4 w-1/3">Colaborador</th>
+                <th className="pb-4 font-bold px-4 w-1/4">Colaborador</th>
                 <th className="pb-4 font-bold px-4">Cargo</th>
                 <th className="pb-4 font-bold px-4">Departamento</th>
+                <th className="pb-4 font-bold px-4">Celular</th>
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={5}><LoadingSpinner /></td></tr>)
-                : filtered.length === 0 ? (<tr><td colSpan={5}><EmptyState /></td></tr>)
+              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>)
+                : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>)
                 : (
                   <AnimatePresence>
                     {filtered.map((item: any) => (
@@ -142,8 +146,9 @@ export const ColaboradoresView = ({ showToast }: any) => {
                         </td>
                         <td className="py-4 px-4 text-xs text-gray-400">{item.cargo}</td>
                         <td className="py-4 px-4 text-xs text-gray-400">
-                          <span className="bg-[#111] px-2.5 py-1 rounded-md neu-pressed text-[10px] uppercase font-bold tracking-wider">{item.departamento}</span>
+                          <span className="bg-[#111] px-2.5 py-1 rounded-md neu-pressed text-[10px] uppercase font-bold tracking-wider">{item.departamento || '—'}</span>
                         </td>
+                        <td className="py-4 px-4 text-xs font-mono text-gray-400">{item.celular || '—'}</td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>

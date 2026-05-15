@@ -120,8 +120,13 @@ const QRScanner = ({ onResult, onClose }: { onResult: (v: string) => void; onClo
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number>(0);
+  const onResultRef = useRef(onResult);
   const [camError, setCamError] = useState<string | null>(null);
 
+  // Mantém a ref sempre atualizada sem recriar tick
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+
+  // tick é estável (sem deps) — não reinicia a câmera quando onResult muda
   const tick = useCallback(async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -137,9 +142,9 @@ const QRScanner = ({ onResult, onClose }: { onResult: (v: string) => void; onClo
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const jsQR = (await import('jsqr')).default;
     const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code?.data) { onResult(code.data); return; }
+    if (code?.data) { onResultRef.current(code.data); return; }
     animRef.current = requestAnimationFrame(tick);
-  }, [onResult]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
@@ -280,13 +285,13 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {registros.map((r: any) => {
+                  {registros.map((r: any, i: number) => {
                     const dt = new Date(r.registrado_em);
                     const dataFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
                     const horaFmt = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
                     const prof = userMap[r.user_id];
                     return (
-                      <motion.tr key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      <motion.tr key={r.id ?? i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         {canSeeAll && (
                           <td className="py-3 px-4">
