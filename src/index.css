@@ -213,8 +213,8 @@ body {
 [data-theme="light"] .text-gray-200     { color: #1f2937; }
 [data-theme="light"] .text-gray-300     { color: #374151; }
 [data-theme="light"] .text-gray-400     { color: #4b5563; }
-[data-theme="light"] .text-gray-500     { color: #6b7280; }
-[data-theme="light"] .text-gray-600     { color: #9ca3af; }
+[data-theme="light"] .text-gray-500     { color: #374151; }
+[data-theme="light"] .text-gray-600     { color: #4b5563; }
 
 [data-theme="light"] .border-white\/5   { border-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .border-white\/10  { border-color: rgba(0,0,0,0.13); }
@@ -227,8 +227,10 @@ body {
 [data-theme="light"] .bg-\[\#111111\]   { background-color: #D4D4D4; }
 
 /* Hover states */
-[data-theme="light"] .hover\:text-gray-200:hover { color: #1f2937; }
-[data-theme="light"] .hover\:text-gray-300:hover { color: #374151; }
+[data-theme="light"] .hover\:text-white:hover       { color: #111111; }
+[data-theme="light"] .hover\:text-gray-200:hover    { color: #1f2937; }
+[data-theme="light"] .hover\:text-gray-300:hover    { color: #374151; }
+[data-theme="light"] .group:hover .group-hover\:text-white { color: #111111; }
 
 /* ── Touch devices: always show table action buttons (hover não funciona em touch) ── */
 @media (hover: none) {

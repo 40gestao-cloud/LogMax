@@ -427,7 +427,7 @@ function LogMaxAppInner() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto main-scrollbar">
           <Suspense fallback={<LoadingSpinner />}>
             {renderContent()}
           </Suspense>

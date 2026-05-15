@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet } from 'lucide-react';
-import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -42,13 +42,26 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     .filter((v: any) => v.status !== 'Cancelada')
     .reduce((s: number, v: any) => s + Number(v.total_final ?? 0), 0);
 
-  const handleCancelar = async (id: string) => {
-    if (!confirm('Cancelar esta venda? O estoque NÃO será revertido automaticamente.')) return;
-    setCanceling(id);
+  const handleCancelar = async (venda: any) => {
+    if (!confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque automaticamente.')) return;
+    setCanceling(venda.id);
     try {
-      await dbUpdate('/api/vendasview', id, { status: 'Cancelada' });
-      setVendas((prev: any[]) => prev.map(v => v.id === id ? { ...v, status: 'Cancelada' } : v));
-      showToast('Venda cancelada.', 'info', true);
+      await dbUpdate('/api/vendasview', venda.id, { status: 'Cancelada' });
+      // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido
+      const today = new Date().toISOString().slice(0, 10);
+      for (const item of (venda.itens ?? [])) {
+        if (!item.produto_id || !item.qtd) continue;
+        await dbInsert('/api/movimentacoesestoqueview', {
+          produto_id: item.produto_id,
+          tipo: 'Entrada',
+          qtd: Number(item.qtd),
+          origem: `Estorno — Venda #${venda.id.slice(-6).toUpperCase()} cancelada`,
+          destino: 'Almoxarifado',
+          data: today,
+        });
+      }
+      setVendas((prev: any[]) => prev.map(v => v.id === venda.id ? { ...v, status: 'Cancelada' } : v));
+      showToast('Venda cancelada e estoque estornado.', 'info', true);
     } catch {
       showToast('Erro ao cancelar.', 'error', true);
     } finally {
@@ -70,13 +83,13 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex justify-between items-start shrink-0 flex-wrap gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Histórico de Vendas</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Histórico de Vendas</h2>
           <p className="text-sm text-gray-400 mt-1">
             {filtro === 'hoje' ? 'Vendas de hoje' : filtro === 'semana' ? 'Últimos 7 dias' : 'Todas as vendas'} —
-            Total: <span className="text-accent font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            Total: <span className="text-yellow-400 font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </p>
         </div>
-        <div className="flex gap-3 items-center flex-wrap">
+        <div className="flex gap-3 items-center flex-wrap w-full sm:w-auto">
           {/* Filtro período */}
           <div className="flex gap-1 neu-flat rounded-xl p-1">
             {(['todos', 'hoje', 'semana'] as const).map(f => (
@@ -87,9 +100,9 @@ export const HistoricoVendasView = ({ showToast }: any) => {
             ))}
           </div>
           {/* Busca */}
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input type="text" placeholder="Buscar venda..." className="neu-input py-2 pl-9 pr-4 rounded-xl text-xs w-44"
+            <input type="text" placeholder="Buscar venda..." className="neu-input py-2 pl-9 pr-4 rounded-xl text-xs w-full sm:w-44"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           {/* Export */}
@@ -126,7 +139,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      <span className="text-lg font-black text-accent font-mono">
+                      <span className="text-lg font-black text-yellow-400 font-mono">
                         {Number(v.total_final ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <StatusBadge status={v.status} />
@@ -156,7 +169,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-400 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
                             {v.status !== 'Cancelada' && (
-                              <button onClick={() => handleCancelar(v.id)} disabled={!!isCanceling}
+                              <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
                                 className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-400 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
                                 <X size={11} /> Cancelar venda
                               </button>

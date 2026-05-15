@@ -14,14 +14,14 @@ export const SaldosEstoqueView = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="flex justify-between items-center shrink-0">
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Saldos de Estoque</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Saldos de Estoque</h2>
           <p className="text-sm text-gray-400 mt-1">Posição atual de estoque por produto.</p>
         </div>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-56"
+          <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>

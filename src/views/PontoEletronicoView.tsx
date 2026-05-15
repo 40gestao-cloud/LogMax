@@ -393,7 +393,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       {/* Título */}
       <div className="shrink-0">
-        <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Ponto Eletrônico</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Ponto Eletrônico</h2>
         <p className="text-sm text-gray-400 mt-1">Registro e acompanhamento de ponto dos funcionários.</p>
       </div>
 

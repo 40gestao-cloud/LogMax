@@ -195,7 +195,7 @@ export const PDVView = ({ showToast, profile }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">
       <div className="flex items-center justify-between mb-5 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">PDV</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">PDV</h2>
           <p className="text-sm text-gray-400 mt-1">Ponto de Venda — registre vendas e baixe o estoque automaticamente.</p>
         </div>
       </div>
@@ -220,11 +220,11 @@ export const PDVView = ({ showToast, profile }: any) => {
             {lastVenda && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                 className="flex items-center justify-between p-4 rounded-2xl shrink-0"
-                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                style={{ background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.2)' }}>
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 size={18} className="text-accent" />
+                  <CheckCircle2 size={18} className="text-yellow-400" />
                   <div>
-                    <p className="text-sm font-bold text-accent">Venda #{lastVenda.id} concluída!</p>
+                    <p className="text-sm font-bold text-yellow-400">Venda #{lastVenda.id} concluída!</p>
                     <p className="text-xs text-gray-400">Total: {lastVenda.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
                 </div>
@@ -249,17 +249,17 @@ export const PDVView = ({ showToast, profile }: any) => {
                     whileTap={!semEstoque ? { scale: 0.97 } : {}}
                     disabled={semEstoque}
                     className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left transition-all border border-transparent relative"
-                    style={inCart ? { borderColor: 'rgba(16,185,129,0.25)', background: 'rgba(16,185,129,0.04)' } : semEstoque ? { opacity: 0.4 } : {}}
+                    style={inCart ? { borderColor: 'rgba(250,204,21,0.25)', background: 'rgba(250,204,21,0.04)' } : semEstoque ? { opacity: 0.4 } : {}}
                   >
                     {inCart && (
-                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black">
+                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-black text-black">
                         {inCart.qtd}
                       </span>
                     )}
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{p.codigo || '—'}</span>
                     <span className="text-sm font-bold text-gray-200 leading-tight">{p.nome}</span>
                     <div className="flex items-end justify-between mt-auto pt-1">
-                      <span className="text-base font-black text-accent">
+                      <span className="text-base font-black text-yellow-400">
                         {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-400' : 'text-gray-500'}`}>
@@ -278,10 +278,10 @@ export const PDVView = ({ showToast, profile }: any) => {
           <div className="neu-flat rounded-3xl p-5 flex flex-col gap-3 flex-1 min-h-0 border border-white/5">
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <ShoppingCart size={16} className="text-accent" />
+                <ShoppingCart size={16} style={{ color: '#FACC15' }} />
                 <h3 className="text-sm font-bold text-gray-200">Carrinho</h3>
                 {cart.length > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black">{cart.length}</span>
+                  <span className="w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-black text-black">{cart.length}</span>
                 )}
               </div>
               {cart.length > 0 && (
@@ -321,7 +321,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                         </button>
                       </div>
                       <div className="w-20 text-right shrink-0">
-                        <p className="text-xs font-bold text-accent">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p className="text-xs font-bold text-yellow-400">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
                       <button onClick={() => removeFromCart(item.produto_id)}
                         className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-400 transition-colors shrink-0">
@@ -351,7 +351,7 @@ export const PDVView = ({ showToast, profile }: any) => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-gray-200">Total</span>
-                <span className="text-xl font-black text-accent font-mono">
+                <span className="text-xl font-black text-yellow-400 font-mono">
                   {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
@@ -365,7 +365,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                   <button key={f} onClick={() => setFormaPagamento(f)}
                     className="py-2 px-2 rounded-xl text-[10px] font-bold transition-all border"
                     style={formaPagamento === f
-                      ? { background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.35)', color: '#10B981' }
+                      ? { background: 'rgba(250,204,21,0.12)', borderColor: 'rgba(250,204,21,0.35)', color: '#FACC15' }
                       : { background: 'transparent', borderColor: 'rgba(255,255,255,0.05)', color: '#6b7280' }
                     }>
                     {f}
@@ -424,9 +424,9 @@ export const PDVView = ({ showToast, profile }: any) => {
                   whileTap={cart.length > 0 && !isClosing ? { scale: 0.98 } : {}}
                   className="w-full py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1"
                   style={{
-                    background: cart.length === 0 || isClosing ? 'rgba(16,185,129,0.2)' : 'linear-gradient(135deg, #10B981, #059669)',
+                    background: cart.length === 0 || isClosing ? 'rgba(250,204,21,0.2)' : 'linear-gradient(135deg, #FACC15, #F59E0B)',
                     color: cart.length === 0 || isClosing ? '#4b5563' : '#0A0A0A',
-                    boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px rgba(16,185,129,0.3)' : 'none',
+                    boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px rgba(250,204,21,0.3)' : 'none',
                     cursor: cart.length === 0 || isClosing ? 'not-allowed' : 'pointer',
                   }}>
                   {isClosing ? <><Loader2 size={16} className="animate-spin" /> Processando...</> : <><CheckCircle2 size={16} /> Fechar Venda</>}

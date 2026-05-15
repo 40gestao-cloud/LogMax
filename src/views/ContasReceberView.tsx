@@ -96,7 +96,7 @@ export const ContasReceberView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Contas a Receber</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Contas a Receber</h2>
           <p className="text-sm text-gray-400 mt-1">
             Total em aberto: <span className="text-accent font-bold">R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </p>

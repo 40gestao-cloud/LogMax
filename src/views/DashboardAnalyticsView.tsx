@@ -143,10 +143,10 @@ export const DashboardAnalyticsView = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 h-full">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Dashboard</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Dashboard</h2>
           <p className="text-sm text-gray-400 mt-1">Visão geral da sua operação.</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -181,10 +181,10 @@ export const DashboardAnalyticsView = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[280px] md:min-h-[400px]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 neu-flat p-6 rounded-3xl border border-white/5 flex flex-col">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide mb-6">Receitas vs Despesas</h3>
-          <div className="flex-1 w-full">
+          <div className="w-full h-[300px] md:h-[380px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={bars} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} />
@@ -200,7 +200,7 @@ export const DashboardAnalyticsView = () => {
         </div>
         <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-6 overflow-hidden">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide">Movimentações Recentes</h3>
-          <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 flex-1">
+          <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 max-h-[340px]">
             {isLoading ? <LoadingSpinner /> : movimentos.length === 0 ? <EmptyState /> : movimentos.map((mov: any, i: number) => (
               <div key={i} className="neu-pressed p-4 rounded-2xl border border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">

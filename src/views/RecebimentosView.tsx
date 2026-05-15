@@ -13,17 +13,18 @@ export const RecebimentosView = ({ showToast }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ pedido_id: '' });
-  const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', status: 'Pendente', produto_id: '' });
+  const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', produto_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [confirmProduto, setConfirmProduto] = useState('');
   const [confirmStatus, setConfirmStatus] = useState('Concluído');
   const [confirmSaving, setConfirmSaving] = useState(false);
 
+  const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
   const filtered = enriched.filter((r: any) => [r.status, String(r.pedido_id)].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
-  const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '', status: 'Pendente', produto_id: '' }); setErrors({}); };
+  const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '', produto_id: '' }); setErrors({}); };
 
   const handleSave = async () => {
     if (!validate()) return;
@@ -32,23 +33,11 @@ export const RecebimentosView = ({ showToast }: any) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const qtd = Number(extras.qtd_recebida) || 0;
-      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: extras.status, data: today };
+      if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
+      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today };
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-
-      if (extras.produto_id && (extras.status === 'Concluído' || extras.status === 'Parcial') && qtd > 0) {
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: extras.produto_id,
-          tipo: 'Entrada',
-          qtd,
-          origem: `Pedido #${form.pedido_id.slice(0, 8).toUpperCase()}`,
-          destino: 'Almoxarifado',
-          data: today,
-        });
-        showToast("Recebimento registrado e estoque atualizado!", 'success', true);
-      } else {
-        showToast("Recebimento registrado!", 'success', true);
-      }
+      showToast("Recebimento registrado! Use o botão Confirmar para atualizar o estoque.", 'success', true);
       closeForm();
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -59,11 +48,12 @@ export const RecebimentosView = ({ showToast }: any) => {
 
   const handleConfirmar = async (item: any) => {
     if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
+    if (!(Number(item.qtd_recebida) > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
     setConfirmSaving(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
-      setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
+      // Movimentação PRIMEIRO — se falhar, status fica Pendente e o botão "Confirmar" reaparesce para retry.
+      // Só atualiza o status após a movimentação estar salva no banco.
       if (confirmStatus === 'Concluído' || confirmStatus === 'Parcial') {
         await dbInsert('/api/movimentacoesestoqueview', {
           produto_id: confirmProduto,
@@ -74,6 +64,8 @@ export const RecebimentosView = ({ showToast }: any) => {
           data: today,
         });
       }
+      await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
+      setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
       setConfirmando(null);
       setConfirmProduto('');
       setConfirmStatus('Concluído');
@@ -87,10 +79,10 @@ export const RecebimentosView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="flex justify-between items-center shrink-0">
-        <div><h2 className="text-3xl font-bold text-gray-100 tracking-tight">Recebimentos</h2><p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p></div>
-        <div className="flex gap-4 items-center">
-          <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-56" value={search} onChange={e => setSearch(e.target.value)} /></div>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Recebimentos</h2><p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p></div>
+        <div className="flex gap-3 items-center w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Registrar</NeuButtonAccent>
         </div>
       </div>
@@ -101,15 +93,14 @@ export const RecebimentosView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(0, 8)} — {p.status}</option>)}</select></FormField>
+                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(0, 8)} — {p.status}</option>)}</select></FormField>
                 <FormField label="Produto recebido">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.produto_id} onChange={e => setExtras(x => ({ ...x, produto_id: e.target.value }))}>
                     <option value="">Selecionar para atualizar estoque...</option>
                     {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo atual: {p.estoque ?? 0})</option>)}
                   </select>
                 </FormField>
-                <FormField label="Qtd Recebida"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
-                <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Pendente', 'Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
+                <FormField label="Qtd Recebida"><input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
               </div>
               <div className="flex gap-3 justify-end">

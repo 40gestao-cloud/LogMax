@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check } from 'lucide-react';
+import { Plus, Save, Trash2, Check, RefreshCw, Loader2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
@@ -9,11 +9,16 @@ export const CotacoesView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/cotacoesview');
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: pedidos } = useFetchData<any>('/api/pedidosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [recreating, setRecreating] = useState<string | null>(null);
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '' });
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+
+  // IDs de cotações que já têm pedido gerado
+  const cotacoesComPedido = new Set(pedidos.map((p: any) => p.cotacao_id).filter(Boolean));
 
   const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovada');
 
@@ -94,6 +99,25 @@ export const CotacoesView = ({ showToast }: any) => {
     }
   };
 
+  const handleRecriarPedido = async (cotacao: any) => {
+    setRecreating(cotacao.id);
+    try {
+      const pedido = await dbInsert('/api/pedidosview', {
+        cotacao_id: cotacao.id,
+        requisicao_id: cotacao.requisicao_id ?? null,
+        fornecedor_id: cotacao.fornecedor_id,
+        valor_total: cotacao.valor_total,
+        prazo_entrega: cotacao.prazo_entrega || null,
+        status: 'Pendente',
+      });
+      showToast(`Pedido #${(pedido as any)?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado com sucesso.`, 'success', true);
+    } catch (err: any) {
+      showToast(`Falha ao recriar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setRecreating(null);
+    }
+  };
+
   const handleCancelar = async (id: string) => {
     if (!confirm('Cancelar esta cotação?')) return;
     try {
@@ -107,9 +131,9 @@ export const CotacoesView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="flex justify-between items-center shrink-0">
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold text-gray-100 tracking-tight">Cotações</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Cotações</h2>
           <p className="text-sm text-gray-400 mt-1">Colete propostas de fornecedores para requisições aprovadas.</p>
         </div>
         <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
@@ -200,6 +224,18 @@ export const CotacoesView = ({ showToast }: any) => {
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => handleAprovar(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Aprovar</button>
                             <button onClick={() => handleCancelar(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400"><Trash2 size={12} /></button>
+                          </div>
+                        )}
+                        {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && (
+                          <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleRecriarPedido(item)}
+                              disabled={recreating === item.id}
+                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 transition-colors flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {recreating === item.id ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                              Recriar Pedido
+                            </button>
                           </div>
                         )}
                       </td>

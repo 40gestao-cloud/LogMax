@@ -107,9 +107,9 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
   })();
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 h-full">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
-        <div className="lg:col-span-5 neu-flat rounded-3xl p-8 flex flex-col gap-5">
+        <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5">
           <h3 className="text-lg font-bold text-gray-200 shrink-0">Acesso Rápido</h3>
           <div className="grid grid-cols-2 gap-3 flex-1">
             {shortcuts.map(({ label, desc, icon: Icon, view }) => (
@@ -128,10 +128,10 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
           </div>
         </div>
 
-        <div className="lg:col-span-7 neu-flat rounded-3xl p-8 flex flex-col justify-center relative overflow-hidden group">
+        <div className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden group">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none transition-colors"
             style={{ background: wppActive ? 'rgba(37,211,102,0.06)' : 'rgba(16,185,129,0.04)' }} />
-          <div className="flex items-center justify-between gap-4 mb-6 relative z-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 relative z-10">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 neu-circle flex items-center justify-center" style={{ color: '#25D366' }}>
                 <MessageCircle size={24} />
@@ -140,7 +140,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                 <h3 className="text-xl font-bold text-gray-200">Integração WhatsApp</h3>
                 {!wppLoading && (
                   <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: wppActive ? '#25D366' : '#6b7280' }}>
+                    color: wppActive ? '#25D366' : 'var(--color-text-dim)' }}>
                     {wppActive ? '● Ativo' : '○ Inativo'}
                   </span>
                 )}
@@ -211,14 +211,14 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                         onChange={e => { setWppInput(p => ({ ...p, [field]: e.target.value })); setWppError(''); }}
                         placeholder={field === 'instance' ? 'ID da instância' : field === 'token' ? 'Token da instância' : 'Número destino (ex: 5511999999999)'}
                         style={{
-                          background: 'linear-gradient(145deg, #070707, #0d0d0d)',
-                          boxShadow: 'inset 3px 3px 8px #040404, inset -2px -2px 5px #111',
-                          border: wppError ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                          background: 'var(--color-input-bg)',
+                          boxShadow: 'var(--color-input-shadow)',
+                          border: wppError ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--color-input-border)',
                           borderRadius: '0.875rem', padding: '0.7rem 1rem',
-                          color: '#e0e0e0', fontSize: '0.8rem', outline: 'none', width: '100%',
+                          color: 'var(--color-input-text)', fontSize: '0.8rem', outline: 'none', width: '100%',
                         }}
                         onFocus={e => { e.currentTarget.style.borderColor = 'rgba(37,211,102,0.3)'; }}
-                        onBlur={e => { e.currentTarget.style.borderColor = wppError ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.05)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = wppError ? 'rgba(239,68,68,0.4)' : 'var(--color-input-border)'; }}
                       />
                     ))}
                     {wppError && (
@@ -249,21 +249,21 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
       {isLoading ? <LoadingSpinner /> : (
         <div className="flex flex-col gap-6 shrink-0 mb-8">
           <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="neu-flat rounded-3xl p-8 flex flex-col items-center justify-center relative border border-white/5">
-              <h4 className="text-xs font-bold text-gray-400 mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-              <div className="w-28 h-28 rounded-full neu-flat flex items-center justify-center mb-8 border-[3px] border-[#0A0A0A] relative">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-white/5">
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] border-[#0A0A0A] relative">
                 <div className="absolute inset-0 rounded-full border-t-[3px] border-accent animate-spin-slow" style={{ animationDuration: '6s' }}></div>
-                <span className="text-4xl font-black text-accent drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{contasReceberCount}</span>
+                <span className="text-3xl sm:text-4xl font-black text-accent drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{contasReceberCount}</span>
               </div>
               <div className="text-center mt-auto">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Valor Total</span>
-                <span className="text-3xl font-bold text-gray-100">{contasReceberValor}</span>
+                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
               </div>
             </div>
-            <div className="neu-flat rounded-3xl p-8 flex flex-col items-center justify-center text-center relative border border-white/5">
-              <h4 className="text-xs font-bold text-gray-400 mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
-              <span className="text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-white/5">
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
+              <span className="text-5xl sm:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
               <span className="text-xs font-medium text-gray-500 mb-10 tracking-wide">Notas fiscais capturadas</span>
               <button onClick={() => onNavigate?.('compras-notasrecebidas')} className="neu-button-accent w-full py-4 rounded-xl font-bold text-sm mt-auto">Ver notas recebidas</button>
             </div>
