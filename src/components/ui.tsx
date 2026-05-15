@@ -14,7 +14,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
     colorClass = 'bg-accent/10 text-accent';
     style = {};
   } else if (['Cancelado','Negado','Negada','Divergente','Atrasado'].includes(status)) {
-    colorClass = 'bg-red-900/30 text-red-500';
+    colorClass = 'bg-red-950/50 text-red-500';
     style = {};
   }
 
@@ -33,9 +33,9 @@ export const NeuButtonAccent = ({ children, onClick, isLoading, type = 'button',
     type={type}
     onClick={onClick}
     disabled={isLoading || disabled}
-    className={`${variant === 'yellow' ? 'bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-[#0A0A0A]' : 'neu-button-accent'} py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${(isLoading || disabled) ? 'opacity-60 scale-95 cursor-not-allowed' : ''}`}
+    className={`${variant === 'yellow' ? 'bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-[#0A0A0A]' : 'neu-button-accent'} btn-shimmer py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${(isLoading || disabled) ? 'opacity-60 scale-95 cursor-not-allowed' : ''}`}
   >
-    {isLoading ? <Loader2 size={16} className="animate-spin text-[#0A0A0A]" /> : null}
+    {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
     {children}
   </button>
 );
@@ -51,7 +51,7 @@ export const Toast = ({ message, visible, type = 'info' }: any) => (
         className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-50 neu-flat rounded-2xl px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 border border-white/5 max-w-[calc(100vw-2rem)]"
       >
         {type === 'error'
-          ? <AlertCircle size={18} className="text-red-400" />
+          ? <AlertCircle size={18} className="text-red-500" />
           : type === 'success'
           ? <CheckCircle size={18} className="text-accent" />
           : <div className="w-3 h-3 rounded-full bg-accent animate-pulse shadow-[0_0_8px_var(--color-accent)]" />
@@ -87,7 +87,7 @@ export const FormField = ({ label, error, children }: { label: string; error?: s
     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
     {children}
     {error && (
-      <span className="flex items-center gap-1 text-[10px] text-red-400 font-semibold">
+      <span className="flex items-center gap-1 text-[10px] text-red-500 font-semibold">
         <AlertCircle size={10} /> {error}
       </span>
     )}
@@ -108,7 +108,7 @@ export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
   const cls: Record<string, string> = {
     'Normal':  'text-gray-400',
     'Alta':    'bg-yellow-900/30 text-yellow-400',
-    'Urgente': 'bg-red-900/30 text-red-400',
+    'Urgente': 'bg-red-950/50 text-red-500',
   };
   const style: React.CSSProperties =
     urgencia === 'Normal' ? { background: 'var(--color-badge-neutral-bg)' } : {};

@@ -74,7 +74,7 @@ export const QRTotemView = () => {
           <motion.div key="error" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col items-center gap-4">
             <WifiOff size={48} className="text-red-500/50" />
-            <p className="text-red-400 text-sm font-bold">Erro de conexão com o servidor</p>
+            <p className="text-red-500 text-sm font-bold">Erro de conexão com o servidor</p>
             <button onClick={fetchToken} className="neu-button px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-2">
               <RefreshCw size={12} /> Tentar novamente
             </button>

@@ -119,7 +119,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'Entrada' ? 'bg-green-900/30 text-green-400' : item.tipo === 'Saída' ? 'bg-red-900/30 text-red-400' : 'bg-blue-900/30 text-blue-400'}`}>{item.tipo}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'Entrada' ? 'bg-green-900/30 text-green-400' : item.tipo === 'Saída' ? 'bg-red-950/50 text-red-500' : 'bg-blue-900/30 text-blue-400'}`}>{item.tipo}</span>
                         </td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.origem || '—'}</td>

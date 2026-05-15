@@ -114,7 +114,7 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
         ))}
@@ -183,7 +183,7 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.forn?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{p.descricao ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-red-400 font-bold text-right">R$ {Number(p.valor || 0).toFixed(2)}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-red-500 font-bold text-right">R$ {Number(p.valor || 0).toFixed(2)}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.vencimento ?? '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
                       </motion.tr>
@@ -203,9 +203,9 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.descricao ?? '—'}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${p.tipo === 'Receita' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>{p.tipo}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${p.tipo === 'Receita' ? 'bg-green-900/30 text-green-400' : 'bg-red-950/50 text-red-500'}`}>{p.tipo}</span>
                         </td>
-                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.tipo === 'Receita' ? 'text-green-400' : 'text-red-400'}`}>R$ {Number(p.valor || 0).toFixed(2)}</td>
+                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.tipo === 'Receita' ? 'text-green-400' : 'text-red-500'}`}>R$ {Number(p.valor || 0).toFixed(2)}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.data ?? '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
                       </motion.tr>
@@ -225,7 +225,7 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
                       <motion.tr key={d.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 text-xs font-mono text-gray-300">{d.numero ?? '—'}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${d.tipo === 'A Receber' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>{d.tipo}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${d.tipo === 'A Receber' ? 'bg-green-900/30 text-green-400' : 'bg-red-950/50 text-red-500'}`}>{d.tipo}</span>
                         </td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{d.sacado ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 font-bold text-right">R$ {Number(d.valor || 0).toFixed(2)}</td>

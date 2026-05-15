@@ -143,7 +143,7 @@ export const FiliaisView = ({ showToast }: any) => {
                 <MapPin size={14} className="text-gray-500" /><span className="flex-1">{item.cidade}</span>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => openEdit(item)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={11} /></button>
-                  <button onClick={() => handleDelete(item.id)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400"><Trash2 size={11} /></button>
+                  <button onClick={() => handleDelete(item.id)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={11} /></button>
                 </div>
               </div>
             </motion.div>

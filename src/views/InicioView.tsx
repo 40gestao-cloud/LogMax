@@ -153,7 +153,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                   <Settings size={13} /> Configurar
                 </button>
                 <button onClick={handleWppDisable}
-                  className="neu-button rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-red-400 transition-colors">
+                  className="neu-button rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">
                   <X size={13} /> Desativar
                 </button>
               </div>
@@ -222,7 +222,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                       />
                     ))}
                     {wppError && (
-                      <p className="text-xs text-red-400 flex items-center gap-1.5">
+                      <p className="text-xs text-red-500 flex items-center gap-1.5">
                         <X size={11} /> {wppError}
                       </p>
                     )}

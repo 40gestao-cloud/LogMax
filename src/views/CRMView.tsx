@@ -147,7 +147,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
-                    <button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400"><Trash2 size={12} /></button>
+                    <button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                   </div>
                   <div className="w-10 h-10 neu-circle flex items-center justify-center bg-accent/5 shrink-0">
                     {isClientes ? <Building size={16} className="text-accent" /> : <Package size={16} className="text-accent" />}

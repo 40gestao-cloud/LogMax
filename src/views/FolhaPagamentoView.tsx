@@ -91,7 +91,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
           <input type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
             className="neu-input rounded-xl px-3 py-2 text-sm" />
         </div>
-        <NeuButtonAccent variant="yellow" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Nova Folha'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Nova Folha'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
@@ -130,7 +130,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -156,7 +156,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.func?.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.mes_ref ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-right">R$ {Number(f.salario_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-red-400 text-right">- R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-red-500 text-right">- R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono font-bold text-green-400 text-right">R$ {Number(f.salario_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-center">
                         <button onClick={() => handleStatusCycle(f)}

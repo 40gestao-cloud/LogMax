@@ -78,7 +78,7 @@ export const GerenciamentoFinanceiroView = () => {
       breakdown: [
         { label: 'Previstas', value: prevPrevisto, cls: prevPrevisto > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Realizadas', value: prevRealizado, cls: 'text-green-400' },
-        { label: 'Canceladas', value: prevCancelado, cls: prevCancelado > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Canceladas', value: prevCancelado, cls: prevCancelado > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -87,16 +87,16 @@ export const GerenciamentoFinanceiroView = () => {
       breakdown: [
         { label: 'Em Aberto', value: recAberto, cls: recAberto > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Recebidos', value: recPago, cls: 'text-green-400' },
-        { label: 'Atrasados', value: recAtrasado, cls: recAtrasado > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Atrasados', value: recAtrasado, cls: recAtrasado > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
       icon: ArrowDownRight, label: 'A Pagar', total: pagar.length,
-      color: 'bg-red-900/40 text-red-400',
+      color: 'bg-red-950/60 text-red-500',
       breakdown: [
         { label: 'Pendentes', value: pagPendente, cls: pagPendente > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Pagos', value: pagPago, cls: 'text-green-400' },
-        { label: 'Atrasados', value: pagAtrasado, cls: pagAtrasado > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Atrasados', value: pagAtrasado, cls: pagAtrasado > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -105,16 +105,16 @@ export const GerenciamentoFinanceiroView = () => {
       breakdown: [
         { label: 'Emitidas', value: dupEmitida, cls: dupEmitida > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Pagas', value: dupPaga, cls: 'text-green-400' },
-        { label: 'Vencidas', value: dupVencida, cls: dupVencida > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Vencidas', value: dupVencida, cls: dupVencida > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
       icon: Landmark, label: 'Caixa/Bancos', total: bancosAtivos.length,
       color: 'bg-accent/20 text-accent',
       breakdown: [
-        { label: 'Saldo Total', value: `R$ ${saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cls: saldoTotal >= 0 ? 'text-green-400' : 'text-red-400' },
+        { label: 'Saldo Total', value: `R$ ${saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cls: saldoTotal >= 0 ? 'text-green-400' : 'text-red-500' },
         { label: 'Positivas', value: bancosPositivos, cls: 'text-green-400' },
-        { label: 'Negativas', value: bancosNegativos, cls: bancosNegativos > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Negativas', value: bancosNegativos, cls: bancosNegativos > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
   ];
@@ -144,7 +144,7 @@ export const GerenciamentoFinanceiroView = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Resultado Previsto</p>
-          <p className={`text-xl font-black leading-tight ${resultadoPrevisto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <p className={`text-xl font-black leading-tight ${resultadoPrevisto >= 0 ? 'text-green-400' : 'text-red-500'}`}>
             {resultadoPrevisto >= 0 ? '+' : ''}R$ {Math.abs(resultadoPrevisto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">receitas − despesas previstas</p>
@@ -158,14 +158,14 @@ export const GerenciamentoFinanceiroView = () => {
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Total a Pagar</p>
-          <p className={`text-xl font-black leading-tight ${pagAtrasado > 0 ? 'text-red-400' : 'text-gray-100'}`}>
+          <p className={`text-xl font-black leading-tight ${pagAtrasado > 0 ? 'text-red-500' : 'text-gray-100'}`}>
             R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">pendentes + atrasadas</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Saldo em Bancos</p>
-          <p className={`text-xl font-black leading-tight ${saldoTotal >= 0 ? 'text-gray-100' : 'text-red-400'}`}>
+          <p className={`text-xl font-black leading-tight ${saldoTotal >= 0 ? 'text-gray-100' : 'text-red-500'}`}>
             R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">{bancosAtivos.length} conta(s) ativa(s)</p>
@@ -221,7 +221,7 @@ export const GerenciamentoFinanceiroView = () => {
         {/* Próximos pagamentos */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={14} className="text-red-400" />
+            <Clock size={14} className="text-red-500" />
             <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Próximos Pagamentos</h3>
           </div>
           <div className="neu-flat rounded-2xl p-5 border border-white/5">
@@ -237,7 +237,7 @@ export const GerenciamentoFinanceiroView = () => {
                         {p.fornecedor?.nome ?? 'Sem fornecedor'} · vence <span className="font-mono">{p.vencimento}</span>
                       </p>
                     </div>
-                    <p className={`text-sm font-bold font-mono ml-4 ${p.status === 'Atrasado' ? 'text-red-400' : 'text-gray-200'}`}>
+                    <p className={`text-sm font-bold font-mono ml-4 ${p.status === 'Atrasado' ? 'text-red-500' : 'text-gray-200'}`}>
                       R$ {Number(p.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
@@ -260,7 +260,7 @@ export const GerenciamentoFinanceiroView = () => {
               <div key={b.id} className="neu-flat rounded-2xl p-4 border border-white/5">
                 <p className="text-xs font-bold text-gray-400">{b.banco ?? '—'}</p>
                 <p className="text-[10px] text-gray-600 mt-0.5">{b.tipo ?? '—'} · {b.conta ?? '—'}</p>
-                <p className={`text-lg font-black font-mono mt-2 ${Number(b.saldo) < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                <p className={`text-lg font-black font-mono mt-2 ${Number(b.saldo) < 0 ? 'text-red-500' : 'text-green-400'}`}>
                   R$ {Number(b.saldo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>

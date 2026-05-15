@@ -86,7 +86,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Histórico de Vendas</h2>
           <p className="text-sm text-gray-400 mt-1">
             {filtro === 'hoje' ? 'Vendas de hoje' : filtro === 'semana' ? 'Últimos 7 dias' : 'Todas as vendas'} —
-            Total: <span className="text-yellow-400 font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            Total: <span className="text-accent font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </p>
         </div>
         <div className="flex gap-3 items-center flex-wrap w-full sm:w-auto">
@@ -139,7 +139,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      <span className="text-lg font-black text-yellow-400 font-mono">
+                      <span className="text-lg font-black text-accent font-mono">
                         {Number(v.total_final ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <StatusBadge status={v.status} />
@@ -166,11 +166,11 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                           {/* Resumo */}
                           <div className="flex items-center justify-between">
                             <div className="text-xs text-gray-500 flex gap-4">
-                              {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-400 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
+                              {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
                             {v.status !== 'Cancelada' && (
                               <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
-                                className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-400 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
+                                className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
                                 <X size={11} /> Cancelar venda
                               </button>
                             )}

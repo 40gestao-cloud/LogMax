@@ -33,6 +33,12 @@ export function useAuth() {
 
     // Escuta mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'TOKEN_REFRESHED') {
+        // Refresh silencioso: atualiza só o token, preserva a referência de user
+        // para não disparar re-fetch de perfil nem re-render global
+        setAuthState(prev => ({ ...prev, session }));
+        return;
+      }
       setAuthState({
         user: session?.user ?? null,
         session,

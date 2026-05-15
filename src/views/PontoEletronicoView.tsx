@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const statusCls = (s: string) => {
-  if (s === 'Falta') return 'bg-red-900/30 text-red-400';
+  if (s === 'Falta') return 'bg-red-950/50 text-red-500';
   if (s === 'Hora Extra') return 'bg-blue-900/30 text-blue-400';
   if (s === 'Justificado') return 'bg-yellow-900/30 text-yellow-400';
   return 'bg-green-900/30 text-green-400';
@@ -84,7 +84,7 @@ const QRGenerator = () => {
 
       {error ? (
         <div className="flex flex-col items-center gap-3 py-4">
-          <p className="text-sm text-red-400">Erro ao gerar QR Code.</p>
+          <p className="text-sm text-red-500">Erro ao gerar QR Code.</p>
           <button onClick={() => fetchToken()} className="neu-button px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-2">
             <RefreshCw size={12} /> Tentar novamente
           </button>
@@ -105,7 +105,7 @@ const QRGenerator = () => {
           <Wifi size={11} />
           <span>Expira em <span className="tabular-nums text-gray-400 font-bold">{countdown}s</span></span>
         </div>
-        <NeuButtonAccent variant="yellow" onClick={() => fetchToken()} disabled={refreshing}>
+        <NeuButtonAccent variant="" onClick={() => fetchToken()} disabled={refreshing}>
           <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
           {refreshing ? 'Gerando...' : 'Gerar QR Code'}
         </NeuButtonAccent>
@@ -160,7 +160,7 @@ const QRScanner = ({ onResult, onClose }: { onResult: (v: string) => void; onClo
       {camError ? (
         <div className="flex flex-col items-center gap-3 py-8">
           <CameraOff size={40} className="text-red-500/50" />
-          <p className="text-sm text-red-400 text-center max-w-xs">{camError}</p>
+          <p className="text-sm text-red-500 text-center max-w-xs">{camError}</p>
         </div>
       ) : (
         <div className="relative rounded-2xl overflow-hidden neu-pressed" style={{ width: 280, height: 280 }}>
@@ -242,7 +242,7 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
         {[
           { label: 'Total',       value: registros.length, cls: 'text-gray-100' },
           { label: 'No Horário',  value: noHorario,        cls: 'text-emerald-400' },
-          { label: 'Atrasados',   value: atrasados,        cls: atrasados > 0 ? 'text-red-400' : 'text-gray-400' },
+          { label: 'Atrasados',   value: atrasados,        cls: atrasados > 0 ? 'text-red-500' : 'text-gray-400' },
         ].map(k => (
           <div key={k.label} className="neu-flat rounded-2xl p-4 border border-white/5 text-center">
             <p className="text-[9px] text-gray-600 uppercase tracking-widest font-bold mb-1.5">{k.label}</p>
@@ -302,7 +302,7 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${r.status === 'Atrasado' ? 'bg-red-900/30 text-red-400' : 'bg-emerald-900/30 text-emerald-400'}`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${r.status === 'Atrasado' ? 'bg-red-950/50 text-red-500' : 'bg-emerald-900/30 text-emerald-400'}`}>
                             {r.status}
                           </span>
                         </td>
@@ -423,7 +423,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
             ].map((k) => (
               <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-                <p className={`text-2xl font-black ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+                <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
               </div>
             ))}
           </div>
@@ -470,7 +470,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                             <p className="text-xs text-emerald-500">
                               {scanResult.label} às {scanResult.hora}
                               {scanResult.status && (
-                                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${scanResult.status === 'Atrasado' ? 'bg-red-900/40 text-red-400' : 'bg-emerald-900/40 text-emerald-400'}`}>
+                                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${scanResult.status === 'Atrasado' ? 'bg-red-950/60 text-red-500' : 'bg-emerald-900/40 text-emerald-400'}`}>
                                   {scanResult.status}
                                 </span>
                               )}
@@ -479,7 +479,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                         </>
                       ) : (
                         <>
-                          <AlertCircle size={24} className="text-red-400 shrink-0" />
+                          <AlertCircle size={24} className="text-red-500 shrink-0" />
                           <div>
                             <p className="text-sm font-bold text-red-300">Falha no registro</p>
                             <p className="text-xs text-red-500">{scanResult.msg}</p>
@@ -493,7 +493,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
 
                 {!showScanner && !scanning && (
                   <div className="flex justify-center">
-                    <NeuButtonAccent variant="yellow" onClick={() => { setScanResult(null); setShowScanner(true); }}>
+                    <NeuButtonAccent variant="" onClick={() => { setScanResult(null); setShowScanner(true); }}>
                       <Camera size={14} />Abrir Câmera
                     </NeuButtonAccent>
                   </div>
@@ -521,7 +521,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
               <input type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm" />
               {filtroData && <button onClick={() => setFiltroData('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar</button>}
             </div>
-            <NeuButtonAccent variant="yellow" onClick={() => setShowForm(v => !v)}>
+            <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}>
               <Plus size={14} />{showForm ? 'Cancelar' : 'Registro Manual'}
             </NeuButtonAccent>
           </div>
@@ -563,7 +563,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                   </div>
                 </div>
                 <div className="flex justify-end mt-5">
-                  <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
+                  <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
                 </div>
               </motion.div>
             )}

@@ -65,7 +65,7 @@ export const GerenciamentoComprasView = () => {
       breakdown: [
         { label: 'Pendentes', value: reqPendentes, cls: reqPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: reqAprovadas, cls: 'text-green-400' },
-        { label: 'Negadas', value: reqNegadas, cls: reqNegadas > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Negadas', value: reqNegadas, cls: reqNegadas > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -74,7 +74,7 @@ export const GerenciamentoComprasView = () => {
       breakdown: [
         { label: 'Em Cotação', value: cotEmCotacao, cls: cotEmCotacao > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: cotAprovadas, cls: 'text-green-400' },
-        { label: 'Recusadas', value: cotRecusadas, cls: cotRecusadas > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Recusadas', value: cotRecusadas, cls: cotRecusadas > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -101,7 +101,7 @@ export const GerenciamentoComprasView = () => {
       breakdown: [
         { label: 'Pendentes', value: pgPendentes, cls: pgPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Pagos', value: pgPagos, cls: 'text-green-400' },
-        { label: 'Atrasados', value: pgAtrasados, cls: pgAtrasados > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Atrasados', value: pgAtrasados, cls: pgAtrasados > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
   ];
@@ -144,7 +144,7 @@ export const GerenciamentoComprasView = () => {
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Contas em Atraso</p>
-          <p className={`text-2xl font-black ${pgAtrasados > 0 ? 'text-red-400' : 'text-gray-100'}`}>{pgAtrasados}</p>
+          <p className={`text-2xl font-black ${pgAtrasados > 0 ? 'text-red-500' : 'text-gray-100'}`}>{pgAtrasados}</p>
           <p className="text-xs text-gray-600 mt-1">vencimentos em aberto</p>
         </div>
       </div>
@@ -169,7 +169,7 @@ export const GerenciamentoComprasView = () => {
         {/* Urgências */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={14} className="text-red-400" />
+            <AlertTriangle size={14} className="text-red-500" />
             <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Requisições Urgentes Abertas</h3>
           </div>
           <div className="neu-flat rounded-2xl p-5 border border-white/5">

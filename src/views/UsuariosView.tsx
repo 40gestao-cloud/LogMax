@@ -277,7 +277,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                           confirmDelete === u.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <button onClick={() => handleDelete(u.id)} disabled={deleting}
-                                className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
+                                className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
                                 {deleting ? '...' : 'Confirmar'}
                               </button>
                               <button onClick={() => setConfirmDelete(null)}
@@ -287,7 +287,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                             </div>
                           ) : (
                             <button onClick={() => setConfirmDelete(u.id)}
-                              className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-400 transition-colors ml-auto">
+                              className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors ml-auto">
                               <Trash2 size={13} />
                             </button>
                           )

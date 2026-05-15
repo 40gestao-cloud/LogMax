@@ -9,7 +9,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon
+  Sun, Moon, Megaphone
 } from 'lucide-react';
 
 // --- lazy views ---
@@ -53,16 +53,21 @@ const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHV
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
 const QRTotemView                  = lazy(() => import('./views/QRTotemView').then(m => ({ default: m.QRTotemView })));
-const PDVView                      = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
-const HistoricoVendasView          = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
+const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
+const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
+const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
+const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
+const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
+const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 
 // --- acesso por setor ---
 const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas'],
+  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing'],
   logistica:  ['estoque', 'compras'],
   vendas:     ['vendas', 'empresa'],
   financeiro: ['financeiro'],
   rh:         ['rh'],
+  marketing:  ['marketing'],
 };
 
 // --- menu ---
@@ -81,7 +86,7 @@ const menuModules = [
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Gerenciamento', 'Relatórios']
+    submenus: ['Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -90,8 +95,11 @@ const menuModules = [
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
     submenus: ['PDV', 'Histórico de Vendas'],
-    color: '#FACC15',
-  }
+  },
+  {
+    id: 'marketing', label: 'Marketing', icon: Megaphone,
+    submenus: ['Promoções', 'Tarefas'],
+  },
 ];
 
 const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
@@ -176,7 +184,7 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
     </nav>
 
     <button onClick={handleSignOut}
-      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-gray-400 hover:text-red-400 transition-all mt-auto border border-transparent hover:border-red-500/10 text-sm font-medium">
+      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-gray-400 hover:text-red-500 transition-all mt-auto border border-transparent hover:border-red-500/10 text-sm font-medium">
       <LogOut size={16} /><span>Sair</span>
     </button>
   </>
@@ -195,15 +203,48 @@ function ThemeToggle() {
   );
 }
 
+const ACCENT_OPTIONS = [
+  { id: 'green',  hex: '#10B981', label: 'Verde'   },
+  { id: 'yellow', hex: '#FACC15', label: 'Amarelo' },
+  { id: 'purple', hex: '#A855F7', label: 'Roxo'    },
+  { id: 'orange', hex: '#F97316', label: 'Laranja' },
+] as const;
+
+function AccentPicker() {
+  const { accentColor, setAccentColor } = useTheme();
+  return (
+    <div className="neu-flat rounded-xl hidden sm:flex items-center gap-2 px-3 py-2.5 border border-white/5" title="Cor do tema">
+      {ACCENT_OPTIONS.map(({ id, hex, label }) => (
+        <button
+          key={id}
+          title={label}
+          onClick={() => setAccentColor(id)}
+          className="w-[14px] h-[14px] rounded-full transition-transform hover:scale-125 focus:outline-none shrink-0"
+          style={{
+            background: hex,
+            boxShadow: accentColor === id
+              ? `0 0 0 2px var(--color-bg-base), 0 0 0 3.5px ${hex}`
+              : undefined,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ApprovalBadges({ onBadges }: { onBadges: (b: Record<string, number>) => void }) {
-  const { data: pendCompras } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' }, true);
-  const { data: pendEstoque } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' }, true);
+  const { data: pendCompras } = useFetchData<any>('/api/minhasaprovacoesview',        { status: 'Pendente' },              true);
+  const { data: pendEstoque } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' },              true);
+  const { data: pendPromo   } = useFetchData<any>('/api/marketingpromocoesview',  { status: 'Aguardando Aprovação' },      true);
+  const { data: pendLinks   } = useFetchData<any>('/api/marketingtarefasview',    { status_link: 'Aguardando Aprovação' }, true);
   useEffect(() => {
     onBadges({
-      'compras-minhasaprovações': pendCompras.length,
-      'estoque-minhasaprovações': pendEstoque.length,
+      'compras-minhasaprovações':          pendCompras.length,
+      'estoque-minhasaprovações':          pendEstoque.length,
+      'financeiro-aprovaçõesdepromoções': pendPromo.length,
+      'financeiro-aprovaçõesdeconteúdo':  pendLinks.length,
     });
-  }, [pendCompras.length, pendEstoque.length, onBadges]);
+  }, [pendCompras.length, pendEstoque.length, pendPromo.length, pendLinks.length, onBadges]);
   return null;
 }
 
@@ -228,7 +269,7 @@ function LogMaxAppInner() {
     }
   };
 
-  if (authLoading || (isAuthenticated && profileLoading)) {
+  if (authLoading || (isAuthenticated && profileLoading && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base">
         <div className="flex flex-col items-center gap-4">
@@ -253,7 +294,7 @@ function LogMaxAppInner() {
         <p className="text-sm text-gray-500 max-w-sm text-center">
           Seu usuário ainda não possui um perfil de acesso. Solicite ao administrador do sistema.
         </p>
-        <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-400 transition-colors">Sair</button>
+        <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
       </div>
     );
   }
@@ -318,9 +359,11 @@ function LogMaxAppInner() {
         fields={[{ key: 'numero', label: 'Número', required: true, placeholder: 'Ex: DUP-001' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['A Receber', 'A Pagar'] }, { key: 'valor', label: 'Valor (R$)', type: 'number', placeholder: '0,00' }, { key: 'vencimento', label: 'Vencimento', type: 'date' }, { key: 'sacado', label: 'Sacado', placeholder: 'Ex: Empresa XYZ' }, { key: 'status', label: 'Status', type: 'select', options: ['Emitida', 'Paga', 'Vencida', 'Cancelada'] }]} />;
       case 'financeiro-caixabancos':          return <GenericCRUDView showToast={st} title="Caixa / Bancos" subtitle="Gerencie contas bancárias e saldos." endpoint="/api/caixabancosview"
         fields={[{ key: 'conta', label: 'Conta', required: true, placeholder: 'Ex: 12345-6' }, { key: 'banco', label: 'Banco', placeholder: 'Ex: Banco do Brasil' }, { key: 'agencia', label: 'Agência', placeholder: 'Ex: 0001' }, { key: 'saldo', label: 'Saldo (R$)', type: 'number', placeholder: '0,00' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'financeiro-integraçãobancária':   return <IntegracaoBancariaView showToast={st} />;
-      case 'financeiro-gerenciamento':        return <GerenciamentoFinanceiroView />;
-      case 'financeiro-relatórios':           return <RelatoriosFinanceirosView showToast={st} />;
+      case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
+      case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
+      case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
+      case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView />;
+      case 'financeiro-relatórios':               return <RelatoriosFinanceirosView showToast={st} />;
       case 'rh-funcionários':     return <FuncionariosView showToast={st} />;
       case 'rh-departamentos':    return <GenericCRUDView showToast={st} title="Departamentos" subtitle="Gerencie os departamentos da empresa." endpoint="/api/departamentosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Tecnologia da Informação' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
@@ -337,6 +380,8 @@ function LogMaxAppInner() {
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
+      case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
+      case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       default:
         return (
@@ -393,8 +438,8 @@ function LogMaxAppInner() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-base p-4 sm:p-8">
-        <header className="flex justify-between items-center shrink-0 mb-4 sm:mb-8 border-b border-white/5 pb-4">
+      <main className="flex-1 h-full overflow-y-auto bg-base p-4 sm:p-8 main-scrollbar">
+        <header className="flex justify-between items-center sticky top-0 z-10 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
@@ -408,6 +453,7 @@ function LogMaxAppInner() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
+            <AccentPicker />
 
             <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-3 border border-white/5">
               <div className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20 shrink-0"
@@ -419,15 +465,15 @@ function LogMaxAppInner() {
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
                   <span className="text-gray-600">{userEmail}</span>
                   <span className="text-accent">•</span>
-                  <button onClick={handleSignOut} className="hover:text-red-400 transition-colors cursor-pointer">Sair</button>
+                  <button onClick={handleSignOut} className="hover:text-red-500 transition-colors cursor-pointer">Sair</button>
                 </div>
               </div>
-              <button onClick={handleSignOut} className="sm:hidden text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors">Sair</button>
+              <button onClick={handleSignOut} className="sm:hidden text-[10px] font-bold text-gray-500 hover:text-red-500 transition-colors">Sair</button>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto main-scrollbar">
+        <div>
           <Suspense fallback={<LoadingSpinner />}>
             {renderContent()}
           </Suspense>

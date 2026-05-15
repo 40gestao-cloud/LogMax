@@ -12,7 +12,7 @@ const statusCls = (s: string) => {
   const lower = s.toLowerCase();
   if (lower.includes('ativo') || lower.includes('paga') || lower.includes('aprovada') || lower.includes('concluí')) return 'bg-green-900/30 text-green-400';
   if (lower.includes('pendente') || lower.includes('solicitada') || lower.includes('agendado')) return 'bg-yellow-900/30 text-yellow-400';
-  if (lower.includes('negada') || lower.includes('cancelado') || lower.includes('desligado')) return 'bg-red-900/30 text-red-400';
+  if (lower.includes('negada') || lower.includes('cancelado') || lower.includes('desligado')) return 'bg-red-950/50 text-red-500';
   return 'bg-gray-700/40 text-gray-400';
 };
 
@@ -89,7 +89,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
       <div className="flex gap-2 shrink-0 flex-wrap">
         {TABS.map((t, i) => (
           <button key={t} onClick={() => { setTab(i); setSearch(''); }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${tab === i ? 'neu-pressed text-yellow-400' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${tab === i ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             {t}
           </button>
         ))}
@@ -156,7 +156,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.func?.nome ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.mes_ref ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-right text-gray-300">R$ {Number(f.salario_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3 px-4 text-xs font-mono text-right text-red-400">-R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3 px-4 text-xs font-mono text-right text-red-500">-R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                           <td className="py-3 px-4 text-xs font-mono font-bold text-right text-green-400">R$ {Number(f.salario_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                           <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(f.status)}`}>{f.status}</span></td>
                         </tr>

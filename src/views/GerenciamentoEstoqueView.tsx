@@ -75,7 +75,7 @@ export const GerenciamentoEstoqueView = () => {
       breakdown: [
         { label: 'Pendentes', value: reqPendentes, cls: reqPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: reqAprovadas, cls: 'text-green-400' },
-        { label: 'Negadas',   value: reqNegadas,   cls: reqNegadas > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Negadas',   value: reqNegadas,   cls: reqNegadas > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -84,7 +84,7 @@ export const GerenciamentoEstoqueView = () => {
       breakdown: [
         { label: 'Pendentes', value: aprPendentes, cls: aprPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovados', value: aprAprovados, cls: 'text-green-400' },
-        { label: 'Negados',   value: aprNegados,   cls: aprNegados > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Negados',   value: aprNegados,   cls: aprNegados > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -93,7 +93,7 @@ export const GerenciamentoEstoqueView = () => {
       breakdown: [
         { label: 'Pendentes', value: expPendentes,  cls: expPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Expedidos', value: expExpedidos,  cls: 'text-green-400' },
-        { label: 'Cancelados',value: expCancelados, cls: expCancelados > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Cancelados',value: expCancelados, cls: expCancelados > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -101,7 +101,7 @@ export const GerenciamentoEstoqueView = () => {
       color: 'bg-green-900/40 text-green-400',
       breakdown: [
         { label: 'Entradas', value: movEntradas, cls: 'text-green-400' },
-        { label: 'Saídas',   value: movSaidas,   cls: movSaidas > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Saídas',   value: movSaidas,   cls: movSaidas > 0 ? 'text-red-500' : 'text-gray-500' },
         { label: 'Ajustes',  value: movAjustes,  cls: movAjustes > 0 ? 'text-blue-400' : 'text-gray-500' },
       ],
     },
@@ -130,7 +130,7 @@ export const GerenciamentoEstoqueView = () => {
     .slice(0, 5);
 
   const statusVencColor = (s: string) =>
-    s === 'Vencido' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400';
+    s === 'Vencido' ? 'bg-red-950/50 text-red-500' : 'bg-yellow-900/30 text-yellow-400';
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -144,7 +144,7 @@ export const GerenciamentoEstoqueView = () => {
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+            <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
         ))}
@@ -186,7 +186,7 @@ export const GerenciamentoEstoqueView = () => {
                         <p className="text-sm font-semibold text-gray-200">{i.prod?.nome ?? '—'}</p>
                         <p className="text-xs text-gray-500 mt-0.5">{i.data ?? '—'}</p>
                       </div>
-                      <span className={`text-xs font-mono font-bold ${dif < 0 ? 'text-red-400' : dif > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                      <span className={`text-xs font-mono font-bold ${dif < 0 ? 'text-red-500' : dif > 0 ? 'text-green-400' : 'text-gray-500'}`}>
                         {dif > 0 ? `+${dif}` : dif}
                       </span>
                     </div>
@@ -200,7 +200,7 @@ export const GerenciamentoEstoqueView = () => {
         {/* Vencimentos críticos */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={14} className="text-red-400" />
+            <Clock size={14} className="text-red-500" />
             <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Vencimentos Críticos</h3>
           </div>
           <div className="neu-flat rounded-2xl p-5 border border-white/5">

@@ -52,11 +52,11 @@ export const SaldosEstoqueView = () => {
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.codigo || '—'}</td>
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.nome}</td>
                           <td className="py-3 px-4 text-xs text-gray-400">{item.categoria || '—'}</td>
-                          <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${semEstoque ? 'text-red-400' : 'text-green-400'}`}>{saldo}</td>
+                          <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${semEstoque ? 'text-red-500' : 'text-green-400'}`}>{saldo}</td>
                           <td className="py-3 px-4 text-xs text-gray-400">{item.unidade || '—'}</td>
                           <td className="py-3 px-4 text-center">
                             {semEstoque
-                              ? <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-900/30 text-red-400">Sem Estoque</span>
+                              ? <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-950/50 text-red-500">Sem Estoque</span>
                               : <StatusBadge status={item.status} />}
                           </td>
                         </motion.tr>

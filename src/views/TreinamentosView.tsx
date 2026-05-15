@@ -7,7 +7,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 const statusCls = (s: string) => {
   if (s === 'Concluído') return 'bg-green-900/30 text-green-400';
   if (s === 'Em Andamento') return 'bg-blue-900/30 text-blue-400';
-  if (s === 'Cancelado') return 'bg-red-900/30 text-red-400';
+  if (s === 'Cancelado') return 'bg-red-950/50 text-red-500';
   return 'bg-yellow-900/30 text-yellow-400'; // Agendado
 };
 
@@ -85,7 +85,7 @@ export const TreinamentosView = ({ showToast }: any) => {
           <input type="text" placeholder="Buscar treinamento..." value={search} onChange={e => setSearch(e.target.value)}
             className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-52" />
         </div>
-        <NeuButtonAccent variant="yellow" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Novo Treinamento'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Novo Treinamento'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
@@ -118,7 +118,7 @@ export const TreinamentosView = ({ showToast }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Criar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Criar'}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -150,7 +150,7 @@ export const TreinamentosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{t.data_fim ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{t.vagas ?? 0}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`text-xs font-mono font-bold ${vagasLiv === 0 ? 'text-red-400' : 'text-green-400'}`}>
+                          <span className={`text-xs font-mono font-bold ${vagasLiv === 0 ? 'text-red-500' : 'text-green-400'}`}>
                             {t.inscritos ?? 0} <span className="text-gray-600 font-normal">/ {t.vagas ?? 0}</span>
                           </span>
                         </td>

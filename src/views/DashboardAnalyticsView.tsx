@@ -108,7 +108,7 @@ export const DashboardAnalyticsView = () => {
       val: `R$ ${(parseFloat(c.valor) || 0).toFixed(2).replace('.', ',')}`,
     })),
     ...filteredCP.slice(0, 2).map((c: any) => ({
-      bg: 'bg-red-500/10', color: 'text-red-400', icon: CreditCard,
+      bg: 'bg-red-500/10', color: 'text-red-500', icon: CreditCard,
       title: 'Conta a Pagar',
       doc: (c.id as string)?.slice(0, 8).toUpperCase() ?? '—',
       val: `R$ ${(parseFloat(c.valor) || 0).toFixed(2).replace('.', ',')}`,
@@ -166,7 +166,7 @@ export const DashboardAnalyticsView = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 shrink-0">
         {[
           { label: 'Receita Total', val: receitaTotal, growth: `${filteredCR.length} lançamentos`, Icon: Banknote, color: 'text-accent', trendColor: 'text-accent' },
-          { label: 'Despesas Operacionais', val: despesasTotal, growth: `${filteredCP.length} lançamentos`, Icon: TrendingDown, color: 'text-gray-100', trendColor: 'text-red-400' },
+          { label: 'Despesas Operacionais', val: despesasTotal, growth: `${filteredCP.length} lançamentos`, Icon: TrendingDown, color: 'text-gray-100', trendColor: 'text-red-500' },
           { label: 'Ordens de Compra', val: ordensCount, growth: `${ordensNovas} novas hoje`, Icon: Package, color: 'text-gray-100', trendColor: 'text-accent' },
           { label: 'Estoque Crítico', val: estoqueCritico, growth: 'Produtos no estoque de segurança', Icon: ShieldAlert, color: 'text-accent', trendColor: 'text-accent', accent: true },
         ].map(({ label, val, growth, Icon, color, trendColor, accent }) => (

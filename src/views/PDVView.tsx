@@ -220,11 +220,11 @@ export const PDVView = ({ showToast, profile }: any) => {
             {lastVenda && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                 className="flex items-center justify-between p-4 rounded-2xl shrink-0"
-                style={{ background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.2)' }}>
+                style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}>
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 size={18} className="text-yellow-400" />
+                  <CheckCircle2 size={18} className="text-accent" />
                   <div>
-                    <p className="text-sm font-bold text-yellow-400">Venda #{lastVenda.id} concluída!</p>
+                    <p className="text-sm font-bold text-accent">Venda #{lastVenda.id} concluída!</p>
                     <p className="text-xs text-gray-400">Total: {lastVenda.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
                 </div>
@@ -249,20 +249,21 @@ export const PDVView = ({ showToast, profile }: any) => {
                     whileTap={!semEstoque ? { scale: 0.97 } : {}}
                     disabled={semEstoque}
                     className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left transition-all border border-transparent relative"
-                    style={inCart ? { borderColor: 'rgba(250,204,21,0.25)', background: 'rgba(250,204,21,0.04)' } : semEstoque ? { opacity: 0.4 } : {}}
+                    style={inCart ? { borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 4%, transparent)' } : semEstoque ? { opacity: 0.4 } : {}}
                   >
                     {inCart && (
-                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-black text-black">
+                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                        style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
                         {inCart.qtd}
                       </span>
                     )}
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{p.codigo || '—'}</span>
                     <span className="text-sm font-bold text-gray-200 leading-tight">{p.nome}</span>
                     <div className="flex items-end justify-between mt-auto pt-1">
-                      <span className="text-base font-black text-yellow-400">
+                      <span className="text-base font-black text-accent">
                         {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
-                      <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-400' : 'text-gray-500'}`}>
+                      <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-500' : 'text-gray-500'}`}>
                         {semEstoque ? 'Sem estoque' : `Saldo: ${p.estoque ?? '∞'}`}
                       </span>
                     </div>
@@ -278,14 +279,15 @@ export const PDVView = ({ showToast, profile }: any) => {
           <div className="neu-flat rounded-3xl p-5 flex flex-col gap-3 flex-1 min-h-0 border border-white/5">
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <ShoppingCart size={16} style={{ color: '#FACC15' }} />
+                <ShoppingCart size={16} className="text-accent" />
                 <h3 className="text-sm font-bold text-gray-200">Carrinho</h3>
                 {cart.length > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-black text-black">{cart.length}</span>
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                    style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{cart.length}</span>
                 )}
               </div>
               {cart.length > 0 && (
-                <button onClick={clearCart} className="text-[10px] text-gray-500 hover:text-red-400 transition-colors flex items-center gap-1">
+                <button onClick={clearCart} className="text-[10px] text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1">
                   <X size={10} /> Limpar
                 </button>
               )}
@@ -321,10 +323,10 @@ export const PDVView = ({ showToast, profile }: any) => {
                         </button>
                       </div>
                       <div className="w-20 text-right shrink-0">
-                        <p className="text-xs font-bold text-yellow-400">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p className="text-xs font-bold text-accent">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
                       <button onClick={() => removeFromCart(item.produto_id)}
-                        className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                        className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors shrink-0">
                         <Trash2 size={11} />
                       </button>
                     </motion.div>
@@ -351,7 +353,7 @@ export const PDVView = ({ showToast, profile }: any) => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-gray-200">Total</span>
-                <span className="text-xl font-black text-yellow-400 font-mono">
+                <span className="text-xl font-black text-accent font-mono">
                   {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
@@ -365,7 +367,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                   <button key={f} onClick={() => setFormaPagamento(f)}
                     className="py-2 px-2 rounded-xl text-[10px] font-bold transition-all border"
                     style={formaPagamento === f
-                      ? { background: 'rgba(250,204,21,0.12)', borderColor: 'rgba(250,204,21,0.35)', color: '#FACC15' }
+                      ? { background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
                       : { background: 'transparent', borderColor: 'rgba(255,255,255,0.05)', color: '#6b7280' }
                     }>
                     {f}
@@ -375,8 +377,8 @@ export const PDVView = ({ showToast, profile }: any) => {
 
               {formaPagamento === 'Fiado' && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
-                  <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.15)' }}>
-                    <User size={12} style={{ color: '#FACC15' }} className="shrink-0" />
+                  <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
+                    <User size={12} className="text-accent shrink-0" />
                     <select
                       value={clienteId}
                       onChange={e => setClienteId(e.target.value)}
@@ -399,9 +401,9 @@ export const PDVView = ({ showToast, profile }: any) => {
                   className="w-full rounded-2xl flex flex-col gap-3 p-4 shrink-0 mt-1"
                   style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
                   <div className="flex items-start gap-2.5">
-                    <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                    <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-bold text-red-400">Erro de conexão</p>
+                      <p className="text-sm font-bold text-red-500">Erro de conexão</p>
                       <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                         Antes de tentar novamente, verifique no{' '}
                         <span className="font-bold text-gray-300">Histórico de Vendas</span>{' '}
@@ -424,9 +426,9 @@ export const PDVView = ({ showToast, profile }: any) => {
                   whileTap={cart.length > 0 && !isClosing ? { scale: 0.98 } : {}}
                   className="w-full py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1"
                   style={{
-                    background: cart.length === 0 || isClosing ? 'rgba(250,204,21,0.2)' : 'linear-gradient(135deg, #FACC15, #F59E0B)',
-                    color: cart.length === 0 || isClosing ? '#4b5563' : '#0A0A0A',
-                    boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px rgba(250,204,21,0.3)' : 'none',
+                    background: cart.length === 0 || isClosing ? 'color-mix(in srgb, var(--color-accent) 20%, transparent)' : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+                    color: cart.length === 0 || isClosing ? '#4b5563' : 'var(--color-accent-text)',
+                    boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'none',
                     cursor: cart.length === 0 || isClosing ? 'not-allowed' : 'pointer',
                   }}>
                   {isClosing ? <><Loader2 size={16} className="animate-spin" /> Processando...</> : <><CheckCircle2 size={16} /> Fechar Venda</>}

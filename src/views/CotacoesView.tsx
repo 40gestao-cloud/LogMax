@@ -223,7 +223,7 @@ export const CotacoesView = ({ showToast }: any) => {
                         {item.status === 'Em Cotação' && (
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => handleAprovar(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Aprovar</button>
-                            <button onClick={() => handleCancelar(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400"><Trash2 size={12} /></button>
+                            <button onClick={() => handleCancelar(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                           </div>
                         )}
                         {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && (

@@ -73,7 +73,7 @@ export const GerenciamentoRHView = () => {
       breakdown: [
         { label: 'Ativos', value: funAtivos, cls: 'text-green-400' },
         { label: 'Afastados', value: funAfastados, cls: funAfastados > 0 ? 'text-yellow-400' : 'text-gray-500' },
-        { label: 'Desligados', value: funDesligados, cls: funDesligados > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Desligados', value: funDesligados, cls: funDesligados > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -99,7 +99,7 @@ export const GerenciamentoRHView = () => {
       color: 'bg-purple-900/40 text-purple-400',
       breakdown: [
         { label: 'Normal', value: pontoNormal, cls: 'text-green-400' },
-        { label: 'Faltas', value: pontoFaltas, cls: pontoFaltas > 0 ? 'text-red-400' : 'text-gray-500' },
+        { label: 'Faltas', value: pontoFaltas, cls: pontoFaltas > 0 ? 'text-red-500' : 'text-gray-500' },
         { label: 'Hora Extra', value: pontoExtras, cls: 'text-blue-400' },
       ],
     },
@@ -217,7 +217,7 @@ export const GerenciamentoRHView = () => {
                         <p className="text-sm font-semibold text-gray-200">{t.nome}</p>
                         <p className="text-xs text-gray-500 mt-0.5">{t.instrutor ?? 'Sem instrutor'} · <span className="font-mono">{t.data_inicio}</span></p>
                       </div>
-                      <span className={`text-xs font-bold font-mono ${vagasLiv === 0 ? 'text-red-400' : 'text-green-400'}`}>{vagasLiv} vagas</span>
+                      <span className={`text-xs font-bold font-mono ${vagasLiv === 0 ? 'text-red-500' : 'text-green-400'}`}>{vagasLiv} vagas</span>
                     </div>
                   );
                 })}

@@ -6,7 +6,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const statusCls = (s: string) => {
   if (s === 'Aprovada') return 'bg-green-900/30 text-green-400';
-  if (s === 'Negada') return 'bg-red-900/30 text-red-400';
+  if (s === 'Negada') return 'bg-red-950/50 text-red-500';
   if (s === 'Em Andamento') return 'bg-blue-900/30 text-blue-400';
   if (s === 'Concluída') return 'bg-gray-700/40 text-gray-400';
   return 'bg-yellow-900/30 text-yellow-400'; // Solicitada
@@ -82,7 +82,7 @@ export const FeriasView = ({ showToast }: any) => {
       </div>
 
       <div className="flex justify-end shrink-0">
-        <NeuButtonAccent variant="yellow" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Solicitar Férias'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Solicitar Férias'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
@@ -120,7 +120,7 @@ export const FeriasView = ({ showToast }: any) => {
               ))}
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Solicitar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Solicitar'}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -159,11 +159,11 @@ export const FeriasView = ({ showToast }: any) => {
                         {f.status === 'Solicitada' && (
                           <div className="flex gap-1.5 justify-end">
                             <button onClick={() => setStatus(f.id, 'Aprovada')}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-green-400 transition-colors" title="Aprovar">
+                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors" title="Aprovar">
                               <Check size={13} />
                             </button>
                             <button onClick={() => setStatus(f.id, 'Negada')}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-400 transition-colors" title="Negar">
+                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors" title="Negar">
                               <XIcon size={13} />
                             </button>
                           </div>

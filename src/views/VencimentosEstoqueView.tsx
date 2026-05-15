@@ -47,7 +47,7 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
   };
 
   const isFormOpen = showForm || !!editItem;
-  const statusColor = (s: string) => s === 'Vencido' ? 'bg-red-900/30 text-red-400' : s === 'Próximo' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-green-900/30 text-green-400';
+  const statusColor = (s: string) => s === 'Vencido' ? 'bg-red-950/50 text-red-500' : s === 'Próximo' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-green-900/30 text-green-400';
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -94,7 +94,7 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.vencimento || '—'}</td>
                       <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusColor(item.status)}`}>{item.status}</span></td>
-                      <td className="py-3 px-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button><button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400"><Trash2 size={12} /></button></div></td>
+                      <td className="py-3 px-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button><button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button></div></td>
                     </motion.tr>
                   ))}
                 </AnimatePresence>

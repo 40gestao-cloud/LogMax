@@ -108,7 +108,7 @@ export const AprovacoesComprasView = ({ showToast }: any) => {
                         </div>
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                            Observação <span className="text-red-400/70">(obrigatória para negar)</span>
+                            Observação <span className="text-red-500/70">(obrigatória para negar)</span>
                           </label>
                           <textarea
                             className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20"
@@ -121,7 +121,7 @@ export const AprovacoesComprasView = ({ showToast }: any) => {
                           <button
                             onClick={() => handleNegar(ap)}
                             disabled={isProcessing}
-                            className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-red-400 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
+                            className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
                           >
                             {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <ThumbsDown size={14} />}
                             Negar

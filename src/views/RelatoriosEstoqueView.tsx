@@ -50,11 +50,11 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
 
   const tipoColor = (tipo: string) =>
     tipo === 'Entrada' ? 'bg-green-900/30 text-green-400'
-    : tipo === 'Saída' ? 'bg-red-900/30 text-red-400'
+    : tipo === 'Saída' ? 'bg-red-950/50 text-red-500'
     : 'bg-blue-900/30 text-blue-400';
 
   const statusVencColor = (st: string) =>
-    st === 'Vencido' ? 'bg-red-900/30 text-red-400'
+    st === 'Vencido' ? 'bg-red-950/50 text-red-500'
     : st === 'Próximo' ? 'bg-yellow-900/30 text-yellow-400'
     : 'bg-green-900/30 text-green-400';
 
@@ -122,7 +122,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+            <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
         ))}
@@ -192,7 +192,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${p.estoque === 0 ? 'opacity-60' : ''}`}>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.codigo ?? '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome ?? '—'}</td>
-                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-400' : 'text-gray-200'}`}>{p.estoque ?? 0}</td>
+                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-500' : 'text-gray-200'}`}>{p.estoque ?? 0}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(p.preco || 0).toFixed(2)}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
@@ -236,7 +236,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{i.prod?.nome ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{i.qtd_sistema ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{i.qtd_contada ?? '—'}</td>
-                          <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${dif < 0 ? 'text-red-400' : dif > 0 ? 'text-green-400' : 'text-gray-400'}`}>{dif > 0 ? `+${dif}` : dif}</td>
+                          <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${dif < 0 ? 'text-red-500' : dif > 0 ? 'text-green-400' : 'text-gray-400'}`}>{dif > 0 ? `+${dif}` : dif}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{i.data ?? '—'}</td>
                           <td className="py-3 px-4 text-center"><StatusBadge status={i.status} /></td>
                         </motion.tr>

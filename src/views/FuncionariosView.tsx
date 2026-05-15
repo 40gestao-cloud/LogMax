@@ -102,7 +102,7 @@ export const FuncionariosView = ({ showToast }: any) => {
             <input type="text" placeholder="Buscar funcionário..." value={search} onChange={e => setSearch(e.target.value)}
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" />
           </div>
-          <NeuButtonAccent variant="yellow" onClick={openNew}><Plus size={14} />Novo Funcionário</NeuButtonAccent>
+          <NeuButtonAccent variant="" onClick={openNew}><Plus size={14} />Novo Funcionário</NeuButtonAccent>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export const FuncionariosView = ({ showToast }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="yellow" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar Alterações' : 'Cadastrar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar Alterações' : 'Cadastrar'}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -175,8 +175,8 @@ export const FuncionariosView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end">
-                          <button onClick={() => openEdit(f)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-yellow-400 transition-colors"><Pencil size={13} /></button>
-                          <button onClick={() => handleDelete(f.id)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                          <button onClick={() => openEdit(f)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"><Pencil size={13} /></button>
+                          <button onClick={() => handleDelete(f.id)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
                         </div>
                       </td>
                     </motion.tr>

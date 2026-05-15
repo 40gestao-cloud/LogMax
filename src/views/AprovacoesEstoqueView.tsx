@@ -98,10 +98,10 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
               )}
               <div className="flex gap-2 justify-end">
                 {expanded !== ap.id && (<button onClick={() => setExpanded(ap.id)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">Adicionar obs.</button>)}
-                <button onClick={() => handleNegar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-400 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
+                <button onClick={() => handleNegar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
                   {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Negar
                 </button>
-                <button onClick={() => handleAprovar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-green-400 hover:bg-green-900/20 border border-green-500/10 disabled:opacity-40 flex items-center gap-1">
+                <button onClick={() => handleAprovar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
                   {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Aprovar
                 </button>
               </div>

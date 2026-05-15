@@ -6,7 +6,7 @@ import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent } from '../comp
 
 const statusIcon = (s: string) => {
   if (s === 'Processado') return <CheckCircle size={12} className="text-green-400" />;
-  if (s === 'Erro') return <AlertTriangle size={12} className="text-red-400" />;
+  if (s === 'Erro') return <AlertTriangle size={12} className="text-red-500" />;
   return <Clock size={12} className="text-yellow-400" />;
 };
 
@@ -75,7 +75,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
         ))}
@@ -101,7 +101,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
               </div>
               <p className="text-[10px] text-gray-500">Ag. {c.agencia ?? '—'} · Conta {c.conta ?? '—'}</p>
               <p className="text-[10px] text-gray-500">{c.tipo ?? '—'}</p>
-              <p className={`text-lg font-black font-mono mt-1 ${Number(c.saldo) < 0 ? 'text-red-400' : 'text-green-400'}`}>
+              <p className={`text-lg font-black font-mono mt-1 ${Number(c.saldo) < 0 ? 'text-red-500' : 'text-green-400'}`}>
                 R$ {Number(c.saldo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
@@ -184,12 +184,12 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
                           <button onClick={() => handleStatusCycle(i)}
                             className="flex items-center gap-1.5 mx-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase hover:opacity-80 transition-opacity">
                             {statusIcon(i.status)}
-                            <span className={i.status === 'Processado' ? 'text-green-400' : i.status === 'Erro' ? 'text-red-400' : 'text-yellow-400'}>{i.status}</span>
+                            <span className={i.status === 'Processado' ? 'text-green-400' : i.status === 'Erro' ? 'text-red-500' : 'text-yellow-400'}>{i.status}</span>
                           </button>
                         </td>
                         <td className="py-3 px-5">
                           <button onClick={() => handleDelete(i.id)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-400 transition-colors">
+                            className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors">
                             <Trash2 size={13} />
                           </button>
                         </td>

@@ -76,7 +76,7 @@ export const InventariosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{item.qtd_sistema ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{item.qtd_contada ?? '—'}</td>
-                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${dif < 0 ? 'text-red-400' : dif > 0 ? 'text-green-400' : 'text-gray-400'}`}>{dif > 0 ? `+${dif}` : dif}</td>
+                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${dif < 0 ? 'text-red-500' : dif > 0 ? 'text-green-400' : 'text-gray-400'}`}>{dif > 0 ? `+${dif}` : dif}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       </motion.tr>

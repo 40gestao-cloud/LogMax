@@ -31,7 +31,7 @@ export const SugestoesComprasView = ({ showToast }: any) => {
   const valorTotalEst = sugestoes.reduce((acc: number, p: any) => acc + p.valor_est, 0);
 
   const situacao = (estoque: number) =>
-    estoque === 0 ? { label: 'Crítico', cls: 'bg-red-900/30 text-red-400' }
+    estoque === 0 ? { label: 'Crítico', cls: 'bg-red-950/50 text-red-500' }
     : { label: 'Baixo', cls: 'bg-yellow-900/30 text-yellow-400' };
 
   const handleSolicitar = async () => {
@@ -85,7 +85,7 @@ export const SugestoesComprasView = ({ showToast }: any) => {
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-red-400' : 'text-gray-100'}`}>{k.value}</p>
+            <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
         ))}
@@ -175,7 +175,7 @@ export const SugestoesComprasView = ({ showToast }: any) => {
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.codigo ?? '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome ?? '—'}</td>
-                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-400' : 'text-yellow-400'}`}>{p.estoque}</td>
+                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-500' : 'text-yellow-400'}`}>{p.estoque}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
                         <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span></td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{p.qtd_sugerida}</td>
