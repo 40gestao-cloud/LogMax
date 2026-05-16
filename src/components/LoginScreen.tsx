@@ -2,12 +2,16 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,7 +52,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
-      style={{ background: 'var(--color-bg-base)' }}
+      style={{ background: isLight ? '#FFFFFF' : 'var(--color-bg-base)' }}
     >
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -57,23 +61,17 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         className="w-[calc(100%-1.5rem)] sm:w-full p-6 sm:p-10"
         style={{
           maxWidth: 420,
-          borderRadius: '2rem',
-          background: 'var(--color-card-bg)',
-          boxShadow: 'var(--color-card-shadow)',
-          border: '1px solid var(--color-card-border)',
           position: 'relative',
           zIndex: 1,
         }}
       >
-        {/* Logo com container neumórfico — adapta automaticamente ao tema. */}
+        {/* Logo — sem container/sombra, totalmente flat. */}
         <div className="flex flex-col items-center mb-8">
           <div
             style={{
               width: 140,
               height: 140,
               borderRadius: '1.5rem',
-              background: 'var(--color-icon-bg)',
-              boxShadow: 'var(--color-icon-shadow)',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
