@@ -10,7 +10,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone
+  Sun, Moon, Megaphone, Palette, Check
 } from 'lucide-react';
 
 // --- lazy views ---
@@ -216,23 +216,97 @@ const ACCENT_OPTIONS = [
 
 function AccentPicker() {
   const { accentColor, setAccentColor } = useTheme();
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o popover ao clicar fora ou no Escape
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      if (!popoverRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('touchstart', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('touchstart', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="neu-flat rounded-xl hidden sm:flex items-center gap-2 px-3 py-2.5 border border-white/5" title="Cor do tema">
-      {ACCENT_OPTIONS.map(({ id, hex, label }) => (
+    <>
+      {/* Desktop (sm+): bolinhas inline */}
+      <div className="neu-flat rounded-xl hidden sm:flex items-center gap-2 px-3 py-2.5 border border-white/5" title="Cor do tema">
+        {ACCENT_OPTIONS.map(({ id, hex, label }) => (
+          <button
+            key={id}
+            title={label}
+            onClick={() => setAccentColor(id)}
+            className="w-[14px] h-[14px] rounded-full transition-transform hover:scale-125 focus:outline-none shrink-0"
+            style={{
+              background: hex,
+              boxShadow: accentColor === id
+                ? `0 0 0 2px var(--color-bg-base), 0 0 0 3.5px ${hex}`
+                : undefined,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Mobile (<sm): ícone de paleta + popover ao toque */}
+      <div ref={popoverRef} className="relative sm:hidden">
         <button
-          key={id}
-          title={label}
-          onClick={() => setAccentColor(id)}
-          className="w-[14px] h-[14px] rounded-full transition-transform hover:scale-125 focus:outline-none shrink-0"
-          style={{
-            background: hex,
-            boxShadow: accentColor === id
-              ? `0 0 0 2px var(--color-bg-base), 0 0 0 3.5px ${hex}`
-              : undefined,
-          }}
-        />
-      ))}
-    </div>
+          onClick={() => setOpen(v => !v)}
+          aria-label="Escolher cor do tema"
+          aria-expanded={open}
+          className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
+        >
+          <Palette size={16} />
+        </button>
+
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 mt-2 neu-flat rounded-2xl p-3 border border-white/10 z-50 shadow-2xl"
+              style={{ background: 'var(--color-bg-base)', minWidth: 180 }}
+            >
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 text-center">Cor do tema</p>
+              <div className="grid grid-cols-3 gap-3 justify-items-center">
+                {ACCENT_OPTIONS.map(({ id, hex, label }) => {
+                  const isActive = accentColor === id;
+                  // Cores claras (amarelo) precisam de tick escuro para visibilidade
+                  const tickColor = id === 'yellow' ? '#0A0A0A' : '#ffffff';
+                  return (
+                    <button
+                      key={id}
+                      aria-label={label}
+                      aria-pressed={isActive}
+                      onClick={() => { setAccentColor(id); setOpen(false); }}
+                      className="w-9 h-9 rounded-full transition-transform hover:scale-110 active:scale-95 focus:outline-none flex items-center justify-center"
+                      style={{
+                        background: hex,
+                        boxShadow: isActive
+                          ? `0 0 0 2px var(--color-bg-base), 0 0 0 3.5px ${hex}`
+                          : undefined,
+                      }}
+                    >
+                      {isActive && <Check size={14} style={{ color: tickColor }} strokeWidth={3} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }
 
