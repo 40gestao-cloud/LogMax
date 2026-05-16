@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { LoadingSpinner } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface CartItem {
   produto_id: string;
@@ -20,6 +22,7 @@ const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado
 
 export const PDVView = ({ showToast, profile }: any) => {
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto();
+  const { theme } = useTheme();
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
@@ -34,6 +37,11 @@ export const PDVView = ({ showToast, profile }: any) => {
   const [isClosing, setIsClosing] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
+  // Pix em aguardo: payload na DB + snapshot do carrinho para chamar o RPC após confirmação
+  const [pixPendente, setPixPendente] = useState<{ id: string; valor: number } | null>(null);
+  const vendaSnapshotRef = useRef<{
+    cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
+  } | null>(null);
 
   // Quando o usuário troca de forma de pagamento, sempre volta parcelas para 1
   // (evita ficar com 6x setado e mudar para Dinheiro).
@@ -103,6 +111,53 @@ export const PDVView = ({ showToast, profile }: any) => {
 
   const valorPorParcela = parcelas > 1 ? totalFinal / parcelas : totalFinal;
 
+  // Chama o RPC transacional. Usado tanto pelo fluxo síncrono (Dinheiro/Cartão/Fiado)
+  // quanto pelo callback do realtime após confirmação do Pix. Recebe snapshot para
+  // que o fluxo Pix possa usar o estado capturado no momento da geração do QR.
+  const finalizarVenda = async (snap: {
+    cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
+  }, forma: string, parcelasEfetivas: number) => {
+    if (!supabase) throw new Error('Supabase indisponível.');
+    const itensPayload = snap.cart.map(item => ({
+      produto_id:    item.produto_id,
+      nome_produto:  item.nome_produto,
+      qtd:           item.qtd,
+      preco_unitario: item.preco_unitario,
+      subtotal:      item.subtotal,
+    }));
+    const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
+      p_cliente_id:      snap.clienteId || null,
+      p_total:           snap.subtotal,
+      p_desconto:        snap.descontoNum,
+      p_total_final:     snap.totalFinal,
+      p_forma_pagamento: forma,
+      p_parcelas:        forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
+      p_itens:           itensPayload,
+    });
+    if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
+
+    const shortId = String(vendaId).slice(-6).toUpperCase();
+    const totalFmt = snap.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const valorParcela = parcelasEfetivas > 1 ? snap.totalFinal / parcelasEfetivas : snap.totalFinal;
+    const parcelaInfo = forma === 'Cartão Crédito' && parcelasEfetivas > 1
+      ? `\n📅 ${parcelasEfetivas}x de ${valorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+      : '';
+    const financeiroInfo =
+      forma === 'Fiado' ? '\n⚠️ Gerado título em Contas a Receber'
+      : forma === 'Cartão Crédito' && parcelasEfetivas > 1 ? `\n⚠️ Gerados ${parcelasEfetivas} títulos em Contas a Receber`
+      : forma === 'Cartão Crédito' ? '\n⚠️ Gerado título em Contas a Receber'
+      : '';
+    wppNotify(`🛒 *LogMax PDV — Venda concluída*\n💰 Total: ${totalFmt}\n💳 Pagamento: ${forma}${parcelaInfo}${financeiroInfo}`);
+    setLastVenda({ id: shortId, total: snap.totalFinal });
+    setCart([]);
+    setDesconto('');
+    setFormaPagamento('Dinheiro');
+    setParcelas(1);
+    setClienteId('');
+    setIsClosing(false);
+    searchRef.current?.focus();
+  };
+
   const handleFecharVenda = async () => {
     if (networkError) return;
     if (cart.length === 0) { showToast?.('Carrinho vazio.', 'error', true); return; }
@@ -142,7 +197,6 @@ export const PDVView = ({ showToast, profile }: any) => {
           if (insuficientes.length > 0) {
             const nomes = insuficientes.map(i => i.nome_produto).join(', ');
             showToast?.(`Estoque insuficiente: ${nomes}. Ajuste o carrinho.`, 'error', true);
-            // Sync cart with actual DB stock so the user sees correct limits
             setCart(prev => prev.map(cartItem => {
               const fp = freshProd.find((p: any) => p.id === cartItem.produto_id);
               return fp ? { ...cartItem, estoque: Number(fp.estoque ?? 0) } : cartItem;
@@ -155,47 +209,33 @@ export const PDVView = ({ showToast, profile }: any) => {
 
       if (!supabase) throw new Error('Supabase indisponível.');
 
-      // Venda PDV → financeiro em transação atômica via RPC.
-      // Se qualquer INSERT falhar (vendas / itens / movimentações / contas_receber),
-      // a função criar_venda_pdv faz ROLLBACK e nada é gravado.
-      const itensPayload = cart.map(item => ({
-        produto_id:    item.produto_id,
-        nome_produto:  item.nome_produto,
-        qtd:           item.qtd,
-        preco_unitario: item.preco_unitario,
-        subtotal:      item.subtotal,
-      }));
+      // Fluxo Pix: cria pendente, mostra QR e aguarda confirmação do simulador
+      // via realtime. A venda só é persistida no RPC quando o cliente confirma.
+      if (formaPagamento === 'PIX') {
+        const { data: pendente, error: insErr } = await supabase
+          .from('pix_pendentes')
+          .insert({ valor: totalFinal, cliente_id: clienteId || null, status: 'aguardando' })
+          .select('id, valor')
+          .single();
+        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar Pix.');
 
-      const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
-        p_cliente_id:      clienteId || null,
-        p_total:           subtotal,
-        p_desconto:        descontoNum,
-        p_total_final:     totalFinal,
-        p_forma_pagamento: formaPagamento,
-        p_parcelas:        formaPagamento === 'Cartão Crédito' ? parcelas : 1,
-        p_itens:           itensPayload,
-      });
-      if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
+        vendaSnapshotRef.current = {
+          cart: [...cart],
+          subtotal,
+          descontoNum,
+          totalFinal,
+          clienteId,
+        };
+        setPixPendente({ id: pendente.id, valor: Number(pendente.valor) });
+        // isClosing fica true enquanto o overlay está aberto (botão "Fechar Venda" desabilitado)
+        return;
+      }
 
-      const shortId = String(vendaId).slice(-6).toUpperCase();
-      const totalFmt = totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      const parcelaInfo = formaPagamento === 'Cartão Crédito' && parcelas > 1
-        ? `\n📅 ${parcelas}x de ${valorPorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-        : '';
-      const financeiroInfo =
-        formaPagamento === 'Fiado' ? '\n⚠️ Gerado título em Contas a Receber'
-        : formaPagamento === 'Cartão Crédito' && parcelas > 1 ? `\n⚠️ Gerados ${parcelas} títulos em Contas a Receber`
-        : formaPagamento === 'Cartão Crédito' ? '\n⚠️ Gerado título em Contas a Receber'
-        : '';
-      wppNotify(`🛒 *LogMax PDV — Venda concluída*\n💰 Total: ${totalFmt}\n💳 Pagamento: ${formaPagamento}${parcelaInfo}${financeiroInfo}`);
-      setLastVenda({ id: shortId, total: totalFinal });
-      setCart([]);
-      setDesconto('');
-      setFormaPagamento('Dinheiro');
-      setParcelas(1);
-      setClienteId('');
-      setIsClosing(false);
-      searchRef.current?.focus();
+      await finalizarVenda(
+        { cart, subtotal, descontoNum, totalFinal, clienteId },
+        formaPagamento,
+        parcelas,
+      );
     } catch (err: any) {
       const isNetworkError =
         err instanceof TypeError ||
@@ -203,13 +243,53 @@ export const PDVView = ({ showToast, profile }: any) => {
         /fetch|network|failed to fetch/i.test(String(err?.message ?? ''));
 
       if (isNetworkError) {
-        // Keep isClosing=true so the button stays disabled while the warning is shown
         setNetworkError(true);
       } else {
         showToast?.(`Erro ao fechar venda: ${err?.message ?? 'verifique o console'}`, 'error', true);
         setIsClosing(false);
       }
     }
+  };
+
+  // Realtime: escuta a linha do pendente Pix. Quando UPDATE marca status='pago',
+  // chama o RPC com o snapshot do carrinho. Cancelamento manual ou cancelado
+  // simplesmente fecha o overlay e devolve o controlo ao operador.
+  useEffect(() => {
+    if (!pixPendente || !supabase) return;
+    const channel = supabase
+      .channel(`pix_pendente_${pixPendente.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixPendente.id}` },
+        async (payload: any) => {
+          const novoStatus = payload?.new?.status;
+          if (novoStatus !== 'pago') return;
+          const snap = vendaSnapshotRef.current;
+          if (!snap) return;
+          try {
+            await finalizarVenda(snap, 'PIX', 1);
+            vendaSnapshotRef.current = null;
+            setPixPendente(null);
+          } catch (err: any) {
+            showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+            setPixPendente(null);
+            setIsClosing(false);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [pixPendente, showToast]);
+
+  const cancelarPix = async () => {
+    if (!pixPendente || !supabase) return;
+    // Tenta marcar como cancelado; ignora erro porque o desfecho local é o mesmo.
+    await supabase.from('pix_pendentes')
+      .update({ status: 'cancelado' })
+      .eq('id', pixPendente.id);
+    vendaSnapshotRef.current = null;
+    setPixPendente(null);
+    setIsClosing(false);
   };
 
   if (loadingProd || caixaLoading) return <LoadingSpinner />;
@@ -513,6 +593,69 @@ export const PDVView = ({ showToast, profile }: any) => {
           </div>
         </div>
       </div>
+
+      {/* Overlay Pix — fica em cima do PDV enquanto aguarda confirmação do simulador */}
+      <AnimatePresence>
+        {pixPendente && (
+          <motion.div
+            key="pix-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              className="neu-flat rounded-3xl w-full max-w-sm p-6 flex flex-col items-center gap-4 border border-white/5 relative"
+              style={{ background: 'var(--color-bg-base)' }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <QrCode size={18} className="text-accent" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent animate-ping" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Aguardando Pagamento</span>
+              </div>
+
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pix — Total</p>
+                <p className="text-3xl font-black text-gray-100 tabular-nums tracking-tight mt-1">
+                  {pixPendente.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-3xl border border-white/5"
+                style={{ background: theme === 'light' ? '#ffffff' : 'rgba(255,255,255,0.04)' }}>
+                <QRCodeSVG
+                  value={`LOGMAX-PIX-${pixPendente.id}`}
+                  size={208}
+                  bgColor="transparent"
+                  fgColor={theme === 'light' ? '#0A0A0A' : '#e5e7eb'}
+                  level="M"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-gray-500 text-center max-w-[18rem]">
+                <Smartphone size={12} className="shrink-0 text-accent" />
+                <span>Peça ao cliente para escanear este código no <span className="font-bold text-gray-300">simulador de pagamento</span>.</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[10px] text-gray-600 font-mono">
+                <Loader2 size={10} className="animate-spin" />
+                <span>Escutando confirmação em tempo real…</span>
+              </div>
+
+              <button
+                onClick={cancelarPix}
+                className="mt-1 w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                style={{ border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', background: 'rgba(239,68,68,0.05)' }}
+              >
+                <X size={12} /> Cancelar pagamento
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

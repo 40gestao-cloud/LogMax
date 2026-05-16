@@ -63,6 +63,7 @@ const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/Aprovaco
 const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
+const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 
 // --- acesso por setor ---
 const SETOR_MODULES: Record<string, string[]> = {
@@ -572,7 +573,24 @@ function LogMaxAppInner() {
   );
 }
 
+// Rota pública: simulador de pagamento Pix (cliente fora do ERP, sem login).
+// É verificada antes do gate de autenticação para que o cliente possa abrir
+// a URL no telemóvel e usar a câmara diretamente.
+function isSimuladorPagamentoRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname === '/simulador-pagamento';
+}
+
 export default function LogMaxApp() {
+  if (isSimuladorPagamentoRoute()) {
+    return (
+      <ThemeProvider>
+        <Suspense fallback={<PageLoadingFallback />}>
+          <SimuladorPagamentoView />
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
   return (
     <ThemeProvider>
       <PwaUpdatePrompt />
