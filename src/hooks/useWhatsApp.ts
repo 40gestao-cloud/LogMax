@@ -57,10 +57,17 @@ export function useWhatsApp() {
 
   const testConnection = async (c: WppConfig): Promise<{ ok: boolean; error?: string }> => {
     if (!c.instance || !c.token || !c.phone) return { ok: false, error: 'Preencha todos os campos' };
+    if (!supabase) return { ok: false, error: 'Supabase não configurado' };
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { ok: false, error: 'Sessão expirada — faça login novamente' };
+
       const res = await fetch('/api/whatsapp-notify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           instance: c.instance,
           token: c.token,
@@ -77,11 +84,18 @@ export function useWhatsApp() {
   };
 
   const notify = useCallback(async (message: string) => {
-    if (!isActive || !config.instance) return;
+    if (!isActive || !config.instance || !supabase) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      // Sem sessão → falha silenciosa (consistente com 'não crítico')
+      if (!session?.access_token) return;
+
       await fetch('/api/whatsapp-notify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ instance: config.instance, token: config.token, phone: config.phone, message }),
       });
     } catch (err) {

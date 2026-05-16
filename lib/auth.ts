@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export type UserRole = 'admin' | 'gerente' | 'colaborador';
+export type UserRole = 'admin' | 'ceo' | 'gerente' | 'colaborador';
 
 export interface AuthedUser {
   id: string;
