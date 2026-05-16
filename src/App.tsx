@@ -51,6 +51,7 @@ const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoVi
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
+const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
@@ -93,7 +94,7 @@ const menuModules = [
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Gerenciamento', 'Relatórios']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -459,6 +460,7 @@ function LogMaxAppInner() {
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'number', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
+      case 'rh-avaliações':       return <AvaliacoesView showToast={st} profile={profile} />;
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
