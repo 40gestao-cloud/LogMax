@@ -33,10 +33,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'Sem permissão para criar usuários.' });
   }
 
-  const { email, password, nome, role, setor } = req.body ?? {};
+  const { email, password, nome, role } = req.body ?? {};
+  let { setor } = req.body ?? {};
 
   if (!email || !password || !nome || !role || !setor) {
     return res.status(400).json({ error: 'Campos obrigatórios: email, password, nome, role, setor.' });
+  }
+
+  const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador'];
+  if (!VALID_ROLES.includes(role)) {
+    return res.status(400).json({ error: 'Cargo inválido.' });
+  }
+
+  // CEO é global por definição: só admin cria CEO e setor é forçado para 'all'.
+  if (role === 'ceo') {
+    if (callerProfile.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas administradores podem criar CEO.' });
+    }
+    setor = 'all';
+  }
+
+  // Apenas admin pode criar outro admin (defesa em profundidade).
+  if (role === 'admin' && callerProfile.role !== 'admin') {
+    return res.status(403).json({ error: 'Apenas administradores podem criar administradores.' });
   }
 
   // Gerente só pode criar colaboradores do seu próprio setor

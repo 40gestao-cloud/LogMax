@@ -47,6 +47,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'Administradores não podem ser excluídos.' });
   }
 
+  // CEO só pode ser excluído por admin.
+  if (targetProfile.role === 'ceo' && callerProfile.role !== 'admin') {
+    return res.status(403).json({ error: 'Apenas administradores podem excluir CEO.' });
+  }
+
   if (callerProfile.role === 'gerente') {
     if (targetProfile.role !== 'colaborador') {
       return res.status(403).json({ error: 'Gerentes só podem excluir colaboradores.' });

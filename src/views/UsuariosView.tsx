@@ -8,21 +8,24 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const SETOR_LABEL: Record<string, string> = {
-  all:        'Admin',
+  all:        'Global',
   logistica:  'Logística',
   vendas:     'Vendas',
   financeiro: 'Financeiro',
   rh:         'RH',
+  marketing:  'Marketing',
 };
 
 const ROLE_LABEL: Record<string, string> = {
   admin:       'Administrador',
+  ceo:         'CEO',
   gerente:     'Gerente',
   colaborador: 'Colaborador',
 };
 
 const roleCls = (r: string) =>
   r === 'admin' ? 'bg-purple-900/30 text-purple-400'
+  : r === 'ceo' ? 'bg-amber-900/30 text-amber-400'
   : r === 'gerente' ? 'bg-yellow-900/30 text-yellow-400'
   : 'bg-blue-900/30 text-blue-400';
 
@@ -31,6 +34,7 @@ const setorCls = (s: string) =>
   : s === 'vendas'   ? 'bg-orange-900/30 text-orange-400'
   : s === 'financeiro' ? 'bg-cyan-900/30 text-cyan-400'
   : s === 'rh'       ? 'bg-rose-900/30 text-rose-400'
+  : s === 'marketing' ? 'bg-fuchsia-900/30 text-fuchsia-400'
   : 'bg-gray-800/50 text-gray-400';
 
 const EMPTY_FORM = { nome: '', email: '', password: '', role: 'colaborador', setor: 'logistica' };
@@ -111,10 +115,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
     setSaving(true);
     try {
+      // CEO é global por definição — força setor='all' antes de enviar.
+      const payload = form.role === 'ceo' ? { ...form, setor: 'all' } : form;
       const res = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao criar usuário.', 'error'); return; }
@@ -139,12 +145,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const setorOptions = isAdmin
-    ? ['logistica', 'vendas', 'financeiro', 'rh']
+    ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing']
     : [callerProfile.setor];
 
   const roleOptions = isAdmin
-    ? ['gerente', 'colaborador']
+    ? ['ceo', 'gerente', 'colaborador']
     : ['colaborador'];
+
+  const isCeoRole = form.role === 'ceo';
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -283,7 +291,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {u.id !== callerProfile.id && u.role !== 'admin' && (
+                        {u.id !== callerProfile.id && u.role !== 'admin' && !(u.role === 'ceo' && !isAdmin) && (
                           confirmDelete === u.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <button onClick={() => handleDelete(u.id)} disabled={deleting}

@@ -6,7 +6,7 @@ export interface UserProfile {
   id: string;
   nome: string;
   email: string;
-  role: 'admin' | 'gerente' | 'colaborador';
+  role: 'admin' | 'ceo' | 'gerente' | 'colaborador';
   setor: 'all' | 'logistica' | 'vendas' | 'financeiro' | 'rh' | 'marketing';
   criado_por: string | null;
   created_at: string;
