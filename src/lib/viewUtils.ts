@@ -89,10 +89,37 @@ export async function exportToPDF(title: string, columns: string[], rows: any[][
 }
 
 export async function exportToExcel(sheetName: string, columns: string[], rows: any[][], filename: string) {
-  const XLSX = await import('xlsx');
-  const wsData = [columns, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+  // exceljs em vez de xlsx (sheetjs) — este último tem 2 CVEs HIGH sem patch.
+  // Lazy-loaded para não pesar no bundle inicial.
+  const ExcelJS = (await import('exceljs')).default;
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'LogMax';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31)); // limite Excel: 31 chars no nome da sheet
+  worksheet.addRow(columns);
+  worksheet.getRow(1).font = { bold: true };
+  rows.forEach(r => worksheet.addRow(r));
+
+  // Auto-largura das colunas baseado no maior valor
+  worksheet.columns.forEach((col, i) => {
+    const headerLen = (columns[i] ?? '').length;
+    const maxBodyLen = rows.reduce((max, r) => Math.max(max, String(r[i] ?? '').length), 0);
+    col.width = Math.min(50, Math.max(10, Math.max(headerLen, maxBodyLen) + 2));
+  });
+
+  // Gerar buffer e disparar download via Blob (funciona em qualquer browser sem File System API)
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
