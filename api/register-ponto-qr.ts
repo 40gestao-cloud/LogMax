@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'crypto';
-import { authenticate, getAdminClient, applyCors } from './_lib/auth';
+import { authenticate, getAdminClient, applyCors } from '../lib/auth';
 
 const CHECKPOINT_LABELS: Record<string, string> = {
   entrada: 'Entrada',

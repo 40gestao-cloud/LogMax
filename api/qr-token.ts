@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'crypto';
-import { authenticate, authorize, applyCors } from './_lib/auth';
+import { authenticate, authorize, applyCors } from '../lib/auth';
 
 const CHECKPOINTS: Record<string, { label: string; target: number }> = {
   entrada: { label: 'Entrada',             target: 7*60+40  },
