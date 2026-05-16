@@ -18,3 +18,6 @@ Thumbs.db
 
 # Build dev
 dev-dist/
+
+# Bundle analyzer (gerado por rollup-plugin-visualizer)
+bundle-stats.html

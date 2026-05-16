@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -32,6 +33,15 @@ export default defineConfig(({ mode }) => {
         devOptions: {
           enabled: true,
         },
+      }),
+      // Gera bundle-stats.html (project root, fora de /dist) com treemap do
+      // que está em cada chunk. Ferramenta de análise local — NÃO deve ser
+      // deployada nem incluída no PWA precache.
+      visualizer({
+        filename: 'bundle-stats.html',
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
       }),
     ],
     define: {
