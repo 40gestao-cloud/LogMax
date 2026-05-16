@@ -246,7 +246,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             color: 'var(--color-text-ghost)',
             letterSpacing: '0.05em',
           }}>
-            Acesso restrito · LogMax © {new Date().getFullYear()}
+            Gestão Organizacional LogMax {new Date().getFullYear()}
           </p>
           <p style={{
             textAlign: 'center', fontSize: '0.7rem',
