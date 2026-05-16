@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard } from 'lucide-react';
+import { useFetchData } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { LoadingSpinner } from '../components/ui';
@@ -29,10 +29,17 @@ export const PDVView = ({ showToast, profile }: any) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [desconto, setDesconto] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
+  const [parcelas, setParcelas] = useState(1);
   const [clienteId, setClienteId] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
+
+  // Quando o usuário troca de forma de pagamento, sempre volta parcelas para 1
+  // (evita ficar com 6x setado e mudar para Dinheiro).
+  useEffect(() => {
+    if (formaPagamento !== 'Cartão Crédito') setParcelas(1);
+  }, [formaPagamento]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -92,7 +99,9 @@ export const PDVView = ({ showToast, profile }: any) => {
   };
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
-  const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setClienteId(''); setLastVenda(null); setNetworkError(false); };
+  const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); };
+
+  const valorPorParcela = parcelas > 1 ? totalFinal / parcelas : totalFinal;
 
   const handleFecharVenda = async () => {
     if (networkError) return;
@@ -144,70 +153,46 @@ export const PDVView = ({ showToast, profile }: any) => {
         }
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      if (!supabase) throw new Error('Supabase indisponível.');
 
-      const venda = await dbInsert('/api/vendasview', {
-        cliente_id: clienteId || null,
-        total: subtotal,
-        desconto: descontoNum,
-        total_final: totalFinal,
-        forma_pagamento: formaPagamento,
-        status: 'Concluída',
-      }) as any;
+      // Venda PDV → financeiro em transação atômica via RPC.
+      // Se qualquer INSERT falhar (vendas / itens / movimentações / contas_receber),
+      // a função criar_venda_pdv faz ROLLBACK e nada é gravado.
+      const itensPayload = cart.map(item => ({
+        produto_id:    item.produto_id,
+        nome_produto:  item.nome_produto,
+        qtd:           item.qtd,
+        preco_unitario: item.preco_unitario,
+        subtotal:      item.subtotal,
+      }));
 
-      // Rollback transacional (#13): tracking de IDs para limpar tudo se algo falhar a meio.
-      const inseridosItens: string[] = [];
-      const inseridosMov:   string[] = [];
-      try {
-        for (const item of cart) {
-          const it = await dbInsert('/api/itensvendaview', {
-            venda_id: venda.id,
-            produto_id: item.produto_id,
-            nome_produto: item.nome_produto,
-            qtd: item.qtd,
-            preco_unitario: item.preco_unitario,
-            subtotal: item.subtotal,
-          }) as any;
-          if (it?.id) inseridosItens.push(it.id);
-          const mv = await dbInsert('/api/movimentacoesestoqueview', {
-            produto_id: item.produto_id,
-            tipo: 'Saída',
-            qtd: item.qtd,
-            origem: 'PDV',
-            destino: `Venda #${venda.id.slice(-6).toUpperCase()}`,
-            data: today,
-          }) as any;
-          if (mv?.id) inseridosMov.push(mv.id);
-        }
-      } catch (itemErr) {
-        // Rollback ordem importa: movimentações primeiro (afetam estoque),
-        // depois itens (FK soft), por fim o cabeçalho da venda.
-        if (supabase && venda?.id) {
-          for (const id of inseridosMov)   { try { await supabase.from('movimentacoes_estoque').delete().eq('id', id); } catch {} }
-          for (const id of inseridosItens) { try { await supabase.from('itens_venda').delete().eq('id', id); } catch {} }
-          try { await supabase.from('vendas').delete().eq('id', venda.id); } catch {}
-        }
-        throw itemErr;
-      }
+      const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
+        p_cliente_id:      clienteId || null,
+        p_total:           subtotal,
+        p_desconto:        descontoNum,
+        p_total_final:     totalFinal,
+        p_forma_pagamento: formaPagamento,
+        p_parcelas:        formaPagamento === 'Cartão Crédito' ? parcelas : 1,
+        p_itens:           itensPayload,
+      });
+      if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
-      if (formaPagamento === 'Fiado' && clienteId) {
-        const cli = clientes.find((c: any) => c.id === clienteId);
-        const vencimento = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-        await dbInsert('/api/contasreceberview', {
-          cliente_id: clienteId,
-          descricao: `Venda PDV #${venda.id.slice(-6).toUpperCase()} — ${cli?.nome ?? 'Cliente'}`,
-          valor: totalFinal,
-          vencimento,
-          status: 'Aberto',
-        });
-      }
-
+      const shortId = String(vendaId).slice(-6).toUpperCase();
       const totalFmt = totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      wppNotify(`🛒 *LogMax PDV — Venda concluída*\n💰 Total: ${totalFmt}\n💳 Pagamento: ${formaPagamento}${formaPagamento === 'Fiado' ? '\n⚠️ Gerado título em Contas a Receber' : ''}`);
-      setLastVenda({ id: venda.id.slice(-6).toUpperCase(), total: totalFinal });
+      const parcelaInfo = formaPagamento === 'Cartão Crédito' && parcelas > 1
+        ? `\n📅 ${parcelas}x de ${valorPorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+        : '';
+      const financeiroInfo =
+        formaPagamento === 'Fiado' ? '\n⚠️ Gerado título em Contas a Receber'
+        : formaPagamento === 'Cartão Crédito' && parcelas > 1 ? `\n⚠️ Gerados ${parcelas} títulos em Contas a Receber`
+        : formaPagamento === 'Cartão Crédito' ? '\n⚠️ Gerado título em Contas a Receber'
+        : '';
+      wppNotify(`🛒 *LogMax PDV — Venda concluída*\n💰 Total: ${totalFmt}\n💳 Pagamento: ${formaPagamento}${parcelaInfo}${financeiroInfo}`);
+      setLastVenda({ id: shortId, total: totalFinal });
       setCart([]);
       setDesconto('');
       setFormaPagamento('Dinheiro');
+      setParcelas(1);
       setClienteId('');
       setIsClosing(false);
       searchRef.current?.focus();
@@ -448,6 +433,38 @@ export const PDVView = ({ showToast, profile }: any) => {
                   </div>
                 </motion.div>
               )}
+
+              <AnimatePresence>
+                {formaPagamento === 'Cartão Crédito' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden">
+                    <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
+                      <CreditCard size={12} className="text-accent shrink-0" />
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Parcelas</label>
+                      <select
+                        value={parcelas}
+                        onChange={e => setParcelas(Number(e.target.value))}
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                          <option key={n} value={n}>
+                            {n}x de {(totalFinal / n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {n === 1 ? ' (à prazo, 30d)' : ' sem juros'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {parcelas > 1 && (
+                      <p className="text-[10px] text-gray-500 mt-1.5 px-1">
+                        {parcelas}x de <span className="font-bold text-accent">{valorPorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> — 1ª parcela vence em 30 dias.
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Fechar venda / Aviso de erro de conexão */}
