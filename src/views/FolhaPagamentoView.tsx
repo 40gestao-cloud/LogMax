@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { supabase } from '../lib/supabase';
 
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
@@ -61,13 +62,48 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
     try {
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
       setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? { ...x, status: next } : x));
+
+      // Pendente → Processada: gera Conta a Pagar para o líquido do funcionário.
+      // Idempotência: marcador `[folha:${id}]` na descrição evita duplicados em race.
+      if (next === 'Processada') {
+        const liquido = Number(f.salario_liquido ?? (Number(f.salario_bruto || 0) - Number(f.descontos || 0)));
+        if (liquido > 0 && supabase) {
+          const marker = `[folha:${f.id}]`;
+          const { data: existentes } = await supabase
+            .from('contas_pagar')
+            .select('id')
+            .like('descricao', `%${marker}%`)
+            .limit(1);
+          if (!existentes || existentes.length === 0) {
+            const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+            // Vencimento: dia 5 do mês seguinte ao de referência.
+            let vencimento: string | null = null;
+            if (f.mes_ref) {
+              const [ano, mes] = f.mes_ref.split('-').map(Number);
+              const proxMes = new Date(ano, mes, 5); // mes é 1-based em mes_ref, Date() é 0-based → +1 vira o próximo
+              vencimento = proxMes.toISOString().slice(0, 10);
+            }
+            try {
+              await dbInsert('/api/contaspagarview', {
+                descricao: `Folha ${f.mes_ref ?? ''} — ${func?.nome ?? 'Funcionário'} ${marker}`,
+                valor: liquido,
+                vencimento,
+                status: 'Pendente',
+              });
+              showToast('Folha processada — Conta a Pagar gerada.', 'success');
+            } catch {
+              showToast('Folha processada, mas falhou ao gerar Conta a Pagar. Verifique manualmente.', 'error');
+            }
+          }
+        }
+      }
     } catch { showToast('Erro ao atualizar status.', 'error'); }
   };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Folha de Pagamento</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Folha de Pagamento</h2>
         <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
       </div>
 
@@ -79,7 +115,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
           { label: 'Folhas Pendentes', value: pendentes, warn: pendentes > 0 },
         ].map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
             <p className={`text-xl font-black leading-tight ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
           </div>
         ))}
@@ -96,8 +132,8 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Registrar Folha</h3>
               <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
@@ -136,7 +172,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {enriched.length === 0 ? <EmptyState message={`Nenhuma folha para ${mesFiltro}.`} /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">

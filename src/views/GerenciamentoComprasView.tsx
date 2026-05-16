@@ -38,11 +38,11 @@ export const GerenciamentoComprasView = () => {
 
   // Contagens por status
   const reqPendentes = requisicoes.filter((r: any) => r.status === 'Pendente').length;
-  const reqAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovada').length;
-  const reqNegadas = requisicoes.filter((r: any) => r.status === 'Negada').length;
+  const reqAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado').length;
+  const reqNegadas = requisicoes.filter((r: any) => r.status === 'Negado').length;
 
   const cotEmCotacao = cotacoes.filter((c: any) => c.status === 'Em Cotação').length;
-  const cotAprovadas = cotacoes.filter((c: any) => c.status === 'Aprovada').length;
+  const cotAprovadas = cotacoes.filter((c: any) => c.status === 'Aprovado').length;
   const cotRecusadas = cotacoes.filter((c: any) => c.status === 'Recusada').length;
 
   const pedPendentes = pedidos.filter((p: any) => p.status === 'Pendente').length;
@@ -126,24 +126,24 @@ export const GerenciamentoComprasView = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Gerenciamento de Compras</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gerenciamento de Compras</h2>
         <p className="text-sm text-gray-400 mt-1">Visão geral do pipeline de compras — do pedido ao pagamento.</p>
       </div>
 
       {/* Sumário rápido */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 shrink-0">
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Pedidos em Aberto</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Pedidos em Aberto</p>
           <p className="text-2xl font-black text-gray-100">{pedPendentes + pedAprovados + pedTransporte}</p>
           <p className="text-xs text-gray-600 mt-1">aguardando recebimento</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Valor Comprometido</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Valor Comprometido</p>
           <p className="text-xl font-black text-gray-100">R$ {valorPedidosAtivos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           <p className="text-xs text-gray-600 mt-1">em pedidos ativos</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Contas em Atraso</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Contas em Atraso</p>
           <p className={`text-2xl font-black ${pgAtrasados > 0 ? 'text-red-500' : 'text-gray-100'}`}>{pgAtrasados}</p>
           <p className="text-xs text-gray-600 mt-1">vencimentos em aberto</p>
         </div>

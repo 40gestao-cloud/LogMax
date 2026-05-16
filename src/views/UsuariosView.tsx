@@ -149,21 +149,21 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Usuários</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Usuários</h2>
         <p className="text-sm text-gray-400 mt-1">
           {isAdmin ? 'Gerencie todos os usuários do sistema.' : `Gerencie os colaboradores de ${SETOR_LABEL[callerProfile.setor]}.`}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 shrink-0">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 shrink-0">
         {[
           { label: 'Total',        value: users.length,       icon: Users },
           { label: 'Gerentes',     value: totalGerentes,      icon: Shield },
           { label: 'Colaboradores',value: totalColaboradores,  icon: User },
         ].map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className="text-2xl font-black text-gray-100">{k.value}</p>
+          <div key={k.label} className="neu-flat rounded-2xl p-3 sm:p-5 border border-white/5 min-w-0">
+            <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2 truncate">{k.label}</p>
+            <p className="text-xl sm:text-2xl font-black text-gray-100">{k.value}</p>
           </div>
         ))}
       </div>
@@ -176,8 +176,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Novo Usuário</h3>
               <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
@@ -235,7 +235,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {users.length === 0 ? <EmptyState message="Nenhum usuário cadastrado neste setor." /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">

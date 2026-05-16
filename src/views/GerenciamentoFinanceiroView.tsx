@@ -136,35 +136,35 @@ export const GerenciamentoFinanceiroView = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Gerenciamento Financeiro</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gerenciamento Financeiro</h2>
         <p className="text-sm text-gray-400 mt-1">Visão consolidada do fluxo financeiro — previsões, recebimentos, pagamentos e saldos.</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Resultado Previsto</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Resultado Previsto</p>
           <p className={`text-xl font-black leading-tight ${resultadoPrevisto >= 0 ? 'text-green-400' : 'text-red-500'}`}>
             {resultadoPrevisto >= 0 ? '+' : ''}R$ {Math.abs(resultadoPrevisto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">receitas − despesas previstas</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Total a Receber</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Total a Receber</p>
           <p className="text-xl font-black text-green-400 leading-tight">
             R$ {totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">contas abertas + atrasadas</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Total a Pagar</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Total a Pagar</p>
           <p className={`text-xl font-black leading-tight ${pagAtrasado > 0 ? 'text-red-500' : 'text-gray-100'}`}>
             R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">pendentes + atrasadas</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Saldo em Bancos</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Saldo em Bancos</p>
           <p className={`text-xl font-black leading-tight ${saldoTotal >= 0 ? 'text-gray-100' : 'text-red-500'}`}>
             R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>

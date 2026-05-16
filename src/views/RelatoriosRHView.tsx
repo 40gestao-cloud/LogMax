@@ -81,7 +81,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Relatórios — RH</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Relatórios — RH</h2>
         <p className="text-sm text-gray-400 mt-1">Consulte e exporte relatórios do módulo de Recursos Humanos.</p>
       </div>
 
@@ -113,7 +113,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
       </div>
 
       {/* Table */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex-1">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex-1">
         <AnimatePresence mode="wait">
           {tab === 0 && (
             <motion.div key="fun" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

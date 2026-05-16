@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination } from '../components/ui';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
@@ -19,25 +20,27 @@ const EMPTY_EXTRAS = {
 export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
   const isClientes = type === 'clientes';
   const endpoint = isClientes ? '/api/crmview' : '/api/crmview-fornecedores';
-  const { data, setData, isLoading } = useFetchData<any>(endpoint);
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    endpoint, undefined, false,
+    { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'email', 'telefone', 'cpf_cnpj', 'pessoa_tipo'] }
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
-  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ nome: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
-  const PAGE_SIZE = 24;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search]);
 
   const title = isClientes ? 'Gestão de Clientes' : 'Gestão de Fornecedores';
   const desc  = isClientes ? 'Visualize e gerencie a carteira de clientes ativos.' : 'Controle seus parceiros comerciais e rede de suprimentos.';
 
-  const filtered = data.filter((item: any) =>
-    [item.nome, item.tipo, item.categoria, item.status, item.email, item.telefone, item.cpf_cnpj, item.pessoa_tipo]
-      .some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Pesquisa agora é server-side.
+  const filtered = data;
 
   const exportCols = isClientes
     ? ['Nome', 'Tipo', 'Telefone', 'E-mail', 'CPF/CNPJ', 'Status']
@@ -125,7 +128,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       {/* Header */}
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">{title}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
           <p className="text-sm text-gray-400 mt-1">{desc}</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
@@ -148,7 +151,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       {/* Formulário */}
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">
                 {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
@@ -231,7 +234,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (
         <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pr-2">
-          {filtered.slice(0, visibleCount).map((item: any, i: number) => {
+          {filtered.map((item: any, i: number) => {
             const pessoaTipo: string = item.pessoa_tipo ?? (isClientes ? item.tipo : item.categoria) ?? '—';
             const docLabel = item.pessoa_tipo === 'Pessoa Física' ? 'CPF' : 'CNPJ';
             return (
@@ -296,16 +299,14 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
             );
           })}
           </div>
-          {filtered.length > visibleCount && (
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <p className="text-xs text-gray-500">Mostrando {visibleCount} de {filtered.length}</p>
-              <button
-                onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
-                className="neu-button px-6 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
-                Carregar mais ({filtered.length - visibleCount} restantes)
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reload}
+          />
         </div>
       )}
     </motion.div>

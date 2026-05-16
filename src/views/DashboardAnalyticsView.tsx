@@ -149,7 +149,7 @@ export const DashboardAnalyticsView = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Dashboard</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Dashboard</h2>
           <p className="text-sm text-gray-400 mt-1">Visão geral da sua operação.</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -201,7 +201,7 @@ export const DashboardAnalyticsView = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-6 overflow-hidden">
+        <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-6">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide">Movimentações Recentes</h3>
           <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 max-h-[340px]">
             {isLoading ? <LoadingSpinner /> : movimentos.length === 0 ? <EmptyState /> : movimentos.map((mov: any, i: number) => (

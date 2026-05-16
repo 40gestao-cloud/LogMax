@@ -100,6 +100,24 @@ export const PDVView = ({ showToast, profile }: any) => {
     if (formaPagamento === 'Fiado' && !clienteId) { showToast?.('Selecione o cliente para venda Fiado.', 'error', true); return; }
     setIsClosing(true);
     try {
+      // Revalida o caixa antes de fechar a venda — outro operador pode tê-lo fechado
+      // enquanto o carrinho estava a ser montado.
+      if (supabase) {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: caixaAtual } = await supabase
+          .from('controle_caixa')
+          .select('id, status')
+          .eq('data', today)
+          .eq('status', 'Aberto')
+          .limit(1);
+        if (!caixaAtual || caixaAtual.length === 0) {
+          showToast?.('O caixa de hoje foi fechado. Abra um novo caixa em Financeiro → Controle de Caixa antes de continuar.', 'error', true);
+          await refreshCaixa();
+          setIsClosing(false);
+          return;
+        }
+      }
+
       // Fresh stock check against DB — cannot rely on local state with multiple cashiers
       if (supabase) {
         const prodIds = cart.map(i => i.produto_id);
@@ -137,39 +155,49 @@ export const PDVView = ({ showToast, profile }: any) => {
         status: 'Concluída',
       }) as any;
 
+      // Rollback transacional (#13): tracking de IDs para limpar tudo se algo falhar a meio.
+      const inseridosItens: string[] = [];
+      const inseridosMov:   string[] = [];
       try {
         for (const item of cart) {
-          await dbInsert('/api/itensvendaview', {
+          const it = await dbInsert('/api/itensvendaview', {
             venda_id: venda.id,
             produto_id: item.produto_id,
             nome_produto: item.nome_produto,
             qtd: item.qtd,
             preco_unitario: item.preco_unitario,
             subtotal: item.subtotal,
-          });
-          await dbInsert('/api/movimentacoesestoqueview', {
+          }) as any;
+          if (it?.id) inseridosItens.push(it.id);
+          const mv = await dbInsert('/api/movimentacoesestoqueview', {
             produto_id: item.produto_id,
             tipo: 'Saída',
             qtd: item.qtd,
             origem: 'PDV',
             destino: `Venda #${venda.id.slice(-6).toUpperCase()}`,
             data: today,
-          });
+          }) as any;
+          if (mv?.id) inseridosMov.push(mv.id);
         }
       } catch (itemErr) {
-        // Rollback: remove the orphaned venda header (best-effort)
+        // Rollback ordem importa: movimentações primeiro (afetam estoque),
+        // depois itens (FK soft), por fim o cabeçalho da venda.
         if (supabase && venda?.id) {
-          try { await supabase.from('vendas').delete().eq('id', venda.id); } catch { /* silent */ }
+          for (const id of inseridosMov)   { try { await supabase.from('movimentacoes_estoque').delete().eq('id', id); } catch {} }
+          for (const id of inseridosItens) { try { await supabase.from('itens_venda').delete().eq('id', id); } catch {} }
+          try { await supabase.from('vendas').delete().eq('id', venda.id); } catch {}
         }
         throw itemErr;
       }
 
       if (formaPagamento === 'Fiado' && clienteId) {
         const cli = clientes.find((c: any) => c.id === clienteId);
+        const vencimento = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
         await dbInsert('/api/contasreceberview', {
           cliente_id: clienteId,
           descricao: `Venda PDV #${venda.id.slice(-6).toUpperCase()} — ${cli?.nome ?? 'Cliente'}`,
           valor: totalFinal,
+          vencimento,
           status: 'Aberto',
         });
       }
@@ -225,7 +253,7 @@ export const PDVView = ({ showToast, profile }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">
       <div className="flex items-center justify-between mb-5 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">PDV</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">PDV</h2>
           <p className="text-sm text-gray-400 mt-1">Ponto de Venda — registre vendas e baixe o estoque automaticamente.</p>
         </div>
       </div>
@@ -406,7 +434,7 @@ export const PDVView = ({ showToast, profile }: any) => {
               </div>
 
               {formaPagamento === 'Fiado' && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
                     <User size={12} className="text-accent shrink-0" />
                     <select

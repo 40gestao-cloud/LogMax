@@ -6,6 +6,7 @@ import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const statusCls = (s: string) => {
@@ -32,6 +33,8 @@ const CHECKPOINT_OPTIONS = [
 
 // ─── Gerador de QR Code (admin) ──────────────────────────────────────────────
 const QRGenerator = () => {
+  const { theme } = useTheme();
+  const qrFgColor = theme === 'light' ? '#111111' : '#e5e7eb';
   const [selected, setSelected] = useState('entrada');
   const [tokenData, setTokenData] = useState<any>(null);
   const [countdown, setCountdown] = useState(120);
@@ -95,7 +98,7 @@ const QRGenerator = () => {
         <AnimatePresence mode="wait">
           <motion.div key={tokenData.token} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="p-4 neu-pressed rounded-2xl border border-white/5">
-            <QRCodeSVG value={tokenData.token} size={200} bgColor="transparent" fgColor="#e5e7eb" level="M" />
+            <QRCodeSVG value={tokenData.token} size={200} bgColor="transparent" fgColor={qrFgColor} level="M" />
           </motion.div>
         </AnimatePresence>
       )}
@@ -266,7 +269,7 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
       </div>
 
       {/* Tabela */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {loading ? (
           <div className="flex justify-center py-8"><LoadingSpinner /></div>
         ) : registros.length === 0 ? (
@@ -398,7 +401,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       {/* Título */}
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Ponto Eletrônico</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Ponto Eletrônico</h2>
         <p className="text-sm text-gray-400 mt-1">Registro e acompanhamento de ponto dos funcionários.</p>
       </div>
 
@@ -427,7 +430,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
               { label: 'Justificados',       value: justificados, warn: false },
             ].map((k) => (
               <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
                 <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
               </div>
             ))}
@@ -453,7 +456,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
               <div className="flex flex-col gap-4">
                 <AnimatePresence mode="wait">
                   {showScanner && (
-                    <motion.div key="scanner" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                    <motion.div key="scanner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                       <div className="flex justify-center py-4">
                         <QRScanner onResult={handleQRResult} onClose={() => setShowScanner(false)} />
                       </div>
@@ -533,8 +536,8 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
 
           <AnimatePresence>
             {showForm && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 overflow-hidden">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-sm font-bold text-gray-300">Registro Manual de Ponto</h3>
                   <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
@@ -575,7 +578,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
           </AnimatePresence>
 
           {/* Tabela de registros manuais */}
-          <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+          <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             {enriched.length === 0 ? <EmptyState message={filtroData ? `Nenhum registro para ${filtroData}.` : 'Nenhum registro de ponto.'} /> : (
               <div className="overflow-x-auto main-scrollbar">
                 <table className="w-full text-left border-collapse">

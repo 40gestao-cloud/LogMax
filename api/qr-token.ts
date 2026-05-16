@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'crypto';
+import { authenticate, authorize, applyCors } from './_lib/auth';
 
 const CHECKPOINTS: Record<string, { label: string; target: number }> = {
   entrada: { label: 'Entrada',             target: 7*60+40  },
@@ -7,13 +8,19 @@ const CHECKPOINTS: Record<string, { label: string; target: number }> = {
   saida:   { label: 'Saída',               target: 11*60+20 },
 };
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) return res.status(500).json({ error: 'Servidor não configurado.' });
+  // Apenas admin ou gerente podem gerar tokens QR (decisão do utilizador na auditoria)
+  const user = await authenticate(req, res);
+  if (!user) return;
+  if (!authorize(user, res, 'admin', 'gerente')) return;
 
-  // O admin escolhe o tipo; fallback para 'entrada'
+  // Secret dedicado — separado do service_role para limitar blast radius se vazar
+  const secret = process.env.QR_TOKEN_SECRET;
+  if (!secret) return res.status(500).json({ error: 'QR_TOKEN_SECRET não configurado.' });
+
   const requested = req.query.checkpoint as string;
   const checkpoint = CHECKPOINTS[requested] ? requested : 'entrada';
 

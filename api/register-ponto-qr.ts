@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 import { createHmac } from 'crypto';
+import { authenticate, getAdminClient, applyCors } from './_lib/auth';
 
 const CHECKPOINT_LABELS: Record<string, string> = {
   entrada: 'Entrada',
@@ -30,21 +30,18 @@ function computeStatus(checkpoint: string, now: Date): 'No Horário' | 'Atrasado
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return res.status(500).json({ error: 'Servidor não configurado.' });
+  const admin = getAdminClient(res);
+  if (!admin) return;
 
-  const bearerToken = (req.headers.authorization ?? '').replace('Bearer ', '');
-  if (!bearerToken) return res.status(401).json({ error: 'Token obrigatório.' });
+  const user = await authenticate(req, res, admin);
+  if (!user) return;
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data: { user }, error: authErr } = await admin.auth.getUser(bearerToken);
-  if (authErr || !user) return res.status(401).json({ error: 'Token inválido.' });
+  // Secret dedicado para o HMAC do QR — mesmo usado em qr-token.ts
+  const qrSecret = process.env.QR_TOKEN_SECRET;
+  if (!qrSecret) return res.status(500).json({ error: 'QR_TOKEN_SECRET não configurado.' });
 
   const { token } = req.body ?? {};
   if (!token) return res.status(400).json({ error: 'Token QR obrigatório.' });
@@ -60,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Token corrompido.' });
   }
 
-  const expectedHmac = createHmac('sha256', serviceKey).update(payload).digest('hex');
+  const expectedHmac = createHmac('sha256', qrSecret).update(payload).digest('hex');
   if (parts[1] !== expectedHmac) {
     return res.status(400).json({ error: 'Assinatura inválida.' });
   }

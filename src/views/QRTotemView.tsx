@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, Clock, Wifi, WifiOff } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 const CHECKPOINT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   entrada: { label: 'Entrada',              color: 'text-emerald-400', bg: 'bg-emerald-900/20' },
@@ -10,6 +11,8 @@ const CHECKPOINT_CONFIG: Record<string, { label: string; color: string; bg: stri
 };
 
 export const QRTotemView = () => {
+  const { theme } = useTheme();
+  const qrFgColor = theme === 'light' ? '#111111' : '#e5e7eb';
   const [tokenData, setTokenData] = useState<any>(null);
   const [clock, setClock] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
@@ -92,7 +95,7 @@ export const QRTotemView = () => {
                 value={tokenData.token}
                 size={240}
                 bgColor="transparent"
-                fgColor="#e5e7eb"
+                fgColor={qrFgColor}
                 level="M"
               />
             </div>

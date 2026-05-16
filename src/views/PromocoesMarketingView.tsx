@@ -104,14 +104,14 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Promoções</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções</h2>
         <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a aprovação pelo Financeiro.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
             <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
           </div>
         ))}
@@ -133,8 +133,8 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Nova Proposta de Promoção</h3>
               <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
@@ -182,7 +182,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {promocoes.length === 0 ? <EmptyState message="Nenhuma proposta criada ainda" /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -214,13 +214,13 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400 whitespace-nowrap">
                           {p.data_inicio ?? '—'}{p.data_fim ? ` → ${p.data_fim}` : ''}
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-400 max-w-[150px] truncate">{p.descricao ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-400 max-w-[7rem] sm:max-w-[150px] truncate">{p.descricao ?? '—'}</td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${style?.badge ?? ''}`}>
                             {style?.icon}{p.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[140px] truncate">{p.observacao ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[140px] truncate">{p.observacao ?? '—'}</td>
                       </motion.tr>
                     );
                   })}

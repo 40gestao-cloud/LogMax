@@ -23,6 +23,7 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
   const handleAprovar = async (ap: any) => {
     if (processing) return;
     setProcessing(ap.id);
+    let aprovUpdated = false;
     try {
       // Consulta saldo ATUAL no banco (evita TOCTOU com dados em memória desatualizados)
       if (ap.req?.produto_id && ap.req?.qtd) {
@@ -39,7 +40,8 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
         }
       }
       await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Aprovado', observacao: obs[ap.id] ?? '' });
-      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovada' });
+      aprovUpdated = true;
+      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovado' });
       if (ap.req?.produto_id && ap.req?.qtd) {
         const today = new Date().toISOString().slice(0, 10);
         await dbInsert('/api/movimentacoesestoqueview', {
@@ -55,7 +57,10 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
       wppNotify(`📤 *LogMax — Requisição de Estoque aprovada*\n📦 Produto: ${ap.prod?.nome ?? '—'}\n🔢 Qtd: ${ap.req?.qtd ?? '—'}\n🏭 Destino: ${ap.req?.destino ?? '—'}`);
     } catch {
-      showToast("Erro ao aprovar.", 'error', true);
+      if (aprovUpdated) {
+        try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
+      }
+      showToast("Erro ao aprovar — rollback aplicado.", 'error', true);
     } finally {
       setProcessing(null);
     }
@@ -65,13 +70,18 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
     if (processing) return;
     if (!obs[ap.id]?.trim()) { showToast("Informe uma observação para negar.", 'error', true); return; }
     setProcessing(ap.id);
+    let aprovUpdated = false;
     try {
       await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Negado', observacao: obs[ap.id] });
-      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Negada' });
+      aprovUpdated = true;
+      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Negado' });
       setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
       showToast("Requisição negada.", 'success', true);
     } catch {
-      showToast("Erro ao negar.", 'error', true);
+      if (aprovUpdated) {
+        try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
+      }
+      showToast("Erro ao negar — rollback aplicado.", 'error', true);
     } finally {
       setProcessing(null);
     }
@@ -79,7 +89,7 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div><h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Aprovações de Estoque</h2><p className="text-sm text-gray-400 mt-1">Analise e aprove ou negue requisições de estoque pendentes.</p></div>
+      <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações de Estoque</h2><p className="text-sm text-gray-400 mt-1">Analise e aprove ou negue requisições de estoque pendentes.</p></div>
       {enriched.length === 0 ? <EmptyState message="Nenhuma aprovação pendente" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
           {enriched.map((ap: any) => (

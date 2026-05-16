@@ -24,11 +24,24 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!validate()) return;
+    const qtd = Number(extras.qtd) || 0;
+    if (qtd <= 0) { showToast('Informe uma quantidade > 0.', 'error', true); return; }
+
+    // Bloqueia saída que tornaria o saldo negativo (#9).
+    if (form.tipo === 'Saída') {
+      const prod = produtos.find((p: any) => p.id === form.produto_id);
+      const saldo = Number(prod?.estoque ?? 0);
+      if (qtd > saldo) {
+        showToast(`Saldo insuficiente: estoque atual ${saldo} un. (saída solicitada: ${qtd}).`, 'error', true);
+        return;
+      }
+    }
+
     setIsSaving(true);
     showToast("Registrando...", 'info', false);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const payload = { ...form, qtd: Number(extras.qtd) || 0, origem: extras.origem, destino: extras.destino, data: today };
+      const payload = { ...form, qtd, origem: extras.origem, destino: extras.destino, data: today };
       const saved = await dbInsert('/api/movimentacoesestoqueview', payload);
       setData([saved ?? { id: Date.now(), ...payload }, ...data]);
       showToast("Movimentação registrada!", 'success', true);
@@ -41,7 +54,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Movimentações de Estoque</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Movimentações de Estoque</h2>
           <p className="text-sm text-gray-400 mt-1">Entradas, saídas e ajustes de estoque.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -56,7 +69,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Movimentação</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -96,7 +109,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse min-w-[540px]">
             <thead>

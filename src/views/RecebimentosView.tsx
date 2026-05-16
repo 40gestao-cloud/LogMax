@@ -1,17 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 export const RecebimentosView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/recebimentosview');
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/recebimentosview', undefined, false,
+    { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao'] }
+  );
+  // pedidos/produtos: sem paginação — usados em dropdowns globais (todos os ativos).
   const { data: pedidos } = useFetchData<any>('/api/pedidosview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ pedido_id: '' });
   const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '', produto_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
@@ -21,8 +30,8 @@ export const RecebimentosView = ({ showToast }: any) => {
   const [confirmSaving, setConfirmSaving] = useState(false);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
+  // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
-  const filtered = enriched.filter((r: any) => [r.status, String(r.pedido_id)].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
   const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '', produto_id: '' }); setErrors({}); };
 
@@ -66,10 +75,25 @@ export const RecebimentosView = ({ showToast }: any) => {
       }
       await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
+
+      // Sincronia: recebimento "Concluído" fecha o pedido relacionado.
+      // "Parcial" deixa o pedido em "Em Entrega" para permitir entregas adicionais.
+      if (confirmStatus === 'Concluído' && item.pedido_id) {
+        const ped = pedidos.find((p: any) => p.id === item.pedido_id);
+        if (ped && ped.status !== 'Recebido' && ped.status !== 'Cancelado') {
+          try { await dbUpdate('/api/pedidosview', item.pedido_id, { status: 'Recebido' }); }
+          catch { /* não bloqueia o fluxo — relatórios mostrarão divergência */ }
+        }
+      }
+
       setConfirmando(null);
       setConfirmProduto('');
       setConfirmStatus('Concluído');
-      showToast('Recebimento confirmado e estoque atualizado!', 'success', true);
+      showToast(
+        confirmStatus === 'Concluído'
+          ? 'Recebimento confirmado, estoque atualizado e pedido encerrado!'
+          : 'Recebimento parcial confirmado e estoque atualizado.',
+        'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -80,7 +104,7 @@ export const RecebimentosView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Recebimentos</h2><p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p></div>
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recebimentos</h2><p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Registrar</NeuButtonAccent>
@@ -89,7 +113,7 @@ export const RecebimentosView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -112,14 +136,14 @@ export const RecebimentosView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4">Pedido</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Observação</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>) : (
+              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : enriched.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>) : (
                 <AnimatePresence>
-                  {filtered.map((item: any) => (
+                  {enriched.map((item: any) => (
                     <React.Fragment key={item.id}>
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
@@ -142,25 +166,27 @@ export const RecebimentosView = ({ showToast }: any) => {
                         {confirmando === item.id && (
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <td colSpan={6} className="pb-3 px-4">
-                              <div className="flex flex-wrap items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
-                                <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
+                                <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-xs" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
+                                  <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
                                     <option value="">Selecione o produto...</option>
                                     {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
                                   </select>
                                 </div>
                                 <div className="flex flex-col gap-1">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-xs" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
+                                  <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
                                     {['Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                                 </div>
-                                <button onClick={() => handleConfirmar(item)} disabled={confirmSaving}
-                                  className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
-                                  {confirmSaving ? 'Salvando...' : <><Save size={12} /> Confirmar e atualizar estoque</>}
-                                </button>
-                                <button onClick={() => setConfirmando(null)} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500">Cancelar</button>
+                                <div className="flex gap-2 sm:contents">
+                                  <button onClick={() => handleConfirmar(item)} disabled={confirmSaving}
+                                    className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 flex-1 sm:flex-none">
+                                    {confirmSaving ? 'Salvando...' : <><Save size={12} /> Confirmar e atualizar estoque</>}
+                                  </button>
+                                  <button onClick={() => setConfirmando(null)} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center justify-center">Cancelar</button>
+                                </div>
                               </div>
                             </td>
                           </motion.tr>
@@ -173,6 +199,14 @@ export const RecebimentosView = ({ showToast }: any) => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalCount={totalCount}
+          isLoading={isLoading}
+          onPrev={() => setPage(p => Math.max(0, p - 1))}
+          onNext={() => setPage(p => p + 1)}
+          onReload={reload}
+        />
       </div>
     </motion.div>
   );

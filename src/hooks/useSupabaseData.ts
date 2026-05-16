@@ -1,11 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, ENDPOINT_TABLE_MAP, isSupabaseConfigured } from '../lib/supabase';
 
-export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<string, any>, realtime?: boolean) {
+export const PAGE_SIZE = 50;
+
+// Escapa caracteres com significado especial em PostgREST `or()` filters.
+// Vírgula separa cláusulas; parêntesis agrupam; `*` é wildcard PostgREST.
+function escapePostgrestSearch(s: string): string {
+  return s.replace(/[,()*]/g, ' ');
+}
+
+export function useFetchData<T = any>(
+  endpoint: string,
+  extraFilter?: Record<string, any>,
+  realtime?: boolean,
+  options?: { page?: number; searchTerm?: string; searchColumns?: string[] },
+) {
   const table = ENDPOINT_TABLE_MAP[endpoint];
-  const [data, setData]         = useState<T[]>([]);
-  const [isLoading, setLoading] = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const [data, setData]             = useState<T[]>([]);
+  const [isLoading, setLoading]     = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+
+  const page    = options?.page;
+  const isPaged = page !== undefined;
+  const rawSearch = (options?.searchTerm ?? '').trim();
+  const searchCols = options?.searchColumns;
+  const hasSearch = rawSearch.length > 0 && Array.isArray(searchCols) && searchCols.length > 0;
 
   const load = useCallback(async () => {
     if (!table) {
@@ -22,24 +42,50 @@ export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<str
     setLoading(true);
     setError(null);
 
-    let query = supabase.from(table).select('*').order('created_at', { ascending: false });
+    const applyFilters = (q: any) => {
+      if (extraFilter) {
+        for (const [col, val] of Object.entries(extraFilter)) {
+          q = q.eq(col, val);
+        }
+      }
+      if (hasSearch) {
+        const safe = escapePostgrestSearch(rawSearch);
+        const orClause = searchCols!.map(c => `${c}.ilike.%${safe}%`).join(',');
+        q = q.or(orClause);
+      }
+      return q;
+    };
 
-    if (extraFilter) {
-      for (const [col, val] of Object.entries(extraFilter)) {
-        query = query.eq(col, val);
+    if (isPaged) {
+      const from = page! * PAGE_SIZE;
+      const to   = from + PAGE_SIZE - 1;
+      let q = supabase
+        .from(table)
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
+      q = applyFilters(q);
+      const { data: rows, error: err, count } = await q.range(from, to);
+      if (err) {
+        console.error('[useFetchData] Erro Supabase:', err.message);
+        setError(err.message);
+      } else {
+        setData((rows ?? []) as T[]);
+        setTotalCount(count ?? null);
+      }
+    } else {
+      let q = supabase.from(table).select('*').order('created_at', { ascending: false });
+      q = applyFilters(q);
+      const { data: rows, error: err } = await q;
+      if (err) {
+        console.error('[useFetchData] Erro Supabase:', err.message);
+        setError(err.message);
+      } else {
+        setData((rows ?? []) as T[]);
       }
     }
 
-    const { data: rows, error: err } = await query;
-
-    if (err) {
-      console.error('[useFetchData] Erro Supabase:', err.message);
-      setError(err.message);
-    } else {
-      setData((rows ?? []) as T[]);
-    }
     setLoading(false);
-  }, [table, JSON.stringify(extraFilter)]);
+  }, [table, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -55,7 +101,7 @@ export function useFetchData<T = any>(endpoint: string, extraFilter?: Record<str
     return () => { supabase.removeChannel(channel); };
   }, [load, realtime]);
 
-  return { data, setData, isLoading, error, reload: load };
+  return { data, setData, isLoading, error, reload: load, totalCount };
 }
 
 export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): Promise<T | null> {

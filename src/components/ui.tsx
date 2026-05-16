@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Search, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package } from 'lucide-react';
 
@@ -13,7 +13,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
   } else if (['Em Cotação','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
     colorClass = 'bg-accent/10 text-accent';
     style = {};
-  } else if (['Cancelado','Negado','Negada','Divergente','Atrasado'].includes(status)) {
+  } else if (['Cancelado','Negado','Divergente','Atrasado'].includes(status)) {
     colorClass = 'bg-red-500/15 text-red-500';
     style = {};
   }
@@ -68,6 +68,74 @@ export const LoadingSpinner = () => (
     <span className="text-xs text-gray-400 font-bold tracking-widest uppercase">Carregando dados...</span>
   </div>
 );
+
+export const PageLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center w-full h-full min-h-[300px] gap-4">
+    <Loader2 size={36} className="animate-spin" style={{ color: '#FACC15' }} />
+    <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#FACC15', opacity: 0.65 }}>
+      Carregando módulo...
+    </span>
+  </div>
+);
+
+export const Pagination = ({
+  page,
+  totalCount,
+  pageSize = 50,
+  isLoading,
+  onPrev,
+  onNext,
+  onReload,
+}: {
+  page: number;
+  totalCount: number | null;
+  pageSize?: number;
+  isLoading?: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onReload?: () => void;
+}) => {
+  const hasNext = totalCount !== null && (page + 1) * pageSize < totalCount;
+  const hasPrev = page > 0;
+  // Em mobile, mostra sempre o botão de refresh mesmo quando há só uma página.
+  if (!hasPrev && !hasNext && !onReload) return null;
+  const from = totalCount ? page * pageSize + 1 : 0;
+  const to   = totalCount ? Math.min((page + 1) * pageSize, totalCount) : 0;
+  return (
+    <div className="flex items-center justify-between gap-2 pt-4 border-t border-white/5 mt-2 flex-wrap">
+      <span className="text-xs text-gray-500">
+        {totalCount !== null ? `${from}–${to} de ${totalCount} registos` : `Página ${page + 1}`}
+      </span>
+      <div className="flex gap-2 items-center">
+        {onReload && (
+          <button
+            onClick={onReload}
+            disabled={isLoading}
+            title="Atualizar"
+            className="neu-button w-9 h-9 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors disabled:opacity-30 flex items-center justify-center gap-1.5"
+          >
+            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+        )}
+        <button
+          onClick={onPrev}
+          disabled={!hasPrev || isLoading}
+          className="neu-button px-3 sm:px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ← <span className="hidden sm:inline">Anterior</span>
+        </button>
+        <button
+          onClick={onNext}
+          disabled={!hasNext || isLoading}
+          className="neu-button px-3 sm:px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <span className="hidden sm:inline">Próximo</span> →
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const EmptyState = ({ message = 'Nenhum registro encontrado' }: { message?: string }) => (
   <div
@@ -126,7 +194,7 @@ export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
 export const PlaceholderView = ({ title, desc }: { title: string; desc?: string }) => (
   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
     <div>
-      <h2 className="text-3xl font-bold text-gray-100 tracking-tight">{title}</h2>
+      <h2 className="text-3xl font-bold text-accent tracking-tight">{title}</h2>
       {desc && <p className="text-sm text-gray-400 mt-1">{desc}</p>}
     </div>
     <div className="flex h-full items-center justify-center flex-col gap-4 text-center">

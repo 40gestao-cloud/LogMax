@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 const EMPTY_EXTRAS = {
@@ -35,23 +36,24 @@ const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string |
 };
 
 export const ProdutosView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/produtosview');
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/produtosview', undefined, false,
+    { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'] }
+  );
   const [isSaving, setIsSaving]   = useState(false);
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<any | null>(null);
-  const [search, setSearch]       = useState('');
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  const PAGE_SIZE = 50;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search]);
-
-  const filtered = data.filter((item: any) =>
-    [item.codigo, item.nome, item.categoria, item.ean, item.fornecedor, item.status]
-      .some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Pesquisa agora é server-side; já não há filtro client-side.
+  const filtered = data;
 
   const exportCols = ['Código', 'Nome', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Margem', 'Estoque', 'Est. Mín', 'EAN', 'Status'];
   const exportRows = () => filtered.map((d: any) => {
@@ -144,7 +146,7 @@ export const ProdutosView = ({ showToast }: any) => {
       {/* Header */}
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Catálogo de Produtos</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Catálogo de Produtos</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie o portfólio de itens do estoque e suas informações.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
@@ -166,7 +168,7 @@ export const ProdutosView = ({ showToast }: any) => {
       {/* Formulário */}
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Produto' : 'Novo Produto'}</h3>
 
@@ -264,40 +266,38 @@ export const ProdutosView = ({ showToast }: any) => {
 
       {/* Tabela */}
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
-          {filtered.length > PAGE_SIZE && (
-            <p className="text-xs text-gray-500 mb-4">Mostrando {Math.min(visibleCount, filtered.length)} de {filtered.length} produtos</p>
-          )}
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[760px] md:min-w-[900px]">
+            <table className="w-full text-left border-collapse md:min-w-[900px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-4 font-bold px-4">Código</th>
+                  <th className="pb-4 font-bold px-4 hidden sm:table-cell">Código</th>
                   <th className="pb-4 font-bold px-4">Nome</th>
-                  <th className="pb-4 font-bold px-4">Categoria</th>
+                  <th className="pb-4 font-bold px-4 hidden lg:table-cell">Categoria</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">P. Custo</th>
                   <th className="pb-4 font-bold px-4 text-right">P. Venda</th>
-                  <th className="pb-4 font-bold px-4 text-right">Margem</th>
+                  <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">Margem</th>
                   <th className="pb-4 font-bold px-4 text-center">Estoque</th>
-                  <th className="pb-4 font-bold px-4 text-center">Status</th>
+                  <th className="pb-4 font-bold px-4 text-center hidden sm:table-cell">Status</th>
                   <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {filtered.slice(0, visibleCount).map((item: any) => {
+                  {filtered.map((item: any) => {
                     const estAtual = parseNum(item.estoque);
                     const estMin   = parseNum(item.estoque_minimo);
                     const baixoEstoque = estMin > 0 && estAtual <= estMin;
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-4 px-4 text-xs font-mono text-gray-400">{item.codigo}</td>
+                        <td className="py-4 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{item.codigo}</td>
                         <td className="py-4 px-4">
+                          <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
                           <p className="text-sm font-semibold text-gray-200">{item.nome}</p>
                           {item.fornecedor && <p className="text-[10px] text-gray-600 mt-0.5">{item.fornecedor}</p>}
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 hidden lg:table-cell">
                           {item.categoria
                             ? <span className="text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
                             : <span className="text-gray-700">—</span>}
@@ -308,7 +308,7 @@ export const ProdutosView = ({ showToast }: any) => {
                         <td className="py-4 px-4 text-xs font-mono text-gray-200 text-right">
                           {item.preco != null ? fmtBRL(parseNum(item.preco)) : '—'}
                         </td>
-                        <td className="py-4 px-4 text-xs text-right">
+                        <td className="py-4 px-4 text-xs text-right hidden md:table-cell">
                           <MargemBadge venda={item.preco} custo={item.preco_custo} />
                         </td>
                         <td className="py-4 px-4 text-center">
@@ -322,7 +322,7 @@ export const ProdutosView = ({ showToast }: any) => {
                             )}
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-center"><StatusBadge status={item.status} /></td>
+                        <td className="py-4 px-4 text-center hidden sm:table-cell"><StatusBadge status={item.status} /></td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
@@ -336,15 +336,14 @@ export const ProdutosView = ({ showToast }: any) => {
               </tbody>
             </table>
           </div>
-          {filtered.length > visibleCount && (
-            <div className="flex justify-center pt-4 border-t border-white/5 mt-2">
-              <button
-                onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
-                className="neu-button px-6 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
-                Carregar mais ({filtered.length - visibleCount} restantes)
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reload}
+          />
         </div>
       )}
     </motion.div>

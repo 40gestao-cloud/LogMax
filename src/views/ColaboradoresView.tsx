@@ -75,7 +75,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Gestão de Colaboradores</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gestão de Colaboradores</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie sua equipe, cargos e permissões de acesso.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -90,7 +90,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Colaborador' : 'Novo Colaborador'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -119,7 +119,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar pr-2 pb-2">
           <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>

@@ -61,6 +61,11 @@
 
   /* header user widget */
   --color-header-widget-bg: var(--color-bg-base);
+
+  /* inset shadow para .neu-input — partilhado pelo focus + pulse animation.
+     Light mode override mais abaixo. */
+  --neu-input-inset-shadow: inset 4px 4px 10px var(--color-bg-dark),
+                            inset -2px -2px 6px var(--color-bg-light);
 }
 
 /* ── Accent color palettes ── */
@@ -88,11 +93,65 @@
   --color-accent-text:  #0A0A0A;
 }
 
+[data-accent="blue"] {
+  --color-accent:      #3B82F6;  /* blue-500 */
+  --color-accent-hover: #2563EB;  /* blue-600 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-accent="pink"] {
+  --color-accent:      #EC4899;  /* pink-500 */
+  --color-accent-hover: #DB2777;  /* pink-600 */
+  --color-accent-text:  #ffffff;
+}
+
+/* ── Light mode: variantes mais escuras e vibrantes para garantir contraste WCAG ──
+   No fundo escuro o accent original (-500/-400) lê-se bem. Em fundo claro #E8E8E8
+   esses tons ficam pálidos. Aqui usamos a variante -700 do Tailwind, que mantém a
+   identidade da cor mas com contraste AA garantido. O `accent-text` (cor ON button)
+   passa a branco para os tons que ficaram demasiado escuros para texto preto. */
+[data-theme="light"][data-accent="green"] {
+  --color-accent:      #047857;  /* emerald-700 */
+  --color-accent-hover: #065f46;  /* emerald-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="yellow"] {
+  --color-accent:      #a16207;  /* yellow-700 (amber escuro) */
+  --color-accent-hover: #854d0e;  /* yellow-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="purple"] {
+  --color-accent:      #7e22ce;  /* purple-700 */
+  --color-accent-hover: #6b21a8;  /* purple-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="orange"] {
+  --color-accent:      #c2410c;  /* orange-700 */
+  --color-accent-hover: #9a3412;  /* orange-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="blue"] {
+  --color-accent:      #1d4ed8;  /* blue-700 */
+  --color-accent-hover: #1e40af;  /* blue-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="pink"] {
+  --color-accent:      #be185d;  /* pink-700 */
+  --color-accent-hover: #9d174d;  /* pink-800 */
+  --color-accent-text:  #ffffff;
+}
+
 /* ── Light mode overrides ── */
 [data-theme="light"] {
   --color-bg-base:    #E8E8E8;
-  --color-bg-dark:    #C8C8C8;
-  --color-bg-light:   #FFFFFF;
+  /* Sombras suavizadas: menor contraste contra bg-base para um neumorfismo subtil. */
+  --color-bg-dark:    #DCDCDC;
+  --color-bg-light:   #F2F2F2;
 
   --color-text-primary:   #111111;
   --color-text-secondary: #1f2937;
@@ -107,17 +166,17 @@
   --color-surface-md:     rgba(0, 0, 0, 0.06);
 
   --color-card-bg:       linear-gradient(145deg, #F2F2F2, #DCDCDC);
-  --color-card-shadow:   12px 12px 32px #C0C0C0, -6px -6px 20px #FFFFFF,
-                         inset 0 1px 0 rgba(255,255,255,0.8);
+  --color-card-shadow:   6px 6px 18px #D4D4D4, -3px -3px 12px #F5F5F5,
+                         inset 0 1px 0 rgba(255,255,255,0.6);
   --color-card-border:   rgba(0, 0, 0, 0.06);
   --color-input-bg:      linear-gradient(145deg, #DCDCDC, #EEEEEE);
-  --color-input-shadow:  inset 4px 4px 10px #C8C8C8, inset -2px -2px 6px #FFFFFF;
+  --color-input-shadow:  inset 2px 2px 6px #D8D8D8, inset -1px -1px 4px #F5F5F5;
   --color-input-border:  rgba(0, 0, 0, 0.08);
   --color-input-text:    #111111;
   --color-input-ph:      #9ca3af;
 
   --color-icon-bg:       linear-gradient(145deg, #F2F2F2, #DCDCDC);
-  --color-icon-shadow:   6px 6px 14px #C8C8C8, -4px -4px 10px #FFFFFF,
+  --color-icon-shadow:   3px 3px 8px #D4D4D4, -2px -2px 6px #F5F5F5,
                          inset 0 0 0 1px rgba(16,185,129,0.25);
 
   --color-scrollbar:       #C0C0C0;
@@ -127,6 +186,21 @@
   --color-badge-neutral-text: #4b5563;
 
   --color-avatar-bg: #D8D8D8;
+
+  /* inset shadow do .neu-input mais subtil para combinar com sombras suaves */
+  --neu-input-inset-shadow: inset 2px 2px 6px var(--color-bg-dark),
+                            inset -1px -1px 4px var(--color-bg-light);
+}
+
+/* Botão accent: a sombra fixa rgba(0,0,0,0.3) fica pesada em fundo claro. Suaviza. */
+[data-theme="light"] .neu-button-accent {
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.10),
+             -1px -1px 4px rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="light"] .neu-button-accent:active {
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.12),
+              inset -1px -1px 4px rgba(255, 255, 255, 0.4);
 }
 
 /* ── Utility classes ── */
@@ -189,19 +263,22 @@
 
   .neu-input {
     background: var(--color-bg-base);
-    box-shadow: inset 4px 4px 10px var(--color-bg-dark),
-                inset -2px -2px 6px var(--color-bg-light);
+    box-shadow: var(--neu-input-inset-shadow);
     color: var(--color-text-primary);
-    border: 1px solid transparent;
-    transition: all 0.2s ease-in-out;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .neu-input:hover:not(:focus):not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
 
   .neu-input:focus {
     outline: none;
-    border-color: rgba(16, 185, 129, 0.5);
-    box-shadow: inset 4px 4px 10px var(--color-bg-dark),
-                inset -2px -2px 6px var(--color-bg-light),
-                0 0 8px rgba(16, 185, 129, 0.2);
+    border-color: var(--color-accent);
+    box-shadow: var(--neu-input-inset-shadow),
+                0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+    animation: neu-input-pulse 1.8s ease-in-out infinite;
   }
 
   .neu-circle {
@@ -263,6 +340,73 @@ body {
   .group-hover\:opacity-100 { opacity: 1 !important; }
 }
 
+/* ── Touch-friendly button sizes em mobile (#2) ──
+   Botões de acção 32px ficam pequenos para o polegar. Em telemóveis sobe para 36px.
+   iOS HIG e Material recomendam 44px mas 36px é o equilíbrio com a densidade visual da app. */
+@media (max-width: 640px) {
+  button.w-7.h-7  { width: 2rem;     height: 2rem;     }   /* 28 → 32 */
+  button.w-8.h-8  { width: 2.25rem;  height: 2.25rem;  }   /* 32 → 36 */
+}
+
+/* ── Light mode: badges com fundo sólido contrastante ──
+   No dark mode, `bg-{color}-900/30 + text-{color}-400` lê-se bem (fundo dim + texto claro).
+   No light mode, esse mesmo combo fica invisível (fundo dim quase branco + texto claro).
+   Aqui forçamos paleta tonal pastel + texto escuro para garantir contraste WCAG AA. */
+[data-theme="light"] .bg-purple-900\/30   { background-color: #f3e8ff !important; }
+[data-theme="light"] .bg-yellow-900\/30   { background-color: #fef9c3 !important; }
+[data-theme="light"] .bg-blue-900\/30     { background-color: #dbeafe !important; }
+[data-theme="light"] .bg-green-900\/30    { background-color: #dcfce7 !important; }
+[data-theme="light"] .bg-emerald-900\/30  { background-color: #d1fae5 !important; }
+[data-theme="light"] .bg-emerald-900\/40  { background-color: #a7f3d0 !important; }
+[data-theme="light"] .bg-orange-900\/30   { background-color: #ffedd5 !important; }
+[data-theme="light"] .bg-cyan-900\/30     { background-color: #cffafe !important; }
+[data-theme="light"] .bg-rose-900\/30     { background-color: #ffe4e6 !important; }
+[data-theme="light"] .bg-pink-900\/30     { background-color: #fce7f3 !important; }
+[data-theme="light"] .bg-red-900\/20      { background-color: #fee2e2 !important; }
+[data-theme="light"] .bg-red-950\/50      { background-color: #fee2e2 !important; }
+[data-theme="light"] .bg-red-950\/60      { background-color: #fecaca !important; }
+[data-theme="light"] .bg-gray-700\/40     { background-color: #e5e7eb !important; }
+[data-theme="light"] .bg-gray-800\/50     { background-color: #e5e7eb !important; }
+[data-theme="light"] .bg-gray-800         { background-color: #e5e7eb !important; }
+
+/* Texto escuro contrastante para legibilidade no light mode */
+[data-theme="light"] .text-purple-400  { color: #6b21a8 !important; }
+[data-theme="light"] .text-purple-300  { color: #6b21a8 !important; }
+[data-theme="light"] .text-yellow-400  { color: #854d0e !important; }
+[data-theme="light"] .text-yellow-300  { color: #854d0e !important; }
+[data-theme="light"] .text-blue-400    { color: #1e40af !important; }
+[data-theme="light"] .text-blue-300    { color: #1e40af !important; }
+[data-theme="light"] .text-green-400   { color: #166534 !important; }
+[data-theme="light"] .text-green-300   { color: #166534 !important; }
+[data-theme="light"] .text-emerald-400 { color: #047857 !important; }
+[data-theme="light"] .text-emerald-300 { color: #047857 !important; }
+[data-theme="light"] .text-emerald-500 { color: #065f46 !important; }
+[data-theme="light"] .text-orange-400  { color: #9a3412 !important; }
+[data-theme="light"] .text-orange-300  { color: #9a3412 !important; }
+[data-theme="light"] .text-cyan-400    { color: #155e75 !important; }
+[data-theme="light"] .text-rose-400    { color: #9f1239 !important; }
+[data-theme="light"] .text-pink-400    { color: #9d174d !important; }
+[data-theme="light"] .text-red-400     { color: #991b1b !important; }
+[data-theme="light"] .text-red-500     { color: #b91c1c !important; }
+[data-theme="light"] .text-red-300     { color: #991b1b !important; }
+
+/* ── Pulse animado nos inputs em focus (ambos os temas, segue accent) ── */
+@keyframes neu-input-pulse {
+  0%, 100% {
+    box-shadow: var(--neu-input-inset-shadow),
+                0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+  50% {
+    box-shadow: var(--neu-input-inset-shadow),
+                0 0 0 6px color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+}
+
+/* Respeita preferência de utilizador por menos animação */
+@media (prefers-reduced-motion: reduce) {
+  .neu-input:focus { animation: none; }
+}
+
 /* Scrollbars */
 .custom-scrollbar::-webkit-scrollbar       { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -310,7 +454,7 @@ body {
     transparent 100%
   );
   transform: translateX(-150%) skewX(-15deg);
-  animation: btn-shine 3s ease-in-out infinite;
+  animation: btn-shine 2s ease-in-out infinite;
   pointer-events: none;
 }
 

@@ -97,7 +97,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
       {/* Título */}
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Controle de Caixa</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Controle de Caixa</h2>
         <p className="text-sm text-gray-400 mt-1">Abertura e fechamento do caixa diário. O PDV só opera com caixa aberto.</p>
       </div>
 

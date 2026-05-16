@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, RefreshCw, Loader2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { supabase } from '../lib/supabase';
 
 export const CotacoesView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/cotacoesview');
+  const [page, setPage] = useState(0);
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/cotacoesview', undefined, false,
+    { page, searchColumns: ['status'] } // sem search box visível ainda; pronto para futuro
+  );
+  // requisicoes/fornecedores: sem paginação (usados em dropdowns).
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
-  const { data: pedidos } = useFetchData<any>('/api/pedidosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [recreating, setRecreating] = useState<string | null>(null);
@@ -17,10 +22,26 @@ export const CotacoesView = ({ showToast }: any) => {
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  // IDs de cotações que já têm pedido gerado
-  const cotacoesComPedido = new Set(pedidos.map((p: any) => p.cotacao_id).filter(Boolean));
+  // IDs de cotações que já têm pedido gerado.
+  // Query separada agora que `pedidos` deixou de ser carregado integralmente.
+  const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('pedidos').select('cotacao_id')
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        const ids = new Set<string>(
+          (rows ?? [])
+            .map((p: any) => p.cotacao_id)
+            .filter((id: any): id is string => Boolean(id))
+        );
+        setCotacoesComPedido(ids);
+      });
+    return () => { cancelled = true; };
+  }, [data]);
 
-  const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovada');
+  const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
 
   const enriched = data.map((c: any) => ({
     ...c,
@@ -58,6 +79,33 @@ export const CotacoesView = ({ showToast }: any) => {
     }
   };
 
+  // Best-effort snapshot: tenta gravar item_descricao + item_qtd no pedido.
+  // Se a coluna não existe na BD (sem migração), faz fallback transparente.
+  const insertPedidoComSnapshot = async (cotacao: any) => {
+    const cotReq = requisicoes.find((r: any) => r.id === cotacao.requisicao_id);
+    const basePayload: any = {
+      cotacao_id: cotacao.id,
+      requisicao_id: cotacao.requisicao_id ?? null,
+      fornecedor_id: cotacao.fornecedor_id,
+      valor_total: cotacao.valor_total,
+      prazo_entrega: cotacao.prazo_entrega || null,
+      status: 'Pendente',
+    };
+    const snapshotPayload = {
+      ...basePayload,
+      item_descricao: cotReq?.item ?? null,
+      item_qtd: cotReq?.qtd ?? null,
+    };
+    try {
+      return await dbInsert('/api/pedidosview', snapshotPayload);
+    } catch (e: any) {
+      if (/column .* does not exist/i.test(String(e?.message ?? ''))) {
+        return await dbInsert('/api/pedidosview', basePayload);
+      }
+      throw e;
+    }
+  };
+
   const handleAprovar = async (cotacao: any) => {
     try {
       await dbUpdate('/api/cotacoesview', cotacao.id, { status: 'Aprovado' });
@@ -85,14 +133,7 @@ export const CotacoesView = ({ showToast }: any) => {
       }
     }
     try {
-      const pedido = await dbInsert('/api/pedidosview', {
-        cotacao_id: cotacao.id,
-        requisicao_id: cotacao.requisicao_id ?? null,
-        fornecedor_id: cotacao.fornecedor_id,
-        valor_total: cotacao.valor_total,
-        prazo_entrega: cotacao.prazo_entrega || null,
-        status: 'Pendente',
-      });
+      const pedido = await insertPedidoComSnapshot(cotacao);
       showToast(`Cotação aprovada! Pedido #${(pedido as any)?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado.`, 'success', true);
     } catch (err: any) {
       showToast(`Cotação aprovada, mas falha ao criar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -102,14 +143,20 @@ export const CotacoesView = ({ showToast }: any) => {
   const handleRecriarPedido = async (cotacao: any) => {
     setRecreating(cotacao.id);
     try {
-      const pedido = await dbInsert('/api/pedidosview', {
-        cotacao_id: cotacao.id,
-        requisicao_id: cotacao.requisicao_id ?? null,
-        fornecedor_id: cotacao.fornecedor_id,
-        valor_total: cotacao.valor_total,
-        prazo_entrega: cotacao.prazo_entrega || null,
-        status: 'Pendente',
-      });
+      // Idempotência server-side (#16): impede recriar pedido se já existe
+      if (supabase) {
+        const { data: existentes } = await supabase
+          .from('pedidos')
+          .select('id')
+          .eq('cotacao_id', cotacao.id)
+          .limit(1);
+        if (existentes && existentes.length > 0) {
+          showToast('Esta cotação já tem pedido registado.', 'info', true);
+          setRecreating(null);
+          return;
+        }
+      }
+      const pedido = await insertPedidoComSnapshot(cotacao);
       showToast(`Pedido #${(pedido as any)?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado com sucesso.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao recriar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -133,7 +180,7 @@ export const CotacoesView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Cotações</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cotações</h2>
           <p className="text-sm text-gray-400 mt-1">Colete propostas de fornecedores para requisições aprovadas.</p>
         </div>
         <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
@@ -143,7 +190,7 @@ export const CotacoesView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden shrink-0">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Cotação</h3>
               {requisicoesAprovadas.length === 0 ? (
@@ -195,7 +242,7 @@ export const CotacoesView = ({ showToast }: any) => {
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6 flex-1 min-h-0">
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -245,6 +292,14 @@ export const CotacoesView = ({ showToast }: any) => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reload}
+          />
         </div>
       )}
     </motion.div>

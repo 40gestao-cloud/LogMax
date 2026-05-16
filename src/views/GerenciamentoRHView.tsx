@@ -52,7 +52,7 @@ export const GerenciamentoRHView = () => {
 
   // Férias
   const ferSolic = ferias.filter((f: any) => f.status === 'Solicitada').length;
-  const ferAprov = ferias.filter((f: any) => f.status === 'Aprovada').length;
+  const ferAprov = ferias.filter((f: any) => f.status === 'Aprovado').length;
   const ferAndando = ferias.filter((f: any) => f.status === 'Em Andamento').length;
 
   // Ponto
@@ -128,29 +128,29 @@ export const GerenciamentoRHView = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Gerenciamento de RH</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gerenciamento de RH</h2>
         <p className="text-sm text-gray-400 mt-1">Visão consolidada do capital humano — funcionários, folha, férias e treinamentos.</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Funcionários Ativos</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Funcionários Ativos</p>
           <p className="text-2xl font-black text-gray-100">{funAtivos}</p>
           <p className="text-xs text-gray-600 mt-1">de {funcionarios.length} cadastrados</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Folha do Mês</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Folha do Mês</p>
           <p className="text-xl font-black text-green-400 leading-tight">R$ {totalLiqMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           <p className="text-xs text-gray-600 mt-1">líquido processado · {anoMes}</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Férias Pendentes</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Férias Pendentes</p>
           <p className={`text-2xl font-black ${ferSolic > 0 ? 'text-yellow-400' : 'text-gray-100'}`}>{ferSolic}</p>
           <p className="text-xs text-gray-600 mt-1">aguardando aprovação</p>
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Treinamentos Ativos</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Treinamentos Ativos</p>
           <p className="text-2xl font-black text-gray-100">{treAndando}</p>
           <p className="text-xs text-gray-600 mt-1">em andamento</p>
         </div>

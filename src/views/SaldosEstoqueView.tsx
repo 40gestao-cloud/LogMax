@@ -16,7 +16,7 @@ export const SaldosEstoqueView = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Saldos de Estoque</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Saldos de Estoque</h2>
           <p className="text-sm text-gray-400 mt-1">Posição atual de estoque por produto.</p>
         </div>
         <div className="relative w-full sm:w-auto">
@@ -26,7 +26,7 @@ export const SaldosEstoqueView = () => {
         </div>
       </div>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse min-w-[500px]">
             <thead>

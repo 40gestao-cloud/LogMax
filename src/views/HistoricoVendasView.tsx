@@ -1,16 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { supabase } from '../lib/supabase';
 
 export const HistoricoVendasView = ({ showToast }: any) => {
-  const { data: vendas, setData: setVendas, isLoading: loadingV } = useFetchData<any>('/api/vendasview');
-  const { data: itens, isLoading: loadingI } = useFetchData<any>('/api/itensvendaview');
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  // Realtime activo: vendas concluídas por outros caixas refrescam esta lista (#21).
+  const { data: vendas, setData: setVendas, isLoading: loadingV, totalCount, reload: reloadVendas } = useFetchData<any>(
+    '/api/vendasview', undefined, true,
+    { page, searchTerm: debouncedSearch, searchColumns: ['forma_pagamento', 'status'] }
+  );
   const { data: clientes } = useFetchData<any>('/api/crmview');
 
-  const [search, setSearch] = useState('');
+  // Itens carregados apenas para as vendas da página actual.
+  // Antes carregava `itens_venda` inteira — escala mal com vendas diárias acumuladas.
+  const [itens, setItens] = useState<any[]>([]);
+  const [loadingI, setLoadingI] = useState(false);
+  const vendaIdsKey = vendas.map((v: any) => v.id).join(',');
+  useEffect(() => {
+    if (!supabase || vendas.length === 0) {
+      setItens([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingI(true);
+    const ids = vendas.map((v: any) => v.id);
+    supabase.from('itens_venda').select('*').in('venda_id', ids)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setItens(rows ?? []);
+        setLoadingI(false);
+      });
+    return () => { cancelled = true; };
+  }, [vendaIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [filtro, setFiltro] = useState<'todos' | 'hoje' | 'semana'>('todos');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [canceling, setCanceling] = useState<string | null>(null);
@@ -26,16 +57,14 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     itens: itens.filter((i: any) => i.venda_id === v.id),
   }));
 
+  // Search é server-side; cliente/id pesquisa-se manualmente dentro da página.
+  // Período hoje/semana mantém-se client-side (operação rápida, conhecida).
   const filtered = enriched
     .filter((v: any) => {
       const d = (v.created_at ?? '').slice(0, 10);
       if (filtro === 'hoje') return d === today;
       if (filtro === 'semana') return d >= weekAgo;
       return true;
-    })
-    .filter((v: any) => {
-      const q = search.toLowerCase();
-      return [v.id, v.forma_pagamento, v.status, v.cliente?.nome].some((x: any) => x?.toLowerCase().includes(q));
     });
 
   const totalFiltrado = filtered
@@ -43,14 +72,21 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     .reduce((s: number, v: any) => s + Number(v.total_final ?? 0), 0);
 
   const handleCancelar = async (venda: any) => {
+    // Guard: impede duplo cancelamento (clique duplo, realtime defasado).
+    if (venda.status === 'Cancelada') {
+      showToast('Esta venda já está cancelada.', 'info', true);
+      return;
+    }
     if (!confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque automaticamente.')) return;
     setCanceling(venda.id);
     try {
       await dbUpdate('/api/vendasview', venda.id, { status: 'Cancelada' });
       // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido
       const today = new Date().toISOString().slice(0, 10);
-      for (const item of (venda.itens ?? [])) {
-        if (!item.produto_id || !item.qtd) continue;
+      const itensVenda = venda.itens ?? [];
+      let skippedCount = 0;
+      for (const item of itensVenda) {
+        if (!item.produto_id || !item.qtd) { skippedCount++; continue; }
         await dbInsert('/api/movimentacoesestoqueview', {
           produto_id: item.produto_id,
           tipo: 'Entrada',
@@ -61,7 +97,13 @@ export const HistoricoVendasView = ({ showToast }: any) => {
         });
       }
       setVendas((prev: any[]) => prev.map(v => v.id === venda.id ? { ...v, status: 'Cancelada' } : v));
-      showToast('Venda cancelada e estoque estornado.', 'info', true);
+      if (skippedCount > 0) {
+        showToast(
+          `Venda cancelada, mas ${skippedCount} ${skippedCount === 1 ? 'item não foi estornado' : 'itens não foram estornados'} ao estoque (produto removido ou inválido). Verifique manualmente.`,
+          'error', false);
+      } else {
+        showToast('Venda cancelada e estoque estornado.', 'info', true);
+      }
     } catch {
       showToast('Erro ao cancelar.', 'error', true);
     } finally {
@@ -83,7 +125,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex justify-between items-start shrink-0 flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Histórico de Vendas</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Histórico de Vendas</h2>
           <p className="text-sm text-gray-400 mt-1">
             {filtro === 'hoje' ? 'Vendas de hoje' : filtro === 'semana' ? 'Últimos 7 dias' : 'Todas as vendas'} —
             Total: <span className="text-accent font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
@@ -125,7 +167,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
               const isCanceling = canceling === v.id;
               return (
                 <motion.div key={v.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
+                  className="neu-flat rounded-2xl border border-white/5">
                   <button onClick={() => setExpanded(isExp ? null : v.id)}
                     className="w-full flex items-center justify-between p-5 hover:bg-white/[0.02] transition-colors text-left">
                     <div className="flex items-center gap-5">
@@ -149,7 +191,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
 
                   <AnimatePresence>
                     {isExp && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div className="px-5 pb-5 border-t border-white/5 pt-4 flex flex-col gap-4">
                           {/* Itens */}
                           <div className="flex flex-col gap-1">
@@ -183,6 +225,14 @@ export const HistoricoVendasView = ({ showToast }: any) => {
               );
             })}
           </AnimatePresence>
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reloadVendas}
+          />
         </div>
       )}
     </motion.div>

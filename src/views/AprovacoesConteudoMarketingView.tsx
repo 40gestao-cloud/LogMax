@@ -54,7 +54,7 @@ export const AprovacoesConteudoMarketingView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Aprovações de Conteúdo</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações de Conteúdo</h2>
         <p className="text-sm text-gray-400 mt-1">Revise e aprove ou reprove os links de propaganda enviados pelo time de Marketing.</p>
       </div>
 

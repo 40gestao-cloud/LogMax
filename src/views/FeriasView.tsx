@@ -5,8 +5,8 @@ import { useFetchData, dbInsert, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const statusCls = (s: string) => {
-  if (s === 'Aprovada') return 'bg-green-900/30 text-green-400';
-  if (s === 'Negada') return 'bg-red-950/50 text-red-500';
+  if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
+  if (s === 'Negado') return 'bg-red-950/50 text-red-500';
   if (s === 'Em Andamento') return 'bg-blue-900/30 text-blue-400';
   if (s === 'Concluída') return 'bg-gray-700/40 text-gray-400';
   return 'bg-yellow-900/30 text-yellow-400'; // Solicitada
@@ -29,7 +29,7 @@ export const FeriasView = ({ showToast }: any) => {
   }));
 
   const solicitadas = ferias.filter((f: any) => f.status === 'Solicitada').length;
-  const aprovadas = ferias.filter((f: any) => f.status === 'Aprovada').length;
+  const aprovadas = ferias.filter((f: any) => f.status === 'Aprovado').length;
   const emAndamento = ferias.filter((f: any) => f.status === 'Em Andamento').length;
   const concluidas = ferias.filter((f: any) => f.status === 'Concluída').length;
 
@@ -63,7 +63,7 @@ export const FeriasView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Férias</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Férias</h2>
         <p className="text-sm text-gray-400 mt-1">Gerencie solicitações e períodos de férias dos funcionários.</p>
       </div>
 
@@ -75,7 +75,7 @@ export const FeriasView = ({ showToast }: any) => {
           { label: 'Concluídas', value: concluidas, warn: false },
         ].map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
             <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
           </div>
         ))}
@@ -87,8 +87,8 @@ export const FeriasView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <h3 className="text-sm font-bold text-gray-300 mb-5">Nova Solicitação de Férias</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -126,7 +126,7 @@ export const FeriasView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden shrink-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {enriched.length === 0 ? <EmptyState message="Nenhuma férias registrada." /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -158,17 +158,17 @@ export const FeriasView = ({ showToast }: any) => {
                       <td className="py-3 px-4">
                         {f.status === 'Solicitada' && (
                           <div className="flex gap-1.5 justify-end">
-                            <button onClick={() => setStatus(f.id, 'Aprovada')}
+                            <button onClick={() => setStatus(f.id, 'Aprovado')}
                               className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors" title="Aprovar">
                               <Check size={13} />
                             </button>
-                            <button onClick={() => setStatus(f.id, 'Negada')}
+                            <button onClick={() => setStatus(f.id, 'Negado')}
                               className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors" title="Negar">
                               <XIcon size={13} />
                             </button>
                           </div>
                         )}
-                        {f.status === 'Aprovada' && (
+                        {f.status === 'Aprovado' && (
                           <button onClick={() => setStatus(f.id, 'Em Andamento')}
                             className="text-[10px] text-blue-400 hover:underline transition-colors font-bold ml-auto block">Iniciar</button>
                         )}

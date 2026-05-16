@@ -66,7 +66,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Integração Bancária</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Integração Bancária</h2>
         <p className="text-sm text-gray-400 mt-1">Gerencie contas bancárias e o histórico de importações/conciliações.</p>
       </div>
 
@@ -74,7 +74,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
             <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
@@ -122,8 +122,8 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
 
         <AnimatePresence>
           {showForm && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-              className="neu-flat rounded-2xl p-5 border border-white/5 mb-4 overflow-hidden">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="neu-flat rounded-2xl p-5 border border-white/5 mb-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <FormField label="Banco">
                   <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Ex: Banco do Brasil"
@@ -155,7 +155,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
           )}
         </AnimatePresence>
 
-        <div className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
+        <div className="neu-flat rounded-2xl border border-white/5">
           {integracoes.length === 0 ? (
             <p className="text-xs text-gray-600 text-center py-8">Nenhuma importação registrada.</p>
           ) : (

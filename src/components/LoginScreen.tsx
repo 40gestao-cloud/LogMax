@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package, Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
@@ -47,34 +47,16 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-base"
+      className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
+      style={{ background: '#09090b' /* zinc-950, sólido e profundo */ }}
     >
-      {/* Background ambient glow */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          width: 600, height: 600, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%)',
-          top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-        }}
-      />
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          width: 300, height: 300, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 70%)',
-          top: '20%', right: '15%',
-        }}
-      />
-
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+        className="w-[calc(100%-1.5rem)] sm:w-full p-6 sm:p-10"
         style={{
-          width: '100%',
           maxWidth: 420,
-          padding: '2.5rem',
           borderRadius: '2rem',
           background: 'var(--color-card-bg)',
           boxShadow: 'var(--color-card-shadow)',
@@ -83,29 +65,30 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           zIndex: 1,
         }}
       >
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-10">
+        {/* Logo com container neumorfico 3D — alto relevo no fundo escuro */}
+        <div className="flex flex-col items-center mb-8">
           <div
             style={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: 'var(--color-icon-bg)',
-              boxShadow: 'var(--color-icon-shadow)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '1rem',
+              width: 140,
+              height: 140,
+              borderRadius: '1.5rem', /* rounded-3xl */
+              background: '#0b0b0d',
+              boxShadow:
+                '10px 10px 24px #050506, ' +     /* sombra escura — canto inferior direito */
+                '-6px -6px 18px #1a1a1d, ' +     /* highlight subtil — canto superior esquerdo */
+                'inset 0 1px 0 rgba(255,255,255,0.04)', /* brilho interno topo */
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <Package size={24} style={{ color: '#10B981' }} />
+            <img
+              src="/logo-login.png"
+              alt="LogMax"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 900, color: '#10B981', letterSpacing: '0.1em', lineHeight: 1 }}>
-            LogMax
-          </h1>
-          <p style={{
-            fontSize: '0.7rem', fontWeight: 700,
-            color: 'var(--color-text-dim)',
-            letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '0.4rem',
-          }}>
-            Plataforma de Gestão
-          </p>
         </div>
 
         {/* Form */}
@@ -230,6 +213,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             type="submit"
             disabled={isLoading}
             whileTap={!isLoading ? { scale: 0.97 } : {}}
+            className="btn-shimmer"
             style={{
               marginTop: '0.5rem',
               width: '100%',
@@ -270,9 +254,9 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             Acesso restrito · LogMax © {new Date().getFullYear()}
           </p>
           <p style={{
-            textAlign: 'center', fontSize: '0.6rem',
+            textAlign: 'center', fontSize: '0.7rem',
             color: 'var(--color-text-dim)',
-            letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
+            letterSpacing: '0.02em', fontWeight: 500,
           }}>
             Desenvolvido por Igor Souza
           </p>

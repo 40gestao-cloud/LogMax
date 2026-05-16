@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.png', 'logo-login.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],

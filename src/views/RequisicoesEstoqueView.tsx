@@ -56,7 +56,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Requisições de Estoque</h2><p className="text-sm text-gray-400 mt-1">Solicitações de retirada e movimentação de produtos.</p></div>
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Estoque</h2><p className="text-sm text-gray-400 mt-1">Solicitações de retirada e movimentação de produtos.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Requisição</NeuButtonAccent>
@@ -64,7 +64,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
       </div>
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Requisição' : 'Nova Requisição'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -92,7 +92,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Destino</th><th className="pb-4 font-bold px-4">Solicitante</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>

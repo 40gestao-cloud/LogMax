@@ -3,7 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useFetchData } from './hooks/useSupabaseData';
 import { LoginScreen } from './components/LoginScreen';
-import { Toast, LoadingSpinner, PlaceholderView } from './components/ui';
+import { Toast, LoadingSpinner, PageLoadingFallback, PlaceholderView } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -210,6 +210,8 @@ const ACCENT_OPTIONS = [
   { id: 'yellow', hex: '#FACC15', label: 'Amarelo' },
   { id: 'purple', hex: '#A855F7', label: 'Roxo'    },
   { id: 'orange', hex: '#F97316', label: 'Laranja' },
+  { id: 'blue',   hex: '#3B82F6', label: 'Azul'    },
+  { id: 'pink',   hex: '#EC4899', label: 'Rosa'    },
 ] as const;
 
 function AccentPicker() {
@@ -408,7 +410,7 @@ function LogMaxAppInner() {
   const displayName = userEmail.split('@')[0];
 
   return (
-    <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)' }}>
+    <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <ApprovalBadges onBadges={handleBadges} />
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
@@ -451,8 +453,10 @@ function LogMaxAppInner() {
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
               <Menu size={18} />
             </button>
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide">Plataforma LogMax</h2>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
+                <span className="hidden sm:inline">Plataforma </span>LogMax
+              </h2>
               <p className="hidden sm:block text-[11px] text-gray-500 uppercase tracking-widest mt-1">Ambiente seguro</p>
             </div>
           </div>
@@ -481,7 +485,7 @@ function LogMaxAppInner() {
 
         <div className="flex-1 min-h-0">
           <ErrorBoundary key={activeView}>
-            <Suspense fallback={<LoadingSpinner />}>
+            <Suspense fallback={<PageLoadingFallback />}>
               {renderContent()}
             </Suspense>
           </ErrorBoundary>

@@ -114,14 +114,14 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Relatórios de Estoque</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Relatórios de Estoque</h2>
         <p className="text-sm text-gray-400 mt-1">Visão consolidada de movimentações, saldos, vencimentos e inventários.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {kpis.map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
             <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
             <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
           </div>
@@ -155,7 +155,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
         </div>
       </div>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6 flex-1 min-h-0">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
         <div className="overflow-x-auto overflow-y-auto h-full main-scrollbar">
           {isLoading ? <LoadingSpinner /> : activeData.length === 0 ? <EmptyState /> : (
             <table className="w-full text-left border-collapse">

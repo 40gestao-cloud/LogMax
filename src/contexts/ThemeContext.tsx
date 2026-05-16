@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
-export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange';
+export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink';
 
-const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange'];
+const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink'];
 
 interface ThemeContextValue {
   theme: Theme;

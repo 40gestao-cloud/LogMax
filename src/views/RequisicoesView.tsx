@@ -1,27 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 export const RequisicoesView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesview', undefined, true);
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/requisicoesview', undefined, true,
+    { page, searchTerm: debouncedSearch, searchColumns: ['item', 'solicitante', 'urgencia', 'centro_custo', 'status'] }
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
-  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ item: '', solicitante: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const today = new Date().toISOString().split('T')[0];
-
-  const filtered = data.filter((r: any) =>
-    [r.item, r.solicitante, r.status, r.urgencia, r.centro_custo].some((v: any) =>
-      v?.toLowerCase().includes(search.toLowerCase())
-    )
-  );
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -88,7 +90,7 @@ export const RequisicoesView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-100 tracking-tight">Requisições de Compra</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Compra</h2>
           <p className="text-sm text-gray-400 mt-1">Solicite itens para compra. Requisições aprovadas seguem para cotação.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -105,7 +107,7 @@ export const RequisicoesView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden shrink-0">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Requisição' : 'Nova Requisição'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -148,32 +150,35 @@ export const RequisicoesView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState message="Nenhuma requisição encontrada" /> : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-hidden flex flex-col mb-6 flex-1 min-h-0">
+      {isLoading ? <LoadingSpinner /> : data.length === 0 ? <EmptyState message="Nenhuma requisição encontrada" /> : (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[700px]">
+            <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Item</th>
                   <th className="pb-4 font-bold px-4 text-center">Qtd</th>
                   <th className="pb-4 font-bold px-4 text-center">Urgência</th>
-                  <th className="pb-4 font-bold px-4">Centro de Custo</th>
-                  <th className="pb-4 font-bold px-4">Solicitante</th>
-                  <th className="pb-4 font-bold px-4">Data</th>
+                  <th className="pb-4 font-bold px-4 hidden lg:table-cell">Centro de Custo</th>
+                  <th className="pb-4 font-bold px-4 hidden md:table-cell">Solicitante</th>
+                  <th className="pb-4 font-bold px-4 hidden sm:table-cell">Data</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
                   <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {filtered.map((item: any) => (
+                  {data.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[200px]"><span className="block truncate">{item.item}</span></td>
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[9rem] sm:max-w-[200px]">
+                        <span className="block truncate">{item.item}</span>
+                        <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
+                      </td>
                       <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">{item.qtd}</td>
                       <td className="py-3 px-4 text-center"><UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} /></td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{item.centro_custo || '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{item.solicitante}</td>
-                      <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.data}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.centro_custo || '—'}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.solicitante}</td>
+                      <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.data}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
                         {item.status === 'Pendente' && (
@@ -189,6 +194,14 @@ export const RequisicoesView = ({ showToast }: any) => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reload}
+          />
         </div>
       )}
     </motion.div>
