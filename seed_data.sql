@@ -1,8 +1,31 @@
 -- ============================================================
 -- LOGMAX — seed_data.sql
--- Execute APÓS: logmax_supabase_schema.sql → rh_tables.sql → logmax_rls.sql
--- Todos os INSERTs usam ON CONFLICT DO NOTHING — idempotente.
--- UUIDs fixos para registros novos; subqueries para FKs do schema.
+-- ============================================================
+-- ⚠️ DESATIVADO PARA PRODUÇÃO (2026-05-16)
+--
+-- Este arquivo contém DADOS FICTÍCIOS de demonstração. Não execute
+-- em ambiente de produção. Mantido apenas para referência histórica
+-- / testes locais.
+--
+-- Para produção:
+--   • Execute apenas o schema (logmax_supabase_schema.sql) e RLS.
+--   • Limpe qualquer dado pré-existente com:
+--       supabase/migrations/20260516_truncate_for_production.sql
+--   • Cadastre o usuário admin/CEO manualmente via /api/create-user.
+--
+-- Para reativar como seed de demo em ambiente local, remova o RAISE
+-- abaixo e os blocos DO $$ ... END $$ que envolvem o conteúdo.
+-- ============================================================
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'seed_data.sql desativado — vê o cabeçalho do ficheiro.';
+END $$;
+
+/*
+
+-- ============================================================
+-- CONTEÚDO ORIGINAL (preservado em bloco de comentário)
 -- ============================================================
 
 
@@ -305,3 +328,5 @@ INSERT INTO treinamentos (id, nome, instrutor, data_inicio, data_fim, vagas, ins
   ('d8000000-0000-0000-0000-000000000002', 'Excel Avançado',           'Ana Lima',         '2026-05-05', '2026-05-16', 15, 15, 'Em Andamento'),
   ('d8000000-0000-0000-0000-000000000003', 'LGPD na Prática',          'Dra. Paula Souza', '2026-04-01', '2026-04-02', 30, 28, 'Concluído')
 ON CONFLICT DO NOTHING;
+
+*/
