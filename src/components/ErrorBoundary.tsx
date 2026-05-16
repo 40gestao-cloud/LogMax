@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { Sentry } from '../lib/sentry';
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -14,6 +15,10 @@ export class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.error('[LogMax] Render error:', error, info?.componentStack);
+    // Envia para o Sentry com o componentStack como contexto adicional
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info?.componentStack ?? '' } },
+    });
   }
 
   render() {
