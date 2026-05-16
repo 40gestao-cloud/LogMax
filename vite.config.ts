@@ -11,7 +11,9 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        // 'prompt' permite ao app mostrar banner "Nova versão disponível"
+        // em vez de atualizar silenciosamente — vide PwaUpdatePrompt.tsx.
+        registerType: 'prompt',
         includeAssets: ['icon.png', 'logo-login.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {

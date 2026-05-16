@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useFetchData } from './hooks/useSupabaseData';
 import { LoginScreen } from './components/LoginScreen';
+import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { Toast, LoadingSpinner, PageLoadingFallback, PlaceholderView } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
@@ -572,6 +573,7 @@ function LogMaxAppInner() {
 export default function LogMaxApp() {
   return (
     <ThemeProvider>
+      <PwaUpdatePrompt />
       <LogMaxAppInner />
     </ThemeProvider>
   );
