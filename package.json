@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@sentry/react": "^10.53.1",
@@ -40,6 +41,7 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^4.1.6",
     "workbox-window": "^7.3.0"
   }
 }
