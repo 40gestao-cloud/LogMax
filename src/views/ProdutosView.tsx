@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
 
 const EMPTY_EXTRAS = {
   categoria:      '',
@@ -140,6 +141,37 @@ export const ProdutosView = ({ showToast }: any) => {
   const margemAoVivo = calcMargem(form.preco, extras.preco_custo);
   const isFormOpen = showForm || !!editItem;
 
+  // EAN-13 — preview ao vivo
+  const eanNorm = normalizeEan13(extras.ean);
+  const eanPreviewRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!isFormOpen) return;
+    const canvas = eanPreviewRef.current;
+    if (!canvas) return;
+    if (eanNorm.valid) {
+      try { drawEan13ToCanvas(canvas, eanNorm.value, { moduleWidth: 2, barHeight: 56 }); }
+      catch { /* ignora — pattern inválido */ }
+    } else {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }, [isFormOpen, eanNorm.value, eanNorm.valid]);
+
+  const downloadLabelFor = async (item: { ean?: string; nome?: string; codigo?: string; preco?: any }) => {
+    try {
+      await downloadEan13LabelPdf({
+        ean: item.ean ?? '',
+        nome: item.nome,
+        codigo: item.codigo,
+        preco: item.preco != null ? parseNum(item.preco) : null,
+        filename: `etiqueta-${item.codigo || normalizeEan13(item.ean).value}`,
+      });
+      showToast('Etiqueta gerada!', 'success', true);
+    } catch (err: any) {
+      showToast(err?.message || 'EAN-13 inválido para gerar etiqueta.', 'error', true);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
 
@@ -194,7 +226,7 @@ export const ProdutosView = ({ showToast }: any) => {
                   <FormField label="Cód. Barras EAN">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
                       value={extras.ean} onChange={e => setExtras(x => ({ ...x, ean: e.target.value }))}
-                      placeholder="Ex: 7891234567890" />
+                      placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
                   </FormField>
                   <FormField label="Fornecedor">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -203,6 +235,58 @@ export const ProdutosView = ({ showToast }: any) => {
                   </FormField>
                 </div>
               </div>
+
+              {/* Etiqueta EAN-13 */}
+              {extras.ean.replace(/\D/g, '').length > 0 && (
+                <div>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                    <Barcode size={12} /> Etiqueta EAN-13
+                  </p>
+                  <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="bg-white p-3 rounded-lg flex items-center justify-center min-h-[88px]">
+                      {eanNorm.valid ? (
+                        <canvas ref={eanPreviewRef} />
+                      ) : (
+                        <span className="text-[11px] text-gray-500 font-mono px-6 text-center">
+                          Informe 12 ou 13 dígitos para visualizar
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-2 w-full">
+                      {eanNorm.valid ? (
+                        <div className="flex items-center gap-2 text-emerald-400 text-xs">
+                          <Check size={14} />
+                          <span className="font-bold">EAN-13 válido:</span>
+                          <span className="font-mono">{eanNorm.value}</span>
+                          {eanNorm.autoCompleted && (
+                            <span className="text-[10px] text-gray-500">(dígito verificador calculado)</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-yellow-400 text-xs">
+                          <AlertCircle size={14} />
+                          <span>
+                            {eanNorm.digits.length === 13
+                              ? 'Dígito verificador inválido — confira os números.'
+                              : `Faltam ${Math.max(0, 12 - eanNorm.digits.length)} dígito(s) para validar.`}
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-gray-500">
+                        Imprima em adesivo 80×50 mm. O código é escaneável por qualquer leitor de código de barras compatível com EAN-13.
+                      </p>
+                      <div className="flex justify-start">
+                        <NeuButtonAccent
+                          onClick={() => downloadLabelFor({ ean: extras.ean, nome: form.nome, codigo: form.codigo, preco: form.preco })}
+                          disabled={!eanNorm.valid || !form.nome.trim()}
+                        >
+                          <FileDown size={14} /> Baixar etiqueta PDF
+                        </NeuButtonAccent>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Preços */}
               <div>
@@ -325,6 +409,13 @@ export const ProdutosView = ({ showToast }: any) => {
                         <td className="py-4 px-4 text-center hidden sm:table-cell"><StatusBadge status={item.status} /></td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {normalizeEan13(item.ean).valid && (
+                              <button onClick={() => downloadLabelFor(item)}
+                                title="Baixar etiqueta EAN-13 em PDF"
+                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                                <Barcode size={12} />
+                              </button>
+                            )}
                             <button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                           </div>
