@@ -314,6 +314,25 @@ body {
   margin: 0;
   padding: 0;
   transition: background-color 0.3s ease, color 0.3s ease;
+
+  /* Sensação de app nativo: bloqueia seleção acidental de textos estruturais
+     (rodapés, labels, títulos, botões) e o menu nativo "Copiar/Pesquisar" no
+     toque longo em mobile. Reabilitado abaixo onde a seleção é útil. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Reabilita seleção onde faz sentido: campos de entrada e tabelas de relatórios
+   (utilizador pode copiar dados). `.selectable` serve de escape hatch pontual. */
+input,
+textarea,
+[contenteditable="true"],
+table,
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* ── Global light-mode overrides for Tailwind gray classes ── */
