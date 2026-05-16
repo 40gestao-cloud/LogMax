@@ -48,7 +48,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
-      style={{ background: '#09090b' /* zinc-950, sólido e profundo */ }}
+      style={{ background: 'var(--color-bg-base)' }}
     >
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -65,18 +65,15 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           zIndex: 1,
         }}
       >
-        {/* Logo com container neumorfico 3D — alto relevo no fundo escuro */}
+        {/* Logo com container neumórfico — adapta automaticamente ao tema. */}
         <div className="flex flex-col items-center mb-8">
           <div
             style={{
               width: 140,
               height: 140,
-              borderRadius: '1.5rem', /* rounded-3xl */
-              background: '#0b0b0d',
-              boxShadow:
-                '10px 10px 24px #050506, ' +     /* sombra escura — canto inferior direito */
-                '-6px -6px 18px #1a1a1d, ' +     /* highlight subtil — canto superior esquerdo */
-                'inset 0 1px 0 rgba(255,255,255,0.04)', /* brilho interno topo */
+              borderRadius: '1.5rem',
+              background: 'var(--color-icon-bg)',
+              boxShadow: 'var(--color-icon-shadow)',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',

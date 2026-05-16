@@ -21,9 +21,27 @@
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
 
-    <!-- Evita FOUC no dark theme -->
+    <!-- Evita FOUC: aplica tema persistido ANTES do React montar.
+         Sem isto, light mode flashava com bg/sombras dark antes do useEffect rodar. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('logmax-theme');
+          var a = localStorage.getItem('logmax-accent');
+          if (t === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.style.backgroundColor = '#E8E8E8';
+          } else {
+            document.documentElement.style.backgroundColor = '#0A0A0A';
+          }
+          if (a) document.documentElement.setAttribute('data-accent', a);
+        } catch (e) {
+          document.documentElement.style.backgroundColor = '#0A0A0A';
+        }
+      })();
+    </script>
     <style>
-      html, body { background-color: #0A0A0A; margin: 0; padding: 0; }
+      html, body { margin: 0; padding: 0; }
     </style>
   </head>
   <body>

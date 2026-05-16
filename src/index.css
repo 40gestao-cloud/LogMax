@@ -165,19 +165,25 @@
   --color-surface:        rgba(0, 0, 0, 0.03);
   --color-surface-md:     rgba(0, 0, 0, 0.06);
 
-  --color-card-bg:       linear-gradient(145deg, #F2F2F2, #DCDCDC);
-  --color-card-shadow:   6px 6px 18px #D4D4D4, -3px -3px 12px #F5F5F5,
-                         inset 0 1px 0 rgba(255,255,255,0.6);
+  /* Sombras drasticamente suavizadas (premium light): elevação subtil sem
+     ruído neumórfico pesado. Combinação de soft drop-shadow + highlight quase
+     imperceptível, alinhada com Material/iOS. */
+  --color-card-bg:       linear-gradient(180deg, #FAFAFA, #ECECEC);
+  --color-card-shadow:   0 1px 2px rgba(0,0,0,0.04),
+                         0 8px 24px rgba(0,0,0,0.06),
+                         inset 0 1px 0 rgba(255,255,255,0.75);
   --color-card-border:   rgba(0, 0, 0, 0.06);
-  --color-input-bg:      linear-gradient(145deg, #DCDCDC, #EEEEEE);
-  --color-input-shadow:  inset 2px 2px 6px #D8D8D8, inset -1px -1px 4px #F5F5F5;
+  --color-input-bg:      #F4F4F4;
+  --color-input-shadow:  inset 0 1px 2px rgba(0,0,0,0.05);
   --color-input-border:  rgba(0, 0, 0, 0.08);
   --color-input-text:    #111111;
   --color-input-ph:      #9ca3af;
 
-  --color-icon-bg:       linear-gradient(145deg, #F2F2F2, #DCDCDC);
-  --color-icon-shadow:   3px 3px 8px #D4D4D4, -2px -2px 6px #F5F5F5,
-                         inset 0 0 0 1px rgba(16,185,129,0.25);
+  --color-icon-bg:       linear-gradient(180deg, #F5F5F5, #E4E4E4);
+  --color-icon-shadow:   0 1px 2px rgba(0,0,0,0.04),
+                         0 6px 16px rgba(0,0,0,0.05),
+                         inset 0 1px 0 rgba(255,255,255,0.7),
+                         inset 0 0 0 1px rgba(0,0,0,0.04);
 
   --color-scrollbar:       #C0C0C0;
   --color-scrollbar-hover: #A0A0A0;
