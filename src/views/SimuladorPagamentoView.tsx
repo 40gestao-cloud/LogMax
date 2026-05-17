@@ -70,9 +70,14 @@ export const SimuladorPagamentoView: React.FC = () => {
           ctx.drawImage(video, 0, 0, w, h);
           try {
             const imageData = ctx.getImageData(0, 0, w, h);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+            // attemptBoth lê QRs tanto escuro/claro como claro/escuro — robustez.
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
             if (code?.data) {
-              const match = PIX_REGEX.exec(code.data.trim());
+              const raw = code.data.trim();
+              const match = PIX_REGEX.exec(raw);
+              if (!match) {
+                console.warn('[Simulador] QR detectado mas formato inválido:', raw);
+              }
               if (match) {
                 const pixId = match[1];
                 stopCamera();

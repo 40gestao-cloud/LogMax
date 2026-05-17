@@ -7,7 +7,6 @@ import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { LoadingSpinner } from '../components/ui';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface CartItem {
   produto_id: string;
@@ -22,7 +21,6 @@ const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado
 
 export const PDVView = ({ showToast, profile }: any) => {
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto();
-  const { theme } = useTheme();
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
@@ -624,13 +622,15 @@ export const PDVView = ({ showToast, profile }: any) => {
                 </p>
               </div>
 
+              {/* QR sempre preto-sobre-branco com quiet zone — exigência dos scanners,
+                  independente do tema da app. */}
               <div className="p-4 rounded-3xl border border-white/5"
-                style={{ background: theme === 'light' ? '#ffffff' : 'rgba(255,255,255,0.04)' }}>
+                style={{ background: '#ffffff' }}>
                 <QRCodeSVG
                   value={`LOGMAX-PIX-${pixPendente.id}`}
                   size={208}
-                  bgColor="transparent"
-                  fgColor={theme === 'light' ? '#0A0A0A' : '#e5e7eb'}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
                   level="M"
                 />
               </div>
