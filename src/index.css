@@ -360,13 +360,12 @@ table,
 [data-theme="light"] .hover\:text-gray-300:hover    { color: #374151; }
 [data-theme="light"] .group:hover .group-hover\:text-white { color: #111111; }
 
-/* ── Touch ou ecrãs pequenos: sempre mostrar ações de linha (editar/excluir/etc.) ──
-   Hover-to-reveal só funciona em desktop com mouse. Em touch (mesmo quando o browser
-   reporta erradamente hover:hover, como Chrome Android em PWA mode às vezes) e em
-   ecrãs <=768px, forçamos visível para que ícones de ação sejam descobríveis. */
-@media (hover: none), (max-width: 768px) {
-  .group-hover\:opacity-100 { opacity: 1 !important; }
-}
+/* ── Ações de linha (editar/excluir/código de barras) sempre visíveis ──
+   Hover-to-reveal é hostil em touch e cria ambiguidade em desktop também
+   ("onde estão os botões?"). Forçamos visível em qualquer viewport para
+   descoberta imediata. Tailwind ainda emite as classes opacity-0 +
+   group-hover:opacity-100 nas views; este override anula ambas. */
+.group-hover\:opacity-100 { opacity: 1 !important; }
 
 /* ── Touch-friendly button sizes em mobile (#2) ──
    Botões de acção 32px ficam pequenos para o polegar. Em telemóveis sobe para 36px.
