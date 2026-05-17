@@ -18,7 +18,9 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['icon.png', 'logo-login.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {
-          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+          // json incluído para precachear manifest.json e simulador-manifest.json
+          // (segundo PWA do /simulador-pagamento — vide SimuladorPagamentoView).
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,json}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,

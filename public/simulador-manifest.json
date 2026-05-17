@@ -1,0 +1,29 @@
+{
+  "name": "Banco Simulado",
+  "short_name": "Banco",
+  "description": "App de demonstração para pagamento Pix via QR Code na plataforma LogMax.",
+  "start_url": "/simulador-pagamento",
+  "scope": "/simulador-pagamento",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "id": "logmax-banco-simulado",
+  "icons": [
+    {
+      "src": "/simulador-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/simulador-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["finance"],
+  "prefer_related_applications": false
+}

@@ -10,6 +10,24 @@ type Stage = 'scanning' | 'confirming' | 'paying' | 'success' | 'error';
 
 const PIX_REGEX = /^LOGMAX-PIX-([0-9a-f-]{36})$/i;
 
+// Swap a tag <link rel> ou <meta name> para o href/content alvo, devolvendo
+// função que restaura o valor anterior. Permite usar identidade própria de
+// PWA ("Banco Simulado") só enquanto este componente está montado.
+function swapTag(
+  selector: string,
+  attr: 'href' | 'content',
+  newValue: string,
+): () => void {
+  const el = document.querySelector(selector);
+  if (!el) return () => {};
+  const prev = el.getAttribute(attr);
+  el.setAttribute(attr, newValue);
+  return () => {
+    if (prev === null) el.removeAttribute(attr);
+    else el.setAttribute(attr, prev);
+  };
+}
+
 export const SimuladorPagamentoView: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -19,6 +37,25 @@ export const SimuladorPagamentoView: React.FC = () => {
   const [stage, setStage] = useState<Stage>('scanning');
   const [errorMsg, setErrorMsg] = useState('');
   const [pendente, setPendente] = useState<{ id: string; valor: number } | null>(null);
+
+  // Identidade própria de PWA enquanto a rota /simulador-pagamento está activa.
+  // Browser usa estes valores quando o utilizador faz "Adicionar ao Ecrã Inicial",
+  // dando ao simulador ícone e nome distintos da LogMax.
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = 'Banco Simulado — Pagamento Pix';
+    const restores = [
+      swapTag('link[rel="manifest"]',          'href',    '/simulador-manifest.json'),
+      swapTag('link[rel="apple-touch-icon"]',  'href',    '/simulador-icon.svg'),
+      swapTag('link[rel="icon"]',              'href',    '/simulador-icon.svg'),
+      swapTag('meta[name="theme-color"]',      'content', '#3B82F6'),
+      swapTag('meta[name="apple-mobile-web-app-title"]', 'content', 'Banco Simulado'),
+    ];
+    return () => {
+      document.title = prevTitle;
+      restores.forEach(r => r());
+    };
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
