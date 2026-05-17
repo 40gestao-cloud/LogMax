@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
@@ -58,7 +58,7 @@ export const ContasReceberView = ({ showToast }: any) => {
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ descricao: item.descricao ?? '' });
-    setExtras({ valor: String(item.valor ?? ''), vencimento: item.vencimento ?? '', cliente_id: item.cliente_id ?? '' });
+    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', cliente_id: item.cliente_id ?? '' });
     setErrors({});
     setShowForm(false);
   };
@@ -76,7 +76,7 @@ export const ContasReceberView = ({ showToast }: any) => {
     setIsSaving(true);
     const payload = {
       descricao: form.descricao,
-      valor: parseFloat(extras.valor.replace(',', '.')) || 0,
+      valor: parseBRL(extras.valor),
       vencimento: extras.vencimento || null,
       cliente_id: extras.cliente_id || null,
     };
@@ -189,8 +189,8 @@ export const ContasReceberView = ({ showToast }: any) => {
                     placeholder="Ex: Serviço prestado" />
                 </FormField>
                 <FormField label="Valor (R$)">
-                  <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: e.target.value }))} placeholder="0,00" />
+                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} placeholder="0,00" />
                 </FormField>
                 <FormField label="Vencimento">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { useFormValidation, exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone } from '../lib/viewUtils';
 
 // ✅ FiliaisView com validação de formulário + exportação
 export const FiliaisView = ({ showToast }: any) => {
@@ -115,13 +115,13 @@ export const FiliaisView = ({ showToast }: any) => {
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`} value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }} placeholder="Ex: Filial Sul" />
                 </FormField>
                 <FormField label="CNPJ *" error={errors.cnpj}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cnpj ? 'border border-red-500/40' : ''}`} value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: e.target.value })); clearError('cnpj'); }} placeholder="00.000.000/0000-00" />
+                  <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono ${errors.cnpj ? 'border border-red-500/40' : ''}`} value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) })); clearError('cnpj'); }} placeholder="00.000.000/0000-00" inputMode="numeric" />
                 </FormField>
                 <FormField label="Cidade/UF *" error={errors.cidade}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cidade ? 'border border-red-500/40' : ''}`} value={form.cidade} onChange={e => { setForm(f => ({ ...f, cidade: e.target.value })); clearError('cidade'); }} placeholder="Ex: São Paulo/SP" />
                 </FormField>
                 <FormField label="Celular">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular} onChange={e => setExtras(x => ({ ...x, celular: e.target.value }))} placeholder="(11) 99999-9999" />
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular} onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" />
                 </FormField>
                 <FormField label="Endereço">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.endereco} onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))} placeholder="Rua, número, bairro" />

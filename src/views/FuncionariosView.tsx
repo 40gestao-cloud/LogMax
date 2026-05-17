@@ -3,7 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
-import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
+
+const MASK_FOR: Record<string, (v: string) => string> = {
+  cpf:      formatCPF,
+  telefone: formatPhone,
+  salario:  formatBRL,
+};
 
 const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo' };
 
@@ -35,14 +41,23 @@ export const FuncionariosView = ({ showToast }: any) => {
   );
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setShowForm(true); };
-  const openEdit = (f: any) => { setForm({ ...f, salario: f.salario ?? '' }); setEditing(f); setShowForm(true); };
+  const openEdit = (f: any) => {
+    setForm({
+      ...f,
+      cpf:      f.cpf      ? formatCPF(f.cpf)        : '',
+      telefone: f.telefone ? formatPhone(f.telefone) : '',
+      salario:  f.salario  != null ? formatBRL(Number(f.salario)) : '',
+    });
+    setEditing(f);
+    setShowForm(true);
+  };
   const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); };
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, salario: Number(form.salario || 0) };
+      const payload = { ...form, salario: parseBRL(form.salario) };
       if (editing) {
         const updated = await dbUpdate('/api/funcionariosview', editing.id, payload);
         setData((prev: any[]) => prev.map((f: any) => f.id === editing.id ? { ...f, ...updated } : f));
@@ -128,14 +143,27 @@ export const FuncionariosView = ({ showToast }: any) => {
                 { label: 'Departamento', k: 'departamento', type: 'text' },
                 { label: 'Data de Admissão', k: 'data_admissao', type: 'date' },
                 { label: 'Data de Nascimento', k: 'data_nascimento', type: 'date' },
-                { label: 'Salário (R$)', k: 'salario', type: 'number' },
-              ].map(({ label, k, type }) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-              ))}
+                { label: 'Salário (R$)', k: 'salario', type: 'text' },
+              ].map(({ label, k, type }) => {
+                const mask = MASK_FOR[k];
+                const isNumericMask = !!mask;
+                return (
+                  <div key={k} className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                    <input
+                      type={type}
+                      inputMode={isNumericMask ? 'numeric' : undefined}
+                      value={form[k]}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const next = mask ? mask(raw) : raw;
+                        setForm((p: any) => ({ ...p, [k]: next }));
+                      }}
+                      className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
+                    />
+                  </div>
+                );
+              })}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
                 <select value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
@@ -175,7 +203,7 @@ export const FuncionariosView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-xs text-gray-400">{f.cargo ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.departamento ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.data_admissao ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(f.salario || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right tabular-nums">R$ {formatBRL(Number(f.salario || 0))}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end">

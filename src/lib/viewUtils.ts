@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date'; options?: string[]; required?: boolean; placeholder?: string };
+export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency'; options?: string[]; required?: boolean; placeholder?: string };
 
 export function useFormValidation<T extends Record<string, string>>(fields: T) {
   const [errors, setErrors] = useState<Partial<Record<keyof T, string>>>({});
@@ -47,6 +47,34 @@ export const formatCNPJ = (v: string): string => {
   if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
   if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+};
+
+// Aceita string de input (qualquer formato) ou número (valor em reais).
+// Devolve sempre "1.234,56" — milhar com ponto, decimal com vírgula.
+export const formatBRL = (v: string | number | null | undefined): string => {
+  if (v === null || v === undefined || v === '') return '';
+  let digits: string;
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return '';
+    digits = Math.round(Math.abs(v) * 100).toString();
+  } else {
+    digits = String(v).replace(/\D/g, '');
+  }
+  if (!digits) return '';
+  const padded = digits.padStart(3, '0');
+  const cents  = padded.slice(-2);
+  const intRaw = padded.slice(0, -2).replace(/^0+(?=\d)/, '');
+  const intFmt = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${intFmt},${cents}`;
+};
+
+// Inverte formatBRL: "1.234,56" → 1234.56 ; "" → 0.
+export const parseBRL = (v: string | number | null | undefined): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (!v) return 0;
+  const digits = String(v).replace(/\D/g, '');
+  if (!digits) return 0;
+  return Number(digits) / 100;
 };
 
 export async function exportToPDF(title: string, columns: string[], rows: any[][], filename: string) {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { GField } from '../lib/viewUtils';
+import { GField, formatBRL, parseBRL } from '../lib/viewUtils';
 
 export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
@@ -30,7 +30,12 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
 
   const openEdit = (item: any) => {
     setEditItem(item);
-    setFormState(Object.fromEntries(fields.map(f => [f.key, String(item[f.key] ?? '')])));
+    setFormState(Object.fromEntries(fields.map(f => {
+      const raw = item[f.key];
+      // currency é armazenado como número no banco; convertemos pra "1.234,56" no form.
+      if (f.type === 'currency') return [f.key, formatBRL(raw)];
+      return [f.key, String(raw ?? '')];
+    })));
     setValErrors({});
     setShowForm(false);
   };
@@ -42,13 +47,15 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      const numericKeys = new Set(fields.filter(f => f.type === 'number').map(f => f.key));
-      const dateKeys    = new Set(fields.filter(f => f.type === 'date').map(f => f.key));
+      const numericKeys  = new Set(fields.filter(f => f.type === 'number').map(f => f.key));
+      const dateKeys     = new Set(fields.filter(f => f.type === 'date').map(f => f.key));
+      const currencyKeys = new Set(fields.filter(f => f.type === 'currency').map(f => f.key));
       // Date vazio vira null — Postgres rejeita '' em colunas date/timestamp.
       const parsed = Object.fromEntries(
         Object.entries(formState).map(([k, v]) => {
-          if (numericKeys.has(k)) return [k, Number(v) || 0];
-          if (dateKeys.has(k))    return [k, v === '' ? null : v];
+          if (currencyKeys.has(k)) return [k, parseBRL(v as string)];
+          if (numericKeys.has(k))  return [k, Number(v) || 0];
+          if (dateKeys.has(k))     return [k, v === '' ? null : v];
           return [k, v];
         })
       );
@@ -113,6 +120,16 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                           <option value="">Selecione...</option>
                           {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
+                      ) : f.type === 'currency' ? (
+                        <input type="text" inputMode="numeric"
+                          className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
+                          value={formState[f.key]}
+                          onChange={e => {
+                            const masked = formatBRL(e.target.value);
+                            setFormState(s => ({ ...s, [f.key]: masked }));
+                            setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; });
+                          }}
+                          placeholder={f.placeholder ?? '0,00'} />
                       ) : (
                         <input type={f.type ?? 'text'} className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
                           value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}
@@ -148,8 +165,12 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                     {filtered.map((item: any) => (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         {fields.map((f, idx) => (
-                          <td key={f.key} className={`py-4 px-4 ${idx === 0 ? 'text-sm font-semibold text-gray-200' : 'text-xs text-gray-400'}`}>
-                            {f.key === 'status' ? <StatusBadge status={item[f.key]} /> : String(item[f.key] ?? '—')}
+                          <td key={f.key} className={`py-4 px-4 ${idx === 0 ? 'text-sm font-semibold text-gray-200' : 'text-xs text-gray-400'} ${f.type === 'currency' ? 'tabular-nums' : ''}`}>
+                            {f.key === 'status'
+                              ? <StatusBadge status={item[f.key]} />
+                              : f.type === 'currency'
+                                ? (item[f.key] != null && item[f.key] !== '' ? `R$ ${formatBRL(Number(item[f.key]))}` : '—')
+                                : String(item[f.key] ?? '—')}
                           </td>
                         ))}
                         <td className="py-4 px-4 text-right">

@@ -4,7 +4,7 @@ import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, Al
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
 
 const EMPTY_EXTRAS = {
@@ -19,8 +19,7 @@ const EMPTY_EXTRAS = {
 const parseNum = (v: string | number | undefined | null): number =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;
 
-const fmtBRL = (v: number) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
 const calcMargem = (venda: string | number, custo: string | number): number | null => {
   const v = parseNum(venda);
@@ -73,10 +72,14 @@ export const ProdutosView = ({ showToast }: any) => {
 
   const openEdit = (item: any) => {
     setEditItem(item);
-    setForm({ codigo: item.codigo ?? '', nome: item.nome ?? '', preco: String(item.preco ?? '') });
+    setForm({
+      codigo: item.codigo ?? '',
+      nome:   item.nome   ?? '',
+      preco:  item.preco != null && item.preco !== '' ? formatBRL(Number(item.preco)) : '',
+    });
     setExtras({
       categoria:      item.categoria      ?? '',
-      preco_custo:    item.preco_custo !== undefined && item.preco_custo !== null ? String(item.preco_custo) : '',
+      preco_custo:    item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
       estoque:        item.estoque        !== undefined ? String(item.estoque)        : '',
       estoque_minimo: item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
       ean:            item.ean            ?? '',
@@ -101,9 +104,9 @@ export const ProdutosView = ({ showToast }: any) => {
     try {
       const payload = {
         ...form,
-        preco:          parseNum(form.preco),
+        preco:          parseBRL(form.preco),
         categoria:      extras.categoria,
-        preco_custo:    extras.preco_custo !== '' ? parseNum(extras.preco_custo) : null,
+        preco_custo:    extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
         estoque:        extras.estoque        !== '' ? parseInt(extras.estoque, 10)        : 0,
         estoque_minimo: extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
         ean:            extras.ean,
@@ -139,8 +142,8 @@ export const ProdutosView = ({ showToast }: any) => {
     }
   };
 
-  // Margem calculada ao vivo no formulário
-  const margemAoVivo = calcMargem(form.preco, extras.preco_custo);
+  // Margem calculada ao vivo no formulário (parseBRL desempacota a máscara)
+  const margemAoVivo = calcMargem(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const isFormOpen = showForm || !!editItem;
 
   // EAN-13 — preview ao vivo
@@ -279,7 +282,7 @@ export const ProdutosView = ({ showToast }: any) => {
                       </p>
                       <div className="flex justify-start">
                         <NeuButtonAccent
-                          onClick={() => downloadLabelFor({ ean: extras.ean, nome: form.nome, codigo: form.codigo, preco: form.preco })}
+                          onClick={() => downloadLabelFor({ ean: extras.ean, nome: form.nome, codigo: form.codigo, preco: parseBRL(form.preco) })}
                           disabled={!eanNorm.valid || !form.nome.trim()}
                         >
                           <FileDown size={14} /> Baixar etiqueta PDF
@@ -295,13 +298,13 @@ export const ProdutosView = ({ showToast }: any) => {
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Preços</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Preço de Custo (R$)">
-                    <input type="number" min="0" step="0.01" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.preco_custo} onChange={e => setExtras(x => ({ ...x, preco_custo: e.target.value }))}
+                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                      value={extras.preco_custo} onChange={e => setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) }))}
                       placeholder="0,00" />
                   </FormField>
                   <FormField label="Preço de Venda (R$) *" error={errors.preco}>
-                    <input type="number" min="0" step="0.01" className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.preco ? 'border border-red-500/40' : ''}`}
-                      value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: e.target.value })); clearError('preco'); }}
+                    <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
+                      value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
                       placeholder="0,00" />
                   </FormField>
                   {/* Margem calculada ao vivo */}

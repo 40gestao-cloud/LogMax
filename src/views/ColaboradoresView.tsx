@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, User, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { useFormValidation, formatPhone } from '../lib/viewUtils';
 
 export const ColaboradoresView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/colaboradoresview');
@@ -103,7 +103,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`} value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }} placeholder="Ex: João Silva" />
                 </FormField>
                 <FormField label="Celular">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular} onChange={e => setExtras(x => ({ ...x, celular: e.target.value }))} placeholder="(11) 99999-9999" />
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular} onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" />
                 </FormField>
                 <FormField label="Cargo">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.cargo} onChange={e => setExtras(x => ({ ...x, cargo: e.target.value }))} placeholder="Ex: Analista de Compras" />
