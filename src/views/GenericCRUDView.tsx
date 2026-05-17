@@ -43,8 +43,14 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
     showToast("Salvando...", 'info', false);
     try {
       const numericKeys = new Set(fields.filter(f => f.type === 'number').map(f => f.key));
+      const dateKeys    = new Set(fields.filter(f => f.type === 'date').map(f => f.key));
+      // Date vazio vira null — Postgres rejeita '' em colunas date/timestamp.
       const parsed = Object.fromEntries(
-        Object.entries(formState).map(([k, v]) => [k, numericKeys.has(k) ? (Number(v) || 0) : v])
+        Object.entries(formState).map(([k, v]) => {
+          if (numericKeys.has(k)) return [k, Number(v) || 0];
+          if (dateKeys.has(k))    return [k, v === '' ? null : v];
+          return [k, v];
+        })
       );
       const payload = editItem ? parsed : { ...parsed, status: (parsed.status as string) || defaultStatus };
       if (editItem) {
