@@ -34,6 +34,7 @@ const CHECKPOINT_OPTIONS = [
 // ─── Gerador de QR Code (admin) ──────────────────────────────────────────────
 const QRGenerator = () => {
   const { theme } = useTheme();
+  const { session } = useAuth();
   const qrFgColor = theme === 'light' ? '#111111' : '#e5e7eb';
   const [selected, setSelected] = useState('entrada');
   const [tokenData, setTokenData] = useState<any>(null);
@@ -42,11 +43,17 @@ const QRGenerator = () => {
   const [error, setError] = useState(false);
 
   const fetchToken = useCallback(async (type?: string) => {
+    // Aguarda session carregar — sem isso o primeiro fetch dispara sem token,
+    // recebe 401 e pinta o erro (e a corrida com o fetch autenticado faz o
+    // erro persistir mesmo quando o segundo fetch sucede).
+    if (!session?.access_token) return;
     setRefreshing(true);
     setError(false);
     try {
       const cp = type ?? selected;
-      const res = await fetch(`/api/qr-token?checkpoint=${cp}`);
+      const res = await fetch(`/api/qr-token?checkpoint=${cp}`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
       if (!res.ok) throw new Error();
       setTokenData(await res.json());
       setCountdown(120);
@@ -55,7 +62,7 @@ const QRGenerator = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [selected]);
+  }, [selected, session]);
 
   useEffect(() => {
     fetchToken();
