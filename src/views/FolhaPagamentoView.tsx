@@ -52,7 +52,11 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
       setForm(EMPTY);
       setShowForm(false);
       showToast('Folha registrada.', 'success');
-    } catch { showToast('Erro ao salvar.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[FolhaPagamento] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error');
+    }
     setSaving(false);
   };
 

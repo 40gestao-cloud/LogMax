@@ -72,8 +72,10 @@ export const CotacoesView = ({ showToast }: any) => {
       setData((prev: any[]) => [saved ?? { id: Date.now(), ...form, ...extras, status: 'Em Cotação' }, ...prev]);
       closeForm();
       showToast("Cotação criada!", 'success', true);
-    } catch {
-      showToast("Erro ao salvar.", 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Cotacoes] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
     }

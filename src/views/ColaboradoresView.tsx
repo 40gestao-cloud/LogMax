@@ -51,8 +51,10 @@ export const ColaboradoresView = ({ showToast }: any) => {
         showToast("Colaborador adicionado!", 'success', true);
       }
       closeForm();
-    } catch {
-      showToast("Erro ao salvar.", 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Colaboradores] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
     }

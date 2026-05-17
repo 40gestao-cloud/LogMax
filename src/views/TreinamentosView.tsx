@@ -45,7 +45,11 @@ export const TreinamentosView = ({ showToast }: any) => {
       setForm(EMPTY);
       setShowForm(false);
       showToast('Treinamento criado.', 'success');
-    } catch { showToast('Erro ao salvar.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Treinamentos] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error');
+    }
     setSaving(false);
   };
 

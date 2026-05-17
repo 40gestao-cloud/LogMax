@@ -48,7 +48,11 @@ export const FeriasView = ({ showToast }: any) => {
       setForm(EMPTY);
       setShowForm(false);
       showToast('Férias solicitadas.', 'success');
-    } catch { showToast('Erro ao salvar.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Ferias] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error');
+    }
     setSaving(false);
   };
 

@@ -53,7 +53,11 @@ export const FuncionariosView = ({ showToast }: any) => {
         showToast('Funcionário cadastrado.', 'success');
       }
       closeForm();
-    } catch { showToast('Erro ao salvar.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Funcionarios] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error');
+    }
     setSaving(false);
   };
 

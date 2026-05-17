@@ -92,8 +92,10 @@ export const ContasPagarView = ({ showToast }: any) => {
         showToast('Conta a Pagar criada!', 'success', true);
       }
       closeForm();
-    } catch {
-      showToast('Erro ao salvar.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[ContasPagar] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
     }

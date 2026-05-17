@@ -37,7 +37,11 @@ export const NotasRecebidasView = ({ showToast }: any) => {
         showToast("Nota adicionada!", 'success', true);
       }
       closeForm();
-    } catch { showToast("Erro ao salvar.", 'error', true); } finally { setIsSaving(false); }
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[NotasRecebidas] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
+    } finally { setIsSaving(false); }
   };
 
   const handleDelete = async (id: string) => {

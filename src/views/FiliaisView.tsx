@@ -58,8 +58,10 @@ export const FiliaisView = ({ showToast }: any) => {
         showToast("Filial criada com sucesso!", 'success', true);
       }
       closeForm();
-    } catch {
-      showToast("Erro ao salvar. Tente novamente.", 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[Filiais] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
     }

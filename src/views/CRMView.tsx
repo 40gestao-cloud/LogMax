@@ -102,8 +102,10 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
         showToast('Registro criado com sucesso!', 'success', true);
       }
       closeForm();
-    } catch {
-      showToast('Erro ao salvar.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.error_description ?? String(err);
+      console.error('[CRM] erro ao salvar:', err);
+      showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
     }
