@@ -40,6 +40,25 @@
         }
       })();
     </script>
+
+    <!-- Identidade própria de PWA para /simulador-pagamento — DEVE rodar antes
+         do parsing do <link rel="manifest"> ter efeito no browser para evitar
+         "Esse app já está instalado". Por isso fica em script inline no head. -->
+    <script>
+      (function () {
+        if (window.location.pathname !== '/simulador-pagamento') return;
+        function set(sel, attr, val) {
+          var el = document.querySelector(sel);
+          if (el) el.setAttribute(attr, val);
+        }
+        set('link[rel="manifest"]',                   'href',    '/simulador-manifest.json');
+        set('link[rel="apple-touch-icon"]',           'href',    '/simulador-icon.svg');
+        set('link[rel="icon"]',                       'href',    '/simulador-icon.svg');
+        set('meta[name="theme-color"]',               'content', '#3B82F6');
+        set('meta[name="apple-mobile-web-app-title"]','content', 'Banco Simulado');
+        document.title = 'Banco Simulado — Pagamento Pix';
+      })();
+    </script>
     <style>
       html, body { margin: 0; padding: 0; }
     </style>

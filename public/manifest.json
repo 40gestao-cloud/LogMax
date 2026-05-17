@@ -2,6 +2,7 @@
   "name": "LogMax - Gestão de Compras",
   "short_name": "LogMax",
   "description": "Plataforma de gestão de compras, estoque e financeiro para empresas.",
+  "id": "logmax-erp",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0A0A",
