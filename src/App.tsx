@@ -61,6 +61,7 @@ const HistoricoVendasView                  = lazy(() => import('./views/Historic
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
 const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
+const TarefasView                          = lazy(() => import('./views/TarefasView').then(m => ({ default: m.TarefasView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
@@ -79,27 +80,27 @@ const SETOR_MODULES: Record<string, string[]> = {
 const menuModules = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Colaboradores', 'Clientes', 'Fornecedores', 'Produtos', 'Serviços', 'Centros de custo', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento']
+    submenus: ['Filiais', 'Colaboradores', 'Clientes', 'Fornecedores', 'Produtos', 'Serviços', 'Centros de custo', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Planejamento orçamentário', 'Gerenciamento', 'Relatórios']
+    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Planejamento orçamentário', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Minhas Aprovações', 'Requisições', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos', 'Gerenciamento', 'Relatórios']
+    submenus: ['Minhas Aprovações', 'Requisições', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios']
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Gerenciamento', 'Relatórios']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
-    submenus: ['PDV', 'Histórico de Vendas'],
+    submenus: ['PDV', 'Histórico de Vendas', 'Tarefas'],
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
@@ -476,6 +477,12 @@ function LogMaxAppInner() {
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
+      case 'empresa-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="empresa" />;
+      case 'compras-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="compras" />;
+      case 'estoque-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="estoque" />;
+      case 'financeiro-tarefas':           return <TarefasView showToast={st} profile={profile} modulo="financeiro" />;
+      case 'rh-tarefas':                   return <TarefasView showToast={st} profile={profile} modulo="rh" />;
+      case 'vendas-tarefas':               return <TarefasView showToast={st} profile={profile} modulo="vendas" />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       default:
         return (
