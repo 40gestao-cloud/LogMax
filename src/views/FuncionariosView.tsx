@@ -81,7 +81,11 @@ export const FuncionariosView = ({ showToast }: any) => {
       await dbDelete('/api/funcionariosview', id);
       setData((prev: any[]) => prev.filter((f: any) => f.id !== id));
       showToast('Removido.', 'success');
-    } catch { showToast('Erro ao remover.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Funcionarios] erro ao remover:', err);
+      showToast(`Erro ao remover: ${msg}`, 'error');
+    }
   };
 
   const exportCols = ['Nome', 'CPF', 'Cargo', 'Departamento', 'Admissão', 'Salário', 'Status'];

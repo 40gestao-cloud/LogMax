@@ -147,8 +147,17 @@ export async function dbDelete(endpoint: string, id: string): Promise<void> {
   const table = ENDPOINT_TABLE_MAP[endpoint];
   if (!table) return;
 
-  const { error } = await supabase.from(table).delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  // `.select()` após o delete devolve as linhas removidas. Se RLS esconder a linha
+  // (ou se o id não existir), o Supabase NÃO devolve erro — só 0 linhas. Sem este
+  // check, o UI tira a linha do estado, mas o registo continua no banco.
+  const { data, error } = await supabase.from(table).delete().eq('id', id).select();
+  if (error) {
+    console.error(`[dbDelete] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
+    throw new Error(error.message);
+  }
+  if (!data || data.length === 0) {
+    throw new Error('Nenhum registro removido. Permissão (RLS) negada ou registro já não existe.');
+  }
 }
 
 export async function dbSetStatus(endpoint: string, id: string, status: string): Promise<void> {

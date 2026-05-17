@@ -151,8 +151,10 @@ export const ContasReceberView = ({ showToast }: any) => {
       await dbDelete('/api/contasreceberview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast('Conta excluída.', 'success', true);
-    } catch {
-      showToast('Erro ao excluir.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[ContasReceber] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
     }
   };
 

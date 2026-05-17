@@ -120,8 +120,10 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       await dbDelete(endpoint, id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast('Registro excluído.', 'success', true);
-    } catch {
-      showToast('Erro ao excluir.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[CRM] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
     }
   };
 

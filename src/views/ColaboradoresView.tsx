@@ -66,8 +66,10 @@ export const ColaboradoresView = ({ showToast }: any) => {
       await dbDelete('/api/colaboradoresview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast("Colaborador excluído.", 'success', true);
-    } catch {
-      showToast("Erro ao excluir.", 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Colaboradores] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
     }
   };
 

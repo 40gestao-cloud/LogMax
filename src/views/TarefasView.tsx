@@ -108,8 +108,10 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
       await dbDelete('/api/tarefasview', id);
       setData((prev: any[]) => prev.filter((t: any) => t.id !== id));
       showToast('Tarefa removida.', 'success');
-    } catch {
-      showToast('Erro ao remover.', 'error');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Tarefas] erro ao remover:', err);
+      showToast(`Erro ao remover: ${msg}`, 'error');
     }
   };
 

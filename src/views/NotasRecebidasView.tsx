@@ -46,8 +46,15 @@ export const NotasRecebidasView = ({ showToast }: any) => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir?')) return;
-    try { await dbDelete('/api/notasrecebidasview', id); setData((p: any[]) => p.filter(d => d.id !== id)); showToast("Excluído.", 'success', true); }
-    catch { showToast("Erro.", 'error', true); }
+    try {
+      await dbDelete('/api/notasrecebidasview', id);
+      setData((p: any[]) => p.filter(d => d.id !== id));
+      showToast("Excluído.", 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[NotasRecebidas] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
+    }
   };
 
   const isFormOpen = showForm || !!editItem;

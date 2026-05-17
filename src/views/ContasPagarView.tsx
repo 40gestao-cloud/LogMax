@@ -153,8 +153,10 @@ export const ContasPagarView = ({ showToast }: any) => {
       await dbDelete('/api/contaspagarview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast('Conta excluída.', 'success', true);
-    } catch {
-      showToast('Erro ao excluir.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[ContasPagar] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
     }
   };
 

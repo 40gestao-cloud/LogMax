@@ -137,8 +137,10 @@ export const ProdutosView = ({ showToast }: any) => {
       await dbDelete('/api/produtosview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast('Produto excluído.', 'success', true);
-    } catch {
-      showToast('Erro ao excluir.', 'error', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Produtos] erro ao excluir:', err);
+      showToast(`Erro ao excluir: ${msg}`, 'error', true);
     }
   };
 

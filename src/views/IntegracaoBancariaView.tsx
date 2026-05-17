@@ -52,7 +52,11 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
       await dbDelete('/api/integracaobancariaview', id);
       setIntegracoes((prev: any[]) => prev.filter((i: any) => i.id !== id));
       showToast('Registro removido.', 'success');
-    } catch { showToast('Erro ao remover.', 'error'); }
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[IntegracaoBancaria] erro ao remover:', err);
+      showToast(`Erro ao remover: ${msg}`, 'error');
+    }
   };
 
   const handleStatusCycle = async (item: any) => {

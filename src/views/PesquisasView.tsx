@@ -115,8 +115,10 @@ export const PesquisasView = ({ showToast, profile }: any) => {
       await dbDelete('/api/pesquisasview', id);
       setData((prev: any[]) => prev.filter(x => x.id !== id));
       showToast('Pesquisa removida.', 'success');
-    } catch {
-      showToast('Erro ao remover.', 'error');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Pesquisas] erro ao remover:', err);
+      showToast(`Erro ao remover: ${msg}`, 'error');
     }
   };
 
