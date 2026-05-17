@@ -1,5 +1,11 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/reverter-promocoes-expiradas",
+      "schedule": "5 3 * * *"
+    }
   ]
 }

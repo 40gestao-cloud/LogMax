@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, FileDown, Sheet } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet } from 'lucide-react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -18,6 +19,10 @@ const STATUS_STYLE: Record<string, { badge: string; icon: React.ReactNode }> = {
     badge: 'bg-red-500/10 text-red-500 border-red-500/20',
     icon: <XCircle size={10} />,
   },
+  'Encerrada': {
+    badge: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+    icon: <Archive size={10} />,
+  },
 };
 
 const EMPTY_FORM = {
@@ -31,23 +36,34 @@ const EMPTY_FORM = {
 };
 
 export const PromocoesMarketingView = ({ showToast, profile }: any) => {
-  const { data: promocoes, setData, isLoading } = useFetchData<any>('/api/marketingpromocoesview');
+  const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  // Sincronização best-effort ao montar: reverte promoções expiradas e
+  // recarrega a lista. O cron diário (vercel.json) é a defesa primária.
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.rpc('reverter_promocoes_expiradas').then(({ data, error }) => {
+      if (error) { console.warn('[reverter_promocoes_expiradas]', error.message); return; }
+      if (typeof data === 'number' && data > 0) reload();
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const aguardando = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
   const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado').length;
-  const reprovadas = promocoes.filter((p: any) => p.status === 'Reprovado').length;
+  const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada').length;
 
   const kpis = [
     { label: 'Total de Campanhas',     value: promocoes.length, warn: false },
     { label: 'Aguardando Aprovação',   value: aguardando,       warn: aguardando > 0 },
-    { label: 'Aprovadas',              value: aprovadas,        warn: false },
-    { label: 'Reprovadas',             value: reprovadas,       warn: false },
+    { label: 'Em Vigor',               value: aprovadas,        warn: false },
+    { label: 'Encerradas',             value: encerradas,       warn: false },
   ];
 
   const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);

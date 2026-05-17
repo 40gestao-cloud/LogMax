@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Check, X, Loader2, Tag, TrendingDown, Info } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { EmptyState } from '../components/ui';
 
 export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
@@ -9,6 +10,16 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
   const [obs, setObs]           = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
+
+  // Sincronização best-effort: reverte promoções expiradas ao abrir a tela.
+  // O cron diário (vercel.json) é a defesa primária; isto é fallback caso
+  // o cron falhe ou alguém edite uma campanha durante o dia.
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.rpc('reverter_promocoes_expiradas').then(({ error }) => {
+      if (error) console.warn('[reverter_promocoes_expiradas]', error.message);
+    });
+  }, []);
 
   const handleAprovar = async (promo: any) => {
     if (processing) return;
@@ -74,7 +85,7 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
         <Info size={16} className="text-accent shrink-0 mt-0.5" />
         <p className="text-xs text-gray-400 leading-relaxed">
           Ao <span className="text-accent font-bold">Aprovar</span>, o preço do produto será atualizado imediatamente no PDV para o valor sugerido pelo Marketing.
-          O preço anterior não é revertido automaticamente ao fim da campanha.
+          Ao fim da campanha (<span className="font-mono text-gray-300">data_fim</span>), o preço original é restaurado automaticamente, exceto se tiver sido ajustado manualmente durante o período.
         </p>
       </div>
 
