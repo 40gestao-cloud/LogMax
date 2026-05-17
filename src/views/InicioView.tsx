@@ -17,11 +17,37 @@ import {
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 
+const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
+
 export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (view: string) => void; showToast?: (msg: string, type?: string) => void; profile?: UserProfile }) => {
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
   const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview');
   const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
   const isLoading = loadingCR || loadingNR || loadingPed;
+
+  // Pesquisas pendentes para o usuário logado (qualquer role/setor).
+  // Mesma semântica de elegibilidade que MinhasPesquisasView e a RPC.
+  const ativasFilter = React.useMemo(() => ({ status: 'Ativa' }), []);
+  const { data: pesquisasAtivas } = useFetchData<any>('/api/pesquisasview', ativasFilter);
+  const minhasRespFilter = React.useMemo(
+    () => (profile?.id ? { respondente_id: profile.id } : undefined),
+    [profile?.id],
+  );
+  const { data: minhasRespostas } = useFetchData<any>('/api/pesquisarespostasview', minhasRespFilter);
+
+  const pesquisasPendentesCount = React.useMemo(() => {
+    if (!profile) return 0;
+    const respondidasIds = new Set((minhasRespostas ?? []).map((r: any) => r.pesquisa_id));
+    return (pesquisasAtivas ?? []).filter((p: any) => {
+      if (respondidasIds.has(p.id)) return false;
+      if (p.anonima && typeof window !== 'undefined' && localStorage.getItem(`${PESQUISA_LS_PREFIX}${p.id}`)) return false;
+      const roles = p.alvo_roles as string[] | null;
+      const setores = p.alvo_setores as string[] | null;
+      if (roles && roles.length > 0 && !roles.includes(profile.role)) return false;
+      if (setores && setores.length > 0 && profile.setor !== 'all' && !setores.includes(profile.setor)) return false;
+      return true;
+    }).length;
+  }, [pesquisasAtivas, minhasRespostas, profile]);
 
   const contasAberto = contasReceber.filter((c: any) => c.status !== 'Pago');
   const contasReceberCount = contasAberto.length;
@@ -114,6 +140,22 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
+      {pesquisasPendentesCount > 0 && (
+        <button onClick={() => onNavigate?.('minhas-pesquisas')}
+          className="neu-flat rounded-3xl p-5 sm:p-6 border border-accent/20 hover:border-accent/40 transition-colors flex items-center gap-4 text-left shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center text-accent shrink-0">
+            <ClipboardList size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-200">
+              Você tem {pesquisasPendentesCount} {pesquisasPendentesCount === 1 ? 'pesquisa pendente' : 'pesquisas pendentes'}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">Sua opinião é importante. Clique para responder.</p>
+          </div>
+          <ArrowRight size={16} className="text-accent shrink-0" />
+        </button>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
         <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5">
           <h3 className="text-lg font-bold text-gray-200 shrink-0">Acesso Rápido</h3>

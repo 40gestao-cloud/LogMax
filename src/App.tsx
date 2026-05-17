@@ -62,6 +62,8 @@ const PromocoesMarketingView               = lazy(() => import('./views/Promocoe
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
 const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
 const TarefasView                          = lazy(() => import('./views/TarefasView').then(m => ({ default: m.TarefasView })));
+const PesquisasView                        = lazy(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
+const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
@@ -96,7 +98,7 @@ const menuModules = [
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -471,6 +473,7 @@ function LogMaxAppInner() {
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'number', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
       case 'rh-avaliações':       return <AvaliacoesView showToast={st} profile={profile} />;
+      case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
@@ -483,6 +486,7 @@ function LogMaxAppInner() {
       case 'financeiro-tarefas':           return <TarefasView showToast={st} profile={profile} modulo="financeiro" />;
       case 'rh-tarefas':                   return <TarefasView showToast={st} profile={profile} modulo="rh" />;
       case 'vendas-tarefas':               return <TarefasView showToast={st} profile={profile} modulo="vendas" />;
+      case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       default:
         return (
