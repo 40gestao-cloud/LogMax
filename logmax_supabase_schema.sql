@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS filiais (
   id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  codigo      text NOT NULL,
+  codigo      text,
   nome        text NOT NULL,
   cidade      text,
   estado      text,
