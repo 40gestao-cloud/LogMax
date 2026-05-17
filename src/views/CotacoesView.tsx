@@ -153,7 +153,7 @@ export const CotacoesView = ({ showToast }: any) => {
           .eq('cotacao_id', cotacao.id)
           .limit(1);
         if (existentes && existentes.length > 0) {
-          showToast('Esta cotação já tem pedido registado.', 'info', true);
+          showToast('Esta cotação já tem pedido registrado.', 'info', true);
           setRecreating(null);
           return;
         }

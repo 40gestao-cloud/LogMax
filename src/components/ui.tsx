@@ -104,7 +104,7 @@ export const Pagination = ({
   return (
     <div className="flex items-center justify-between gap-2 pt-4 border-t border-white/5 mt-2 flex-wrap">
       <span className="text-xs text-gray-500">
-        {totalCount !== null ? `${from}–${to} de ${totalCount} registos` : `Página ${page + 1}`}
+        {totalCount !== null ? `${from}–${to} de ${totalCount} registros` : `Página ${page + 1}`}
       </span>
       <div className="flex gap-2 items-center">
         {onReload && (

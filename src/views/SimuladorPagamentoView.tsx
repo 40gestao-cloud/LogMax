@@ -48,9 +48,9 @@ export const SimuladorPagamentoView: React.FC = () => {
     } catch (err: any) {
       const name = err?.name ?? '';
       const msg =
-        name === 'NotAllowedError' ? 'Permissão de câmara negada. Autorize o acesso nas configurações do navegador.'
-        : name === 'NotFoundError'  ? 'Nenhuma câmara encontrada neste dispositivo.'
-        : 'Não foi possível aceder à câmara. Verifique se está em HTTPS e tente novamente.';
+        name === 'NotAllowedError' ? 'Permissão de câmera negada. Autorize o acesso nas configurações do navegador.'
+        : name === 'NotFoundError'  ? 'Nenhuma câmera encontrada neste dispositivo.'
+        : 'Não foi possível acessar a câmera. Verifique se está em HTTPS e tente novamente.';
       setErrorMsg(msg);
       setStage('error');
     }
@@ -339,7 +339,7 @@ export const SimuladorPagamentoView: React.FC = () => {
             >
               <div className="w-16 h-16 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                {errorMsg.includes('câmara') ? <CameraOff size={28} className="text-red-400" /> : <AlertTriangle size={28} className="text-red-400" />}
+                {errorMsg.includes('câmera') ? <CameraOff size={28} className="text-red-400" /> : <AlertTriangle size={28} className="text-red-400" />}
               </div>
               <div>
                 <p className="text-sm font-bold text-red-400">Não foi possível continuar</p>

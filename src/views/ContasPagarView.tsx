@@ -138,7 +138,7 @@ export const ContasPagarView = ({ showToast }: any) => {
         }
       }
 
-      showToast(`Pagamento registado e R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} debitado de ${banco.banco ?? banco.conta}.`, 'success', true);
+      showToast(`Pagamento registrado e R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} debitado de ${banco.banco ?? banco.conta}.`, 'success', true);
       closePay();
     } catch {
       showToast('Erro ao registar pagamento.', 'error', true);

@@ -136,7 +136,7 @@ export const ContasReceberView = ({ showToast }: any) => {
         }
       }
 
-      showToast(`Recebimento registado e R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} creditado em ${banco.banco ?? banco.conta}.`, 'success', true);
+      showToast(`Recebimento registrado e R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} creditado em ${banco.banco ?? banco.conta}.`, 'success', true);
       closeReceber();
     } catch {
       showToast('Erro ao registar recebimento.', 'error', true);
