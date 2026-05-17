@@ -334,7 +334,14 @@ function LogMaxAppInner() {
   const { profile, isLoading: profileLoading } = useUserProfile();
   const [badges, setBadges] = useState<Record<string, number>>({});
   const handleBadges = useCallback((b: Record<string, number>) => setBadges(b), []);
-  const [activeView, setActiveView] = useState('inicio');
+  // Persistido em sessionStorage para sobreviver a F5/pull-to-refresh
+  // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
+  const [activeView, setActiveView] = useState<string>(() => {
+    try { return sessionStorage.getItem('logmax:activeView') || 'inicio'; } catch { return 'inicio'; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem('logmax:activeView', activeView); } catch {}
+  }, [activeView]);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -389,6 +396,7 @@ function LogMaxAppInner() {
 
   const handleSignOut = async () => {
     showToast("Saindo...", 'info', true);
+    try { sessionStorage.removeItem('logmax:activeView'); } catch {}
     await signOut();
   };
 
