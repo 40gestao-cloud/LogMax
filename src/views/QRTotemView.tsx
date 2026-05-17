@@ -3,6 +3,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, Clock, Wifi, WifiOff } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../hooks/useAuth';
+
+const CHECKPOINT_OPTIONS = [
+  { key: 'entrada', label: 'Entrada',  time: '07:40', color: 'text-emerald-400', activeBorder: 'border-emerald-500/40', activeBg: 'bg-emerald-900/20' },
+  { key: 'retorno', label: 'Intervalo', time: '09:20', color: 'text-yellow-400',  activeBorder: 'border-yellow-500/40',  activeBg: 'bg-yellow-900/20'  },
+  { key: 'saida',   label: 'Saída',    time: '11:20', color: 'text-blue-400',    activeBorder: 'border-blue-500/40',    activeBg: 'bg-blue-900/20'    },
+] as const;
 
 const CHECKPOINT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   entrada: { label: 'Entrada',              color: 'text-emerald-400', bg: 'bg-emerald-900/20' },
@@ -12,18 +19,27 @@ const CHECKPOINT_CONFIG: Record<string, { label: string; color: string; bg: stri
 
 export const QRTotemView = () => {
   const { theme } = useTheme();
+  const { session } = useAuth();
   const qrFgColor = theme === 'light' ? '#111111' : '#e5e7eb';
   const [tokenData, setTokenData] = useState<any>(null);
   const [clock, setClock] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [countdown, setCountdown] = useState(120);
+  const [selected, setSelected] = useState<'entrada' | 'retorno' | 'saida'>('entrada');
 
-  const fetchToken = useCallback(async () => {
+  const fetchToken = useCallback(async (type?: string) => {
+    // Aguarda session carregar — sem isso o primeiro fetch dispara sem token,
+    // recebe 401 e pinta o erro (e a corrida com o fetch autenticado faz o
+    // erro persistir mesmo quando o segundo fetch sucede).
+    if (!session?.access_token) return;
     setRefreshing(true);
     setError(false);
     try {
-      const res = await fetch('/api/qr-token');
+      const cp = type ?? selected;
+      const res = await fetch(`/api/qr-token?checkpoint=${cp}`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setTokenData(data);
@@ -33,7 +49,12 @@ export const QRTotemView = () => {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [session, selected]);
+
+  const handleSelect = (key: 'entrada' | 'retorno' | 'saida') => {
+    setSelected(key);
+    fetchToken(key);
+  };
 
   // Relógio
   useEffect(() => {
@@ -129,18 +150,26 @@ export const QRTotemView = () => {
         )}
       </AnimatePresence>
 
-      {/* Horários dos checkpoints */}
+      {/* Seletor de checkpoints (clicável) */}
       <div className="flex gap-4">
-        {[
-          { label: 'Entrada', time: '07:40', color: 'text-emerald-400' },
-          { label: 'Retorno', time: '09:20', color: 'text-yellow-400' },
-          { label: 'Saída',   time: '11:20', color: 'text-blue-400'   },
-        ].map(cp => (
-          <div key={cp.label} className="neu-flat rounded-2xl px-5 py-3 border border-white/5 text-center">
-            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">{cp.label}</p>
-            <p className={`text-lg font-black tabular-nums ${cp.color}`}>{cp.time}</p>
-          </div>
-        ))}
+        {CHECKPOINT_OPTIONS.map(cp => {
+          const isActive = selected === cp.key;
+          return (
+            <button
+              key={cp.key}
+              onClick={() => handleSelect(cp.key)}
+              disabled={refreshing}
+              className={`rounded-2xl px-5 py-3 text-center border transition-all disabled:opacity-60 ${
+                isActive
+                  ? `neu-pressed ${cp.activeBorder} ${cp.activeBg}`
+                  : 'neu-flat border-white/5 hover:border-white/10'
+              }`}
+            >
+              <p className={`text-[10px] uppercase tracking-widest font-bold ${isActive ? cp.color : 'text-gray-600'}`}>{cp.label}</p>
+              <p className={`text-lg font-black tabular-nums ${cp.color}`}>{cp.time}</p>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-1.5 text-[10px] text-gray-700">
