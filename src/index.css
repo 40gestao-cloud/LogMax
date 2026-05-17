@@ -360,8 +360,11 @@ table,
 [data-theme="light"] .hover\:text-gray-300:hover    { color: #374151; }
 [data-theme="light"] .group:hover .group-hover\:text-white { color: #111111; }
 
-/* ── Touch devices: always show table action buttons (hover não funciona em touch) ── */
-@media (hover: none) {
+/* ── Touch ou ecrãs pequenos: sempre mostrar ações de linha (editar/excluir/etc.) ──
+   Hover-to-reveal só funciona em desktop com mouse. Em touch (mesmo quando o browser
+   reporta erradamente hover:hover, como Chrome Android em PWA mode às vezes) e em
+   ecrãs <=768px, forçamos visível para que ícones de ação sejam descobríveis. */
+@media (hover: none), (max-width: 768px) {
   .group-hover\:opacity-100 { opacity: 1 !important; }
 }
 
