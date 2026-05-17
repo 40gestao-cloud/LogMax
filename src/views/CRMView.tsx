@@ -94,8 +94,10 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
         showToast('Registro atualizado!', 'success', true);
       } else {
+        // ultima_compra é coluna date no schema — preenchida pelo trigger de venda PDV,
+        // não pelo cadastro inicial. Omitir aqui (NULL até primeira compra).
         const payload = isClientes
-          ? { ...base, ultimaCompra: 'Hoje', status: 'Ativo' }
+          ? { ...base, status: 'Ativo' }
           : { ...base, categoria: extras.categoria, status: 'Homologado' };
         const saved = await dbInsert(endpoint, payload);
         setData([saved ?? { id: Date.now(), ...payload }, ...data]);
@@ -294,7 +296,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
                 {isClientes && (
                   <div className="text-[11px] text-gray-500 border-t border-white/5 pt-3 mt-auto flex justify-between">
                     <span>Última compra:</span>
-                    <strong className="text-gray-200">{item.ultimaCompra ?? '—'}</strong>
+                    <strong className="text-gray-200">{item.ultima_compra ?? '—'}</strong>
                   </div>
                 )}
               </motion.div>
