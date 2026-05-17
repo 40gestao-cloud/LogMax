@@ -4,6 +4,7 @@ import { Check, X, Loader2, Tag, TrendingDown, Info } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState } from '../components/ui';
+import { playPlim } from '../utils/audioUtils';
 
 export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
   const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação' });
@@ -36,6 +37,7 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
         });
       }
       setData((prev: any[]) => prev.filter(p => p.id !== promo.id));
+      playPlim();
       showToast('Promoção aprovada! Preço atualizado no PDV.', 'success', true);
     } catch {
       showToast('Erro ao aprovar.', 'error', true);

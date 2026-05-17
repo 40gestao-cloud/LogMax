@@ -7,6 +7,7 @@ import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { LoadingSpinner } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 
 interface CartItem {
   produto_id: string;
@@ -78,6 +79,7 @@ export const PDVView = ({ showToast, profile }: any) => {
           showToast?.('Quantidade máxima em estoque atingida.', 'error', true);
           return prev;
         }
+        playBeep();
         return prev.map(i => i.produto_id === produto.id
           ? { ...i, qtd: i.qtd + 1, subtotal: (i.qtd + 1) * i.preco_unitario }
           : i
@@ -87,6 +89,7 @@ export const PDVView = ({ showToast, profile }: any) => {
         showToast?.('Produto sem estoque.', 'error', true);
         return prev;
       }
+      playBeep();
       return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999 }];
     });
   }, [showToast]);
@@ -133,6 +136,10 @@ export const PDVView = ({ showToast, profile }: any) => {
       p_itens:           itensPayload,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
+
+    // Pix já tocou o "Plim" no callback do realtime (confirmação do cliente);
+    // demais formas tocam "ka-ching" agora que a venda foi efetivamente persistida.
+    if (forma !== 'PIX') playKaching();
 
     const shortId = String(vendaId).slice(-6).toUpperCase();
     const totalFmt = snap.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -265,6 +272,7 @@ export const PDVView = ({ showToast, profile }: any) => {
           const snap = vendaSnapshotRef.current;
           if (!snap) return;
           try {
+            playPlim();
             await finalizarVenda(snap, 'PIX', 1);
             vendaSnapshotRef.current = null;
             setPixPendente(null);
