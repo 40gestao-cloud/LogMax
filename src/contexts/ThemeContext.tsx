@@ -5,6 +5,15 @@ export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'p
 
 const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink'];
 
+const ACCENT_HEX: Record<AccentColor, string> = {
+  green:  '#10B981',
+  yellow: '#FACC15',
+  purple: '#A855F7',
+  orange: '#F97316',
+  blue:   '#3B82F6',
+  pink:   '#EC4899',
+};
+
 interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
@@ -38,6 +47,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-accent', accentColor);
     localStorage.setItem('logmax-accent', accentColor);
+    // /simulador-pagamento tem identidade própria (azul fixo) — não sobrescrever.
+    if (window.location.pathname === '/simulador-pagamento') return;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', ACCENT_HEX[accentColor]);
   }, [accentColor]);
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));

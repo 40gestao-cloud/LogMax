@@ -25,6 +25,10 @@
          Sem isto, light mode flashava com bg/sombras dark antes do useEffect rodar. -->
     <script>
       (function () {
+        var ACCENT_HEX = {
+          green:  '#10B981', yellow: '#FACC15', purple: '#A855F7',
+          orange: '#F97316', blue:   '#3B82F6', pink:   '#EC4899'
+        };
         try {
           var t = localStorage.getItem('logmax-theme');
           var a = localStorage.getItem('logmax-accent');
@@ -35,6 +39,10 @@
             document.documentElement.style.backgroundColor = '#0A0A0A';
           }
           if (a) document.documentElement.setAttribute('data-accent', a);
+          if (a && ACCENT_HEX[a]) {
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', ACCENT_HEX[a]);
+          }
         } catch (e) {
           document.documentElement.style.backgroundColor = '#0A0A0A';
         }
