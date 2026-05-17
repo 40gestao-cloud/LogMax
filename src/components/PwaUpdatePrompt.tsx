@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -20,6 +20,17 @@ export function PwaUpdatePrompt() {
       console.warn('[PWA] Erro ao registar service worker:', err);
     },
   });
+  const [updating, setUpdating] = useState(false);
+
+  const handleUpdate = () => {
+    setUpdating(true);
+    // updateServiceWorker(true) só recarrega se o evento `controllerchange`
+    // disparar. Em alguns estados (SW waiting preso, primeira visita após
+    // registro, dev) isso não acontece e o clique fica silencioso. Disparamos
+    // o skip-waiting e, em paralelo, agendamos um reload de fallback.
+    try { updateServiceWorker(true); } catch (e) { console.warn('[PWA] update falhou:', e); }
+    setTimeout(() => window.location.reload(), 1500);
+  };
 
   return (
     <AnimatePresence>
@@ -56,7 +67,8 @@ export function PwaUpdatePrompt() {
             </span>
             <button
               type="button"
-              onClick={() => updateServiceWorker(true)}
+              onClick={handleUpdate}
+              disabled={updating}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -69,11 +81,12 @@ export function PwaUpdatePrompt() {
                 fontSize: '0.72rem',
                 fontWeight: 800,
                 letterSpacing: '0.05em',
-                cursor: 'pointer',
+                cursor: updating ? 'wait' : 'pointer',
+                opacity: updating ? 0.7 : 1,
               }}
             >
-              <RefreshCw size={12} />
-              Atualizar agora
+              <RefreshCw size={12} className={updating ? 'animate-spin' : ''} />
+              {updating ? 'Atualizando...' : 'Atualizar agora'}
             </button>
             <button
               type="button"
