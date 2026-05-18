@@ -417,6 +417,32 @@ table,
 [data-theme="light"] .text-red-500     { color: #b91c1c !important; }
 [data-theme="light"] .text-red-300     { color: #991b1b !important; }
 
+/* ── FilialBadge: cores dedicadas por unidade ──
+   Tons mais escuros no modo claro para garantir contraste WCAG.
+   Classes próprias evitam que overrides globais quebrem outros componentes. */
+.filial-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  border: 1px solid transparent;
+}
+.filial-badge--supermax { background: rgba(16,185,129,0.10);  color: #34d399; border-color: rgba(16,185,129,0.22); }
+.filial-badge--maxlook  { background: rgba(217,70,239,0.10);  color: #e879f9; border-color: rgba(217,70,239,0.22); }
+.filial-badge--techmax  { background: rgba(249,115,22,0.10);  color: #fb923c; border-color: rgba(249,115,22,0.22); }
+.filial-badge--matriz   { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
+.filial-badge--unknown  { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
+
+[data-theme="light"] .filial-badge--supermax { background: rgba(16,185,129,0.18);  color: #065f46; border-color: rgba(16,185,129,0.50); }
+[data-theme="light"] .filial-badge--maxlook  { background: rgba(217,70,239,0.16);  color: #86198f; border-color: rgba(217,70,239,0.50); }
+[data-theme="light"] .filial-badge--techmax  { background: rgba(249,115,22,0.18);  color: #9a3412; border-color: rgba(249,115,22,0.50); }
+[data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
+[data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
+
 /* ── Pulse animado nos inputs em focus (ambos os temas, segue accent) ── */
 @keyframes neu-input-pulse {
   0%, 100% {

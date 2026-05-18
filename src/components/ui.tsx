@@ -195,24 +195,18 @@ export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
 // conhecido (SuperMax/MaxLook/TechMax/Matriz), aplica a cor estável; caso
 // contrário cai num cinza neutro.
 export const FilialBadge = ({ filial }: { filial?: string | null }) => {
-  // Import dinâmico para evitar dependência circular com viewUtils
-  // (FilialBadge é usado em vários views; FILIAL_COLOR vive em lib/filiais).
+  // Classes CSS dedicadas (.filial-badge--*) com variantes claro/escuro em
+  // index.css. No light mode os tons ficam mais escuros para garantir contraste.
   const f = (filial ?? '').toString().trim();
-  const palette: Record<string, string> = {
-    SuperMax: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-    MaxLook:  'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20',
-    TechMax:  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    Matriz:   'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  if (!f) return <span className="text-gray-700 text-xs">—</span>;
+  const variantMap: Record<string, string> = {
+    SuperMax: 'supermax',
+    MaxLook:  'maxlook',
+    TechMax:  'techmax',
+    Matriz:   'matriz',
   };
-  if (!f) {
-    return <span className="text-gray-700 text-xs">—</span>;
-  }
-  const cls = palette[f] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border ${cls}`}>
-      {f}
-    </span>
-  );
+  const variant = variantMap[f] ?? 'unknown';
+  return <span className={`filial-badge filial-badge--${variant}`}>{f}</span>;
 };
 
 export const PlaceholderView = ({ title, desc }: { title: string; desc?: string }) => (

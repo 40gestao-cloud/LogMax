@@ -13,9 +13,9 @@ export const FILIAL_DEFAULT: FilialHolding = 'Matriz';
 // Estilo de badge por filial — usado em FilialBadge nas listagens.
 // Mapeamento estável: cada unidade tem cor própria pra identificação visual.
 export const FILIAL_COLOR: Record<FilialHolding, { bg: string; text: string; border: string }> = {
-  SuperMax: { bg: 'bg-sky-500/10',     text: 'text-sky-400',     border: 'border-sky-500/20' },
+  SuperMax: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
   MaxLook:  { bg: 'bg-fuchsia-500/10', text: 'text-fuchsia-400', border: 'border-fuchsia-500/20' },
-  TechMax:  { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
+  TechMax:  { bg: 'bg-orange-500/10',  text: 'text-orange-400',  border: 'border-orange-500/20' },
   Matriz:   { bg: 'bg-gray-500/10',    text: 'text-gray-400',    border: 'border-gray-500/20' },
 };
 
