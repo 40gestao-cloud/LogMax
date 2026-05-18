@@ -39,7 +39,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('contas_pagar').select('valor').eq('status', 'Pendente')
+    supabase.from('contas_pagar').select('valor').eq('status', 'Pendente').eq('ativo', true)
       .then(({ data: rows }) => {
         if (cancelled) return;
         setTotalPendente((rows ?? []).reduce((s: number, c: any) => s + Number(c.valor || 0), 0));

@@ -38,7 +38,7 @@ export const ContasReceberView = ({ showToast }: any) => {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('contas_receber').select('valor').eq('status', 'Aberto')
+    supabase.from('contas_receber').select('valor').eq('status', 'Aberto').eq('ativo', true)
       .then(({ data: rows }) => {
         if (cancelled) return;
         setTotalAberto((rows ?? []).reduce((s: number, c: any) => s + Number(c.valor || 0), 0));

@@ -28,7 +28,7 @@ export const CotacoesView = ({ showToast }: any) => {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('pedidos').select('cotacao_id')
+    supabase.from('pedidos').select('cotacao_id').eq('ativo', true)
       .then(({ data: rows }) => {
         if (cancelled) return;
         const ids = new Set<string>(
