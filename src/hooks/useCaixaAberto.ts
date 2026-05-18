@@ -25,6 +25,7 @@ export function useCaixaAberto() {
         .select('*')
         .eq('data', today)
         .eq('status', 'Aberto')
+        .eq('ativo', true)
         .maybeSingle();
       setCaixa(data ?? null);
     } catch {

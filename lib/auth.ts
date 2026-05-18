@@ -44,13 +44,17 @@ export async function authenticate(
 
   const token = (req.headers.authorization ?? '').replace('Bearer ', '');
   if (!token) {
-    res.status(401).json({ error: 'Token ausente.' });
+    res.status(401).json({ error: 'Token ausente. Faça login novamente.' });
     return null;
   }
 
   const { data: { user }, error } = await client.auth.getUser(token);
   if (error || !user) {
-    res.status(401).json({ error: 'Token inválido.' });
+    // Detalha o motivo (token expirado vs assinatura inválida vs Supabase
+    // URL/key inconsistentes entre Vercel e front) — sem isto o front só
+    // vê "Token inválido" e não sabe o que diagnosticar.
+    const detail = error?.message ?? 'usuário não encontrado';
+    res.status(401).json({ error: `Token inválido: ${detail}` });
     return null;
   }
 
@@ -61,7 +65,7 @@ export async function authenticate(
     .single();
 
   if (!profile) {
-    res.status(403).json({ error: 'Perfil não encontrado.' });
+    res.status(403).json({ error: `Perfil não encontrado para ${user.email ?? user.id}.` });
     return null;
   }
 
