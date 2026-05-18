@@ -69,13 +69,16 @@ const ControleCaixaView                    = lazy(() => import('./views/Controle
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 
 // --- acesso por setor ---
+// 'empresa' é cadastro base (filiais, colaboradores, clientes, produtos...) e
+// fica disponível para todos os setores. Os demais módulos seguem o recorte
+// funcional de cada setor.
 const SETOR_MODULES: Record<string, string[]> = {
   all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing'],
-  logistica:  ['estoque', 'compras'],
-  vendas:     ['vendas', 'empresa'],
-  financeiro: ['financeiro'],
-  rh:         ['rh'],
-  marketing:  ['marketing'],
+  logistica:  ['empresa', 'estoque', 'compras'],
+  vendas:     ['empresa', 'vendas'],
+  financeiro: ['empresa', 'financeiro'],
+  rh:         ['empresa', 'rh'],
+  marketing:  ['empresa', 'marketing'],
 };
 
 // --- menu ---
