@@ -109,26 +109,80 @@ export const PDVView = ({ showToast, profile }: any) => {
     );
   };
 
-  // Leitor de código de barras: o scanner "tipa" o código e envia Enter.
-  // Tenta match exato por EAN/código (sempre o caso do scanner); se não houver
-  // mas o termo digitado resultar em UM único produto na lista filtrada,
-  // adiciona-o também (atalho de teclado para busca rápida por nome).
-  const handleSearchEnter = () => {
-    const termo = search.trim();
+  // Lógica de busca por código (EAN/código interno) ou termo livre. Usada
+  // pelo Enter manual no input e pelo listener global do scanner. Recebe o
+  // código por argumento (não lê `search`) porque o scanner pode disparar
+  // mesmo com o foco fora do input.
+  const processBarcode = useCallback((codeRaw: string) => {
+    const termo = codeRaw.trim();
     if (!termo) return;
     const termoLower = termo.toLowerCase();
     let match = produtosAtivos.find((p: any) =>
       String(p.ean ?? '').trim() === termo ||
       String(p.codigo ?? '').trim().toLowerCase() === termoLower
     );
-    if (!match && filtered.length === 1) match = filtered[0];
     if (!match) {
-      showToast?.('Produto não encontrado.', 'error', true);
-      return;
+      const partial = produtosAtivos.filter((p: any) =>
+        [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(termoLower))
+      );
+      if (partial.length === 1) match = partial[0];
     }
-    addToCart(match);
+    if (!match) {
+      showToast?.(`Produto não encontrado: ${termo}`, 'error', true);
+    } else {
+      addToCart(match);
+    }
     setSearch('');
-  };
+    searchRef.current?.focus();
+  }, [produtosAtivos, addToCart, showToast]);
+
+  const handleSearchEnter = () => processBarcode(search);
+
+  // Mantém a função processBarcode mais recente acessível ao listener global
+  // sem que seja necessário rebindar o evento a cada render.
+  const processBarcodeRef = useRef(processBarcode);
+  useEffect(() => { processBarcodeRef.current = processBarcode; }, [processBarcode]);
+
+  const pixPendenteRef = useRef(pixPendente);
+  useEffect(() => { pixPendenteRef.current = pixPendente; }, [pixPendente]);
+
+  // Leitor de código de barras (hardware): teclas chegam em <50ms entre si e
+  // terminam com Enter. Listener global em fase de CAPTURE para que mesmo
+  // quando o foco está num botão (Tema, forma de pagamento, card de produto),
+  // a leitura seja processada e o Enter não active o botão focado.
+  useEffect(() => {
+    const SCANNER_MAX_INTERVAL_MS = 50;
+    let chars = '';
+    let lastTs = 0;
+
+    const onKey = (e: KeyboardEvent) => {
+      const now = performance.now();
+      const fast = now - lastTs < SCANNER_MAX_INTERVAL_MS;
+
+      if (e.key === 'Enter') {
+        if (chars.length >= 4 && fast) {
+          e.preventDefault();
+          e.stopPropagation();
+          const code = chars;
+          chars = '';
+          lastTs = 0;
+          if (!pixPendenteRef.current) processBarcodeRef.current(code);
+          return;
+        }
+        chars = '';
+        lastTs = 0;
+        return;
+      }
+
+      if (e.key.length !== 1) return;
+      if (!fast) chars = '';
+      chars += e.key;
+      lastTs = now;
+    };
+
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, []);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
   const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); };
