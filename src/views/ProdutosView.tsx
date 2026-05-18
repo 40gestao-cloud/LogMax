@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 
 const EMPTY_EXTRAS = {
   categoria:      '',
@@ -14,6 +15,7 @@ const EMPTY_EXTRAS = {
   estoque_minimo: '',
   ean:            '',
   fornecedor:     '',
+  filial:         FILIAL_DEFAULT as string,
 };
 
 const parseNum = (v: string | number | undefined | null): number =>
@@ -38,11 +40,14 @@ const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string |
 export const ProdutosView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/produtosview', undefined, false,
+    '/api/produtosview',
+    filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
+    false,
     { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'] }
   );
   const [isSaving, setIsSaving]   = useState(false);
@@ -84,6 +89,7 @@ export const ProdutosView = ({ showToast }: any) => {
       estoque_minimo: item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
       ean:            item.ean            ?? '',
       fornecedor:     item.fornecedor     ?? '',
+      filial:         item.filial         ?? FILIAL_DEFAULT,
     });
     setErrors({});
     setShowForm(false);
@@ -93,7 +99,7 @@ export const ProdutosView = ({ showToast }: any) => {
     setShowForm(false);
     setEditItem(null);
     setForm({ codigo: '', nome: '', preco: '' });
-    setExtras(EMPTY_EXTRAS);
+    setExtras({ ...EMPTY_EXTRAS });
     setErrors({});
   };
 
@@ -111,6 +117,7 @@ export const ProdutosView = ({ showToast }: any) => {
         estoque_minimo: extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
         ean:            extras.ean,
         fornecedor:     extras.fornecedor,
+        filial:         extras.filial || FILIAL_DEFAULT,
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, payload);
@@ -200,6 +207,11 @@ export const ProdutosView = ({ showToast }: any) => {
             <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
+            <option value="todas">Todas filiais</option>
+            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>
@@ -239,6 +251,12 @@ export const ProdutosView = ({ showToast }: any) => {
                     <input className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.fornecedor} onChange={e => setExtras(x => ({ ...x, fornecedor: e.target.value }))}
                       placeholder="Ex: Distribuidora ABC" />
+                  </FormField>
+                  <FormField label="Filial / Unidade *">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.filial} onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
+                      {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
                   </FormField>
                 </div>
               </div>
@@ -365,6 +383,7 @@ export const ProdutosView = ({ showToast }: any) => {
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Código</th>
                   <th className="pb-4 font-bold px-4">Nome</th>
                   <th className="pb-4 font-bold px-4 hidden lg:table-cell">Categoria</th>
+                  <th className="pb-4 font-bold px-4 text-center hidden md:table-cell">Filial</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">P. Custo</th>
                   <th className="pb-4 font-bold px-4 text-right">P. Venda</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">Margem</th>
@@ -393,6 +412,7 @@ export const ProdutosView = ({ showToast }: any) => {
                             ? <span className="text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
                             : <span className="text-gray-700">—</span>}
                         </td>
+                        <td className="py-4 px-4 text-center hidden md:table-cell"><FilialBadge filial={item.filial} /></td>
                         <td className="py-4 px-4 text-xs font-mono text-gray-400 text-right hidden md:table-cell">
                           {item.preco_custo != null ? fmtBRL(parseNum(item.preco_custo)) : '—'}
                         </td>

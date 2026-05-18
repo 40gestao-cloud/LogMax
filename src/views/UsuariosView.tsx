@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'Global',
@@ -37,7 +38,7 @@ const setorCls = (s: string) =>
   : s === 'marketing' ? 'bg-fuchsia-900/30 text-fuchsia-400'
   : 'bg-gray-800/50 text-gray-400';
 
-const EMPTY_FORM = { nome: '', email: '', password: '', role: 'colaborador', setor: 'logistica' };
+const EMPTY_FORM = { nome: '', email: '', password: '', role: 'colaborador', setor: 'logistica', filial: FILIAL_DEFAULT as string };
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
@@ -50,6 +51,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
 
   const isAdmin = callerProfile.role === 'admin';
   const isGerente = callerProfile.role === 'gerente';
@@ -71,9 +73,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     })();
   }, [isGerente, callerProfile.setor]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Filtragem por filial (lista do banco já filtrada por setor para gerente)
+  const filteredUsers = filialFiltro === 'todas'
+    ? users
+    : users.filter(u => (u.filial ?? FILIAL_DEFAULT) === filialFiltro);
+
   // KPIs
-  const totalGerentes     = users.filter(u => u.role === 'gerente').length;
-  const totalColaboradores = users.filter(u => u.role === 'colaborador').length;
+  const totalGerentes     = filteredUsers.filter(u => u.role === 'gerente').length;
+  const totalColaboradores = filteredUsers.filter(u => u.role === 'colaborador').length;
 
   const handleLinkFuncionario = async (userId: string, funcionarioId: string) => {
     if (!supabase) return;
@@ -165,9 +172,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4 shrink-0">
         {[
-          { label: 'Total',        value: users.length,       icon: Users },
-          { label: 'Gerentes',     value: totalGerentes,      icon: Shield },
-          { label: 'Colaboradores',value: totalColaboradores,  icon: User },
+          { label: 'Total',        value: filteredUsers.length, icon: Users },
+          { label: 'Gerentes',     value: totalGerentes,        icon: Shield },
+          { label: 'Colaboradores',value: totalColaboradores,    icon: User },
         ].map(k => (
           <div key={k.label} className="neu-flat rounded-2xl p-3 sm:p-5 border border-white/5 min-w-0">
             <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2 truncate">{k.label}</p>
@@ -176,7 +183,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         ))}
       </div>
 
-      <div className="flex justify-end shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+          className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
+          <option value="todas">Todas filiais</option>
+          {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
         <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
           <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
         </NeuButtonAccent>
@@ -233,6 +245,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                 </select>
               </div>
+
+              {/* Filial / Unidade */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
+                <select value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
             </div>
             <div className="flex justify-end mt-5">
               <NeuButtonAccent onClick={handleSave} disabled={saving}>
@@ -244,7 +265,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        {users.length === 0 ? <EmptyState message="Nenhum usuário cadastrado neste setor." /> : (
+        {filteredUsers.length === 0 ? <EmptyState message={filialFiltro === 'todas' ? 'Nenhum usuário cadastrado neste setor.' : `Nenhum usuário na filial ${filialFiltro}.`} /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -253,6 +274,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4">E-mail</th>
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
+                  <th className="pb-4 font-bold px-4 text-center">Filial</th>
                   <th className="pb-4 font-bold px-4">Funcionário (Ponto QR)</th>
                   <th className="pb-4 font-bold px-4 text-center">Criado em</th>
                   <th className="pb-4 px-4"></th>
@@ -260,7 +282,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {users.map(u => (
+                  {filteredUsers.map(u => (
                     <motion.tr key={u.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
@@ -275,6 +297,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
                       </td>
+                      <td className="py-3 px-4 text-center"><FilialBadge filial={u.filial} /></td>
                       <td className="py-3 px-4">
                         <select
                           value={u.funcionario_id ?? ''}

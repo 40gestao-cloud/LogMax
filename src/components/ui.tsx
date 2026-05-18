@@ -191,6 +191,30 @@ export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
   );
 };
 
+// Badge da unidade de negócio (Holding). Aceita string livre — se for um valor
+// conhecido (SuperMax/MaxLook/TechMax/Matriz), aplica a cor estável; caso
+// contrário cai num cinza neutro.
+export const FilialBadge = ({ filial }: { filial?: string | null }) => {
+  // Import dinâmico para evitar dependência circular com viewUtils
+  // (FilialBadge é usado em vários views; FILIAL_COLOR vive em lib/filiais).
+  const f = (filial ?? '').toString().trim();
+  const palette: Record<string, string> = {
+    SuperMax: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+    MaxLook:  'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20',
+    TechMax:  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    Matriz:   'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  };
+  if (!f) {
+    return <span className="text-gray-700 text-xs">—</span>;
+  }
+  const cls = palette[f] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border ${cls}`}>
+      {f}
+    </span>
+  );
+};
+
 export const PlaceholderView = ({ title, desc }: { title: string; desc?: string }) => (
   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
     <div>

@@ -16,6 +16,7 @@ interface CartItem {
   qtd: number;
   subtotal: number;
   estoque: number;
+  filial?: string;
 }
 
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
@@ -90,7 +91,7 @@ export const PDVView = ({ showToast, profile }: any) => {
         return prev;
       }
       playBeep();
-      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999 }];
+      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999, filial: produto.filial }];
     });
   }, [showToast]);
 
@@ -126,6 +127,18 @@ export const PDVView = ({ showToast, profile }: any) => {
       preco_unitario: item.preco_unitario,
       subtotal:      item.subtotal,
     }));
+    // Filial da venda: usa a filial do primeiro produto se todos os itens
+    // forem da mesma unidade; caso contrário (carrinho misto ou item sem
+    // filial), cai para a filial do operador (profile.filial). Default
+    // 'Matriz' se nada estiver definido — evita venda sem atribuição.
+    const filiaisCarrinho = Array.from(
+      new Set(snap.cart.map((it: any) => it.filial).filter(Boolean))
+    );
+    const filialVenda: string =
+      filiaisCarrinho.length === 1
+        ? String(filiaisCarrinho[0])
+        : (profile?.filial ?? 'Matriz');
+
     const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
       p_cliente_id:      snap.clienteId || null,
       p_total:           snap.subtotal,
@@ -134,6 +147,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       p_forma_pagamento: forma,
       p_parcelas:        forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
       p_itens:           itensPayload,
+      p_filial:          filialVenda,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 

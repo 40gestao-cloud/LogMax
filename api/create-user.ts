@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Sem permissão para criar usuários.' });
     }
 
-    const { email, password, nome, role } = req.body ?? {};
+    const { email, password, nome, role, filial } = req.body ?? {};
     let { setor } = req.body ?? {};
 
     if (!email || !password || !nome || !role || !setor) {
@@ -100,15 +100,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: friendly });
     }
 
-    // Criar perfil
-    const { error: profileErr } = await admin.from('user_profiles').insert({
+    // Criar perfil. Filial é opcional no payload — default 'Matriz' (default
+    // do schema). Frontend valida contra FILIAIS_HOLDING.
+    const profilePayload: any = {
       id:         newUser.id,
       nome,
       email,
       role,
       setor,
       criado_por: caller.id,
-    });
+    };
+    if (typeof filial === 'string' && filial.trim()) {
+      profilePayload.filial = filial.trim();
+    }
+    const { error: profileErr } = await admin.from('user_profiles').insert(profilePayload);
 
     if (profileErr) {
       log.error('profile.insert_failed', profileErr, { new_user_id: newUser.id, rollback: 'deleting_auth_user' });

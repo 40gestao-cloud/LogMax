@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet } from 'lucide-react';
+import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet, Building2 } from 'lucide-react';
 import {
   Bar,
   Line,
@@ -14,6 +14,7 @@ import {
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 
 type Period = '7d' | '30d' | 'year';
 
@@ -25,7 +26,8 @@ export const DashboardAnalyticsView = () => {
   const { data: contasPagar,   isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview');
   const { data: pedidos,       isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
   const { data: produtos,      isLoading: loadingProd } = useFetchData<any>('/api/produtosview');
-  const isLoading = loadingCR || loadingCP || loadingPed || loadingProd;
+  const { data: vendas,        isLoading: loadingVendas } = useFetchData<any>('/api/vendasview');
+  const isLoading = loadingCR || loadingCP || loadingPed || loadingProd || loadingVendas;
 
   const [period, setPeriod] = useState<Period>('30d');
 
@@ -39,6 +41,36 @@ export const DashboardAnalyticsView = () => {
   const filteredCR  = useMemo(() => contasReceber.filter((r: any) => new Date(r.created_at) >= dateFrom), [contasReceber, dateFrom]);
   const filteredCP  = useMemo(() => contasPagar.filter((r: any)   => new Date(r.created_at) >= dateFrom), [contasPagar,   dateFrom]);
   const filteredPed = useMemo(() => pedidos.filter((r: any)       => new Date(r.created_at) >= dateFrom), [pedidos,       dateFrom]);
+  const filteredVendas = useMemo(
+    () => vendas.filter((v: any) => v.status !== 'Cancelada' && new Date(v.created_at) >= dateFrom),
+    [vendas, dateFrom]
+  );
+
+  // Faturamento por filial — agrupa vendas pelo campo `filial`. Vendas sem
+  // filial (antigas, pré-migration) caem em 'Não atribuído'.
+  const faturamentoPorFilial = useMemo(() => {
+    const bucket: Record<string, { total: number; count: number }> = {};
+    for (const f of FILIAIS_HOLDING) bucket[f] = { total: 0, count: 0 };
+    for (const v of filteredVendas) {
+      const key = v.filial && (FILIAIS_HOLDING as readonly string[]).includes(v.filial)
+        ? v.filial
+        : 'Não atribuído';
+      if (!bucket[key]) bucket[key] = { total: 0, count: 0 };
+      bucket[key].total += Number(v.total_final) || 0;
+      bucket[key].count += 1;
+    }
+    return bucket;
+  }, [filteredVendas]);
+
+  // Classes Tailwind devem ser literais para o JIT detectar — não usar
+  // template strings como `text-${color}-400`.
+  const filialTextClass: Record<string, string> = {
+    SuperMax:        'text-sky-400',
+    MaxLook:         'text-fuchsia-400',
+    TechMax:         'text-emerald-400',
+    Matriz:          'text-gray-400',
+    'Não atribuído': 'text-red-400',
+  };
 
   const receitaTotal = sum(filteredCR, 'valor').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const despesasTotal = sum(filteredCP, 'valor').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -182,6 +214,35 @@ export const DashboardAnalyticsView = () => {
             </span>
           </div>
         ))}
+      </div>
+
+      {/* Faturamento por Filial (Holding) */}
+      <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-4 shrink-0">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h3 className="text-sm font-bold text-gray-200 tracking-wide flex items-center gap-2">
+            <Building2 size={14} className="text-accent" /> Faturamento por Filial
+          </h3>
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            {filteredVendas.length} venda(s) no período
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Sempre mostrar as 4 unidades + 'Não atribuído' se houver vendas órfãs */}
+          {[...FILIAIS_HOLDING, 'Não atribuído'].map(filial => {
+            const agg = faturamentoPorFilial[filial] ?? { total: 0, count: 0 };
+            if (filial === 'Não atribuído' && agg.count === 0) return null;
+            const colorCls = filialTextClass[filial] ?? 'text-gray-400';
+            return (
+              <div key={filial} className="neu-pressed p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${colorCls}`}>{filial}</span>
+                <span className="text-xl font-black font-mono tabular-nums text-gray-100">
+                  {agg.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+                <span className="text-[10px] text-gray-500">{agg.count} venda(s)</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

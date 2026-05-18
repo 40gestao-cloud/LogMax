@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
 
@@ -15,6 +16,7 @@ const EMPTY_EXTRAS = {
   endereco: '',
   cpf_cnpj: '',
   categoria: '',
+  filial: FILIAL_DEFAULT as string,
 };
 
 export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
@@ -22,11 +24,14 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
   const endpoint = isClientes ? '/api/crmview' : '/api/crmview-fornecedores';
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    endpoint, undefined, false,
+    endpoint,
+    filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
+    false,
     { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'email', 'telefone', 'cpf_cnpj', 'pessoa_tipo'] }
   );
   const [isSaving, setIsSaving] = useState(false);
@@ -62,6 +67,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       endereco:    item.endereco   ?? '',
       cpf_cnpj:    item.cpf_cnpj   ?? '',
       categoria:   item.categoria  ?? '',
+      filial:      item.filial     ?? FILIAL_DEFAULT,
     });
     setErrors({});
     setShowForm(false);
@@ -87,6 +93,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
         email:       extras.email,
         endereco:    extras.endereco,
         cpf_cnpj:    extras.cpf_cnpj,
+        filial:      extras.filial || FILIAL_DEFAULT,
       };
       if (editItem) {
         const payload = isClientes ? base : { ...base, categoria: extras.categoria };
@@ -150,6 +157,11 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
+            <option value="todas">Todas filiais</option>
+            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>
@@ -225,6 +237,14 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
                       placeholder="Ex: Materiais, Serviços" />
                   </FormField>
                 )}
+
+                <FormField label="Filial / Unidade *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.filial}
+                    onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
+                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </FormField>
               </div>
 
               <div className="flex gap-3 justify-end">
@@ -252,6 +272,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
                     <h3 className="text-sm font-bold text-gray-200 mb-2 tracking-wide">{item.nome}</h3>
                     <div className="flex gap-2 items-center flex-wrap">
                       <span className="text-[10px] uppercase px-2 py-0.5 rounded text-gray-400 tracking-widest neu-pressed" style={{ background: 'var(--color-badge-neutral-bg)' }}>{pessoaTipo}</span>
+                      <FilialBadge filial={item.filial} />
                       <span className="w-1 h-1 rounded-full bg-accent"></span>
                       <span className="text-xs text-accent font-medium">{item.status}</span>
                     </div>
