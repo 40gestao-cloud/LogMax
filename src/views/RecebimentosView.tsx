@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, CheckCircle2, ChevronDown } from 'lucide-react';
-import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
+import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -52,6 +52,19 @@ export const RecebimentosView = ({ showToast }: any) => {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar este recebimento? Ele sairá da lista mas o histórico fica preservado.')) return;
+    try {
+      await dbDelete('/api/recebimentosview', id);
+      setData((prev: any[]) => prev.filter(d => d.id !== id));
+      showToast('Recebimento inativado.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Recebimentos] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
     }
   };
 
@@ -152,14 +165,17 @@ export const RecebimentosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          {item.status === 'Pendente' && (
-                            <button
-                              onClick={() => { setConfirmando(confirmando === item.id ? null : item.id); setConfirmProduto(''); setConfirmStatus('Concluído'); }}
-                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1 ml-auto opacity-0 group-hover:opacity-100"
-                            >
-                              <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
-                            </button>
-                          )}
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {item.status === 'Pendente' && (
+                              <button
+                                onClick={() => { setConfirmando(confirmando === item.id ? null : item.id); setConfirmProduto(''); setConfirmStatus('Concluído'); }}
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
+                              >
+                                <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
+                              </button>
+                            )}
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </div>
                         </td>
                       </motion.tr>
                       <AnimatePresence>

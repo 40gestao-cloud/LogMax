@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 
@@ -51,6 +51,19 @@ export const ExpedicaoView = ({ showToast }: any) => {
     } catch { showToast("Erro.", 'error', true); } finally { setIsSaving(false); }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar esta expedição?')) return;
+    try {
+      await dbDelete('/api/expedicao', id);
+      setData((prev: any[]) => prev.filter(d => d.id !== id));
+      showToast('Expedição inativada.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Expedicao] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -85,16 +98,21 @@ export const ExpedicaoView = ({ showToast }: any) => {
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4 text-center">Status</th></tr></thead>
+            <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={4}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={4}><EmptyState /></td></tr>) : (
+              {isLoading ? (<tr><td colSpan={5}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={5}><EmptyState /></td></tr>) : (
                 <AnimatePresence>
                   {filtered.map((item: any) => (
-                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_expedida ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data_expedicao || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                        </div>
+                      </td>
                     </motion.tr>
                   ))}
                 </AnimatePresence>

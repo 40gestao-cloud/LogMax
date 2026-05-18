@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, BookOpen, X } from 'lucide-react';
-import { useFetchData, dbInsert, dbSetStatus } from '../hooks/useSupabaseData';
+import { Plus, BookOpen, X, Edit2, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const statusCls = (s: string) => {
@@ -19,6 +19,7 @@ const EMPTY: any = { nome: '', instrutor: '', data_inicio: '', data_fim: '', vag
 export const TreinamentosView = ({ showToast }: any) => {
   const { data: treinamentos, setData, isLoading } = useFetchData<any>('/api/treinamentosview');
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -38,13 +39,21 @@ export const TreinamentosView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome do treinamento é obrigatório.', 'error'); return; }
+    const payload = { ...form, vagas: Number(form.vagas || 0), inscritos: Number(form.inscritos || 0) };
     setSaving(true);
     try {
-      const rec = await dbInsert('/api/treinamentosview', { ...form, vagas: Number(form.vagas || 0), inscritos: Number(form.inscritos || 0) });
-      setData((prev: any[]) => [rec, ...prev]);
+      if (editId) {
+        const updated = await dbUpdate('/api/treinamentosview', editId, payload);
+        setData((prev: any[]) => prev.map((t: any) => t.id === editId ? { ...t, ...(updated ?? payload) } : t));
+        showToast('Treinamento atualizado.', 'success');
+      } else {
+        const rec = await dbInsert('/api/treinamentosview', payload);
+        setData((prev: any[]) => [rec, ...prev]);
+        showToast('Treinamento criado.', 'success');
+      }
       setForm(EMPTY);
       setShowForm(false);
-      showToast('Treinamento criado.', 'success');
+      setEditId(null);
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[Treinamentos] erro ao salvar:', err);
@@ -52,6 +61,35 @@ export const TreinamentosView = ({ showToast }: any) => {
     }
     setSaving(false);
   };
+
+  const openEdit = (t: any) => {
+    setEditId(t.id);
+    setForm({
+      nome:        t.nome        ?? '',
+      instrutor:   t.instrutor   ?? '',
+      data_inicio: t.data_inicio ?? '',
+      data_fim:    t.data_fim    ?? '',
+      vagas:       t.vagas     != null ? String(t.vagas)     : '',
+      inscritos:   t.inscritos != null ? String(t.inscritos) : '0',
+      status:      t.status      ?? 'Agendado',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar este treinamento?')) return;
+    try {
+      await dbDelete('/api/treinamentosview', id);
+      setData((prev: any[]) => prev.filter((t: any) => t.id !== id));
+      showToast('Treinamento inativado.', 'success');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Treinamentos] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error');
+    }
+  };
+
+  const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY); };
 
   const handleStatusAdvance = async (t: any) => {
     if (t.status === 'Concluído' || t.status === 'Cancelado') return;
@@ -89,7 +127,7 @@ export const TreinamentosView = ({ showToast }: any) => {
           <input type="text" placeholder="Buscar treinamento..." value={search} onChange={e => setSearch(e.target.value)}
             className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-52" />
         </div>
-        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Novo Treinamento'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => { if (showForm) closeForm(); else setShowForm(true); }}><Plus size={14} />{showForm ? 'Cancelar' : 'Novo Treinamento'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
@@ -97,8 +135,8 @@ export const TreinamentosView = ({ showToast }: any) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Novo Treinamento</h3>
-              <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Treinamento' : 'Novo Treinamento'}</h3>
+              <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
@@ -122,7 +160,7 @@ export const TreinamentosView = ({ showToast }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Criar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Criar')}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -140,6 +178,7 @@ export const TreinamentosView = ({ showToast }: any) => {
                 <th className="pb-4 font-bold px-4 text-center">Vagas</th>
                 <th className="pb-4 font-bold px-4 text-center">Inscritos</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
+                <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr></thead>
               <tbody>
                 <AnimatePresence>
@@ -147,7 +186,7 @@ export const TreinamentosView = ({ showToast }: any) => {
                     const vagasLiv = Math.max(Number(t.vagas || 0) - Number(t.inscritos || 0), 0);
                     return (
                       <motion.tr key={t.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{t.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{t.instrutor ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{t.data_inicio ?? '—'}</td>
@@ -164,6 +203,12 @@ export const TreinamentosView = ({ showToast }: any) => {
                             className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-opacity ${statusCls(t.status)} ${!(t.status === 'Concluído' || t.status === 'Cancelado') ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}>
                             {t.status}
                           </button>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openEdit(t)} title="Editar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
+                            <button onClick={() => handleDelete(t.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </div>
                         </td>
                       </motion.tr>
                     );

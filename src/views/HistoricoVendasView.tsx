@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronDown, X, FileDown, Sheet } from 'lucide-react';
-import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
+import { Search, ChevronDown, X, FileDown, Sheet, Trash2 } from 'lucide-react';
+import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -81,33 +81,57 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     setCanceling(venda.id);
     try {
       await dbUpdate('/api/vendasview', venda.id, { status: 'Cancelada' });
-      // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido
+      // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido.
+      // Itens órfãos (produto deletado/inválido) são pulados silenciosamente — o
+      // cancelamento da venda não pode falhar por causa de dados antigos.
       const today = new Date().toISOString().slice(0, 10);
       const itensVenda = venda.itens ?? [];
-      let skippedCount = 0;
+      let estornados = 0;
+      let orfaos = 0;
       for (const item of itensVenda) {
-        if (!item.produto_id || !item.qtd) { skippedCount++; continue; }
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: item.produto_id,
-          tipo: 'Entrada',
-          qtd: Number(item.qtd),
-          origem: `Estorno — Venda #${venda.id.slice(-6).toUpperCase()} cancelada`,
-          destino: 'Almoxarifado',
-          data: today,
-        });
+        if (!item.produto_id || !item.qtd) { orfaos++; continue; }
+        try {
+          await dbInsert('/api/movimentacoesestoqueview', {
+            produto_id: item.produto_id,
+            tipo: 'Entrada',
+            qtd: Number(item.qtd),
+            origem: `Estorno — Venda #${venda.id.slice(-6).toUpperCase()} cancelada`,
+            destino: 'Almoxarifado',
+            data: today,
+          });
+          estornados++;
+        } catch (estornoErr: any) {
+          // Falha de FK (produto removido após a venda) ou similar: registra
+          // no console mas não interrompe o cancelamento.
+          console.warn(`[Estorno] item ${item.id} ignorado:`, estornoErr?.message ?? estornoErr);
+          orfaos++;
+        }
       }
       setVendas((prev: any[]) => prev.map(v => v.id === venda.id ? { ...v, status: 'Cancelada' } : v));
-      if (skippedCount > 0) {
-        showToast(
-          `Venda cancelada, mas ${skippedCount} ${skippedCount === 1 ? 'item não foi estornado' : 'itens não foram estornados'} ao estoque (produto removido ou inválido). Verifique manualmente.`,
-          'error', false);
+      if (orfaos > 0 && estornados > 0) {
+        showToast(`Venda cancelada. ${estornados} item(ns) estornado(s) ao estoque; ${orfaos} pulado(s) (produto removido).`, 'info', true);
+      } else if (orfaos > 0 && estornados === 0) {
+        showToast('Venda cancelada. Estoque não foi estornado (produtos removidos do catálogo).', 'info', true);
       } else {
-        showToast('Venda cancelada e estoque estornado.', 'info', true);
+        showToast('Venda cancelada e estoque estornado.', 'success', true);
       }
-    } catch {
-      showToast('Erro ao cancelar.', 'error', true);
+    } catch (err: any) {
+      showToast(`Erro ao cancelar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setCanceling(null);
+    }
+  };
+
+  const handleExcluir = async (venda: any) => {
+    if (!confirm('Inativar esta venda? Ela sairá da listagem mas o histórico fica preservado no banco.')) return;
+    try {
+      await dbDelete('/api/vendasview', venda.id);
+      setVendas((prev: any[]) => prev.filter(v => v.id !== venda.id));
+      showToast('Venda inativada.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[HistoricoVendas] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
     }
   };
 
@@ -210,12 +234,18 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                             <div className="text-xs text-gray-500 flex gap-4">
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
-                            {v.status !== 'Cancelada' && (
-                              <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
-                                className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
-                                <X size={11} /> Cancelar venda
+                            <div className="flex items-center gap-2">
+                              {v.status !== 'Cancelada' && (
+                                <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
+                                  className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
+                                  <X size={11} /> Cancelar venda
+                                </button>
+                              )}
+                              <button onClick={() => handleExcluir(v)} title="Inativar venda" disabled={!!isCanceling}
+                                className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                <Trash2 size={11} /> Excluir
                               </button>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </motion.div>

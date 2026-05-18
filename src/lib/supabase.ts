@@ -70,3 +70,23 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/pesquisarespostaitensview':    'pesquisa_resposta_itens',
   '/api/controlecaixaview':            'controle_caixa',
 };
+
+// Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
+// automaticamente `ativo = true`; dbDeactivate faz UPDATE em vez de DELETE.
+// Tabelas fora deste set continuam com hard delete (auditoria, cascades,
+// transações efêmeras como pix_pendentes).
+export const TABLES_WITH_ATIVO = new Set<string>([
+  'filiais', 'colaboradores', 'clientes', 'fornecedores', 'produtos', 'servicos',
+  'centros_custo', 'projetos', 'condicoes_pagamento', 'classificacoes_auxiliares',
+  'mapeamentos_rateio', 'formas_pagamento', 'cargos', 'departamentos', 'beneficios',
+  'caixa_bancos', 'funcionarios',
+  'requisicoes', 'cotacoes', 'pedidos', 'recebimentos', 'notas_recebidas',
+  'requisicoes_estoque', 'expedicao', 'movimentacoes_estoque', 'inventarios',
+  'vencimentos_estoque',
+  'contas_receber', 'contas_pagar', 'duplicatas', 'previsoes', 'controle_caixa',
+  'integracoes_bancarias',
+  'folha_pagamento', 'ferias', 'treinamentos',
+  'vendas',
+  'marketing_promocoes', 'marketing_tarefas',
+  'tarefas',
+]);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, RefreshCw, Loader2 } from 'lucide-react';
-import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
+import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { supabase } from '../lib/supabase';
@@ -173,8 +173,21 @@ export const CotacoesView = ({ showToast }: any) => {
       const updated = await dbUpdate('/api/cotacoesview', id, { status: 'Cancelado' });
       setData((prev: any[]) => prev.map(c => c.id === id ? (updated ?? { ...c, status: 'Cancelado' }) : c));
       showToast("Cotação cancelada.", 'info', true);
-    } catch {
-      showToast("Erro ao cancelar.", 'error', true);
+    } catch (err: any) {
+      showToast(`Erro ao cancelar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar esta cotação?')) return;
+    try {
+      await dbDelete('/api/cotacoesview', id);
+      setData((prev: any[]) => prev.filter(c => c.id !== id));
+      showToast('Cotação inativada.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Cotacoes] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
     }
   };
 
@@ -269,14 +282,14 @@ export const CotacoesView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.validade || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        {item.status === 'Em Cotação' && (
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleAprovar(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Aprovar</button>
-                            <button onClick={() => handleCancelar(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
-                          </div>
-                        )}
-                        {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && (
-                          <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {item.status === 'Em Cotação' && (
+                            <>
+                              <button onClick={() => handleAprovar(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Aprovar</button>
+                              <button onClick={() => handleCancelar(item.id)} title="Cancelar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-yellow-400"><Trash2 size={12} /></button>
+                            </>
+                          )}
+                          {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && (
                             <button
                               onClick={() => handleRecriarPedido(item)}
                               disabled={recreating === item.id}
@@ -285,8 +298,9 @@ export const CotacoesView = ({ showToast }: any) => {
                               {recreating === item.id ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
                               Recriar Pedido
                             </button>
-                          </div>
-                        )}
+                          )}
+                          <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                        </div>
                       </td>
                     </motion.tr>
                   ))}

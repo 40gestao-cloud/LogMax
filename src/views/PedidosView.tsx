@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Loader2 } from 'lucide-react';
-import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
+import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
+import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { supabase } from '../lib/supabase';
@@ -79,6 +79,19 @@ export const PedidosView = ({ showToast }: any) => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar este pedido?')) return;
+    try {
+      await dbDelete('/api/pedidosview', id);
+      setData((prev: any[]) => prev.filter(p => p.id !== id));
+      showToast('Pedido inativado.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Pedidos] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="shrink-0">
@@ -121,13 +134,16 @@ export const PedidosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.prazo_entrega || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          {flow && (
-                            <button onClick={() => handleAvance(item)} disabled={isProc}
-                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1.5 ml-auto disabled:opacity-50">
-                              {isProc ? <Loader2 size={11} className="animate-spin" /> : <ArrowRight size={11} />}
-                              {flow.label}
-                            </button>
-                          )}
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {flow && (
+                              <button onClick={() => handleAvance(item)} disabled={isProc}
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                {isProc ? <Loader2 size={11} className="animate-spin" /> : <ArrowRight size={11} />}
+                                {flow.label}
+                              </button>
+                            )}
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </div>
                         </td>
                       </motion.tr>
                     );

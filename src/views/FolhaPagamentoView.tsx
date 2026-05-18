@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X } from 'lucide-react';
-import { useFetchData, dbInsert, dbSetStatus } from '../hooks/useSupabaseData';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
 
@@ -20,6 +20,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
   const hoje = new Date().toISOString().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -40,18 +41,21 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
     const bruto = Number(form.salario_bruto || 0);
     const desc = Number(form.descontos || 0);
+    const payload = { ...form, salario_bruto: bruto, descontos: desc, salario_liquido: bruto - desc };
     setSaving(true);
     try {
-      const rec = await dbInsert('/api/folhapagamentoview', {
-        ...form,
-        salario_bruto: bruto,
-        descontos: desc,
-        salario_liquido: bruto - desc,
-      });
-      setData((prev: any[]) => [rec, ...prev]);
+      if (editId) {
+        const updated = await dbUpdate('/api/folhapagamentoview', editId, payload);
+        setData((prev: any[]) => prev.map((f: any) => f.id === editId ? { ...f, ...(updated ?? payload) } : f));
+        showToast('Folha atualizada.', 'success');
+      } else {
+        const rec = await dbInsert('/api/folhapagamentoview', payload);
+        setData((prev: any[]) => [rec, ...prev]);
+        showToast('Folha registrada.', 'success');
+      }
       setForm(EMPTY);
       setShowForm(false);
-      showToast('Folha registrada.', 'success');
+      setEditId(null);
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[FolhaPagamento] erro ao salvar:', err);
@@ -59,6 +63,33 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
     }
     setSaving(false);
   };
+
+  const openEdit = (f: any) => {
+    setEditId(f.id);
+    setForm({
+      funcionario_id: f.funcionario_id ?? '',
+      mes_ref:        f.mes_ref        ?? '',
+      salario_bruto:  f.salario_bruto != null ? String(f.salario_bruto) : '',
+      descontos:      f.descontos     != null ? String(f.descontos)     : '',
+      status:         f.status        ?? 'Pendente',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar este lançamento de folha?')) return;
+    try {
+      await dbDelete('/api/folhapagamentoview', id);
+      setData((prev: any[]) => prev.filter((f: any) => f.id !== id));
+      showToast('Folha inativada.', 'success');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[FolhaPagamento] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error');
+    }
+  };
+
+  const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY); };
 
   const handleStatusCycle = async (f: any) => {
     const next = statusNext(f.status);
@@ -131,7 +162,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
           <input type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
             className="neu-input rounded-xl px-3 py-2 text-sm" />
         </div>
-        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Nova Folha'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => { if (showForm) closeForm(); else setShowForm(true); }}><Plus size={14} />{showForm ? 'Cancelar' : 'Nova Folha'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
@@ -139,8 +170,8 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Registrar Folha</h3>
-              <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Folha' : 'Registrar Folha'}</h3>
+              <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -170,7 +201,7 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Registrar')}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -187,12 +218,13 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
                 <th className="pb-4 font-bold px-4 text-right">Descontos</th>
                 <th className="pb-4 font-bold px-4 text-right">Líquido</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
+                <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr></thead>
               <tbody>
                 <AnimatePresence>
                   {enriched.map((f: any) => (
                     <motion.tr key={f.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.func?.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.mes_ref ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-right">R$ {Number(f.salario_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
@@ -204,6 +236,12 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
                           {f.status === 'Paga' ? <CheckCircle size={11} /> : f.status === 'Processada' ? <DollarSign size={11} /> : <Clock size={11} />}
                           {f.status}
                         </button>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openEdit(f)} title="Editar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
+                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                        </div>
                       </td>
                     </motion.tr>
                   ))}

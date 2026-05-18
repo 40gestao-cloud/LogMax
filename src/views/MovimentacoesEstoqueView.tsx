@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 
@@ -48,6 +48,19 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
       closeForm();
     } catch { showToast("Erro ao registrar.", 'error', true); }
     finally { setIsSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar esta movimentação? O saldo de estoque NÃO é revertido automaticamente — faça um ajuste manual se necessário.')) return;
+    try {
+      await dbDelete('/api/movimentacoesestoqueview', id);
+      setData((prev: any[]) => prev.filter(d => d.id !== id));
+      showToast('Movimentação inativada.', 'success', true);
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Movimentacoes] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error', true);
+    }
   };
 
   return (
@@ -120,15 +133,16 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
                 <th className="pb-4 font-bold px-4 text-right">Qtd</th>
                 <th className="pb-4 font-bold px-4">Origem</th>
                 <th className="pb-4 font-bold px-4">Destino</th>
+                <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>)
-                : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>)
+              {isLoading ? (<tr><td colSpan={7}><LoadingSpinner /></td></tr>)
+                : filtered.length === 0 ? (<tr><td colSpan={7}><EmptyState /></td></tr>)
                 : (
                   <AnimatePresence>
                     {filtered.map((item: any) => (
-                      <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs">
@@ -137,6 +151,11 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.origem || '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.destino || '—'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </div>
+                        </td>
                       </motion.tr>
                     ))}
                   </AnimatePresence>

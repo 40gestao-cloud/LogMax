@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Palmtree } from 'lucide-react';
-import { useFetchData, dbInsert, dbSetStatus } from '../hooks/useSupabaseData';
+import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const statusCls = (s: string) => {
@@ -18,6 +18,7 @@ export const FeriasView = ({ showToast }: any) => {
   const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview');
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -41,13 +42,21 @@ export const FeriasView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!form.funcionario_id || !form.data_inicio) { showToast('Funcionário e data de início são obrigatórios.', 'error'); return; }
+    const payload = { ...form, dias: Number(form.dias || 30) };
     setSaving(true);
     try {
-      const rec = await dbInsert('/api/feriasview', { ...form, dias: Number(form.dias || 30) });
-      setData((prev: any[]) => [rec, ...prev]);
+      if (editId) {
+        const updated = await dbUpdate('/api/feriasview', editId, payload);
+        setData((prev: any[]) => prev.map((f: any) => f.id === editId ? { ...f, ...(updated ?? payload) } : f));
+        showToast('Férias atualizadas.', 'success');
+      } else {
+        const rec = await dbInsert('/api/feriasview', payload);
+        setData((prev: any[]) => [rec, ...prev]);
+        showToast('Férias solicitadas.', 'success');
+      }
       setForm(EMPTY);
       setShowForm(false);
-      showToast('Férias solicitadas.', 'success');
+      setEditId(null);
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[Ferias] erro ao salvar:', err);
@@ -55,6 +64,33 @@ export const FeriasView = ({ showToast }: any) => {
     }
     setSaving(false);
   };
+
+  const openEdit = (f: any) => {
+    setEditId(f.id);
+    setForm({
+      funcionario_id: f.funcionario_id ?? '',
+      data_inicio:    f.data_inicio    ?? '',
+      data_fim:       f.data_fim       ?? '',
+      dias:           f.dias != null ? String(f.dias) : '30',
+      status:         f.status ?? 'Solicitada',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar este pedido de férias?')) return;
+    try {
+      await dbDelete('/api/feriasview', id);
+      setData((prev: any[]) => prev.filter((f: any) => f.id !== id));
+      showToast('Férias inativadas.', 'success');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Ferias] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error');
+    }
+  };
+
+  const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY); };
 
   const setStatus = async (id: string, status: string) => {
     try {
@@ -86,14 +122,14 @@ export const FeriasView = ({ showToast }: any) => {
       </div>
 
       <div className="flex justify-end shrink-0">
-        <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}><Plus size={14} />{showForm ? 'Cancelar' : 'Solicitar Férias'}</NeuButtonAccent>
+        <NeuButtonAccent variant="" onClick={() => { if (showForm) closeForm(); else setShowForm(true); }}><Plus size={14} />{showForm ? 'Cancelar' : 'Solicitar Férias'}</NeuButtonAccent>
       </div>
 
       <AnimatePresence>
         {showForm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <h3 className="text-sm font-bold text-gray-300 mb-5">Nova Solicitação de Férias</h3>
+            <h3 className="text-sm font-bold text-gray-300 mb-5">{editId ? 'Editar Férias' : 'Nova Solicitação de Férias'}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
@@ -124,7 +160,7 @@ export const FeriasView = ({ showToast }: any) => {
               ))}
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Solicitar'}</NeuButtonAccent>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Solicitar')}</NeuButtonAccent>
             </div>
           </motion.div>
         )}
@@ -160,26 +196,30 @@ export const FeriasView = ({ showToast }: any) => {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(f.status)}`}>{f.status}</span>
                       </td>
                       <td className="py-3 px-4">
-                        {f.status === 'Solicitada' && (
-                          <div className="flex gap-1.5 justify-end">
-                            <button onClick={() => setStatus(f.id, 'Aprovado')}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors" title="Aprovar">
-                              <Check size={13} />
-                            </button>
-                            <button onClick={() => setStatus(f.id, 'Negado')}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors" title="Negar">
-                              <XIcon size={13} />
-                            </button>
-                          </div>
-                        )}
-                        {f.status === 'Aprovado' && (
-                          <button onClick={() => setStatus(f.id, 'Em Andamento')}
-                            className="text-[10px] text-blue-400 hover:underline transition-colors font-bold ml-auto block">Iniciar</button>
-                        )}
-                        {f.status === 'Em Andamento' && (
-                          <button onClick={() => setStatus(f.id, 'Concluída')}
-                            className="text-[10px] text-gray-400 hover:underline transition-colors font-bold ml-auto block">Concluir</button>
-                        )}
+                        <div className="flex gap-1.5 justify-end items-center">
+                          {f.status === 'Solicitada' && (
+                            <>
+                              <button onClick={() => setStatus(f.id, 'Aprovado')}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors" title="Aprovar">
+                                <Check size={13} />
+                              </button>
+                              <button onClick={() => setStatus(f.id, 'Negado')}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors" title="Negar">
+                                <XIcon size={13} />
+                              </button>
+                            </>
+                          )}
+                          {f.status === 'Aprovado' && (
+                            <button onClick={() => setStatus(f.id, 'Em Andamento')}
+                              className="text-[10px] text-blue-400 hover:underline transition-colors font-bold">Iniciar</button>
+                          )}
+                          {f.status === 'Em Andamento' && (
+                            <button onClick={() => setStatus(f.id, 'Concluída')}
+                              className="text-[10px] text-gray-400 hover:underline transition-colors font-bold">Concluir</button>
+                          )}
+                          <button onClick={() => openEdit(f)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"><Edit2 size={12} /></button>
+                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors"><Trash2 size={12} /></button>
+                        </div>
                       </td>
                     </motion.tr>
                   ))}

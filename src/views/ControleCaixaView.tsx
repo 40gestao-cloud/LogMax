@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, CheckCircle, Clock, DollarSign, User, Calendar, ChevronDown } from 'lucide-react';
+import { LockOpen, Lock, Clock, DollarSign, User, Calendar, ChevronDown, Trash2 } from 'lucide-react';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
-import { useFetchData } from '../hooks/useSupabaseData';
+import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
@@ -87,6 +87,19 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
       showToast('Erro ao fechar o caixa.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteSessao = async (id: string) => {
+    if (!confirm('Inativar esta sessão de caixa? O histórico será preservado mas não aparecerá mais na listagem.')) return;
+    try {
+      await dbDelete('/api/controlecaixaview', id);
+      await reload();
+      showToast('Sessão inativada.', 'success');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[ControleCaixa] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error');
     }
   };
 
@@ -222,11 +235,12 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                   <th className="pb-3 font-bold px-4 text-center">Hora Abert.</th>
                   <th className="pb-3 font-bold px-4 text-center">Hora Fech.</th>
                   <th className="pb-3 font-bold px-4 text-center">Status</th>
+                  <th className="pb-3 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {historico.map((h: any) => (
-                  <tr key={h.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr key={h.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                     <td className="py-3 px-4 text-xs font-mono text-gray-400">{fmtData(h.data)}</td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right font-bold">{fmtBRL(Number(h.valor_abertura))}</td>
                     <td className="py-3 px-4 text-xs text-gray-400">{h.aberto_por_nome ?? '—'}</td>
@@ -237,6 +251,13 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                         className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.status === 'Aberto' ? 'bg-emerald-500/15 text-emerald-500' : 'text-gray-500'}`}
                         style={h.status !== 'Aberto' ? { background: 'var(--color-badge-neutral-bg)' } : {}}
                       >{h.status}</span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {h.status !== 'Aberto' && (
+                          <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

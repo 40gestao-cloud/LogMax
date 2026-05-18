@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, ENDPOINT_TABLE_MAP, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, ENDPOINT_TABLE_MAP, TABLES_WITH_ATIVO, isSupabaseConfigured } from '../lib/supabase';
 
 export const PAGE_SIZE = 50;
 
@@ -13,9 +13,11 @@ export function useFetchData<T = any>(
   endpoint: string,
   extraFilter?: Record<string, any>,
   realtime?: boolean,
-  options?: { page?: number; searchTerm?: string; searchColumns?: string[] },
+  options?: { page?: number; searchTerm?: string; searchColumns?: string[]; includeInactive?: boolean },
 ) {
   const table = ENDPOINT_TABLE_MAP[endpoint];
+  const softDelete = !!table && TABLES_WITH_ATIVO.has(table);
+  const includeInactive = !!options?.includeInactive;
   const [data, setData]             = useState<T[]>([]);
   const [isLoading, setLoading]     = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -43,6 +45,11 @@ export function useFetchData<T = any>(
     setError(null);
 
     const applyFilters = (q: any) => {
+      // Soft delete: por padrão lista só registros ativos. Opt-out via
+      // options.includeInactive (ex.: telas de "arquivados").
+      if (softDelete && !includeInactive) {
+        q = q.eq('ativo', true);
+      }
       if (extraFilter) {
         for (const [col, val] of Object.entries(extraFilter)) {
           q = q.eq(col, val);
@@ -85,7 +92,7 @@ export function useFetchData<T = any>(
     }
 
     setLoading(false);
-  }, [table, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [table, softDelete, includeInactive, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -147,12 +154,28 @@ export async function dbDelete(endpoint: string, id: string): Promise<void> {
   const table = ENDPOINT_TABLE_MAP[endpoint];
   if (!table) return;
 
-  // `.select()` após o delete devolve as linhas removidas. Se RLS esconder a linha
-  // (ou se o id não existir), o Supabase NÃO devolve erro — só 0 linhas. Sem este
-  // check, o UI tira a linha do estado, mas o registo continua no banco.
+  // Soft delete por padrão (preserva histórico, evita FK violation). Hard delete
+  // só nas tabelas fora de TABLES_WITH_ATIVO (auditoria, cascades, efêmeras).
+  if (TABLES_WITH_ATIVO.has(table)) {
+    const { data, error } = await supabase
+      .from(table)
+      .update({ ativo: false })
+      .eq('id', id)
+      .select();
+    if (error) {
+      console.error(`[dbDelete:soft] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) {
+      throw new Error('Nenhum registro inativado. Permissão (RLS) negada ou registro já não existe.');
+    }
+    return;
+  }
+
+  // Hard delete (tabelas fora do soft delete). `.select()` detecta RLS silent fail.
   const { data, error } = await supabase.from(table).delete().eq('id', id).select();
   if (error) {
-    console.error(`[dbDelete] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
+    console.error(`[dbDelete:hard] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
     throw new Error(error.message);
   }
   if (!data || data.length === 0) {

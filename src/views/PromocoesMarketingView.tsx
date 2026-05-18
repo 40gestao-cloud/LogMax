@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2 } from 'lucide-react';
+import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
@@ -105,6 +105,19 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       showToast('Erro ao enviar proposta.', 'error');
     }
     setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Inativar esta promoção?')) return;
+    try {
+      await dbDelete('/api/marketingpromocoesview', id);
+      setData((prev: any[]) => prev.filter((p: any) => p.id !== id));
+      showToast('Promoção inativada.', 'success');
+    } catch (err: any) {
+      const msg = err?.message ?? 'verifique o console';
+      console.error('[Promocoes] erro ao inativar:', err);
+      showToast(`Erro ao inativar: ${msg}`, 'error');
+    }
   };
 
   const exportCols = ['Produto', 'Preço Atual', 'Preço Promo', 'Início', 'Fim', 'Status'];
@@ -211,6 +224,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
                   <th className="pb-4 font-bold px-4">Observação</th>
+                  <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +233,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                     const style = STATUS_STYLE[p.status];
                     return (
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome_produto ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">
                           R$ {Number(p.preco_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -237,6 +251,11 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[140px] truncate">{p.observacao ?? '—'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleDelete(p.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </div>
+                        </td>
                       </motion.tr>
                     );
                   })}
