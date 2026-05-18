@@ -63,8 +63,9 @@ export const PDVView = ({ showToast, profile }: any) => {
   }, [produtos]);
 
   const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
+  const searchLower = search.toLowerCase();
   const filtered = produtosAtivos.filter((p: any) =>
-    [p.nome, p.codigo].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+    [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower))
   );
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
@@ -106,6 +107,27 @@ export const PDVView = ({ showToast, profile }: any) => {
       })
       .filter(Boolean)
     );
+  };
+
+  // Leitor de código de barras: o scanner "tipa" o código e envia Enter.
+  // Tenta match exato por EAN/código (sempre o caso do scanner); se não houver
+  // mas o termo digitado resultar em UM único produto na lista filtrada,
+  // adiciona-o também (atalho de teclado para busca rápida por nome).
+  const handleSearchEnter = () => {
+    const termo = search.trim();
+    if (!termo) return;
+    const termoLower = termo.toLowerCase();
+    let match = produtosAtivos.find((p: any) =>
+      String(p.ean ?? '').trim() === termo ||
+      String(p.codigo ?? '').trim().toLowerCase() === termoLower
+    );
+    if (!match && filtered.length === 1) match = filtered[0];
+    if (!match) {
+      showToast?.('Produto não encontrado.', 'error', true);
+      return;
+    }
+    addToCart(match);
+    setSearch('');
   };
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
@@ -352,10 +374,11 @@ export const PDVView = ({ showToast, profile }: any) => {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Buscar produto por nome ou código..."
+              placeholder="Buscar por nome, código ou bipar o código de barras..."
               className="neu-input py-3 pl-10 pr-4 rounded-2xl text-sm w-full"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); } }}
             />
           </div>
 
