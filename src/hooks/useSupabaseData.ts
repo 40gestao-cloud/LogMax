@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, ENDPOINT_TABLE_MAP, TABLES_WITH_ATIVO, isSupabaseConfigured } from '../lib/supabase';
+import { sanitizeUuidFks } from '../lib/viewUtils';
 
 export const PAGE_SIZE = 50;
 
@@ -116,11 +117,12 @@ export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): 
   const table = ENDPOINT_TABLE_MAP[endpoint];
   if (!table) throw new Error(`[dbInsert] Tabela não mapeada para "${endpoint}"`);
 
-  console.debug(`[dbInsert] → ${table}`, payload);
+  const cleaned = sanitizeUuidFks(payload as any);
+  console.debug(`[dbInsert] → ${table}`, cleaned);
 
   const { data, error } = await supabase
     .from(table)
-    .insert(payload as any)
+    .insert(cleaned as any)
     .select()
     .single();
 
@@ -138,9 +140,11 @@ export async function dbUpdate<T = any>(endpoint: string, id: string, payload: P
   const table = ENDPOINT_TABLE_MAP[endpoint];
   if (!table) throw new Error(`[dbUpdate] Tabela não mapeada para "${endpoint}"`);
 
+  const cleaned = sanitizeUuidFks(payload as any);
+
   const { data, error } = await supabase
     .from(table)
-    .update(payload as any)
+    .update(cleaned as any)
     .eq('id', id)
     .select()
     .single();

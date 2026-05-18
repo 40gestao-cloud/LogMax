@@ -77,6 +77,23 @@ export const parseBRL = (v: string | number | null | undefined): number => {
   return Number(digits) / 100;
 };
 
+// Converte string vazia em chaves UUID-like (`_id`) para `null`. Postgres
+// rejeita '' como UUID; o front frequentemente envia '' quando o select
+// está em "Nenhum/Selecione...". Em vez de tratar caso a caso em cada view,
+// rodamos no dbInsert/dbUpdate. Tabelas com FK NOT NULL passam a falhar com
+// mensagem mais clara ("null value in column ... violates not-null") em vez
+// do críptico "invalid input syntax for type uuid: ''".
+export function sanitizeUuidFks<T extends Record<string, any>>(payload: T): T {
+  if (!payload || typeof payload !== 'object') return payload;
+  const out: any = { ...payload };
+  for (const key of Object.keys(out)) {
+    if (key.endsWith('_id') && out[key] === '') {
+      out[key] = null;
+    }
+  }
+  return out as T;
+}
+
 export async function exportToPDF(title: string, columns: string[], rows: any[][], filename: string) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
