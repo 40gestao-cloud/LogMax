@@ -21,9 +21,13 @@ CREATE TABLE IF NOT EXISTS controle_caixa (
   created_at       timestamptz DEFAULT now()
 );
 
--- Garante apenas um caixa por dia
-CREATE UNIQUE INDEX IF NOT EXISTS uq_controle_caixa_data
-  ON controle_caixa (data);
+-- Garante apenas um caixa ativo por dia.
+-- Partial index: linhas soft-deletadas (ativo=false) NÃO bloqueiam
+-- a abertura de uma nova sessão no mesmo dia. Veja migração
+-- 20260518_caixa_unique_ativo.sql.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_controle_caixa_data_ativo
+  ON controle_caixa (data)
+  WHERE ativo = true;
 
 ALTER TABLE controle_caixa ENABLE ROW LEVEL SECURITY;
 
