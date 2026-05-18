@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, FilialBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 
@@ -477,6 +477,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                         {inCart.qtd}
                       </span>
                     )}
+                    {p.filial && <FilialBadge filial={p.filial} />}
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{p.codigo || '—'}</span>
                     <span className="text-sm font-bold text-gray-200 leading-tight">{p.nome}</span>
                     <div className="flex items-end justify-between mt-auto pt-1">
