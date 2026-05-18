@@ -11,7 +11,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, Palette, Check
+  Sun, Moon, Megaphone, Palette, Check, ArrowLeft
 } from 'lucide-react';
 
 // --- lazy views ---
@@ -110,7 +110,7 @@ const menuModules = [
   },
 ];
 
-const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
   <>
     <div className="flex items-center gap-3 px-1 mb-2">
       <div className="w-9 h-9 neu-circle flex items-center justify-center text-accent">
@@ -126,16 +126,16 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
 
     <nav className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
       <div className="flex flex-col gap-2">
-        <button onClick={() => { setActiveView('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
           <Home size={18} /><span>Início</span>
         </button>
         {profile?.setor === 'all' && (
-          <button onClick={() => { setActiveView('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
         {(profile?.role === 'admin' || profile?.role === 'gerente') && (
-          <button onClick={() => { setActiveView('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
@@ -168,7 +168,7 @@ const SidebarNav = ({ activeView, setActiveView, openModules, toggleModule, hand
                           const viewId = `${mod.id}-${sub.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
                           const isActive = activeView === viewId;
                           return (
-                            <button key={sub} onClick={() => { setActiveView(viewId); onClose?.(); }}
+                            <button key={sub} onClick={() => { navigate(viewId); onClose?.(); }}
                               className={`flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
                               style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                               <span>{sub}</span>
@@ -345,6 +345,32 @@ function LogMaxAppInner() {
   useEffect(() => {
     try { sessionStorage.setItem('logmax:activeView', activeView); } catch {}
   }, [activeView]);
+  // Pilha de histórico para o botão "voltar". Persistida em sessionStorage
+  // junto com activeView para sobreviver a F5 / pull-to-refresh.
+  const [viewHistory, setViewHistory] = useState<string[]>(() => {
+    try {
+      const raw = sessionStorage.getItem('logmax:viewHistory');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem('logmax:viewHistory', JSON.stringify(viewHistory)); } catch {}
+  }, [viewHistory]);
+  const navigate = useCallback((view: string) => {
+    setActiveView(prev => {
+      if (prev === view) return prev;
+      setViewHistory(h => [...h, prev]);
+      return view;
+    });
+  }, []);
+  const goBack = useCallback(() => {
+    setViewHistory(h => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setActiveView(prev);
+      return h.slice(0, -1);
+    });
+  }, []);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -399,14 +425,17 @@ function LogMaxAppInner() {
 
   const handleSignOut = async () => {
     showToast("Saindo...", 'info', true);
-    try { sessionStorage.removeItem('logmax:activeView'); } catch {}
+    try {
+      sessionStorage.removeItem('logmax:activeView');
+      sessionStorage.removeItem('logmax:viewHistory');
+    } catch {}
     await signOut();
   };
 
   const renderContent = () => {
     const st = showToast;
     switch (activeView) {
-      case 'inicio':                          return <InicioView onNavigate={setActiveView} showToast={st} profile={profile} />;
+      case 'inicio':                          return <InicioView onNavigate={navigate} showToast={st} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'empresa-colaboradores':           return <ColaboradoresView showToast={st} />;
@@ -522,7 +551,7 @@ function LogMaxAppInner() {
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               className="fixed top-0 left-0 w-64 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat lg:hidden">
               <SidebarNav
-                activeView={activeView} setActiveView={setActiveView}
+                activeView={activeView} navigate={navigate}
                 openModules={openModules} toggleModule={toggleModule}
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
                 visibleModules={visibleModules} profile={profile} badges={badges}
@@ -535,7 +564,7 @@ function LogMaxAppInner() {
       {/* SIDEBAR */}
       <aside className="hidden lg:flex w-64 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat relative">
         <SidebarNav
-          activeView={activeView} setActiveView={setActiveView}
+          activeView={activeView} navigate={navigate}
           openModules={openModules} toggleModule={toggleModule}
           handleSignOut={handleSignOut}
           visibleModules={visibleModules} profile={profile} badges={badges}
@@ -550,6 +579,16 @@ function LogMaxAppInner() {
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
               <Menu size={18} />
             </button>
+            {viewHistory.length > 0 && (
+              <button
+                onClick={goBack}
+                title="Voltar para a tela anterior"
+                aria-label="Voltar"
+                className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors shrink-0"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            )}
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
                 <span className="hidden sm:inline">Plataforma </span>LogMax
