@@ -117,7 +117,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 width: '100%',
                 transition: 'border-color 0.2s',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.35)'; }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent) 35%, transparent)'; }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = error && !email.trim()
                   ? 'rgba(239,68,68,0.4)'
@@ -156,7 +156,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   width: '100%',
                   transition: 'border-color 0.2s',
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.35)'; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent) 35%, transparent)'; }}
                 onBlur={(e) => {
                   e.currentTarget.style.borderColor = error && !password.trim()
                     ? 'rgba(239,68,68,0.4)'
@@ -203,25 +203,26 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             )}
           </AnimatePresence>
 
-          {/* Submit */}
+          {/* Submit — usa cor do tema (lida do localStorage pelo bootstrap em
+              index.html antes do React montar; first-load default = verde). */}
           <motion.button
             type="submit"
             disabled={isLoading}
             whileTap={!isLoading ? { scale: 0.97 } : {}}
-            className="btn-shimmer"
+            className="btn-shimmer login-submit"
             style={{
               marginTop: '0.5rem',
               width: '100%',
               padding: '0.95rem',
               borderRadius: '0.875rem',
               background: isLoading
-                ? 'rgba(16,185,129,0.5)'
-                : 'linear-gradient(135deg, #10B981, #059669)',
+                ? 'color-mix(in srgb, var(--color-accent) 50%, transparent)'
+                : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
               boxShadow: isLoading
                 ? 'none'
-                : '0 4px 20px rgba(16,185,129,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+                : '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent), inset 0 1px 0 rgba(255,255,255,0.1)',
               border: 'none',
-              color: '#0A0A0A',
+              color: 'var(--color-accent-text)',
               fontWeight: 800,
               fontSize: '0.875rem',
               letterSpacing: '0.08em',

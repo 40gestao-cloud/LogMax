@@ -488,3 +488,16 @@ table,
 .btn-shimmer:disabled::before {
   animation-play-state: paused;
 }
+
+/* LoginScreen — botão Entrar segue o tema dinâmico (--color-accent).
+   Hover intensifica a sombra; focus-visible mostra anel acessível. */
+.login-submit:not(:disabled):hover {
+  box-shadow:
+    0 6px 26px color-mix(in srgb, var(--color-accent) 38%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  filter: brightness(1.05);
+}
+.login-submit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 65%, transparent);
+  outline-offset: 2px;
+}

@@ -108,24 +108,48 @@ export const ProdutosView = ({ showToast }: any) => {
     setIsSaving(true);
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
-      const payload = {
+      const estoqueInicial = extras.estoque !== '' ? parseInt(extras.estoque, 10) : 0;
+      // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
+      // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
+      const basePayload = {
         ...form,
         preco:          parseBRL(form.preco),
         categoria:      extras.categoria,
         preco_custo:    extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
-        estoque:        extras.estoque        !== '' ? parseInt(extras.estoque, 10)        : 0,
         estoque_minimo: extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
         ean:            extras.ean,
         fornecedor:     extras.fornecedor,
         filial:         extras.filial || FILIAL_DEFAULT,
       };
       if (editItem) {
-        const updated = await dbUpdate('/api/produtosview', editItem.id, payload);
-        setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
+        const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
+        setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...basePayload }) : d));
         showToast('Produto atualizado!', 'success', true);
       } else {
-        const saved = await dbInsert('/api/produtosview', { ...payload, status: 'Ativo' });
-        setData([saved ?? { id: Date.now(), ...payload, status: 'Ativo' }, ...data]);
+        // Cria com estoque = 0 e gera movimentação Entrada (Saldo Inicial) se
+        // o operador informou abertura > 0. O trigger fn_atualiza_estoque_produto
+        // soma a quantidade ao saldo do produto recém-criado.
+        const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
+        const saved = await dbInsert<any>('/api/produtosview', insertPayload);
+        const novoId = saved?.id;
+        if (novoId && estoqueInicial > 0) {
+          try {
+            await dbInsert('/api/movimentacoesestoqueview', {
+              produto_id: novoId,
+              tipo:       'Entrada',
+              qtd:        estoqueInicial,
+              origem:     'Saldo Inicial de Implantação',
+              destino:    'Almoxarifado',
+              data:       new Date().toISOString().slice(0, 10),
+            });
+            // Reflete o saldo no estado local após o trigger.
+            saved.estoque = estoqueInicial;
+          } catch (movErr: any) {
+            console.warn('[Produtos] Falha ao registrar saldo inicial:', movErr?.message ?? movErr);
+            showToast('Produto criado, mas saldo inicial não foi registrado. Verifique movimentações.', 'error', true);
+          }
+        }
+        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: estoqueInicial }, ...data]);
         showToast('Produto criado com sucesso!', 'success', true);
       }
       closeForm();
@@ -351,10 +375,20 @@ export const ProdutosView = ({ showToast }: any) => {
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-sm">
-                  <FormField label="Estoque Atual">
-                    <input type="number" min="0" step="1" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.estoque} onChange={e => setExtras(x => ({ ...x, estoque: e.target.value }))}
-                      placeholder="0" />
+                  <FormField label={editItem ? 'Estoque Atual (read-only)' : 'Estoque Inicial (Abertura)'}>
+                    <input
+                      type="number" min="0" step="1"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      value={extras.estoque}
+                      onChange={e => setExtras(x => ({ ...x, estoque: e.target.value }))}
+                      placeholder="0"
+                      disabled={!!editItem}
+                      readOnly={!!editItem}
+                      title={editItem ? 'Saldo só altera via Recebimentos / Movimentações de Estoque.' : 'Saldo de abertura — gera movimentação de Entrada.'}
+                    />
+                    {editItem && (
+                      <p className="text-[10px] text-gray-500 mt-1">Saldo controlado por Movimentações / Recebimentos.</p>
+                    )}
                   </FormField>
                   <FormField label="Estoque Mínimo">
                     <input type="number" min="0" step="1" className="neu-input py-2 px-3 rounded-xl text-sm"
