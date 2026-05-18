@@ -16,10 +16,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (applyCors(req, res)) return;
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-    // Apenas admin ou gerente podem gerar tokens QR (decisão do utilizador na auditoria)
+    // Apenas admin, ceo ou gerente podem gerar tokens QR.
     const user = await authenticate(req, res);
     if (!user) return;
-    if (!authorize(user, res, 'admin', 'gerente')) {
+    if (!authorize(user, res, 'admin', 'ceo', 'gerente')) {
       log.warn('user.permission_denied', { user_id: user.id, user_role: user.role });
       return;
     }

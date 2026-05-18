@@ -24,7 +24,7 @@ export const QRTotemView = () => {
   const [tokenData, setTokenData] = useState<any>(null);
   const [clock, setClock] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(120);
   const [selected, setSelected] = useState<'entrada' | 'retorno' | 'saida'>('entrada');
 
@@ -34,18 +34,27 @@ export const QRTotemView = () => {
     // erro persistir mesmo quando o segundo fetch sucede).
     if (!session?.access_token) return;
     setRefreshing(true);
-    setError(false);
+    setError(null);
     try {
       const cp = type ?? selected;
       const res = await fetch(`/api/qr-token?checkpoint=${cp}`, {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        let detail = '';
+        try {
+          const body = await res.json();
+          detail = body?.error ?? '';
+        } catch {
+          try { detail = await res.text(); } catch { /* noop */ }
+        }
+        throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
       const data = await res.json();
       setTokenData(data);
       setCountdown(120);
-    } catch {
-      setError(true);
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro desconhecido');
     } finally {
       setRefreshing(false);
     }
@@ -96,10 +105,11 @@ export const QRTotemView = () => {
       <AnimatePresence mode="wait">
         {error ? (
           <motion.div key="error" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-4">
+            className="flex flex-col items-center gap-4 max-w-md text-center">
             <WifiOff size={48} className="text-red-500/50" />
             <p className="text-red-500 text-sm font-bold">Erro de conexão com o servidor</p>
-            <button onClick={fetchToken} className="neu-button px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+            <p className="text-xs text-gray-500 font-mono break-all">{error}</p>
+            <button onClick={() => fetchToken()} className="neu-button px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-2">
               <RefreshCw size={12} /> Tentar novamente
             </button>
           </motion.div>

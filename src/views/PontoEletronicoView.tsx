@@ -40,7 +40,7 @@ const QRGenerator = () => {
   const [tokenData, setTokenData] = useState<any>(null);
   const [countdown, setCountdown] = useState(120);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchToken = useCallback(async (type?: string) => {
     // Aguarda session carregar — sem isso o primeiro fetch dispara sem token,
@@ -48,17 +48,27 @@ const QRGenerator = () => {
     // erro persistir mesmo quando o segundo fetch sucede).
     if (!session?.access_token) return;
     setRefreshing(true);
-    setError(false);
+    setError(null);
     try {
       const cp = type ?? selected;
       const res = await fetch(`/api/qr-token?checkpoint=${cp}`, {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        // Preserva o motivo real (403/500/payload do servidor) para diagnóstico.
+        let detail = '';
+        try {
+          const body = await res.json();
+          detail = body?.error ?? '';
+        } catch {
+          try { detail = await res.text(); } catch { /* noop */ }
+        }
+        throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
       setTokenData(await res.json());
       setCountdown(120);
-    } catch {
-      setError(true);
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro desconhecido');
     } finally {
       setRefreshing(false);
     }
@@ -93,8 +103,9 @@ const QRGenerator = () => {
       </div>
 
       {error ? (
-        <div className="flex flex-col items-center gap-3 py-4">
-          <p className="text-sm text-red-500">Erro ao gerar QR Code.</p>
+        <div className="flex flex-col items-center gap-3 py-4 max-w-md text-center">
+          <p className="text-sm text-red-500 font-bold">Erro ao gerar QR Code</p>
+          <p className="text-xs text-gray-500 font-mono break-all">{error}</p>
           <button onClick={() => fetchToken()} className="neu-button px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-2">
             <RefreshCw size={12} /> Tentar novamente
           </button>

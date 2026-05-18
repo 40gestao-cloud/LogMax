@@ -253,7 +253,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                       >{h.status}</span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-2">
                         {h.status !== 'Aberto' && (
                           <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                         )}
