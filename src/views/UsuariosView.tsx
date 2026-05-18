@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -38,7 +38,8 @@ const setorCls = (s: string) =>
   : s === 'marketing' ? 'bg-fuchsia-900/30 text-fuchsia-400'
   : 'bg-gray-800/50 text-gray-400';
 
-const EMPTY_FORM = { nome: '', email: '', password: '', role: 'colaborador', setor: 'logistica', filial: FILIAL_DEFAULT as string };
+// Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
+const FILIAIS_GERENTE = FILIAIS_HOLDING.filter(f => f !== 'Matriz');
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
@@ -46,15 +47,27 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<any>(EMPTY_FORM);
+
+  const isAdmin = callerProfile.role === 'admin';
+  const isGerente = callerProfile.role === 'gerente';
+
+  // Form vazio depende do papel: gerente herda seu próprio setor (não pode trocar)
+  // e tem default de filial fora da Matriz.
+  const emptyForm = useMemo(() => ({
+    nome: '',
+    email: '',
+    password: '',
+    role: 'colaborador',
+    setor: isGerente ? callerProfile.setor : 'logistica',
+    filial: isGerente ? FILIAIS_GERENTE[0] : (FILIAL_DEFAULT as string),
+  }), [isGerente, callerProfile.setor]);
+
+  const [form, setForm] = useState<any>(emptyForm);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
-
-  const isAdmin = callerProfile.role === 'admin';
-  const isGerente = callerProfile.role === 'gerente';
 
   useEffect(() => {
     if (!supabase) { setIsLoading(false); return; }
@@ -139,7 +152,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         const { data } = await q;
         setUsers(data ?? []);
       }
-      setForm(EMPTY_FORM);
+      setForm(emptyForm);
       setShowForm(false);
       showToast('Usuário criado com sucesso.', 'success');
     } catch {
@@ -246,12 +259,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 </select>
               </div>
 
-              {/* Filial / Unidade */}
+              {/* Filial / Unidade — gerentes não podem atribuir Matriz */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
                 <select value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                  {(isGerente ? FILIAIS_GERENTE : FILIAIS_HOLDING).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
             </div>

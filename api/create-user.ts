@@ -74,7 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Apenas administradores podem criar administradores.' });
     }
 
-    // Gerente só pode criar colaboradores do seu próprio setor
+    // Gerente só pode criar colaboradores do seu próprio setor.
+    // Filial: pode atribuir SuperMax/MaxLook/TechMax, mas não Matriz (reservada a admin/CEO).
     if (callerProfile.role === 'gerente') {
       if (role !== 'colaborador') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_role: role, reason: 'gerente_role_mismatch' });
@@ -83,6 +84,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (setor !== callerProfile.setor) {
         log.warn('user.permission_denied', { caller_id: caller.id, caller_setor: callerProfile.setor, target_setor: setor, reason: 'gerente_setor_mismatch' });
         return res.status(403).json({ error: 'Gerentes só podem criar usuários do seu setor.' });
+      }
+      // Sem filial explícita cairia no default do schema ('Matriz'), por isso checamos ambos os casos.
+      const targetFilial = (typeof filial === 'string' ? filial.trim() : '') || 'Matriz';
+      if (targetFilial === 'Matriz') {
+        log.warn('user.permission_denied', { caller_id: caller.id, target_filial: targetFilial, reason: 'gerente_matriz_forbidden' });
+        return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
       }
     }
 
