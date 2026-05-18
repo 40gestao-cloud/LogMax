@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import {
+  validarImagemProduto,
+  uploadImagemProduto,
+  removerImagemAntiga,
+  PRODUTO_IMAGEM_ACCEPT,
+  PRODUTO_IMAGEM_MAX_LABEL,
+} from '../lib/produtoImagem';
 
 const EMPTY_EXTRAS = {
   categoria:      '',
@@ -57,6 +64,14 @@ export const ProdutosView = ({ showToast }: any) => {
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
+  // Imagem do produto — `imagemUrl` é a URL já persistida no bucket;
+  // `imagemUrlAnterior` guarda a referência original para apagarmos do
+  // Storage quando o usuário troca/remove a imagem em modo edição.
+  const [imagemUrl, setImagemUrl] = useState<string>('');
+  const [imagemUrlAnterior, setImagemUrlAnterior] = useState<string>('');
+  const [imagemUploading, setImagemUploading] = useState(false);
+  const imagemInputRef = useRef<HTMLInputElement | null>(null);
+
   // Pesquisa agora é server-side; já não há filtro client-side.
   const filtered = data;
 
@@ -91,6 +106,8 @@ export const ProdutosView = ({ showToast }: any) => {
       fornecedor:     item.fornecedor     ?? '',
       filial:         item.filial         ?? FILIAL_DEFAULT,
     });
+    setImagemUrl(item.imagem_url ?? '');
+    setImagemUrlAnterior(item.imagem_url ?? '');
     setErrors({});
     setShowForm(false);
   };
@@ -100,7 +117,39 @@ export const ProdutosView = ({ showToast }: any) => {
     setEditItem(null);
     setForm({ codigo: '', nome: '', preco: '' });
     setExtras({ ...EMPTY_EXTRAS });
+    setImagemUrl('');
+    setImagemUrlAnterior('');
     setErrors({});
+    if (imagemInputRef.current) imagemInputRef.current.value = '';
+  };
+
+  // Upload de imagem: validação rigorosa (formato + 120 KB) ANTES do POST.
+  // Se aceito, faz upload para o bucket e guarda a URL pública no estado.
+  const handleImagemChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validacao = validarImagemProduto(file);
+    if (!validacao.ok) {
+      showToast(validacao.motivo, 'error', true);
+      e.target.value = '';
+      return;
+    }
+    setImagemUploading(true);
+    try {
+      const url = await uploadImagemProduto(file, editItem?.id);
+      setImagemUrl(url);
+      showToast('Imagem carregada!', 'success', true);
+    } catch (err: any) {
+      console.error('[Produtos] erro upload imagem:', err);
+      showToast(err?.message ?? 'Falha ao enviar imagem.', 'error', true);
+    } finally {
+      setImagemUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoverImagem = () => {
+    setImagemUrl('');
   };
 
   const handleSave = async () => {
@@ -120,10 +169,16 @@ export const ProdutosView = ({ showToast }: any) => {
         ean:            extras.ean,
         fornecedor:     extras.fornecedor,
         filial:         extras.filial || FILIAL_DEFAULT,
+        imagem_url:     imagemUrl || null,
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...basePayload }) : d));
+        // Best-effort cleanup: se a imagem foi trocada ou removida, apaga a
+        // antiga do bucket. Falha aqui não bloqueia o sucesso do UPDATE.
+        if (imagemUrlAnterior && imagemUrlAnterior !== imagemUrl) {
+          removerImagemAntiga(imagemUrlAnterior).catch(() => {});
+        }
         showToast('Produto atualizado!', 'success', true);
       } else {
         // Cria com estoque = 0 e gera movimentação Entrada (Saldo Inicial) se
@@ -285,6 +340,51 @@ export const ProdutosView = ({ showToast }: any) => {
                 </div>
               </div>
 
+              {/* Imagem do produto */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                  <ImagePlus size={12} /> Imagem do produto
+                </p>
+                <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
+                  <ProdutoThumb url={imagemUrl} size="lg" alt={form.nome || 'Produto'} />
+                  <div className="flex-1 flex flex-col gap-2 w-full">
+                    <input
+                      ref={imagemInputRef}
+                      type="file"
+                      accept={PRODUTO_IMAGEM_ACCEPT}
+                      onChange={handleImagemChange}
+                      className="hidden"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => imagemInputRef.current?.click()}
+                        disabled={imagemUploading}
+                        className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {imagemUploading
+                          ? <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+                          : <><ImagePlus size={12} /> {imagemUrl ? 'Trocar imagem' : 'Selecionar imagem'}</>}
+                      </button>
+                      {imagemUrl && !imagemUploading && (
+                        <button
+                          type="button"
+                          onClick={handleRemoverImagem}
+                          className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5"
+                        >
+                          <XIcon size={11} /> Remover
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-snug">
+                      Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> com no máximo{' '}
+                      <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_MAX_LABEL}</span>. Use imagens leves para o
+                      catálogo carregar rápido no PDV. Sem imagem, o produto exibe um ícone padrão.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Etiqueta EAN-13 */}
               {extras.ean.replace(/\D/g, '').length > 0 && (
                 <div>
@@ -414,6 +514,7 @@ export const ProdutosView = ({ showToast }: any) => {
             <table className="w-full text-left border-collapse md:min-w-[900px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-4 font-bold px-4 w-14">Foto</th>
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Código</th>
                   <th className="pb-4 font-bold px-4">Nome</th>
                   <th className="pb-4 font-bold px-4 hidden lg:table-cell">Categoria</th>
@@ -435,6 +536,9 @@ export const ProdutosView = ({ showToast }: any) => {
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <td className="py-4 px-4">
+                          <ProdutoThumb url={item.imagem_url} size="xs" alt={item.nome} />
+                        </td>
                         <td className="py-4 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{item.codigo}</td>
                         <td className="py-4 px-4">
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>

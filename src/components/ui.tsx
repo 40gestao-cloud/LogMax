@@ -209,6 +209,53 @@ export const FilialBadge = ({ filial }: { filial?: string | null }) => {
   return <span className={`filial-badge filial-badge--${variant}`}>{f}</span>;
 };
 
+// Miniatura/imagem de produto com fallback amigável quando não há imagem.
+// Aceita tamanhos pré-definidos (`xs` 40px → tabela, `sm` 56px → mobile,
+// `md` 72px → cards PDV, `lg` 96px → preview no formulário). Mantém aspecto
+// quadrado e canto arredondado consistentes com o resto da UI neumorfa.
+export const ProdutoThumb = ({
+  url,
+  alt,
+  size = 'sm',
+  rounded = 'rounded-xl',
+}: {
+  url?: string | null;
+  alt?: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  rounded?: string;
+}) => {
+  const dim: Record<string, string> = {
+    xs: 'w-10 h-10',
+    sm: 'w-14 h-14',
+    md: 'w-20 h-20',
+    lg: 'w-24 h-24',
+  };
+  const iconSize: Record<string, number> = { xs: 16, sm: 20, md: 26, lg: 32 };
+  const base = `${dim[size]} ${rounded} shrink-0 overflow-hidden flex items-center justify-center neu-pressed border border-white/5`;
+  if (url) {
+    return (
+      <div className={base}>
+        <img
+          src={url}
+          alt={alt ?? 'Imagem do produto'}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            // Se a URL quebrar, esconde a <img> e o fallback de fundo aparece.
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className={`${base} text-gray-600`}>
+      <Package size={iconSize[size]} strokeWidth={1.5} />
+    </div>
+  );
+};
+
 export const PlaceholderView = ({ title, desc }: { title: string; desc?: string }) => (
   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
     <div>

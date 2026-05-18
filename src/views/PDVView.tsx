@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
-import { LoadingSpinner, FilialBadge } from '../components/ui';
+import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 
@@ -468,18 +468,23 @@ export const PDVView = ({ showToast, profile }: any) => {
                     onClick={() => !semEstoque && addToCart(p)}
                     whileTap={!semEstoque ? { scale: 0.97 } : {}}
                     disabled={semEstoque}
-                    className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left transition-all border border-transparent relative"
+                    className="neu-button rounded-2xl p-3 flex flex-col gap-2 text-left transition-all border border-transparent relative"
                     style={inCart ? { borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 4%, transparent)' } : semEstoque ? { opacity: 0.4 } : {}}
                   >
                     {inCart && (
-                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
                         {inCart.qtd}
                       </span>
                     )}
-                    {p.filial && <FilialBadge filial={p.filial} />}
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{p.codigo || '—'}</span>
-                    <span className="text-sm font-bold text-gray-200 leading-tight">{p.nome}</span>
+                    <div className="flex gap-3 items-start">
+                      <ProdutoThumb url={p.imagem_url} size="md" alt={p.nome} />
+                      <div className="flex-1 min-w-0 flex flex-col gap-1">
+                        {p.filial && <FilialBadge filial={p.filial} />}
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">{p.codigo || '—'}</span>
+                        <span className="text-sm font-bold text-gray-200 leading-tight line-clamp-2">{p.nome}</span>
+                      </div>
+                    </div>
                     <div className="flex items-end justify-between mt-auto pt-1">
                       <span className="text-base font-black text-accent">
                         {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
