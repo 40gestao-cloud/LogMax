@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, Calendar, ChevronDown, Trash2 } from 'lucide-react';
+import { LockOpen, Lock, Clock, DollarSign, User, Calendar, ChevronDown, Trash2, RotateCcw } from 'lucide-react';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
@@ -30,6 +30,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   const [observacao, setObservacao]       = useState('');
   const [saving, setSaving]               = useState(false);
   const [confirmFechar, setConfirmFechar] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
 
   const handleAbrir = async () => {
     const valor = parseFloat(valorAbertura.replace(',', '.'));
@@ -49,7 +50,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
         observacao:       observacao || null,
       });
       if (error) {
-        if (error.code === '23505') showToast('Já existe uma sessão aberta para hoje.', 'error');
+        if (error.code === '23505') showToast('Já existe uma sessão registrada para hoje. Reabra ou inative a anterior no histórico.', 'error');
         else throw error;
         return;
       }
@@ -87,6 +88,28 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
       showToast('Erro ao fechar o caixa.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReabrir = async (id: string) => {
+    if (!supabase) return;
+    if (!confirm('Reabrir esta sessão? O fechamento anterior será descartado.')) return;
+    try {
+      const { error } = await supabase
+        .from('controle_caixa')
+        .update({
+          status: 'Aberto',
+          fechado_por: null,
+          fechado_por_nome: null,
+          fechado_em: null,
+        })
+        .eq('id', id);
+      if (error) throw error;
+      await refresh();
+      await reload();
+      showToast('Caixa reaberto.', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao reabrir: ${err?.message ?? 'verifique o console'}`, 'error');
     }
   };
 
@@ -254,6 +277,9 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex justify-end gap-2">
+                        {h.status === 'Fechado' && h.data === today && !caixa && (
+                          <button onClick={() => handleReabrir(h.id)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
+                        )}
                         <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                       </div>
                     </td>
