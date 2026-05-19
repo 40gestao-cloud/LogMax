@@ -129,11 +129,10 @@ export const SimuladorPagamentoView: React.FC = () => {
   const confirmarPagamento = async () => {
     if (!pendente || !supabase) return;
     setStage('paying');
-    const { error } = await supabase
-      .from('pix_pendentes')
-      .update({ status: 'pago' })
-      .eq('id', pendente.id)
-      .eq('status', 'aguardando');
+    // RPC SECURITY DEFINER faz a transição aguardando → pago sem depender de
+    // policy de UPDATE pra anon. A função valida o estado atual no servidor
+    // e retorna erro se o pendente já foi processado ou não existe.
+    const { error } = await supabase.rpc('confirmar_pix_pendente', { p_id: pendente.id });
     if (error) {
       setErrorMsg(`Falha ao confirmar: ${error.message}`);
       setStage('error');
