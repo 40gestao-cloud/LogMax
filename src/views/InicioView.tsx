@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
+import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
@@ -140,6 +141,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
+      {!isAdmin && <PontoFAB />}
       {pesquisasPendentesCount > 0 && (
         <button onClick={() => onNavigate?.('minhas-pesquisas')}
           className="neu-flat rounded-3xl p-5 sm:p-6 border border-accent/20 hover:border-accent/40 transition-colors flex items-center gap-4 text-left shrink-0">
