@@ -192,10 +192,6 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
       ];
     })();
 
-    const recentes = [...chamados]
-      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
-      .slice(0, 12);
-
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -253,52 +249,6 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
               );
             })}
           </div>
-        </section>
-
-        <section className="shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Chamados recentes</h3>
-            {chamados.length > 0 && <span className="text-[10px] text-gray-600">{chamados.length} total</span>}
-          </div>
-
-          {recentes.length === 0 ? (
-            <EmptyState message="Nenhum chamado registrado ainda" />
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {recentes.map(c => (
-                <motion.div key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                  className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>{c.status}</span>
-                      <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>{c.urgencia}</span>
-                      <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
-                    </div>
-                    <p className="text-sm font-bold text-gray-200 truncate">{c.descricao}</p>
-                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                      <span className="text-[10px] text-gray-500">Setor: <span className="text-gray-300 font-semibold">{setorLabel(c.setor_origem)}</span></span>
-                      {c.nome_criador && <span className="text-[10px] text-gray-600">• {c.nome_criador}</span>}
-                      <span className="text-[10px] text-gray-600">• {formatRelative(c.created_at)}</span>
-                    </div>
-                  </div>
-
-                  {c.status !== 'Resolvido' && (
-                    <button
-                      onClick={() => advanceStatus(c)}
-                      disabled={updatingId === c.id}
-                      className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all disabled:opacity-40 flex items-center gap-1.5 shrink-0"
-                    >
-                      {updatingId === c.id
-                        ? <Loader2 size={12} className="animate-spin" />
-                        : <>{c.status === 'Aberto' ? <ChevronRight size={12} /> : <Check size={12} />}
-                            {c.status === 'Aberto' ? 'Atender' : 'Resolver'}
-                          </>}
-                    </button>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          )}
         </section>
 
         <SetorChamadosModal
