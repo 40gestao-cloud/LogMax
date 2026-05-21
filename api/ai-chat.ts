@@ -2,9 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 
-// Modelo Gemini default — flash tem free tier robusta e é rápido o suficiente
-// pra Q&A. Trocar via env GEMINI_MODEL sem redeploy de código.
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+// Modelo Gemini default — 1.5-flash tem free tier disponível em todas as
+// regiões; 2.0-flash às vezes vem com limit:0 em projetos novos do AI
+// Studio. Trocar via env GEMINI_MODEL sem redeploy de código.
+const DEFAULT_MODEL = 'gemini-1.5-flash';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'model'; content: string };
 
