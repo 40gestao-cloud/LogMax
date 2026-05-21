@@ -15,6 +15,7 @@ const SETOR_LABEL: Record<string, string> = {
   financeiro: 'Financeiro',
   rh:         'RH',
   marketing:  'Marketing',
+  ti:         'TI',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -36,6 +37,7 @@ const setorCls = (s: string) =>
   : s === 'financeiro' ? 'bg-cyan-900/30 text-cyan-400'
   : s === 'rh'       ? 'bg-rose-900/30 text-rose-400'
   : s === 'marketing' ? 'bg-fuchsia-900/30 text-fuchsia-400'
+  : s === 'ti'        ? 'bg-sky-900/30 text-sky-400'
   : 'bg-gray-800/50 text-gray-400';
 
 // Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
@@ -165,7 +167,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const setorOptions = isAdmin
-    ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing']
+    ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti']
     : [callerProfile.setor];
 
   const roleOptions = isAdmin

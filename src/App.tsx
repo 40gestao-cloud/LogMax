@@ -81,6 +81,7 @@ const SETOR_MODULES: Record<string, string[]> = {
   financeiro: ['empresa', 'financeiro', 'ti'],
   rh:         ['empresa', 'rh', 'ti'],
   marketing:  ['empresa', 'marketing', 'ti'],
+  ti:         ['empresa', 'ti'],
 };
 
 // --- menu ---

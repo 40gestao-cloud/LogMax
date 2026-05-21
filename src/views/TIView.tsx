@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Monitor, X, Plus, Building2, ShoppingCart, Package, DollarSign,
   Users, Megaphone, ShoppingBag, Cpu, HardDrive, Loader2, Check, ChevronRight,
+  LifeBuoy,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -71,12 +72,15 @@ const formatRelative = (iso: string) => {
   return d.toLocaleDateString('pt-BR');
 };
 
+const setorLabel = (id: string) => SETOR_GRID.find(s => s.id === id)?.label ?? id;
+
 type TIViewProps = {
   showToast: (msg: string, type?: string) => void;
   profile: UserProfile;
 };
 
 export const TIView = ({ showToast, profile }: TIViewProps) => {
+  // RLS já restringe: TI/admin vê tudo, demais setores só veem os próprios.
   const { data: chamados, setData, isLoading } =
     useFetchData<TIChamado>('/api/tichamadosview', undefined, true);
 
@@ -85,30 +89,12 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
   const [saving, setSaving]       = useState(false);
   const [updatingId, setUpdating] = useState<string | null>(null);
 
-  const isStaff = profile.role === 'admin' || profile.role === 'ceo';
+  // O responsável TI é quem tem setor='ti'. Admin/CEO também vê o dashboard.
+  const isTIStaff = profile.setor === 'ti' || profile.role === 'admin' || profile.role === 'ceo';
 
-  const kpis = useMemo(() => {
-    const abertos       = chamados.filter(c => c.status === 'Aberto').length;
-    const emAndamento   = chamados.filter(c => c.status === 'Em andamento').length;
-    const resolvidosMes = chamados.filter(c => c.status === 'Resolvido' && c.resolvido_em && isThisMonth(c.resolvido_em)).length;
-    return [
-      { label: 'Abertos',        value: abertos,       color: 'text-blue-400'   },
-      { label: 'Em andamento',   value: emAndamento,   color: 'text-yellow-400' },
-      { label: 'Resolvidos/mês', value: resolvidosMes, color: 'text-accent'     },
-    ];
-  }, [chamados]);
-
-  const recentes = useMemo(
-    () => [...chamados]
-      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
-      .slice(0, 8),
-    [chamados],
-  );
-
-  const setorLabel = (id: string) => SETOR_GRID.find(s => s.id === id)?.label ?? id;
-
-  const openForm = (setorId: string) => {
-    setForm({ ...EMPTY_FORM, setor_origem: setorId });
+  const openForm = (setorId?: string) => {
+    const setor = setorId ?? (isTIStaff ? '' : profile.setor);
+    setForm({ ...EMPTY_FORM, setor_origem: setor });
     setShowForm(true);
   };
 
@@ -127,10 +113,10 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
       });
       if (created) setData(prev => [created, ...prev]);
 
-      // Notifica o TI (setor 'all' — admin/CEO) sobre o novo chamado.
+      // Notifica o setor 'ti' — só o(s) usuário(s) responsáveis recebem.
       if (supabase) {
         await supabase.rpc('notificar_setor', {
-          p_setor:     'all',
+          p_setor:     'ti',
           p_tipo:      'ti_chamado',
           p_titulo:    `Novo chamado: ${setorLabel(form.setor_origem)}`,
           p_mensagem:  `${form.tipo_problema} — ${form.descricao.slice(0, 80)}`,
@@ -150,7 +136,7 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
   };
 
   const advanceStatus = async (c: TIChamado) => {
-    if (!isStaff) return;
+    if (!isTIStaff) return;
     const next: TIChamado['status'] | null =
       c.status === 'Aberto' ? 'Em andamento'
       : c.status === 'Em andamento' ? 'Resolvido'
@@ -165,10 +151,12 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
       const updated = await dbUpdate<TIChamado>('/api/tichamadosview', c.id, patch);
       setData(prev => prev.map(x => x.id === c.id ? { ...x, ...updated } : x));
 
-      // Devolve aviso ao setor de origem
+      // Avisa o setor que abriu (setores fictícios — ia/equipamentos — caem em 'all').
+      const setorDestino =
+        c.setor_origem === 'ia' || c.setor_origem === 'equipamentos' ? 'all' : c.setor_origem;
       if (supabase) {
         await supabase.rpc('notificar_setor', {
-          p_setor:     c.setor_origem === 'ia' || c.setor_origem === 'equipamentos' ? 'all' : c.setor_origem,
+          p_setor:     setorDestino,
           p_tipo:      next === 'Resolvido' ? 'ti_resolvido' : 'info',
           p_titulo:    next === 'Resolvido' ? 'Chamado resolvido' : 'Chamado em andamento',
           p_mensagem:  c.descricao.slice(0, 120),
@@ -186,138 +174,265 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
+  // ──────────────────────────────────────────────
+  // MODO 1: RESPONSÁVEL TI (setor='ti') + admin/CEO
+  // ──────────────────────────────────────────────
+  if (isTIStaff) {
+    const kpis = (() => {
+      const abertos       = chamados.filter(c => c.status === 'Aberto').length;
+      const emAndamento   = chamados.filter(c => c.status === 'Em andamento').length;
+      const resolvidosMes = chamados.filter(c => c.status === 'Resolvido' && c.resolvido_em && isThisMonth(c.resolvido_em)).length;
+      return [
+        { label: 'Abertos',        value: abertos,       color: 'text-blue-400'   },
+        { label: 'Em andamento',   value: emAndamento,   color: 'text-yellow-400' },
+        { label: 'Resolvidos/mês', value: resolvidosMes, color: 'text-accent'     },
+      ];
+    })();
+
+    const recentes = [...chamados]
+      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+      .slice(0, 12);
+
+    return (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+
+        <div className="shrink-0 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
+            <Monitor size={20} />
+          </div>
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">TI & Suporte</h2>
+            <p className="text-sm text-gray-400 mt-0.5">Painel da equipe de TI — chamados de todos os setores.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
+          {kpis.map(k => (
+            <div key={k.label} className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
+              <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
+              <p className={`text-2xl sm:text-3xl font-black ${k.color}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <section className="shrink-0">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Registrar chamado por setor</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {SETOR_GRID.map(s => {
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => openForm(s.id)}
+                  className="neu-flat hover:neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col items-center gap-2 transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center" style={{ color: s.color }}>
+                    <Icon size={22} />
+                  </div>
+                  <span className="text-xs font-bold text-gray-300 group-hover:text-gray-100">{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Chamados recentes</h3>
+            {chamados.length > 0 && <span className="text-[10px] text-gray-600">{chamados.length} total</span>}
+          </div>
+
+          {recentes.length === 0 ? (
+            <EmptyState message="Nenhum chamado registrado ainda" />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {recentes.map(c => (
+                <motion.div key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>{c.status}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>{c.urgencia}</span>
+                      <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
+                    </div>
+                    <p className="text-sm font-bold text-gray-200 truncate">{c.descricao}</p>
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-gray-500">Setor: <span className="text-gray-300 font-semibold">{setorLabel(c.setor_origem)}</span></span>
+                      {c.nome_criador && <span className="text-[10px] text-gray-600">• {c.nome_criador}</span>}
+                      <span className="text-[10px] text-gray-600">• {formatRelative(c.created_at)}</span>
+                    </div>
+                  </div>
+
+                  {c.status !== 'Resolvido' && (
+                    <button
+                      onClick={() => advanceStatus(c)}
+                      disabled={updatingId === c.id}
+                      className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+                    >
+                      {updatingId === c.id
+                        ? <Loader2 size={12} className="animate-spin" />
+                        : <>{c.status === 'Aberto' ? <ChevronRight size={12} /> : <Check size={12} />}
+                            {c.status === 'Aberto' ? 'Atender' : 'Resolver'}
+                          </>}
+                    </button>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <FormModal
+          show={showForm}
+          onClose={() => !saving && setShowForm(false)}
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          onSave={handleSave}
+          allowSetorChange={true}
+        />
+      </motion.div>
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // MODO 2: SOLICITANTE (qualquer outro setor)
+  // ──────────────────────────────────────────────
+  const meusChamados = [...chamados].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+  const meusAbertos      = meusChamados.filter(c => c.status === 'Aberto').length;
+  const meusEmAndamento  = meusChamados.filter(c => c.status === 'Em andamento').length;
+  const meusResolvidos   = meusChamados.filter(c => c.status === 'Resolvido').length;
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
 
       <div className="shrink-0 flex items-center gap-3">
         <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
-          <Monitor size={20} />
+          <LifeBuoy size={20} />
         </div>
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">TI & Suporte</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Abra chamados para a equipe técnica.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Suporte de TI</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Abra um chamado para a equipe de TI resolver o seu problema.</p>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* CTA principal */}
+      <div className="neu-flat rounded-3xl p-6 sm:p-8 border border-white/5 shrink-0 flex flex-col sm:flex-row items-center gap-6">
+        <div className="flex-1">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-100 mb-1">Precisa de ajuda?</h3>
+          <p className="text-sm text-gray-400">
+            Descreva o problema (hardware, software, rede, IA ou outro) e o time de TI será notificado imediatamente.
+          </p>
+        </div>
+        <NeuButtonAccent variant="" onClick={() => openForm()}>
+          <Plus size={14} />Abrir novo chamado
+        </NeuButtonAccent>
+      </div>
+
+      {/* KPIs pessoais */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
-        {kpis.map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl sm:text-3xl font-black ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
+        <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Abertos</p>
+          <p className="text-2xl sm:text-3xl font-black text-blue-400">{meusAbertos}</p>
+        </div>
+        <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Em andamento</p>
+          <p className="text-2xl sm:text-3xl font-black text-yellow-400">{meusEmAndamento}</p>
+        </div>
+        <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Resolvidos</p>
+          <p className="text-2xl sm:text-3xl font-black text-accent">{meusResolvidos}</p>
+        </div>
       </div>
 
-      {/* Grade de setores — abrir chamado */}
+      {/* Lista de chamados do próprio usuário */}
       <section className="shrink-0">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Abrir chamado para o TI</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {SETOR_GRID.map(s => {
-            const Icon = s.icon;
-            return (
-              <button
-                key={s.id}
-                onClick={() => openForm(s.id)}
-                className="neu-flat hover:neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col items-center gap-2 transition-all group"
-              >
-                <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center" style={{ color: s.color }}>
-                  <Icon size={22} />
-                </div>
-                <span className="text-xs font-bold text-gray-300 group-hover:text-gray-100">{s.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Meus chamados</h3>
 
-      {/* Lista de chamados recentes */}
-      <section className="shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Chamados recentes</h3>
-          {chamados.length > 0 && (
-            <span className="text-[10px] text-gray-600">{chamados.length} total</span>
-          )}
-        </div>
-
-        {recentes.length === 0 ? (
-          <EmptyState message="Nenhum chamado registrado ainda" />
+        {meusChamados.length === 0 ? (
+          <EmptyState message="Você ainda não abriu nenhum chamado" />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {recentes.map(c => (
-              <motion.div
-                key={c.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>
-                      {c.status}
-                    </span>
-                    <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>
-                      {c.urgencia}
-                    </span>
-                    <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
-                  </div>
-                  <p className="text-sm font-bold text-gray-200 truncate">{c.descricao}</p>
-                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                    <span className="text-[10px] text-gray-500">Setor: <span className="text-gray-300 font-semibold">{setorLabel(c.setor_origem)}</span></span>
-                    {c.nome_criador && <span className="text-[10px] text-gray-600">• {c.nome_criador}</span>}
-                    <span className="text-[10px] text-gray-600">• {formatRelative(c.created_at)}</span>
-                  </div>
+            {meusChamados.map(c => (
+              <motion.div key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                className="neu-flat rounded-2xl p-4 border border-white/5">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>{c.status}</span>
+                  <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>{c.urgencia}</span>
+                  <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
                 </div>
-
-                {isStaff && c.status !== 'Resolvido' && (
-                  <button
-                    onClick={() => advanceStatus(c)}
-                    disabled={updatingId === c.id}
-                    className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all disabled:opacity-40 flex items-center gap-1.5 shrink-0"
-                  >
-                    {updatingId === c.id
-                      ? <Loader2 size={12} className="animate-spin" />
-                      : <>{c.status === 'Aberto' ? <ChevronRight size={12} /> : <Check size={12} />}
-                          {c.status === 'Aberto' ? 'Atender' : 'Resolver'}
-                        </>}
-                  </button>
-                )}
+                <p className="text-sm font-bold text-gray-200">{c.descricao}</p>
+                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                  <span className="text-[10px] text-gray-600">{formatRelative(c.created_at)}</span>
+                  {c.status === 'Resolvido' && c.resolvido_em && (
+                    <span className="text-[10px] text-accent">• Resolvido em {new Date(c.resolvido_em).toLocaleDateString('pt-BR')}</span>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>
         )}
       </section>
 
-      {/* Modal */}
-      <AnimatePresence>
-        {showForm && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => !saving && setShowForm(false)}
-              className="fixed inset-0 bg-black/60 z-40"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 top-12 sm:top-20 sm:left-1/2 sm:-translate-x-1/2 sm:inset-x-auto sm:w-full sm:max-w-lg z-50 neu-flat rounded-3xl p-6 border border-white/10"
-              style={{ background: 'var(--color-bg-base)' }}
-            >
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-base font-bold text-gray-100">Abrir chamado de TI</h3>
-                <button
-                  onClick={() => !saving && setShowForm(false)}
-                  className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+      <FormModal
+        show={showForm}
+        onClose={() => !saving && setShowForm(false)}
+        form={form}
+        setForm={setForm}
+        saving={saving}
+        onSave={handleSave}
+        allowSetorChange={false}
+      />
+    </motion.div>
+  );
+};
 
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+// ──────────────────────────────────────────────
+// Modal compartilhado entre os dois modos
+// ──────────────────────────────────────────────
+type FormModalProps = {
+  show: boolean;
+  onClose: () => void;
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  saving: boolean;
+  onSave: () => void;
+  allowSetorChange: boolean;
+};
+
+function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorChange }: FormModalProps) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 z-40"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed inset-x-4 top-12 sm:top-20 sm:left-1/2 sm:-translate-x-1/2 sm:inset-x-auto sm:w-full sm:max-w-lg z-50 neu-flat rounded-3xl p-6 border border-white/10"
+            style={{ background: 'var(--color-bg-base)' }}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-gray-100">Abrir chamado de TI</h3>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+                {allowSetorChange ? (
                   <select
                     value={form.setor_origem}
                     onChange={e => setForm(f => ({ ...f, setor_origem: e.target.value }))}
@@ -326,67 +441,71 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
                     <option value="">Selecione...</option>
                     {SETOR_GRID.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo de problema</label>
-                  <select
-                    value={form.tipo_problema}
-                    onChange={e => setForm(f => ({ ...f, tipo_problema: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                  >
-                    {TIPO_PROBLEMA.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
-                  <textarea
-                    value={form.descricao}
-                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                    rows={4}
-                    placeholder="Descreva o que está acontecendo..."
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Urgência</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {URGENCIAS.map(u => (
-                      <button
-                        key={u}
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, urgencia: u }))}
-                        className={`py-2 rounded-xl text-xs font-bold transition-all ${
-                          form.urgencia === u
-                            ? 'neu-pressed text-accent border border-accent/30'
-                            : 'neu-button text-gray-400 hover:text-gray-200'
-                        }`}
-                      >
-                        {u}
-                      </button>
-                    ))}
+                ) : (
+                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300 border border-white/5">
+                    {setorLabel(form.setor_origem)}
                   </div>
-                </div>
+                )}
               </div>
 
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  onClick={() => setShowForm(false)}
-                  disabled={saving}
-                  className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors"
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo de problema</label>
+                <select
+                  value={form.tipo_problema}
+                  onChange={e => setForm(f => ({ ...f, tipo_problema: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
                 >
-                  Cancelar
-                </button>
-                <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                  {saving ? <><Loader2 size={14} className="animate-spin" />Abrindo...</> : <><Plus size={14} />Abrir chamado</>}
-                </NeuButtonAccent>
+                  {TIPO_PROBLEMA.map(o => <option key={o}>{o}</option>)}
+                </select>
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </motion.div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
+                <textarea
+                  value={form.descricao}
+                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  rows={4}
+                  placeholder="Descreva o que está acontecendo..."
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Urgência</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {URGENCIAS.map(u => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, urgencia: u }))}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                        form.urgencia === u
+                          ? 'neu-pressed text-accent border border-accent/30'
+                          : 'neu-button text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={onClose}
+                disabled={saving}
+                className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <NeuButtonAccent variant="" onClick={onSave} disabled={saving}>
+                {saving ? <><Loader2 size={14} className="animate-spin" />Abrindo...</> : <><Plus size={14} />Abrir chamado</>}
+              </NeuButtonAccent>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
-};
+}

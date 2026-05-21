@@ -7,7 +7,7 @@ export interface UserProfile {
   nome: string;
   email: string;
   role: 'admin' | 'ceo' | 'gerente' | 'colaborador';
-  setor: 'all' | 'logistica' | 'vendas' | 'financeiro' | 'rh' | 'marketing';
+  setor: 'all' | 'logistica' | 'vendas' | 'financeiro' | 'rh' | 'marketing' | 'ti';
   filial?: string | null;
   criado_por: string | null;
   created_at: string;
