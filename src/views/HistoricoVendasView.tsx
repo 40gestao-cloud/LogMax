@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet, Trash2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
@@ -6,6 +6,7 @@ import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../componen
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
+import { useAIContext } from '../contexts/AIAssistantContext';
 
 export const HistoricoVendasView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
@@ -70,6 +71,36 @@ export const HistoricoVendasView = ({ showToast }: any) => {
   const totalFiltrado = filtered
     .filter((v: any) => v.status !== 'Cancelada')
     .reduce((s: number, v: any) => s + Number(v.total_final ?? 0), 0);
+
+  // ──────────────────────────────────────────────
+  // Injeção de contexto pro MaxAI — versão slim das vendas filtradas
+  // ──────────────────────────────────────────────
+  // O hook `useAIContext` registra esses dados enquanto a view está aberta.
+  // Quando o usuário pergunta no MaxAI, o snapshot é enviado junto (invisível
+  // na UI). useMemo evita reset a cada render.
+  const aiSnapshot = useMemo(() => ({
+    label: `Vendas — filtro: ${filtro}`,
+    data: {
+      filtro_periodo: filtro,
+      total_vendas:   filtered.length,
+      valor_total:    Number(totalFiltrado.toFixed(2)),
+      ticket_medio:   filtered.length ? Number((totalFiltrado / filtered.length).toFixed(2)) : 0,
+      vendas: filtered.slice(0, 30).map((v: any) => ({
+        data:           v.created_at?.slice(0, 10),
+        hora:           v.created_at?.slice(11, 16),
+        total:          Number(v.total_final ?? 0),
+        forma_pagamento: v.forma_pagamento,
+        status:         v.status,
+        cliente:        v.cliente?.nome ?? null,
+        itens: (v.itens ?? []).map((i: any) => ({
+          produto: i.descricao,
+          qtd:     i.qtd,
+          preco:   i.preco_unitario ?? i.preco,
+        })),
+      })),
+    },
+  }), [filtro, filtered.length, totalFiltrado]); // eslint-disable-line react-hooks/exhaustive-deps
+  useAIContext(aiSnapshot);
 
   const handleCancelar = async (venda: any) => {
     // Guard: impede duplo cancelamento (clique duplo, realtime defasado).

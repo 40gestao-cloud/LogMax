@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
+import { AIAssistantProvider } from './contexts/AIAssistantContext';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -553,10 +554,16 @@ function LogMaxAppInner() {
   const userEmail = user?.email ?? 'Administrador';
   const displayName = userEmail.split('@')[0];
 
+  // MaxAI disponível apenas para admin/CEO (visão global) e setor Financeiro.
+  // Endpoint /api/ai-chat também valida server-side (defense-in-depth).
+  const canUseMaxAI =
+    profile.role === 'admin' || profile.role === 'ceo' || profile.setor === 'financeiro';
+
   return (
+    <AIAssistantProvider>
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <ApprovalBadges onBadges={handleBadges} />
-      <AIAssistantFAB />
+      {canUseMaxAI && <AIAssistantFAB />}
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
       {/* MOBILE SIDEBAR OVERLAY */}
@@ -648,6 +655,7 @@ function LogMaxAppInner() {
         </div>
       </main>
     </div>
+    </AIAssistantProvider>
   );
 }
 

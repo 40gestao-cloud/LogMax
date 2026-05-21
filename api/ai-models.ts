@@ -19,6 +19,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authenticate(req, res);
     if (!user) return;
 
+    const canUseMaxAI =
+      user.role === 'admin' || user.role === 'ceo' || user.setor === 'financeiro';
+    if (!canUseMaxAI) {
+      return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY ausente.' });
 

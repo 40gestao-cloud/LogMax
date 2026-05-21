@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
+import { useAIContext } from '../contexts/AIAssistantContext';
 
 export const SaldosEstoqueView = () => {
   const { data, isLoading } = useFetchData<any>('/api/saldosestoqueview');
@@ -11,6 +12,28 @@ export const SaldosEstoqueView = () => {
   const filtered = data.filter((p: any) =>
     [p.nome, p.codigo, p.categoria].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
+
+  // Injeção de contexto pro MaxAI — saldos consolidados + produtos críticos.
+  const aiSnapshot = useMemo(() => {
+    const itens = filtered.map((p: any) => ({
+      codigo:    p.codigo,
+      produto:   p.nome,
+      categoria: p.categoria,
+      saldo:     Number(p.estoque ?? p.qtd ?? 0),
+      unidade:   p.unidade,
+      preco:     p.preco,
+    }));
+    return {
+      label: 'Saldos de Estoque',
+      data: {
+        total_produtos:   itens.length,
+        sem_estoque:      itens.filter(i => i.saldo === 0).length,
+        valor_inventario: Number(itens.reduce((s, i) => s + i.saldo * (Number(i.preco) || 0), 0).toFixed(2)),
+        produtos: itens.slice(0, 60), // cap pra caber no orçamento do MaxAI
+      },
+    };
+  }, [filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useAIContext(aiSnapshot);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">

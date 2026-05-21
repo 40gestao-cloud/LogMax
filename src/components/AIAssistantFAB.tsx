@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye } from 'lucide-react';
 import { useGeminiChat } from '../hooks/useGeminiChat';
+import { useCurrentAIContext } from '../contexts/AIAssistantContext';
 
 const SUGESTOES = [
   'Como calcular o ponto de equilíbrio?',
@@ -13,7 +14,15 @@ const SUGESTOES = [
 export const AIAssistantFAB = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
-  const { messages, isLoading, error, send, reset } = useGeminiChat();
+  // Lê o contexto registrado pela view atual. Como `useCurrentAIContext`
+  // retorna o estado live, embrulhamos num getter pra capturar o valor
+  // exatamente no momento do envio (não no momento do hook).
+  const currentContext = useCurrentAIContext();
+  const ctxRef = useRef(currentContext);
+  useEffect(() => { ctxRef.current = currentContext; }, [currentContext]);
+  const { messages, isLoading, error, send, reset } = useGeminiChat({
+    getContextSnapshot: () => ctxRef.current,
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -94,7 +103,7 @@ export const AIAssistantFAB = () => {
                   <Sparkles size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-100">Assistente LogMax</p>
+                  <p className="text-sm font-bold text-gray-100">MaxAI</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest">Powered by Gemini</p>
                 </div>
                 {messages.length > 0 && (
@@ -174,6 +183,18 @@ export const AIAssistantFAB = () => {
                   </div>
                 )}
               </div>
+
+              {/* Chip de contexto da tela atual */}
+              {currentContext && (
+                <div className="shrink-0 px-4 pt-2 -mb-1">
+                  <div
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/20"
+                    title="MaxAI tem acesso aos dados desta tela"
+                  >
+                    <Eye size={10} /> Vendo: {currentContext.label}
+                  </div>
+                </div>
+              )}
 
               {/* Input */}
               <div className="shrink-0 border-t border-white/5 p-3 flex items-end gap-2">

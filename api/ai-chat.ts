@@ -45,6 +45,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authenticate(req, res);
     if (!user) return;
 
+    // Acesso ao MaxAI restrito a admin/CEO (visão global) e Financeiro.
+    // UI gateia também, mas validar server-side previne uso direto do endpoint.
+    const canUseMaxAI =
+      user.role === 'admin' || user.role === 'ceo' || user.setor === 'financeiro';
+    if (!canUseMaxAI) {
+      log.warn('access.denied', { user_id: user.id, role: user.role, setor: user.setor });
+      return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });
+    }
+
     // .trim() defensivo: copiar do AI Studio às vezes traz espaço/quebra-linha
     // que invalida silenciosamente a chave do lado do Google.
     const apiKey = process.env.GEMINI_API_KEY?.trim();
