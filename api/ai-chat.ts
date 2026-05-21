@@ -43,12 +43,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authenticate(req, res);
     if (!user) return;
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // .trim() defensivo: copiar do AI Studio às vezes traz espaço/quebra-linha
+    // que invalida silenciosamente a chave do lado do Google.
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       log.error('config.missing_key', new Error('GEMINI_API_KEY ausente'));
-      return res.status(500).json({ error: 'IA não configurada no servidor.' });
+      return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY nas env vars do Vercel.' });
     }
-    const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
 
     const { messages } = (req.body ?? {}) as { messages?: ChatMessage[] };
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -72,12 +74,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parts: [{ text: m.content }],
     }));
 
+    // Header em vez de query string: evita logar a chave em access logs
+    // e é o método recomendado pelo Google.
     const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
     const upstream = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: buildSystemPrompt(user.setor, user.role) }] },
         contents,
@@ -98,14 +105,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await upstream.json() as any;
 
     if (!upstream.ok) {
+      // Inclui o erro cru do Google no log pra diagnóstico (a key não é logada)
       log.warn('gemini.failed', {
         user_id: user.id,
         status: upstream.status,
         error_kind: data?.error?.status,
+        error_message: data?.error?.message,
+        key_len: apiKey.length,
+        key_prefix: apiKey.slice(0, 4),
+        model,
       });
+      const isAuthErr = upstream.status === 400 || upstream.status === 401 || upstream.status === 403;
       const friendly =
         upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
-        : upstream.status === 401 || upstream.status === 403 ? 'Chave da IA inválida ou sem permissão.'
+        : isAuthErr ? 'Chave da IA inválida ou sem permissão. Verifique a env var GEMINI_API_KEY no Vercel e refaça o deploy.'
         : data?.error?.message ?? 'Erro na IA.';
       return res.status(upstream.status === 429 ? 429 : 502).json({ error: friendly });
     }
