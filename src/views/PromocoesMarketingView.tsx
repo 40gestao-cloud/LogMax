@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2 } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -41,6 +41,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [obsAberta, setObsAberta] = useState<any | null>(null);
 
   // Sincronização best-effort ao montar: reverte promoções expiradas e
   // recarrega a lista. O cron diário (vercel.json) é a defesa primária.
@@ -250,7 +251,21 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                             {style?.icon}{p.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[140px] truncate">{p.observacao ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[180px]">
+                          {p.observacao ? (
+                            <button
+                              type="button"
+                              onClick={() => setObsAberta(p)}
+                              title="Ver observação completa"
+                              className="inline-flex items-center gap-1.5 text-left text-gray-300 hover:text-accent transition-colors max-w-full"
+                            >
+                              <MessageSquare size={12} className="shrink-0 opacity-70" />
+                              <span className="truncate">{p.observacao}</span>
+                            </button>
+                          ) : (
+                            <span>—</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => handleDelete(p.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
@@ -265,6 +280,44 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
           </div>
         )}
       </div>
+
+      {/* Modal — observação completa (ex: motivo da reprovação pelo Financeiro) */}
+      <AnimatePresence>
+        {obsAberta && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setObsAberta(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={16} className="text-accent" />
+                  <h3 className="text-sm font-bold text-gray-200">Observação do Financeiro</h3>
+                </div>
+                <button onClick={() => setObsAberta(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                <span className="font-bold text-gray-300">{obsAberta.nome_produto ?? 'Promoção'}</span>
+                {' · '}
+                <span className={STATUS_STYLE[obsAberta.status]?.badge ? `${STATUS_STYLE[obsAberta.status].badge} px-2 py-0.5 rounded-full border text-[10px] font-bold` : ''}>
+                  {obsAberta.status}
+                </span>
+              </p>
+              <div className="neu-pressed rounded-xl p-4 text-sm text-gray-200 whitespace-pre-wrap break-words">
+                {obsAberta.observacao}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

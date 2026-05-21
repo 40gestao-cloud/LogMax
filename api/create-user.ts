@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', caller.id)
       .single();
 
-    if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'gerente')) {
+    if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo' && callerProfile.role !== 'gerente')) {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile?.role });
       return res.status(403).json({ error: 'Sem permissão para criar usuários.' });
     }

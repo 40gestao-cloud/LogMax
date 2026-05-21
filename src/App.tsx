@@ -147,7 +147,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
-        {(profile?.role === 'admin' || profile?.role === 'gerente') && (
+        {(profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>
