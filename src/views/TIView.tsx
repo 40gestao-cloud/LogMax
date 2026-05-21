@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Monitor, X, Plus, Building2, ShoppingCart, Package, DollarSign,
   Users, Megaphone, ShoppingBag, Cpu, HardDrive, Loader2, Check, ChevronRight,
-  LifeBuoy,
+  LifeBuoy, Truck,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -26,6 +26,7 @@ const SETOR_GRID: { id: string; label: string; icon: any; color: string }[] = [
   { id: 'empresa',      label: 'Empresa',         icon: Building2,    color: '#10B981' },
   { id: 'compras',      label: 'Compras',         icon: ShoppingCart, color: '#3B82F6' },
   { id: 'estoque',      label: 'Estoque',         icon: Package,      color: '#A855F7' },
+  { id: 'logistica',    label: 'Logística',       icon: Truck,        color: '#22C55E' },
   { id: 'financeiro',   label: 'Financeiro',      icon: DollarSign,   color: '#10B981' },
   { id: 'rh',           label: 'RH',              icon: Users,        color: '#FACC15' },
   { id: 'vendas',       label: 'Vendas',          icon: ShoppingBag,  color: '#EC4899' },
@@ -88,6 +89,8 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
   const [form, setForm]           = useState<typeof EMPTY_FORM>(EMPTY_FORM);
   const [saving, setSaving]       = useState(false);
   const [updatingId, setUpdating] = useState<string | null>(null);
+  // Drill-down: setor cujos chamados estão sendo exibidos no painel.
+  const [setorAberto, setSetorAberto] = useState<string | null>(null);
 
   // O responsável TI é quem tem setor='ti'. Admin/CEO também vê o dashboard.
   const isTIStaff = profile.setor === 'ti' || profile.role === 'admin' || profile.role === 'ceo';
@@ -217,20 +220,35 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
         </div>
 
         <section className="shrink-0">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Registrar chamado por setor</h3>
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Chamados por setor</h3>
+          <p className="text-[11px] text-gray-600 mb-3 -mt-2">Clique em um setor para ver os chamados que ele abriu.</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {SETOR_GRID.map(s => {
               const Icon = s.icon;
+              const doSetor      = chamados.filter(c => c.setor_origem === s.id);
+              const naoResolvidos = doSetor.filter(c => c.status !== 'Resolvido').length;
+              const total         = doSetor.length;
               return (
                 <button
                   key={s.id}
-                  onClick={() => openForm(s.id)}
-                  className="neu-flat hover:neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col items-center gap-2 transition-all group"
+                  onClick={() => setSetorAberto(s.id)}
+                  disabled={total === 0}
+                  className={`neu-flat rounded-2xl p-4 border border-white/5 flex flex-col items-center gap-2 transition-all group relative ${
+                    total === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:neu-pressed'
+                  }`}
                 >
-                  <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center" style={{ color: s.color }}>
+                  <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center relative" style={{ color: s.color }}>
                     <Icon size={22} />
+                    {naoResolvidos > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[var(--color-bg-base)]">
+                        {naoResolvidos > 9 ? '9+' : naoResolvidos}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs font-bold text-gray-300 group-hover:text-gray-100">{s.label}</span>
+                  <span className="text-[10px] text-gray-600">
+                    {total === 0 ? 'sem chamados' : `${total} chamado${total > 1 ? 's' : ''}`}
+                  </span>
                 </button>
               );
             })}
@@ -282,6 +300,14 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
             </div>
           )}
         </section>
+
+        <SetorChamadosModal
+          setorId={setorAberto}
+          chamados={chamados.filter(c => c.setor_origem === setorAberto)}
+          updatingId={updatingId}
+          onClose={() => setSetorAberto(null)}
+          onAdvance={advanceStatus}
+        />
 
         <FormModal
           show={showForm}
@@ -502,6 +528,118 @@ function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorCha
               <NeuButtonAccent variant="" onClick={onSave} disabled={saving}>
                 {saving ? <><Loader2 size={14} className="animate-spin" />Abrindo...</> : <><Plus size={14} />Abrir chamado</>}
               </NeuButtonAccent>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Modal drill-down: chamados de um setor específico
+// ──────────────────────────────────────────────
+type SetorChamadosModalProps = {
+  setorId: string | null;
+  chamados: TIChamado[];
+  updatingId: string | null;
+  onClose: () => void;
+  onAdvance: (c: TIChamado) => void;
+};
+
+function SetorChamadosModal({ setorId, chamados, updatingId, onClose, onAdvance }: SetorChamadosModalProps) {
+  const setor = setorId ? SETOR_GRID.find(s => s.id === setorId) : null;
+
+  // Esc fecha o modal (padrão do AccentPicker no App.tsx).
+  React.useEffect(() => {
+    if (!setorId) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [setorId, onClose]);
+
+  // Aberto → Em andamento → Resolvido (mais novos primeiro dentro de cada status)
+  const ordered = [...chamados].sort((a, b) => {
+    const order = { 'Aberto': 0, 'Em andamento': 1, 'Resolvido': 2 } as const;
+    const so = order[a.status] - order[b.status];
+    if (so !== 0) return so;
+    return +new Date(b.created_at) - +new Date(a.created_at);
+  });
+
+  return (
+    <AnimatePresence>
+      {setorId && setor && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 z-40"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed inset-x-4 top-8 sm:top-16 sm:left-1/2 sm:-translate-x-1/2 sm:inset-x-auto sm:w-full sm:max-w-2xl z-50 neu-flat rounded-3xl p-6 border border-white/10 max-h-[85vh] flex flex-col"
+            style={{ background: 'var(--color-bg-base)' }}
+          >
+            <div className="flex items-center justify-between mb-5 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center shrink-0" style={{ color: setor.color }}>
+                  <setor.icon size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-100 truncate">Chamados de {setor.label}</h3>
+                  <p className="text-[11px] text-gray-500">{ordered.length} chamado{ordered.length === 1 ? '' : 's'}</p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-2 px-2">
+              {ordered.length === 0 ? (
+                <EmptyState message={`Nenhum chamado de ${setor.label} ainda`} />
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {ordered.map(c => (
+                    <div key={c.id} className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>{c.status}</span>
+                          <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>{c.urgencia}</span>
+                          <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
+                        </div>
+                        <p className="text-sm font-bold text-gray-200 break-words">{c.descricao}</p>
+                        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                          {c.nome_criador && <span className="text-[10px] text-gray-500">Por: <span className="text-gray-300">{c.nome_criador}</span></span>}
+                          <span className="text-[10px] text-gray-600">• {formatRelative(c.created_at)}</span>
+                          {c.status === 'Resolvido' && c.resolvido_em && (
+                            <span className="text-[10px] text-accent">• Resolvido em {new Date(c.resolvido_em).toLocaleDateString('pt-BR')}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {c.status !== 'Resolvido' && (
+                        <button
+                          onClick={() => onAdvance(c)}
+                          disabled={updatingId === c.id}
+                          className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+                        >
+                          {updatingId === c.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <>{c.status === 'Aberto' ? <ChevronRight size={12} /> : <Check size={12} />}
+                                {c.status === 'Aberto' ? 'Atender' : 'Resolver'}
+                              </>}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
         </>
