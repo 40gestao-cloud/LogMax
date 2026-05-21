@@ -1,0 +1,392 @@
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Monitor, X, Plus, Building2, ShoppingCart, Package, DollarSign,
+  Users, Megaphone, ShoppingBag, Cpu, HardDrive, Loader2, Check, ChevronRight,
+} from 'lucide-react';
+import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
+import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import type { UserProfile } from '../hooks/useUserProfile';
+
+type TIChamado = {
+  id: string;
+  setor_origem: string;
+  tipo_problema: string;
+  descricao: string;
+  urgencia: 'Baixa' | 'Média' | 'Alta';
+  status: 'Aberto' | 'Em andamento' | 'Resolvido';
+  nome_criador?: string | null;
+  created_at: string;
+  resolvido_em?: string | null;
+};
+
+const SETOR_GRID: { id: string; label: string; icon: any; color: string }[] = [
+  { id: 'empresa',      label: 'Empresa',         icon: Building2,    color: '#10B981' },
+  { id: 'compras',      label: 'Compras',         icon: ShoppingCart, color: '#3B82F6' },
+  { id: 'estoque',      label: 'Estoque',         icon: Package,      color: '#A855F7' },
+  { id: 'financeiro',   label: 'Financeiro',      icon: DollarSign,   color: '#10B981' },
+  { id: 'rh',           label: 'RH',              icon: Users,        color: '#FACC15' },
+  { id: 'vendas',       label: 'Vendas',          icon: ShoppingBag,  color: '#EC4899' },
+  { id: 'marketing',    label: 'Marketing',       icon: Megaphone,    color: '#F97316' },
+  { id: 'ia',           label: 'Suporte com IA',  icon: Cpu,          color: '#A855F7' },
+  { id: 'equipamentos', label: 'Equipamentos',    icon: HardDrive,    color: '#3B82F6' },
+];
+
+const TIPO_PROBLEMA = ['Hardware', 'Software', 'Rede', 'Inteligência Artificial', 'Outro'];
+const URGENCIAS    = ['Baixa', 'Média', 'Alta'] as const;
+
+const STATUS_STYLE: Record<string, string> = {
+  'Aberto':       'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  'Em andamento': 'bg-yellow-400/15 text-yellow-400 border border-yellow-400/30',
+  'Resolvido':    'bg-accent/15 text-accent border border-accent/30',
+};
+
+const URGENCIA_STYLE: Record<string, string> = {
+  'Baixa': 'text-gray-400',
+  'Média': 'text-yellow-400',
+  'Alta':  'text-red-500',
+};
+
+const EMPTY_FORM = {
+  setor_origem: '',
+  tipo_problema: 'Hardware',
+  descricao: '',
+  urgencia: 'Média' as 'Baixa' | 'Média' | 'Alta',
+};
+
+const isThisMonth = (iso: string) => {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+};
+
+const formatRelative = (iso: string) => {
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60)     return 'agora';
+  if (diff < 3600)   return `${Math.floor(diff / 60)} min atrás`;
+  if (diff < 86400)  return `${Math.floor(diff / 3600)}h atrás`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d atrás`;
+  return d.toLocaleDateString('pt-BR');
+};
+
+type TIViewProps = {
+  showToast: (msg: string, type?: string) => void;
+  profile: UserProfile;
+};
+
+export const TIView = ({ showToast, profile }: TIViewProps) => {
+  const { data: chamados, setData, isLoading } =
+    useFetchData<TIChamado>('/api/tichamadosview', undefined, true);
+
+  const [showForm, setShowForm]   = useState(false);
+  const [form, setForm]           = useState<typeof EMPTY_FORM>(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [updatingId, setUpdating] = useState<string | null>(null);
+
+  const isStaff = profile.role === 'admin' || profile.role === 'ceo';
+
+  const kpis = useMemo(() => {
+    const abertos       = chamados.filter(c => c.status === 'Aberto').length;
+    const emAndamento   = chamados.filter(c => c.status === 'Em andamento').length;
+    const resolvidosMes = chamados.filter(c => c.status === 'Resolvido' && c.resolvido_em && isThisMonth(c.resolvido_em)).length;
+    return [
+      { label: 'Abertos',        value: abertos,       color: 'text-blue-400'   },
+      { label: 'Em andamento',   value: emAndamento,   color: 'text-yellow-400' },
+      { label: 'Resolvidos/mês', value: resolvidosMes, color: 'text-accent'     },
+    ];
+  }, [chamados]);
+
+  const recentes = useMemo(
+    () => [...chamados]
+      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+      .slice(0, 8),
+    [chamados],
+  );
+
+  const setorLabel = (id: string) => SETOR_GRID.find(s => s.id === id)?.label ?? id;
+
+  const openForm = (setorId: string) => {
+    setForm({ ...EMPTY_FORM, setor_origem: setorId });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.setor_origem)         { showToast('Selecione o setor.', 'error'); return; }
+    if (!form.descricao.trim())     { showToast('Descreva o problema.', 'error'); return; }
+
+    setSaving(true);
+    try {
+      const created = await dbInsert<TIChamado>('/api/tichamadosview', {
+        ...form,
+        descricao: form.descricao.trim(),
+        status: 'Aberto',
+        nome_criador: profile.nome,
+        criado_por: profile.id,
+      });
+      if (created) setData(prev => [created, ...prev]);
+
+      // Notifica o TI (setor 'all' — admin/CEO) sobre o novo chamado.
+      if (supabase) {
+        await supabase.rpc('notificar_setor', {
+          p_setor:     'all',
+          p_tipo:      'ti_chamado',
+          p_titulo:    `Novo chamado: ${setorLabel(form.setor_origem)}`,
+          p_mensagem:  `${form.tipo_problema} — ${form.descricao.slice(0, 80)}`,
+          p_link_view: 'ti-chamados',
+          p_urgencia:  form.urgencia,
+          p_ref_id:    created?.id ?? null,
+        });
+      }
+
+      showToast('Chamado aberto. TI foi notificado.', 'success');
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+    } catch (err: any) {
+      showToast(`Erro ao abrir chamado: ${err?.message ?? 'tente novamente'}`, 'error');
+    }
+    setSaving(false);
+  };
+
+  const advanceStatus = async (c: TIChamado) => {
+    if (!isStaff) return;
+    const next: TIChamado['status'] | null =
+      c.status === 'Aberto' ? 'Em andamento'
+      : c.status === 'Em andamento' ? 'Resolvido'
+      : null;
+    if (!next) return;
+
+    setUpdating(c.id);
+    try {
+      const patch: Partial<TIChamado> = { status: next };
+      if (next === 'Resolvido') patch.resolvido_em = new Date().toISOString();
+
+      const updated = await dbUpdate<TIChamado>('/api/tichamadosview', c.id, patch);
+      setData(prev => prev.map(x => x.id === c.id ? { ...x, ...updated } : x));
+
+      // Devolve aviso ao setor de origem
+      if (supabase) {
+        await supabase.rpc('notificar_setor', {
+          p_setor:     c.setor_origem === 'ia' || c.setor_origem === 'equipamentos' ? 'all' : c.setor_origem,
+          p_tipo:      next === 'Resolvido' ? 'ti_resolvido' : 'info',
+          p_titulo:    next === 'Resolvido' ? 'Chamado resolvido' : 'Chamado em andamento',
+          p_mensagem:  c.descricao.slice(0, 120),
+          p_link_view: 'ti-chamados',
+          p_urgencia:  'Baixa',
+          p_ref_id:    c.id,
+        });
+      }
+      showToast(`Status atualizado: ${next}`, 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? 'tente novamente'}`, 'error');
+    }
+    setUpdating(null);
+  };
+
+  if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+
+      <div className="shrink-0 flex items-center gap-3">
+        <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
+          <Monitor size={20} />
+        </div>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">TI & Suporte</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Abra chamados para a equipe técnica.</p>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
+        {kpis.map(k => (
+          <div key={k.label} className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
+            <p className={`text-2xl sm:text-3xl font-black ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Grade de setores — abrir chamado */}
+      <section className="shrink-0">
+        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Abrir chamado para o TI</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {SETOR_GRID.map(s => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.id}
+                onClick={() => openForm(s.id)}
+                className="neu-flat hover:neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col items-center gap-2 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center" style={{ color: s.color }}>
+                  <Icon size={22} />
+                </div>
+                <span className="text-xs font-bold text-gray-300 group-hover:text-gray-100">{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Lista de chamados recentes */}
+      <section className="shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Chamados recentes</h3>
+          {chamados.length > 0 && (
+            <span className="text-[10px] text-gray-600">{chamados.length} total</span>
+          )}
+        </div>
+
+        {recentes.length === 0 ? (
+          <EmptyState message="Nenhum chamado registrado ainda" />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {recentes.map(c => (
+              <motion.div
+                key={c.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[c.status] ?? ''}`}>
+                      {c.status}
+                    </span>
+                    <span className={`text-[10px] font-black uppercase tracking-wide ${URGENCIA_STYLE[c.urgencia] ?? ''}`}>
+                      {c.urgencia}
+                    </span>
+                    <span className="text-[10px] text-gray-600">• {c.tipo_problema}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-200 truncate">{c.descricao}</p>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span className="text-[10px] text-gray-500">Setor: <span className="text-gray-300 font-semibold">{setorLabel(c.setor_origem)}</span></span>
+                    {c.nome_criador && <span className="text-[10px] text-gray-600">• {c.nome_criador}</span>}
+                    <span className="text-[10px] text-gray-600">• {formatRelative(c.created_at)}</span>
+                  </div>
+                </div>
+
+                {isStaff && c.status !== 'Resolvido' && (
+                  <button
+                    onClick={() => advanceStatus(c)}
+                    disabled={updatingId === c.id}
+                    className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+                  >
+                    {updatingId === c.id
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <>{c.status === 'Aberto' ? <ChevronRight size={12} /> : <Check size={12} />}
+                          {c.status === 'Aberto' ? 'Atender' : 'Resolver'}
+                        </>}
+                  </button>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => !saving && setShowForm(false)}
+              className="fixed inset-0 bg-black/60 z-40"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-x-4 top-12 sm:top-20 sm:left-1/2 sm:-translate-x-1/2 sm:inset-x-auto sm:w-full sm:max-w-lg z-50 neu-flat rounded-3xl p-6 border border-white/10"
+              style={{ background: 'var(--color-bg-base)' }}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-bold text-gray-100">Abrir chamado de TI</h3>
+                <button
+                  onClick={() => !saving && setShowForm(false)}
+                  className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+                  <select
+                    value={form.setor_origem}
+                    onChange={e => setForm(f => ({ ...f, setor_origem: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                  >
+                    <option value="">Selecione...</option>
+                    {SETOR_GRID.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo de problema</label>
+                  <select
+                    value={form.tipo_problema}
+                    onChange={e => setForm(f => ({ ...f, tipo_problema: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                  >
+                    {TIPO_PROBLEMA.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
+                  <textarea
+                    value={form.descricao}
+                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                    rows={4}
+                    placeholder="Descreva o que está acontecendo..."
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Urgência</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {URGENCIAS.map(u => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, urgencia: u }))}
+                        className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                          form.urgencia === u
+                            ? 'neu-pressed text-accent border border-accent/30'
+                            : 'neu-button text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  onClick={() => setShowForm(false)}
+                  disabled={saving}
+                  className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+                  {saving ? <><Loader2 size={14} className="animate-spin" />Abrindo...</> : <><Plus size={14} />Abrir chamado</>}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};

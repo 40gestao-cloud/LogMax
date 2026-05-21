@@ -11,8 +11,9 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, Palette, Check, ArrowLeft
+  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor
 } from 'lucide-react';
+import { NotificationBell } from './components/NotificationBell';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -67,18 +68,19 @@ const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPe
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
+const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 
 // --- acesso por setor ---
 // 'empresa' é cadastro base (filiais, colaboradores, clientes, produtos...) e
 // fica disponível para todos os setores. Os demais módulos seguem o recorte
 // funcional de cada setor.
 const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing'],
-  logistica:  ['empresa', 'estoque', 'compras'],
-  vendas:     ['empresa', 'vendas'],
-  financeiro: ['empresa', 'financeiro'],
-  rh:         ['empresa', 'rh'],
-  marketing:  ['empresa', 'marketing'],
+  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
+  logistica:  ['empresa', 'estoque', 'compras', 'ti'],
+  vendas:     ['empresa', 'vendas', 'ti'],
+  financeiro: ['empresa', 'financeiro', 'ti'],
+  rh:         ['empresa', 'rh', 'ti'],
+  marketing:  ['empresa', 'marketing', 'ti'],
 };
 
 // --- menu ---
@@ -110,6 +112,11 @@ const menuModules = [
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
     submenus: ['Promoções', 'Tarefas'],
+  },
+  {
+    id: 'ti', label: 'TI & Suporte', icon: Monitor,
+    submenus: ['Chamados'],
+    isNew: true,
   },
 ];
 
@@ -158,6 +165,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                       className={isOpen && !mod.color ? 'text-accent' : ''}
                       style={isOpen && mod.color ? { color: mod.color } : {}} />
                     <span>{mod.label}</span>
+                    {mod.isNew && (
+                      <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30">
+                        Novo
+                      </span>
+                    )}
                   </div>
                   <ChevronDown size={14}
                     className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : 'text-gray-500'} ${isOpen && !mod.color ? 'text-accent' : ''}`}
@@ -520,6 +532,7 @@ function LogMaxAppInner() {
       case 'vendas-tarefas':               return <TarefasView showToast={st} profile={profile} modulo="vendas" />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
+      case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
@@ -601,6 +614,7 @@ function LogMaxAppInner() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <NotificationBell setor={profile.setor} onNavigate={navigate} />
             <ThemeToggle />
             <AccentPicker />
 
