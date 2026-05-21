@@ -14,6 +14,7 @@ import {
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
+import { AIAssistantFAB } from './components/AIAssistantFAB';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -555,6 +556,7 @@ function LogMaxAppInner() {
   return (
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <ApprovalBadges onBadges={handleBadges} />
+      <AIAssistantFAB />
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
       {/* MOBILE SIDEBAR OVERLAY */}
