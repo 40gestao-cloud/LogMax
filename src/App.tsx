@@ -590,7 +590,7 @@ function LogMaxAppInner() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 h-full overflow-y-auto flex flex-col bg-base p-4 sm:p-8 main-scrollbar">
-        <header className="shrink-0 flex justify-between items-center sticky top-0 z-10 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
+        <header className="shrink-0 flex justify-between items-center sticky top-0 z-30 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">

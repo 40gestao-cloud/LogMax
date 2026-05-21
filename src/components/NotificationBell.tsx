@@ -120,7 +120,7 @@ export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-[min(92vw,360px)] neu-flat rounded-2xl border border-white/10 z-50 shadow-2xl overflow-hidden"
+            className="absolute right-0 mt-2 w-[min(92vw,360px)] neu-flat rounded-2xl border border-white/10 z-[100] shadow-2xl overflow-hidden"
             style={{ background: 'var(--color-bg-base)' }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
