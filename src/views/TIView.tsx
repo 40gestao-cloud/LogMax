@@ -22,17 +22,24 @@ type TIChamado = {
   resolvido_em?: string | null;
 };
 
+// Paleta bicolor alternada (azul claro / laranja) — escolha do usuário pra
+// dar identidade visual consistente aos cards de setor. Os 8 setores reais
+// ficam exatamente 4 azuis + 4 laranjas. Categorias internas de TI ('ia',
+// 'equipamentos') continuam o mesmo padrão pra não destoarem.
+const SETOR_AZUL    = '#7DD3FC'; // sky-300
+const SETOR_LARANJA = '#F97316'; // orange-500
+
 const SETOR_GRID: { id: string; label: string; icon: any; color: string }[] = [
-  { id: 'empresa',      label: 'Empresa',         icon: Building2,    color: '#10B981' },
-  { id: 'compras',      label: 'Compras',         icon: ShoppingCart, color: '#3B82F6' },
-  { id: 'estoque',      label: 'Estoque',         icon: Package,      color: '#A855F7' },
-  { id: 'logistica',    label: 'Logística',       icon: Truck,        color: '#22C55E' },
-  { id: 'financeiro',   label: 'Financeiro',      icon: DollarSign,   color: '#10B981' },
-  { id: 'rh',           label: 'RH',              icon: Users,        color: '#FACC15' },
-  { id: 'vendas',       label: 'Vendas',          icon: ShoppingBag,  color: '#EC4899' },
-  { id: 'marketing',    label: 'Marketing',       icon: Megaphone,    color: '#F97316' },
-  { id: 'ia',           label: 'Suporte com IA',  icon: Cpu,          color: '#A855F7' },
-  { id: 'equipamentos', label: 'Equipamentos',    icon: HardDrive,    color: '#3B82F6' },
+  { id: 'empresa',      label: 'Empresa',         icon: Building2,    color: SETOR_AZUL    },
+  { id: 'compras',      label: 'Compras',         icon: ShoppingCart, color: SETOR_LARANJA },
+  { id: 'estoque',      label: 'Estoque',         icon: Package,      color: SETOR_AZUL    },
+  { id: 'logistica',    label: 'Logística',       icon: Truck,        color: SETOR_LARANJA },
+  { id: 'financeiro',   label: 'Financeiro',      icon: DollarSign,   color: SETOR_AZUL    },
+  { id: 'rh',           label: 'RH',              icon: Users,        color: SETOR_LARANJA },
+  { id: 'vendas',       label: 'Vendas',          icon: ShoppingBag,  color: SETOR_AZUL    },
+  { id: 'marketing',    label: 'Marketing',       icon: Megaphone,    color: SETOR_LARANJA },
+  { id: 'ia',           label: 'Suporte com IA',  icon: Cpu,          color: SETOR_AZUL    },
+  { id: 'equipamentos', label: 'Equipamentos',    icon: HardDrive,    color: SETOR_LARANJA },
 ];
 
 const TIPO_PROBLEMA = ['Hardware', 'Software', 'Rede', 'Inteligência Artificial', 'Outro'];
