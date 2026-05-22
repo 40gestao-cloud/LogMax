@@ -5,6 +5,8 @@ import {
   Megaphone, ClipboardList, Monitor,
 } from 'lucide-react';
 import { useNotificacoes, type Notificacao } from '../hooks/useNotificacoes';
+import { useTheme } from '../contexts/ThemeContext';
+import { getSetor, corDoSetor } from '../lib/setores';
 
 type Props = {
   setor: string | undefined | null;
@@ -61,6 +63,7 @@ const formatRelative = (iso: string) => {
 
 export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
   const { data, unreadCount, markRead, markAllRead } = useNotificacoes(setor);
+  const { accentColor } = useTheme();
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -150,8 +153,21 @@ export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
               ) : (
                 <ul className="flex flex-col">
                   {visible.map(n => {
-                    const Icon = TIPO_ICON[n.tipo] ?? Bell;
-                    const color = TIPO_COLOR[n.tipo] ?? 'text-gray-400';
+                    // ti_chamado segue o setor de origem: ícone + cor do setor
+                    // (com a bicolor azul/laranja sob o tema Acessibilidade).
+                    // Pra um chamado de Vendas, o sino mostra o ícone de
+                    // Vendas em vez do Monitor genérico — fica visualmente
+                    // alinhado com os cards da tela /ti-chamados.
+                    const setorOrigem = n.tipo === 'ti_chamado' && n.origem_setor
+                      ? getSetor(n.origem_setor)
+                      : null;
+                    const Icon = setorOrigem?.icon ?? TIPO_ICON[n.tipo] ?? Bell;
+                    const colorClass = setorOrigem
+                      ? ''
+                      : (TIPO_COLOR[n.tipo] ?? 'text-gray-400');
+                    const colorStyle = setorOrigem
+                      ? { color: corDoSetor(setorOrigem.id, accentColor) }
+                      : undefined;
                     return (
                       <li key={n.id}>
                         <button
@@ -160,12 +176,18 @@ export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
                             !n.lido ? 'bg-accent/[0.04]' : ''
                           }`}
                         >
-                          <div className={`w-8 h-8 rounded-xl neu-pressed flex items-center justify-center shrink-0 ${color}`}>
+                          <div
+                            className={`w-8 h-8 rounded-xl neu-pressed flex items-center justify-center shrink-0 ${colorClass}`}
+                            style={colorStyle}
+                          >
                             <Icon size={14} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className={`text-[9px] font-bold uppercase tracking-widest ${color}`}>
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-widest ${colorClass}`}
+                                style={colorStyle}
+                              >
                                 {TIPO_LABEL[n.tipo]}
                               </span>
                               {!n.lido && <span className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_6px_var(--color-accent)]" />}

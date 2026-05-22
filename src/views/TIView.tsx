@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Monitor, X, Plus, Building2, ShoppingCart, Package, DollarSign,
-  Users, Megaphone, ShoppingBag, Cpu, HardDrive, Loader2, Check, ChevronRight,
-  LifeBuoy, Truck,
+  Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useTheme } from '../contexts/ThemeContext';
+import { SETOR_GRID, corDoSetor, setorLabel } from '../lib/setores';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 type TIChamado = {
@@ -22,28 +21,6 @@ type TIChamado = {
   created_at: string;
   resolvido_em?: string | null;
 };
-
-const SETOR_GRID: { id: string; label: string; icon: any; color: string }[] = [
-  { id: 'empresa',      label: 'Empresa',         icon: Building2,    color: '#10B981' },
-  { id: 'compras',      label: 'Compras',         icon: ShoppingCart, color: '#3B82F6' },
-  { id: 'estoque',      label: 'Estoque',         icon: Package,      color: '#A855F7' },
-  { id: 'logistica',    label: 'Logística',       icon: Truck,        color: '#22C55E' },
-  { id: 'financeiro',   label: 'Financeiro',      icon: DollarSign,   color: '#10B981' },
-  { id: 'rh',           label: 'RH',              icon: Users,        color: '#FACC15' },
-  { id: 'vendas',       label: 'Vendas',          icon: ShoppingBag,  color: '#EC4899' },
-  { id: 'marketing',    label: 'Marketing',       icon: Megaphone,    color: '#F97316' },
-  { id: 'ia',           label: 'Suporte com IA',  icon: Cpu,          color: '#A855F7' },
-  { id: 'equipamentos', label: 'Equipamentos',    icon: HardDrive,    color: '#3B82F6' },
-];
-
-// Override do tema de Acessibilidade: cards alternam azul claro / laranja
-// (bicolor pareado com o accent laranja + ícones azul claro do app).
-// Mantém a ordem do SETOR_GRID, então os 8 setores reais ficam 4 + 4
-// e ia/equipamentos seguem o mesmo padrão pra continuidade visual.
-const ACESSIVEL_AZUL    = '#7DD3FC'; // sky-300
-const ACESSIVEL_LARANJA = '#F97316'; // orange-500
-const acessivelColor = (index: number): string =>
-  index % 2 === 0 ? ACESSIVEL_AZUL : ACESSIVEL_LARANJA;
 
 const TIPO_PROBLEMA = ['Hardware', 'Software', 'Rede', 'Inteligência Artificial', 'Outro'];
 const URGENCIAS    = ['Baixa', 'Média', 'Alta'] as const;
@@ -83,8 +60,6 @@ const formatRelative = (iso: string) => {
   return d.toLocaleDateString('pt-BR');
 };
 
-const setorLabel = (id: string) => SETOR_GRID.find(s => s.id === id)?.label ?? id;
-
 type TIViewProps = {
   showToast: (msg: string, type?: string) => void;
   profile: UserProfile;
@@ -92,12 +67,6 @@ type TIViewProps = {
 
 export const TIView = ({ showToast, profile }: TIViewProps) => {
   const { accentColor } = useTheme();
-  const isAcessivel = accentColor === 'acessivel';
-  const corDoSetor = (id: string): string => {
-    if (!isAcessivel) return SETOR_GRID.find(s => s.id === id)?.color ?? '#10B981';
-    const idx = SETOR_GRID.findIndex(s => s.id === id);
-    return acessivelColor(idx);
-  };
 
   // RLS já restringe: TI/admin vê tudo, demais setores só veem os próprios.
   const { data: chamados, setData, isLoading } =
@@ -251,7 +220,7 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
                     total === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:neu-pressed'
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center relative" style={{ color: corDoSetor(s.id) }}>
+                  <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center relative" style={{ color: corDoSetor(s.id, accentColor) }}>
                     <Icon size={22} />
                     {naoResolvidos > 0 && (
                       <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[var(--color-bg-base)]">
@@ -271,7 +240,7 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
 
         <SetorChamadosModal
           setorId={setorAberto}
-          setorColor={setorAberto ? corDoSetor(setorAberto) : null}
+          setorColor={setorAberto ? corDoSetor(setorAberto, accentColor) : null}
           chamados={chamados.filter(c => c.setor_origem === setorAberto)}
           updatingId={updatingId}
           onClose={() => setSetorAberto(null)}
@@ -518,7 +487,7 @@ type SetorChamadosModalProps = {
 };
 
 function SetorChamadosModal({ setorId, setorColor, chamados, updatingId, onClose, onAdvance }: SetorChamadosModalProps) {
-  const setor = setorId ? SETOR_GRID.find(s => s.id === setorId) : null;
+  const setor = setorId ? SETOR_GRID.find((s) => s.id === setorId) : null;
 
   // Esc fecha o modal (padrão do AccentPicker no App.tsx).
   React.useEffect(() => {
