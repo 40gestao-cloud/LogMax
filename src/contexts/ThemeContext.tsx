@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
-export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink';
+export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'acessivel';
 
-const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink'];
+const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink', 'acessivel'];
 
 const ACCENT_HEX: Record<AccentColor, string> = {
   green:  '#10B981',
@@ -12,6 +12,9 @@ const ACCENT_HEX: Record<AccentColor, string> = {
   orange: '#F97316',
   blue:   '#3B82F6',
   pink:   '#EC4899',
+  // Acessibilidade: laranja principal (theme-color do browser/PWA segue o
+  // accent visível em botões). Os ícones recebem azul claro via CSS.
+  acessivel: '#F97316',
 };
 
 interface ThemeContextValue {

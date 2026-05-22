@@ -105,6 +105,19 @@
   --color-accent-text:  #ffffff;
 }
 
+/* ── Acessibilidade visual (orange + light blue) ──
+   Combinação laranja/azul-claro é uma das mais legíveis para utilizadores com
+   protanopia/deuteranopia/tritanopia e oferece alto contraste em geral.
+   • Accent principal (botões, fundos, badges, focus rings) fica laranja.
+   • A classe .text-accent (usada em ícones e textos de ênfase) é sobreposta
+     mais abaixo com azul claro, criando a identidade bicolor. */
+[data-accent="acessivel"] {
+  --color-accent:       #F97316;  /* orange-500 */
+  --color-accent-hover: #EA580C;  /* orange-600 */
+  --color-accent-text:  #0A0A0A;
+  --color-accent-icon:  #7DD3FC;  /* sky-300 — azul claro vivo no dark */
+}
+
 /* ── Light mode: variantes mais escuras e vibrantes para garantir contraste WCAG ──
    No fundo escuro o accent original (-500/-400) lê-se bem. Em fundo claro #E8E8E8
    esses tons ficam pálidos. Aqui usamos a variante -700 do Tailwind, que mantém a
@@ -144,6 +157,22 @@
   --color-accent:      #be185d;  /* pink-700 */
   --color-accent-hover: #9d174d;  /* pink-800 */
   --color-accent-text:  #ffffff;
+}
+
+/* Light mode da acessibilidade: laranja escurece e azul ganha tom mais saturado
+   para manter contraste WCAG AA em fundo claro. */
+[data-theme="light"][data-accent="acessivel"] {
+  --color-accent:       #c2410c;  /* orange-700 */
+  --color-accent-hover: #9a3412;  /* orange-800 */
+  --color-accent-text:  #ffffff;
+  --color-accent-icon:  #0369a1;  /* sky-700 — azul legível em fundo claro */
+}
+
+/* Override de ícones/ênfase para o tema acessível: tudo que usa .text-accent
+   passa a azul claro, mantendo o restante da UI (bg-accent, border-accent,
+   focus rings) em laranja. Cria a identidade bicolor laranja+azul. */
+[data-accent="acessivel"] .text-accent {
+  color: var(--color-accent-icon);
 }
 
 /* ── Light mode overrides ── */

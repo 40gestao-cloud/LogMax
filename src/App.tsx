@@ -11,7 +11,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor
+  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -230,13 +230,27 @@ function ThemeToggle() {
   );
 }
 
-const ACCENT_OPTIONS = [
+type AccentOption = {
+  id: 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'acessivel';
+  hex: string;
+  label: string;
+  /** Cor secundária (renderizada como swatch bicolor) — usada no preset de acessibilidade */
+  secondaryHex?: string;
+  /** Marca o preset como destinado a acessibilidade visual (selo + título descritivo) */
+  accessible?: boolean;
+};
+
+const ACCENT_OPTIONS: readonly AccentOption[] = [
   { id: 'green',  hex: '#10B981', label: 'Verde'   },
   { id: 'yellow', hex: '#FACC15', label: 'Amarelo' },
   { id: 'purple', hex: '#A855F7', label: 'Roxo'    },
   { id: 'orange', hex: '#F97316', label: 'Laranja' },
   { id: 'blue',   hex: '#3B82F6', label: 'Azul'    },
   { id: 'pink',   hex: '#EC4899', label: 'Rosa'    },
+  // Preset de acessibilidade: laranja + azul claro (alto contraste, amigável
+  // para daltonismo). Ver paleta em src/index.css [data-accent="acessivel"].
+  { id: 'acessivel', hex: '#F97316', secondaryHex: '#7DD3FC',
+    label: 'Acessibilidade', accessible: true },
 ] as const;
 
 function AccentPicker() {
@@ -261,11 +275,15 @@ function AccentPicker() {
     };
   }, [open]);
 
+  // Separa presets normais do(s) de acessibilidade para destacar visualmente
+  const normalAccents = ACCENT_OPTIONS.filter(o => !o.accessible);
+  const accessibleAccents = ACCENT_OPTIONS.filter(o => o.accessible);
+
   return (
     <>
       {/* Desktop (sm+): bolinhas inline */}
       <div className="neu-flat rounded-xl hidden sm:flex items-center gap-2 px-3 py-2.5 border border-white/5" title="Cor do tema">
-        {ACCENT_OPTIONS.map(({ id, hex, label }) => (
+        {normalAccents.map(({ id, hex, label }) => (
           <button
             key={id}
             title={label}
@@ -279,6 +297,30 @@ function AccentPicker() {
             }}
           />
         ))}
+        {/* Divider + presets de acessibilidade */}
+        {accessibleAccents.length > 0 && (
+          <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
+        )}
+        {accessibleAccents.map(({ id, hex, secondaryHex }) => {
+          const isActive = accentColor === id;
+          return (
+            <button
+              key={id}
+              title="Acessibilidade — laranja com ícones azul claro (alto contraste)"
+              aria-label="Tema de acessibilidade: laranja com ícones azul claro"
+              onClick={() => setAccentColor(id)}
+              className="w-[18px] h-[18px] rounded-full transition-transform hover:scale-125 focus:outline-none shrink-0 flex items-center justify-center relative"
+              style={{
+                background: `linear-gradient(135deg, ${hex} 0%, ${hex} 50%, ${secondaryHex} 50%, ${secondaryHex} 100%)`,
+                boxShadow: isActive
+                  ? `0 0 0 2px var(--color-bg-base), 0 0 0 3.5px ${hex}`
+                  : undefined,
+              }}
+            >
+              <Accessibility size={10} className="text-white" strokeWidth={3} />
+            </button>
+          );
+        })}
       </div>
 
       {/* Mobile (<sm): ícone de paleta + popover ao toque */}
@@ -300,11 +342,11 @@ function AccentPicker() {
               exit={{ opacity: 0, y: -6, scale: 0.96 }}
               transition={{ duration: 0.15 }}
               className="absolute right-0 mt-2 neu-flat rounded-2xl p-3 border border-white/10 z-50 shadow-2xl"
-              style={{ background: 'var(--color-bg-base)', minWidth: 180 }}
+              style={{ background: 'var(--color-bg-base)', minWidth: 200 }}
             >
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 text-center">Cor do tema</p>
               <div className="grid grid-cols-3 gap-3 justify-items-center">
-                {ACCENT_OPTIONS.map(({ id, hex, label }) => {
+                {normalAccents.map(({ id, hex, label }) => {
                   const isActive = accentColor === id;
                   // Cores claras (amarelo) precisam de tick escuro para visibilidade
                   const tickColor = id === 'yellow' ? '#0A0A0A' : '#ffffff';
@@ -327,6 +369,43 @@ function AccentPicker() {
                   );
                 })}
               </div>
+              {accessibleAccents.length > 0 && (
+                <>
+                  <div className="mt-4 mb-2 h-px bg-white/10" aria-hidden />
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 text-center">Acessibilidade</p>
+                  {accessibleAccents.map(({ id, hex, secondaryHex, label }) => {
+                    const isActive = accentColor === id;
+                    return (
+                      <button
+                        key={id}
+                        aria-label={`${label}: laranja com ícones azul claro (alto contraste)`}
+                        aria-pressed={isActive}
+                        onClick={() => { setAccentColor(id); setOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl neu-button hover:scale-[1.02] active:scale-95 transition-transform focus:outline-none"
+                        style={{
+                          boxShadow: isActive
+                            ? `inset 0 0 0 2px ${hex}`
+                            : undefined,
+                        }}
+                      >
+                        <span
+                          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                          style={{
+                            background: `linear-gradient(135deg, ${hex} 0%, ${hex} 50%, ${secondaryHex} 50%, ${secondaryHex} 100%)`,
+                          }}
+                        >
+                          <Accessibility size={14} className="text-white" strokeWidth={2.5} />
+                        </span>
+                        <span className="flex flex-col items-start text-left">
+                          <span className="text-[11px] font-bold text-gray-200">{label}</span>
+                          <span className="text-[9px] text-gray-500 uppercase tracking-widest">Laranja + azul claro</span>
+                        </span>
+                        {isActive && <Check size={14} className="ml-auto text-accent" strokeWidth={3} />}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
