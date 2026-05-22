@@ -38,12 +38,17 @@ CREATE TABLE IF NOT EXISTS marketing_artes (
   publicada_em        timestamptz NOT NULL DEFAULT now(),
   publicada_por       uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   nome_publicador     text,
+  -- created_at é redundante com publicada_em aqui, mas useFetchData faz
+  -- order('created_at', desc) hard-coded e PostgREST 400a se a coluna
+  -- não existe. Manter pra alinhar com o padrão das outras tabelas.
+  created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT chk_arte_url_format CHECK (arte_url ~* '^https?://')
 );
 
 CREATE INDEX IF NOT EXISTS idx_artes_promocao_id   ON marketing_artes(promocao_id);
 CREATE INDEX IF NOT EXISTS idx_artes_publicada_em  ON marketing_artes(publicada_em DESC);
+CREATE INDEX IF NOT EXISTS idx_artes_created_at    ON marketing_artes(created_at DESC);
 
 -- Trigger pra atualizar updated_at automaticamente
 CREATE OR REPLACE FUNCTION trg_marketing_artes_updated_at()
