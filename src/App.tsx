@@ -67,6 +67,7 @@ const TarefasMarketingView                 = lazy(() => import('./views/TarefasM
 const TarefasView                          = lazy(() => import('./views/TarefasView').then(m => ({ default: m.TarefasView })));
 const PesquisasView                        = lazy(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
 const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
+const ArtesPromocionaisView                = lazy(() => import('./views/ArtesPromocionaisView').then(m => ({ default: m.ArtesPromocionaisView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
@@ -534,6 +535,7 @@ function LogMaxAppInner() {
       case 'rh-tarefas':                   return <TarefasView showToast={st} profile={profile} modulo="rh" />;
       case 'vendas-tarefas':               return <TarefasView showToast={st} profile={profile} modulo="vendas" />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
+      case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       default:
