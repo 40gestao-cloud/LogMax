@@ -111,7 +111,7 @@ const menuModules = [
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
-    submenus: ['PDV', 'Histórico de Vendas', 'Tarefas'],
+    submenus: ['PDV', 'Clientes', 'Histórico de Vendas', 'Tarefas'],
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
@@ -525,6 +525,7 @@ function LogMaxAppInner() {
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
+      case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
