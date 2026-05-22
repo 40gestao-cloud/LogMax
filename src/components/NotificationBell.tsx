@@ -123,7 +123,12 @@ export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-[min(92vw,360px)] neu-flat rounded-2xl border border-white/10 z-[100] shadow-2xl overflow-hidden"
+            // Mobile: fixed full-width (menos 24px de margem) logo abaixo
+            // do header — antes estava `absolute right-0` ancorado no
+            // botão, e como o sino fica no meio do header (não na borda
+            // direita do viewport) a caixa estourava para fora pela
+            // esquerda. Desktop mantém o ancoramento original.
+            className="fixed left-3 right-3 top-[72px] sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:mt-2 sm:w-[min(92vw,360px)] neu-flat rounded-2xl border border-white/10 z-[100] shadow-2xl overflow-hidden"
             style={{ background: 'var(--color-bg-base)' }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
