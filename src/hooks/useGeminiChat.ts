@@ -2,11 +2,17 @@ import { useCallback, useState } from 'react';
 import { useAuth } from './useAuth';
 import type { AIContextSnapshot } from '../contexts/AIAssistantContext';
 
+export type ChatSource = { uri: string; title: string };
+
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   createdAt: number;
+  /** Fontes do Google Search quando o MaxAI usou grounding. */
+  sources?: ChatSource[];
+  /** Termos que o modelo pesquisou (diagnóstico opcional). */
+  searchQueries?: string[];
 };
 
 // Orçamento de caracteres pro JSON do contexto. O endpoint rejeita
@@ -120,6 +126,8 @@ export function useGeminiChat(opts?: Options) {
         role: 'assistant',
         content: json.reply ?? '',
         createdAt: Date.now(),
+        sources: Array.isArray(json.sources) && json.sources.length > 0 ? json.sources : undefined,
+        searchQueries: Array.isArray(json.searchQueries) && json.searchQueries.length > 0 ? json.searchQueries : undefined,
       };
       setMessages(prev => [...prev, reply]);
     } catch {

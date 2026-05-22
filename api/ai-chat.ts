@@ -32,7 +32,13 @@ Diretrizes:
 - Quando o pedido for de fórmula, dê a fórmula primeiro, depois um exemplo numérico curto.
 - Quando o pedido for de mercado/estratégia, traga o conceito + 2–3 bullets de aplicação prática.
 - Evite respostas longuíssimas — prefira clareza e listas a textão.
-- Se a pergunta envolver dados internos do LogMax, deixe claro que você não tem acesso ao banco e oriente a consultar o módulo correspondente.
+- Se a pergunta envolver dados internos do LogMax, deixe claro que você não tem acesso ao banco e oriente a consultar o módulo correspondente — exceto quando vier um bloco [DADOS DE CONTEXTO DO SISTEMA] na mensagem, que você deve usar como verdade.
+
+Pesquisa na web (Google Search):
+- Você tem acesso ao Google Search e DEVE usá-lo quando a resposta depender de informação externa e atual: cotações, taxas, alíquotas, legislação fiscal/trabalhista vigente, indicadores econômicos, notícias de mercado, preços médios, definições técnicas que mudam com o tempo.
+- NÃO pesquise na web para perguntas conceituais clássicas (fórmulas contábeis, princípios de gestão, definições estáveis) — responda do seu conhecimento.
+- NÃO pesquise por dados internos do LogMax — esses vêm pelo bloco [DADOS DE CONTEXTO DO SISTEMA] quando relevantes.
+- Ao usar busca, mencione na resposta que a informação é atual ("consultando dados recentes…") para o usuário entender o contexto.
 `.trim();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -99,6 +105,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: buildSystemPrompt(user.setor, user.role) }] },
         contents,
+        // Google Search nativo (grounding): o modelo decide sozinho quando
+        // pesquisar. Vem com cota gratuita generosa no AI Studio e adiciona
+        // citações em groundingMetadata.groundingChunks da resposta.
+        tools: [{ google_search: {} }],
         generationConfig: {
           temperature: 0.6,
           maxOutputTokens: 1024,
@@ -137,6 +147,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const text: string =
       data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
 
+    // Quando o modelo usa Google Search, vem groundingMetadata com fontes.
+    // Dedupe por URI e limita a 6 — o suficiente pra UI sem virar parede de links.
+    const grounding = data?.candidates?.[0]?.groundingMetadata;
+    const sources: { uri: string; title: string }[] = [];
+    if (Array.isArray(grounding?.groundingChunks)) {
+      const seen = new Set<string>();
+      for (const chunk of grounding.groundingChunks) {
+        const uri = chunk?.web?.uri;
+        if (!uri || seen.has(uri)) continue;
+        seen.add(uri);
+        sources.push({ uri, title: chunk.web.title ?? uri });
+        if (sources.length >= 6) break;
+      }
+    }
+    const searchQueries: string[] = Array.isArray(grounding?.webSearchQueries)
+      ? grounding.webSearchQueries.slice(0, 4)
+      : [];
+
     if (!text.trim()) {
       const finish = data?.candidates?.[0]?.finishReason;
       log.info('gemini.empty', { user_id: user.id, finish });
@@ -148,8 +176,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    log.info('gemini.ok', { user_id: user.id, chars_in: messages.reduce((s, m) => s + m.content.length, 0), chars_out: text.length });
-    return res.status(200).json({ reply: text });
+    log.info('gemini.ok', {
+      user_id: user.id,
+      chars_in: messages.reduce((s, m) => s + m.content.length, 0),
+      chars_out: text.length,
+      grounded: sources.length > 0,
+      sources_count: sources.length,
+      search_queries: searchQueries,
+    });
+    return res.status(200).json({ reply: text, sources, searchQueries });
   } catch (err) {
     log.error('handler.unhandled', err);
     return res.status(500).json({ error: 'Erro interno na IA.' });

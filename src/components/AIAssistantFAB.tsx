@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye, Globe, ExternalLink } from 'lucide-react';
 import { useGeminiChat } from '../hooks/useGeminiChat';
 import { useCurrentAIContext } from '../contexts/AIAssistantContext';
 
@@ -154,7 +154,7 @@ export const AIAssistantFAB = () => {
                 {messages.map(m => (
                   <div
                     key={m.id}
-                    className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div
                       className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
@@ -165,6 +165,29 @@ export const AIAssistantFAB = () => {
                     >
                       {m.content}
                     </div>
+
+                    {m.role === 'assistant' && m.sources && m.sources.length > 0 && (
+                      <div className="mt-1.5 max-w-[85%] flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent/80">
+                          <Globe size={10} /> Fontes consultadas
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {m.sources.map((s, idx) => (
+                            <a
+                              key={`${m.id}-src-${idx}`}
+                              href={s.uri}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={s.uri}
+                              className="inline-flex items-center gap-1 max-w-[200px] px-2 py-1 rounded-lg text-[10px] text-gray-300 hover:text-accent border border-white/10 hover:border-accent/40 bg-white/5 transition-colors"
+                            >
+                              <span className="truncate">{s.title}</span>
+                              <ExternalLink size={9} className="shrink-0 opacity-70" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
 
