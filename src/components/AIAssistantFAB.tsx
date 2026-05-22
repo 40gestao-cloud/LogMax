@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye, Globe, ExternalLink } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye, Globe, ExternalLink, Copy, Check } from 'lucide-react';
 import { useGeminiChat } from '../hooks/useGeminiChat';
 import { useCurrentAIContext } from '../contexts/AIAssistantContext';
 
@@ -14,6 +14,8 @@ const SUGESTOES = [
 export const AIAssistantFAB = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
   // Lê o contexto registrado pela view atual. Como `useCurrentAIContext`
   // retorna o estado live, embrulhamos num getter pra capturar o valor
   // exatamente no momento do envio (não no momento do hook).
@@ -54,6 +56,29 @@ export const AIAssistantFAB = () => {
     setInput('');
     send(text);
   };
+
+  const handleCopy = useCallback(async (id: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      // Fallback pra navegadores/contextos sem Clipboard API (http, iframes).
+      const ta = document.createElement('textarea');
+      ta.value = content;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* desiste silenciosamente */ }
+      document.body.removeChild(ta);
+    }
+    setCopiedId(id);
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1500);
+  }, []);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+  }, []);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter envia; Shift+Enter quebra linha.
@@ -187,6 +212,22 @@ export const AIAssistantFAB = () => {
                           ))}
                         </div>
                       </div>
+                    )}
+
+                    {m.role === 'assistant' && m.content.trim() && (
+                      <button
+                        onClick={() => handleCopy(m.id, m.content)}
+                        title={copiedId === m.id ? 'Copiado!' : 'Copiar resposta'}
+                        aria-label="Copiar resposta"
+                        className={`mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-colors ${
+                          copiedId === m.id
+                            ? 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10'
+                            : 'text-gray-500 border-white/10 hover:text-accent hover:border-accent/40'
+                        }`}
+                      >
+                        {copiedId === m.id ? <Check size={10} /> : <Copy size={10} />}
+                        {copiedId === m.id ? 'Copiado' : 'Copiar'}
+                      </button>
                     )}
                   </div>
                 ))}
