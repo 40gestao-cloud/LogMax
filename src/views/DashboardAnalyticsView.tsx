@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet, Building2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet, Building2, X, ChevronDown } from 'lucide-react';
 import {
   Bar,
   Line,
@@ -15,19 +15,35 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
+import type { UserProfile } from '../hooks/useUserProfile';
 
 type Period = '7d' | '30d' | 'year';
+type KpiKey = 'receita' | 'despesa' | 'ordens' | 'estoque';
+
+const BRL = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const sum = (arr: any[], key: string) =>
   arr.reduce((s: number, r: any) => s + (parseFloat(r[key]) || 0), 0);
 
-export const DashboardAnalyticsView = () => {
+export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | null }) => {
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
   const { data: contasPagar,   isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview');
   const { data: pedidos,       isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
   const { data: produtos,      isLoading: loadingProd } = useFetchData<any>('/api/produtosview');
   const { data: vendas,        isLoading: loadingVendas } = useFetchData<any>('/api/vendasview');
   const isLoading = loadingCR || loadingCP || loadingPed || loadingProd || loadingVendas;
+
+  // Drill-down dos KPIs liberado para: Admin, CEO, Gerente Financeiro,
+  // Gerente Logística. Os demais perfis (e visitantes via deep-link) veem
+  // os cards mas eles não respondem a clique. RLS continua sendo a defesa
+  // real — gerentes só veem os registros do próprio escopo.
+  const canExpandKpis = !!profile && (
+    profile.role === 'admin' ||
+    profile.role === 'ceo' ||
+    (profile.role === 'gerente' && (profile.setor === 'financeiro' || profile.setor === 'logistica'))
+  );
+  const [expandedKpi, setExpandedKpi] = useState<KpiKey | null>(null);
 
   const [period, setPeriod] = useState<Period>('30d');
 
@@ -199,22 +215,82 @@ export const DashboardAnalyticsView = () => {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 shrink-0">
-        {[
-          { label: 'Receita Total', val: receitaTotal, growth: `${filteredCR.length} lançamentos`, Icon: Banknote, color: 'text-accent', trendColor: 'text-accent' },
-          { label: 'Despesas Operacionais', val: despesasTotal, growth: `${filteredCP.length} lançamentos`, Icon: TrendingDown, color: 'text-gray-100', trendColor: 'text-red-500' },
-          { label: 'Ordens de Compra', val: ordensCount, growth: `${ordensNovas} novas hoje`, Icon: Package, color: 'text-gray-100', trendColor: 'text-accent' },
-          { label: 'Estoque Crítico', val: estoqueCritico, growth: 'Produtos no estoque de segurança', Icon: ShieldAlert, color: 'text-accent', trendColor: 'text-accent', accent: true },
-        ].map(({ label, val, growth, Icon, color, trendColor, accent }) => (
-          <div key={label} className={`neu-flat p-6 rounded-3xl border flex flex-col gap-4 relative overflow-hidden ${accent ? 'bg-accent/5 border-accent/20' : 'border-white/5'}`}>
-            <div className="absolute top-0 right-0 p-6 opacity-10"><Icon size={48} /></div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest relative z-10 ${accent ? 'text-accent' : 'text-gray-500'}`}>{label}</span>
-            <span className={`text-3xl font-bold font-mono tracking-tighter relative z-10 ${color}`}>{val}</span>
-            <span className={`text-xs font-bold flex items-center gap-1 mt-auto relative z-10 ${trendColor}`}>
-              <TrendingUp size={12} /> {growth}
-            </span>
-          </div>
-        ))}
+        {([
+          { key: 'receita',  label: 'Receita Total',          val: receitaTotal,  growth: `${filteredCR.length} lançamentos`,  Icon: Banknote,    color: 'text-accent',   trendColor: 'text-accent',  accent: false },
+          { key: 'despesa',  label: 'Despesas Operacionais',  val: despesasTotal, growth: `${filteredCP.length} lançamentos`,  Icon: TrendingDown, color: 'text-gray-100', trendColor: 'text-red-500', accent: false },
+          { key: 'ordens',   label: 'Ordens de Compra',       val: ordensCount,   growth: `${ordensNovas} novas hoje`,         Icon: Package,     color: 'text-gray-100', trendColor: 'text-accent',  accent: false },
+          { key: 'estoque',  label: 'Estoque Crítico',        val: estoqueCritico, growth: 'Produtos no estoque de segurança', Icon: ShieldAlert, color: 'text-accent',   trendColor: 'text-accent',  accent: true  },
+        ] as const).map(({ key, label, val, growth, Icon, color, trendColor, accent }) => {
+          const isExpanded = expandedKpi === key;
+          const interactive = canExpandKpis;
+          // O card inteiro vira <button> quando o usuário tem permissão —
+          // alvo grande facilita touch no mobile. O ícone decorativo passa
+          // a indicar a interatividade (opacidade sobe + chevron aparece).
+          const baseCls = `neu-flat p-6 rounded-3xl border flex flex-col gap-4 relative overflow-hidden text-left transition-all ${
+            accent ? 'bg-accent/5 border-accent/20' : 'border-white/5'
+          }`;
+          const interactiveCls = interactive
+            ? 'cursor-pointer hover:border-accent/40 hover:scale-[1.01] active:scale-[0.99]'
+            : 'cursor-default';
+          const expandedCls = isExpanded ? 'ring-2 ring-accent/60' : '';
+          const Inner = (
+            <>
+              <div className={`absolute top-0 right-0 p-6 transition-opacity ${interactive ? 'opacity-25' : 'opacity-10'}`}>
+                <Icon size={48} />
+              </div>
+              {interactive && (
+                <ChevronDown
+                  size={16}
+                  className={`absolute top-4 right-4 text-accent transition-transform z-10 ${isExpanded ? 'rotate-180' : ''}`}
+                />
+              )}
+              <span className={`text-[10px] font-bold uppercase tracking-widest relative z-10 ${accent ? 'text-accent' : 'text-gray-500'}`}>{label}</span>
+              <span className={`text-3xl font-bold font-mono tracking-tighter relative z-10 ${color}`}>{val}</span>
+              <span className={`text-xs font-bold flex items-center gap-1 mt-auto relative z-10 ${trendColor}`}>
+                <TrendingUp size={12} /> {growth}
+              </span>
+            </>
+          );
+          return interactive ? (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setExpandedKpi(prev => prev === key ? null : key)}
+              aria-expanded={isExpanded}
+              aria-controls="kpi-detail-panel"
+              className={`${baseCls} ${interactiveCls} ${expandedCls}`}
+            >
+              {Inner}
+            </button>
+          ) : (
+            <div key={key} className={baseCls}>{Inner}</div>
+          );
+        })}
       </div>
+
+      {/* Painel de drill-down dos KPIs (só para perfis autorizados) */}
+      <AnimatePresence initial={false}>
+        {expandedKpi && canExpandKpis && (
+          <motion.div
+            id="kpi-detail-panel"
+            key={expandedKpi}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <KpiDetailPanel
+              kind={expandedKpi}
+              contasReceber={filteredCR}
+              contasPagar={filteredCP}
+              pedidos={filteredPed}
+              produtos={produtos}
+              onClose={() => setExpandedKpi(null)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Faturamento por Filial (Holding) */}
       <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-4 shrink-0">
@@ -285,3 +361,135 @@ export const DashboardAnalyticsView = () => {
     </motion.div>
   );
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// Painel de drill-down dos KPIs
+// ──────────────────────────────────────────────────────────────────────
+type KpiKind = 'receita' | 'despesa' | 'ordens' | 'estoque';
+
+const KPI_TITLE: Record<KpiKind, string> = {
+  receita: 'Lançamentos — Receita Total',
+  despesa: 'Lançamentos — Despesas Operacionais',
+  ordens:  'Lançamentos — Ordens de Compra',
+  estoque: 'Produtos em Estoque Crítico',
+};
+
+const KPI_HINT: Record<KpiKind, string> = {
+  receita: 'Contas a receber registradas no período selecionado.',
+  despesa: 'Contas a pagar registradas no período selecionado.',
+  ordens:  'Pedidos de compra criados no período selecionado.',
+  estoque: 'Produtos cujo saldo está no/abaixo do estoque mínimo (default 10).',
+};
+
+function KpiDetailPanel({
+  kind, contasReceber, contasPagar, pedidos, produtos, onClose,
+}: {
+  kind: KpiKind;
+  contasReceber: any[];
+  contasPagar: any[];
+  pedidos: any[];
+  produtos: any[];
+  onClose: () => void;
+}) {
+  const rows = (() => {
+    if (kind === 'receita') {
+      return contasReceber.map(c => ({
+        id: c.id,
+        primary:   c.descricao ?? '—',
+        secondary: c.cliente ?? '',
+        value:     parseFloat(c.valor) || 0,
+        date:      c.vencimento ?? c.created_at,
+        status:    c.status ?? '—',
+      }));
+    }
+    if (kind === 'despesa') {
+      return contasPagar.map(c => ({
+        id: c.id,
+        primary:   c.descricao ?? '—',
+        secondary: c.fornecedor ?? '',
+        value:     parseFloat(c.valor) || 0,
+        date:      c.vencimento ?? c.created_at,
+        status:    c.status ?? '—',
+      }));
+    }
+    if (kind === 'ordens') {
+      return pedidos.map(p => ({
+        id: p.id,
+        primary:   p.item_descricao ?? (p.id?.slice(0, 8).toUpperCase() ?? '—'),
+        secondary: p.fornecedor ?? '',
+        value:     parseFloat(p.valor_total) || 0,
+        date:      p.created_at,
+        status:    p.status ?? '—',
+      }));
+    }
+    // estoque crítico
+    return produtos
+      .filter(p => {
+        const minimo = Number(p.estoque_minimo ?? 0) || 10;
+        return (p.estoque ?? 0) <= minimo;
+      })
+      .map(p => ({
+        id: p.id,
+        primary:   p.nome ?? '—',
+        secondary: p.codigo ?? '',
+        value:     null,
+        date:      null,
+        status:    `${p.estoque ?? 0} / mín ${Number(p.estoque_minimo ?? 0) || 10}`,
+      }));
+  })();
+
+  return (
+    <div className="neu-flat p-5 sm:p-6 rounded-3xl border border-accent/30 flex flex-col gap-4 mt-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-accent tracking-wide">{KPI_TITLE[kind]}</h3>
+          <p className="text-[11px] text-gray-500 mt-0.5">{KPI_HINT[kind]} ({rows.length} {rows.length === 1 ? 'registro' : 'registros'})</p>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Fechar detalhes"
+          className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white shrink-0"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState message="Nenhum lançamento no período (ou RLS bloqueou para o seu perfil)" />
+      ) : (
+        <div className="overflow-x-auto max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
+          <table className="w-full min-w-[600px]">
+            <thead className="text-[10px] uppercase tracking-widest text-gray-500 sticky top-0 bg-[var(--color-bg-base)]">
+              <tr className="border-b border-white/5">
+                <th className="text-left py-2 px-2 font-bold">Descrição</th>
+                <th className="text-left py-2 px-2 font-bold">{kind === 'receita' ? 'Cliente' : kind === 'despesa' || kind === 'ordens' ? 'Fornecedor' : 'Código'}</th>
+                <th className="text-right py-2 px-2 font-bold">{kind === 'estoque' ? 'Estoque' : 'Valor'}</th>
+                <th className="text-left py-2 px-2 font-bold">{kind === 'estoque' ? '' : 'Data'}</th>
+                <th className="text-left py-2 px-2 font-bold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="text-xs">
+              {rows.map(r => (
+                <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                  <td className="py-2 px-2 text-gray-200 font-semibold truncate max-w-[280px]">{r.primary}</td>
+                  <td className="py-2 px-2 text-gray-400 truncate max-w-[200px]">{r.secondary || '—'}</td>
+                  <td className="py-2 px-2 text-right font-mono text-gray-100">
+                    {r.value !== null ? BRL(r.value) : r.status}
+                  </td>
+                  <td className="py-2 px-2 text-gray-500 font-mono text-[11px]">
+                    {r.date ? new Date(r.date).toLocaleDateString('pt-BR') : ''}
+                  </td>
+                  <td className="py-2 px-2">
+                    {kind === 'estoque' ? '' : (
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{r.status}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

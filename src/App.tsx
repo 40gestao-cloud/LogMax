@@ -150,7 +150,8 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
           <Home size={18} /><span>Início</span>
         </button>
-        {profile?.setor === 'all' && (
+        {(profile?.setor === 'all'
+          || (profile?.role === 'gerente' && (profile?.setor === 'financeiro' || profile?.setor === 'logistica'))) && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
@@ -542,7 +543,7 @@ function LogMaxAppInner() {
     const st = showToast;
     switch (activeView) {
       case 'inicio':                          return <InicioView onNavigate={navigate} showToast={st} profile={profile} />;
-      case 'dashboard':                       return <DashboardAnalyticsView />;
+      case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'empresa-colaboradores':           return <ColaboradoresView showToast={st} />;
       case 'empresa-clientes':                return <CRMView type="clientes" showToast={st} />;
