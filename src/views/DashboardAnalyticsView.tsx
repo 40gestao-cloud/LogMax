@@ -480,38 +480,66 @@ function KpiDetailPanel({
       {rows.length === 0 ? (
         <EmptyState message="Nenhum lançamento no período (ou RLS bloqueou para o seu perfil)" />
       ) : (
-        <div className="overflow-x-auto max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
-          <table className="w-full min-w-[600px]">
-            <thead className="text-[10px] uppercase tracking-widest text-gray-500 sticky top-0 bg-[var(--color-bg-base)]">
-              <tr className="border-b border-white/5">
-                <th className="text-left py-2 px-2 font-bold">Descrição</th>
-                <th className="text-left py-2 px-2 font-bold">{kind === 'receita' ? 'Cliente' : kind === 'despesa' || kind === 'ordens' ? 'Fornecedor' : 'Código'}</th>
-                <th className="text-right py-2 px-2 font-bold">{kind === 'estoque' ? 'Estoque' : 'Valor'}</th>
-                <th className="text-left py-2 px-2 font-bold">{kind === 'estoque' ? '' : 'Data'}</th>
-                <th className="text-left py-2 px-2 font-bold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-xs">
-              {rows.map(r => (
-                <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                  <td className="py-2 px-2 text-gray-200 font-semibold truncate max-w-[280px]">{r.primary}</td>
-                  <td className="py-2 px-2 text-gray-400 truncate max-w-[200px]">{r.secondary || '—'}</td>
-                  <td className="py-2 px-2 text-right font-mono text-gray-100">
+        <>
+          {/* Mobile (<md): lista de cards verticais — evita scroll horizontal */}
+          <div className="md:hidden flex flex-col gap-2 max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
+            {rows.map(r => (
+              <div key={r.id} className="neu-pressed rounded-2xl p-3 border border-white/5 flex flex-col gap-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-200 truncate flex-1 min-w-0">{r.primary}</p>
+                  <span className="text-sm font-mono text-gray-100 font-bold shrink-0 tabular-nums">
                     {r.value !== null ? BRL(r.value) : r.status}
-                  </td>
-                  <td className="py-2 px-2 text-gray-500 font-mono text-[11px]">
-                    {r.date ? new Date(r.date).toLocaleDateString('pt-BR') : ''}
-                  </td>
-                  <td className="py-2 px-2">
-                    {kind === 'estoque' ? '' : (
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{r.status}</span>
-                    )}
-                  </td>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-gray-500 truncate flex-1 min-w-0">{r.secondary || '—'}</span>
+                  {r.date && (
+                    <span className="text-[10px] text-gray-600 font-mono shrink-0">
+                      {new Date(r.date).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+                {kind !== 'estoque' && (
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">{r.status}</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop (md+): tabela original */}
+          <div className="hidden md:block overflow-x-auto max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
+            <table className="w-full min-w-[600px]">
+              <thead className="text-[10px] uppercase tracking-widest text-gray-500 sticky top-0 bg-[var(--color-bg-base)]">
+                <tr className="border-b border-white/5">
+                  <th className="text-left py-2 px-2 font-bold">Descrição</th>
+                  <th className="text-left py-2 px-2 font-bold">{kind === 'receita' ? 'Cliente' : kind === 'despesa' || kind === 'ordens' ? 'Fornecedor' : 'Código'}</th>
+                  <th className="text-right py-2 px-2 font-bold">{kind === 'estoque' ? 'Estoque' : 'Valor'}</th>
+                  <th className="text-left py-2 px-2 font-bold">{kind === 'estoque' ? '' : 'Data'}</th>
+                  <th className="text-left py-2 px-2 font-bold">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="text-xs">
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    <td className="py-2 px-2 text-gray-200 font-semibold truncate max-w-[280px]">{r.primary}</td>
+                    <td className="py-2 px-2 text-gray-400 truncate max-w-[200px]">{r.secondary || '—'}</td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-100">
+                      {r.value !== null ? BRL(r.value) : r.status}
+                    </td>
+                    <td className="py-2 px-2 text-gray-500 font-mono text-[11px]">
+                      {r.date ? new Date(r.date).toLocaleDateString('pt-BR') : ''}
+                    </td>
+                    <td className="py-2 px-2">
+                      {kind === 'estoque' ? '' : (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{r.status}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
