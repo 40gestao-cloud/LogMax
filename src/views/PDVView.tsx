@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
@@ -29,7 +28,6 @@ export const PDVView = ({ showToast, profile }: any) => {
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
-  const { notify: wppNotify } = useWhatsApp();
 
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -283,17 +281,6 @@ export const PDVView = ({ showToast, profile }: any) => {
     if (forma !== 'PIX') playKaching();
 
     const shortId = String(vendaId).slice(-6).toUpperCase();
-    const totalFmt = snap.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const valorParcela = parcelasEfetivas > 1 ? snap.totalFinal / parcelasEfetivas : snap.totalFinal;
-    const parcelaInfo = forma === 'Cartão Crédito' && parcelasEfetivas > 1
-      ? `\n📅 ${parcelasEfetivas}x de ${valorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-      : '';
-    const financeiroInfo =
-      forma === 'Fiado' ? '\n⚠️ Gerado título em Contas a Receber'
-      : forma === 'Cartão Crédito' && parcelasEfetivas > 1 ? `\n⚠️ Gerados ${parcelasEfetivas} títulos em Contas a Receber`
-      : forma === 'Cartão Crédito' ? '\n⚠️ Gerado título em Contas a Receber'
-      : '';
-    wppNotify(`🛒 *LogMax PDV — Venda concluída*\n💰 Total: ${totalFmt}\n💳 Pagamento: ${forma}${parcelaInfo}${financeiroInfo}`);
     setLastVenda({ id: shortId, total: snap.totalFinal });
     setCart([]);
     setDesconto('');

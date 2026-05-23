@@ -73,6 +73,7 @@ const AprovacoesConteudoMarketingView      = lazy(() => import('./views/Aprovaco
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
+const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 
 // --- acesso por setor (UX only — NÃO é segurança) ---
 // Este mapa controla o que aparece no menu lateral por setor. NÃO é a fonte
@@ -652,6 +653,7 @@ function LogMaxAppInner() {
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
+      case 'central-tempo':                return <CentralTempoView />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

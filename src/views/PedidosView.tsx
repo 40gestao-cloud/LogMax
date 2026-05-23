@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
-import { useWhatsApp } from '../hooks/useWhatsApp';
 import { supabase } from '../lib/supabase';
 
 export const PedidosView = ({ showToast }: any) => {
@@ -12,7 +11,6 @@ export const PedidosView = ({ showToast }: any) => {
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
   const { data: cotacoes } = useFetchData<any>('/api/cotacoesview');
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
-  const { notify: wppNotify } = useWhatsApp();
   const [processing, setProcessing] = useState<string | null>(null);
 
   const enriched = data.map((p: any) => {
@@ -68,7 +66,6 @@ export const PedidosView = ({ showToast }: any) => {
           pedido_id: pedido.id,
         });
         showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
-        wppNotify(`📦 *LogMax — Pedido aprovado*\n🛒 Item: ${itemDesc}\n🏢 Fornecedor: ${pedido.forn?.nome ?? '—'}\n💰 Valor: R$ ${Number(pedido.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
       } else {
         showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
       }

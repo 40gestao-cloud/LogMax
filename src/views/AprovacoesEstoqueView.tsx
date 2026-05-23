@@ -4,13 +4,11 @@ import { X, Check, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge } from '../components/ui';
-import { useWhatsApp } from '../hooks/useWhatsApp';
 
 export const AprovacoesEstoqueView = ({ showToast }: any) => {
   const { data: aprovacoes, setData: setAprovacoes } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' });
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
-  const { notify: wppNotify } = useWhatsApp();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
@@ -55,7 +53,6 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       }
       setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
-      wppNotify(`📤 *LogMax — Requisição de Estoque aprovada*\n📦 Produto: ${ap.prod?.nome ?? '—'}\n🔢 Qtd: ${ap.req?.qtd ?? '—'}\n🏭 Destino: ${ap.req?.destino ?? '—'}`);
     } catch {
       if (aprovUpdated) {
         try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}

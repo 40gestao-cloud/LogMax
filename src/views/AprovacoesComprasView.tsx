@@ -3,13 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
-import { useWhatsApp } from '../hooks/useWhatsApp';
 import { supabase } from '../lib/supabase';
 
 export const AprovacoesComprasView = ({ showToast }: any) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' }, true);
   const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', undefined, true);
-  const { notify: wppNotify } = useWhatsApp();
   const [processing, setProcessing] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
@@ -29,7 +27,6 @@ export const AprovacoesComprasView = ({ showToast }: any) => {
       await dbUpdate('/api/requisicoesview', ap.requisicao_id, { status: 'Aprovado' });
       setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada!", 'success', true);
-      wppNotify(`✅ *LogMax — Requisição aprovada*\n📦 Item: ${ap.req?.item ?? ap.requisicao_id}\n👤 Solicitante: ${ap.req?.solicitante ?? '—'}\n🔢 Qtd: ${ap.req?.qtd ?? '—'}`);
     } catch {
       // Rollback best-effort: se a aprovação foi marcada mas a requisição falhou,
       // reverte a aprovação para evitar estado inconsistente.

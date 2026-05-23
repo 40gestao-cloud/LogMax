@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, Check, Settings, Loader2, X, MessageCircle, ShoppingBag, DollarSign, Megaphone } from 'lucide-react';
-import { useWhatsApp } from '../hooks/useWhatsApp';
+import React from 'react';
+import { motion } from 'motion/react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Clock } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import {
   Bar,
@@ -106,30 +105,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
     .flatMap(mod => SHORTCUTS_BY_MODULE[mod] ?? [])
     .slice(0, 6);
 
-  const { config: wppConfig, isActive: wppActive, isLoading: wppLoading, saveConfig: wppSave, disableIntegration: wppDisable, testConnection: wppTest } = useWhatsApp();
-  const [showWppForm, setShowWppForm] = useState(false);
-  const [wppInput, setWppInput] = useState({ instance: '', token: '', phone: '' });
-  const [wppTesting, setWppTesting] = useState(false);
-  const [wppError, setWppError] = useState('');
   const isAdmin = profile?.role === 'admin';
-
-  const handleWppSave = async () => {
-    if (!wppInput.instance.trim() || !wppInput.token.trim() || !wppInput.phone.trim()) {
-      setWppError('Preencha todos os campos'); return;
-    }
-    setWppTesting(true); setWppError('');
-    const { ok, error } = await wppTest(wppInput);
-    if (!ok) { setWppError(error ?? 'Falha no teste de conexão'); setWppTesting(false); return; }
-    await wppSave(wppInput);
-    setShowWppForm(false);
-    setWppTesting(false);
-    showToast?.('WhatsApp integrado com sucesso!', 'success');
-  };
-
-  const handleWppDisable = async () => {
-    await wppDisable();
-    showToast?.('Integração WhatsApp desativada.', 'info');
-  };
 
   const chartData = (() => {
     const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -198,134 +174,43 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
           </div>
         </div>
 
-        <div className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden group">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none transition-colors"
-            style={{ background: `color-mix(in srgb, var(--color-accent) ${wppActive ? 6 : 4}%, transparent)` }} />
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 relative z-10">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent">
-                <MessageCircle size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-200">Integração WhatsApp</h3>
-                {!wppLoading && (
-                  <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: wppActive ? 'var(--color-accent)' : 'var(--color-text-dim)' }}>
-                    {wppActive ? '● Ativo' : '○ Inativo'}
-                  </span>
-                )}
-              </div>
+        <button
+          onClick={() => onNavigate?.('central-tempo')}
+          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden text-left group hover:border-accent/20 border border-transparent transition-all"
+        >
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none"
+            style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }} />
+          <div className="flex items-center gap-4 mb-6 relative z-10">
+            <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent">
+              <Clock size={24} />
             </div>
-            {wppActive && isAdmin && (
-              <div className="flex items-center gap-2 relative z-10">
-                <button onClick={() => { setWppInput(wppConfig); setShowWppForm(v => !v); setWppError(''); }}
-                  className="neu-button rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white transition-colors">
-                  <Settings size={13} /> Configurar
-                </button>
-                <button onClick={handleWppDisable}
-                  className="neu-button rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">
-                  <X size={13} /> Desativar
-                </button>
-              </div>
-            )}
+            <div>
+              <h3 className="text-xl font-bold text-gray-200">Central de Tempo</h3>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Produtividade Operacional
+              </span>
+            </div>
           </div>
 
-          <AnimatePresence mode="wait">
-            {wppLoading ? (
-              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex items-center gap-2 text-gray-500 text-sm relative z-10">
-                <Loader2 size={14} className="animate-spin" /> Carregando configuração...
-              </motion.div>
-            ) : wppActive && !showWppForm ? (
-              <motion.div key="active" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                className="flex flex-col gap-4 relative z-10">
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Mensagens automáticas são enviadas via WhatsApp quando requisições são aprovadas e pedidos avançam de status.
-                </p>
-                <div className="flex items-center gap-3 p-4 rounded-2xl"
-                  style={{
-                    background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)',
-                    border:     '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)',
-                  }}>
-                  <Check size={16} className="shrink-0 text-accent" />
-                  <div>
-                    <p className="text-xs font-bold text-accent">Z-API configurada</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      Instância: <span className="font-mono">{wppConfig.instance}</span> · Destino: <span className="font-mono">{wppConfig.phone}</span>
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="inactive-or-form" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                className="flex flex-col gap-4 relative z-10">
-                {!showWppForm ? (
-                  <>
-                    <h2 className="text-2xl font-bold text-white leading-snug">
-                      Receba notificações automáticas <span className="block mt-1 text-accent">direto no WhatsApp</span>
-                    </h2>
-                    <p className="text-gray-500 text-sm">Configure sua instância Z-API e o LogMax enviará mensagens a cada aprovação e avanço de pedido.</p>
-                    {isAdmin && (
-                      <button onClick={() => { setShowWppForm(true); setWppInput({ instance: '', token: '', phone: '' }); setWppError(''); }}
-                        className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all"
-                        style={{
-                          background:  'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
-                          color:       'var(--color-accent-text)',
-                          border:      'none',
-                          boxShadow:   '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent)',
-                        }}>
-                        Ativar integração <ArrowRight size={16} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-xs text-gray-500">Preencha os dados da sua instância Z-API. Uma mensagem de teste será enviada antes de salvar.</p>
-                    {(['instance', 'token', 'phone'] as const).map(field => (
-                      <input
-                        key={field}
-                        value={wppInput[field]}
-                        onChange={e => { setWppInput(p => ({ ...p, [field]: e.target.value })); setWppError(''); }}
-                        placeholder={field === 'instance' ? 'ID da instância' : field === 'token' ? 'Token da instância' : 'Número destino (ex: 5511999999999)'}
-                        style={{
-                          background: 'var(--color-input-bg)',
-                          boxShadow: 'var(--color-input-shadow)',
-                          border: wppError ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--color-input-border)',
-                          borderRadius: '0.875rem', padding: '0.7rem 1rem',
-                          color: 'var(--color-input-text)', fontSize: '0.8rem', outline: 'none', width: '100%',
-                        }}
-                        onFocus={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent) 30%, transparent)'; }}
-                        onBlur={e => { e.currentTarget.style.borderColor = wppError ? 'rgba(239,68,68,0.4)' : 'var(--color-input-border)'; }}
-                      />
-                    ))}
-                    {wppError && (
-                      <p className="text-xs text-red-500 flex items-center gap-1.5">
-                        <X size={11} /> {wppError}
-                      </p>
-                    )}
-                    <div className="flex gap-2 mt-1">
-                      <button onClick={handleWppSave} disabled={wppTesting}
-                        className="btn-shimmer py-2.5 px-5 rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50 transition-all"
-                        style={{
-                          background: wppTesting
-                            ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)'
-                            : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
-                          color: 'var(--color-accent-text)',
-                          border: 'none',
-                        }}>
-                        {wppTesting ? <><Loader2 size={12} className="animate-spin" /> Testando...</> : <><Check size={12} /> Testar e Salvar</>}
-                      </button>
-                      <button onClick={() => { setShowWppForm(false); setWppError(''); }}
-                        className="neu-button py-2.5 px-4 rounded-xl text-xs font-bold text-gray-500 hover:text-white transition-colors">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+          <h2 className="text-2xl font-bold text-white leading-snug relative z-10">
+            Relógio, alarmes, cronômetro e timer
+            <span className="block mt-1 text-accent">numa só tela.</span>
+          </h2>
+          <p className="text-gray-500 text-sm mt-2 mb-5 relative z-10">
+            Fuso de Brasília–Acre travado, alarmes salvos no próprio navegador, voltas no
+            cronômetro e timer regressivo com alerta sonoro. Sem servidor, sem custo.
+          </p>
+
+          <span className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"
+            style={{
+              background:  'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+              color:       'var(--color-accent-text)',
+              border:      'none',
+              boxShadow:   '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent)',
+            }}>
+            Abrir Central de Tempo <ArrowRight size={16} />
+          </span>
+        </button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : (
