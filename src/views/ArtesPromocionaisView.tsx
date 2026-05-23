@@ -67,7 +67,7 @@ const StarRow: React.FC<{ value: number; onChange?: (v: number) => void; size?: 
 );
 
 export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
-  const { data: artes, isLoading } = useFetchData<Arte>('/api/marketingartesview', undefined, true);
+  const { data: artes, isLoading, error: artesError } = useFetchData<Arte>('/api/marketingartesview', undefined, true);
   const { data: feedbacks, setData: setFeedbacks } = useFetchData<Feedback>('/api/marketingartefeedbackview', undefined, true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<Record<string, { estrelas: number; comentario: string }>>({});
@@ -149,9 +149,12 @@ export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
         </p>
       </div>
 
-      {artes.length === 0 ? (
+      {artesError || artes.length === 0 ? (
         <div className="neu-flat rounded-3xl p-10 border border-white/5">
-          <EmptyState message="Nenhuma arte publicada ainda. Quando o Marketing publicar, ela aparece aqui." />
+          <EmptyState
+            error={artesError}
+            message="Nenhuma arte publicada ainda. Quando o Marketing publicar, ela aparece aqui."
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

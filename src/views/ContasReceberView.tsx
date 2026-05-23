@@ -14,7 +14,7 @@ export const ContasReceberView = ({ showToast }: any) => {
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   // Realtime: vendas Fiado de outros caixas geram contas a receber — esta view actualiza-se sozinha (#21).
-  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+  const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/contasreceberview', undefined, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
@@ -215,7 +215,7 @@ export const ContasReceberView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhuma conta a receber" /> : (
+      {isLoading ? <LoadingSpinner /> : (error || enriched.length === 0) ? <EmptyState error={error} message="Nenhuma conta a receber" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
             <table className="w-full text-left border-collapse">

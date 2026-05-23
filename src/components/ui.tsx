@@ -137,18 +137,41 @@ export const Pagination = ({
   );
 };
 
-export const EmptyState = ({ message = 'Nenhum registro encontrado' }: { message?: string }) => (
-  <div
-    className="flex flex-col items-center justify-center p-12 w-full text-center rounded-2xl border-dashed border-2"
-    style={{
-      borderColor: 'var(--color-border-md)',
-      background: 'var(--color-surface)',
-    }}
-  >
-    <Search size={32} className="text-gray-600 mb-4" />
-    <span className="text-sm font-semibold text-gray-400">{message}</span>
-  </div>
-);
+// Mostra "nada encontrado" OU, se `error` for passado, um banner vermelho
+// com a mensagem do PostgREST/Supabase. Sem `error`, comporta-se igual ao
+// antigo (back-compat). Views que destructuram `error` do useFetchData
+// devem repassar aqui — caso contrário, problemas de RLS/coluna/4xx ficam
+// indistinguíveis de "tabela realmente vazia" (foi o que mascarou o bug
+// das artes promocionais por dois passos).
+export const EmptyState = ({ message = 'Nenhum registro encontrado', error }: { message?: string; error?: string | null }) => {
+  if (error) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center p-10 w-full text-center rounded-2xl border-dashed border-2"
+        style={{
+          borderColor: 'rgba(239, 68, 68, 0.45)',         // red-500 @ 45%
+          background:  'rgba(239, 68, 68, 0.06)',          // red-500 @ 6%
+        }}
+      >
+        <AlertCircle size={32} className="text-red-500 mb-3" />
+        <span className="text-sm font-bold text-red-400 mb-1">Erro ao carregar dados</span>
+        <span className="text-xs text-gray-400 max-w-md break-words">{error}</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="flex flex-col items-center justify-center p-12 w-full text-center rounded-2xl border-dashed border-2"
+      style={{
+        borderColor: 'var(--color-border-md)',
+        background: 'var(--color-surface)',
+      }}
+    >
+      <Search size={32} className="text-gray-600 mb-4" />
+      <span className="text-sm font-semibold text-gray-400">{message}</span>
+    </div>
+  );
+};
 
 export const FormField = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
   <div className="flex flex-col gap-1.5">

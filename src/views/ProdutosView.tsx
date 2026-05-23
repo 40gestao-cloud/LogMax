@@ -51,7 +51,7 @@ export const ProdutosView = ({ showToast }: any) => {
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
-  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+  const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/produtosview',
     filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
     false,
@@ -508,7 +508,7 @@ export const ProdutosView = ({ showToast }: any) => {
       </AnimatePresence>
 
       {/* Tabela */}
-      {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (
+      {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse md:min-w-[900px]">
