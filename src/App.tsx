@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useFetchData } from './hooks/useSupabaseData';
+import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { Toast, LoadingSpinner, PageLoadingFallback, PlaceholderView } from './components/ui';
@@ -495,6 +496,30 @@ function LogMaxAppInner() {
       }, 3000);
     }
   }, []);
+
+  // Supabase não configurado: sistema fora do ar. Tela específica
+  // antes do LoginScreen porque o form de login não consegue chamar
+  // signInWithPassword sem o client.
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base px-6 text-center">
+        <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
+          <Package size={28} className="text-gray-500" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-300">Sistema indisponível</h2>
+        <p className="text-sm text-gray-500 max-w-md">
+          O LogMax está temporariamente fora do ar (configuração do servidor ausente).
+          Tente novamente em alguns minutos. Se o problema persistir, avise o administrador.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
 
   if (authLoading || (isAuthenticated && profileLoading && !profile)) {
     return (

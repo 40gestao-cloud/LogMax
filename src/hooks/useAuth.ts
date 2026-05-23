@@ -59,7 +59,10 @@ export function useAuth() {
     user: authState.user,
     session: authState.session,
     isLoading: authState.isLoading,
-    isAuthenticated: isSupabaseConfigured ? !!authState.user : true, // sem Supabase, libera acesso
+    // Sem Supabase configurado o sistema está fora do ar — não "libera acesso".
+    // App.tsx detecta isSupabaseConfigured=false e mostra tela explícita
+    // de manutenção em vez do LoginScreen (que falharia ao tentar logar).
+    isAuthenticated: isSupabaseConfigured && !!authState.user,
     signOut,
   };
 }

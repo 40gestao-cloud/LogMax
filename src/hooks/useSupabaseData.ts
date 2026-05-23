@@ -136,15 +136,27 @@ export function useFetchData<T = any>(
     const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2);
+    // Debounce: durante imports em massa ou bursts de UPDATE, agrupa
+    // eventos em janelas de 250ms para evitar fan-out de fetches.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel(`rt-${table}-${channelId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, () => loadRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        if (debounceTimer !== null) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          loadRef.current();
+        }, 250);
+      })
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
           console.warn(`[Realtime] Erro no canal ${table} — dados podem estar desatualizados.`);
         }
       });
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
   }, [table, realtime]);
 
   return { data, setData, isLoading, error, reload: load, totalCount };

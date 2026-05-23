@@ -5,8 +5,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
+import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 
 interface CartItem {
@@ -22,6 +24,7 @@ interface CartItem {
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
 
 export const PDVView = ({ showToast, profile }: any) => {
+  const { user } = useAuth();
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto();
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
@@ -146,6 +149,15 @@ export const PDVView = ({ showToast, profile }: any) => {
   const pixPendenteRef = useRef(pixPendente);
   useEffect(() => { pixPendenteRef.current = pixPendente; }, [pixPendente]);
 
+  // Refs adicionais para o gate do scanner: enquanto o PDV está
+  // processando o fechamento ou mostrando confirmação da última venda,
+  // o listener global não deve disparar (operador pode estar digitando
+  // num input de modal, ou Enter ia ativar o botão "Fechar Venda").
+  const isClosingRef = useRef(isClosing);
+  useEffect(() => { isClosingRef.current = isClosing; }, [isClosing]);
+  const lastVendaRef = useRef(lastVenda);
+  useEffect(() => { lastVendaRef.current = lastVenda; }, [lastVenda]);
+
   // Leitor de código de barras (hardware): teclas chegam em <50ms entre si e
   // terminam com Enter. Listener global em fase de CAPTURE para que mesmo
   // quando o foco está num botão (Tema, forma de pagamento, card de produto),
@@ -156,17 +168,25 @@ export const PDVView = ({ showToast, profile }: any) => {
     let lastTs = 0;
 
     const onKey = (e: KeyboardEvent) => {
+      // Gate: scanner desativado durante modais/estados em que o Enter
+      // tem outro propósito (overlay Pix, finalização em curso, banner
+      // de "venda concluída" antes do operador clicar OK).
+      const blocked =
+        pixPendenteRef.current !== null ||
+        isClosingRef.current ||
+        lastVendaRef.current !== null;
+
       const now = performance.now();
       const fast = now - lastTs < SCANNER_MAX_INTERVAL_MS;
 
       if (e.key === 'Enter') {
-        if (chars.length >= 4 && fast) {
+        if (chars.length >= 4 && fast && !blocked) {
           e.preventDefault();
           e.stopPropagation();
           const code = chars;
           chars = '';
           lastTs = 0;
-          if (!pixPendenteRef.current) processBarcodeRef.current(code);
+          processBarcodeRef.current(code);
           return;
         }
         chars = '';
@@ -175,6 +195,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       }
 
       if (e.key.length !== 1) return;
+      if (blocked) { chars = ''; lastTs = 0; return; }
       if (!fast) chars = '';
       chars += e.key;
       lastTs = now;
@@ -183,6 +204,36 @@ export const PDVView = ({ showToast, profile }: any) => {
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
   }, []);
+
+  // Detecção de Pix órfão: ao montar, busca pendentes deste operador
+  // que ficaram em 'aguardando' (operador fechou aba, recarregou, etc.).
+  // Cancela em silêncio — o snapshot do carrinho era client-side e já
+  // se perdeu, então o pendente nunca seria efetivado mesmo se o
+  // cliente escaneasse. Manter um pendente vivo só polui pix_pendentes
+  // e confunde o sino do simulador.
+  useEffect(() => {
+    if (!supabase || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: orfaos } = await supabase
+        .from('pix_pendentes')
+        .select('id')
+        .eq('operador_id', user.id)
+        .eq('status', 'aguardando');
+      if (cancelled || !orfaos || orfaos.length === 0) return;
+      const ids = orfaos.map((o: any) => o.id);
+      await supabase
+        .from('pix_pendentes')
+        .update({ status: 'cancelado' })
+        .in('id', ids);
+      showToast?.(
+        `${ids.length} pagamento${ids.length > 1 ? 's' : ''} Pix pendente${ids.length > 1 ? 's' : ''} cancelado${ids.length > 1 ? 's' : ''} (sessão anterior).`,
+        'info',
+        true,
+      );
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, showToast]);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
   const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); };
@@ -262,7 +313,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       // Revalida o caixa antes de fechar a venda — outro operador pode tê-lo fechado
       // enquanto o carrinho estava a ser montado.
       if (supabase) {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayBR();
         const { data: caixaAtual } = await supabase
           .from('controle_caixa')
           .select('id, status')
@@ -309,7 +360,12 @@ export const PDVView = ({ showToast, profile }: any) => {
       if (formaPagamento === 'PIX') {
         const { data: pendente, error: insErr } = await supabase
           .from('pix_pendentes')
-          .insert({ valor: totalFinal, cliente_id: clienteId || null, status: 'aguardando' })
+          .insert({
+            valor: totalFinal,
+            cliente_id: clienteId || null,
+            status: 'aguardando',
+            operador_id: user?.id ?? null,
+          })
           .select('id, valor')
           .single();
         if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar Pix.');
@@ -332,17 +388,42 @@ export const PDVView = ({ showToast, profile }: any) => {
         parcelas,
       );
     } catch (err: any) {
+      const msg = String(err?.message ?? '');
       const isNetworkError =
         err instanceof TypeError ||
         !navigator.onLine ||
-        /fetch|network|failed to fetch/i.test(String(err?.message ?? ''));
+        /fetch|network|failed to fetch/i.test(msg);
 
       if (isNetworkError) {
         setNetworkError(true);
-      } else {
-        showToast?.(`Erro ao fechar venda: ${err?.message ?? 'verifique o console'}`, 'error', true);
         setIsClosing(false);
+        return;
       }
+
+      // P0001 + 'Estoque insuficiente' vem do RPC criar_venda_pdv quando o
+      // lock pessimista detecta concorrência. Mensagem já é amigável.
+      // Atualiza o carrinho com o saldo real para o operador reagir.
+      if (/estoque insuficiente/i.test(msg)) {
+        showToast?.(msg, 'error', true);
+        if (supabase) {
+          const prodIds = cart.map(i => i.produto_id);
+          const { data: freshProd } = await supabase
+            .from('produtos')
+            .select('id, estoque')
+            .in('id', prodIds);
+          if (freshProd) {
+            setCart(prev => prev.map(cartItem => {
+              const fp = freshProd.find((p: any) => p.id === cartItem.produto_id);
+              return fp ? { ...cartItem, estoque: Number(fp.estoque ?? 0) } : cartItem;
+            }));
+          }
+        }
+        setIsClosing(false);
+        return;
+      }
+
+      showToast?.(`Erro ao fechar venda: ${err?.message ?? 'verifique o console'}`, 'error', true);
+      setIsClosing(false);
     }
   };
 

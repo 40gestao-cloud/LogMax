@@ -5,6 +5,7 @@ import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -30,7 +31,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   const [observacao, setObservacao]       = useState('');
   const [saving, setSaving]               = useState(false);
   const [confirmFechar, setConfirmFechar] = useState(false);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayBR();
 
   const handleAbrir = async () => {
     const valor = parseFloat(valorAbertura.replace(',', '.'));
@@ -39,7 +40,6 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
     setSaving(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
       const { error } = await supabase.from('controle_caixa').insert({
         data:             today,
         valor_abertura:   valor,

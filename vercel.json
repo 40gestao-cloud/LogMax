@@ -6,6 +6,10 @@
     {
       "path": "/api/reverter-promocoes-expiradas",
       "schedule": "5 3 * * *"
+    },
+    {
+      "path": "/api/cancelar-pix-pendentes-antigos",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

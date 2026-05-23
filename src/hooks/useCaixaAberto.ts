@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { todayBR } from '../lib/dates';
 
 export interface CaixaAberto {
   id: string;
@@ -15,7 +16,7 @@ export function useCaixaAberto() {
   const [caixa, setCaixa] = useState<CaixaAberto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayBR();
 
   const refresh = useCallback(async () => {
     if (!supabase) { setIsLoading(false); return; }

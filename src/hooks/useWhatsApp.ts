@@ -84,24 +84,27 @@ export function useWhatsApp() {
   };
 
   const notify = useCallback(async (message: string) => {
-    if (!isActive || !config.instance || !supabase) return;
+    if (!supabase) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      // Sem sessão → falha silenciosa (consistente com 'não crítico')
+      // Sem sessão → falha silenciosa (consistente com 'não crítico').
       if (!session?.access_token) return;
 
+      // Não envia mais instance/token — o servidor lê de `configuracoes`
+      // via service role. Se a config estiver vazia, o servidor responde
+      // ok:false silenciosamente (PDV não trata erro de notify).
       await fetch('/api/whatsapp-notify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ instance: config.instance, token: config.token, phone: config.phone, message }),
+        body: JSON.stringify({ message }),
       });
     } catch (err) {
       console.warn('[WhatsApp] Falha na notificação (não crítico):', err);
     }
-  }, [config, isActive]);
+  }, []);
 
   return { config, isActive, isLoading, saveConfig, disableIntegration, testConnection, notify };
 }
