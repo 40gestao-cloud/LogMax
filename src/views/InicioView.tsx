@@ -200,17 +200,17 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
 
         <div className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden group">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none transition-colors"
-            style={{ background: wppActive ? 'rgba(37,211,102,0.06)' : 'rgba(16,185,129,0.04)' }} />
+            style={{ background: `color-mix(in srgb, var(--color-accent) ${wppActive ? 6 : 4}%, transparent)` }} />
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 neu-circle flex items-center justify-center" style={{ color: '#25D366' }}>
+              <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent">
                 <MessageCircle size={24} />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-200">Integração WhatsApp</h3>
                 {!wppLoading && (
                   <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: wppActive ? '#25D366' : 'var(--color-text-dim)' }}>
+                    color: wppActive ? 'var(--color-accent)' : 'var(--color-text-dim)' }}>
                     {wppActive ? '● Ativo' : '○ Inativo'}
                   </span>
                 )}
@@ -243,10 +243,13 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                   Mensagens automáticas são enviadas via WhatsApp quando requisições são aprovadas e pedidos avançam de status.
                 </p>
                 <div className="flex items-center gap-3 p-4 rounded-2xl"
-                  style={{ background: 'rgba(37,211,102,0.06)', border: '1px solid rgba(37,211,102,0.15)' }}>
-                  <Check size={16} style={{ color: '#25D366' }} className="shrink-0" />
+                  style={{
+                    background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)',
+                    border:     '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)',
+                  }}>
+                  <Check size={16} className="shrink-0 text-accent" />
                   <div>
-                    <p className="text-xs font-bold" style={{ color: '#25D366' }}>Z-API configurada</p>
+                    <p className="text-xs font-bold text-accent">Z-API configurada</p>
                     <p className="text-[10px] text-gray-500 mt-0.5">
                       Instância: <span className="font-mono">{wppConfig.instance}</span> · Destino: <span className="font-mono">{wppConfig.phone}</span>
                     </p>
@@ -259,14 +262,18 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                 {!showWppForm ? (
                   <>
                     <h2 className="text-2xl font-bold text-white leading-snug">
-                      Receba notificações automáticas <span style={{ color: '#25D366' }} className="block mt-1">direto no WhatsApp</span>
+                      Receba notificações automáticas <span className="block mt-1 text-accent">direto no WhatsApp</span>
                     </h2>
                     <p className="text-gray-500 text-sm">Configure sua instância Z-API e o LogMax enviará mensagens a cada aprovação e avanço de pedido.</p>
                     {isAdmin && (
                       <button onClick={() => { setShowWppForm(true); setWppInput({ instance: '', token: '', phone: '' }); setWppError(''); }}
-                        className="py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all"
-                        style={{ background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#fff', border: 'none',
-                          boxShadow: '0 4px 20px rgba(37,211,102,0.25)' }}>
+                        className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all"
+                        style={{
+                          background:  'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+                          color:       'var(--color-accent-text)',
+                          border:      'none',
+                          boxShadow:   '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent)',
+                        }}>
                         Ativar integração <ArrowRight size={16} />
                       </button>
                     )}
@@ -287,7 +294,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                           borderRadius: '0.875rem', padding: '0.7rem 1rem',
                           color: 'var(--color-input-text)', fontSize: '0.8rem', outline: 'none', width: '100%',
                         }}
-                        onFocus={e => { e.currentTarget.style.borderColor = 'rgba(37,211,102,0.3)'; }}
+                        onFocus={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent) 30%, transparent)'; }}
                         onBlur={e => { e.currentTarget.style.borderColor = wppError ? 'rgba(239,68,68,0.4)' : 'var(--color-input-border)'; }}
                       />
                     ))}
@@ -298,9 +305,14 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
                     )}
                     <div className="flex gap-2 mt-1">
                       <button onClick={handleWppSave} disabled={wppTesting}
-                        className="py-2.5 px-5 rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50 transition-all"
-                        style={{ background: wppTesting ? 'rgba(37,211,102,0.4)' : 'linear-gradient(135deg, #25D366, #128C7E)',
-                          color: '#fff', border: 'none' }}>
+                        className="btn-shimmer py-2.5 px-5 rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50 transition-all"
+                        style={{
+                          background: wppTesting
+                            ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)'
+                            : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+                          color: 'var(--color-accent-text)',
+                          border: 'none',
+                        }}>
                         {wppTesting ? <><Loader2 size={12} className="animate-spin" /> Testando...</> : <><Check size={12} /> Testar e Salvar</>}
                       </button>
                       <button onClick={() => { setShowWppForm(false); setWppError(''); }}
