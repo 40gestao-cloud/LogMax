@@ -22,12 +22,19 @@
     <link rel="apple-touch-icon" href="/icon.png" />
 
     <!-- Evita FOUC: aplica tema persistido ANTES do React montar.
-         Sem isto, light mode flashava com bg/sombras dark antes do useEffect rodar. -->
+         Sem isto, light mode flashava com bg/sombras dark antes do useEffect rodar.
+         IMPORTANTE: ACCENT_HEX abaixo é clone do mapa em src/contexts/ThemeContext.tsx.
+         Ao adicionar accent novo, atualizar AMBOS — senão hard refresh (Ctrl+Shift+R)
+         mostra a meta theme-color default por alguns ms antes do React assumir. -->
     <script>
       (function () {
         var ACCENT_HEX = {
           green:  '#10B981', yellow: '#FACC15', purple: '#A855F7',
-          orange: '#F97316', blue:   '#3B82F6', pink:   '#EC4899'
+          orange: '#F97316', blue:   '#3B82F6', pink:   '#EC4899',
+          red:    '#EF4444',
+          // Acessibilidade: laranja é a cor visível em botões/badges,
+          // ícones em azul claro são CSS-only.
+          acessivel: '#F97316'
         };
         try {
           var t = localStorage.getItem('logmax-theme');
