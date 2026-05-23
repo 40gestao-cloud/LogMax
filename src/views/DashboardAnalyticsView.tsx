@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, Package, Banknote, CreditCard, TrendingUp, TrendingDown, ShieldAlert, FileDown, Sheet, Building2, X, ChevronDown } from 'lucide-react';
 import {
@@ -44,6 +44,28 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
     (profile.role === 'gerente' && (profile.setor === 'financeiro' || profile.setor === 'logistica'))
   );
   const [expandedKpi, setExpandedKpi] = useState<KpiKey | null>(null);
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+
+  // Se o usuário perder a permissão em runtime (troca de perfil, refetch),
+  // limpa o estado pra não deixar um painel órfão referenciado.
+  useEffect(() => {
+    if (!canExpandKpis && expandedKpi) setExpandedKpi(null);
+  }, [canExpandKpis, expandedKpi]);
+
+  // No mobile o painel abre DEPOIS dos 4 cards stacked — sem este scroll
+  // o usuário toca e parece não acontecer nada (painel está fora do
+  // viewport). Atrasamos 220ms (transition de 200ms + folga) pra rolar
+  // só quando o painel já tem altura; rolar antes faz o scrollIntoView
+  // tratar a div de height:0 como "já visível" e ignorar.
+  // `block: 'nearest'` evita rolagem desnecessária no desktop se já
+  // estiver no viewport.
+  useEffect(() => {
+    if (!expandedKpi) return;
+    const id = setTimeout(() => {
+      detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 220);
+    return () => clearTimeout(id);
+  }, [expandedKpi]);
 
   const [period, setPeriod] = useState<Period>('30d');
 
@@ -272,6 +294,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
       <AnimatePresence initial={false}>
         {expandedKpi && canExpandKpis && (
           <motion.div
+            ref={detailPanelRef}
             id="kpi-detail-panel"
             key={expandedKpi}
             initial={{ opacity: 0, height: 0 }}
