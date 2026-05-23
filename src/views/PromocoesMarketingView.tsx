@@ -294,35 +294,35 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto *</label>
-                <select value={form.produto_id} onChange={e => handleProductChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto *</label>
+                <select id="promo-produto" value={form.produto_id} onChange={e => handleProductChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecione um produto...</option>
                   {produtosAtivos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
-                <input type="number" value={form.preco_atual} readOnly
+                <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
+                <input id="promo-preco-atual" type="number" value={form.preco_atual} readOnly
                   className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
-                <input type="number" value={form.preco_promocional} onChange={e => setForm((f: any) => ({ ...f, preco_promocional: e.target.value }))}
+                <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
+                <input id="promo-preco-promocional" type="number" value={form.preco_promocional} onChange={e => setForm((f: any) => ({ ...f, preco_promocional: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
-                <input type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
+                <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
+                <input id="promo-data-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha</label>
-                <input type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
+                <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha</label>
+                <input id="promo-data-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Campanha</label>
-                <input type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Campanha</label>
+                <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Promoção de verão" />
               </div>
             </div>
@@ -475,8 +475,9 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                 <span className="font-bold text-gray-300">{arteModal.promocao.nome_produto}</span>
                 {arteModal.promocao.descricao && <> · <span className="text-gray-400">{arteModal.promocao.descricao}</span></>}
               </p>
-              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link da arte *</label>
+              <label htmlFor="promo-arte-url" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link da arte *</label>
               <input
+                id="promo-arte-url"
                 type="url"
                 value={arteUrl}
                 onChange={e => setArteUrl(e.target.value)}

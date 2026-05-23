@@ -179,7 +179,9 @@ export const GerenciamentoEstoqueView = () => {
             ) : (
               <div className="flex flex-col gap-3">
                 {invAbertos.map((i: any) => {
-                  const dif = Number(i.diferenca ?? (i.qtd_contada - i.qtd_sistema) ?? 0);
+                  // Os `?? 0` nos operandos absorvem null/undefined antes da
+                  // subtração — sem isso, qtd_contada=null vira NaN e some o sinal.
+                  const dif = Number(i.diferenca ?? ((i.qtd_contada ?? 0) - (i.qtd_sistema ?? 0)));
                   return (
                     <div key={i.id} className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0">
                       <div>

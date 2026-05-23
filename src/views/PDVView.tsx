@@ -668,10 +668,11 @@ export const PDVView = ({ showToast, profile }: any) => {
 
             {/* Pagamento */}
             <div className="flex flex-col gap-2 pt-3 border-t border-white/5 shrink-0">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Forma de pagamento</label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <span id="pdv-forma-pagto-label" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Forma de pagamento</span>
+              <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-labelledby="pdv-forma-pagto-label">
                 {FORMAS.map(f => (
                   <button key={f} onClick={() => setFormaPagamento(f)}
+                    role="radio" aria-checked={formaPagamento === f}
                     className="py-2 px-2 rounded-xl text-[10px] font-bold transition-all border"
                     style={formaPagamento === f
                       ? { background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
@@ -707,8 +708,9 @@ export const PDVView = ({ showToast, profile }: any) => {
                     className="overflow-hidden">
                     <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
                       <CreditCard size={12} className="text-accent shrink-0" />
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Parcelas</label>
+                      <label htmlFor="pdv-parcelas" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Parcelas</label>
                       <select
+                        id="pdv-parcelas"
                         value={parcelas}
                         onChange={e => setParcelas(Number(e.target.value))}
                         className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none"

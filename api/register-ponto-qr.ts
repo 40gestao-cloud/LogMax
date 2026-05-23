@@ -82,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const [windowIdStr, checkpoint] = payload.split('|');
     const windowId = parseInt(windowIdStr, 10);
-    if (isNaN(windowId) || !CHECKPOINT_LABELS[checkpoint]) {
+    if (Number.isNaN(windowId) || !CHECKPOINT_LABELS[checkpoint]) {
       log.warn('qr.token_malformed', { user_id: user.id, reason: 'payload_shape', payload });
       return res.status(400).json({ error: 'Token malformado.' });
     }

@@ -83,7 +83,9 @@ export const InventariosView = ({ showToast }: any) => {
               {isLoading ? (<tr><td colSpan={7}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={7}><EmptyState /></td></tr>) : (
                 <AnimatePresence>
                   {filtered.map((item: any) => {
-                    const dif = Number(item.diferenca ?? (item.qtd_contada - item.qtd_sistema) ?? 0);
+                    // `?? 0` nos operandos antes da subtração: sem isso,
+                    // qtd_contada=null gera NaN e o badge perde o sinal.
+                    const dif = Number(item.diferenca ?? ((item.qtd_contada ?? 0) - (item.qtd_sistema ?? 0)));
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>

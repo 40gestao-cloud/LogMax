@@ -395,9 +395,10 @@ function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorCha
 
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+                <label htmlFor="ti-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
                 {allowSetorChange ? (
                   <select
+                    id="ti-setor"
                     value={form.setor_origem}
                     onChange={e => setForm(f => ({ ...f, setor_origem: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm"
@@ -406,15 +407,16 @@ function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorCha
                     {SETOR_GRID.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
                 ) : (
-                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300 border border-white/5">
+                  <div id="ti-setor" className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300 border border-white/5">
                     {setorLabel(form.setor_origem)}
                   </div>
                 )}
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo de problema</label>
+                <label htmlFor="ti-tipo-problema" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo de problema</label>
                 <select
+                  id="ti-tipo-problema"
                   value={form.tipo_problema}
                   onChange={e => setForm(f => ({ ...f, tipo_problema: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm"
@@ -424,8 +426,9 @@ function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorCha
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
+                <label htmlFor="ti-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
                 <textarea
+                  id="ti-descricao"
                   value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                   rows={4}
@@ -435,12 +438,14 @@ function FormModal({ show, onClose, form, setForm, saving, onSave, allowSetorCha
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Urgência</label>
-                <div className="grid grid-cols-3 gap-2">
+                <span id="ti-urgencia-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Urgência</span>
+                <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="ti-urgencia-label">
                   {URGENCIAS.map(u => (
                     <button
                       key={u}
                       type="button"
+                      role="radio"
+                      aria-checked={form.urgencia === u}
                       onClick={() => setForm(f => ({ ...f, urgencia: u }))}
                       className={`py-2 rounded-xl text-xs font-bold transition-all ${
                         form.urgencia === u

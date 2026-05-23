@@ -158,8 +158,8 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
 
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
-          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
-          <input type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
+          <label htmlFor="folha-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
+          <input id="folha-mes-filtro" type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
             className="neu-input rounded-xl px-3 py-2 text-sm" />
         </div>
         <NeuButtonAccent variant="" onClick={() => { if (showForm) closeForm(); else setShowForm(true); }}><Plus size={14} />{showForm ? 'Cancelar' : 'Nova Folha'}</NeuButtonAccent>
@@ -175,8 +175,8 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <select value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
+                <select id="folha-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
                   {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
                     <option key={f.id} value={f.id}>{f.nome}</option>
@@ -189,12 +189,13 @@ export const FolhaPagamentoView = ({ showToast }: any) => {
                 { label: 'Descontos (R$)', k: 'descontos', type: 'number' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                  <label htmlFor={`folha-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input id={`folha-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
               ))}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</label>
+                {/* O "Líquido Estimado" é texto somente-leitura, sem input — usamos span por isso */}
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</span>
                 <p className="neu-input rounded-xl px-3 py-2.5 text-sm text-green-400 font-mono font-bold">
                   R$ {(Number(form.salario_bruto || 0) - Number(form.descontos || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>

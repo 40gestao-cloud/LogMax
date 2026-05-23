@@ -132,8 +132,8 @@ export const FeriasView = ({ showToast }: any) => {
             <h3 className="text-sm font-bold text-gray-300 mb-5">{editId ? 'Editar Férias' : 'Nova Solicitação de Férias'}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <select value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <label htmlFor="ferias-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
+                <select id="ferias-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
                   {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
                     <option key={f.id} value={f.id}>{f.nome}</option>
@@ -146,8 +146,8 @@ export const FeriasView = ({ showToast }: any) => {
                 { label: 'Dias', k: 'dias', type: 'number' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input type={type} value={form[k]} onChange={e => {
+                  <label htmlFor={`ferias-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input id={`ferias-${k}`} type={type} value={form[k]} onChange={e => {
                     const v = e.target.value;
                     if (k === 'data_fim') {
                       const dias = calcDias(form.data_inicio, v);

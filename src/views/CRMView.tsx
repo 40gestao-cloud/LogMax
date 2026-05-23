@@ -177,8 +177,8 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
 
               {/* Toggle Empresa / Pessoa Física */}
               <div>
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2">Tipo de pessoa</label>
-                <div className="flex gap-1 neu-pressed rounded-xl p-1 w-fit border border-white/5">
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2" id="crm-tipo-pessoa-label">Tipo de pessoa</span>
+                <div className="flex gap-1 neu-pressed rounded-xl p-1 w-fit border border-white/5" role="radiogroup" aria-labelledby="crm-tipo-pessoa-label">
                   {(['Empresa', 'Pessoa Física'] as PessoaTipo[]).map(tipo => (
                     <button key={tipo} type="button"
                       onClick={() => setExtras(x => ({ ...x, pessoa_tipo: tipo, cpf_cnpj: '' }))}

@@ -155,28 +155,28 @@ export const PesquisasView = ({ showToast, profile }: any) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
-                <input type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
+                <label htmlFor="pesquisa-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+                <input id="pesquisa-titulo" type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Pesquisa de clima organizacional Q1" />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                <input type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                <label htmlFor="pesquisa-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+                <input id="pesquisa-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Contexto e objetivo da pesquisa..." />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
-                <input type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
+                <label htmlFor="pesquisa-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
+                <input id="pesquisa-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
-                <input type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
+                <label htmlFor="pesquisa-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
+                <input id="pesquisa-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Roles-alvo (vazio = todos)</label>
-                <div className="flex flex-wrap gap-2">
+                <span id="pesquisa-roles-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Roles-alvo (vazio = todos)</span>
+                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-roles-label">
                   {ROLES_DISPONIVEIS.map(r => {
                     const active = form.alvo_roles.includes(r);
                     return (
@@ -190,8 +190,8 @@ export const PesquisasView = ({ showToast, profile }: any) => {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setores-alvo (vazio = todos)</label>
-                <div className="flex flex-wrap gap-2">
+                <span id="pesquisa-setores-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setores-alvo (vazio = todos)</span>
+                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-setores-label">
                   {SETORES_DISPONIVEIS.map(s => {
                     const active = form.alvo_setores.includes(s);
                     return (

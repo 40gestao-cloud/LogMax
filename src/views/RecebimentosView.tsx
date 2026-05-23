@@ -184,15 +184,15 @@ export const RecebimentosView = ({ showToast }: any) => {
                             <td colSpan={6} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
-                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
+                                  <label htmlFor={`receb-produto-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
+                                  <select id={`receb-produto-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
                                     <option value="">Selecione o produto...</option>
                                     {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
                                   </select>
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
+                                  <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
+                                  <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
                                     {['Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                                 </div>

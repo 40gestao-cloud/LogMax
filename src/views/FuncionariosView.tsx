@@ -153,8 +153,9 @@ export const FuncionariosView = ({ showToast }: any) => {
                 const isNumericMask = !!mask;
                 return (
                   <div key={k} className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                    <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
                     <input
+                      id={`func-${k}`}
                       type={type}
                       inputMode={isNumericMask ? 'numeric' : undefined}
                       value={form[k]}
@@ -169,8 +170,8 @@ export const FuncionariosView = ({ showToast }: any) => {
                 );
               })}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                <select value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
+                <label htmlFor="func-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+                <select id="func-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   {['Ativo', 'Inativo', 'Afastado', 'Desligado'].map(o => <option key={o} value={o}>{o}</option>)}
                 </select>

@@ -157,25 +157,25 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
-                <input type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
+                <label htmlFor="tarefa-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+                <input id="tarefa-titulo" type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Conferir lote de mercadoria X" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Prioridade</label>
-                <select value={form.prioridade} onChange={e => setForm((f: any) => ({ ...f, prioridade: e.target.value }))}
+                <label htmlFor="tarefa-prioridade" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Prioridade</label>
+                <select id="tarefa-prioridade" value={form.prioridade} onChange={e => setForm((f: any) => ({ ...f, prioridade: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   {['Alta', 'Média', 'Baixa'].map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                <input type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                <label htmlFor="tarefa-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+                <input id="tarefa-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Detalhes da demanda..." />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Prazo</label>
-                <input type="date" value={form.prazo} onChange={e => setForm((f: any) => ({ ...f, prazo: e.target.value }))}
+                <label htmlFor="tarefa-prazo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Prazo</label>
+                <input id="tarefa-prazo" type="date" value={form.prazo} onChange={e => setForm((f: any) => ({ ...f, prazo: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>

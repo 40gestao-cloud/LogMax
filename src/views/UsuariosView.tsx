@@ -324,17 +324,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 { label: 'E-mail *', k: 'email', type: 'email' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
+                  <label htmlFor={`user-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input id={`user-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
               ))}
 
               {/* Senha com olho */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Senha *</label>
+                <label htmlFor="user-password" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Senha *</label>
                 <div className="relative">
-                  <input type={showPass ? 'text' : 'password'} value={form.password}
+                  <input id="user-password" type={showPass ? 'text' : 'password'} value={form.password}
                     onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
                   <button type="button" onClick={() => setShowPass(v => !v)}
@@ -346,8 +346,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
               {/* Setor */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
-                <select value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
+                <label htmlFor="user-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+                <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
                   disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
                   {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
                 </select>
@@ -355,8 +355,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
               {/* Cargo */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                <select value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
+                <label htmlFor="user-role" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
+                <select id="user-role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
                   disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
                   {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                 </select>
@@ -364,8 +364,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
               {/* Filial / Unidade — gerentes não podem atribuir Matriz */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
-                <select value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
+                <label htmlFor="user-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
+                <select id="user-filial" value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   {(isGerente ? FILIAIS_GERENTE : FILIAIS_HOLDING).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
@@ -494,24 +494,24 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
-                  <input type="text" value={editForm.nome}
+                  <label htmlFor="user-edit-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
+                  <input id="user-edit-nome" type="text" value={editForm.nome}
                     onChange={e => setEditForm((p: any) => ({ ...p, nome: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">E-mail *</label>
-                  <input type="email" value={editForm.email}
+                  <label htmlFor="user-edit-email" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">E-mail *</label>
+                  <input id="user-edit-email" type="email" value={editForm.email}
                     onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
 
                 {/* Nova senha (opcional) */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nova Senha (opcional)</label>
+                  <label htmlFor="user-edit-password" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nova Senha (opcional)</label>
                   <div className="relative">
-                    <input type={editShowPass ? 'text' : 'password'} value={editForm.password}
+                    <input id="user-edit-password" type={editShowPass ? 'text' : 'password'} value={editForm.password}
                       placeholder="Deixe em branco para manter"
                       onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
                       className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
@@ -524,8 +524,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
                 {/* Setor — só admin/CEO podem alterar */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
-                  <select value={editForm.setor}
+                  <label htmlFor="user-edit-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
+                  <select id="user-edit-setor" value={editForm.setor}
                     onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
                     disabled={!isGlobal || editForm.role === 'ceo'}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
@@ -538,8 +538,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
                 {/* Cargo — só admin/CEO podem alterar; CEO não pode promover a admin/CEO */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                  <select value={editForm.role}
+                  <label htmlFor="user-edit-role" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
+                  <select id="user-edit-role" value={editForm.role}
                     onChange={e => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
                     disabled={!isGlobal}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
@@ -563,8 +563,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
                 {/* Filial — gerente não pode atribuir Matriz */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
-                  <select value={editForm.filial}
+                  <label htmlFor="user-edit-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
+                  <select id="user-edit-filial" value={editForm.filial}
                     onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm">
                     {(isGerente ? FILIAIS_GERENTE : FILIAIS_HOLDING).map(f => (

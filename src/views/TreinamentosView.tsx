@@ -148,13 +148,13 @@ export const TreinamentosView = ({ showToast }: any) => {
                 { label: 'Inscritos', k: 'inscritos', type: 'number' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                  <label htmlFor={`treino-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input id={`treino-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
               ))}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                <select value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <label htmlFor="treino-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+                <select id="treino-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   {['Agendado', 'Em Andamento', 'Concluído', 'Cancelado'].map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>

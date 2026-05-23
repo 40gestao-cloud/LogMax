@@ -74,7 +74,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
     } else {
       exportToPDF('Relatório de Inventários', ['Produto', 'Qtd Sistema', 'Qtd Contada', 'Diferença', 'Status', 'Data'],
         filteredInv.map((i: any) => {
-          const dif = Number(i.diferenca ?? (i.qtd_contada - i.qtd_sistema) ?? 0);
+          const dif = Number(i.diferenca ?? ((i.qtd_contada ?? 0) - (i.qtd_sistema ?? 0)));
           return [i.prod?.nome ?? '—', String(i.qtd_sistema ?? ''), String(i.qtd_contada ?? ''), String(dif), i.status ?? '', i.data ?? ''];
         }),
         'logmax-inventarios');
@@ -97,7 +97,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
     } else {
       exportToExcel('Inventários', ['Produto', 'Qtd Sistema', 'Qtd Contada', 'Diferença', 'Status', 'Data'],
         filteredInv.map((i: any) => {
-          const dif = Number(i.diferenca ?? (i.qtd_contada - i.qtd_sistema) ?? 0);
+          const dif = Number(i.diferenca ?? ((i.qtd_contada ?? 0) - (i.qtd_sistema ?? 0)));
           return [i.prod?.nome ?? '—', Number(i.qtd_sistema ?? 0), Number(i.qtd_contada ?? 0), dif, i.status ?? '', i.data ?? ''];
         }),
         'logmax-inventarios');
@@ -230,7 +230,9 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
                   </tr></thead>
                   <tbody><AnimatePresence>
                     {filteredInv.map((i: any) => {
-                      const dif = Number(i.diferenca ?? (i.qtd_contada - i.qtd_sistema) ?? 0);
+                      // `?? 0` nos operandos antes da subtração — qtd_contada=null
+                      // antes virava NaN e a célula mostrava o literal.
+                      const dif = Number(i.diferenca ?? ((i.qtd_contada ?? 0) - (i.qtd_sistema ?? 0)));
                       return (
                         <motion.tr key={i.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{i.prod?.nome ?? '—'}</td>

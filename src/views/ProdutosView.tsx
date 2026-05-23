@@ -453,7 +453,8 @@ export const ProdutosView = ({ showToast }: any) => {
                   </FormField>
                   {/* Margem calculada ao vivo */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Margem de Lucro</label>
+                    {/* Margem é texto calculado read-only, sem input — span em vez de label */}
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Margem de Lucro</span>
                     <div className={`neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 ${
                       margemAoVivo === null ? 'text-gray-600' :
                       margemAoVivo >= 30 ? 'text-emerald-400' :

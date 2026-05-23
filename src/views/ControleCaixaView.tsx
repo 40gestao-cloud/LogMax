@@ -204,12 +204,13 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                <label htmlFor="caixa-valor-abertura" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Valor de Abertura (R$) *
                 </label>
                 <div className="relative">
                   <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
+                    id="caixa-valor-abertura"
                     type="number" min="0" step="0.01"
                     className="neu-input py-2.5 pl-8 pr-3 rounded-xl text-sm w-full"
                     placeholder="0,00"
@@ -220,8 +221,8 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Observação</label>
-                <input className="neu-input py-2.5 px-3 rounded-xl text-sm"
+                <label htmlFor="caixa-observacao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Observação</label>
+                <input id="caixa-observacao" className="neu-input py-2.5 px-3 rounded-xl text-sm"
                   placeholder="Opcional"
                   value={observacao}
                   onChange={e => setObservacao(e.target.value)} />

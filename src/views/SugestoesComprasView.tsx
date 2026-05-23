@@ -129,18 +129,19 @@ export const SugestoesComprasView = ({ showToast }: any) => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Qtd Sugerida</label>
+                  {/* Qtd Sugerida é texto fixo read-only, sem input — span em vez de label */}
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Qtd Sugerida</span>
                   <div className="neu-input py-2 px-3 rounded-xl text-sm text-accent font-mono font-bold">{requestingItem.qtd_sugerida} {requestingItem.unidade}</div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Urgência</label>
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm" value={urgencia} onChange={e => setUrgencia(e.target.value)}>
+                  <label htmlFor="sug-urgencia" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Urgência</label>
+                  <select id="sug-urgencia" className="neu-input py-2 px-3 rounded-xl text-sm" value={urgencia} onChange={e => setUrgencia(e.target.value)}>
                     {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Solicitante</label>
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Seu nome..." value={solicitante} onChange={e => setSolicitante(e.target.value)} />
+                  <label htmlFor="sug-solicitante" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Solicitante</label>
+                  <input id="sug-solicitante" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Seu nome..." value={solicitante} onChange={e => setSolicitante(e.target.value)} />
                 </div>
               </div>
               <div className="flex gap-3 justify-end">

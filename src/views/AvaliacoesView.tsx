@@ -153,10 +153,11 @@ function ModalAvaliacao({
           ))}
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
+            <label htmlFor="avaliacao-observacao" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
               Observação (opcional)
             </label>
             <textarea
+              id="avaliacao-observacao"
               value={observacao}
               onChange={e => setObservacao(e.target.value)}
               rows={3}
@@ -230,8 +231,9 @@ function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; 
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome</label>
+            <label htmlFor="avaliacao-ciclo-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome</label>
             <input
+              id="avaliacao-ciclo-nome"
               type="text"
               value={form.nome}
               onChange={e => setForm(p => ({ ...p, nome: e.target.value }))}
@@ -242,8 +244,9 @@ function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
+              <label htmlFor="avaliacao-ciclo-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
               <input
+                id="avaliacao-ciclo-inicio"
                 type="date"
                 value={form.data_inicio}
                 onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))}
@@ -251,8 +254,9 @@ function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; 
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
+              <label htmlFor="avaliacao-ciclo-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
               <input
+                id="avaliacao-ciclo-fim"
                 type="date"
                 value={form.data_fim}
                 onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}

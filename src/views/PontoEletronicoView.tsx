@@ -213,8 +213,8 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
       {/* Filtro de mês */}
       <div className="flex items-center gap-3 shrink-0">
         <Calendar size={14} className="text-yellow-400" />
-        <label className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
-        <input type="month" value={filtroMes}
+        <label htmlFor="ponto-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
+        <input id="ponto-mes-filtro" type="month" value={filtroMes}
           onChange={e => setFiltroMes(e.target.value)}
           className="neu-input rounded-xl px-3 py-2 text-sm" />
       </div>
@@ -476,8 +476,8 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
           <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-3">
               <Clock size={14} className="text-yellow-400" />
-              <label className="text-xs text-gray-500 font-bold uppercase tracking-widest">Filtrar por Data</label>
-              <input type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm" />
+              <label htmlFor="ponto-data-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Filtrar por Data</label>
+              <input id="ponto-data-filtro" type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm" />
               {filtroData && <button onClick={() => setFiltroData('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar</button>}
             </div>
             <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}>
@@ -495,8 +495,8 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                    <select value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                    <label htmlFor="ponto-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
+                    <select id="ponto-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                       <option value="">Selecionar...</option>
                       {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
                         <option key={f.id} value={f.id}>{f.nome}</option>
@@ -510,13 +510,13 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                     { label: 'Horas Trabalhadas', k: 'horas_trabalhadas', type: 'number' },
                   ].map(({ label, k, type, placeholder }: any) => (
                     <div key={k} className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                      <input type={type} value={form[k]} placeholder={placeholder} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                      <label htmlFor={`ponto-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                      <input id={`ponto-${k}`} type={type} value={form[k]} placeholder={placeholder} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                     </div>
                   ))}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                    <select value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                    <label htmlFor="ponto-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+                    <select id="ponto-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                       {['Normal', 'Falta', 'Justificado', 'Hora Extra'].map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
