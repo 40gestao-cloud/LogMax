@@ -131,8 +131,13 @@ export function useFetchData<T = any>(
 
   useEffect(() => {
     if (!realtime || !supabase || !table) return;
+    // crypto.randomUUID() em vez de Math.random — qualidade criptográfica,
+    // sem chance teórica de colisão entre instâncias paralelas do hook.
+    const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
     const channel = supabase
-      .channel(`rt-${table}-${Math.random().toString(36).slice(2)}`)
+      .channel(`rt-${table}-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => loadRef.current())
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {

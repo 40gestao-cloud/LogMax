@@ -49,6 +49,13 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
+    // Em build de produção, esbuild remove todas as chamadas console.* e
+    // `debugger`. Mantemos os logs no código pra DX em dev (HMR, mode!=='build'
+    // mantém intactos), mas o bundle de produção fica limpo — evita vazar
+    // payload/PII em telas de QA/cliente e reduz tamanho de bundle.
+    // Erros críticos seguem sendo capturados pelo Sentry (lib/sentry.ts) via
+    // window.onerror / unhandledrejection, sem depender de console.error.
+    esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : undefined,
     build: {
       rollupOptions: {
         output: {

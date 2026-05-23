@@ -49,8 +49,12 @@ export function useNotificacoes(setor: string | undefined | null) {
   useEffect(() => {
     load();
     if (!supabase || !setor) return;
+    // crypto.randomUUID() pra ID único forte entre instâncias paralelas.
+    const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
     const ch = supabase
-      .channel(`notificacoes-${setor}-${Math.random().toString(36).slice(2)}`)
+      .channel(`notificacoes-${setor}-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notificacoes' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
