@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cancelar-pix-pendentes-antigos",
-      "schedule": "*/30 * * * *"
+      "schedule": "15 3 * * *"
     }
   ]
 }
