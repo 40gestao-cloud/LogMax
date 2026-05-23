@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS pesquisa_resposta_itens (
   pergunta_id  uuid        NOT NULL REFERENCES pesquisa_perguntas(id) ON DELETE CASCADE,
   valor_escala int         CHECK (valor_escala BETWEEN 1 AND 5),
   valor_texto  text,
+  -- useFetchData ordena por created_at; sem essa coluna, qualquer view
+  -- futura que faça fetch direto da tabela devolve 400 silencioso.
+  created_at   timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT chk_resposta_valor
     CHECK (valor_escala IS NOT NULL OR valor_texto IS NOT NULL)
 );

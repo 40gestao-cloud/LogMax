@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, ENDPOINT_TABLE_MAP, TABLES_WITH_ATIVO, isSupabaseConfigured } from '../lib/supabase';
 import { sanitizeUuidFks } from '../lib/viewUtils';
 
@@ -14,11 +14,22 @@ export function useFetchData<T = any>(
   endpoint: string,
   extraFilter?: Record<string, any>,
   realtime?: boolean,
-  options?: { page?: number; searchTerm?: string; searchColumns?: string[]; includeInactive?: boolean },
+  options?: {
+    page?: number;
+    searchTerm?: string;
+    searchColumns?: string[];
+    includeInactive?: boolean;
+    /** Coluna usada no ORDER BY DESC. Default: 'created_at'. Tabelas
+     *  sem essa coluna (ex.: snapshot, append-only com timestamp próprio)
+     *  devem passar a coluna correta — senão PostgREST devolve 400 e a
+     *  UI fica vazia silenciosamente. */
+    orderBy?: string;
+  },
 ) {
   const table = ENDPOINT_TABLE_MAP[endpoint];
   const softDelete = !!table && TABLES_WITH_ATIVO.has(table);
   const includeInactive = !!options?.includeInactive;
+  const orderBy = options?.orderBy ?? 'created_at';
   const [data, setData]             = useState<T[]>([]);
   const [isLoading, setLoading]     = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -29,6 +40,13 @@ export function useFetchData<T = any>(
   const rawSearch = (options?.searchTerm ?? '').trim();
   const searchCols = options?.searchColumns;
   const hasSearch = rawSearch.length > 0 && Array.isArray(searchCols) && searchCols.length > 0;
+
+  // Sequência incremental para descartar respostas obsoletas. Sem isto,
+  // se o utilizador digitar rápido na busca a query A (lenta) chega depois
+  // da B (rápida) e sobrescreve a UI com resultados antigos. Cada chamada
+  // de load() captura o seu ID e só faz setState se ainda for o pedido
+  // corrente — caso contrário a resposta é ignorada.
+  const reqIdRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!table) {
@@ -42,6 +60,7 @@ export function useFetchData<T = any>(
       return;
     }
 
+    const myId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
 
@@ -70,9 +89,10 @@ export function useFetchData<T = any>(
       let q = supabase
         .from(table)
         .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+        .order(orderBy, { ascending: false });
       q = applyFilters(q);
       const { data: rows, error: err, count } = await q.range(from, to);
+      if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
       if (err) {
         console.error('[useFetchData] Erro Supabase:', err.message);
         setError(err.message);
@@ -81,9 +101,10 @@ export function useFetchData<T = any>(
         setTotalCount(count ?? null);
       }
     } else {
-      let q = supabase.from(table).select('*').order('created_at', { ascending: false });
+      let q = supabase.from(table).select('*').order(orderBy, { ascending: false });
       q = applyFilters(q);
       const { data: rows, error: err } = await q;
+      if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
       if (err) {
         console.error('[useFetchData] Erro Supabase:', err.message);
         setError(err.message);
@@ -93,21 +114,33 @@ export function useFetchData<T = any>(
     }
 
     setLoading(false);
-  }, [table, softDelete, includeInactive, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [table, softDelete, includeInactive, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols), orderBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Effect 1: chama load() quando filtros / paginação / busca mudam.
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Effect 2: subscrição realtime separada — só reconecta quando a tabela
+  // ou o flag `realtime` mudam. Antes o canal era recriado a cada keystroke
+  // de busca / mudança de filtro / paginação (effect dependia de `load`),
+  // causando churn na conexão WebSocket. Agora o canal sobrevive a mudanças
+  // de filtro e dispara o load mais recente via ref.
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; }, [load]);
+
+  useEffect(() => {
     if (!realtime || !supabase || !table) return;
     const channel = supabase
       .channel(`rt-${table}-${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table }, () => loadRef.current())
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
           console.warn(`[Realtime] Erro no canal ${table} — dados podem estar desatualizados.`);
         }
       });
     return () => { supabase.removeChannel(channel); };
-  }, [load, realtime]);
+  }, [table, realtime]);
 
   return { data, setData, isLoading, error, reload: load, totalCount };
 }
