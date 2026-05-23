@@ -238,7 +238,7 @@ function ThemeToggle() {
 }
 
 type AccentOption = {
-  id: 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'acessivel';
+  id: 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'red' | 'acessivel';
   hex: string;
   label: string;
   /** Cor secundária (renderizada como swatch bicolor) — usada no preset de acessibilidade */
@@ -254,6 +254,7 @@ const ACCENT_OPTIONS: readonly AccentOption[] = [
   { id: 'orange', hex: '#F97316', label: 'Laranja' },
   { id: 'blue',   hex: '#3B82F6', label: 'Azul'    },
   { id: 'pink',   hex: '#EC4899', label: 'Rosa'    },
+  { id: 'red',    hex: '#EF4444', label: 'Vermelho' },
   // Preset de acessibilidade: laranja + azul claro (alto contraste, amigável
   // para daltonismo). Ver paleta em src/index.css [data-accent="acessivel"].
   { id: 'acessivel', hex: '#F97316', secondaryHex: '#7DD3FC',

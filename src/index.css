@@ -105,6 +105,12 @@
   --color-accent-text:  #ffffff;
 }
 
+[data-accent="red"] {
+  --color-accent:      #EF4444;  /* red-500 */
+  --color-accent-hover: #DC2626;  /* red-600 */
+  --color-accent-text:  #ffffff;
+}
+
 /* ── Acessibilidade visual (orange + light blue) ──
    Combinação laranja/azul-claro é uma das mais legíveis para utilizadores com
    protanopia/deuteranopia/tritanopia e oferece alto contraste em geral.
@@ -156,6 +162,12 @@
 [data-theme="light"][data-accent="pink"] {
   --color-accent:      #be185d;  /* pink-700 */
   --color-accent-hover: #9d174d;  /* pink-800 */
+  --color-accent-text:  #ffffff;
+}
+
+[data-theme="light"][data-accent="red"] {
+  --color-accent:      #b91c1c;  /* red-700 */
+  --color-accent-hover: #991b1b;  /* red-800 */
   --color-accent-text:  #ffffff;
 }
 
