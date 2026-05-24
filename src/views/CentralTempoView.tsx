@@ -355,7 +355,11 @@ function CronometroCard() {
   }, []);
 
   const start = () => {
-    if (running) return;
+    // Guard por REF em vez de state: `running` vem do closure e
+    // setRunning(true) é assíncrono, então clique duplo rápido passaria
+    // pelos dois `if (running) return` antes do re-render e criaria dois
+    // setInterval — o primeiro vira ghost. intervalRef é mutado síncrono.
+    if (intervalRef.current !== null) return;
     setRunning(true);
     startedAtRef.current = performance.now();
     intervalRef.current = setInterval(() => {
@@ -471,7 +475,10 @@ function TimerCard() {
   useEffect(() => () => {
     if (intervalRef.current !== null) clearInterval(intervalRef.current);
     const a = audioRef.current;
-    if (a) { try { a.pause(); } catch {} }
+    if (a) {
+      try { a.pause(); } catch {}
+      audioRef.current = null;
+    }
   }, []);
 
   const totalSetMs = () =>
@@ -490,7 +497,10 @@ function TimerCard() {
   };
 
   const start = () => {
-    if (running) return;
+    // Guard por REF (mesmo motivo do Cronômetro): clique duplo rápido
+    // antes do re-render passaria pelo `if (running) return` duas vezes
+    // e abriria dois setInterval; o primeiro vira ghost no clearInterval.
+    if (intervalRef.current !== null) return;
     // Se ainda não foi iniciado, parte do total configurado;
     // se foi pausado, retoma do que sobrou.
     const ms = remaining > 0 ? remaining : totalSetMs();
@@ -564,7 +574,10 @@ function TimerCard() {
         </div>
       </div>
 
-      {/* Setters HH/MM/SS — desabilitados durante contagem */}
+      {/* Setters HH/MM/SS — desabilitados durante contagem. Mudar qualquer
+          select limpa o estado `finished` para que o visor pare de piscar
+          em vermelho e o texto "Tempo esgotado" suma — o usuário está
+          claramente reconfigurando para um próximo ciclo. */}
       <div className="grid grid-cols-3 gap-2 mb-4">
         {[
           { label: 'Horas',   value: hours,   set: setHours,   max: 23 },
@@ -576,7 +589,10 @@ function TimerCard() {
             <div key={label} className="flex flex-col gap-1">
               <label htmlFor={id} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 text-center">{label}</label>
               <select id={id} value={value} disabled={!configurable}
-                onChange={e => set(Number.parseInt(e.target.value, 10))}
+                onChange={e => {
+                  set(Number.parseInt(e.target.value, 10));
+                  if (finished) setFinished(false);
+                }}
                 className="neu-input py-2 px-2 rounded-xl text-sm font-mono tabular-nums w-full text-center disabled:opacity-50 disabled:cursor-not-allowed">
                 {Array.from({ length: max + 1 }, (_, i) => (
                   <option key={i} value={i}>{pad2(i)}</option>

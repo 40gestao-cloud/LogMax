@@ -19,7 +19,7 @@ import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
-export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (view: string) => void; showToast?: (msg: string, type?: string) => void; profile?: UserProfile }) => {
+export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string) => void; profile?: UserProfile }) => {
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
   const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview');
   const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
@@ -174,9 +174,8 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
           </div>
         </div>
 
-        <button
-          onClick={() => onNavigate?.('central-tempo')}
-          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden text-left group hover:border-accent/20 border border-transparent transition-all"
+        <div
+          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none"
             style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }} />
@@ -197,10 +196,14 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
             <span className="block mt-1 text-accent">numa só tela.</span>
           </h2>
           <p className="text-gray-500 text-sm mt-2 mb-5 relative z-10">
-            Controle de Tempo
+            Fuso horário Brasília-Acre
           </p>
 
-          <span className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"
+          {/* Só este botão navega — antes o card inteiro era <button> e
+              qualquer clique abria a view. */}
+          <button
+            onClick={() => onNavigate?.('central-tempo')}
+            className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"
             style={{
               background:  'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
               color:       'var(--color-accent-text)',
@@ -208,8 +211,8 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
               boxShadow:   '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent)',
             }}>
             Abrir Central de Tempo <ArrowRight size={16} />
-          </span>
-        </button>
+          </button>
+        </div>
       </div>
 
       {isLoading ? <LoadingSpinner /> : (

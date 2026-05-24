@@ -203,29 +203,45 @@ export const PDVView = ({ showToast, profile }: any) => {
     return () => document.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // Detecção de Pix órfão: ao montar, busca pendentes deste operador
-  // que ficaram em 'aguardando' (operador fechou aba, recarregou, etc.).
-  // Cancela em silêncio — o snapshot do carrinho era client-side e já
-  // se perdeu, então o pendente nunca seria efetivado mesmo se o
-  // cliente escaneasse. Manter um pendente vivo só polui pix_pendentes
-  // e confunde o sino do simulador.
+  // Limpeza de Pix órfãos ao montar o PDV. Substitui o cron de servidor
+  // (impossível no plano Hobby do Vercel: limite de 1 execução/dia).
+  // Qualquer operador que abre o PDV faz a limpeza — efeito coletivo.
+  //
+  // Duas janelas de idade:
+  //   • > 5 min do PRÓPRIO operador: sessão anterior do mesmo usuário
+  //     (fechou aba no meio do checkout). Margem curta porque sabemos
+  //     que é dele; cliente real confirma em < 1 min.
+  //   • > 1h de QUALQUER operador: pendente abandonado de outro caixa
+  //     que não voltou ao PDV. Margem longa pra não pisar em fluxo
+  //     legítimo em andamento noutro terminal.
   useEffect(() => {
     if (!supabase || !user?.id) return;
     let cancelled = false;
     (async () => {
-      const { data: orfaos } = await supabase
-        .from('pix_pendentes')
-        .select('id')
-        .eq('operador_id', user.id)
-        .eq('status', 'aguardando');
-      if (cancelled || !orfaos || orfaos.length === 0) return;
-      const ids = orfaos.map((o: any) => o.id);
+      const cutoff5min = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const cutoff1h   = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const [own, others] = await Promise.all([
+        supabase.from('pix_pendentes').select('id')
+          .eq('operador_id', user.id)
+          .eq('status', 'aguardando')
+          .lt('created_at', cutoff5min),
+        supabase.from('pix_pendentes').select('id')
+          .eq('status', 'aguardando')
+          .lt('created_at', cutoff1h),
+      ]);
+      if (cancelled) return;
+      // Set dedupe: pendente do próprio operador com > 1h aparece nos dois.
+      const ids = Array.from(new Set([
+        ...((own.data ?? []).map((o: any) => o.id)),
+        ...((others.data ?? []).map((o: any) => o.id)),
+      ]));
+      if (ids.length === 0) return;
       await supabase
         .from('pix_pendentes')
         .update({ status: 'cancelado' })
         .in('id', ids);
       showToast?.(
-        `${ids.length} pagamento${ids.length > 1 ? 's' : ''} Pix pendente${ids.length > 1 ? 's' : ''} cancelado${ids.length > 1 ? 's' : ''} (sessão anterior).`,
+        `${ids.length} pagamento${ids.length > 1 ? 's' : ''} Pix antigo${ids.length > 1 ? 's' : ''} cancelado${ids.length > 1 ? 's' : ''}.`,
         'info',
         true,
       );

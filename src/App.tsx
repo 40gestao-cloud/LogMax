@@ -568,7 +568,7 @@ function LogMaxAppInner() {
   const renderContent = () => {
     const st = showToast;
     switch (activeView) {
-      case 'inicio':                          return <InicioView onNavigate={navigate} showToast={st} profile={profile} />;
+      case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'empresa-colaboradores':           return <ColaboradoresView showToast={st} />;
