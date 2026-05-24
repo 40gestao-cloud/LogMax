@@ -197,8 +197,7 @@ export const InicioView = ({ onNavigate, showToast, profile }: { onNavigate?: (v
             <span className="block mt-1 text-accent">numa só tela.</span>
           </h2>
           <p className="text-gray-500 text-sm mt-2 mb-5 relative z-10">
-            Fuso de Brasília–Acre travado, alarmes salvos no próprio navegador, voltas no
-            cronômetro e timer regressivo com alerta sonoro. Sem servidor, sem custo.
+            Controle de Tempo
           </p>
 
           <span className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"

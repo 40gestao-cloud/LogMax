@@ -21,3 +21,6 @@ dev-dist/
 
 # Bundle analyzer (gerado por rollup-plugin-visualizer)
 bundle-stats.html
+
+# Claude Code — preferências pessoais por projeto
+.claude/settings.local.json

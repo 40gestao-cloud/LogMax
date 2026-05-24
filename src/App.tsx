@@ -735,9 +735,9 @@ function LogMaxAppInner() {
             )}
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
-                <span className="hidden sm:inline">Plataforma </span>LogMax
+                LogMax<span className="hidden sm:inline"> - Gestão Organizacional</span>
               </h2>
-              <p className="hidden sm:block text-[11px] text-gray-500 uppercase tracking-widest mt-1">Ambiente seguro</p>
+              <p className="hidden sm:block text-[11px] text-gray-500 uppercase tracking-widest mt-1">Desenvolvido por Igor Souza</p>
             </div>
           </div>
 
