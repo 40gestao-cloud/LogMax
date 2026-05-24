@@ -155,7 +155,7 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
-        <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5">
+        <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5 border border-accent/20">
           <h3 className="text-lg font-bold text-gray-200 shrink-0">Acesso Rápido</h3>
           <div className="grid grid-cols-2 gap-3 flex-1">
             {shortcuts.map(({ label, desc, icon: Icon, view }) => (
@@ -175,7 +175,7 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
         </div>
 
         <div
-          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden"
+          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden border border-accent/20"
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none"
             style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }} />
@@ -219,7 +219,7 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
         <div className="flex flex-col gap-6 shrink-0 mb-8">
           <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-white/5">
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
               <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] border-[#0A0A0A] relative">
                 <div className="absolute inset-0 rounded-full border-t-[3px] border-accent animate-spin-slow" style={{ animationDuration: '6s' }}></div>
@@ -230,13 +230,13 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
                 <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
               </div>
             </div>
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-white/5">
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
               <span className="text-5xl sm:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
               <span className="text-xs font-medium text-gray-500 mb-10 tracking-wide">Notas fiscais capturadas</span>
               <button onClick={() => onNavigate?.('compras-notasrecebidas')} className="neu-button-accent w-full py-4 rounded-xl font-bold text-sm mt-auto">Ver notas recebidas</button>
             </div>
-            <div className="neu-flat rounded-3xl p-6 flex flex-col border border-white/5">
+            <div className="neu-flat rounded-3xl p-6 flex flex-col border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-4 pl-2 uppercase tracking-widest">Pedidos de Compra</h4>
               <div className="flex-1 min-h-[140px] w-full mb-6">
                 <ResponsiveContainer width="100%" height="100%" minHeight={140}>

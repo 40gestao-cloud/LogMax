@@ -248,8 +248,8 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
           // O card inteiro vira <button> quando o usuário tem permissão —
           // alvo grande facilita touch no mobile. O ícone decorativo passa
           // a indicar a interatividade (opacidade sobe + chevron aparece).
-          const baseCls = `neu-flat p-6 rounded-3xl border flex flex-col gap-4 relative overflow-hidden text-left transition-all ${
-            accent ? 'bg-accent/5 border-accent/20' : 'border-white/5'
+          const baseCls = `neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col gap-4 relative overflow-hidden text-left transition-all ${
+            accent ? 'bg-accent/5' : ''
           }`;
           const interactiveCls = interactive
             ? 'cursor-pointer hover:border-accent/40 hover:scale-[1.01] active:scale-[0.99]'
@@ -316,7 +316,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
       </AnimatePresence>
 
       {/* Faturamento por Filial (Holding) */}
-      <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-4 shrink-0">
+      <div className="neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col gap-4 shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide flex items-center gap-2">
             <Building2 size={14} className="text-accent" /> Faturamento por Filial
@@ -332,7 +332,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
             if (filial === 'Não atribuído' && agg.count === 0) return null;
             const colorCls = filialTextClass[filial] ?? 'text-gray-400';
             return (
-              <div key={filial} className="neu-pressed p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
+              <div key={filial} className="neu-pressed p-4 rounded-2xl border border-accent/20 flex flex-col gap-1.5">
                 <span className={`text-[10px] font-black uppercase tracking-widest ${colorCls}`}>{filial}</span>
                 <span className="text-xl font-black font-mono tabular-nums text-gray-100">
                   {agg.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -345,7 +345,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 neu-flat p-6 rounded-3xl border border-white/5 flex flex-col">
+        <div className="lg:col-span-2 neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide mb-6">Receitas vs Despesas</h3>
           <div className="w-full h-[300px] md:h-[380px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -361,11 +361,11 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="neu-flat p-6 rounded-3xl border border-white/5 flex flex-col gap-6">
+        <div className="neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col gap-6">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide">Movimentações Recentes</h3>
           <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 max-h-[340px]">
             {isLoading ? <LoadingSpinner /> : movimentos.length === 0 ? <EmptyState /> : movimentos.map((mov: any, i: number) => (
-              <div key={i} className="neu-pressed p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+              <div key={i} className="neu-pressed p-4 rounded-2xl border border-accent/20 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${mov.bg} ${mov.color}`}>
                     <mov.icon size={14} />
@@ -484,7 +484,7 @@ function KpiDetailPanel({
           {/* Mobile (<md): lista de cards verticais — evita scroll horizontal */}
           <div className="md:hidden flex flex-col gap-2 max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
             {rows.map(r => (
-              <div key={r.id} className="neu-pressed rounded-2xl p-3 border border-white/5 flex flex-col gap-1.5">
+              <div key={r.id} className="neu-pressed rounded-2xl p-3 border border-accent/20 flex flex-col gap-1.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-gray-200 truncate flex-1 min-w-0">{r.primary}</p>
                   <span className="text-sm font-mono text-gray-100 font-bold shrink-0 tabular-nums">
