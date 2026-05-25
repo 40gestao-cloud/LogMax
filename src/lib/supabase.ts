@@ -23,6 +23,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/filiaisview':                  'filiais',
   '/api/colaboradoresview':            'colaboradores',
   '/api/crmview':                      'clientes',
+  '/api/crmview-clientes':             'clientes',
   '/api/crmview-fornecedores':         'fornecedores',
   '/api/produtosview':                 'produtos',
   '/api/servicosview':                 'servicos',
