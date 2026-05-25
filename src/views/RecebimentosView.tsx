@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -28,6 +28,10 @@ export const RecebimentosView = ({ showToast }: any) => {
   const [confirmProduto, setConfirmProduto] = useState('');
   const [confirmStatus, setConfirmStatus] = useState('Concluído');
   const [confirmSaving, setConfirmSaving] = useState(false);
+  // Guard sincrônico — `disabled={confirmSaving}` depende de state React
+  // (assíncrono); um double-click rápido entra em handleConfirmar 2× antes
+  // do re-render. Este ref tranca o item já em processo imediatamente.
+  const confirmingRef = useRef<string | null>(null);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
@@ -71,20 +75,34 @@ export const RecebimentosView = ({ showToast }: any) => {
   const handleConfirmar = async (item: any) => {
     if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
     if (!(Number(item.qtd_recebida) > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
+    // Guard sincrônico contra double-click (vide ref acima).
+    if (confirmingRef.current === item.id) return;
+    confirmingRef.current = item.id;
     setConfirmSaving(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
       // Movimentação PRIMEIRO — se falhar, status fica Pendente e o botão "Confirmar" reaparesce para retry.
       // Só atualiza o status após a movimentação estar salva no banco.
       if (confirmStatus === 'Concluído' || confirmStatus === 'Parcial') {
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: confirmProduto,
-          tipo: 'Entrada',
-          qtd: Number(item.qtd_recebida) || 0,
-          origem: `Pedido #${String(item.pedido_id ?? '').slice(0, 8).toUpperCase()}`,
-          destino: 'Almoxarifado',
-          data: today,
-        });
+        try {
+          await dbInsert('/api/movimentacoesestoqueview', {
+            produto_id:     confirmProduto,
+            tipo:           'Entrada',
+            qtd:            Number(item.qtd_recebida) || 0,
+            origem:         `Pedido #${String(item.pedido_id ?? '').slice(0, 8).toUpperCase()}`,
+            destino:        'Almoxarifado',
+            data:           today,
+            recebimento_id: item.id,
+          });
+        } catch (movErr: any) {
+          // 23505 = violação de UNIQUE: este recebimento já gerou movimento
+          // (race em outra aba/clique). Idempotência: tratamos como sucesso.
+          const msg = String(movErr?.message ?? '');
+          const isDuplicate = msg.includes('uq_mov_estoque_por_recebimento')
+                            || msg.includes('23505')
+                            || /duplicate key value/i.test(msg);
+          if (!isDuplicate) throw movErr;
+        }
       }
       await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
@@ -111,6 +129,7 @@ export const RecebimentosView = ({ showToast }: any) => {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setConfirmSaving(false);
+      confirmingRef.current = null;
     }
   };
 
