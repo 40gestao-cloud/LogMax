@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createHmac } from 'crypto';
 import { authenticate, getAdminClient, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 import {
@@ -7,11 +6,11 @@ import {
   acreDayBoundsIso,
   acreTimeString,
   computeStatus,
-  windowIsValid,
+  verifyCodigo,
 } from '../lib/ponto.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const log = createLogger(req, 'register-ponto-qr');
+  const log = createLogger(req, 'register-ponto-codigo');
 
   try {
     if (applyCors(req, res)) return;
@@ -26,53 +25,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authenticate(req, res, admin);
     if (!user) return;
 
-    // Secret dedicado para o HMAC do QR — mesmo usado em qr-token.ts
     const qrSecret = process.env.QR_TOKEN_SECRET;
     if (!qrSecret) {
       log.error('config.missing', new Error('QR_TOKEN_SECRET ausente'));
       return res.status(500).json({ error: 'QR_TOKEN_SECRET não configurado.' });
     }
 
-    const { token } = req.body ?? {};
-    if (!token) {
-      log.warn('request.validation_failed', { user_id: user.id, missing: 'token' });
-      return res.status(400).json({ error: 'Token QR obrigatório.' });
+    const { codigo } = req.body ?? {};
+    if (typeof codigo !== 'string' || !/^\d{6}$/.test(codigo)) {
+      log.warn('request.validation_failed', { user_id: user.id, motivo: 'formato_codigo' });
+      return res.status(400).json({ error: 'Código deve ter 6 dígitos.' });
     }
 
-    // Validar token QR
-    const parts = (token as string).split('.');
-    if (parts.length !== 2) {
-      log.warn('qr.token_malformed', { user_id: user.id, reason: 'parts_count' });
-      return res.status(400).json({ error: 'Token inválido.' });
+    // verifyCodigo procura o checkpoint que casa (current + previous window).
+    const checkpoint = verifyCodigo(codigo, qrSecret);
+    if (!checkpoint) {
+      log.warn('codigo.invalido_ou_expirado', { user_id: user.id });
+      return res.status(400).json({ error: 'Código inválido ou expirado. Aguarde o próximo.' });
     }
 
-    let payload: string;
-    try {
-      payload = Buffer.from(parts[0], 'base64url').toString('utf8');
-    } catch {
-      log.warn('qr.token_malformed', { user_id: user.id, reason: 'base64_decode' });
-      return res.status(400).json({ error: 'Token corrompido.' });
-    }
-
-    const expectedHmac = createHmac('sha256', qrSecret).update(payload).digest('hex');
-    if (parts[1] !== expectedHmac) {
-      log.warn('qr.signature_invalid', { user_id: user.id });
-      return res.status(400).json({ error: 'Assinatura inválida.' });
-    }
-
-    const [windowIdStr, checkpoint] = payload.split('|');
-    const windowId = parseInt(windowIdStr, 10);
-    if (Number.isNaN(windowId) || !CHECKPOINT_LABELS[checkpoint]) {
-      log.warn('qr.token_malformed', { user_id: user.id, reason: 'payload_shape', payload });
-      return res.status(400).json({ error: 'Token malformado.' });
-    }
-
-    if (!windowIsValid(windowId)) {
-      log.warn('qr.token_expired', { user_id: user.id, windowId });
-      return res.status(400).json({ error: 'QR Code expirado. Aguarde o próximo.' });
-    }
-
-    // Verificar duplo registro no mesmo checkpoint hoje (dia do Acre)
+    // Duplo registro no mesmo checkpoint hoje (dia do Acre).
     const now = new Date();
     const { inicio, fim } = acreDayBoundsIso(now);
     const { data: existing } = await admin
@@ -89,10 +61,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(409).json({ error: `${CHECKPOINT_LABELS[checkpoint]} já registrada hoje.` });
     }
 
-    // Calcular status com base na tolerância
     const status = computeStatus(checkpoint, now);
 
-    // Inserir registro
     const { error: insertErr } = await admin.from('ponto_qr_registros').insert({
       user_id: user.id,
       tipo:    checkpoint,
@@ -106,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hora = acreTimeString(now);
 
-    log.info('ponto.registered', { user_id: user.id, checkpoint, status, hora, via: 'qr' });
+    log.info('ponto.registered', { user_id: user.id, checkpoint, status, hora, via: 'codigo' });
 
     return res.status(200).json({
       success: true,

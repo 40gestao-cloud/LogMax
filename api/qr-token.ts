@@ -2,12 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'crypto';
 import { authenticate, authorize, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
-
-const CHECKPOINTS: Record<string, { label: string; target: number }> = {
-  entrada: { label: 'Entrada',             target: 7*60+40  },
-  retorno: { label: 'Retorno do Intervalo', target: 9*60+20  },
-  saida:   { label: 'Saída',               target: 11*60+20 },
-};
+import {
+  CHECKPOINT_LABELS,
+  CHECKPOINT_KEYS,
+  WINDOW_MS,
+  currentWindowId,
+  generateCodigo,
+} from '../lib/ponto.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const log = createLogger(req, 'qr-token');
@@ -32,20 +33,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const requested = req.query.checkpoint as string;
-    const checkpoint = CHECKPOINTS[requested] ? requested : 'entrada';
+    const checkpoint = CHECKPOINT_KEYS.includes(requested as any) ? requested : 'entrada';
 
-    const windowId = Math.floor(Date.now() / 120000); // janela de 2 minutos
+    const windowId = currentWindowId();
     const payload = `${windowId}|${checkpoint}`;
     const hmac = createHmac('sha256', secret).update(payload).digest('hex');
     const token = `${Buffer.from(payload).toString('base64url')}.${hmac}`;
-    const expiresAt = new Date((windowId + 1) * 120000).toISOString();
+    const codigo = generateCodigo(checkpoint, windowId, secret);
+    const expiresAt = new Date((windowId + 1) * WINDOW_MS).toISOString();
 
     log.info('qr.token_generated', { user_id: user.id, checkpoint });
 
     return res.status(200).json({
       token,
+      codigo,
       checkpoint,
-      checkpointLabel: CHECKPOINTS[checkpoint].label,
+      checkpointLabel: CHECKPOINT_LABELS[checkpoint],
       expiresAt,
     });
   } catch (err) {

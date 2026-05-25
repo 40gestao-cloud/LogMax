@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar } from 'lucide-react';
+import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -117,8 +117,18 @@ const QRGenerator = () => {
       ) : (
         <AnimatePresence mode="wait">
           <motion.div key={tokenData.token} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="p-4 neu-pressed rounded-2xl border border-white/5">
-            <QRCodeSVG value={tokenData.token} size={200} bgColor="transparent" fgColor={qrFgColor} level="M" />
+            className="flex flex-col items-center gap-3">
+            <div className="p-4 neu-pressed rounded-2xl border border-white/5">
+              <QRCodeSVG value={tokenData.token} size={200} bgColor="transparent" fgColor={qrFgColor} level="M" />
+            </div>
+            {tokenData.codigo && (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[9px] text-gray-600 uppercase tracking-widest font-bold">Código alternativo</p>
+                <p className="text-3xl font-black text-accent tabular-nums tracking-[0.3em] pl-[0.3em]">
+                  {tokenData.codigo}
+                </p>
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
       )}
@@ -298,6 +308,39 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult>(null);
   const [qrRegistros, setQrRegistros] = useState<any[]>([]);
+  const [showCodigo, setShowCodigo] = useState(false);
+  const [codigoInput, setCodigoInput] = useState('');
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+
+  const handleCodigoSubmit = async () => {
+    const codigo = codigoInput.trim();
+    if (!/^\d{6}$/.test(codigo)) {
+      setScanResult({ ok: false, msg: 'Código deve ter 6 dígitos.' });
+      return;
+    }
+    setEnviandoCodigo(true);
+    setScanResult(null);
+    try {
+      const res = await fetch('/api/register-ponto-codigo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ codigo }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setScanResult({ ok: false, msg: json.error ?? 'Erro ao registrar ponto.' });
+      } else {
+        setScanResult({ ok: true, label: json.label, hora: json.hora, status: json.status });
+        setQrRegistros(prev => [{ tipo: json.tipo, label: json.label, hora: json.hora }, ...prev]);
+        setCodigoInput('');
+        setShowCodigo(false);
+      }
+    } catch {
+      setScanResult({ ok: false, msg: 'Erro de conexão.' });
+    } finally {
+      setEnviandoCodigo(false);
+    }
+  };
 
   const handleQRResult = useCallback(async (token: string) => {
     if (scanning) return;
@@ -451,10 +494,42 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                   )}
                 </AnimatePresence>
 
-                {!showScanner && !scanning && (
-                  <div className="flex justify-center">
+                {showCodigo && !scanning && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="flex flex-col items-center gap-3 py-2">
+                    <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">Digite o código de 6 dígitos</p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      autoFocus
+                      value={codigoInput}
+                      onChange={e => setCodigoInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onKeyDown={e => { if (e.key === 'Enter' && codigoInput.length === 6) handleCodigoSubmit(); }}
+                      placeholder="000000"
+                      className="neu-input rounded-2xl px-5 py-3 text-3xl font-black tabular-nums tracking-[0.5em] pl-[0.5em] text-center w-56" />
+                    <div className="flex gap-2">
+                      <button onClick={() => { setShowCodigo(false); setCodigoInput(''); setScanResult(null); }}
+                        disabled={enviandoCodigo}
+                        className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50">
+                        Cancelar
+                      </button>
+                      <NeuButtonAccent variant="" onClick={handleCodigoSubmit}
+                        disabled={enviandoCodigo || codigoInput.length !== 6}>
+                        {enviandoCodigo ? 'Validando...' : 'Bater Ponto'}
+                      </NeuButtonAccent>
+                    </div>
+                  </motion.div>
+                )}
+
+                {!showScanner && !showCodigo && !scanning && (
+                  <div className="flex justify-center gap-2">
                     <NeuButtonAccent variant="" onClick={() => { setScanResult(null); setShowScanner(true); }}>
                       <Camera size={14} />Abrir Câmera
+                    </NeuButtonAccent>
+                    <NeuButtonAccent variant="" onClick={() => { setScanResult(null); setCodigoInput(''); setShowCodigo(true); }}>
+                      <KeyRound size={14} />Digitar Código
                     </NeuButtonAccent>
                   </div>
                 )}

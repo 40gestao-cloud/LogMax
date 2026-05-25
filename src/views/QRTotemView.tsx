@@ -130,6 +130,14 @@ export const QRTotemView = () => {
                 level="M"
               />
             </div>
+            {tokenData.codigo && (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">ou digite o código</p>
+                <p className="text-4xl font-black text-accent tabular-nums tracking-[0.4em] pl-[0.4em]">
+                  {tokenData.codigo}
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <Clock size={12} />
               <span>Atualiza em <span className="tabular-nums text-gray-400 font-bold">{countdown}s</span></span>
