@@ -113,7 +113,7 @@ const menuModules = [
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -591,7 +591,7 @@ function LogMaxAppInner() {
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'compras-requisições':             return <RequisicoesView showToast={st} />;
-      case 'compras-cotações':                return <CotacoesView showToast={st} />;
+      case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
       case 'compras-minhasaprovações':        return <AprovacoesComprasView showToast={st} />;
@@ -619,6 +619,7 @@ function LogMaxAppInner() {
       case 'financeiro-caixabancos':          return <GenericCRUDView showToast={st} title="Caixa / Bancos" subtitle="Gerencie contas bancárias e saldos." endpoint="/api/caixabancosview"
         fields={[{ key: 'conta', label: 'Conta', required: true, placeholder: 'Ex: 12345-6' }, { key: 'banco', label: 'Banco', placeholder: 'Ex: Banco do Brasil' }, { key: 'agencia', label: 'Agência', placeholder: 'Ex: 0001' }, { key: 'saldo', label: 'Saldo (R$)', type: 'currency', placeholder: '0,00' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
+      case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
       case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
       case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView />;
