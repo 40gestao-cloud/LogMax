@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock } from 'lucide-react';
-import { useFetchData } from '../hooks/useSupabaseData';
+import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2 } from 'lucide-react';
+import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -129,9 +129,27 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
   const [page, setPage] = useState(0);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const extraFilter = filtroCategoria ? { categoria: filtroCategoria } : undefined;
-  const { data, isLoading, totalCount, reload } = useFetchData<any>(
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/feedbacksorganizacaoview', extraFilter, false, { page }
   );
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+
+  const handleExcluir = async (id: string) => {
+    setExcluindo(id);
+    try {
+      // dbDelete faz soft-delete (UPDATE ativo=false) — feedbacks_organizacao
+      // está em TABLES_WITH_ATIVO. Preserva histórico para auditoria.
+      await dbDelete('/api/feedbacksorganizacaoview', id);
+      setData((prev: any[]) => prev.filter(f => f.id !== id));
+      showToast('Feedback removido.', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setExcluindo(null);
+      setConfirmandoId(null);
+    }
+  };
 
   // KPIs sumarizados (sobre a página atual — sem agregação server-side)
   const porCategoria = (data ?? []).reduce((acc: Record<string, number>, f: any) => {
@@ -172,9 +190,9 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
           <div className="flex flex-col gap-3">
             {data.map((f: any) => (
               <motion.div key={f.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                className="neu-pressed rounded-2xl p-4 border border-white/5">
+                className="neu-pressed rounded-2xl p-4 border border-white/5 group">
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                  <div className="flex items-center gap-2 text-[10px] text-gray-600 flex-wrap">
                     <EyeOff size={11} />
                     <span className="uppercase tracking-widest font-bold">Anônimo</span>
                     {f.categoria && (
@@ -183,9 +201,29 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                    <Calendar size={11} />
-                    <span className="font-mono">{fmtDate(f.created_at)}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                      <Calendar size={11} />
+                      <span className="font-mono">{fmtDate(f.created_at)}</span>
+                    </div>
+                    {confirmandoId === f.id ? (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleExcluir(f.id)} disabled={excluindo === f.id}
+                          className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
+                          {excluindo === f.id ? '...' : 'Confirmar'}
+                        </button>
+                        <button onClick={() => setConfirmandoId(null)} disabled={excluindo === f.id}
+                          className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmandoId(f.id)}
+                        title="Excluir feedback"
+                        className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{f.texto}</p>
