@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2 } from 'lucide-react';
+import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
+import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 const statusCls = (s: string) => {
   if (s === 'Falta') return 'bg-red-950/50 text-red-500';
@@ -237,6 +238,33 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
   const noHorario = registros.filter(r => r.status === 'No Horário').length;
   const atrasados  = registros.filter(r => r.status === 'Atrasado').length;
 
+  // ─── Export PDF / Excel ─────────────────────────────────────────────────
+  // Exporta o que está visível (mês filtrado + escopo de visibilidade do user).
+  const tipoLabel = (t: string) => t === 'entrada' ? 'Entrada' : t === 'retorno' ? 'Retorno' : 'Saída';
+  const buildRows = (forExcel: boolean) =>
+    registros.map((r: any) => {
+      const dt = new Date(r.registrado_em);
+      const data = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
+      const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
+      const prof = userMap[r.user_id];
+      const base = canSeeAll
+        ? [prof?.nome ?? '—', prof?.email ?? r.user_id.slice(0, 8), data, hora, tipoLabel(r.tipo), r.status]
+        : [data, hora, tipoLabel(r.tipo), r.status];
+      // forExcel reservado caso futuramente queiramos tipos numéricos diferenciados (atualmente todas as colunas são texto)
+      void forExcel;
+      return base;
+    });
+
+  const colunas = canSeeAll
+    ? ['Colaborador', 'E-mail', 'Data', 'Horário', 'Tipo', 'Status']
+    : ['Data', 'Horário', 'Tipo', 'Status'];
+
+  const filename = `logmax-ponto-${filtroMes}`;
+  const titulo = `Histórico de Ponto — ${filtroMes}`;
+
+  const handleExportPDF = () => exportToPDF(titulo, colunas, buildRows(false), filename);
+  const handleExportExcel = () => exportToExcel('Ponto', colunas, buildRows(true), filename);
+
   return (
     <div className="flex flex-col gap-5">
       {/* Mini KPIs */}
@@ -253,13 +281,21 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
         ))}
       </div>
 
-      {/* Filtro de mês */}
-      <div className="flex items-center gap-3 shrink-0">
-        <Calendar size={14} className="text-yellow-400" />
-        <label htmlFor="ponto-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
-        <input id="ponto-mes-filtro" type="month" value={filtroMes}
-          onChange={e => setFiltroMes(e.target.value)}
-          className="neu-input rounded-xl px-3 py-2 text-sm" />
+      {/* Filtro de mês + export */}
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <Calendar size={14} className="text-yellow-400" />
+          <label htmlFor="ponto-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
+          <input id="ponto-mes-filtro" type="month" value={filtroMes}
+            onChange={e => setFiltroMes(e.target.value)}
+            className="neu-input rounded-xl px-3 py-2 text-sm" />
+        </div>
+        {registros.length > 0 && (
+          <div className="flex items-center gap-2">
+            <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />
+            <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
