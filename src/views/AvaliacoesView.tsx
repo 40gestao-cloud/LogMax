@@ -4,6 +4,7 @@ import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye } from 'lu
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { allSetores } from '../lib/rbac';
 
 // ----------------------------------------------------------------------
 // Critérios hardcoded (Etapa 1). Etapa 2 pode tornar configurável.
@@ -438,12 +439,15 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
         .filter(u => u.role === 'gerente' && u.id !== profile.id)
         .map(user => ({ user, tipo: 'ceo_gerente' as const }));
     } else if (isGerente) {
+      // Gerente avalia colaboradores de TODOS seus setores (primário + extras).
+      const setoresGerente = allSetores(profile);
       alvos = users
-        .filter(u => u.role === 'colaborador' && u.setor === profile.setor)
+        .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
         .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
     } else {
-      // colaborador: feedback reverso para gerentes do setor + CEO
-      const gerentesSetor = users.filter(u => u.role === 'gerente' && u.setor === profile.setor);
+      // colaborador: feedback reverso para gerentes de qualquer um dos seus setores + CEO
+      const setoresColaborador = allSetores(profile);
+      const gerentesSetor = users.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
       const ceos = users.filter(u => u.role === 'ceo');
       alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
     }

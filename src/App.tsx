@@ -13,7 +13,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility
+  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
+  Star, MessageSquare
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -57,6 +58,7 @@ const FeriasView                   = lazy(() => import('./views/FeriasView').the
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
+const FeedbackOrganizacionalView   = lazy(() => import('./views/FeedbackOrganizacionalView').then(m => ({ default: m.FeedbackOrganizacionalView })));
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
@@ -117,7 +119,7 @@ const menuModules = [
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Avaliações', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -164,6 +166,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
+        {/* Avaliações: visível para todos os roles — CEO avalia gerentes, gerente avalia equipe, colaborador dá feedback reverso */}
+        <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <Star size={18} /><span>Avaliações</span>
+        </button>
+        {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
+        <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <MessageSquare size={18} /><span>Feedback</span>
+        </button>
       </div>
 
       <div>
@@ -636,7 +646,6 @@ function LogMaxAppInner() {
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
-      case 'rh-avaliações':       return <AvaliacoesView showToast={st} profile={profile} />;
       case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
@@ -654,6 +663,8 @@ function LogMaxAppInner() {
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
+      case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
+      case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
       default:

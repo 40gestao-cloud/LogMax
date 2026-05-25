@@ -73,6 +73,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/controlecaixaview':            'controle_caixa',
   '/api/tichamadosview':               'ti_chamados',
   '/api/notificacoesview':             'notificacoes',
+  '/api/feedbacksorganizacaoview':     'feedbacks_organizacao',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
@@ -94,4 +95,5 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'marketing_promocoes', 'marketing_tarefas',
   'tarefas',
   'ti_chamados',
+  'feedbacks_organizacao',
 ]);
