@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { X, Check, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
@@ -12,6 +12,10 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  // Guard sincrônico: `processing` (state React) atualiza assíncronamente,
+  // então double-click rápido entra no handler 2× antes do disable pintar.
+  // O ref tranca instantaneamente.
+  const processingRef = useRef<string | null>(null);
 
   const enriched = aprovacoes.map((ap: any) => {
     const req = requisicoes.find((r: any) => r.id === ap.requisicao_estoque_id);
@@ -19,7 +23,8 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
   });
 
   const handleAprovar = async (ap: any) => {
-    if (processing) return;
+    if (processingRef.current === ap.id) return;
+    processingRef.current = ap.id;
     setProcessing(ap.id);
     let aprovUpdated = false;
     try {
@@ -42,14 +47,26 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovado' });
       if (ap.req?.produto_id && ap.req?.qtd) {
         const today = new Date().toISOString().slice(0, 10);
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: ap.req.produto_id,
-          tipo: 'Saída',
-          qtd: Number(ap.req.qtd),
-          origem: 'Requisição de Estoque',
-          destino: ap.req.destino || 'Solicitado',
-          data: today,
-        });
+        try {
+          await dbInsert('/api/movimentacoesestoqueview', {
+            produto_id:            ap.req.produto_id,
+            tipo:                  'Saída',
+            qtd:                   Number(ap.req.qtd),
+            origem:                'Requisição de Estoque',
+            destino:               ap.req.destino || 'Solicitado',
+            data:                  today,
+            requisicao_estoque_id: ap.requisicao_estoque_id,
+          });
+        } catch (movErr: any) {
+          // 23505 = UNIQUE: já existe movimento pra essa requisição
+          // (double-click, ou aprovação concorrente em outra aba).
+          // Idempotência: trata como sucesso silencioso.
+          const msg = String(movErr?.message ?? '');
+          const isDuplicate = msg.includes('uq_mov_estoque_por_requisicao_estoque')
+                            || msg.includes('23505')
+                            || /duplicate key value/i.test(msg);
+          if (!isDuplicate) throw movErr;
+        }
       }
       setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
@@ -60,12 +77,14 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       showToast("Erro ao aprovar — rollback aplicado.", 'error', true);
     } finally {
       setProcessing(null);
+      processingRef.current = null;
     }
   };
 
   const handleNegar = async (ap: any) => {
-    if (processing) return;
+    if (processingRef.current === ap.id) return;
     if (!obs[ap.id]?.trim()) { showToast("Informe uma observação para negar.", 'error', true); return; }
+    processingRef.current = ap.id;
     setProcessing(ap.id);
     let aprovUpdated = false;
     try {
@@ -81,6 +100,7 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       showToast("Erro ao negar — rollback aplicado.", 'error', true);
     } finally {
       setProcessing(null);
+      processingRef.current = null;
     }
   };
 
