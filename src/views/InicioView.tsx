@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Clock } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { allSetores } from '../lib/rbac';
 import {
   Bar,
   Line,
@@ -49,7 +50,9 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
       const roles = p.alvo_roles as string[] | null;
       const setores = p.alvo_setores as string[] | null;
       if (roles && roles.length > 0 && !roles.includes(profile.role)) return false;
-      if (setores && setores.length > 0 && profile.setor !== 'all' && !setores.includes(profile.setor)) return false;
+      if (setores && setores.length > 0 && profile.setor !== 'all') {
+        if (!allSetores(profile).some(s => setores.includes(s))) return false;
+      }
       return true;
     }).length;
   }, [pesquisasAtivas, minhasRespostas, profile]);

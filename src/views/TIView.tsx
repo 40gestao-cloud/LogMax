@@ -9,6 +9,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useTheme } from '../contexts/ThemeContext';
 import { SETOR_GRID, corDoSetor, setorLabel } from '../lib/setores';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { hasSetor } from '../lib/rbac';
 
 type TIChamado = {
   id: string;
@@ -79,8 +80,8 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
   // Drill-down: setor cujos chamados estão sendo exibidos no painel.
   const [setorAberto, setSetorAberto] = useState<string | null>(null);
 
-  // O responsável TI é quem tem setor='ti'. Admin/CEO também vê o dashboard.
-  const isTIStaff = profile.setor === 'ti' || profile.role === 'admin' || profile.role === 'ceo';
+  // O responsável TI é quem tem setor='ti' (primário ou extra). Admin/CEO também vê o dashboard.
+  const isTIStaff = hasSetor(profile, 'ti');
 
   const openForm = (setorId?: string) => {
     const setor = setorId ?? (isTIStaff ? '' : profile.setor);

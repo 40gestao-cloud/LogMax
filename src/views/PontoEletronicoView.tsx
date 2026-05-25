@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { hasSetor } from '../lib/rbac';
 
 const statusCls = (s: string) => {
   if (s === 'Falta') return 'bg-red-950/50 text-red-500';
@@ -139,7 +140,7 @@ const QRGenerator = () => {
 // ─── Histórico de Ponto QR ────────────────────────────────────────────────────
 const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
   const { user } = useAuth();
-  const canSeeAll = profile.role === 'admin' || (profile.role === 'gerente' && profile.setor === 'rh');
+  const canSeeAll = profile.role === 'admin' || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
 
   const [registros, setRegistros] = useState<any[]>([]);
   const [userMap, setUserMap] = useState<Record<string, { nome: string; email: string }>>({});

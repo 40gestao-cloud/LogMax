@@ -5,6 +5,7 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { hasSetor } from '../lib/rbac';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'CEO/Admin',
@@ -73,8 +74,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   // admin/CEO. Financeiro consegue ler `marketing_promocoes` (e abrir esta
   // view) mas a RLS de `marketing_artes_insert/update` recusa — escondemos
   // o botão pra não mostrar uma ação que falha.
-  const canPublicarArte =
-    profile?.setor === 'marketing' || profile?.role === 'admin' || profile?.role === 'ceo';
+  const canPublicarArte = hasSetor(profile, 'marketing');
 
   // Mapa rápido promocao_id → arte (1 por promoção, garantido pelo UNIQUE).
   const arteByPromocao = useMemo(() => {

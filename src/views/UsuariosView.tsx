@@ -64,8 +64,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     password: '',
     role: 'colaborador',
     setor: isGerente ? callerProfile.setor : 'logistica',
+    setores_extras: [] as string[],
     filial: isGerente ? FILIAIS_GERENTE[0] : (FILIAL_DEFAULT as string),
   }), [isGerente, callerProfile.setor]);
+
+  // Setores válidos para extras (mesma lista do backend; sem 'all').
+  const SETORES_EXTRAS_DISPONIVEIS: string[] = [
+    'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti',
+  ];
 
   const [form, setForm] = useState<any>(emptyForm);
   const [showPass, setShowPass] = useState(false);
@@ -147,7 +153,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     setSaving(true);
     try {
       // CEO é global por definição — força setor='all' antes de enviar.
-      const payload = form.role === 'ceo' ? { ...form, setor: 'all' } : form;
+      // Gerente não envia setores_extras (backend bloqueia).
+      const cleanExtras = (form.setores_extras ?? []).filter((s: string) => s !== form.setor);
+      const basePayload = isGlobal ? { ...form, setores_extras: cleanExtras } : form;
+      const payload = basePayload.role === 'ceo'
+        ? { ...basePayload, setor: 'all', setores_extras: [] }
+        : basePayload;
       const res = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -191,6 +202,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       email: u.email ?? '',
       role: u.role,
       setor: u.setor,
+      setores_extras: (u.setores_extras ?? []) as string[],
       filial: u.filial ?? FILIAL_DEFAULT,
       password: '',
     });
@@ -226,6 +238,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         payload.role = editForm.role;
         // CEO sempre setor 'all' — servidor força, mas mandamos coerente.
         payload.setor = editForm.role === 'ceo' ? 'all' : editForm.setor;
+        // CEO já é global; extras zeradas.
+        payload.setores_extras = editForm.role === 'ceo'
+          ? []
+          : (editForm.setores_extras ?? []).filter((s: string) => s !== payload.setor);
         payload.filial = editForm.filial;
       } else if (isGerente) {
         // Gerente: só nome/email/senha + filial (sem Matriz).
@@ -249,6 +265,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           email: payload.email ?? u.email,
           role: payload.role ?? u.role,
           setor: payload.setor ?? u.setor,
+          setores_extras: payload.setores_extras ?? u.setores_extras,
           filial: payload.filial ?? u.filial,
         };
       }));
@@ -371,6 +388,35 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 </select>
               </div>
             </div>
+
+            {/* Setores extras — só admin/CEO, escondido para CEO target (global). */}
+            {isGlobal && form.role !== 'ceo' && (
+              <div className="mt-4 flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>
+                </label>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {SETORES_EXTRAS_DISPONIVEIS
+                    .filter(s => s !== form.setor)
+                    .map(s => {
+                      const active = (form.setores_extras ?? []).includes(s);
+                      return (
+                        <button key={s} type="button"
+                          onClick={() => setForm((p: any) => ({
+                            ...p,
+                            setores_extras: active
+                              ? p.setores_extras.filter((x: string) => x !== s)
+                              : [...(p.setores_extras ?? []), s],
+                          }))}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${active ? `${setorCls(s)} border-current/30` : 'neu-button border-white/5 text-gray-600 hover:text-gray-300'}`}>
+                          {SETOR_LABEL[s]}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end mt-5">
               <NeuButtonAccent onClick={handleSave} disabled={saving}>
                 {saving ? 'Criando...' : 'Criar Usuário'}
@@ -404,9 +450,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
                       <td className="py-3 px-4 text-xs text-gray-400 font-mono">{u.email}</td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${setorCls(u.setor)}`}>
-                          {SETOR_LABEL[u.setor] ?? u.setor}
-                        </span>
+                        <div className="flex flex-wrap gap-1 justify-center">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${setorCls(u.setor)}`}>
+                            {SETOR_LABEL[u.setor] ?? u.setor}
+                          </span>
+                          {(u.setores_extras ?? []).map(s => (
+                            <span key={s} title="Setor extra"
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${setorCls(s)} opacity-70`}>
+                              +{SETOR_LABEL[s] ?? s}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${roleCls(u.role)}`}>
@@ -573,6 +627,34 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   </select>
                 </div>
               </div>
+
+              {/* Setores extras — admin/CEO, exceto quando target é CEO (global). */}
+              {isGlobal && editForm.role !== 'ceo' && (
+                <div className="mt-4 flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                    Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {SETORES_EXTRAS_DISPONIVEIS
+                      .filter(s => s !== editForm.setor)
+                      .map(s => {
+                        const active = (editForm.setores_extras ?? []).includes(s);
+                        return (
+                          <button key={s} type="button"
+                            onClick={() => setEditForm((p: any) => ({
+                              ...p,
+                              setores_extras: active
+                                ? p.setores_extras.filter((x: string) => x !== s)
+                                : [...(p.setores_extras ?? []), s],
+                            }))}
+                            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${active ? `${setorCls(s)} border-current/30` : 'neu-button border-white/5 text-gray-600 hover:text-gray-300'}`}>
+                            {SETOR_LABEL[s]}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 mt-6">
                 <button onClick={closeEdit}

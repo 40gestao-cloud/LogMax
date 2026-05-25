@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
+import { hasSetor } from './lib/rbac';
 import { useFetchData } from './hooks/useSupabaseData';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
@@ -152,8 +153,8 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
           <Home size={18} /><span>Início</span>
         </button>
-        {(profile?.setor === 'all'
-          || (profile?.role === 'gerente' && (profile?.setor === 'financeiro' || profile?.setor === 'logistica'))) && (
+        {(profile?.role === 'admin' || profile?.role === 'ceo'
+          || (profile?.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))) && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
@@ -674,8 +675,7 @@ function LogMaxAppInner() {
 
   // MaxAI disponível apenas para admin/CEO (visão global) e setor Financeiro.
   // Endpoint /api/ai-chat também valida server-side (defense-in-depth).
-  const canUseMaxAI =
-    profile.role === 'admin' || profile.role === 'ceo' || profile.setor === 'financeiro';
+  const canUseMaxAI = hasSetor(profile, 'financeiro');
 
   return (
     <AIAssistantProvider>

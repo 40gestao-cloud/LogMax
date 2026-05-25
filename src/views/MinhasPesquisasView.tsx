@@ -4,6 +4,7 @@ import { Send, Lock, ClipboardList, CheckCircle2, X } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { allSetores } from '../lib/rbac';
 
 const LS_PREFIX = 'logmax:pesquisa-respondida:';
 
@@ -15,7 +16,10 @@ function isEligible(pesquisa: any, profile: any): boolean {
   const roles = pesquisa.alvo_roles as string[] | null;
   const setores = pesquisa.alvo_setores as string[] | null;
   if (roles && roles.length > 0 && !roles.includes(profile.role)) return false;
-  if (setores && setores.length > 0 && profile.setor !== 'all' && !setores.includes(profile.setor)) return false;
+  if (setores && setores.length > 0 && profile.setor !== 'all') {
+    // Match se algum setor do usuário (primário ou extra) estiver no alvo.
+    if (!allSetores(profile).some(s => setores.includes(s))) return false;
+  }
   return true;
 }
 

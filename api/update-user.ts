@@ -4,6 +4,8 @@ import { createLogger } from '../lib/log.js';
 
 const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador'];
 const VALID_SETORES = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+// Extras não aceitam 'all' (faz parte só do escopo CEO).
+const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque'];
 const VALID_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -47,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Sem permissão para editar usuários.' });
     }
 
-    const { userId, nome, email, role, setor, filial, password } = req.body ?? {};
+    const { userId, nome, email, role, setor, filial, password, setores_extras } = req.body ?? {};
 
     if (!userId || typeof userId !== 'string') {
       log.warn('request.validation_failed', { missing: 'userId' });
@@ -131,6 +133,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // CEO é sempre global ('all') — independente do que vier no payload.
     if (updates.role === 'ceo') {
       updates.setor = 'all';
+      updates.setores_extras = []; // CEO já é global; zera extras.
+    }
+
+    // Setores extras: só admin/CEO podem alterar; CEO ignora (já é global).
+    if (setores_extras !== undefined && updates.role !== 'ceo') {
+      if (!isGlobalCaller) {
+        log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_setores_extras' });
+        return res.status(403).json({ error: 'Gerentes não podem alterar setores extras.' });
+      }
+      if (!Array.isArray(setores_extras)) {
+        return res.status(400).json({ error: 'setores_extras deve ser um array.' });
+      }
+      const extras = [...new Set(setores_extras as unknown[])]
+        .filter((s): s is string => typeof s === 'string' && VALID_SETORES_EXTRAS.includes(s));
+      // Remove o setor primário (efetivo após este update) da lista.
+      const primaryAfter = updates.setor ?? targetProfile.setor;
+      updates.setores_extras = extras.filter(s => s !== primaryAfter);
     }
 
     if (filial !== undefined) {

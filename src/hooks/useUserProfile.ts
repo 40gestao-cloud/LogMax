@@ -2,12 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
+export type Setor = 'all' | 'logistica' | 'vendas' | 'financeiro' | 'rh' | 'marketing' | 'ti' | 'compras' | 'estoque';
+
 export interface UserProfile {
   id: string;
   nome: string;
   email: string;
   role: 'admin' | 'ceo' | 'gerente' | 'colaborador';
-  setor: 'all' | 'logistica' | 'vendas' | 'financeiro' | 'rh' | 'marketing' | 'ti';
+  setor: Setor;
+  /** Setores adicionais — concedem acesso de leitura/escrita sem elevar role. */
+  setores_extras?: Setor[];
   filial?: string | null;
   criado_por: string | null;
   created_at: string;

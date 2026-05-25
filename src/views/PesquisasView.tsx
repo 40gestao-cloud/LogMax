@@ -4,6 +4,7 @@ import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } f
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { hasSetor } from '../lib/rbac';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
 
@@ -35,7 +36,7 @@ export const PesquisasView = ({ showToast, profile }: any) => {
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const canManage = profile?.setor === 'rh' || profile?.role === 'admin' || profile?.role === 'ceo';
+  const canManage = hasSetor(profile, 'rh');
   if (!canManage) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">

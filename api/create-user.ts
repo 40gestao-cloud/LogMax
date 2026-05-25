@@ -45,8 +45,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Sem permissão para criar usuários.' });
     }
 
-    const { email, password, nome, role, filial } = req.body ?? {};
+    const { email, password, nome, role, filial, setores_extras } = req.body ?? {};
     let { setor } = req.body ?? {};
+
+    // Setores válidos (mesma lista do CHECK no banco).
+    const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque'];
+    let extras: string[] = [];
+    if (Array.isArray(setores_extras)) {
+      // Dedup + filtra inválidos + remove o primário.
+      extras = [...new Set(setores_extras as unknown[])]
+        .filter((s): s is string => typeof s === 'string' && VALID_SETORES_EXTRAS.includes(s));
+    }
 
     if (!email || !password || !nome || !role || !setor) {
       log.warn('request.validation_failed', { missing: { email: !email, password: !password, nome: !nome, role: !role, setor: !setor } });
@@ -66,7 +75,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: 'Apenas administradores podem criar CEO.' });
       }
       setor = 'all';
+      extras = []; // CEO já é global; extras não fazem sentido.
     }
+
+    // Só admin/CEO podem atribuir setores extras (gerente não cria multi-setor).
+    if (extras.length > 0 && callerProfile.role !== 'admin' && callerProfile.role !== 'ceo') {
+      log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_setores_extras' });
+      return res.status(403).json({ error: 'Apenas admin/CEO podem atribuir setores extras.' });
+    }
+    // Remove o primário da lista de extras (defesa contra UI desalinhada).
+    extras = extras.filter(s => s !== setor);
 
     // Apenas admin pode criar outro admin (defesa em profundidade).
     if (role === 'admin' && callerProfile.role !== 'admin') {
@@ -110,12 +128,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Criar perfil. Filial é opcional no payload — default 'Matriz' (default
     // do schema). Frontend valida contra FILIAIS_HOLDING.
     const profilePayload: any = {
-      id:         newUser.id,
+      id:             newUser.id,
       nome,
       email,
       role,
       setor,
-      criado_por: caller.id,
+      setores_extras: extras,
+      criado_por:     caller.id,
     };
     if (typeof filial === 'string' && filial.trim()) {
       profilePayload.filial = filial.trim();
