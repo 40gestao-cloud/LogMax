@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -41,10 +42,16 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
     }
     setEnviando(true);
     try {
-      await dbInsert('/api/feedbacksorganizacaoview', {
-        texto: t,
-        categoria: categoria || null,
+      // RPC SECURITY DEFINER — colaboradores não têm SELECT em
+      // feedbacks_organizacao (RLS), então o INSERT via PostgREST com
+      // .select() RETURNING falha. A RPC contorna isso e mantém
+      // anonimato técnico (auth.uid() não é gravado).
+      if (!supabase) throw new Error('Supabase não configurado');
+      const { error } = await supabase.rpc('enviar_feedback_anonimo', {
+        p_texto: t,
+        p_categoria: categoria || null,
       });
+      if (error) throw error;
       setTexto('');
       setCategoria('');
       setSucesso(true);
