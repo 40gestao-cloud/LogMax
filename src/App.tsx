@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
-import { hasSetor } from './lib/rbac';
+import { hasSetor, allSetores } from './lib/rbac';
 import { useFetchData } from './hooks/useSupabaseData';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
-import { Toast, LoadingSpinner, PageLoadingFallback, PlaceholderView } from './components/ui';
+import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -564,7 +564,12 @@ function LogMaxAppInner() {
   }
 
   // Módulos visíveis pelo setor do usuário
-  const allowedModuleIds = SETOR_MODULES[profile.setor] ?? [];
+  // Multi-setor: união dos módulos de todos os setores do usuário (primário + extras).
+  // Admin/CEO (setor='all') passam direto. Sem isso, gerente Vendas com extra=ti
+  // não veria o módulo TI no menu (RLS já permitiria, só a UX que falhava).
+  const allowedModuleIds = Array.from(new Set(
+    allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
+  ));
   const visibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
 
   const handleSignOut = async () => {
@@ -632,14 +637,14 @@ function LogMaxAppInner() {
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
       case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
-      case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView />;
+      case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView profile={profile} />;
       case 'financeiro-relatórios':               return <RelatoriosFinanceirosView showToast={st} />;
       case 'rh-funcionários':     return <FuncionariosView showToast={st} />;
       case 'rh-departamentos':    return <GenericCRUDView showToast={st} title="Departamentos" subtitle="Gerencie os departamentos da empresa." endpoint="/api/departamentosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Tecnologia da Informação' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-cargos':           return <GenericCRUDView showToast={st} title="Cargos" subtitle="Gerencie os cargos e níveis salariais." endpoint="/api/cargosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Analista de Sistemas' }, { key: 'nivel', label: 'Nível', type: 'select', options: ['Júnior', 'Pleno', 'Sênior', 'Gerência', 'Diretoria'] }, { key: 'salario_base', label: 'Salário Base (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} />;
+      case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} />;
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-totemqr':          return <QRTotemView />;
