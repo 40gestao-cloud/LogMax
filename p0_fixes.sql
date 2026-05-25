@@ -73,8 +73,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  v_data := (NEW.registrado_em AT TIME ZONE 'America/Sao_Paulo')::DATE;
-  v_hora := (NEW.registrado_em AT TIME ZONE 'America/Sao_Paulo')::TIME;
+  v_data := (NEW.registrado_em AT TIME ZONE 'America/Rio_Branco')::DATE;
+  v_hora := (NEW.registrado_em AT TIME ZONE 'America/Rio_Branco')::TIME;
 
   SELECT id, entrada INTO v_ponto_id, v_entrada
   FROM ponto_eletronico

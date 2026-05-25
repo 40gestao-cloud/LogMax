@@ -241,8 +241,8 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
                 <AnimatePresence>
                   {registros.map((r: any, i: number) => {
                     const dt = new Date(r.registrado_em);
-                    const dataFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
-                    const horaFmt = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+                    const dataFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
+                    const horaFmt = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
                     const prof = userMap[r.user_id];
                     return (
                       <motion.tr key={r.id ?? i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}

@@ -14,7 +14,7 @@ const fmtBRL = (v: number) =>
 
 const fmtHora = (iso: string | null) => {
   if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
 };
 
 const fmtData = (str: string) => {
