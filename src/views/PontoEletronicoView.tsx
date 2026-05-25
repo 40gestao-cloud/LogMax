@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound } from 'lucide-react';
+import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -148,17 +148,49 @@ const QRGenerator = () => {
 };
 
 // ─── Histórico de Ponto QR ────────────────────────────────────────────────────
-const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
+const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
   const { user } = useAuth();
   const canSeeAll = profile.role === 'admin' || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
+  // Hard-delete autorizado pra admin/CEO (RH também tem via RLS, mas a UI
+  // intencional aqui é "correção administrativa", então restringimos).
+  const canDelete = profile.role === 'admin' || profile.role === 'ceo';
 
   const [registros, setRegistros] = useState<any[]>([]);
   const [userMap, setUserMap] = useState<Record<string, { nome: string; email: string }>>({});
   const [loading, setLoading] = useState(true);
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<string | null>(null);
   const [filtroMes, setFiltroMes] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+
+  const handleExcluir = async (id: string) => {
+    if (!supabase) return;
+    setExcluindo(id);
+    try {
+      // Hard-delete (sem coluna `ativo`). O trigger trg_recompute_ponto
+      // (migração 20260525k) recalcula ponto_eletronico do dia.
+      // `.select()` força PostgREST a devolver as linhas afetadas — assim
+      // detectamos RLS silent-fail (devolve [] em vez de erro).
+      const { data, error } = await supabase
+        .from('ponto_qr_registros')
+        .delete()
+        .eq('id', id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nenhum registro removido (RLS pode ter bloqueado).');
+      }
+      setRegistros(prev => prev.filter(r => r.id !== id));
+      showToast?.('Registro de ponto removido.', 'success');
+    } catch (err: any) {
+      showToast?.(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setExcluindo(null);
+      setConfirmandoId(null);
+    }
+  };
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -246,6 +278,7 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
                   <th className="pb-4 font-bold px-4 text-center">Horário</th>
                   <th className="pb-4 font-bold px-4 text-center">Tipo</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
+                  {canDelete && <th className="pb-4 font-bold px-4 text-right">Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -276,6 +309,28 @@ const HistoricoPonto = ({ profile }: { profile: UserProfile }) => {
                             {r.status}
                           </span>
                         </td>
+                        {canDelete && (
+                          <td className="py-3 px-4 text-right">
+                            {confirmandoId === r.id ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => handleExcluir(r.id)} disabled={excluindo === r.id}
+                                  className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
+                                  {excluindo === r.id ? '...' : 'Confirmar'}
+                                </button>
+                                <button onClick={() => setConfirmandoId(null)} disabled={excluindo === r.id}
+                                  className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmandoId(r.id)}
+                                title="Excluir registro"
+                                className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors ml-auto">
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </motion.tr>
                     );
                   })}
@@ -642,7 +697,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
       )}
 
       {/* ── Aba Histórico ── */}
-      {tab === 'historico' && <HistoricoPonto profile={profile} />}
+      {tab === 'historico' && <HistoricoPonto profile={profile} showToast={showToast} />}
     </motion.div>
   );
 };
