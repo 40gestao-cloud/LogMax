@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { hasAnySetor } from '../lib/rbac';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -23,6 +24,15 @@ const fmtData = (str: string) => {
 };
 
 export const ControleCaixaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  // Guard: caixa é financeiro+vendas (RLS já reflete isso).
+  if (!hasAnySetor(profile, 'financeiro', 'vendas')) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+        <Lock size={36} className="text-gray-600" />
+        <p className="text-sm text-gray-400">Apenas Financeiro, Vendas, admin ou CEO podem acessar o Caixa.</p>
+      </div>
+    );
+  }
   const { user } = useAuth();
   const { caixa, isLoading: caixaLoading, refresh } = useCaixaAberto();
   const { data: historico, isLoading: histLoading, reload } = useFetchData<any>('/api/controlecaixaview');

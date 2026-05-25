@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2 } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { hasSetor } from '../lib/rbac';
+import type { UserProfile } from '../hooks/useUserProfile';
 
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
@@ -13,7 +15,16 @@ const statusNext = (s: string): string | null =>
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_bruto: '', descontos: '', status: 'Pendente' };
 
-export const FolhaPagamentoView = ({ showToast }: any) => {
+export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  // Guard: dados sensíveis (salário). RLS já bloqueia, mas evita UX confusa.
+  if (!hasSetor(profile, 'rh')) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+        <Lock size={36} className="text-gray-600" />
+        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem acessar a Folha de Pagamento.</p>
+      </div>
+    );
+  }
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<any>('/api/folhapagamentoview');
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
 

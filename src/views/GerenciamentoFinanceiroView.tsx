@@ -1,8 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { TrendingUp, TrendingDown, Landmark, FileText, CreditCard, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, FileText, CreditCard, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
+import { hasSetor } from '../lib/rbac';
+import type { UserProfile } from '../hooks/useUserProfile';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
   <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-w-[130px]">
@@ -24,7 +26,17 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
   </div>
 );
 
-export const GerenciamentoFinanceiroView = () => {
+export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile }) => {
+  // Guard: RLS já bloqueia as queries, mas a UI ficaria com tudo zerado
+  // sem feedback claro. Mostra estado de "sem acesso" antes de tudo.
+  if (!hasSetor(profile, 'financeiro')) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+        <Lock size={36} className="text-gray-600" />
+        <p className="text-sm text-gray-400">Apenas Financeiro, admin ou CEO podem acessar esta visão.</p>
+      </div>
+    );
+  }
   const { data: previsoes, isLoading: loadingPrev } = useFetchData<any>('/api/previsoesview');
   const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview');
   const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview');
