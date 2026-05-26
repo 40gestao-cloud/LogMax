@@ -362,6 +362,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Requisição</th>
+                  <th className="pb-4 font-bold px-4 text-center">Qtd</th>
                   <th className="pb-4 font-bold px-4">Fornecedor</th>
                   <th className="pb-4 font-bold px-4 text-right">Valor Total</th>
                   <th className="pb-4 font-bold px-4">Prazo Entrega</th>
@@ -376,6 +377,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                   {enriched.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.req?.item ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.prazo_entrega || '—'}</td>
