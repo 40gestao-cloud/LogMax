@@ -2,7 +2,7 @@
 
 > Lista **numerada e exata** dos scripts a rodar no Supabase SQL Editor pra criar um banco LogMax do zero.
 >
-> Execute na ordem dos números (1 → 57). Todos os scripts são **idempotentes** — rodar 2× não quebra.
+> Execute na ordem dos números (1 → 60). Todos os scripts são **idempotentes** — rodar 2× não quebra.
 
 ---
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 📋 Sequência completa (1 → 57)
+## 📋 Sequência completa (1 → 60)
 
 | # | Arquivo | Fase | O que faz |
 |---|---|---|---|
@@ -72,13 +72,16 @@
 | 52 | `supabase/migrations/20260525j_feedback_org_delete_ceo.sql` | Migrações | Policy UPDATE de feedbacks_organizacao libera CEO. |
 | 53 | `supabase/migrations/20260525k_ponto_delete_admin_ceo.sql` | Migrações | DELETE em ponto_qr_registros pra admin/CEO + trigger `trg_recompute_ponto`. |
 | 54 | `supabase/migrations/20260526_cotacoes_logistica.sql` | Migrações | RLS de `cotacoes`/`pedidos` aceita 'logistica' (par operacional de Compras); SELECT em `requisicoes` idem. |
-| 55 | **(Bloco SQL inline — não é arquivo)** | Cleanup | Dropa policies `auth_all`/`auth_read` que sobreviveram ao hardening. **Cole o bloco abaixo.** |
-| 56 | `marketing_links_migration.sql` | Patches finais | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas` (idempotente). |
-| 57 | `supabase/migrations/20260516_seed_admin_master.sql` | **Admin** | **Substitua `'admin@example.com'` pelo e-mail real ANTES de rodar.** Vincula a linha em user_profiles ao usuário criado no Auth Dashboard. |
+| 55 | `supabase/migrations/20260526b_atualizar_avaliacao.sql` | Migrações | RPC `atualizar_avaliacao` — admin/CEO editam qualquer avaliação; demais só as próprias; ciclo fechado bloqueia. |
+| 56 | `supabase/migrations/20260526c_produtos_patrimonio.sql` | Migrações | Coluna `tipo` em `produtos` (estoque_venda \| patrimonio) + campos tag/responsável/localização. Patrimônio some do PDV. |
+| 57 | `supabase/migrations/20260526d_criar_avaliacao_ciclo_aberto.sql` | Migrações | RPC `criar_avaliacao` bloqueia ciclo não-Aberto (semântica "fechado = imutável" alinhada à `atualizar_avaliacao`). |
+| 58 | **(Bloco SQL inline — não é arquivo)** | Cleanup | Dropa policies `auth_all`/`auth_read` que sobreviveram ao hardening. **Cole o bloco abaixo.** |
+| 59 | `marketing_links_migration.sql` | Patches finais | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas` (idempotente). |
+| 60 | `supabase/migrations/20260516_seed_admin_master.sql` | **Admin** | **Substitua `'admin@example.com'` pelo e-mail real ANTES de rodar.** Vincula a linha em user_profiles ao usuário criado no Auth Dashboard. |
 
 ---
 
-## Passo 55 — Bloco SQL de cleanup (cole no Editor)
+## Passo 58 — Bloco SQL de cleanup (cole no Editor)
 
 ```sql
 -- Remove policies abertas que sobraram dos passos 1–10 e não foram dropadas
@@ -108,7 +111,7 @@ SELECT schemaname, tablename, policyname
 
 ---
 
-## Passo 57 — Como executar o seed do admin
+## Passo 60 — Como executar o seed do admin
 
 1. **Supabase Dashboard → Authentication → Users → "Add user"**
    - E-mail: `<e-mail do admin>`
@@ -154,11 +157,11 @@ Sem isso o app não conecta. Configure em **Vercel → Project Settings → Envi
 
 - [ ] Banco Supabase criado
 - [ ] Email/senha auth habilitado no Supabase
-- [ ] Passos **1–54** executados em ordem
-- [ ] Passo **55** (cleanup) executado — verificação retorna 0 linhas
-- [ ] Passo **56** (marketing_links) executado
+- [ ] Passos **1–57** executados em ordem
+- [ ] Passo **58** (cleanup) executado — verificação retorna 0 linhas
+- [ ] Passo **59** (marketing_links) executado
 - [ ] Admin master criado em Authentication → Add User
-- [ ] Passo **57** (seed_admin_master) executado com e-mail real substituído
+- [ ] Passo **60** (seed_admin_master) executado com e-mail real substituído
 - [ ] Variáveis de ambiente configuradas no Vercel
 - [ ] Deploy disparado na Vercel
 - [ ] Login bem-sucedido na app com o admin master

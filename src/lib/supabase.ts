@@ -44,6 +44,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/expedicao':                    'expedicao',
   '/api/movimentacoesestoqueview':     'movimentacoes_estoque',
   '/api/saldosestoqueview':            'produtos',
+  '/api/patrimonioview':               'produtos',
   '/api/inventariosestoqueview':       'inventarios',
   '/api/vencimentosestoqueview':       'vencimentos_estoque',
   '/api/contasreceberview':            'contas_receber',

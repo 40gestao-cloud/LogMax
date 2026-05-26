@@ -16,13 +16,17 @@ import {
 } from '../lib/produtoImagem';
 
 const EMPTY_EXTRAS = {
-  categoria:      '',
-  preco_custo:    '',
-  estoque:        '',
-  estoque_minimo: '',
-  ean:            '',
-  fornecedor:     '',
-  filial:         FILIAL_DEFAULT as string,
+  categoria:              '',
+  preco_custo:            '',
+  estoque:                '',
+  estoque_minimo:         '',
+  ean:                    '',
+  fornecedor:             '',
+  filial:                 FILIAL_DEFAULT as string,
+  tipo:                   'estoque_venda' as 'estoque_venda' | 'patrimonio',
+  patrimonio_numero:      '',
+  patrimonio_responsavel: '',
+  patrimonio_localizacao: '',
 };
 
 const parseNum = (v: string | number | undefined | null): number =>
@@ -98,13 +102,17 @@ export const ProdutosView = ({ showToast }: any) => {
       preco:  item.preco != null && item.preco !== '' ? formatBRL(Number(item.preco)) : '',
     });
     setExtras({
-      categoria:      item.categoria      ?? '',
-      preco_custo:    item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
-      estoque:        item.estoque        !== undefined ? String(item.estoque)        : '',
-      estoque_minimo: item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
-      ean:            item.ean            ?? '',
-      fornecedor:     item.fornecedor     ?? '',
-      filial:         item.filial         ?? FILIAL_DEFAULT,
+      categoria:              item.categoria      ?? '',
+      preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
+      estoque:                item.estoque        !== undefined ? String(item.estoque)        : '',
+      estoque_minimo:         item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
+      ean:                    item.ean            ?? '',
+      fornecedor:             item.fornecedor     ?? '',
+      filial:                 item.filial         ?? FILIAL_DEFAULT,
+      tipo:                   (item.tipo === 'patrimonio' ? 'patrimonio' : 'estoque_venda'),
+      patrimonio_numero:      item.patrimonio_numero      ?? '',
+      patrimonio_responsavel: item.patrimonio_responsavel ?? '',
+      patrimonio_localizacao: item.patrimonio_localizacao ?? '',
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -160,16 +168,23 @@ export const ProdutosView = ({ showToast }: any) => {
       const estoqueInicial = extras.estoque !== '' ? parseInt(extras.estoque, 10) : 0;
       // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
       // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
+      const isPatrimonio = extras.tipo === 'patrimonio';
       const basePayload = {
         ...form,
-        preco:          parseBRL(form.preco),
-        categoria:      extras.categoria,
-        preco_custo:    extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
-        estoque_minimo: extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
-        ean:            extras.ean,
-        fornecedor:     extras.fornecedor,
-        filial:         extras.filial || FILIAL_DEFAULT,
-        imagem_url:     imagemUrl || null,
+        preco:                  parseBRL(form.preco),
+        categoria:              extras.categoria,
+        preco_custo:            extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
+        estoque_minimo:         extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
+        ean:                    extras.ean,
+        fornecedor:             extras.fornecedor,
+        filial:                 extras.filial || FILIAL_DEFAULT,
+        imagem_url:             imagemUrl || null,
+        tipo:                   extras.tipo,
+        // Campos de patrimônio só viajam quando tipo='patrimonio' — limpa quando
+        // o produto vira (ou volta a ser) estoque/venda.
+        patrimonio_numero:      isPatrimonio ? (extras.patrimonio_numero      || null) : null,
+        patrimonio_responsavel: isPatrimonio ? (extras.patrimonio_responsavel || null) : null,
+        patrimonio_localizacao: isPatrimonio ? (extras.patrimonio_localizacao || null) : null,
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
@@ -436,6 +451,43 @@ export const ProdutosView = ({ showToast }: any) => {
                   </div>
                 </div>
               )}
+
+              {/* Tipo do produto — separa item de revenda (PDV) de patrimônio (Financeiro) */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <FormField label="Tipo *">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.tipo}
+                      onChange={e => setExtras(x => ({ ...x, tipo: e.target.value as 'estoque_venda' | 'patrimonio' }))}>
+                      <option value="estoque_venda">Estoque / Venda</option>
+                      <option value="patrimonio">Patrimônio</option>
+                    </select>
+                  </FormField>
+                </div>
+                {extras.tipo === 'patrimonio' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 rounded-2xl neu-pressed border border-accent/20">
+                    <FormField label="Nº de Patrimônio (tag)">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
+                        value={extras.patrimonio_numero}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_numero: e.target.value }))}
+                        placeholder="Ex: TAG-2026-001" />
+                    </FormField>
+                    <FormField label="Responsável">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.patrimonio_responsavel}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_responsavel: e.target.value }))}
+                        placeholder="Ex: Igor Neri" />
+                    </FormField>
+                    <FormField label="Localização">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.patrimonio_localizacao}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_localizacao: e.target.value }))}
+                        placeholder="Ex: Sala TI - Rio Branco" />
+                    </FormField>
+                  </div>
+                )}
+              </div>
 
               {/* Preços */}
               <div>

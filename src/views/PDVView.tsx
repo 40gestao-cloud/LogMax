@@ -63,7 +63,11 @@ export const PDVView = ({ showToast, profile }: any) => {
     }));
   }, [produtos]);
 
-  const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
+  // Patrimônio (tipo='patrimonio') é classificado em Compras e gerenciado pelo
+  // Financeiro — não pode vir pra venda. Default ausente = estoque_venda (legado).
+  const produtosAtivos = produtos.filter((p: any) =>
+    (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio'
+  );
   const searchLower = search.toLowerCase();
   const filtered = produtosAtivos.filter((p: any) =>
     [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower))

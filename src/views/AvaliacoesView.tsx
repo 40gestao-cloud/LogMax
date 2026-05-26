@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -45,24 +45,33 @@ const fmtData = (s: string) => {
 // ----------------------------------------------------------------------
 
 function ModalAvaliacao({
-  ciclo, avaliado, tipo, onClose, onSaved, showToast,
+  ciclo, avaliado, tipo, avaliacaoExistente, onClose, onSaved, showToast,
 }: {
   ciclo: Ciclo;
   avaliado: UserProfile;
   tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+  // Quando presente: modo edição → prefill + RPC atualizar_avaliacao.
+  avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => void;
   showToast: any;
 }) {
-  // Notas por categoria/critério (default 3 = neutro)
+  const isEdicao = !!avaliacaoExistente;
+
+  // Notas por categoria/critério (default 3 = neutro, ou os valores existentes em edição)
   const [notas, setNotas] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     (Object.keys(CRITERIOS) as Categoria[]).forEach(cat => {
       CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = 3; });
     });
+    if (avaliacaoExistente) {
+      avaliacaoExistente.criterios.forEach(c => {
+        init[`${c.categoria}::${c.criterio}`] = c.nota;
+      });
+    }
     return init;
   });
-  const [observacao, setObservacao] = useState('');
+  const [observacao, setObservacao] = useState(avaliacaoExistente?.observacao ?? '');
   const [saving, setSaving] = useState(false);
 
   const handleSalvar = async () => {
@@ -72,21 +81,27 @@ function ModalAvaliacao({
       const p_criterios = (Object.keys(CRITERIOS) as Categoria[]).flatMap(cat =>
         CRITERIOS[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
       );
-      const { error } = await supabase.rpc('criar_avaliacao', {
-        p_ciclo_id: ciclo.id,
-        p_avaliado_id: avaliado.id,
-        p_tipo: tipo,
-        p_observacao: observacao || null,
-        p_criterios,
-      });
+      const { error } = isEdicao
+        ? await supabase.rpc('atualizar_avaliacao', {
+            p_avaliacao_id: avaliacaoExistente!.id,
+            p_observacao: observacao || null,
+            p_criterios,
+          })
+        : await supabase.rpc('criar_avaliacao', {
+            p_ciclo_id: ciclo.id,
+            p_avaliado_id: avaliado.id,
+            p_tipo: tipo,
+            p_observacao: observacao || null,
+            p_criterios,
+          });
       if (error) throw error;
-      showToast?.('Avaliação registrada com sucesso.', 'success');
+      showToast?.(isEdicao ? 'Avaliação atualizada.' : 'Avaliação registrada com sucesso.', 'success');
       onSaved();
       onClose();
     } catch (err: any) {
       const msg = err?.message?.includes('unq_avaliacao')
         ? 'Você já avaliou esta pessoa neste ciclo.'
-        : err?.message ?? 'Erro ao salvar avaliação.';
+        : err?.message ?? (isEdicao ? 'Erro ao atualizar avaliação.' : 'Erro ao salvar avaliação.');
       showToast?.(msg, 'error');
     } finally {
       setSaving(false);
@@ -107,7 +122,7 @@ function ModalAvaliacao({
       >
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-bold text-accent">Avaliação de Desempenho</h3>
+            <h3 className="text-lg font-bold text-accent">{isEdicao ? 'Editar Avaliação' : 'Avaliação de Desempenho'}</h3>
             <p className="text-xs text-gray-400 mt-0.5">
               <span className="font-bold text-gray-300">{avaliado.nome}</span> · Ciclo {ciclo.nome}
             </p>
@@ -175,7 +190,7 @@ function ModalAvaliacao({
               Cancelar
             </button>
             <NeuButtonAccent onClick={handleSalvar} isLoading={saving}>
-              <CheckCircle2 size={14} /> Salvar Avaliação
+              <CheckCircle2 size={14} /> {isEdicao ? 'Salvar Alterações' : 'Salvar Avaliação'}
             </NeuButtonAccent>
           </div>
         </div>
@@ -299,7 +314,9 @@ const CardAvaliacao: React.FC<{
   criterios: Criterio[];
   direcaoLabel: string;     // "de" (recebida) | "para" (feita)
   nomeContraparte: string;  // nome do avaliador (recebida) ou avaliado (feita) + ciclo
-}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte }) => {
+  canEditar?: boolean;
+  onEditar?: () => void;
+}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar }) => {
   const [expanded, setExpanded] = useState(false);
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
@@ -326,9 +343,20 @@ const CardAvaliacao: React.FC<{
           <p className="text-xs text-gray-500">{direcaoLabel}</p>
           <p className="text-sm font-bold text-gray-200">{nomeContraparte}</p>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Média</p>
-          <p className="text-2xl font-black text-accent">{mediaTotal.toFixed(1)}</p>
+        <div className="flex items-center gap-2">
+          {canEditar && (
+            <button
+              onClick={onEditar}
+              title="Editar avaliação"
+              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
+          <div className="text-right">
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Média</p>
+            <p className="text-2xl font-black text-accent">{mediaTotal.toFixed(1)}</p>
+          </div>
         </div>
       </div>
 
@@ -340,6 +368,14 @@ const CardAvaliacao: React.FC<{
           </div>
         ))}
       </div>
+
+      {/* Observação sempre visível quando houver — não fica escondida no drill-down. */}
+      {avaliacao.observacao && (
+        <div className="mb-3 p-3 rounded-xl bg-white/[0.02] border-l-2 border-accent/40">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Observação</p>
+          <p className="text-xs text-gray-300 italic whitespace-pre-wrap">"{avaliacao.observacao}"</p>
+        </div>
+      )}
 
       <button
         onClick={() => setExpanded(v => !v)}
@@ -363,12 +399,6 @@ const CardAvaliacao: React.FC<{
                   <span className="font-bold text-gray-200">{c.nota}/5</span>
                 </div>
               ))}
-              {avaliacao.observacao && (
-                <div className="mt-2 pt-2 border-t border-white/5">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Observação</p>
-                  <p className="text-xs text-gray-300 italic">"{avaliacao.observacao}"</p>
-                </div>
-              )}
             </div>
           </motion.div>
         )}
@@ -389,9 +419,42 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
   const [isLoading, setIsLoading] = useState(true);
   const [showNovoCiclo, setShowNovoCiclo] = useState(false);
   const [avaliando, setAvaliando] = useState<{ ciclo: Ciclo; avaliado: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' } | null>(null);
+  const [editando, setEditando] = useState<{
+    ciclo: Ciclo;
+    avaliado: UserProfile;
+    tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+    avaliacaoExistente: { id: string; observacao: string | null; criterios: Criterio[] };
+  } | null>(null);
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo';
   const isGerente   = profile.role === 'gerente';
+
+  // Helper: pode editar uma avaliação? RPC `atualizar_avaliacao` faz o
+  // check autoritativo no banco; aqui é só pra esconder UI quando não
+  // adianta tentar (ciclo fechado, ou usuário sem autoria/sem role).
+  const podeEditarAvaliacao = (av: Avaliacao): boolean => {
+    const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+    if (!ciclo || ciclo.status !== 'Aberto') return false;
+    return isAdminOuCEO || av.avaliador_id === profile.id;
+  };
+
+  // Abre o modal de edição com prefill. Resolve ciclo/avaliado/criterios
+  // do estado já carregado — não precisa re-fetch.
+  const abrirEdicao = (av: Avaliacao) => {
+    const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+    const avaliado = users.find(u => u.id === av.avaliado_id);
+    if (!ciclo || !avaliado) return;
+    setEditando({
+      ciclo,
+      avaliado,
+      tipo: av.tipo as 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador',
+      avaliacaoExistente: {
+        id: av.id,
+        observacao: av.observacao,
+        criterios: criterios.filter(c => c.avaliacao_id === av.id),
+      },
+    });
+  };
 
   const reload = async () => {
     if (!supabase) { setIsLoading(false); return; }
@@ -513,45 +576,81 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId);
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
-    const porAvaliado = new Map<string, Avaliacao[]>();
-    avalCiclo.forEach(a => {
-      const list = porAvaliado.get(a.avaliado_id) ?? [];
-      list.push(a);
-      porAvaliado.set(a.avaliado_id, list);
-    });
-
-    const linhas = Array.from(porAvaliado.entries()).map(([avaliadoId, avals]) => {
-      const user = users.find(u => u.id === avaliadoId);
-      const critsDestaPessoa = criterios.filter(c => avals.some(a => a.id === c.avaliacao_id));
-      const mediaGeral = critsDestaPessoa.length === 0
-        ? 0
-        : critsDestaPessoa.reduce((s, c) => s + c.nota, 0) / critsDestaPessoa.length;
-      // Por avaliador: nome + média das notas dessa avaliação específica.
-      // Feedback de colaborador respeita anonimato do ciclo.
-      const porAvaliador = avals.map(av => {
-        const crits = criterios.filter(c => c.avaliacao_id === av.id);
-        const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
-        const avaliador = users.find(u => u.id === av.avaliador_id);
-        const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
-        return {
-          avaliacaoId: av.id,
-          nome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
-          tipo: av.tipo,
-          media,
-        };
+    // Agrupa um conjunto de avaliações por avaliado e enriquece cada linha.
+    const buildLinhas = (avals: Avaliacao[]) => {
+      const porAvaliado = new Map<string, Avaliacao[]>();
+      avals.forEach(a => {
+        const list = porAvaliado.get(a.avaliado_id) ?? [];
+        list.push(a);
+        porAvaliado.set(a.avaliado_id, list);
       });
-      return {
-        avaliadoId,
-        nome: user?.nome ?? '—',
-        role: user?.role ?? '—',
-        setor: user?.setor ?? '—',
-        qtdAvaliacoes: avals.length,
-        mediaGeral,
-        porAvaliador,
-      };
-    }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
+      return Array.from(porAvaliado.entries()).map(([avaliadoId, avs]) => {
+        const user = users.find(u => u.id === avaliadoId);
+        const critsDestaPessoa = criterios.filter(c => avs.some(a => a.id === c.avaliacao_id));
+        const mediaGeral = critsDestaPessoa.length === 0
+          ? 0
+          : critsDestaPessoa.reduce((s, c) => s + c.nota, 0) / critsDestaPessoa.length;
+        // Por avaliador: nome + média + observação. Feedback de colaborador respeita anonimato do ciclo.
+        const porAvaliador = avs.map(av => {
+          const crits = criterios.filter(c => c.avaliacao_id === av.id);
+          const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+          const avaliador = users.find(u => u.id === av.avaliador_id);
+          const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
+          return {
+            avaliacaoId: av.id,
+            nome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+            tipo: av.tipo,
+            media,
+            observacao: av.observacao,
+          };
+        });
+        return {
+          avaliadoId,
+          nome: user?.nome ?? '—',
+          role: user?.role ?? '—',
+          setor: user?.setor ?? '—',
+          qtdAvaliacoes: avs.length,
+          mediaGeral,
+          porAvaliador,
+        };
+      }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
+    };
 
-    return { totalAvaliacoes: avalCiclo.length, linhas };
+    // Separa por tipo. Ordem fixa pra render previsível.
+    const grupos = [
+      {
+        tipo: 'ceo_gerente' as const,
+        label: 'CEO → Gerentes',
+        descricao: 'Avaliações que o CEO/admin entregou aos gerentes.',
+        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'ceo_gerente')),
+      },
+      {
+        tipo: 'gerente_colaborador' as const,
+        label: 'Gerentes → Colaboradores',
+        descricao: 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.',
+        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'gerente_colaborador')),
+      },
+      {
+        tipo: 'feedback_colaborador' as const,
+        label: 'Feedback Reverso',
+        descricao: 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.',
+        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'feedback_colaborador')),
+      },
+    ];
+
+    // KPIs do ciclo (total, avaliados distintos, média geral).
+    const todosCrits = criterios.filter(c => avalCiclo.some(a => a.id === c.avaliacao_id));
+    const mediaCiclo = todosCrits.length === 0
+      ? 0
+      : todosCrits.reduce((s, c) => s + c.nota, 0) / todosCrits.length;
+
+    return {
+      totalAvaliacoes: avalCiclo.length,
+      totalAvaliados: new Set(avalCiclo.map(a => a.avaliado_id)).size,
+      mediaCiclo,
+      cicloStatus: ciclo?.status ?? 'Aberto',
+      grupos,
+    };
   }, [isAdminOuCEO, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
@@ -628,10 +727,17 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       {/* ── E. CONSOLIDADO DO CICLO (admin/CEO) ── */}
       {isAdminOuCEO && ciclos.length > 0 && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          {/* Header com seletor de ciclo + badge de status, bem destacado pra
+              deixar claro que cada ciclo é independente e selecionável. */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <BarChart3 size={16} className="text-accent" />
               <h3 className="text-sm font-bold text-gray-300">Visão do Ciclo</h3>
+              {consolidado && (
+                consolidado.cicloStatus === 'Aberto'
+                  ? <span className="px-2 py-1 rounded-lg bg-emerald-900/40 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">Aberto</span>
+                  : <span className="px-2 py-1 rounded-lg bg-gray-700/50 text-gray-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Lock size={10} /> Fechado</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <label htmlFor="aval-consolidado-ciclo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Ciclo</label>
@@ -642,85 +748,131 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 className="neu-input rounded-xl px-3 py-2 text-sm"
               >
                 {ciclos.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome} {c.status === 'Aberto' ? '· Aberto' : ''}</option>
+                  <option key={c.id} value={c.id}>{c.nome} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {!consolidado || consolidado.linhas.length === 0 ? (
+          {/* Banner explicativo quando o ciclo selecionado está fechado. */}
+          {consolidado?.cicloStatus === 'Fechado' && (
+            <div className="mb-4 p-3 rounded-xl bg-gray-800/30 border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
+              <Lock size={12} className="shrink-0" /> Este ciclo está fechado — nenhuma nova avaliação pode ser registrada nem editada.
+            </div>
+          )}
+
+          {!consolidado || consolidado.totalAvaliacoes === 0 ? (
             <EmptyState message="Nenhuma avaliação registrada neste ciclo ainda." />
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-3 mb-5">
+              {/* KPIs do ciclo inteiro (somando todos os tipos). */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="text-center p-3 rounded-xl neu-pressed">
                   <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliações</p>
                   <p className="text-xl font-black text-gray-200 mt-0.5">{consolidado.totalAvaliacoes}</p>
                 </div>
                 <div className="text-center p-3 rounded-xl neu-pressed">
                   <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliados</p>
-                  <p className="text-xl font-black text-gray-200 mt-0.5">{consolidado.linhas.length}</p>
+                  <p className="text-xl font-black text-gray-200 mt-0.5">{consolidado.totalAvaliados}</p>
                 </div>
                 <div className="text-center p-3 rounded-xl neu-pressed">
                   <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Média Geral</p>
-                  <p className="text-xl font-black text-accent mt-0.5">
-                    {(consolidado.linhas.reduce((s, l) => s + l.mediaGeral, 0) / consolidado.linhas.length).toFixed(1)}
-                  </p>
+                  <p className="text-xl font-black text-accent mt-0.5">{consolidado.mediaCiclo.toFixed(1)}</p>
                 </div>
               </div>
 
-              <div className="overflow-x-auto main-scrollbar">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                      <th className="pb-3 font-bold px-2 w-6"></th>
-                      <th className="pb-3 font-bold px-4">Avaliado</th>
-                      <th className="pb-3 font-bold px-4">Role · Setor</th>
-                      <th className="pb-3 font-bold px-4 text-center">Recebidas</th>
-                      <th className="pb-3 font-bold px-4 text-center">Média</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {consolidado.linhas.map(l => {
-                      const aberto = linhaExpandida === l.avaliadoId;
-                      return (
-                        <React.Fragment key={l.avaliadoId}>
-                          <tr
-                            className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
-                            onClick={() => setLinhaExpandida(aberto ? null : l.avaliadoId)}
-                          >
-                            <td className="py-3 px-2 text-gray-500">
-                              {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            </td>
-                            <td className="py-3 px-4 text-sm font-semibold text-gray-200">{l.nome}</td>
-                            <td className="py-3 px-4 text-xs text-gray-500">{l.role} · {l.setor}</td>
-                            <td className="py-3 px-4 text-xs font-mono text-center text-gray-300 tabular-nums">{l.qtdAvaliacoes}</td>
-                            <td className="py-3 px-4 text-center">
-                              <span className="text-base font-black text-accent tabular-nums">{l.mediaGeral.toFixed(1)}</span>
-                            </td>
+              {/* Cada tipo de avaliação ganha sua própria sub-seção. Tipo sem
+                  linhas é omitido pra reduzir ruído visual. */}
+              <div className="flex flex-col gap-6">
+                {consolidado.grupos.map(grupo => grupo.linhas.length === 0 ? null : (
+                  <div key={grupo.tipo}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-1 h-4 bg-accent rounded-full" />
+                      <h4 className="text-xs font-bold text-gray-300 uppercase tracking-widest">{grupo.label}</h4>
+                      <span className="text-[10px] text-gray-500 font-bold ml-1">
+                        {grupo.linhas.length} {grupo.linhas.length === 1 ? 'avaliado' : 'avaliados'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mb-3 pl-3">{grupo.descricao}</p>
+
+                    <div className="overflow-x-auto main-scrollbar">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                            <th className="pb-3 font-bold px-2 w-6"></th>
+                            <th className="pb-3 font-bold px-4">Avaliado</th>
+                            <th className="pb-3 font-bold px-4">Role · Setor</th>
+                            <th className="pb-3 font-bold px-4 text-center">Recebidas</th>
+                            <th className="pb-3 font-bold px-4 text-center">Média</th>
                           </tr>
-                          {aberto && (
-                            <tr className="border-b border-white/5">
-                              <td colSpan={5} className="px-4 py-3 bg-white/[0.02]">
-                                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Avaliadores</p>
-                                <div className="flex flex-col gap-1.5">
-                                  {l.porAvaliador.map(pa => (
-                                    <div key={pa.avaliacaoId} className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-300">
-                                        {pa.nome} <span className="text-gray-600">· {pa.tipo}</span>
-                                      </span>
-                                      <span className="font-bold text-gray-200 tabular-nums">{pa.media.toFixed(1)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                          {grupo.linhas.map(l => {
+                            // Linha expandida é única globalmente: prefixa com tipo pra
+                            // evitar colisão quando o mesmo avaliado aparece em > 1 grupo.
+                            const linhaKey = `${grupo.tipo}::${l.avaliadoId}`;
+                            const aberto = linhaExpandida === linhaKey;
+                            return (
+                              <React.Fragment key={linhaKey}>
+                                <tr
+                                  className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                                  onClick={() => setLinhaExpandida(aberto ? null : linhaKey)}
+                                >
+                                  <td className="py-3 px-2 text-gray-500">
+                                    {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                  </td>
+                                  <td className="py-3 px-4 text-sm font-semibold text-gray-200">{l.nome}</td>
+                                  <td className="py-3 px-4 text-xs text-gray-500">{l.role} · {l.setor}</td>
+                                  <td className="py-3 px-4 text-xs font-mono text-center text-gray-300 tabular-nums">{l.qtdAvaliacoes}</td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className="text-base font-black text-accent tabular-nums">{l.mediaGeral.toFixed(1)}</span>
+                                  </td>
+                                </tr>
+                                {aberto && (
+                                  <tr className="border-b border-white/5">
+                                    <td colSpan={5} className="px-4 py-3 bg-white/[0.02]">
+                                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Avaliadores</p>
+                                      <div className="flex flex-col gap-2.5">
+                                        {l.porAvaliador.map(pa => {
+                                          const avObj = avaliacoes.find(a => a.id === pa.avaliacaoId);
+                                          const podeEdit = avObj ? podeEditarAvaliacao(avObj) : false;
+                                          return (
+                                            <div key={pa.avaliacaoId} className="flex flex-col gap-1 pb-2 border-b border-white/5 last:border-0 last:pb-0">
+                                              <div className="flex items-center justify-between text-xs gap-2">
+                                                <span className="text-gray-300">{pa.nome}</span>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-bold text-gray-200 tabular-nums">{pa.media.toFixed(1)}</span>
+                                                  {podeEdit && avObj && (
+                                                    <button
+                                                      onClick={() => abrirEdicao(avObj)}
+                                                      title="Editar avaliação"
+                                                      className="w-6 h-6 neu-button rounded-md flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+                                                    >
+                                                      <Pencil size={10} />
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {pa.observacao && (
+                                                <p className="text-[11px] text-gray-400 italic pl-2 border-l-2 border-accent/30 whitespace-pre-wrap">
+                                                  "{pa.observacao}"
+                                                </p>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -820,6 +972,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 criterios={f.criterios}
                 direcaoLabel="para"
                 nomeContraparte={`${f.avaliadoNome} · ${f.cicloNome}`}
+                canEditar={podeEditarAvaliacao(f.avaliacao)}
+                onEditar={() => abrirEdicao(f.avaliacao)}
               />
             ))}
           </div>
@@ -841,6 +995,17 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
             avaliado={avaliando.avaliado}
             tipo={avaliando.tipo}
             onClose={() => setAvaliando(null)}
+            onSaved={reload}
+            showToast={showToast}
+          />
+        )}
+        {editando && (
+          <ModalAvaliacao
+            ciclo={editando.ciclo}
+            avaliado={editando.avaliado}
+            tipo={editando.tipo}
+            avaliacaoExistente={editando.avaliacaoExistente}
+            onClose={() => setEditando(null)}
             onSaved={reload}
             showToast={showToast}
           />
