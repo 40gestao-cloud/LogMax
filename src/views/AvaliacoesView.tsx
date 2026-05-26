@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -291,10 +291,15 @@ function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; 
 }
 
 // ----------------------------------------------------------------------
-// Card de detalhe de avaliação recebida
+// Card de detalhe de avaliação (recebida OU feita — direção parametrizada).
 // ----------------------------------------------------------------------
 
-const CardRecebida: React.FC<{ avaliacao: Avaliacao; criterios: Criterio[]; avaliadorNome: string }> = ({ avaliacao, criterios, avaliadorNome }) => {
+const CardAvaliacao: React.FC<{
+  avaliacao: Avaliacao;
+  criterios: Criterio[];
+  direcaoLabel: string;     // "de" (recebida) | "para" (feita)
+  nomeContraparte: string;  // nome do avaliador (recebida) ou avaliado (feita) + ciclo
+}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte }) => {
   const [expanded, setExpanded] = useState(false);
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
@@ -318,8 +323,8 @@ const CardRecebida: React.FC<{ avaliacao: Avaliacao; criterios: Criterio[]; aval
     <div className="neu-flat rounded-2xl p-4 border border-white/5">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <p className="text-xs text-gray-500">de</p>
-          <p className="text-sm font-bold text-gray-200">{avaliadorNome}</p>
+          <p className="text-xs text-gray-500">{direcaoLabel}</p>
+          <p className="text-sm font-bold text-gray-200">{nomeContraparte}</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Média</p>
@@ -473,6 +478,82 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
   }, [avaliacoes, criterios, users, ciclos, profile.id]);
 
+  // Avaliações feitas pelo usuário (para a seção D — fecha o gap "pra onde foi
+  // o que eu avaliei?"). Mostra avaliado, não avaliador. Anonimato não aplica
+  // aqui — o avaliador sabe quem ele mesmo avaliou.
+  const feitas = useMemo(() => {
+    return avaliacoes
+      .filter(a => a.avaliador_id === profile.id)
+      .map(av => {
+        const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+        const avaliado = users.find(u => u.id === av.avaliado_id);
+        return {
+          avaliacao: av,
+          criterios: criterios.filter(c => c.avaliacao_id === av.id),
+          avaliadoNome: avaliado?.nome ?? '—',
+          cicloNome: ciclo?.nome ?? '—',
+        };
+      })
+      .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
+  }, [avaliacoes, criterios, users, ciclos, profile.id]);
+
+  // ── Consolidado do ciclo (admin/CEO) — seção E ────────────────────────
+  const [cicloConsolidadoId, setCicloConsolidadoId] = useState<string | null>(null);
+  const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
+
+  // Default: ciclo aberto; senão o mais recente. Só dispara se ainda não escolhido.
+  useEffect(() => {
+    if (cicloConsolidadoId || ciclos.length === 0) return;
+    const aberto = ciclos.find(c => c.status === 'Aberto');
+    setCicloConsolidadoId(aberto?.id ?? ciclos[0].id);
+  }, [ciclos, cicloConsolidadoId]);
+
+  const consolidado = useMemo(() => {
+    if (!isAdminOuCEO || !cicloConsolidadoId) return null;
+    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId);
+    const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
+
+    const porAvaliado = new Map<string, Avaliacao[]>();
+    avalCiclo.forEach(a => {
+      const list = porAvaliado.get(a.avaliado_id) ?? [];
+      list.push(a);
+      porAvaliado.set(a.avaliado_id, list);
+    });
+
+    const linhas = Array.from(porAvaliado.entries()).map(([avaliadoId, avals]) => {
+      const user = users.find(u => u.id === avaliadoId);
+      const critsDestaPessoa = criterios.filter(c => avals.some(a => a.id === c.avaliacao_id));
+      const mediaGeral = critsDestaPessoa.length === 0
+        ? 0
+        : critsDestaPessoa.reduce((s, c) => s + c.nota, 0) / critsDestaPessoa.length;
+      // Por avaliador: nome + média das notas dessa avaliação específica.
+      // Feedback de colaborador respeita anonimato do ciclo.
+      const porAvaliador = avals.map(av => {
+        const crits = criterios.filter(c => c.avaliacao_id === av.id);
+        const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+        const avaliador = users.find(u => u.id === av.avaliador_id);
+        const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
+        return {
+          avaliacaoId: av.id,
+          nome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+          tipo: av.tipo,
+          media,
+        };
+      });
+      return {
+        avaliadoId,
+        nome: user?.nome ?? '—',
+        role: user?.role ?? '—',
+        setor: user?.setor ?? '—',
+        qtdAvaliacoes: avals.length,
+        mediaGeral,
+        porAvaliador,
+      };
+    }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
+
+    return { totalAvaliacoes: avalCiclo.length, linhas };
+  }, [isAdminOuCEO, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
+
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   return (
@@ -482,10 +563,10 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho</h2>
         <p className="text-sm text-gray-400 mt-1">
-          {isAdminOuCEO && 'Gerencie ciclos e avalie gerentes. '}
+          {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
           {isGerente && 'Avalie os colaboradores do seu setor. '}
           {profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO. '}
-          Veja avaliações que você recebeu.
+          Veja avaliações que você recebeu e o histórico do que você avaliou.
         </p>
       </div>
 
@@ -540,6 +621,108 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── E. CONSOLIDADO DO CICLO (admin/CEO) ── */}
+      {isAdminOuCEO && ciclos.length > 0 && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Visão do Ciclo</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="aval-consolidado-ciclo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Ciclo</label>
+              <select
+                id="aval-consolidado-ciclo"
+                value={cicloConsolidadoId ?? ''}
+                onChange={e => { setCicloConsolidadoId(e.target.value); setLinhaExpandida(null); }}
+                className="neu-input rounded-xl px-3 py-2 text-sm"
+              >
+                {ciclos.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome} {c.status === 'Aberto' ? '· Aberto' : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!consolidado || consolidado.linhas.length === 0 ? (
+            <EmptyState message="Nenhuma avaliação registrada neste ciclo ainda." />
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="text-center p-3 rounded-xl neu-pressed">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliações</p>
+                  <p className="text-xl font-black text-gray-200 mt-0.5">{consolidado.totalAvaliacoes}</p>
+                </div>
+                <div className="text-center p-3 rounded-xl neu-pressed">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliados</p>
+                  <p className="text-xl font-black text-gray-200 mt-0.5">{consolidado.linhas.length}</p>
+                </div>
+                <div className="text-center p-3 rounded-xl neu-pressed">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Média Geral</p>
+                  <p className="text-xl font-black text-accent mt-0.5">
+                    {(consolidado.linhas.reduce((s, l) => s + l.mediaGeral, 0) / consolidado.linhas.length).toFixed(1)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto main-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                      <th className="pb-3 font-bold px-2 w-6"></th>
+                      <th className="pb-3 font-bold px-4">Avaliado</th>
+                      <th className="pb-3 font-bold px-4">Role · Setor</th>
+                      <th className="pb-3 font-bold px-4 text-center">Recebidas</th>
+                      <th className="pb-3 font-bold px-4 text-center">Média</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consolidado.linhas.map(l => {
+                      const aberto = linhaExpandida === l.avaliadoId;
+                      return (
+                        <React.Fragment key={l.avaliadoId}>
+                          <tr
+                            className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                            onClick={() => setLinhaExpandida(aberto ? null : l.avaliadoId)}
+                          >
+                            <td className="py-3 px-2 text-gray-500">
+                              {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </td>
+                            <td className="py-3 px-4 text-sm font-semibold text-gray-200">{l.nome}</td>
+                            <td className="py-3 px-4 text-xs text-gray-500">{l.role} · {l.setor}</td>
+                            <td className="py-3 px-4 text-xs font-mono text-center text-gray-300 tabular-nums">{l.qtdAvaliacoes}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="text-base font-black text-accent tabular-nums">{l.mediaGeral.toFixed(1)}</span>
+                            </td>
+                          </tr>
+                          {aberto && (
+                            <tr className="border-b border-white/5">
+                              <td colSpan={5} className="px-4 py-3 bg-white/[0.02]">
+                                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Avaliadores</p>
+                                <div className="flex flex-col gap-1.5">
+                                  {l.porAvaliador.map(pa => (
+                                    <div key={pa.avaliacaoId} className="flex items-center justify-between text-xs">
+                                      <span className="text-gray-300">
+                                        {pa.nome} <span className="text-gray-600">· {pa.tipo}</span>
+                                      </span>
+                                      <span className="font-bold text-gray-200 tabular-nums">{pa.media.toFixed(1)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -602,11 +785,41 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {recebidas.map(r => (
-              <CardRecebida
+              <CardAvaliacao
                 key={r.avaliacao.id}
                 avaliacao={r.avaliacao}
                 criterios={r.criterios}
-                avaliadorNome={`${r.avaliadorNome} · ${r.cicloNome}`}
+                direcaoLabel="de"
+                nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── D. AVALIAÇÕES FEITAS ── */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+        <div className="flex items-center gap-2 mb-5">
+          <Send size={16} className="text-accent" />
+          <h3 className="text-sm font-bold text-gray-300">Avaliações que Você Fez</h3>
+          {feitas.length > 0 && (
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">
+              {feitas.length} {feitas.length === 1 ? 'registro' : 'registros'}
+            </span>
+          )}
+        </div>
+
+        {feitas.length === 0 ? (
+          <EmptyState message="Você ainda não fez nenhuma avaliação." />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {feitas.map(f => (
+              <CardAvaliacao
+                key={f.avaliacao.id}
+                avaliacao={f.avaliacao}
+                criterios={f.criterios}
+                direcaoLabel="para"
+                nomeContraparte={`${f.avaliadoNome} · ${f.cicloNome}`}
               />
             ))}
           </div>
