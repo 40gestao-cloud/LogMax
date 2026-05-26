@@ -104,11 +104,22 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
     marketing:  ['marketing'],
   };
 
-  const shortcuts = (SETOR_MODS[profile?.setor ?? 'all'] ?? [])
-    .flatMap(mod => SHORTCUTS_BY_MODULE[mod] ?? [])
-    .slice(0, 6);
-
   const isAdmin = profile?.role === 'admin';
+
+  const baseShortcuts = (SETOR_MODS[profile?.setor ?? 'all'] ?? [])
+    .flatMap(mod => SHORTCUTS_BY_MODULE[mod] ?? []);
+
+  // Ponto Eletrônico no Acesso Rápido: CEO/gerente/colaborador (qualquer setor)
+  // batem ponto — admin não. Pra não-admin garantimos o card no início da lista
+  // (sem duplicar quando o setor já incluiria via SHORTCUTS_BY_MODULE.rh).
+  const shortcutsComPonto = isAdmin
+    ? baseShortcuts.filter(s => s.view !== 'rh-pontoeletrônico')
+    : [
+        { label: 'Ponto Eletrônico', desc: 'Registro de ponto', icon: ClipboardList, view: 'rh-pontoeletrônico' },
+        ...baseShortcuts.filter(s => s.view !== 'rh-pontoeletrônico'),
+      ];
+
+  const shortcuts = shortcutsComPonto.slice(0, 6);
 
   const chartData = (() => {
     const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
