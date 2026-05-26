@@ -5,7 +5,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { supabase } from '../lib/supabase';
-import { hasSetor } from '../lib/rbac';
+import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // notificar_setor: RPC já existente em 20260520_ti_e_notificacoes.sql.
@@ -56,8 +56,10 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   const [feedbackInput, setFeedbackInput] = useState('');
   const [decidindo, setDecidindo] = useState(false);
 
-  // RBAC: Compras cria/envia/gera pedido; gerente do Financeiro (+admin/CEO) aprova.
-  const isCompras    = hasSetor(profile, 'compras');
+  // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
+  // recebimentos/movimentações) cria/envia/gera pedido; gerente do Financeiro
+  // (+admin/CEO) aprova.
+  const isCompras    = hasAnySetor(profile, 'compras', 'logistica');
   const isFinanceiro = hasSetor(profile, 'financeiro');
   // Aprovação restrita ao GERENTE do Financeiro (escolha do usuário); admin/CEO sempre podem.
   const podeDecidir  =
