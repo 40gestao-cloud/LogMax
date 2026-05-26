@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -316,7 +316,9 @@ const CardAvaliacao: React.FC<{
   nomeContraparte: string;  // nome do avaliador (recebida) ou avaliado (feita) + ciclo
   canEditar?: boolean;
   onEditar?: () => void;
-}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar }) => {
+  canExcluir?: boolean;
+  onExcluir?: () => void;
+}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir }) => {
   const [expanded, setExpanded] = useState(false);
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
@@ -351,6 +353,15 @@ const CardAvaliacao: React.FC<{
               className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
             >
               <Pencil size={12} />
+            </button>
+          )}
+          {canExcluir && (
+            <button
+              onClick={onExcluir}
+              title="Excluir avaliação"
+              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={12} />
             </button>
           )}
           <div className="text-right">
@@ -438,6 +449,41 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     return isAdminOuCEO || av.avaliador_id === profile.id;
   };
 
+  // DELETE de avaliação individual. RLS `avaliacoes_delete USING auth_is_admin()`
+  // já restringe a admin/CEO; critérios são apagados em cascata via FK.
+  // `.select()` no DELETE detecta silent-fail de RLS (devolve [] em vez de erro).
+  const excluirAvaliacao = async (av: Avaliacao) => {
+    if (!supabase) return;
+    if (!isAdminOuCEO) return;  // defesa em profundidade
+    const critsCount = criterios.filter(c => c.avaliacao_id === av.id).length;
+    const avaliado  = users.find(u => u.id === av.avaliado_id);
+    const avaliador = users.find(u => u.id === av.avaliador_id);
+    const ciclo     = ciclos.find(c => c.id === av.ciclo_id);
+    const msg =
+      `Excluir esta avaliação?\n\n` +
+      `  • De: ${avaliador?.nome ?? '—'}\n` +
+      `  • Para: ${avaliado?.nome ?? '—'}\n` +
+      `  • Ciclo: ${ciclo?.nome ?? '—'}\n` +
+      `  • ${critsCount} critério(s) com notas\n\n` +
+      `Esta ação é irreversível.`;
+    if (!window.confirm(msg)) return;
+    try {
+      const { data, error } = await supabase
+        .from('avaliacoes')
+        .delete()
+        .eq('id', av.id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nenhuma avaliação removida (RLS pode ter bloqueado).');
+      }
+      showToast?.('Avaliação excluída.', 'success');
+      reload();
+    } catch (err: any) {
+      showToast?.(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
+    }
+  };
+
   // Abre o modal de edição com prefill. Resolve ciclo/avaliado/criterios
   // do estado já carregado — não precisa re-fetch.
   const abrirEdicao = (av: Avaliacao) => {
@@ -488,6 +534,47 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       reload();
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao fechar.', 'error');
+    }
+  };
+
+  // DELETE destrutivo: ON DELETE CASCADE em avaliacoes.ciclo_id e
+  // criterios_avaliacao.avaliacao_id apaga tudo em cascata. RLS ciclos_write
+  // (FOR ALL USING auth_is_admin()) cobre admin+CEO. `.select()` no DELETE
+  // detecta silent-fail de RLS (devolve [] em vez de erro).
+  const excluirCiclo = async (ciclo: Ciclo) => {
+    if (!supabase) return;
+    const avaliacoesCiclo = avaliacoes.filter(a => a.ciclo_id === ciclo.id);
+    const avalIds = new Set(avaliacoesCiclo.map(a => a.id));
+    const critsCount = criterios.filter(c => avalIds.has(c.avaliacao_id)).length;
+    const isAberto = ciclo.status === 'Aberto';
+
+    const msg =
+      `Excluir o ciclo "${ciclo.nome}"?\n\n` +
+      (isAberto ? '⚠️ Este ciclo está ABERTO — pessoas podem estar avaliando agora.\n\n' : '') +
+      `Isso vai apagar PERMANENTEMENTE:\n` +
+      `  • ${avaliacoesCiclo.length} avaliação(ões)\n` +
+      `  • ${critsCount} critério(s) com notas\n\n` +
+      `Esta ação é irreversível.`;
+    if (!window.confirm(msg)) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ciclos_avaliacao')
+        .delete()
+        .eq('id', ciclo.id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nenhum ciclo removido (RLS pode ter bloqueado).');
+      }
+      // Reset do consolidado se o ciclo selecionado foi o apagado — o
+      // useEffect de default re-elege ciclo aberto/mais recente.
+      if (cicloConsolidadoId === ciclo.id) setCicloConsolidadoId(null);
+      setLinhaExpandida(null);
+      showToast?.('Ciclo excluído.', 'success');
+      reload();
+    } catch (err: any) {
+      showToast?.(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
     }
   };
 
@@ -706,14 +793,23 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                       <td className="py-3 px-4 text-center"><StatusBadge status={c.status} /></td>
                       <td className="py-3 px-4 text-center text-xs text-gray-400">{c.feedback_anonimo ? 'Sim' : 'Não'}</td>
                       <td className="py-3 px-4 text-right">
-                        {c.status === 'Aberto' && (
+                        <div className="flex items-center justify-end gap-3">
+                          {c.status === 'Aberto' && (
+                            <button
+                              onClick={() => fecharCiclo(c.id)}
+                              className="text-[10px] text-gray-500 hover:text-yellow-400 font-bold uppercase tracking-widest flex items-center gap-1"
+                            >
+                              <Lock size={11} /> Fechar
+                            </button>
+                          )}
                           <button
-                            onClick={() => fecharCiclo(c.id)}
-                            className="text-[10px] text-gray-500 hover:text-red-400 font-bold uppercase tracking-widest flex items-center gap-1 ml-auto"
+                            onClick={() => excluirCiclo(c)}
+                            title="Excluir ciclo (apaga avaliações em cascata)"
+                            className="text-[10px] text-gray-500 hover:text-red-500 font-bold uppercase tracking-widest flex items-center gap-1"
                           >
-                            <Lock size={11} /> Fechar
+                            <Trash2 size={11} /> Excluir
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -851,6 +947,15 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                                                       <Pencil size={10} />
                                                     </button>
                                                   )}
+                                                  {avObj && (
+                                                    <button
+                                                      onClick={() => excluirAvaliacao(avObj)}
+                                                      title="Excluir avaliação"
+                                                      className="w-6 h-6 neu-button rounded-md flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors"
+                                                    >
+                                                      <Trash2 size={10} />
+                                                    </button>
+                                                  )}
                                                 </div>
                                               </div>
                                               {pa.observacao && (
@@ -943,6 +1048,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 criterios={r.criterios}
                 direcaoLabel="de"
                 nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+                canExcluir={isAdminOuCEO}
+                onExcluir={() => excluirAvaliacao(r.avaliacao)}
               />
             ))}
           </div>
@@ -974,6 +1081,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 nomeContraparte={`${f.avaliadoNome} · ${f.cicloNome}`}
                 canEditar={podeEditarAvaliacao(f.avaliacao)}
                 onEditar={() => abrirEdicao(f.avaliacao)}
+                canExcluir={isAdminOuCEO}
+                onExcluir={() => excluirAvaliacao(f.avaliacao)}
               />
             ))}
           </div>
