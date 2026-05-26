@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2 } from 'lucide-react';
+import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2, Heart } from 'lucide-react';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -55,8 +55,6 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
       setTexto('');
       setCategoria('');
       setSucesso(true);
-      showToast('Feedback enviado anonimamente.', 'success');
-      setTimeout(() => setSucesso(false), 4000);
     } catch (err: any) {
       showToast(`Erro ao enviar: ${err?.message ?? 'verifique o console'}`, 'error');
     } finally {
@@ -114,9 +112,33 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
 
       <AnimatePresence>
         {sucesso && (
-          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-500/20 rounded-xl px-4 py-2.5 text-center">
-            Feedback enviado anonimamente. Obrigado pela contribuição.
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setSucesso(false)}>
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+              onClick={(e) => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-8 max-w-md w-full border border-emerald-500/20 flex flex-col items-center text-center gap-4">
+              <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                transition={{ delay: 0.12, type: 'spring', stiffness: 260, damping: 18 }}
+                className="w-16 h-16 rounded-full bg-emerald-900/30 flex items-center justify-center">
+                <Heart size={28} className="text-emerald-400" fill="currentColor" />
+              </motion.div>
+              <h3 className="text-lg font-bold text-gray-100">Obrigado pelo seu feedback!</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                Isso nos ajuda a melhorar os processos da LogMax e a sua experiência ao nosso lado.
+              </p>
+              <button
+                onClick={() => setSucesso(false)}
+                className="neu-button px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent transition-colors mt-2">
+                Fechar
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
