@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Award, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -53,7 +53,7 @@ function ModalAvaliacao({
   // Quando presente: modo edição → prefill + RPC atualizar_avaliacao.
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => Promise<void> | void;
   showToast: any;
 }) {
   const isEdicao = !!avaliacaoExistente;
@@ -96,7 +96,9 @@ function ModalAvaliacao({
           });
       if (error) throw error;
       showToast?.(isEdicao ? 'Avaliação atualizada.' : 'Avaliação registrada com sucesso.', 'success');
-      onSaved();
+      // Aguarda o reload terminar antes de fechar o modal — sem isso, fechar dispara
+      // re-render e o usuário pode ver a tela velha antes da nova lista chegar.
+      await onSaved();
       onClose();
     } catch (err: any) {
       const msg = err?.message?.includes('unq_avaliacao')
@@ -502,24 +504,35 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     });
   };
 
+  // Primeira carga bloqueia a UI com spinner; re-fetches (após salvar) são
+  // silenciosos pra não piscar a tela inteira e perder o scroll do usuário.
+  const hasLoadedOnce = useRef(false);
   const reload = async () => {
     if (!supabase) { setIsLoading(false); return; }
-    setIsLoading(true);
+    if (!hasLoadedOnce.current) setIsLoading(true);
     try {
-      const [{ data: c }, { data: u }, { data: a }, { data: cr }] = await Promise.all([
+      const [resC, resU, resA, resCr] = await Promise.all([
         supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*'),
         supabase.from('avaliacoes').select('*'),
         supabase.from('criterios_avaliacao').select('*'),
       ]);
-      setCiclos(c ?? []);
-      setUsers(u ?? []);
-      setAvaliacoes(a ?? []);
-      setCriterios(cr ?? []);
-    } catch {
-      showToast?.('Erro ao carregar avaliações.', 'error');
+      // Erros silenciosos do PostgREST (RLS, schema drift) vêm em `error`, não
+      // como exceção. Sem isto, `a ?? []` mascarava o problema e a UI ficava
+      // "vazia" sem feedback. Mostra o primeiro erro real ao usuário.
+      const firstErr = resC.error || resU.error || resA.error || resCr.error;
+      if (firstErr) {
+        showToast?.(`Erro ao carregar avaliações: ${firstErr.message}`, 'error');
+      }
+      setCiclos(resC.data ?? []);
+      setUsers(resU.data ?? []);
+      setAvaliacoes(resA.data ?? []);
+      setCriterios(resCr.data ?? []);
+    } catch (err: any) {
+      showToast?.(`Erro ao carregar avaliações: ${err?.message ?? 'desconhecido'}`, 'error');
     } finally {
       setIsLoading(false);
+      hasLoadedOnce.current = true;
     }
   };
 
@@ -610,24 +623,6 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     return alvos.filter(({ user, tipo }) => !minhasFeitas.includes(`${user.id}::${tipo}`));
   }, [cicloAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente]);
 
-  // Avaliações recebidas pelo usuário (para a seção C)
-  const recebidas = useMemo(() => {
-    return avaliacoes
-      .filter(a => a.avaliado_id === profile.id)
-      .map(av => {
-        const ciclo = ciclos.find(c => c.id === av.ciclo_id);
-        const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
-        const avaliador = users.find(u => u.id === av.avaliador_id);
-        return {
-          avaliacao: av,
-          criterios: criterios.filter(c => c.avaliacao_id === av.id),
-          avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
-          cicloNome: ciclo?.nome ?? '—',
-        };
-      })
-      .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
-  }, [avaliacoes, criterios, users, ciclos, profile.id]);
-
   // Avaliações feitas pelo usuário (para a seção D — fecha o gap "pra onde foi
   // o que eu avaliei?"). Mostra avaliado, não avaliador. Anonimato não aplica
   // aqui — o avaliador sabe quem ele mesmo avaliou.
@@ -704,25 +699,21 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     };
 
     // Separa por tipo. Ordem fixa pra render previsível.
+    // Cada grupo guarda tanto o # de avaliados (linhas distintas) quanto o
+    // total de avaliações — ambos exibidos no header pra evitar a confusão
+    // de "Avaliados=4 mas Avaliações=7" quando alguém recebe múltiplas.
+    const mkGrupo = (
+      tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador',
+      label: string,
+      descricao: string,
+    ) => {
+      const avs = avalCiclo.filter(a => a.tipo === tipo);
+      return { tipo, label, descricao, linhas: buildLinhas(avs), totalAvaliacoes: avs.length };
+    };
     const grupos = [
-      {
-        tipo: 'ceo_gerente' as const,
-        label: 'CEO → Gerentes',
-        descricao: 'Avaliações que o CEO/admin entregou aos gerentes.',
-        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'ceo_gerente')),
-      },
-      {
-        tipo: 'gerente_colaborador' as const,
-        label: 'Gerentes → Colaboradores',
-        descricao: 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.',
-        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'gerente_colaborador')),
-      },
-      {
-        tipo: 'feedback_colaborador' as const,
-        label: 'Feedback Reverso',
-        descricao: 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.',
-        linhas: buildLinhas(avalCiclo.filter(a => a.tipo === 'feedback_colaborador')),
-      },
+      mkGrupo('ceo_gerente', 'CEO → Gerentes', 'Avaliações que o CEO/admin entregou aos gerentes.'),
+      mkGrupo('gerente_colaborador', 'Gerentes → Colaboradores', 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.'),
+      mkGrupo('feedback_colaborador', 'Feedback Reverso', 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.'),
     ];
 
     // KPIs do ciclo (total, avaliados distintos, média geral).
@@ -752,7 +743,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
           {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
           {isGerente && 'Avalie os colaboradores do seu setor. '}
           {profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO. '}
-          Veja avaliações que você recebeu e o histórico do que você avaliou.
+          Veja o histórico do que você avaliou.
         </p>
       </div>
 
@@ -887,6 +878,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                       <h4 className="text-xs font-bold text-gray-300 uppercase tracking-widest">{grupo.label}</h4>
                       <span className="text-[10px] text-gray-500 font-bold ml-1">
                         {grupo.linhas.length} {grupo.linhas.length === 1 ? 'avaliado' : 'avaliados'}
+                        {' · '}
+                        {grupo.totalAvaliacoes} {grupo.totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-500 mb-3 pl-3">{grupo.descricao}</p>
@@ -898,7 +891,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                             <th className="pb-3 font-bold px-2 w-6"></th>
                             <th className="pb-3 font-bold px-4">Avaliado</th>
                             <th className="pb-3 font-bold px-4">Role · Setor</th>
-                            <th className="pb-3 font-bold px-4 text-center">Recebidas</th>
+                            <th className="pb-3 font-bold px-4 text-center">Avaliações</th>
                             <th className="pb-3 font-bold px-4 text-center">Média</th>
                           </tr>
                         </thead>
@@ -1025,32 +1018,6 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                   <Star size={10} /> Avaliar agora
                 </span>
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── C. RECEBIDAS ── */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        <div className="flex items-center gap-2 mb-5">
-          <Award size={16} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-300">Avaliações Recebidas</h3>
-        </div>
-
-        {recebidas.length === 0 ? (
-          <EmptyState message="Nenhuma avaliação recebida ainda." />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recebidas.map(r => (
-              <CardAvaliacao
-                key={r.avaliacao.id}
-                avaliacao={r.avaliacao}
-                criterios={r.criterios}
-                direcaoLabel="de"
-                nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
-                canExcluir={isAdminOuCEO}
-                onExcluir={() => excluirAvaliacao(r.avaliacao)}
-              />
             ))}
           </div>
         )}
