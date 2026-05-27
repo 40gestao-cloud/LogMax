@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores } from './lib/rbac';
-import { useFetchData } from './hooks/useSupabaseData';
+import { useSidebarBadges } from './hooks/useSidebarBadges';
+import { SETOR_MODULES } from './lib/sectorAccess';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
@@ -78,27 +79,6 @@ const ControleCaixaView                    = lazy(() => import('./views/Controle
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
-
-// --- acesso por setor (UX only — NÃO é segurança) ---
-// Este mapa controla o que aparece no menu lateral por setor. NÃO é a fonte
-// de verdade pra autorização: a RLS no Supabase (20260516_rls_hardening.sql
-// e migrações posteriores) é quem realmente bloqueia leitura/escrita por
-// `auth_user_setor()` / `auth_is_admin()`. Esconder do menu evita UX confusa
-// ("o botão aparece e falha"), mas se alguém digitar o `activeView` direto
-// no console, a RLS continua barrando.
-//
-// 'empresa' é cadastro base (filiais, colaboradores, clientes, produtos...)
-// e fica disponível para todos os setores. Os demais seguem o recorte
-// funcional de cada setor.
-const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
-  logistica:  ['empresa', 'estoque', 'compras', 'ti'],
-  vendas:     ['empresa', 'vendas', 'ti'],
-  financeiro: ['empresa', 'financeiro', 'ti'],
-  rh:         ['empresa', 'rh', 'ti'],
-  marketing:  ['empresa', 'marketing', 'ti'],
-  ti:         ['empresa', 'ti'],
-};
 
 // --- menu ---
 const menuModules = [
@@ -437,27 +417,9 @@ function AccentPicker() {
   );
 }
 
-function ApprovalBadges({ onBadges }: { onBadges: (b: Record<string, number>) => void }) {
-  const { data: pendCompras } = useFetchData<any>('/api/minhasaprovacoesview',        { status: 'Pendente' },              true);
-  const { data: pendEstoque } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' },              true);
-  const { data: pendPromo   } = useFetchData<any>('/api/marketingpromocoesview',  { status: 'Aguardando Aprovação' },      true);
-  const { data: pendLinks   } = useFetchData<any>('/api/marketingtarefasview',    { status_link: 'Aguardando Aprovação' }, true);
-  useEffect(() => {
-    onBadges({
-      'compras-minhasaprovações':          pendCompras.length,
-      'estoque-minhasaprovações':          pendEstoque.length,
-      'financeiro-aprovaçõesdepromoções': pendPromo.length,
-      'financeiro-aprovaçõesdeconteúdo':  pendLinks.length,
-    });
-  }, [pendCompras.length, pendEstoque.length, pendPromo.length, pendLinks.length, onBadges]);
-  return null;
-}
-
 function LogMaxAppInner() {
   const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
   const { profile, isLoading: profileLoading } = useUserProfile();
-  const [badges, setBadges] = useState<Record<string, number>>({});
-  const handleBadges = useCallback((b: Record<string, number>) => setBadges(b), []);
   // Persistido em sessionStorage para sobreviver a F5/pull-to-refresh
   // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
   const [activeView, setActiveView] = useState<string>(() => {
@@ -496,6 +458,11 @@ function LogMaxAppInner() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
+  // Atualiza via realtime (granular por tabela) + fallback no foco da janela.
+  // Não re-fetcha ao navegar — realtime já cobre as mudanças.
+  const badges = useSidebarBadges(profile);
 
   const toggleModule = (id: string) => setOpenModules(prev => ({ ...prev, [id]: !prev[id] }));
 
@@ -699,7 +666,6 @@ function LogMaxAppInner() {
   return (
     <AIAssistantProvider>
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
-      <ApprovalBadges onBadges={handleBadges} />
       {canUseMaxAI && <AIAssistantFAB />}
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
 
