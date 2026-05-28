@@ -79,6 +79,26 @@ export const PedidosView = ({ showToast }: any) => {
   const handleDelete = async (id: string) => {
     if (!confirm('Inativar este pedido?')) return;
     try {
+      // Pedido aprovado gera Conta a Pagar com pedido_id. Inativar só o pedido
+      // deixava a conta órfã visível em Despesas Operacionais. Inativamos
+      // junto as contas Pendentes; se houver conta 'Pago', recusamos a
+      // exclusão — registro financeiro real não some por exclusão de pedido.
+      if (supabase) {
+        const { data: contas } = await supabase
+          .from('contas_pagar')
+          .select('id, status')
+          .eq('pedido_id', id)
+          .eq('ativo', true);
+        const pagas = (contas ?? []).filter((c: any) => c.status === 'Pago');
+        if (pagas.length > 0) {
+          showToast('Existe Conta a Pagar já quitada para este pedido. Estorne antes de inativar.', 'error', true);
+          return;
+        }
+        const pendentes = (contas ?? []).filter((c: any) => c.status !== 'Pago');
+        for (const c of pendentes) {
+          await dbDelete('/api/contaspagarview', c.id);
+        }
+      }
       await dbDelete('/api/pedidosview', id);
       setData((prev: any[]) => prev.filter(p => p.id !== id));
       showToast('Pedido inativado.', 'success', true);
