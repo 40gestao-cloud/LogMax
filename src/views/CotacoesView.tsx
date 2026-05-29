@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -107,10 +107,11 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
     try {
       const fornNome = fornecedores.find((f: any) => f.id === form.fornecedor_id)?.nome ?? 'fornecedor';
       const reqItem  = requisicoes.find((r: any) => r.id === form.requisicao_id)?.item ?? 'item';
+      const valorNum = parseBRL(extras.valor_total);
       const saved = await dbInsert('/api/cotacoesview', {
         requisicao_id: form.requisicao_id,
         fornecedor_id: form.fornecedor_id,
-        valor_total: parseFloat(extras.valor_total.replace(',', '.')) || 0,
+        valor_total: valorNum,
         prazo_entrega: extras.prazo_entrega,
         validade: extras.validade || null,
         status: 'Aguardando Financeiro',
@@ -124,7 +125,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
         setor:     'financeiro',
         tipo:      'aprovacao_pendente',
         titulo:    'Nova cotação aguardando aprovação',
-        mensagem:  `${reqItem} — ${fornNome} (R$ ${Number(extras.valor_total.replace(',', '.') || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`,
+        mensagem:  `${reqItem} — ${fornNome} (R$ ${formatBRL(valorNum)})`,
         link_view: 'compras-cotações',
         urgencia:  'Média',
         ref_id:    (saved as any)?.id,
@@ -329,9 +330,10 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       </select>
                     </FormField>
                     <FormField label="Valor Total (R$)">
-                      <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.valor_total} onChange={e => setExtras(x => ({ ...x, valor_total: e.target.value }))}
-                        placeholder="Ex: 1.250,00" />
+                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.valor_total}
+                        onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                        placeholder="0,00" />
                     </FormField>
                     <FormField label="Prazo de Entrega">
                       <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -379,7 +381,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.req?.item ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(item.valor_total ?? 0))}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.prazo_entrega || '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.validade || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>

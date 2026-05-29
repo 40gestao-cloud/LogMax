@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 
 export const NotasRecebidasView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/notasrecebidasview');
@@ -20,13 +20,13 @@ export const NotasRecebidasView = ({ showToast }: any) => {
   const filtered = enriched.filter((n: any) => [n.numero_nf, n.status, n.forn?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
   const closeForm = () => { setShowForm(false); setEditItem(null); setForm({ numero_nf: '' }); setExtras({ fornecedor_id: '', valor_total: '', data_emissao: '', status: 'Não Vinculada' }); setErrors({}); };
-  const openEdit = (item: any) => { setEditItem(item); setForm({ numero_nf: item.numero_nf ?? '' }); setExtras({ fornecedor_id: item.fornecedor_id ?? '', valor_total: String(item.valor_total ?? ''), data_emissao: item.data_emissao ?? '', status: item.status ?? 'Não Vinculada' }); setErrors({}); setShowForm(false); };
+  const openEdit = (item: any) => { setEditItem(item); setForm({ numero_nf: item.numero_nf ?? '' }); setExtras({ fornecedor_id: item.fornecedor_id ?? '', valor_total: item.valor_total != null && item.valor_total !== '' ? formatBRL(Number(item.valor_total)) : '', data_emissao: item.data_emissao ?? '', status: item.status ?? 'Não Vinculada' }); setErrors({}); setShowForm(false); };
 
   const handleSave = async () => {
     if (!validate()) return;
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
-      const payload = { ...form, ...extras, valor_total: Number(extras.valor_total) || 0 };
+      const payload = { ...form, ...extras, valor_total: parseBRL(extras.valor_total) };
       if (editItem) {
         const u = await dbUpdate('/api/notasrecebidasview', editItem.id, payload);
         setData((p: any[]) => p.map(d => d.id === editItem.id ? (u ?? { ...d, ...payload }) : d));
@@ -77,7 +77,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Número NF *" error={errors.numero_nf}><input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.numero_nf ? 'border border-red-500/40' : ''}`} value={form.numero_nf} onChange={e => { setForm(f => ({ ...f, numero_nf: e.target.value })); clearError('numero_nf'); }} placeholder="Ex: NF-001234" /></FormField>
                 <FormField label="Fornecedor"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.fornecedor_id} onChange={e => setExtras(x => ({ ...x, fornecedor_id: e.target.value }))}><option value="">Nenhum</option>{fornecedores.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></FormField>
-                <FormField label="Valor Total (R$)"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.valor_total} onChange={e => setExtras(x => ({ ...x, valor_total: e.target.value }))} placeholder="0,00" /></FormField>
+                <FormField label="Valor Total (R$)"><input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.valor_total} onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))} placeholder="0,00" /></FormField>
                 <FormField label="Data Emissão"><input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.data_emissao} onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} /></FormField>
                 <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Não Vinculada', 'Vinculada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
               </div>
@@ -101,7 +101,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.numero_nf}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(item.valor_total ?? 0))}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data_emissao || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button><button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button></div></td>

@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+
+// Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
+// não existe no catálogo (compra eventual, serviço, item novo).
+const ITEM_OUTRO = '__outro__';
 
 export const RequisicoesView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
@@ -16,9 +20,19 @@ export const RequisicoesView = ({ showToast }: any) => {
     '/api/requisicoesview', undefined, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['item', 'solicitante', 'urgencia', 'centro_custo', 'status'] }
   );
+  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const produtosOrdenados = useMemo(
+    () => [...produtos]
+      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo')
+      .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
+    [produtos]
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
+  // produtoSel = id do produto escolhido no dropdown, ITEM_OUTRO ou '' (nenhum).
+  // form.item = texto final que vai pra BD (nome do produto ou texto livre).
+  const [produtoSel, setProdutoSel] = useState<string>('');
   const [form, setForm] = useState({ item: '', solicitante: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
@@ -29,6 +43,10 @@ export const RequisicoesView = ({ showToast }: any) => {
     setEditItem(item);
     setForm({ item: item.item ?? '', solicitante: item.solicitante ?? '' });
     setExtras({ qtd: String(item.qtd ?? 1), urgencia: item.urgencia ?? 'Normal', centro_custo: item.centro_custo ?? '' });
+    // Pré-seleciona o produto se o item gravado bater com algum do catálogo;
+    // senão cai em "Outro" pra preservar o texto histórico.
+    const match = produtosOrdenados.find((p: any) => p.nome === item.item);
+    setProdutoSel(match ? match.id : (item.item ? ITEM_OUTRO : ''));
     setErrors({});
     setShowForm(false);
   };
@@ -36,9 +54,23 @@ export const RequisicoesView = ({ showToast }: any) => {
   const closeForm = () => {
     setShowForm(false);
     setEditItem(null);
+    setProdutoSel('');
     setForm({ item: '', solicitante: '' });
     setExtras({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
     setErrors({});
+  };
+
+  const handleProdutoChange = (value: string) => {
+    setProdutoSel(value);
+    clearError('item');
+    if (value === ITEM_OUTRO) {
+      setForm(f => ({ ...f, item: '' }));
+    } else if (value === '') {
+      setForm(f => ({ ...f, item: '' }));
+    } else {
+      const p = produtosOrdenados.find((pr: any) => pr.id === value);
+      setForm(f => ({ ...f, item: p?.nome ?? '' }));
+    }
   };
 
   const handleSave = async () => {
@@ -114,9 +146,28 @@ export const RequisicoesView = ({ showToast }: any) => {
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Requisição' : 'Nova Requisição'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <FormField label="Item solicitado *" error={errors.item}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.item ? 'border border-red-500/40' : ''}`}
-                    value={form.item} onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
-                    placeholder="Ex: Papel A4 resma 500fls" />
+                  <select
+                    className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.item ? 'border border-red-500/40' : ''}`}
+                    value={produtoSel}
+                    onChange={e => handleProdutoChange(e.target.value)}
+                  >
+                    <option value="">Selecione um produto...</option>
+                    {produtosOrdenados.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome}{p.codigo ? ` (${p.codigo})` : ''}
+                      </option>
+                    ))}
+                    <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
+                  </select>
+                  {produtoSel === ITEM_OUTRO && (
+                    <input
+                      className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}
+                      value={form.item}
+                      onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
+                      placeholder="Descreva o item solicitado"
+                      autoFocus
+                    />
+                  )}
                 </FormField>
                 <FormField label="Solicitante *" error={errors.solicitante}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.solicitante ? 'border border-red-500/40' : ''}`}

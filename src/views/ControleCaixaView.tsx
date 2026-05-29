@@ -9,6 +9,7 @@ import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasAnySetor } from '../lib/rbac';
+import { formatBRL, parseBRL } from '../lib/viewUtils';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -44,7 +45,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   const today = todayBR();
 
   const handleAbrir = async () => {
-    const valor = parseFloat(valorAbertura.replace(',', '.'));
+    const valor = parseBRL(valorAbertura);
     if (!valor || valor <= 0) { showToast('Informe um valor de abertura válido.', 'error'); return; }
     if (!supabase) { showToast('Supabase não configurado.', 'error'); return; }
 
@@ -221,11 +222,11 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                   <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="caixa-valor-abertura"
-                    type="number" min="0" step="0.01"
+                    type="text" inputMode="numeric"
                     className="neu-input py-2.5 pl-8 pr-3 rounded-xl text-sm w-full"
                     placeholder="0,00"
                     value={valorAbertura}
-                    onChange={e => setValorAbertura(e.target.value)}
+                    onChange={e => setValorAbertura(formatBRL(e.target.value))}
                     onKeyDown={e => e.key === 'Enter' && handleAbrir()}
                   />
                 </div>
