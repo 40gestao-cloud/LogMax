@@ -6,6 +6,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ─────────────────────────────────────────────
+--  HELPERS GLOBAIS
+--  Declarados antes das tabelas porque entram em DEFAULTs.
+-- ─────────────────────────────────────────────
+
+-- LogMax opera em Rio Branco / Acre (UTC-5, sem DST). Use no lugar
+-- de CURRENT_DATE em DEFAULTs de coluna e cálculos em RPC para que
+-- "hoje" bata com a operação física, mesmo no cluster Supabase em UTC.
+-- Histórico/contexto: migration 20260530_acre_timezone_fix.sql.
+CREATE OR REPLACE FUNCTION public.acre_today()
+RETURNS date
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT (now() AT TIME ZONE 'America/Rio_Branco')::date;
+$$;
+
+-- ─────────────────────────────────────────────
 --  MÓDULO: EMPRESA
 -- ─────────────────────────────────────────────
 
@@ -151,7 +168,7 @@ CREATE TABLE IF NOT EXISTS requisicoes (
   urgencia     text DEFAULT 'Normal',   -- Normal / Alta / Urgente
   status       text NOT NULL DEFAULT 'Pendente',  -- Pendente / Aprovada / Negada
   solicitante  text,
-  data         date DEFAULT CURRENT_DATE,
+  data         date DEFAULT public.acre_today(),
   created_at   timestamptz DEFAULT now()
 );
 
@@ -190,7 +207,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
 CREATE TABLE IF NOT EXISTS recebimentos (
   id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   pedido_id    uuid REFERENCES pedidos(id) ON DELETE SET NULL,
-  data         date DEFAULT CURRENT_DATE,
+  data         date DEFAULT public.acre_today(),
   qtd_recebida integer DEFAULT 0,
   status       text NOT NULL DEFAULT 'Pendente',  -- Pendente / Concluído / Parcial
   observacao   text,
@@ -235,7 +252,7 @@ CREATE TABLE IF NOT EXISTS expedicao (
   requisicao_id   uuid REFERENCES requisicoes_estoque(id) ON DELETE SET NULL,
   produto_id      uuid REFERENCES produtos(id) ON DELETE SET NULL,
   qtd_expedida    integer DEFAULT 0,
-  data_expedicao  date DEFAULT CURRENT_DATE,
+  data_expedicao  date DEFAULT public.acre_today(),
   status          text NOT NULL DEFAULT 'Pendente',  -- Pendente / Expedido / Cancelado
   created_at      timestamptz DEFAULT now()
 );
@@ -247,7 +264,7 @@ CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
   qtd        integer NOT NULL,
   origem     text,
   destino    text,
-  data       date DEFAULT CURRENT_DATE,
+  data       date DEFAULT public.acre_today(),
   created_at timestamptz DEFAULT now()
 );
 
@@ -258,7 +275,7 @@ CREATE TABLE IF NOT EXISTS inventarios (
   qtd_contada integer DEFAULT 0,
   diferenca   integer GENERATED ALWAYS AS (qtd_contada - qtd_sistema) STORED,
   status      text NOT NULL DEFAULT 'Em Andamento',  -- Em Andamento / Concluído / Cancelado
-  data        date DEFAULT CURRENT_DATE,
+  data        date DEFAULT public.acre_today(),
   created_at  timestamptz DEFAULT now()
 );
 
@@ -334,7 +351,7 @@ CREATE TABLE IF NOT EXISTS integracoes_bancarias (
   id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   banco       text NOT NULL,
   arquivo     text,
-  data_import date DEFAULT CURRENT_DATE,
+  data_import date DEFAULT public.acre_today(),
   registros   integer DEFAULT 0,
   status      text NOT NULL DEFAULT 'Pendente',
   created_at  timestamptz DEFAULT now()
