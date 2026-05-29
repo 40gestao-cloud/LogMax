@@ -12,11 +12,26 @@ export const CHECKPOINT_LABELS: Record<string, string> = {
   saida:   'Saída',
 };
 
+// Defaults = turma da manhã. Cada projeto Vercel pode sobrescrever via env
+// PONTO_ENTRADA / PONTO_RETORNO / PONTO_SAIDA (formato "HH:MM").
+const PONTO_DEFAULTS = { entrada: '07:40', retorno: '09:20', saida: '11:20' };
+
+function parseHHMM(value: string | undefined, fallback: string): number {
+  const raw = (value ?? fallback).trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  // Em vez de cair em fallback silenciosamente, derrubamos o boot: env
+  // mal-formada significa horário errado pra turma inteira.
+  if (!m) throw new Error(`PONTO env inválida: "${raw}" (esperado HH:MM)`);
+  const h = Number(m[1]); const mm = Number(m[2]);
+  if (h > 23 || mm > 59) throw new Error(`PONTO env fora do range: "${raw}"`);
+  return h * 60 + mm;
+}
+
 /** Horários-alvo em minutos desde meia-noite (hora do Acre). */
 export const CHECKPOINT_TARGET_MINUTES: Record<string, number> = {
-  entrada: 7 * 60 + 40,  // 07:40
-  retorno: 9 * 60 + 20,  // 09:20
-  saida:   11 * 60 + 20, // 11:20
+  entrada: parseHHMM(process.env.PONTO_ENTRADA, PONTO_DEFAULTS.entrada),
+  retorno: parseHHMM(process.env.PONTO_RETORNO, PONTO_DEFAULTS.retorno),
+  saida:   parseHHMM(process.env.PONTO_SAIDA,   PONTO_DEFAULTS.saida),
 };
 
 export const CHECKPOINT_KEYS = ['entrada', 'retorno', 'saida'] as const;

@@ -11,6 +11,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 
 const statusCls = (s: string) => {
   if (s === 'Falta') return 'bg-red-950/50 text-red-500';
@@ -29,9 +30,9 @@ const tipoCls = (t: string) => {
 const EMPTY: any = { funcionario_id: '', data: '', entrada: '', saida: '', horas_trabalhadas: '', status: 'Normal' };
 
 const CHECKPOINT_OPTIONS = [
-  { key: 'entrada', label: 'Entrada',  time: '07:40', color: 'text-emerald-400', activeCls: 'neu-pressed border-emerald-500/30 text-emerald-300' },
-  { key: 'retorno', label: 'Retorno',  time: '09:20', color: 'text-yellow-400',  activeCls: 'neu-pressed border-yellow-500/30 text-yellow-300'  },
-  { key: 'saida',   label: 'Saída',    time: '11:20', color: 'text-blue-400',    activeCls: 'neu-pressed border-blue-500/30 text-blue-300'    },
+  { key: 'entrada', label: 'Entrada',  time: PONTO_HORARIOS.entrada, color: 'text-emerald-400', activeCls: 'neu-pressed border-emerald-500/30 text-emerald-300' },
+  { key: 'retorno', label: 'Retorno',  time: PONTO_HORARIOS.retorno, color: 'text-yellow-400',  activeCls: 'neu-pressed border-yellow-500/30 text-yellow-300'  },
+  { key: 'saida',   label: 'Saída',    time: PONTO_HORARIOS.saida,   color: 'text-blue-400',    activeCls: 'neu-pressed border-blue-500/30 text-blue-300'    },
 ];
 
 // ─── Gerador de QR Code (admin) ──────────────────────────────────────────────

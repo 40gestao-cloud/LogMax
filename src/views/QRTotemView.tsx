@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, Clock, Wifi, WifiOff } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
+import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 
 const CHECKPOINT_OPTIONS = [
-  { key: 'entrada', label: 'Entrada',  time: '07:40', color: 'text-emerald-400', activeBorder: 'border-emerald-500/40', activeBg: 'bg-emerald-900/20' },
-  { key: 'retorno', label: 'Intervalo', time: '09:20', color: 'text-yellow-400',  activeBorder: 'border-yellow-500/40',  activeBg: 'bg-yellow-900/20'  },
-  { key: 'saida',   label: 'Saída',    time: '11:20', color: 'text-blue-400',    activeBorder: 'border-blue-500/40',    activeBg: 'bg-blue-900/20'    },
+  { key: 'entrada', label: 'Entrada',  time: PONTO_HORARIOS.entrada, color: 'text-emerald-400', activeBorder: 'border-emerald-500/40', activeBg: 'bg-emerald-900/20' },
+  { key: 'retorno', label: 'Intervalo', time: PONTO_HORARIOS.retorno, color: 'text-yellow-400',  activeBorder: 'border-yellow-500/40',  activeBg: 'bg-yellow-900/20'  },
+  { key: 'saida',   label: 'Saída',    time: PONTO_HORARIOS.saida,   color: 'text-blue-400',    activeBorder: 'border-blue-500/40',    activeBg: 'bg-blue-900/20'    },
 ] as const;
 
 const CHECKPOINT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
