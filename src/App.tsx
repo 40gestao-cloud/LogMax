@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare
+  Star, MessageSquare, BookOpen
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -79,6 +79,7 @@ const ControleCaixaView                    = lazy(() => import('./views/Controle
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
+const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 
 // --- menu ---
 const menuModules = [
@@ -147,6 +148,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
+        {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
+        <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <BookOpen size={18} /><span>Catálogo</span>
+        </button>
         {/* Avaliações: visível para todos os roles — CEO avalia gerentes, gerente avalia equipe, colaborador dá feedback reverso */}
         <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
           <Star size={18} /><span>Avaliações</span>
@@ -637,6 +642,7 @@ function LogMaxAppInner() {
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
+      case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
       case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;

@@ -9,6 +9,12 @@ import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
+import { FILIAL_COLOR } from '../lib/filiais';
+
+// Filtro de unidade do PDV: 3 empresas operacionais (Matriz é administrativa,
+// não vende — fica em "Todas").
+const FILIAIS_PDV = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+type FilialPDV = typeof FILIAIS_PDV[number] | 'todas';
 
 interface CartItem {
   produto_id: string;
@@ -30,6 +36,12 @@ export const PDVView = ({ showToast, profile }: any) => {
   const { data: clientes } = useFetchData<any>('/api/crmview');
 
   const [search, setSearch] = useState('');
+  // Filial padrão: a do operador se for uma das 3 empresas; senão "Todas".
+  const filialInicial: FilialPDV =
+    (FILIAIS_PDV as readonly string[]).includes(profile?.filial)
+      ? (profile.filial as FilialPDV)
+      : 'todas';
+  const [filialFiltro, setFilialFiltro] = useState<FilialPDV>(filialInicial);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [desconto, setDesconto] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
@@ -68,8 +80,15 @@ export const PDVView = ({ showToast, profile }: any) => {
   const produtosAtivos = produtos.filter((p: any) =>
     (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio'
   );
+  // Filial filter primeiro, depois busca textual. Critério: igual exato a `filial`
+  // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica fora
+  // dos 3 botões — só aparece em "Todas".
+  const produtosPorFilial =
+    filialFiltro === 'todas'
+      ? produtosAtivos
+      : produtosAtivos.filter((p: any) => p.filial === filialFiltro);
   const searchLower = search.toLowerCase();
-  const filtered = produtosAtivos.filter((p: any) =>
+  const filtered = produtosPorFilial.filter((p: any) =>
     [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower))
   );
 
@@ -122,24 +141,27 @@ export const PDVView = ({ showToast, profile }: any) => {
     const termo = codeRaw.trim();
     if (!termo) return;
     const termoLower = termo.toLowerCase();
-    let match = produtosAtivos.find((p: any) =>
+    // Scanner respeita o filtro de filial — assim o operador não bipa por
+    // engano um item de outra empresa quando está com filtro ativo.
+    let match = produtosPorFilial.find((p: any) =>
       String(p.ean ?? '').trim() === termo ||
       String(p.codigo ?? '').trim().toLowerCase() === termoLower
     );
     if (!match) {
-      const partial = produtosAtivos.filter((p: any) =>
+      const partial = produtosPorFilial.filter((p: any) =>
         [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(termoLower))
       );
       if (partial.length === 1) match = partial[0];
     }
     if (!match) {
-      showToast?.(`Produto não encontrado: ${termo}`, 'error', true);
+      const filialMsg = filialFiltro === 'todas' ? '' : ` em ${filialFiltro}`;
+      showToast?.(`Produto não encontrado${filialMsg}: ${termo}`, 'error', true);
     } else {
       addToCart(match);
     }
     setSearch('');
     searchRef.current?.focus();
-  }, [produtosAtivos, addToCart, showToast]);
+  }, [produtosPorFilial, filialFiltro, addToCart, showToast]);
 
   const handleSearchEnter = () => processBarcode(search);
 
@@ -524,6 +546,38 @@ export const PDVView = ({ showToast, profile }: any) => {
             />
           </div>
 
+          {/* Filtro de unidade — 3 empresas + Todas */}
+          <div className="flex gap-2 flex-wrap shrink-0" role="radiogroup" aria-label="Filtrar produtos por unidade">
+            <button
+              onClick={() => setFilialFiltro('todas')}
+              role="radio"
+              aria-checked={filialFiltro === 'todas'}
+              className="py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button"
+              style={filialFiltro === 'todas'
+                ? { background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
+                : { background: 'transparent', borderColor: 'transparent' }
+              }
+            >
+              Todas
+            </button>
+            {FILIAIS_PDV.map(f => {
+              const ativo = filialFiltro === f;
+              const cor = FILIAL_COLOR[f];
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilialFiltro(f)}
+                  role="radio"
+                  aria-checked={ativo}
+                  className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''}`}
+                  style={!ativo ? { background: 'transparent', borderColor: 'transparent' } : {}}
+                >
+                  {f}
+                </button>
+              );
+            })}
+          </div>
+
           <AnimatePresence>
             {lastVenda && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -543,8 +597,12 @@ export const PDVView = ({ showToast, profile }: any) => {
 
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 max-h-[45vh] lg:max-h-none">
             {filtered.length === 0 ? (
-              <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm">
-                {search ? 'Nenhum produto encontrado.' : 'Nenhum produto ativo cadastrado.'}
+              <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm text-center">
+                {search
+                  ? 'Nenhum produto encontrado.'
+                  : filialFiltro !== 'todas'
+                    ? `Nenhum produto ativo cadastrado para ${filialFiltro}.`
+                    : 'Nenhum produto ativo cadastrado.'}
               </div>
             ) : (
               filtered.map((p: any) => {
