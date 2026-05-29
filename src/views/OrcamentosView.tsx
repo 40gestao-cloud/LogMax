@@ -67,9 +67,12 @@ export const OrcamentosView = ({
 }) => {
   const [page, setPage] = useState(0);
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
+  // Reset paginação ao mudar filtro client-side — senão o usuário pode estar
+  // na página 3 e o filtro mostra "nada", parecendo bug.
+  useEffect(() => { setPage(0); }, [statusFiltro]);
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/orcamentosview', undefined, false,
-    { page, searchColumns: ['status'] }
+    { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
@@ -190,8 +193,11 @@ export const OrcamentosView = ({
     try {
       const payload: any = {
         cliente_id:    form.cliente_id || null,
-        vendedor_id:   profile.id,
-        vendedor_nome: profile.nome,
+        // Vendedor é setado apenas na criação. Em edição (admin/CEO editando
+        // o rascunho de outro vendedor, por ex.) preservamos o autor original
+        // para não "roubar" a proposta.
+        vendedor_id:   editItem ? editItem.vendedor_id : profile.id,
+        vendedor_nome: editItem ? editItem.vendedor_nome : profile.nome,
         validade_dias: Math.max(1, parseInt(form.validade_dias) || 3),
         itens,
         subtotal,
@@ -649,7 +655,7 @@ export const OrcamentosView = ({
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
-            onClick={() => !decidindo && setDecisao(null)}
+            onClick={() => { if (!decidindo) { setDecisao(null); setFeedbackInput(''); } }}
           >
             <motion.div
               initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
