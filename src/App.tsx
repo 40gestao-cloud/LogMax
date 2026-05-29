@@ -80,9 +80,17 @@ const SimuladorPagamentoView               = lazy(() => import('./views/Simulado
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
+const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
+const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
+const ClienteEspecialView                  = lazy(() => import('./views/ClienteEspecialView').then(m => ({ default: m.ClienteEspecialView })));
 
 // --- menu ---
-const menuModules = [
+// Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
+// { label, requireRole?, requireSetor? } pra esconder linha por role/setor
+// (ex.: Cliente Especial só admin/CEO; Pedidos de Venda no Estoque só pra
+// logística). Funções de filtro estão em filterSubmenus() abaixo.
+type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[] };
+const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
     submenus: ['Filiais', 'Colaboradores', 'Clientes', 'Fornecedores', 'Produtos', 'Serviços', 'Centros de custo', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
@@ -93,11 +101,15 @@ const menuModules = [
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Minhas Aprovações', 'Requisições', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Minhas Aprovações', 'Requisições', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos',
+      { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
+      'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
+      { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
+      'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -105,7 +117,9 @@ const menuModules = [
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
-    submenus: ['PDV', 'Clientes', 'Histórico de Vendas', 'Tarefas'],
+    submenus: ['PDV', 'Clientes', 'Histórico de Vendas', 'Orçamentos', 'Pedidos de Venda',
+      { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] },
+      'Tarefas'],
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
@@ -117,6 +131,20 @@ const menuModules = [
     isNew: true,
   },
 ];
+
+// Helpers: extrai label e checa RBAC granular do submenu.
+const subLabel = (s: SubmenuItem): string => typeof s === 'string' ? s : s.label;
+const subPermitido = (s: SubmenuItem, profile: any): boolean => {
+  if (typeof s === 'string') return true;
+  if (s.requireRole && !s.requireRole.includes(profile?.role)) return false;
+  if (s.requireSetor) {
+    // admin/CEO sempre passa
+    if (profile?.role === 'admin' || profile?.role === 'ceo') return true;
+    const setores = [profile?.setor, ...(profile?.setores_extras ?? [])].filter(Boolean);
+    if (!s.requireSetor.some((sec: string) => setores.includes(sec))) return false;
+  }
+  return true;
+};
 
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
   <>
@@ -190,22 +218,25 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                   {isOpen && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-col overflow-hidden">
                       <div className="flex flex-col pt-2 pb-1">
-                        {mod.submenus.map((sub: any) => {
-                          const viewId = `${mod.id}-${sub.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
-                          const isActive = activeView === viewId;
-                          return (
-                            <button key={sub} onClick={() => { navigate(viewId); onClose?.(); }}
-                              className={`flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
-                              style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
-                              <span>{sub}</span>
-                              {(badges?.[viewId] ?? 0) > 0 && (
-                                <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
-                                  {badges[viewId] > 9 ? '9+' : badges[viewId]}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
+                        {mod.submenus
+                          .filter((sub: any) => subPermitido(sub, profile))
+                          .map((sub: any) => {
+                            const label = subLabel(sub);
+                            const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
+                            const isActive = activeView === viewId;
+                            return (
+                              <button key={label} onClick={() => { navigate(viewId); onClose?.(); }}
+                                className={`flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
+                                style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
+                                <span>{label}</span>
+                                {(badges?.[viewId] ?? 0) > 0 && (
+                                  <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
+                                    {badges[viewId] > 9 ? '9+' : badges[viewId]}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                       </div>
                     </motion.div>
                   )}
@@ -631,6 +662,12 @@ function LogMaxAppInner() {
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
       case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
+      case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
+      case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} />;
+      case 'vendas-clienteespecial':       return <ClienteEspecialView showToast={st} profile={profile} />;
+      case 'estoque-pedidosdevenda':       return <PedidosVendaView showToast={st} profile={profile} />;
+      case 'financeiro-pedidosdevenda':    return <PedidosVendaView showToast={st} profile={profile} />;
+      case 'financeiro-aprovaçõesdeorçamento': return <OrcamentosView showToast={st} profile={profile} mode="financeiro" />;
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
       case 'empresa-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="empresa" />;
