@@ -10,7 +10,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/pedidosvendaview', undefined, false, { page }
+    '/api/pedidosvendaview', undefined, true, { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview');
   const [processando, setProcessando] = useState<string | null>(null);

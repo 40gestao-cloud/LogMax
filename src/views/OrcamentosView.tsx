@@ -71,7 +71,7 @@ export const OrcamentosView = ({
   // na página 3 e o filtro mostra "nada", parecendo bug.
   useEffect(() => { setPage(0); }, [statusFiltro]);
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/orcamentosview', undefined, false,
+    '/api/orcamentosview', undefined, true,
     { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview');

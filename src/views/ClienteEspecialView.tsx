@@ -38,7 +38,9 @@ async function notificarSetor(args: {
 export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo';
 
-  const { data, setData, isLoading } = useFetchData<any>('/api/orcamentosview');
+  // Realtime: quando o vendedor envia uma nova proposta ao cliente, ela aparece
+  // aqui sem precisar de F5. Idem decisão registrada em outra aba/setor.
+  const { data, setData, isLoading } = useFetchData<any>('/api/orcamentosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
 
   const [selecionado, setSelecionado] = useState<any | null>(null);

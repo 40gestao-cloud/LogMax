@@ -46,16 +46,32 @@ const BADGE_DEFS: BadgeDef[] = [
 
   // ─── Financeiro ───────────────────────────────────────────────────────────
   { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' } },
+  { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' } },
   { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
   { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' } },
+  // Pedidos de Venda chega no Financeiro pra registrar pagamento. Conta
+  // 'Aguardando Separação' como proxy de "pedido aberto" (visível também antes
+  // da logística separar, porque cliente pode pagar primeiro).
+  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: { status: 'Aguardando Separação' } },
   { viewId: 'financeiro-tarefas',                modulo: 'financeiro', table: 'tarefas',             filters: { modulo: 'financeiro', status: 'Pendente' } },
 
   // ─── RH ───────────────────────────────────────────────────────────────────
   { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' } },
   { viewId: 'rh-tarefas', modulo: 'rh', table: 'tarefas', filters: { modulo: 'rh', status: 'Pendente' } },
 
+  // ─── Estoque (extra) ──────────────────────────────────────────────────────
+  // Pedidos de Venda recém-chegados aguardando logística separar.
+  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: { status: 'Aguardando Separação' } },
+
   // ─── Vendas ───────────────────────────────────────────────────────────────
-  { viewId: 'vendas-tarefas', modulo: 'vendas', table: 'tarefas', filters: { modulo: 'vendas', status: 'Pendente' } },
+  // Orçamento aprovado pelo financeiro: vendas precisa enviar ao cliente.
+  { viewId: 'vendas-orçamentos',     modulo: 'vendas', table: 'orcamentos', filters: { status: 'Aprovado Financeiro' } },
+  // Cliente Especial (admin/CEO simula): badge conta orçamentos aguardando
+  // decisão do cliente. Como o submenu já é gated por requireRole, só admin/CEO
+  // verão o badge — mesmo que o def passe no gate por SETOR_MODULES (que é
+  // por módulo, não por submenu).
+  { viewId: 'vendas-clienteespecial', modulo: 'vendas', table: 'orcamentos', filters: { status: 'Enviado ao Cliente' } },
+  { viewId: 'vendas-tarefas',         modulo: 'vendas', table: 'tarefas',    filters: { modulo: 'vendas', status: 'Pendente' } },
 
   // ─── Marketing ────────────────────────────────────────────────────────────
   { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
