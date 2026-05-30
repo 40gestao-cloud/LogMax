@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare, BookOpen
+  Star, MessageSquare, BookOpen, SunMedium, Plus, Minus,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -266,6 +266,129 @@ function ThemeToggle() {
     >
       {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
     </button>
+  );
+}
+
+function BrightnessControl() {
+  const { brightness, setBrightness } = useTheme();
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Constantes locais — mantém o componente desacoplado do ThemeContext
+  // (caso o range mude no futuro, ajusta-se num único lugar).
+  const MIN = 50, MAX = 150, STEP = 10;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      if (!popoverRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('touchstart', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('touchstart', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const inc = () => setBrightness(Math.min(MAX, brightness + STEP));
+  const dec = () => setBrightness(Math.max(MIN, brightness - STEP));
+  const reset = () => setBrightness(100);
+  const offNeutral = brightness !== 100;
+
+  return (
+    <div ref={popoverRef} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        aria-label="Ajustar brilho da tela"
+        aria-expanded={open}
+        title={`Brilho ${brightness}%`}
+        className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors relative"
+      >
+        <SunMedium size={16} />
+        {offNeutral && (
+          <span
+            aria-hidden
+            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent border-2"
+            style={{ borderColor: 'var(--color-bg-base)' }}
+          />
+        )}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 mt-2 neu-flat rounded-2xl p-4 border border-white/10 z-50 shadow-2xl"
+            style={{ background: 'var(--color-bg-base)', minWidth: 220 }}
+          >
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 text-center">
+              Brilho da tela
+            </p>
+
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <button
+                onClick={dec}
+                disabled={brightness <= MIN}
+                aria-label="Diminuir brilho"
+                className="neu-button w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Minus size={14} />
+              </button>
+
+              <div className="flex flex-col items-center min-w-[60px]">
+                <span className="text-xl font-black text-accent leading-none">{brightness}%</span>
+                <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold mt-1">
+                  {brightness < 100 ? 'Escurecido' : brightness > 100 ? 'Clareado' : 'Neutro'}
+                </span>
+              </div>
+
+              <button
+                onClick={inc}
+                disabled={brightness >= MAX}
+                aria-label="Aumentar brilho"
+                className="neu-button w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {/* Slider para ajuste contínuo (mais granular que +/-) */}
+            <input
+              type="range"
+              min={MIN}
+              max={MAX}
+              step={STEP}
+              value={brightness}
+              onChange={e => setBrightness(Number(e.target.value))}
+              aria-label="Slider de brilho"
+              className="w-full accent-current cursor-pointer"
+              style={{ color: 'var(--color-accent)' }}
+            />
+
+            <div className="flex items-center justify-between text-[9px] text-gray-500 font-bold mt-1">
+              <span>{MIN}%</span>
+              <span>{MAX}%</span>
+            </div>
+
+            {offNeutral && (
+              <button
+                onClick={reset}
+                className="mt-3 w-full text-[10px] font-bold text-gray-400 hover:text-accent transition-colors py-2 rounded-lg neu-button"
+              >
+                Redefinir (100%)
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -773,6 +896,7 @@ function LogMaxAppInner() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell setor={profile.setor} onNavigate={navigate} />
+            <BrightnessControl />
             <ThemeToggle />
             <AccentPicker />
 
