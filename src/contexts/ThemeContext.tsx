@@ -18,9 +18,11 @@ const ACCENT_HEX: Record<AccentColor, string> = {
   acessivel: '#F97316',
 };
 
-// Brilho da tela — 50% a 150% (100 = neutro). Browser não expõe API nativa,
-// então a percepção de brilho é renderizada por um overlay preto/branco com
-// opacidade variável (z-9999, pointer-events: none).
+// Brilho da tela — 50% a 150% (100 = neutro). Aplicado via
+// `filter: brightness(X)` no <body>, que multiplica a luminância dos
+// pixels (mesma matemática do brilho de SO em celular/computador). Cores
+// continuam vivas, só ficam mais escuras (<100) ou mais claras (>100).
+// Removemos automaticamente o filter em 100% para zerar custo de composição.
 export const BRIGHTNESS_MIN = 50;
 export const BRIGHTNESS_MAX = 150;
 export const BRIGHTNESS_STEP = 10;
@@ -76,6 +78,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem('logmax-brightness', String(brightness));
+    // filter:brightness no body — body não é o scroller (o scroll vive em
+    // <main>), então a "armadilha" de position:fixed virando relativo ao
+    // ancestral filtrado não afeta nada visualmente: body cobre o viewport
+    // inteiro com `bg-base` e h-screen.
+    if (brightness === 100) {
+      document.body.style.removeProperty('filter');
+    } else {
+      document.body.style.filter = `brightness(${brightness / 100})`;
+    }
   }, [brightness]);
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
@@ -86,33 +97,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, accentColor, setAccentColor, brightness, setBrightness }}>
       {children}
-      <BrightnessOverlay value={brightness} />
     </ThemeContext.Provider>
   );
 }
 
 export const useTheme = () => useContext(ThemeContext);
-
-// Overlay full-screen sem interação. Abaixo de 100% escurece (preto), acima
-// clareia (branco). Opacidade máxima 0.2 em qualquer extremo — o suficiente
-// para alterar percepção sem quebrar contraste de leitura nem mascarar a UI.
-function BrightnessOverlay({ value }: { value: number }) {
-  if (value === 100) return null;
-  const isDim    = value < 100;
-  const distance = Math.abs(value - 100);            // 0..50
-  const opacity  = (distance / 50) * 0.4;            // 0..0.4
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: 'fixed',
-        inset: 0,
-        pointerEvents: 'none',
-        zIndex: 9999,
-        background: isDim ? 'black' : 'white',
-        opacity,
-        transition: 'opacity 0.2s ease',
-      }}
-    />
-  );
-}
