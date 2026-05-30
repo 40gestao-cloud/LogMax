@@ -436,7 +436,6 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
-  transition: background-color 0.3s ease, color 0.3s ease;
 
   /* Sensação de app nativo: bloqueia seleção acidental de textos estruturais
      (rodapés, labels, títulos, botões) e o menu nativo "Copiar/Pesquisar" no
@@ -583,6 +582,21 @@ table,
 /* Respeita preferência de utilizador por menos animação */
 @media (prefers-reduced-motion: reduce) {
   .neu-input:focus { animation: none; }
+}
+
+/* ── Theme switching: suprime TODAS as transições durante a troca ──
+   Sem isso, body (0.3s) + neu-* (0.2s) + Tailwind transitions criam um
+   efeito "wave" onde cada elemento muda na sua velocidade e a troca de
+   tema parece lenta e tortuosa. Com a classe ativa, o switch é instantâneo
+   visualmente — exatamente o que o usuário espera ao clicar no toggle.
+   A classe é adicionada e removida em <2 frames pelo ThemeContext. */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
 }
 
 /* Scrollbars */

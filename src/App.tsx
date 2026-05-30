@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare, BookOpen, SunMedium, Plus, Minus,
+  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -308,7 +308,7 @@ function BrightnessControl() {
         title={`Brilho ${brightness}%`}
         className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors relative"
       >
-        <SunMedium size={16} />
+        <Lightbulb size={16} />
         {offNeutral && (
           <span
             aria-hidden

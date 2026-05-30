@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'red' | 'acessivel';
@@ -62,9 +62,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return Math.round(raw);
   });
 
+  // Pula a primeira execução (mount) — não há "troca" pendente, só inicialização.
+  // Sem isso, a primeira carga ativa o theme-switching desnecessariamente.
+  const firstThemeRun = useRef(true);
+
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    if (firstThemeRun.current) {
+      firstThemeRun.current = false;
+      root.setAttribute('data-theme', theme);
+      localStorage.setItem('logmax-theme', theme);
+      return;
+    }
+    // Troca real: suprime transições, troca o atributo, libera transições no
+    // próximo paint (2 RAFs garantem que o browser aplicou o novo estilo sem
+    // animar). Sem isso, body (0.3s) e neu-* (0.2s) faziam o switch parecer
+    // lento e desigual.
+    root.classList.add('theme-switching');
+    root.setAttribute('data-theme', theme);
     localStorage.setItem('logmax-theme', theme);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('theme-switching');
+      });
+    });
+    return () => cancelAnimationFrame(id);
   }, [theme]);
 
   useEffect(() => {
