@@ -82,7 +82,9 @@ const BADGE_DEFS: BadgeDef[] = [
   // ─── TI ───────────────────────────────────────────────────────────────────
   // RLS de ti_chamados já filtra pelo setor responsável — count só conta o
   // que o usuário pode ver.
-  { viewId: 'ti-chamados', modulo: 'ti', table: 'ti_chamados', filters: { status: 'Aberto' } },
+  { viewId: 'ti-chamados',             modulo: 'ti', table: 'ti_chamados',         filters: { status: 'Aberto' } },
+  // Desenvolvimento com IA: badge conta treinamentos ainda por acontecer.
+  { viewId: 'ti-desenvolvimentocomia', modulo: 'ti', table: 'desenvolvimentos_ia', filters: { status: 'Agendado' } },
 
   // ─── Empresa (cadastro base, só Tarefas tem fluxo de pendência) ───────────
   { viewId: 'empresa-tarefas', modulo: 'empresa', table: 'tarefas', filters: { modulo: 'empresa', status: 'Pendente' } },

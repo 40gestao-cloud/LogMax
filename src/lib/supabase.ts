@@ -74,6 +74,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/pesquisarespostaitensview':    'pesquisa_resposta_itens',
   '/api/controlecaixaview':            'controle_caixa',
   '/api/tichamadosview':               'ti_chamados',
+  '/api/desenvolvimentosiaview':       'desenvolvimentos_ia',
   '/api/notificacoesview':             'notificacoes',
   '/api/feedbacksorganizacaoview':     'feedbacks_organizacao',
   '/api/orcamentosview':               'orcamentos',
@@ -98,7 +99,7 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'vendas',
   'marketing_promocoes', 'marketing_tarefas',
   'tarefas',
-  'ti_chamados',
+  'ti_chamados', 'desenvolvimentos_ia',
   'feedbacks_organizacao',
   'orcamentos', 'pedidos_venda',
 ]);

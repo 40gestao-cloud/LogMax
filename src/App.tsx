@@ -78,6 +78,7 @@ const AprovacoesConteudoMarketingView      = lazy(() => import('./views/Aprovaco
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
+const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
@@ -127,7 +128,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'ti', label: 'TI & Suporte', icon: Monitor,
-    submenus: ['Chamados'],
+    submenus: ['Chamados', 'Desenvolvimento com IA'],
     isNew: true,
   },
 ];
@@ -683,6 +684,7 @@ function LogMaxAppInner() {
       case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
       case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
+      case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
       default:
         return (
