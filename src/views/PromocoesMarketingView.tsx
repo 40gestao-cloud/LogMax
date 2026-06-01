@@ -339,7 +339,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {promocoes.length === 0 ? <EmptyState message="Nenhuma proposta criada ainda" /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Produto</th>
@@ -360,7 +360,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                     return (
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome_produto ?? '—'}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[200px] truncate" title={p.nome_produto ?? ''}>{p.nome_produto ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">
                           R$ {Number(p.preco_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
@@ -376,7 +376,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                             {style?.icon}{p.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[180px]">
+                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[180px] truncate">
                           {p.observacao ? (
                             <button
                               type="button"
