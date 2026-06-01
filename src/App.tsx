@@ -20,6 +20,7 @@ import {
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
+import { AuditoriaProvider } from './contexts/AuditoriaContext';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -857,6 +858,7 @@ function LogMaxAppInner() {
 
   return (
     <AIAssistantProvider>
+    <AuditoriaProvider>
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       {canUseMaxAI && <AIAssistantFAB />}
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
@@ -951,6 +953,7 @@ function LogMaxAppInner() {
         </div>
       </main>
     </div>
+    </AuditoriaProvider>
     </AIAssistantProvider>
   );
 }
