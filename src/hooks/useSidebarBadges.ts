@@ -27,6 +27,14 @@ type BadgeDef = {
   modulo: string;
   table: string;
   filters: Record<string, string>;
+  // Quando informado, usa esse `select` no PostgREST (ex.: `*,pai!inner(col)`)
+  // pra excluir órfãs de tabelas filhas. O count continua exato por causa
+  // do INNER embed: linhas sem match no pai não entram na contagem.
+  select?: string;
+  // Tabelas a ouvir via realtime. Default = [table]. Use quando o `select`
+  // depende de outra tabela (ex.: requisições) cujas mudanças também invalidam
+  // a contagem.
+  listenTables?: string[];
 };
 
 const BADGE_DEFS: BadgeDef[] = [
@@ -35,11 +43,29 @@ const BADGE_DEFS: BadgeDef[] = [
   { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' } },
   { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' } },
   { viewId: 'compras-recebimentos',     modulo: 'compras',    table: 'recebimentos',         filters: { status: 'Pendente' } },
-  { viewId: 'compras-minhasaprovações', modulo: 'compras',    table: 'aprovacoes_compras',   filters: { status: 'Pendente' } },
+  // INNER join com requisicoes pra excluir aprovações Pendente cuja requisição
+  // foi soft-deletada/cancelada (ficavam órfãs e inflavam o badge sem aparecer
+  // na tela — ver feedback_soft_delete_cascade).
+  {
+    viewId: 'compras-minhasaprovações',
+    modulo: 'compras',
+    table: 'aprovacoes_compras',
+    filters: { status: 'Pendente', 'requisicoes.ativo': 'true', 'requisicoes.status': 'Pendente' },
+    select: '*,requisicoes!inner(id)',
+    listenTables: ['aprovacoes_compras', 'requisicoes'],
+  },
   { viewId: 'compras-tarefas',          modulo: 'compras',    table: 'tarefas',              filters: { modulo: 'compras', status: 'Pendente' } },
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
-  { viewId: 'estoque-minhasaprovações', modulo: 'estoque',    table: 'aprovacoes_estoque',   filters: { status: 'Pendente' } },
+  // Mesmo padrão do compras: descarta órfãs de requisições_estoque inativas.
+  {
+    viewId: 'estoque-minhasaprovações',
+    modulo: 'estoque',
+    table: 'aprovacoes_estoque',
+    filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
+    select: '*,requisicoes_estoque!inner(id)',
+    listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
+  },
   { viewId: 'estoque-requisições',      modulo: 'estoque',    table: 'requisicoes_estoque',  filters: { status: 'Pendente' } },
   { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' } },
   { viewId: 'estoque-tarefas',          modulo: 'estoque',    table: 'tarefas',              filters: { modulo: 'estoque', status: 'Pendente' } },
@@ -145,7 +171,11 @@ export function useSidebarBadges(
     );
     let eligible = BADGE_DEFS.filter(def => allowedModulos.has(def.modulo));
     if (onlyTables) {
-      eligible = eligible.filter(def => onlyTables.has(def.table));
+      // Considera listenTables (default = [table]) — assim mudanças na tabela
+      // pai (via inner-join) também disparam re-fetch do badge filho.
+      eligible = eligible.filter(def =>
+        (def.listenTables ?? [def.table]).some(t => onlyTables.has(t)),
+      );
     }
     if (eligible.length === 0) return;
 
@@ -153,7 +183,7 @@ export function useSidebarBadges(
       try {
         let q = supabase!
           .from(def.table)
-          .select('*', { count: 'exact', head: true });
+          .select(def.select ?? '*', { count: 'exact', head: true });
         if (TABLES_WITH_ATIVO.has(def.table)) {
           q = q.eq('ativo', true);
         }
@@ -206,7 +236,9 @@ export function useSidebarBadges(
       allSetores(profile).flatMap(s => SETOR_MODULES[String(s)] ?? []),
     );
     const tables = Array.from(new Set(
-      BADGE_DEFS.filter(def => allowedModulos.has(def.modulo)).map(d => d.table),
+      BADGE_DEFS
+        .filter(def => allowedModulos.has(def.modulo))
+        .flatMap(d => d.listenTables ?? [d.table]),
     ));
 
     // Set acumula tabelas alteradas dentro da janela de debounce. Sem ele,
