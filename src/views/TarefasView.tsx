@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, ChevronRight, AlertCircle } from 'lucide-react';
+import { Plus, X, ChevronRight, ChevronDown, AlertCircle } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
@@ -46,6 +46,7 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
   const [form, setForm]             = useState<any>(EMPTY_FORM);
   const [saving, setSaving]         = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -197,11 +198,18 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
               const next       = nextStatus(t.status);
               const isUpdating = updatingId === t.id;
               const vencida    = isVencida(t);
+              const isExpanded = expandedId === t.id;
+              const hasDescricao = !!t.descricao;
 
               return (
                 <motion.div key={t.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => hasDescricao && setExpandedId(prev => prev === t.id ? null : t.id)}
+                    disabled={!hasDescricao}
+                    className="flex-1 min-w-0 text-left disabled:cursor-default"
+                  >
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className={`text-[10px] font-black uppercase tracking-wide ${PRIO_STYLE[t.prioridade] ?? 'text-gray-500'}`}>
                         {t.prioridade}
@@ -212,8 +220,20 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-bold text-gray-200 truncate">{t.titulo}</p>
-                    {t.descricao && <p className="text-xs text-gray-500 mt-0.5 truncate">{t.descricao}</p>}
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-gray-200 truncate flex-1 min-w-0">{t.titulo}</p>
+                      {hasDescricao && (
+                        <ChevronDown
+                          size={14}
+                          className={`shrink-0 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      )}
+                    </div>
+                    {hasDescricao && (
+                      <p className={`text-xs text-gray-500 mt-0.5 ${isExpanded ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
+                        {t.descricao}
+                      </p>
+                    )}
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[t.status] ?? ''}`}>
                         {t.status}
@@ -227,7 +247,7 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
                         <span className="text-[10px] text-gray-600">Por: {t.nome_criador}</span>
                       )}
                     </div>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2 shrink-0">
                     {next && (
                       <button onClick={() => handleAdvance(t)} disabled={isUpdating}
