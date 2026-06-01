@@ -29,7 +29,3 @@ export const PRODUTO_PREFIX_FILIAL: Partial<Record<FilialHolding, string>> = {
   SuperMax: 'SM-',
   MaxLook:  'ML-',
 };
-
-// Regex que casa qualquer prefixo conhecido — usado pra detectar e trocar
-// prefixos quando o usuário muda a filial no formulário.
-export const PRODUTO_PREFIX_REGEX = /^(TM|SM|ML)-/i;

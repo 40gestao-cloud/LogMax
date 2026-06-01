@@ -6,7 +6,7 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL, PRODUTO_PREFIX_REGEX } from '../lib/filiais';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -378,18 +378,12 @@ export const ProdutosView = ({ showToast }: any) => {
                       value={extras.filial} onChange={e => {
                         const novaFilial = e.target.value;
                         setExtras(x => ({ ...x, filial: novaFilial }));
-                        // Auto-swap do prefixo do SKU pra nova unidade. Só age quando
-                        // o código está vazio ou já tem um prefixo conhecido — assim
-                        // não sobrescreve código legado digitado manualmente.
+                        // Auto-fill do prefixo SÓ quando o código está vazio — conveniência
+                        // sem risco. Se o usuário já digitou algo (com ou sem prefixo),
+                        // não mexemos: a validação no save sinaliza o descasamento.
                         const novoPrefixo = PRODUTO_PREFIX_FILIAL[novaFilial as keyof typeof PRODUTO_PREFIX_FILIAL];
                         if (novoPrefixo) {
-                          setForm(f => {
-                            if (!f.codigo) return { ...f, codigo: novoPrefixo };
-                            if (PRODUTO_PREFIX_REGEX.test(f.codigo)) {
-                              return { ...f, codigo: f.codigo.replace(PRODUTO_PREFIX_REGEX, novoPrefixo) };
-                            }
-                            return f;
-                          });
+                          setForm(f => (!f.codigo ? { ...f, codigo: novoPrefixo } : f));
                           clearError('codigo');
                         }
                       }}>
