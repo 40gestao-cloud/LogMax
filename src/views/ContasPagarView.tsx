@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
@@ -25,7 +26,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [form, setForm] = useState({ descricao: '' });
-  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '' });
+  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: FILIAL_DEFAULT as string });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   // Diálogo inline de pagamento: pede o banco de débito antes de confirmar.
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ descricao: item.descricao ?? '' });
-    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '' });
+    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial: item.filial ?? FILIAL_DEFAULT });
     setErrors({});
     setShowForm(false);
   };
@@ -69,7 +70,7 @@ export const ContasPagarView = ({ showToast }: any) => {
     setShowForm(false);
     setEditItem(null);
     setForm({ descricao: '' });
-    setExtras({ valor: '', vencimento: '', fornecedor_id: '' });
+    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial: FILIAL_DEFAULT });
     setErrors({});
   };
 
@@ -81,6 +82,7 @@ export const ContasPagarView = ({ showToast }: any) => {
       valor: parseBRL(extras.valor),
       vencimento: extras.vencimento || null,
       fornecedor_id: extras.fornecedor_id || null,
+      filial: extras.filial || FILIAL_DEFAULT,
     };
     try {
       if (editItem) {
@@ -187,7 +189,13 @@ export const ContasPagarView = ({ showToast }: any) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Pagar'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <FormField label="Empresa *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.filial} onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
+                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </FormField>
                 <FormField label="Descrição *" error={errors.descricao}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
                     value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
@@ -230,6 +238,7 @@ export const ContasPagarView = ({ showToast }: any) => {
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4 hidden md:table-cell">Fornecedor</th>
+                  <th className="pb-4 font-bold px-4 text-center hidden sm:table-cell">Empresa</th>
                   <th className="pb-4 font-bold px-4 text-right">Valor</th>
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Vencimento</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
@@ -246,6 +255,7 @@ export const ContasPagarView = ({ showToast }: any) => {
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.forn?.nome ?? '—'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>
+                        <td className="py-3 px-4 text-center hidden sm:table-cell"><FilialBadge filial={item.filial} /></td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.vencimento || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
@@ -262,7 +272,7 @@ export const ContasPagarView = ({ showToast }: any) => {
                       <AnimatePresence>
                         {payingId === item.id && (
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <td colSpan={6} className="pb-3 px-4">
+                            <td colSpan={7} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[220px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Landmark size={11} /> Conta bancária de débito *</label>
