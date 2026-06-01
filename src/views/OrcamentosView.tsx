@@ -4,6 +4,7 @@ import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -406,7 +407,11 @@ export const OrcamentosView = ({
                     onChange={e => { setForm(f => ({ ...f, cliente_id: e.target.value })); clearError('cliente_id'); }}
                   >
                     <option value="">Selecione...</option>
-                    {clientes.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    {groupCadastrosParaSelect(clientes).map(g => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </FormField>
                 <FormField label="Validade (dias) *">

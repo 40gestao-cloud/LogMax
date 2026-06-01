@@ -4,6 +4,7 @@ import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -324,8 +325,12 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
                         value={form.fornecedor_id} onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value })); clearError('fornecedor_id'); }}>
                         <option value="">Selecione...</option>
-                        {fornecedores.map((f: any) => (
-                          <option key={f.id} value={f.id}>{f.nome}</option>
+                        {groupCadastrosParaSelect(fornecedores).map(g => (
+                          <optgroup key={g.label} label={g.label}>
+                            {g.items.map((f: any) => (
+                              <option key={f.id} value={f.id}>{f.nome}</option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </FormField>

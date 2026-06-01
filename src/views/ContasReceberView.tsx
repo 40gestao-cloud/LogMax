@@ -4,6 +4,7 @@ import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X } from 'lucide-re
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
@@ -202,7 +203,11 @@ export const ContasReceberView = ({ showToast }: any) => {
                   <select className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={extras.cliente_id} onChange={e => setExtras(x => ({ ...x, cliente_id: e.target.value }))}>
                     <option value="">Nenhum</option>
-                    {clientes.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    {groupCadastrosParaSelect(clientes).map(g => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </FormField>
               </div>

@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
+import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 
 // Filtro de unidade do PDV: 3 empresas operacionais (Matriz é administrativa,
 // não vende — fica em "Todas").
@@ -758,7 +759,11 @@ export const PDVView = ({ showToast, profile }: any) => {
                       className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none"
                     >
                       <option value="">Selecione o cliente *</option>
-                      {clientes.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      {groupCadastrosParaSelect(clientes).map(g => (
+                        <optgroup key={g.label} label={g.label}>
+                          {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </optgroup>
+                      ))}
                     </select>
                   </div>
                 </motion.div>

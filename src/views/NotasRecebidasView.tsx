@@ -4,6 +4,7 @@ import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 
 export const NotasRecebidasView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/notasrecebidasview');
@@ -76,7 +77,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar NF' : 'Nova NF'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Número NF *" error={errors.numero_nf}><input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.numero_nf ? 'border border-red-500/40' : ''}`} value={form.numero_nf} onChange={e => { setForm(f => ({ ...f, numero_nf: e.target.value })); clearError('numero_nf'); }} placeholder="Ex: NF-001234" /></FormField>
-                <FormField label="Fornecedor"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.fornecedor_id} onChange={e => setExtras(x => ({ ...x, fornecedor_id: e.target.value }))}><option value="">Nenhum</option>{fornecedores.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></FormField>
+                <FormField label="Fornecedor"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.fornecedor_id} onChange={e => setExtras(x => ({ ...x, fornecedor_id: e.target.value }))}><option value="">Nenhum</option>{groupCadastrosParaSelect(fornecedores).map(g => (<optgroup key={g.label} label={g.label}>{g.items.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}</optgroup>))}</select></FormField>
                 <FormField label="Valor Total (R$)"><input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.valor_total} onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))} placeholder="0,00" /></FormField>
                 <FormField label="Data Emissão"><input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.data_emissao} onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} /></FormField>
                 <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Não Vinculada', 'Vinculada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
