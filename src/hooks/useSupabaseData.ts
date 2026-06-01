@@ -19,17 +19,22 @@ export function useFetchData<T = any>(
     searchTerm?: string;
     searchColumns?: string[];
     includeInactive?: boolean;
-    /** Coluna usada no ORDER BY DESC. Default: 'created_at'. Tabelas
+    /** Coluna usada no ORDER BY. Default: 'created_at'. Tabelas
      *  sem essa coluna (ex.: snapshot, append-only com timestamp próprio)
      *  devem passar a coluna correta — senão PostgREST devolve 400 e a
      *  UI fica vazia silenciosamente. */
     orderBy?: string;
+    /** Direção do ORDER BY. Default: false (DESC — mais novo primeiro,
+     *  natural para timestamps). Use `true` quando ordenar por código
+     *  ou nome em ordem crescente. */
+    ascending?: boolean;
   },
 ) {
   const table = ENDPOINT_TABLE_MAP[endpoint];
   const softDelete = !!table && TABLES_WITH_ATIVO.has(table);
   const includeInactive = !!options?.includeInactive;
   const orderBy = options?.orderBy ?? 'created_at';
+  const ascending = options?.ascending ?? false;
   const [data, setData]             = useState<T[]>([]);
   const [isLoading, setLoading]     = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -89,7 +94,7 @@ export function useFetchData<T = any>(
       let q = supabase
         .from(table)
         .select('*', { count: 'exact' })
-        .order(orderBy, { ascending: false });
+        .order(orderBy, { ascending });
       q = applyFilters(q);
       const { data: rows, error: err, count } = await q.range(from, to);
       if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
@@ -101,7 +106,7 @@ export function useFetchData<T = any>(
         setTotalCount(count ?? null);
       }
     } else {
-      let q = supabase.from(table).select('*').order(orderBy, { ascending: false });
+      let q = supabase.from(table).select('*').order(orderBy, { ascending });
       q = applyFilters(q);
       const { data: rows, error: err } = await q;
       if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
@@ -114,7 +119,7 @@ export function useFetchData<T = any>(
     }
 
     setLoading(false);
-  }, [table, softDelete, includeInactive, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols), orderBy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [table, softDelete, includeInactive, JSON.stringify(extraFilter), page, rawSearch, JSON.stringify(searchCols), orderBy, ascending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effect 1: chama load() quando filtros / paginação / busca mudam.
   useEffect(() => {

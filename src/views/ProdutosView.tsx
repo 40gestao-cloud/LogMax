@@ -59,7 +59,13 @@ export const ProdutosView = ({ showToast }: any) => {
     '/api/produtosview',
     filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
     false,
-    { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'] }
+    {
+      page,
+      searchTerm: debouncedSearch,
+      searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'],
+      orderBy: 'codigo',
+      ascending: true,
+    }
   );
   const [isSaving, setIsSaving]   = useState(false);
   const [showForm, setShowForm]   = useState(false);
@@ -77,7 +83,14 @@ export const ProdutosView = ({ showToast }: any) => {
   const imagemInputRef = useRef<HTMLInputElement | null>(null);
 
   // Pesquisa agora é server-side; já não há filtro client-side.
-  const filtered = data;
+  // Re-sort numérico por código na página atual: o servidor ordena
+  // lexicograficamente, então "PRD-10" viria antes de "PRD-2". Aqui
+  // comparamos pelo número embutido pra exibir 1, 2, 10 na ordem certa.
+  const filtered = [...data].sort((a: any, b: any) => {
+    const ca = String(a.codigo ?? '');
+    const cb = String(b.codigo ?? '');
+    return ca.localeCompare(cb, 'pt-BR', { numeric: true, sensitivity: 'base' });
+  });
 
   const exportCols = ['Código', 'Nome', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Margem', 'Estoque', 'Est. Mín', 'EAN', 'Status'];
   const exportRows = () => filtered.map((d: any) => {
