@@ -65,8 +65,10 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
   const notasCount = notasRecebidas.length;
   const SHORTCUTS_BY_MODULE: Record<string, { label: string; desc: string; icon: any; view: string }[]> = {
     empresa:    [
-      { label: 'Produtos',         desc: 'Catálogo de produtos',      icon: Package,       view: 'empresa-produtos'          },
       { label: 'Filiais',          desc: 'Unidades e escritórios',    icon: Boxes,         view: 'empresa-filiais'           },
+    ],
+    cadastros:  [
+      { label: 'Produtos',         desc: 'Catálogo de produtos',      icon: Package,       view: 'cadastros-produtos'        },
     ],
     compras:    [
       { label: 'Requisições',      desc: 'Solicitações de compra',    icon: ClipboardList, view: 'compras-requisições'       },
@@ -96,8 +98,8 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
   };
 
   const SETOR_MODS: Record<string, string[]> = {
-    all:        ['compras', 'estoque', 'financeiro', 'rh', 'empresa'],
-    logistica:  ['estoque', 'compras'],
+    all:        ['compras', 'estoque', 'financeiro', 'rh', 'empresa', 'cadastros'],
+    logistica:  ['estoque', 'compras', 'cadastros'],
     vendas:     ['empresa', 'vendas'],
     financeiro: ['financeiro'],
     rh:         ['rh'],

@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus,
+  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -94,7 +94,16 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Colaboradores', 'Clientes', 'Fornecedores', 'Produtos', 'Serviços', 'Centros de custo', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
+    submenus: ['Filiais', 'Fornecedores', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
+  },
+  {
+    // Cadastros operacionais — Produtos e Serviços. Acesso restrito a admin/CEO
+    // (via SETOR_MODULES 'all') e setor logística. Outros setores não veem o
+    // módulo nem suas rotas (RLS continua sendo a fonte de verdade).
+    // Colaboradores foi movido para RH; Clientes vive em Vendas; Centros de
+    // custo agora pertence ao Financeiro.
+    id: 'cadastros', label: 'Cadastros', icon: Database,
+    submenus: ['Produtos', 'Serviços']
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
@@ -108,13 +117,13 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Centros de custo', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Colaboradores', 'Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -583,7 +592,22 @@ function LogMaxAppInner() {
   // Persistido em sessionStorage para sobreviver a F5/pull-to-refresh
   // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
   const [activeView, setActiveView] = useState<string>(() => {
-    try { return sessionStorage.getItem('logmax:activeView') || 'inicio'; } catch { return 'inicio'; }
+    try {
+      const raw = sessionStorage.getItem('logmax:activeView') || 'inicio';
+      // Migração de rotas após reorganização dos submenus:
+      //   - Produtos/Serviços saíram de Empresa → módulo Cadastros (novo).
+      //   - Colaboradores saiu de Empresa → Recursos Humanos.
+      //   - Clientes saiu de Empresa (já existia em Vendas).
+      //   - Centros de custo saiu de Empresa → Financeiro.
+      // Redireciona sessões antigas pra não cair no fallback "em desenvolvimento".
+      const migrado = raw
+        .replace(/^empresa-produtos$/,         'cadastros-produtos')
+        .replace(/^empresa-serviços$/,         'cadastros-serviços')
+        .replace(/^empresa-colaboradores$/,    'rh-colaboradores')
+        .replace(/^empresa-clientes$/,         'vendas-clientes')
+        .replace(/^empresa-centrosdecusto$/,   'financeiro-centrosdecusto');
+      return migrado;
+    } catch { return 'inicio'; }
   });
   useEffect(() => {
     try { sessionStorage.setItem('logmax:activeView', activeView); } catch {}
@@ -715,13 +739,12 @@ function LogMaxAppInner() {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
-      case 'empresa-colaboradores':           return <ColaboradoresView showToast={st} />;
-      case 'empresa-clientes':                return <CRMView type="clientes" showToast={st} />;
       case 'empresa-fornecedores':            return <CRMView type="fornecedores" showToast={st} />;
-      case 'empresa-produtos':                return <ProdutosView showToast={st} />;
-      case 'empresa-serviços':                return <GenericCRUDView showToast={st} title="Serviços" subtitle="Gerencie os serviços prestados." endpoint="/api/servicosview"
+      case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
+      case 'rh-colaboradores':                return <ColaboradoresView showToast={st} />;
+      case 'cadastros-serviços':              return <GenericCRUDView showToast={st} title="Serviços" subtitle="Gerencie os serviços prestados." endpoint="/api/servicosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: SRV-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Instalação' }, { key: 'tipo', label: 'Tipo', placeholder: 'Ex: Manutenção' }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-centrosdecusto':          return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Gerencie centros de custo e orçamentos." endpoint="/api/centroscustoview"
+      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Gerencie centros de custo e orçamentos." endpoint="/api/centroscustoview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }]} />;

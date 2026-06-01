@@ -10,8 +10,8 @@
 // e fica disponível para todos os setores. Os demais seguem o recorte
 // funcional de cada setor.
 export const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
-  logistica:  ['empresa', 'estoque', 'compras', 'ti'],
+  all:        ['empresa', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
+  logistica:  ['empresa', 'cadastros', 'estoque', 'compras', 'ti'],
   vendas:     ['empresa', 'vendas', 'ti'],
   financeiro: ['empresa', 'financeiro', 'ti'],
   rh:         ['empresa', 'rh', 'ti'],
