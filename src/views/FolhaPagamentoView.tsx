@@ -135,6 +135,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 valor: liquido,
                 vencimento,
                 status: 'Pendente',
+                filial: profile?.filial ?? 'Matriz',
               });
               showToast('Folha processada — Conta a Pagar gerada.', 'success');
             } catch {

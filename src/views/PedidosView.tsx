@@ -64,6 +64,7 @@ export const PedidosView = ({ showToast }: any) => {
           vencimento,
           status: 'Pendente',
           pedido_id: pedido.id,
+          filial: pedido.forn?.filial ?? 'Matriz',
         });
         showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
       } else {
