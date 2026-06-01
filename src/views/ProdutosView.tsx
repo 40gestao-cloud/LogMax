@@ -6,7 +6,7 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL, PRODUTO_PREFIX_REGEX } from '../lib/filiais';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -175,6 +175,15 @@ export const ProdutosView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!validate()) return;
+    // Regra de SKU por unidade: bloqueia código sem o prefixo esperado da filial.
+    // Matriz não tem prefixo (não opera produtos de venda) — passa direto.
+    const prefixoExigido = PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL];
+    if (prefixoExigido && !form.codigo.toUpperCase().startsWith(prefixoExigido)) {
+      const msg = 'O código do produto não está em conformidade com a empresa selecionada';
+      setErrors({ codigo: msg });
+      showToast(msg, 'error', true);
+      return;
+    }
     setIsSaving(true);
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
@@ -337,7 +346,12 @@ export const ProdutosView = ({ showToast }: any) => {
                   <FormField label="Código *" error={errors.codigo}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
                       value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
-                      placeholder="Ex: PRD-001" />
+                      placeholder={`Ex: ${PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL] ?? 'PRD-'}001`} />
+                    {PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL] && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Use o prefixo <span className="font-mono text-accent">{PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL]}</span> para produtos da {extras.filial}.
+                      </p>
+                    )}
                   </FormField>
                   <FormField label="Nome do produto *" error={errors.nome}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
@@ -361,7 +375,24 @@ export const ProdutosView = ({ showToast }: any) => {
                   </FormField>
                   <FormField label="Filial / Unidade *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.filial} onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
+                      value={extras.filial} onChange={e => {
+                        const novaFilial = e.target.value;
+                        setExtras(x => ({ ...x, filial: novaFilial }));
+                        // Auto-swap do prefixo do SKU pra nova unidade. Só age quando
+                        // o código está vazio ou já tem um prefixo conhecido — assim
+                        // não sobrescreve código legado digitado manualmente.
+                        const novoPrefixo = PRODUTO_PREFIX_FILIAL[novaFilial as keyof typeof PRODUTO_PREFIX_FILIAL];
+                        if (novoPrefixo) {
+                          setForm(f => {
+                            if (!f.codigo) return { ...f, codigo: novoPrefixo };
+                            if (PRODUTO_PREFIX_REGEX.test(f.codigo)) {
+                              return { ...f, codigo: f.codigo.replace(PRODUTO_PREFIX_REGEX, novoPrefixo) };
+                            }
+                            return f;
+                          });
+                          clearError('codigo');
+                        }
+                      }}>
                       {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                   </FormField>
