@@ -94,16 +94,16 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Fornecedores', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
+    submenus: ['Filiais', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
   },
   {
-    // Cadastros operacionais — Produtos e Serviços. Acesso restrito a admin/CEO
-    // (via SETOR_MODULES 'all') e setor logística. Outros setores não veem o
-    // módulo nem suas rotas (RLS continua sendo a fonte de verdade).
-    // Colaboradores foi movido para RH; Clientes vive em Vendas; Centros de
-    // custo agora pertence ao Financeiro.
+    // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
+    // restrito a admin/CEO (via SETOR_MODULES 'all') e setor logística.
+    // Outros setores não veem o módulo nem suas rotas (RLS continua sendo
+    // a fonte de verdade). Colaboradores foi movido para RH; Clientes vive
+    // em Vendas; Centros de custo agora pertence ao Financeiro.
     id: 'cadastros', label: 'Cadastros', icon: Database,
-    submenus: ['Produtos', 'Serviços']
+    submenus: ['Produtos', 'Fornecedores', 'Serviços']
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
@@ -605,6 +605,7 @@ function LogMaxAppInner() {
         .replace(/^empresa-serviços$/,         'cadastros-serviços')
         .replace(/^empresa-colaboradores$/,    'rh-colaboradores')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
+        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
         .replace(/^empresa-centrosdecusto$/,   'financeiro-centrosdecusto');
       return migrado;
     } catch { return 'inicio'; }
@@ -739,7 +740,7 @@ function LogMaxAppInner() {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
-      case 'empresa-fornecedores':            return <CRMView type="fornecedores" showToast={st} />;
+      case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'rh-colaboradores':                return <ColaboradoresView showToast={st} />;
       case 'cadastros-serviços':              return <GenericCRUDView showToast={st} title="Serviços" subtitle="Gerencie os serviços prestados." endpoint="/api/servicosview"
