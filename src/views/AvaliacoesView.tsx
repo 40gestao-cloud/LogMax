@@ -623,6 +623,27 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     return alvos.filter(({ user, tipo }) => !minhasFeitas.includes(`${user.id}::${tipo}`));
   }, [cicloAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente]);
 
+  // Avaliações recebidas pelo usuário logado (seção C). Cobre os 3 tipos:
+  // ceo_gerente (gerente vê nota do CEO), gerente_colaborador (colaborador vê
+  // nota do gerente) e feedback_colaborador (gerente/CEO vê feedback reverso).
+  // Anonimato do ciclo só esconde o autor em feedback_colaborador.
+  const recebidas = useMemo(() => {
+    return avaliacoes
+      .filter(a => a.avaliado_id === profile.id)
+      .map(av => {
+        const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+        const avaliador = users.find(u => u.id === av.avaliador_id);
+        const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
+        return {
+          avaliacao: av,
+          criterios: criterios.filter(c => c.avaliacao_id === av.id),
+          avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+          cicloNome: ciclo?.nome ?? '—',
+        };
+      })
+      .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
+  }, [avaliacoes, criterios, users, ciclos, profile.id]);
+
   // Avaliações feitas pelo usuário (para a seção D — fecha o gap "pra onde foi
   // o que eu avaliei?"). Mostra avaliado, não avaliador. Anonimato não aplica
   // aqui — o avaliador sabe quem ele mesmo avaliou.
@@ -741,9 +762,9 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho</h2>
         <p className="text-sm text-gray-400 mt-1">
           {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
-          {isGerente && 'Avalie os colaboradores do seu setor. '}
-          {profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO. '}
-          Veja o histórico do que você avaliou.
+          {isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
+          {profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
+          Veja o histórico do que você avaliou e o que recebeu.
         </p>
       </div>
 
@@ -1018,6 +1039,35 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                   <Star size={10} /> Avaliar agora
                 </span>
               </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── C. AVALIAÇÕES RECEBIDAS ── */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+        <div className="flex items-center gap-2 mb-5">
+          <Eye size={16} className="text-accent" />
+          <h3 className="text-sm font-bold text-gray-300">Avaliações Recebidas</h3>
+          {recebidas.length > 0 && (
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">
+              {recebidas.length} {recebidas.length === 1 ? 'registro' : 'registros'}
+            </span>
+          )}
+        </div>
+
+        {recebidas.length === 0 ? (
+          <EmptyState message="Você ainda não recebeu nenhuma avaliação." />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {recebidas.map(r => (
+              <CardAvaliacao
+                key={r.avaliacao.id}
+                avaliacao={r.avaliacao}
+                criterios={r.criterios}
+                direcaoLabel="de"
+                nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+              />
             ))}
           </div>
         )}
