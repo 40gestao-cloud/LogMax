@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'CEO/Admin',
@@ -46,6 +47,7 @@ const STATUS_STYLE: Record<string, { badge: string; icon: React.ReactNode }> = {
 
 const EMPTY_FORM = {
   produto_id: '',
+  tipo_origem: 'produto' as 'produto' | 'servico',
   preco_atual: '',
   preco_custo: '',
   preco_promocional: '',
@@ -57,6 +59,7 @@ const EMPTY_FORM = {
 export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: servicos } = useFetchData<any>('/api/servicosview');
   const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', undefined, true);
   const { data: feedbacks } = useFetchData<any>('/api/marketingartefeedbackview', undefined, true);
   const [showForm, setShowForm] = useState(false);
@@ -117,27 +120,81 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   ];
 
   const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
+  const servicosAtivos = servicos.filter((s: any) => s.status === 'Ativo' || !s.status);
 
-  const handleProductChange = (prodId: string) => {
-    const prod = produtos.find((p: any) => p.id === prodId);
-    const custoRaw = prod?.custo ?? prod?.preco_custo;
+  // Unifica produtos + serviços marcando cada um com o tipo de origem.
+  // Preço unificado: produto usa `preco`, serviço usa `valor`. Custo: ambos
+  // tentam `custo` e `preco_custo` como fallback.
+  type ItemPromo = { id: string; nome: string; preco: number; custo: number | null; filial: string; tipo_origem: 'produto' | 'servico' };
+  const itens = useMemo<ItemPromo[]>(() => {
+    const normalizar = (raw: any, tipo: 'produto' | 'servico'): ItemPromo => {
+      const precoRaw = tipo === 'produto' ? raw.preco : raw.valor;
+      const custoRaw = raw.custo ?? raw.preco_custo;
+      return {
+        id:          raw.id,
+        nome:        raw.nome ?? '',
+        preco:       Number(precoRaw ?? 0),
+        custo:       custoRaw != null && custoRaw !== '' ? Number(custoRaw) : null,
+        filial:      raw.filial || 'Sem empresa',
+        tipo_origem: tipo,
+      };
+    };
+    return [
+      ...produtosAtivos.map((p: any) => normalizar(p, 'produto')),
+      ...servicosAtivos.map((s: any) => normalizar(s, 'servico')),
+    ];
+  }, [produtosAtivos, servicosAtivos]);
+
+  // Agrupa por (filial, tipo) — gera optgroups "TechMax — Produtos",
+  // "TechMax — Serviços" etc. Ordem: filiais conforme FILIAIS_HOLDING +
+  // 'Sem empresa' no final; dentro, produtos antes de serviços.
+  const itensAgrupados = useMemo(() => {
+    const buckets = new Map<string, ItemPromo[]>();
+    for (const it of itens) {
+      const key = `${it.filial}|${it.tipo_origem}`;
+      (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(it);
+    }
+    for (const [, arr] of buckets) arr.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+
+    const filialOrder = [...FILIAIS_HOLDING, 'Sem empresa'];
+    const tipoOrder: Record<string, number> = { produto: 0, servico: 1 };
+    const labelTipo = (t: string) => t === 'produto' ? 'Produtos' : 'Serviços';
+    return Array.from(buckets.entries())
+      .map(([key, items]) => {
+        const [filial, tipo] = key.split('|');
+        return { filial, tipo, items, label: `${filial} — ${labelTipo(tipo)}` };
+      })
+      .sort((a, b) =>
+        (filialOrder.indexOf(a.filial) - filialOrder.indexOf(b.filial)) ||
+        (tipoOrder[a.tipo] - tipoOrder[b.tipo]),
+      );
+  }, [itens]);
+
+  const handleProductChange = (id: string) => {
+    const item = itens.find(i => i.id === id);
+    if (!item) {
+      setForm((f: any) => ({ ...f, produto_id: '', tipo_origem: 'produto', preco_atual: '', preco_custo: '' }));
+      return;
+    }
     setForm((f: any) => ({
       ...f,
-      produto_id: prodId,
-      preco_atual: prod?.preco != null && prod?.preco !== '' ? formatBRL(Number(prod.preco)) : '',
-      preco_custo: custoRaw != null && custoRaw !== '' ? formatBRL(Number(custoRaw)) : '',
+      produto_id:  item.id,
+      tipo_origem: item.tipo_origem,
+      preco_atual: item.preco ? formatBRL(item.preco) : '',
+      preco_custo: item.custo != null ? formatBRL(item.custo) : '',
     }));
   };
 
   const handleSave = async () => {
-    if (!form.produto_id) { showToast('Selecione um produto.', 'error'); return; }
+    if (!form.produto_id) { showToast('Selecione um produto ou serviço.', 'error'); return; }
     if (!form.preco_promocional) { showToast('Informe o preço promocional.', 'error'); return; }
     setSaving(true);
     try {
-      const prod = produtos.find((p: any) => p.id === form.produto_id);
+      const item = itens.find(i => i.id === form.produto_id);
       const payload = {
         produto_id:        form.produto_id,
-        nome_produto:      prod?.nome ?? '',
+        tipo_origem:       form.tipo_origem,
+        nome_produto:      item?.nome ?? '',
         preco_atual:       parseBRL(form.preco_atual),
         preco_custo:       parseBRL(form.preco_custo || '0'),
         preco_promocional: parseBRL(form.preco_promocional),
@@ -295,10 +352,14 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto *</label>
+                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto / Serviço *</label>
                 <select id="promo-produto" value={form.produto_id} onChange={e => handleProductChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecione um produto...</option>
-                  {produtosAtivos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                  <option value="">Selecione...</option>
+                  {itensAgrupados.map(g => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.items.map(it => <option key={it.id} value={it.id}>{it.nome}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
