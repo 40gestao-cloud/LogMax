@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock } from 'lucide-react';
+import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import {
   LoadingSpinner,
@@ -23,7 +23,7 @@ const calcMargem = (venda: number, custo: number): number | null => {
 // Catálogo é vitrine read-only para todos os setores. CRUD continua em
 // Empresa → Produtos (ProdutosView). Bloco financeiro (custo + margem) é
 // gated por admin/CEO/financeiro — demais setores só veem preço de venda.
-export const CatalogoProdutosView = ({ profile }: { showToast: any; profile: UserProfile }) => {
+export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
@@ -194,7 +194,25 @@ export const CatalogoProdutosView = ({ profile }: { showToast: any; profile: Use
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     {selecionado.codigo || '—'}
                   </span>
-                  <h3 className="text-xl font-bold text-gray-100 leading-tight">{selecionado.nome}</h3>
+                  <div className="flex items-start gap-2">
+                    <h3 className="text-xl font-bold text-gray-100 leading-tight flex-1 min-w-0">{selecionado.nome}</h3>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(selecionado.nome ?? '');
+                          showToast?.('Nome copiado!', 'success', true);
+                        } catch {
+                          showToast?.('Não foi possível copiar.', 'error', true);
+                        }
+                      }}
+                      className="action-btn-neutral shrink-0 mt-0.5"
+                      title="Copiar nome"
+                      aria-label="Copiar nome do produto"
+                    >
+                      <Copy size={12} />
+                    </button>
+                  </div>
                   {selecionado.categoria && (
                     <span className="text-xs text-gray-400 flex items-center gap-1.5">
                       <Tag size={11} /> {selecionado.categoria}
