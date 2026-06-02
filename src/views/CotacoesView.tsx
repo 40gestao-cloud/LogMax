@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -7,6 +7,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -50,10 +51,13 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   );
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
-  const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '' });
+  // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
+  // mantendo apenas um ativo de cada vez.
+  const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'PJ' | 'PF' });
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -92,6 +96,37 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
 
   const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
 
+  // Agrupa requisições aprovadas pela empresa do produto correspondente
+  // (match do `item` da requisição com o `nome` do produto cadastrado).
+  // Requisições cujo item não bate com nenhum produto vão para "Outros".
+  const requisicoesAgrupadas = useMemo(() => {
+    const norm = (s: string) => s.trim().toLowerCase();
+    const buckets = new Map<string, any[]>();
+    for (const r of requisicoesAprovadas) {
+      const prod = produtos.find((p: any) => norm(p.nome ?? '') === norm(r.item ?? ''));
+      const filial = prod?.filial && (FILIAIS_HOLDING as readonly string[]).includes(prod.filial) ? prod.filial : 'Outros';
+      (buckets.get(filial) ?? buckets.set(filial, []).get(filial)!).push(r);
+    }
+    for (const [, arr] of buckets) {
+      arr.sort((a, b) => String(a.item ?? '').localeCompare(String(b.item ?? ''), 'pt-BR', { sensitivity: 'base' }));
+    }
+    const ordem = [...FILIAIS_HOLDING, 'Outros'];
+    return ordem.filter(f => buckets.has(f)).map(f => ({ filial: f, items: buckets.get(f)! }));
+  }, [requisicoesAprovadas, produtos]);
+
+  // Fornecedores divididos em PF / PJ, cada lista agrupada por filial.
+  const agruparFornecedoresPorFilial = (tipo: 'PJ' | 'PF') => {
+    const filtrados = fornecedores.filter((f: any) => (f.pessoa_tipo ?? 'PJ') === tipo);
+    return groupCadastrosParaSelect(filtrados).map(g => ({
+      // groupCadastrosParaSelect retorna label "PJ — TechMax". Aqui só queremos
+      // a filial (pessoa_tipo já está separada na nossa caixa).
+      label: g.label.replace(/^(PJ|PF)\s*—\s*/, ''),
+      items: g.items,
+    }));
+  };
+  const fornecedoresPJ = useMemo(() => agruparFornecedoresPorFilial('PJ'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fornecedoresPF = useMemo(() => agruparFornecedoresPorFilial('PF'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const enriched = data.map((c: any) => ({
     ...c,
     req: requisicoes.find((r: any) => r.id === c.requisicao_id),
@@ -100,7 +135,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
 
   const closeForm = () => {
     setShowForm(false);
-    setForm({ requisicao_id: '', fornecedor_id: '' });
+    setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
     setExtras({ valor_total: '', prazo_entrega: '', validade: '' });
     setErrors({});
   };
@@ -333,16 +368,35 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.requisicao_id ? 'border border-red-500/40' : ''}`}
                         value={form.requisicao_id} onChange={e => { setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
                         <option value="">Selecione...</option>
-                        {requisicoesAprovadas.map((r: any) => (
-                          <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
+                        {requisicoesAgrupadas.map(g => (
+                          <optgroup key={g.filial} label={g.filial}>
+                            {g.items.map((r: any) => (
+                              <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </FormField>
-                    <FormField label="Fornecedor *" error={errors.fornecedor_id}>
+                    <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
-                        value={form.fornecedor_id} onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value })); clearError('fornecedor_id'); }}>
-                        <option value="">Selecione...</option>
-                        {groupCadastrosParaSelect(fornecedores).map(g => (
+                        value={form.fornecedor_tipo === 'PJ' ? form.fornecedor_id : ''}
+                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'PJ' : '' })); clearError('fornecedor_id'); }}>
+                        <option value="">Selecione um fornecedor PJ...</option>
+                        {fornecedoresPJ.map(g => (
+                          <optgroup key={g.label} label={g.label}>
+                            {g.items.map((f: any) => (
+                              <option key={f.id} value={f.id}>{f.nome}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </FormField>
+                    <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
+                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
+                        value={form.fornecedor_tipo === 'PF' ? form.fornecedor_id : ''}
+                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'PF' : '' })); clearError('fornecedor_id'); }}>
+                        <option value="">Selecione um fornecedor PF...</option>
+                        {fornecedoresPF.map(g => (
                           <optgroup key={g.label} label={g.label}>
                             {g.items.map((f: any) => (
                               <option key={f.id} value={f.id}>{f.nome}</option>
