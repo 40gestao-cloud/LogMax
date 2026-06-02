@@ -15,7 +15,7 @@ export const RecebimentosView = ({ showToast }: any) => {
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/recebimentosview', undefined, false,
-    { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao'] }
+    { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao', 'pedido_id'] }
   );
   // pedidos/produtos: sem paginação — usados em dropdowns globais (todos os ativos).
   const { data: pedidos } = useFetchData<any>('/api/pedidosview');
@@ -90,7 +90,7 @@ export const RecebimentosView = ({ showToast }: any) => {
             produto_id:     confirmProduto,
             tipo:           'Entrada',
             qtd:            Number(item.qtd_recebida) || 0,
-            origem:         `Pedido #${String(item.pedido_id ?? '').slice(0, 8).toUpperCase()}`,
+            origem:         `Pedido #${String(item.pedido_id ?? '').slice(-6).toUpperCase()}`,
             destino:        'Almoxarifado',
             data:           today,
             recebimento_id: item.id,
@@ -150,7 +150,7 @@ export const RecebimentosView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(0, 8)} — {p.status}</option>)}</select></FormField>
+                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(-6).toUpperCase()} — {p.status}</option>)}</select></FormField>
                 <FormField label="Produto recebido">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.produto_id} onChange={e => setExtras(x => ({ ...x, produto_id: e.target.value }))}>
                     <option value="">Selecionar para atualizar estoque...</option>
@@ -180,7 +180,7 @@ export const RecebimentosView = ({ showToast }: any) => {
                     <React.Fragment key={item.id}>
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
-                        <td className="py-3 px-4 text-xs text-gray-300">#{String(item.pedido_id ?? '').slice(0, 8)}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-300">#{String(item.pedido_id ?? '').slice(-6).toUpperCase()}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_recebida ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>

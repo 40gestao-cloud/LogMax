@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2 } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
@@ -40,9 +41,12 @@ async function notificarSetor(args: {
 
 export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/cotacoesview', undefined, false,
-    { page, searchColumns: ['status'] }
+    { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao', 'requisicao_id'] }
   );
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
@@ -293,11 +297,23 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
               : 'Colete propostas de fornecedores; após aprovação do Financeiro, gere o pedido.'}
           </p>
         </div>
-        {isCompras && (
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-            <Plus size={16} /> Nova Cotação
-          </NeuButtonAccent>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {isCompras && (
+            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+              <Plus size={16} /> Nova Cotação
+            </NeuButtonAccent>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
