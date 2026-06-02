@@ -106,8 +106,8 @@
 }
 
 [data-accent="red"] {
-  --color-accent:      #EF4444;  /* red-500 */
-  --color-accent-hover: #DC2626;  /* red-600 */
+  --color-accent:      #DC2626;  /* red-600 — red-500 (#EF4444) parecia laranja em monitores quentes */
+  --color-accent-hover: #B91C1C;  /* red-700 */
   --color-accent-text:  #ffffff;
 }
 

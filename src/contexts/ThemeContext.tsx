@@ -12,7 +12,7 @@ const ACCENT_HEX: Record<AccentColor, string> = {
   orange: '#F97316',
   blue:   '#3B82F6',
   pink:   '#EC4899',
-  red:    '#EF4444',
+  red:    '#DC2626',
   // Acessibilidade: laranja principal (theme-color do browser/PWA segue o
   // accent visível em botões). Os ícones recebem azul claro via CSS.
   acessivel: '#F97316',
