@@ -106,27 +106,15 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
-
-  const aguardando = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
-  const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado').length;
-  const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada').length;
-
-  const kpis = [
-    { label: 'Total de Campanhas',     value: promocoes.length, warn: false },
-    { label: 'Aguardando Aprovação',   value: aguardando,       warn: aguardando > 0 },
-    { label: 'Em Vigor',               value: aprovadas,        warn: false },
-    { label: 'Encerradas',             value: encerradas,       warn: false },
-  ];
-
-  const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
-  const servicosAtivos = servicos.filter((s: any) => s.status === 'Ativo' || !s.status);
-
   // Unifica produtos + serviços marcando cada um com o tipo de origem.
   // Preço unificado: produto usa `preco`, serviço usa `valor`. Custo: ambos
   // tentam `custo` e `preco_custo` como fallback.
+  // IMPORTANTE: os useMemo precisam vir ANTES de qualquer early return
+  // (Rules of Hooks). Não mover abaixo do `if (isLoading)`.
   type ItemPromo = { id: string; nome: string; preco: number; custo: number | null; filial: string; tipo_origem: 'produto' | 'servico' };
   const itens = useMemo<ItemPromo[]>(() => {
+    const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
+    const servicosAtivos = servicos.filter((s: any) => s.status === 'Ativo' || !s.status);
     const normalizar = (raw: any, tipo: 'produto' | 'servico'): ItemPromo => {
       const precoRaw = tipo === 'produto' ? raw.preco : raw.valor;
       const custoRaw = raw.custo ?? raw.preco_custo;
@@ -143,7 +131,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       ...produtosAtivos.map((p: any) => normalizar(p, 'produto')),
       ...servicosAtivos.map((s: any) => normalizar(s, 'servico')),
     ];
-  }, [produtosAtivos, servicosAtivos]);
+  }, [produtos, servicos]);
 
   // Agrupa por (filial, tipo) — gera optgroups "TechMax — Produtos",
   // "TechMax — Serviços" etc. Ordem: filiais conforme FILIAIS_HOLDING +
@@ -169,6 +157,19 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
         (tipoOrder[a.tipo] - tipoOrder[b.tipo]),
       );
   }, [itens]);
+
+  if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
+
+  const aguardando = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
+  const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado').length;
+  const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada').length;
+
+  const kpis = [
+    { label: 'Total de Campanhas',     value: promocoes.length, warn: false },
+    { label: 'Aguardando Aprovação',   value: aguardando,       warn: aguardando > 0 },
+    { label: 'Em Vigor',               value: aprovadas,        warn: false },
+    { label: 'Encerradas',             value: encerradas,       warn: false },
+  ];
 
   const handleProductChange = (id: string) => {
     const item = itens.find(i => i.id === id);
