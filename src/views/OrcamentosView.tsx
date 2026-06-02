@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
@@ -107,6 +107,8 @@ export const OrcamentosView = ({
   const [decisao, setDecisao] = useState<{ orc: any; tipo: 'aprovar' | 'reprovar' } | null>(null);
   const [feedbackInput, setFeedbackInput] = useState('');
   const [decidindo, setDecidindo] = useState(false);
+  // Modal read-only de detalhes da proposta (qualquer setor com acesso à view).
+  const [detalhes, setDetalhes] = useState<any | null>(null);
 
   const produtosAtivos = useMemo(
     () => produtos.filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && p.tipo !== 'patrimonio'),
@@ -666,6 +668,10 @@ export const OrcamentosView = ({
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={o.criado_por} criadoEm={o.created_at} atualizadoPor={o.atualizado_por} atualizadoEm={o.updated_at} />
+                            <button onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
+                              className="action-btn-neutral">
+                              <Eye size={12} />
+                            </button>
                             {podeDecidirAgora && (
                               <>
                                 <button onClick={() => { setDecisao({ orc: o, tipo: 'aprovar' }); setFeedbackInput(''); }}
@@ -780,6 +786,123 @@ export const OrcamentosView = ({
                     <Check size={14} /> Aprovar
                   </NeuButtonAccent>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal read-only: detalhes da proposta para Financeiro/Admin/CEO visualizarem itens e observações antes de decidir. */}
+      <AnimatePresence>
+        {detalhes && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setDetalhes(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
+              className="neu-flat rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4 border border-white/5"
+              style={{ background: 'var(--color-bg-base)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-200">Detalhes da Proposta</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {detalhes.cliente?.nome ?? clientes.find((c: any) => c.id === detalhes.cliente_id)?.nome ?? '—'}
+                    {detalhes.vendedor_nome ? ` • Vendedor: ${detalhes.vendedor_nome}` : ''}
+                  </p>
+                </div>
+                <button onClick={() => setDetalhes(null)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="neu-pressed rounded-xl p-3">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Emitido</p>
+                  <p className="text-gray-200 font-mono mt-1">{detalhes.data_emissao ?? '—'}</p>
+                </div>
+                <div className="neu-pressed rounded-xl p-3">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Validade</p>
+                  <p className="text-gray-200 font-mono mt-1">{detalhes.validade_dias ?? '—'}d</p>
+                </div>
+                <div className="neu-pressed rounded-xl p-3">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Status</p>
+                  <div className="mt-1"><StatusBadge status={detalhes.status} /></div>
+                </div>
+                <div className="neu-pressed rounded-xl p-3">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Valor Total</p>
+                  <p className="text-accent font-mono font-bold mt-1">R$ {formatBRL(Number(detalhes.valor_total ?? 0))}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens</span>
+                {Array.isArray(detalhes.itens) && detalhes.itens.length > 0 ? (
+                  <div className="neu-pressed rounded-xl overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-gray-500 border-b border-white/5">
+                          <th className="py-2 px-3 font-bold">Produto</th>
+                          <th className="py-2 px-3 font-bold text-right">Qtd</th>
+                          <th className="py-2 px-3 font-bold text-right">Unit.</th>
+                          <th className="py-2 px-3 font-bold text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalhes.itens.map((it: any, idx: number) => (
+                          <tr key={idx} className="border-b border-white/5 last:border-b-0">
+                            <td className="py-2 px-3 text-gray-200">{it.nome ?? '—'}</td>
+                            <td className="py-2 px-3 font-mono text-gray-300 text-right">{it.qtd ?? '—'}</td>
+                            <td className="py-2 px-3 font-mono text-gray-300 text-right">R$ {formatBRL(Number(it.preco_unitario ?? 0))}</td>
+                            <td className="py-2 px-3 font-mono text-gray-200 text-right">R$ {formatBRL(Number(it.subtotal ?? 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-600 py-2">Sem itens.</p>
+                )}
+              </div>
+
+              {Number(detalhes.desconto ?? 0) > 0 && (
+                <div className="flex justify-end items-baseline gap-2 text-xs">
+                  <span className="text-gray-500">Desconto aplicado:</span>
+                  <span className="font-mono text-yellow-400">R$ {formatBRL(Number(detalhes.desconto ?? 0))}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Observações</span>
+                <div className="neu-pressed rounded-xl p-3 text-xs text-gray-300 whitespace-pre-wrap min-h-[60px]">
+                  {detalhes.observacoes?.trim() ? detalhes.observacoes : <span className="text-gray-600 italic">Sem observações.</span>}
+                </div>
+              </div>
+
+              {detalhes.feedback_financeiro && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Feedback do Financeiro</span>
+                  <div className="neu-pressed rounded-xl p-3 text-xs text-gray-300 whitespace-pre-wrap">
+                    {detalhes.feedback_financeiro}
+                  </div>
+                </div>
+              )}
+
+              {detalhes.feedback_cliente && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Feedback do Cliente</span>
+                  <div className="neu-pressed rounded-xl p-3 text-xs text-gray-300 whitespace-pre-wrap">
+                    {detalhes.feedback_cliente}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end mt-2">
+                <button onClick={() => setDetalhes(null)} className="neu-button py-2 px-4 rounded-xl text-sm text-gray-400">Fechar</button>
               </div>
             </motion.div>
           </motion.div>
