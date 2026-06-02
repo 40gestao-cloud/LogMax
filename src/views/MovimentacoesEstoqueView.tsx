@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
@@ -152,7 +153,8 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400">{item.origem || '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.destino || '—'}</td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="action-bar-glass inline-flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                           </div>
                         </td>
