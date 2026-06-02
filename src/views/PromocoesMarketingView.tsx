@@ -133,30 +133,23 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
     ];
   }, [produtos, servicos]);
 
-  // Agrupa por (filial, tipo) — gera optgroups "TechMax — Produtos",
-  // "TechMax — Serviços" etc. Ordem: filiais conforme FILIAIS_HOLDING +
-  // 'Sem empresa' no final; dentro, produtos antes de serviços.
-  const itensAgrupados = useMemo(() => {
+  // Agrupa itens por filial filtrando por tipo de origem. Usado para gerar
+  // dois selects independentes (Produto / Serviço), cada um com seus próprios
+  // <optgroup> por empresa.
+  const agruparPorFilial = (todos: ItemPromo[], tipo: 'produto' | 'servico') => {
     const buckets = new Map<string, ItemPromo[]>();
-    for (const it of itens) {
-      const key = `${it.filial}|${it.tipo_origem}`;
-      (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(it);
+    for (const it of todos) {
+      if (it.tipo_origem !== tipo) continue;
+      (buckets.get(it.filial) ?? buckets.set(it.filial, []).get(it.filial)!).push(it);
     }
     for (const [, arr] of buckets) arr.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
-
     const filialOrder = [...FILIAIS_HOLDING, 'Sem empresa'];
-    const tipoOrder: Record<string, number> = { produto: 0, servico: 1 };
-    const labelTipo = (t: string) => t === 'produto' ? 'Produtos' : 'Serviços';
     return Array.from(buckets.entries())
-      .map(([key, items]) => {
-        const [filial, tipo] = key.split('|');
-        return { filial, tipo, items, label: `${filial} — ${labelTipo(tipo)}` };
-      })
-      .sort((a, b) =>
-        (filialOrder.indexOf(a.filial) - filialOrder.indexOf(b.filial)) ||
-        (tipoOrder[a.tipo] - tipoOrder[b.tipo]),
-      );
-  }, [itens]);
+      .map(([filial, items]) => ({ filial, items }))
+      .sort((a, b) => filialOrder.indexOf(a.filial) - filialOrder.indexOf(b.filial));
+  };
+  const produtosAgrupados = useMemo(() => agruparPorFilial(itens, 'produto'), [itens]);
+  const servicosAgrupados = useMemo(() => agruparPorFilial(itens, 'servico'), [itens]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -352,12 +345,29 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
               <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto / Serviço *</label>
-                <select id="promo-produto" value={form.produto_id} onChange={e => handleProductChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecione...</option>
-                  {itensAgrupados.map(g => (
-                    <optgroup key={g.label} label={g.label}>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
+                <select id="promo-produto"
+                  value={form.tipo_origem === 'produto' ? form.produto_id : ''}
+                  onChange={e => handleProductChange(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Selecione um produto...</option>
+                  {produtosAgrupados.map(g => (
+                    <optgroup key={g.filial} label={g.filial}>
+                      {g.items.map(it => <option key={it.id} value={it.id}>{it.nome}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="promo-servico" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
+                <select id="promo-servico"
+                  value={form.tipo_origem === 'servico' ? form.produto_id : ''}
+                  onChange={e => handleProductChange(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Selecione um serviço...</option>
+                  {servicosAgrupados.map(g => (
+                    <optgroup key={g.filial} label={g.filial}>
                       {g.items.map(it => <option key={it.id} value={it.id}>{it.nome}</option>)}
                     </optgroup>
                   ))}
