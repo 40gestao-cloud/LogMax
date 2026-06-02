@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
@@ -11,6 +11,7 @@ import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 
 // Filtro de unidade do PDV: 3 empresas operacionais (Matriz é administrativa,
 // não vende — fica em "Todas").
@@ -523,11 +524,30 @@ export const PDVView = ({ showToast, profile }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">
-      <div className="flex items-center justify-between mb-5 shrink-0">
+      <div className="flex items-center justify-between mb-5 shrink-0 gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">PDV</h2>
           <p className="text-sm text-gray-400 mt-1">Ponto de Venda — registre vendas e baixe o estoque automaticamente.</p>
         </div>
+        <button
+          onClick={async () => {
+            try {
+              const sufixo = filialFiltro === 'todas' ? 'todas' : filialFiltro.toLowerCase();
+              await downloadCatalogoEan13Pdf({
+                produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0) })),
+                titulo: `Catálogo PDV — ${filialFiltro === 'todas' ? 'todas as unidades' : filialFiltro}`,
+                filename: `logmax-catalogo-pdv-${sufixo}`,
+              });
+            } catch (err: any) {
+              showToast(err?.message ?? 'Erro ao gerar PDF', 'error', true);
+            }
+          }}
+          disabled={filtered.length === 0}
+          className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-accent hover:bg-accent/10 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          title="Baixar catálogo dos produtos exibidos em PDF (com etiquetas EAN-13)"
+        >
+          <FileDown size={14} /> PDF
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">

@@ -186,3 +186,120 @@ export async function downloadEan13LabelPdf(opts: {
   const safe = (opts.filename || `etiqueta-${ean}`).replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`${safe}.pdf`);
 }
+
+// Catálogo em PDF — uma página A4 contendo várias etiquetas em grid 2×4
+// (8 produtos por página). Cada slot mostra nome, preço, código EAN-13
+// numérico e a etiqueta visual com as barras. Produtos sem EAN válido
+// são silenciosamente omitidos (não há etiqueta a renderizar).
+export async function downloadCatalogoEan13Pdf(opts: {
+  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>;
+  filename?: string;
+  titulo?: string;
+}) {
+  const items = opts.produtos
+    .map(p => ({ ...p, norm: normalizeEan13(p.ean) }))
+    .filter(p => p.norm.valid);
+  if (items.length === 0) throw new Error('Nenhum produto com EAN-13 válido para gerar etiquetas.');
+
+  const { default: jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+  const W = 210, H = 297;
+  const margin = 8;
+  const cols = 2, rows = 4;
+  const slotW = (W - margin * 2) / cols;
+  const slotH = (H - margin * 2 - 12) / rows; // 12mm reservado para cabeçalho
+  const perPage = cols * rows;
+
+  // Cabeçalho de página.
+  const drawHeader = (pageIdx: number, totalPages: number) => {
+    doc.setFillColor(10, 10, 10);
+    doc.rect(0, 0, W, 10, 'F');
+    doc.setTextColor(16, 185, 129);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('LogMax', margin, 6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 180, 180);
+    doc.text(opts.titulo ?? 'Catálogo PDV — etiquetas EAN-13', W / 2, 6.5, { align: 'center' });
+    doc.setTextColor(140, 140, 140);
+    doc.text(`Página ${pageIdx + 1}/${totalPages}`, W - margin, 6.5, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+  };
+
+  const drawSlot = (x: number, y: number, item: typeof items[number]) => {
+    const ean = item.norm.value;
+    // Caixa do slot.
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.rect(x, y, slotW, slotH);
+
+    // Nome (top), truncado se passar.
+    if (item.nome) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const nome = item.nome.length > 38 ? item.nome.slice(0, 37) + '…' : item.nome;
+      doc.text(nome, x + slotW / 2, y + 5, { align: 'center' });
+    }
+
+    // Meta: código + preço.
+    const metaParts: string[] = [];
+    if (item.codigo) metaParts.push(item.codigo);
+    if (item.preco != null) metaParts.push(fmtBRL(Number(item.preco)));
+    if (metaParts.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text(metaParts.join('   ·   '), x + slotW / 2, y + 10, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    }
+
+    // Etiqueta EAN-13 (barras) — centralizada horizontalmente no slot.
+    const pattern = encodeEan13(ean);
+    const moduleWidth = 0.35;
+    const totalBarsWidth = pattern.length * moduleWidth;
+    const barHeight = 18;
+    const guardOverhang = 1.5;
+    const barX = x + (slotW - totalBarsWidth) / 2;
+    const barY = y + 14;
+
+    doc.setFillColor(0, 0, 0);
+    for (let i = 0; i < pattern.length; i++) {
+      if (pattern[i] === '1') {
+        const h = isGuardModule(i) ? barHeight + guardOverhang : barHeight;
+        doc.rect(barX + i * moduleWidth, barY, moduleWidth, h, 'F');
+      }
+    }
+
+    // Dígitos legíveis abaixo das barras.
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    const textY = barY + barHeight + guardOverhang + 2.5;
+    doc.text(ean[0], barX - 1.2, textY, { align: 'right' });
+    for (let i = 0; i < 6; i++) {
+      const dx = barX + (3 + i * 7 + 3.5) * moduleWidth;
+      doc.text(ean[i + 1], dx, textY, { align: 'center' });
+    }
+    for (let i = 0; i < 6; i++) {
+      const dx = barX + (50 + i * 7 + 3.5) * moduleWidth;
+      doc.text(ean[i + 7], dx, textY, { align: 'center' });
+    }
+  };
+
+  const totalPages = Math.ceil(items.length / perPage);
+  items.forEach((item, idx) => {
+    const pageIdx = Math.floor(idx / perPage);
+    if (idx > 0 && idx % perPage === 0) doc.addPage();
+    if (idx % perPage === 0) drawHeader(pageIdx, totalPages);
+    const inPage = idx % perPage;
+    const col = inPage % cols;
+    const row = Math.floor(inPage / cols);
+    const x = margin + col * slotW;
+    const y = margin + 12 + row * slotH;
+    drawSlot(x, y, item);
+  });
+
+  const safe = (opts.filename || 'logmax-catalogo-pdv').replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`${safe}.pdf`);
+}
