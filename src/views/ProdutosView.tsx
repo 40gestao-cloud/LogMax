@@ -16,11 +16,15 @@ import {
   PRODUTO_IMAGEM_MAX_LABEL,
 } from '../lib/produtoImagem';
 
+const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
+
 const EMPTY_EXTRAS = {
   categoria:              '',
   preco_custo:            '',
   estoque:                '',
+  qtd_comprada:           '',
   estoque_minimo:         '',
+  unidade:                'UN' as string,
   ean:                    '',
   fornecedor:             '',
   filial:                 FILIAL_DEFAULT as string,
@@ -119,7 +123,9 @@ export const ProdutosView = ({ showToast }: any) => {
       categoria:              item.categoria      ?? '',
       preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
       estoque:                item.estoque        !== undefined ? String(item.estoque)        : '',
+      qtd_comprada:           '', // sempre vazio na edição — é movimentação one-shot, não persiste
       estoque_minimo:         item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
+      unidade:                item.unidade ?? 'UN',
       ean:                    item.ean            ?? '',
       fornecedor:             item.fornecedor     ?? '',
       filial:                 item.filial         ?? FILIAL_DEFAULT,
@@ -189,6 +195,7 @@ export const ProdutosView = ({ showToast }: any) => {
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
       const estoqueInicial = extras.estoque !== '' ? parseInt(extras.estoque, 10) : 0;
+      const qtdComprada    = extras.qtd_comprada !== '' ? parseInt(extras.qtd_comprada, 10) : 0;
       // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
       // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
       const isPatrimonio = extras.tipo === 'patrimonio';
@@ -198,6 +205,7 @@ export const ProdutosView = ({ showToast }: any) => {
         categoria:              extras.categoria,
         preco_custo:            extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
         estoque_minimo:         extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
+        unidade:                extras.unidade || 'UN',
         ean:                    extras.ean,
         fornecedor:             extras.fornecedor,
         filial:                 extras.filial || FILIAL_DEFAULT,
@@ -225,6 +233,8 @@ export const ProdutosView = ({ showToast }: any) => {
         const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
         const saved = await dbInsert<any>('/api/produtosview', insertPayload);
         const novoId = saved?.id;
+        const hoje = new Date().toISOString().slice(0, 10);
+        let saldoFinal = 0;
         if (novoId && estoqueInicial > 0) {
           try {
             await dbInsert('/api/movimentacoesestoqueview', {
@@ -233,16 +243,36 @@ export const ProdutosView = ({ showToast }: any) => {
               qtd:        estoqueInicial,
               origem:     'Saldo Inicial de Implantação',
               destino:    'Almoxarifado',
-              data:       new Date().toISOString().slice(0, 10),
+              data:       hoje,
             });
-            // Reflete o saldo no estado local após o trigger.
-            saved.estoque = estoqueInicial;
+            saldoFinal += estoqueInicial;
           } catch (movErr: any) {
             console.warn('[Produtos] Falha ao registrar saldo inicial:', movErr?.message ?? movErr);
             showToast('Produto criado, mas saldo inicial não foi registrado. Verifique movimentações.', 'error', true);
           }
         }
-        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: estoqueInicial }, ...data]);
+        // Quantidade comprada: entrada adicional documentando a compra que
+        // está sendo registrada junto ao cadastro. Separa do "Saldo Inicial"
+        // pra ficar claro no histórico que veio de uma compra, não de
+        // implantação. Trigger faz a soma no saldo do produto.
+        if (novoId && qtdComprada > 0) {
+          try {
+            await dbInsert('/api/movimentacoesestoqueview', {
+              produto_id: novoId,
+              tipo:       'Entrada',
+              qtd:        qtdComprada,
+              origem:     'Compra inicial',
+              destino:    'Almoxarifado',
+              data:       hoje,
+            });
+            saldoFinal += qtdComprada;
+          } catch (movErr: any) {
+            console.warn('[Produtos] Falha ao registrar quantidade comprada:', movErr?.message ?? movErr);
+            showToast('Produto criado, mas quantidade comprada não foi registrada. Verifique movimentações.', 'error', true);
+          }
+        }
+        if (saved) saved.estoque = saldoFinal;
+        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal }, ...data]);
         showToast('Produto criado com sucesso!', 'success', true);
       }
       closeForm();
@@ -566,8 +596,15 @@ export const ProdutosView = ({ showToast }: any) => {
               {/* Estoque */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-sm">
-                  <FormField label={editItem ? 'Estoque Atual (read-only)' : 'Estoque Inicial (Abertura)'}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FormField label="Unidade">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.unidade}
+                      onChange={e => setExtras(x => ({ ...x, unidade: e.target.value }))}>
+                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Estoque Inicial (${extras.unidade})`}>
                     <input
                       type="number" min="0" step="1"
                       className={`neu-input py-2 px-3 rounded-xl text-sm ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -582,7 +619,22 @@ export const ProdutosView = ({ showToast }: any) => {
                       <p className="text-[10px] text-gray-500 mt-1">Saldo controlado por Movimentações / Recebimentos.</p>
                     )}
                   </FormField>
-                  <FormField label="Estoque Mínimo">
+                  <FormField label={`Quantidade Comprada (${extras.unidade})`}>
+                    <input
+                      type="number" min="0" step="1"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      value={extras.qtd_comprada}
+                      onChange={e => setExtras(x => ({ ...x, qtd_comprada: e.target.value }))}
+                      placeholder="0"
+                      disabled={!!editItem}
+                      readOnly={!!editItem}
+                      title={editItem ? 'Compras posteriores são registradas via Recebimentos.' : 'Compra inicial — gera movimentação de Entrada além do saldo de abertura.'}
+                    />
+                    {!editItem && (
+                      <p className="text-[10px] text-gray-500 mt-1">Compra que está sendo registrada junto ao cadastro.</p>
+                    )}
+                  </FormField>
+                  <FormField label={`Estoque Mínimo (${extras.unidade})`}>
                     <input type="number" min="0" step="1" className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.estoque_minimo} onChange={e => setExtras(x => ({ ...x, estoque_minimo: e.target.value }))}
                       placeholder="0" />
