@@ -397,7 +397,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                           : <span className="text-gray-700">—</span>}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="action-bar-glass inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           {/* Aguardando Financeiro: gerente do Financeiro decide */}
                           {item.status === 'Aguardando Financeiro' && podeDecidir && (
@@ -438,7 +438,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                           {/* Inativar — Compras (ou admin/CEO) */}
                           {isCompras && (
                             <button onClick={() => handleDelete(item.id)} title="Inativar"
-                              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500">
+                              className="action-btn-delete">
                               <Trash2 size={12} />
                             </button>
                           )}

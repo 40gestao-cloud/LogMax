@@ -252,10 +252,10 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                         </button>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="action-bar-glass inline-flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
-                          <button onClick={() => openEdit(f)} title="Editar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
-                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </motion.tr>

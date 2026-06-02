@@ -289,12 +289,12 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                       >{h.status}</span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="action-bar-glass inline-flex gap-2">
+                      <div className="flex justify-end gap-2">
                         <AuditoriaInspect criadoPor={h.criado_por} criadoEm={h.created_at} atualizadoPor={h.atualizado_por} atualizadoEm={h.updated_at} />
                         {h.status === 'Fechado' && h.data === today && !caixa && (
                           <button onClick={() => handleReabrir(h.id)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
                         )}
-                        <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                        <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="action-btn-delete"><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>

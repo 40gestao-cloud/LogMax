@@ -153,7 +153,7 @@ export const PedidosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.prazo_entrega || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="action-bar-glass inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             {flow && (
                               <button onClick={() => handleAvance(item)} disabled={isProc}
@@ -162,7 +162,7 @@ export const PedidosView = ({ showToast }: any) => {
                                 {flow.label}
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
                       </motion.tr>

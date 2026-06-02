@@ -668,12 +668,12 @@ export const ProdutosView = ({ showToast }: any) => {
                             {normalizeEan13(item.ean).valid && (
                               <button onClick={() => downloadLabelFor(item)}
                                 title="Baixar etiqueta EAN-13 em PDF"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                                className="action-btn-neutral">
                                 <Barcode size={12} />
                               </button>
                             )}
-                            <button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                            <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                            <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
                       </motion.tr>

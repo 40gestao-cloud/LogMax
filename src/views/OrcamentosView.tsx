@@ -583,7 +583,7 @@ export const OrcamentosView = ({
                           ) : <span className="text-gray-700">—</span>}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="action-bar-glass inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={o.criado_por} criadoEm={o.created_at} atualizadoPor={o.atualizado_por} atualizadoEm={o.updated_at} />
                             {podeDecidirAgora && (
                               <>
@@ -613,7 +613,7 @@ export const OrcamentosView = ({
                             )}
                             {podeEditar && (
                               <button onClick={() => openEdit(o)} title="Editar rascunho"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                                className="action-btn-edit">
                                 <FileText size={12} />
                               </button>
                             )}
@@ -631,7 +631,7 @@ export const OrcamentosView = ({
                             )}
                             {(isVendas || isAdminOuCeo) && (
                               <button onClick={() => handleDelete(o.id)} title="Inativar"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500">
+                                className="action-btn-delete">
                                 <Trash2 size={12} />
                               </button>
                             )}

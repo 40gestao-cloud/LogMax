@@ -150,7 +150,7 @@ export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profi
                         </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="action-bar-glass inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={p.criado_por} criadoEm={p.created_at} atualizadoPor={p.atualizado_por} atualizadoEm={p.updated_at} />
                             {podeSeparar && (
                               <button onClick={() => marcarSeparado(p)} disabled={processando === p.id}
@@ -173,7 +173,7 @@ export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profi
                             )}
                             {(isVendas || isAdminOuCeo) && p.status !== 'Concluído' && (
                               <button onClick={() => handleDelete(p.id)} title="Cancelar"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500">
+                                className="action-btn-delete">
                                 <Trash2 size={12} />
                               </button>
                             )}

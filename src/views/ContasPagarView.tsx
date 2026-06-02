@@ -261,13 +261,13 @@ export const ContasPagarView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.vencimento || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="action-bar-glass inline-flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             {item.status === 'Pendente' && (
                               <button onClick={() => openPay(item.id)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Pagar</button>
                             )}
-                            <button onClick={() => openEdit(item)} title="Editar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                            <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
                       </motion.tr>

@@ -106,7 +106,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(item.valor_total ?? 0))}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data_emissao || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
-                      <td className="py-3 px-4 text-right"><div className="action-bar-glass inline-flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} /><button onClick={() => openEdit(item)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button><button onClick={() => handleDelete(item.id)} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button></div></td>
+                      <td className="py-3 px-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} /><button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button><button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button></div></td>
                     </motion.tr>
                   ))}
                 </AnimatePresence>

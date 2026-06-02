@@ -185,7 +185,7 @@ export const RecebimentosView = ({ showToast }: any) => {
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="action-bar-glass inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             {item.status === 'Pendente' && (
                               <button
@@ -195,7 +195,7 @@ export const RecebimentosView = ({ showToast }: any) => {
                                 <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
                       </motion.tr>

@@ -667,55 +667,225 @@ html.theme-switching *::after {
   outline-offset: 2px;
 }
 
-/* ── Action bar com efeito glass + shimmer suave ──
-   Aplicada nos containers das colunas/headers de ação (Editar/Excluir/Auditoria)
-   das listagens dos módulos críticos. Glass = backdrop-blur médio + bg quase
-   sólido (não exagera transparência). Shimmer = sweep diagonal lento e sutil,
-   distinto do `.btn-shimmer` (que é mais agressivo, pra CTA). */
+/* ── Shimmer compartilhado por .action-btn-* ──
+   Sweep diagonal lento e sutil, distinto do `.btn-shimmer` (que é mais
+   agressivo, usado em CTAs). Animado nos botões individuais de Editar
+   (azul) e Excluir (vermelho). */
 @keyframes action-bar-shimmer {
-  0%   { transform: translateX(-130%) skewX(-18deg); }
-  100% { transform: translateX(230%)  skewX(-18deg); }
+  0%   { transform: translateX(-150%) skewX(-18deg); }
+  100% { transform: translateX(250%)  skewX(-18deg); }
 }
 
-.action-bar-glass {
+/* ── Action button "Excluir" — glass + shimmer em vermelho ──
+   Substitui o padrão antigo (w-8 h-8 neu-button rounded-lg + hover:text-red-500)
+   por um botão com fundo vermelho semitransparente, borda vermelha sutil,
+   backdrop-blur e shimmer no mesmo ritmo dos demais .action-btn-*. */
+.action-btn-delete {
   position: relative;
   overflow: hidden;
-  padding: 4px 6px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: rgb(248, 113, 113);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
 }
 
-.action-bar-glass::before {
+.action-btn-delete:hover {
+  background: rgba(239, 68, 68, 0.24);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: rgb(252, 165, 165);
+}
+
+.action-btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-delete::before {
   content: '';
   position: absolute;
   inset: 0;
-  width: 40%;
+  width: 50%;
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 200, 200, 0.18) 50%,
     transparent 100%
   );
-  transform: translateX(-130%) skewX(-18deg);
-  animation: action-bar-shimmer 6s ease-in-out infinite;
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 5s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* Light mode: glass + shimmer mais discretos (segue o feedback "light é flat"). */
-[data-theme="light"] .action-bar-glass {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.06);
-  box-shadow: none;
+.action-btn-delete:disabled::before {
+  animation-play-state: paused;
 }
-[data-theme="light"] .action-bar-glass::before {
+
+/* Light mode: vermelho mais saturado, sombra mínima (light é flat). */
+[data-theme="light"] .action-btn-delete {
+  background: rgba(239, 68, 68, 0.10);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: rgb(220, 38, 38);
+}
+[data-theme="light"] .action-btn-delete:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: rgb(185, 28, 28);
+}
+[data-theme="light"] .action-btn-delete::before {
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(0, 0, 0, 0.04) 50%,
+    rgba(239, 68, 68, 0.12) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Action button "Editar" — glass + shimmer em azul ──
+   Mesmo formato do .action-btn-delete, paleta azul (blue-400). */
+.action-btn-edit {
+  position: relative;
+  overflow: hidden;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgb(96, 165, 250);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.action-btn-edit:hover {
+  background: rgba(59, 130, 246, 0.24);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: rgb(147, 197, 253);
+}
+
+.action-btn-edit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-edit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(200, 220, 255, 0.18) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.action-btn-edit:disabled::before {
+  animation-play-state: paused;
+}
+
+[data-theme="light"] .action-btn-edit {
+  background: rgba(59, 130, 246, 0.10);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: rgb(37, 99, 235);
+}
+[data-theme="light"] .action-btn-edit:hover {
+  background: rgba(59, 130, 246, 0.18);
+  color: rgb(29, 78, 216);
+}
+[data-theme="light"] .action-btn-edit::before {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(59, 130, 246, 0.12) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Action button neutro — glass + shimmer em cinza ──
+   Para ações auxiliares (ex.: baixar etiqueta, exportar) que não são
+   Editar nem Excluir. Mesma estrutura dos demais .action-btn-*. */
+.action-btn-neutral {
+  position: relative;
+  overflow: hidden;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(156, 163, 175, 0.12);
+  border: 1px solid rgba(156, 163, 175, 0.24);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgb(156, 163, 175);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.action-btn-neutral:hover {
+  background: rgba(156, 163, 175, 0.22);
+  border-color: rgba(156, 163, 175, 0.42);
+  color: rgb(209, 213, 219);
+}
+
+.action-btn-neutral:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-neutral::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.action-btn-neutral:disabled::before {
+  animation-play-state: paused;
+}
+
+[data-theme="light"] .action-btn-neutral {
+  background: rgba(107, 114, 128, 0.08);
+  border-color: rgba(107, 114, 128, 0.30);
+  color: rgb(75, 85, 99);
+}
+[data-theme="light"] .action-btn-neutral:hover {
+  background: rgba(107, 114, 128, 0.16);
+  color: rgb(55, 65, 81);
+}
+[data-theme="light"] .action-btn-neutral::before {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(107, 114, 128, 0.10) 50%,
     transparent 100%
   );
 }

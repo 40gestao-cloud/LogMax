@@ -352,7 +352,7 @@ const CardAvaliacao: React.FC<{
             <button
               onClick={onEditar}
               title="Editar avaliação"
-              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+              className="action-btn-edit"
             >
               <Pencil size={12} />
             </button>
@@ -361,7 +361,7 @@ const CardAvaliacao: React.FC<{
             <button
               onClick={onExcluir}
               title="Excluir avaliação"
-              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors"
+              className="action-btn-delete"
             >
               <Trash2 size={12} />
             </button>

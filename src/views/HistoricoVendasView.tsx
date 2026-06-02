@@ -266,7 +266,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                             <div className="text-xs text-gray-500 flex gap-4">
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
-                            <div className="action-bar-glass inline-flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                               <AuditoriaInspect criadoPor={v.criado_por} criadoEm={v.created_at} atualizadoPor={v.atualizado_por} atualizadoEm={v.updated_at} />
                               {v.status !== 'Cancelada' && (
                                 <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
