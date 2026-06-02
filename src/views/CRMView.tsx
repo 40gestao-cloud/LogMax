@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -279,6 +280,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                       <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
                       <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                     </div>

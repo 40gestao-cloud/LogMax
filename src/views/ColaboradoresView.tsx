@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, User, Plus, Save } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation, formatPhone } from '../lib/viewUtils';
@@ -155,6 +156,7 @@ export const ColaboradoresView = ({ showToast }: any) => {
                         <td className="py-4 px-4 text-xs font-mono text-gray-400">{item.celular || '—'}</td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>

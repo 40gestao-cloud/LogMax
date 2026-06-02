@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
@@ -212,8 +213,9 @@ export const FuncionariosView = ({ showToast }: any) => {
                       <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end">
-                          <button onClick={() => openEdit(f)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"><Pencil size={13} /></button>
-                          <button onClick={() => handleDelete(f.id)} className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
+                          <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          <button onClick={() => openEdit(f)} className="action-btn-edit"><Pencil size={12} /></button>
+                          <button onClick={() => handleDelete(f.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </motion.tr>

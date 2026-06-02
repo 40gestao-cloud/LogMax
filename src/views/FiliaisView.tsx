@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone } from '../lib/viewUtils';
@@ -176,8 +177,9 @@ export const FiliaisView = ({ showToast }: any) => {
               </div>
 
               <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
-                <button onClick={() => openEdit(item)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={11} /></button>
-                <button onClick={() => handleDelete(item.id)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={11} /></button>
+                <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
               </div>
             </motion.div>
           ))}
