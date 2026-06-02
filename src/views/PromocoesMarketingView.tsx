@@ -120,11 +120,12 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
 
   const handleProductChange = (prodId: string) => {
     const prod = produtos.find((p: any) => p.id === prodId);
+    const custoRaw = prod?.custo ?? prod?.preco_custo;
     setForm((f: any) => ({
       ...f,
       produto_id: prodId,
       preco_atual: prod?.preco != null && prod?.preco !== '' ? formatBRL(Number(prod.preco)) : '',
-      preco_custo: prod?.custo ?? prod?.preco_custo ?? '',
+      preco_custo: custoRaw != null && custoRaw !== '' ? formatBRL(Number(custoRaw)) : '',
     }));
   };
 
@@ -138,7 +139,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
         produto_id:        form.produto_id,
         nome_produto:      prod?.nome ?? '',
         preco_atual:       parseBRL(form.preco_atual),
-        preco_custo:       Number(form.preco_custo || 0),
+        preco_custo:       parseBRL(form.preco_custo || '0'),
         preco_promocional: parseBRL(form.preco_promocional),
         data_inicio:       form.data_inicio  || null,
         data_fim:          form.data_fim     || null,
@@ -303,6 +304,11 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
                 <input id="promo-preco-atual" type="text" value={form.preco_atual} readOnly
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="promo-preco-custo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Custo (referência)</label>
+                <input id="promo-preco-custo" type="text" value={form.preco_custo} readOnly
                   className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
               </div>
               <div className="flex flex-col gap-1.5">
