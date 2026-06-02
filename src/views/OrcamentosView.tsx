@@ -848,19 +848,32 @@ export const OrcamentosView = ({
                         <tr className="text-left text-gray-500 border-b border-white/5">
                           <th className="py-2 px-3 font-bold">Produto</th>
                           <th className="py-2 px-3 font-bold text-right">Qtd</th>
+                          {(isFinanceiro || isAdminOuCeo) && (
+                            <th className="py-2 px-3 font-bold text-right">Custo Unit.</th>
+                          )}
                           <th className="py-2 px-3 font-bold text-right">Unit.</th>
                           <th className="py-2 px-3 font-bold text-right">Subtotal</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {detalhes.itens.map((it: any, idx: number) => (
-                          <tr key={idx} className="border-b border-white/5 last:border-b-0">
-                            <td className="py-2 px-3 text-gray-200">{it.nome ?? '—'}</td>
-                            <td className="py-2 px-3 font-mono text-gray-300 text-right">{it.qtd ?? '—'}</td>
-                            <td className="py-2 px-3 font-mono text-gray-300 text-right">R$ {formatBRL(Number(it.preco_unitario ?? 0))}</td>
-                            <td className="py-2 px-3 font-mono text-gray-200 text-right">R$ {formatBRL(Number(it.subtotal ?? 0))}</td>
-                          </tr>
-                        ))}
+                        {detalhes.itens.map((it: any, idx: number) => {
+                          const prod = produtos.find((p: any) => p.id === it.produto_id);
+                          const custoRaw = prod?.custo ?? prod?.preco_custo;
+                          const custo = custoRaw != null && custoRaw !== '' ? Number(custoRaw) : null;
+                          return (
+                            <tr key={idx} className="border-b border-white/5 last:border-b-0">
+                              <td className="py-2 px-3 text-gray-200">{it.nome ?? '—'}</td>
+                              <td className="py-2 px-3 font-mono text-gray-300 text-right">{it.qtd ?? '—'}</td>
+                              {(isFinanceiro || isAdminOuCeo) && (
+                                <td className="py-2 px-3 font-mono text-gray-400 text-right">
+                                  {custo != null ? `R$ ${formatBRL(custo)}` : '—'}
+                                </td>
+                              )}
+                              <td className="py-2 px-3 font-mono text-gray-300 text-right">R$ {formatBRL(Number(it.preco_unitario ?? 0))}</td>
+                              <td className="py-2 px-3 font-mono text-gray-200 text-right">R$ {formatBRL(Number(it.subtotal ?? 0))}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
