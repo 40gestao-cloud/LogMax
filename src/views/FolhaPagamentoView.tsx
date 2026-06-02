@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock } from 'lucide-react';
+import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -251,7 +252,8 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                         </button>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="action-bar-glass inline-flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
                           <button onClick={() => openEdit(f)} title="Editar" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
                           <button onClick={() => handleDelete(f.id)} title="Excluir" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
                         </div>

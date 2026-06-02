@@ -70,7 +70,7 @@ export const AuditoriaInspect: React.FC<Props> = ({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        className="w-6 h-6 rounded-md neu-button flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+        className="w-8 h-8 rounded-lg neu-button flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
         title="Inspecionar autoria"
         aria-label="Inspecionar autoria"
       >
