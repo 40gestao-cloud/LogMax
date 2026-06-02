@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
+import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -99,6 +100,7 @@ export const OrcamentosView = ({
   const [form, setForm] = useState({ cliente_id: '', validade_dias: '3' });
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
   const [extras, setExtras] = useState({ desconto: '', observacoes: '' });
+  const [produtoBusca, setProdutoBusca] = useState('');
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   // Modal de decisão Financeiro
@@ -110,6 +112,67 @@ export const OrcamentosView = ({
     () => produtos.filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && p.tipo !== 'patrimonio'),
     [produtos]
   );
+
+  // Agrupa produtos ativos por filial (empresa). Filiais sem produtos não
+  // aparecem; produtos sem filial vão para um bucket "Sem empresa".
+  const produtosPorFilial = useMemo(() => {
+    const buckets = new Map<string, any[]>();
+    for (const p of produtosAtivos) {
+      const key = p.filial && (FILIAIS_HOLDING as readonly string[]).includes(p.filial) ? p.filial : 'Sem empresa';
+      const arr = buckets.get(key) ?? buckets.set(key, []).get(key)!;
+      arr.push(p);
+    }
+    for (const [, arr] of buckets) {
+      arr.sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' }));
+    }
+    const ordem = [...FILIAIS_HOLDING, 'Sem empresa'];
+    return ordem
+      .filter(f => buckets.has(f))
+      .map(f => ({ filial: f, items: buckets.get(f)! }));
+  }, [produtosAtivos]);
+
+  // Mesma estrutura de produtosPorFilial, mas filtrada pelo termo de busca
+  // digitado acima da lista de itens. Match em nome OU código (case-insensitive).
+  const produtosPorFilialFiltrado = useMemo(() => {
+    const termo = produtoBusca.trim().toLowerCase();
+    if (!termo) return produtosPorFilial;
+    return produtosPorFilial
+      .map(g => ({
+        filial: g.filial,
+        items: g.items.filter((p: any) =>
+          (p.nome ?? '').toLowerCase().includes(termo) ||
+          (p.codigo ?? '').toLowerCase().includes(termo)
+        ),
+      }))
+      .filter(g => g.items.length > 0);
+  }, [produtosPorFilial, produtoBusca]);
+
+  const exportarProdutosPDF = async () => {
+    await exportToPDFAgrupado(
+      'Catálogo de Produtos',
+      ['Código', 'Nome', 'Preço (R$)'],
+      produtosPorFilial.map(g => ({
+        titulo: g.filial,
+        rows: g.items.map(p => [
+          p.codigo ?? '—',
+          p.nome ?? '',
+          Number(p.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+        ]),
+      })),
+      'logmax-catalogo-produtos',
+    );
+  };
+
+  const exportarProdutosExcel = async () => {
+    await exportToExcelAgrupado(
+      ['Código', 'Nome', 'Preço'],
+      produtosPorFilial.map(g => ({
+        titulo: g.filial,
+        rows: g.items.map(p => [p.codigo ?? '', p.nome ?? '', Number(p.preco || 0)]),
+      })),
+      'logmax-catalogo-produtos',
+    );
+  };
 
   const subtotal = useMemo(
     () => itens.reduce((s, it) => s + it.subtotal, 0),
@@ -133,6 +196,7 @@ export const OrcamentosView = ({
     setForm({ cliente_id: '', validade_dias: '3' });
     setItens([]);
     setExtras({ desconto: '', observacoes: '' });
+    setProdutoBusca('');
     setErrors({});
   };
 
@@ -373,9 +437,13 @@ export const OrcamentosView = ({
           </p>
         </div>
         {!modoFinanceiro && podeCriarVenda && (
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-            <Plus size={16} /> Nova Proposta
-          </NeuButtonAccent>
+          <div className="flex items-center gap-2 flex-wrap">
+            <ExportButton label="PDF" onClick={exportarProdutosPDF} icon={FileDown} />
+            <ExportButton label="Excel" onClick={exportarProdutosExcel} icon={Sheet} />
+            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+              <Plus size={16} /> Nova Proposta
+            </NeuButtonAccent>
+          </div>
         )}
       </div>
 
@@ -438,11 +506,20 @@ export const OrcamentosView = ({
 
               {/* Itens da proposta */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens da Proposta</span>
-                  <button onClick={addItem} className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent flex items-center gap-1">
-                    <Plus size={11} /> Adicionar item
-                  </button>
+                  <div className="flex items-center gap-2 flex-1 sm:flex-none sm:min-w-[260px]">
+                    <input
+                      type="text"
+                      value={produtoBusca}
+                      onChange={e => setProdutoBusca(e.target.value)}
+                      placeholder="Buscar produto por nome ou código..."
+                      className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
+                    />
+                    <button onClick={addItem} className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent flex items-center gap-1 shrink-0">
+                      <Plus size={11} /> Adicionar item
+                    </button>
+                  </div>
                 </div>
                 {itens.length === 0 ? (
                   <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
@@ -456,8 +533,12 @@ export const OrcamentosView = ({
                           onChange={e => escolherProduto(idx, e.target.value)}
                         >
                           <option value="">Produto...</option>
-                          {produtosAtivos.map((p: any) => (
-                            <option key={p.id} value={p.id}>{p.nome}{p.codigo ? ` (${p.codigo})` : ''}</option>
+                          {produtosPorFilialFiltrado.map(g => (
+                            <optgroup key={g.filial} label={g.filial}>
+                              {g.items.map((p: any) => (
+                                <option key={p.id} value={p.id}>{p.nome}{p.codigo ? ` (${p.codigo})` : ''}</option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
                         <div className="col-span-2">

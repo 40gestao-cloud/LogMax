@@ -133,6 +133,99 @@ export async function exportToPDF(title: string, columns: string[], rows: any[][
   doc.save(`${filename}.pdf`);
 }
 
+/** Grupo para export agrupado — um título + linhas próprias. */
+export type GrupoExport = { titulo: string; rows: any[][] };
+
+/**
+ * PDF agrupado: mesma identidade visual do exportToPDF, mas com cabeçalho de
+ * grupo + tabela própria para cada grupo. Usado quando o usuário quer ver
+ * o mesmo conjunto de colunas segmentado (ex.: produtos por filial).
+ */
+export async function exportToPDFAgrupado(title: string, columns: string[], grupos: GrupoExport[], filename: string) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
+  const doc = new jsPDF();
+
+  doc.setFillColor(10, 10, 10);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LogMax', 14, 14);
+  doc.setFontSize(9);
+  doc.setTextColor(150, 150, 150);
+  doc.text('Relatório Operacional', 14, 21);
+  doc.setFontSize(11);
+  doc.setTextColor(220, 220, 220);
+  doc.text(title, 14, 29);
+
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+
+  let cursorY = 40;
+  for (const grupo of grupos) {
+    if (grupo.rows.length === 0) continue;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(16, 185, 129);
+    doc.text(grupo.titulo, 14, cursorY);
+    cursorY += 4;
+    autoTable(doc, {
+      startY: cursorY,
+      head: [columns],
+      body: grupo.rows,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
+      alternateRowStyles: { fillColor: [245, 247, 245] },
+    });
+    cursorY = (doc as any).lastAutoTable.finalY + 12;
+  }
+
+  doc.save(`${filename}.pdf`);
+}
+
+/**
+ * Excel agrupado: uma aba (worksheet) por grupo. Cada aba leva as mesmas
+ * colunas. Nome da aba truncado a 31 chars (limite do Excel).
+ */
+export async function exportToExcelAgrupado(columns: string[], grupos: GrupoExport[], filename: string) {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'LogMax';
+  workbook.created = new Date();
+
+  for (const grupo of grupos) {
+    if (grupo.rows.length === 0) continue;
+    const worksheet = workbook.addWorksheet(grupo.titulo.slice(0, 31));
+    worksheet.addRow(columns);
+    worksheet.getRow(1).font = { bold: true };
+    grupo.rows.forEach(r => worksheet.addRow(r));
+    worksheet.columns.forEach((col, i) => {
+      const headerLen = (columns[i] ?? '').length;
+      const maxBodyLen = grupo.rows.reduce((max, r) => Math.max(max, String(r[i] ?? '').length), 0);
+      col.width = Math.min(50, Math.max(10, Math.max(headerLen, maxBodyLen) + 2));
+    });
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export async function exportToExcel(sheetName: string, columns: string[], rows: any[][], filename: string) {
   // exceljs em vez de xlsx (sheetjs) — este último tem 2 CVEs HIGH sem patch.
   // Lazy-loaded para não pesar no bundle inicial.
