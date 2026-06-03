@@ -187,32 +187,30 @@ export async function downloadEan13LabelPdf(opts: {
   doc.save(`${safe}.pdf`);
 }
 
-// Catálogo em PDF — uma página A4 contendo várias etiquetas em grid 2×4
-// (8 produtos por página). Cada slot mostra nome, preço, código EAN-13
-// numérico e a etiqueta visual com as barras. Produtos sem EAN válido
-// são silenciosamente omitidos (não há etiqueta a renderizar).
-export async function downloadCatalogoEan13Pdf(opts: {
-  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>;
-  filename?: string;
-  titulo?: string;
-}) {
-  const items = opts.produtos
+// Desenha grid 2×4 de etiquetas EAN-13 em um doc jsPDF existente.
+// Produtos sem EAN válido são silenciosamente omitidos. Retorna a quantidade
+// de etiquetas desenhadas. Quando `startOnNewPage`, força addPage() antes da
+// primeira etiqueta (use quando o doc já tem conteúdo prévio na página atual).
+export function drawEtiquetasGridOnDoc(
+  doc: any,
+  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>,
+  opts: { titulo?: string; startOnNewPage?: boolean } = {},
+): number {
+  const items = produtos
     .map(p => ({ ...p, norm: normalizeEan13(p.ean) }))
     .filter(p => p.norm.valid);
-  if (items.length === 0) throw new Error('Nenhum produto com EAN-13 válido para gerar etiquetas.');
+  if (items.length === 0) return 0;
 
-  const { default: jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-
-  const W = 210, H = 297;
+  const W = 210;
   const margin = 8;
   const cols = 2, rows = 4;
   const slotW = (W - margin * 2) / cols;
-  const slotH = (H - margin * 2 - 12) / rows; // 12mm reservado para cabeçalho
+  const slotH = (297 - margin * 2 - 12) / rows; // 12mm reservado para cabeçalho
   const perPage = cols * rows;
+  const titulo = opts.titulo ?? 'Catálogo PDV — etiquetas EAN-13';
+  const totalPages = Math.ceil(items.length / perPage);
 
-  // Cabeçalho de página.
-  const drawHeader = (pageIdx: number, totalPages: number) => {
+  const drawHeader = (pageIdx: number) => {
     doc.setFillColor(10, 10, 10);
     doc.rect(0, 0, W, 10, 'F');
     doc.setTextColor(16, 185, 129);
@@ -222,7 +220,7 @@ export async function downloadCatalogoEan13Pdf(opts: {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(180, 180, 180);
-    doc.text(opts.titulo ?? 'Catálogo PDV — etiquetas EAN-13', W / 2, 6.5, { align: 'center' });
+    doc.text(titulo, W / 2, 6.5, { align: 'center' });
     doc.setTextColor(140, 140, 140);
     doc.text(`Página ${pageIdx + 1}/${totalPages}`, W - margin, 6.5, { align: 'right' });
     doc.setTextColor(0, 0, 0);
@@ -230,12 +228,10 @@ export async function downloadCatalogoEan13Pdf(opts: {
 
   const drawSlot = (x: number, y: number, item: typeof items[number]) => {
     const ean = item.norm.value;
-    // Caixa do slot.
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.2);
     doc.rect(x, y, slotW, slotH);
 
-    // Nome (top), truncado se passar.
     if (item.nome) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
@@ -243,7 +239,6 @@ export async function downloadCatalogoEan13Pdf(opts: {
       doc.text(nome, x + slotW / 2, y + 5, { align: 'center' });
     }
 
-    // Meta: código + preço.
     const metaParts: string[] = [];
     if (item.codigo) metaParts.push(item.codigo);
     if (item.preco != null) metaParts.push(fmtBRL(Number(item.preco)));
@@ -255,7 +250,6 @@ export async function downloadCatalogoEan13Pdf(opts: {
       doc.setTextColor(0, 0, 0);
     }
 
-    // Etiqueta EAN-13 (barras) — centralizada horizontalmente no slot.
     const pattern = encodeEan13(ean);
     const moduleWidth = 0.35;
     const totalBarsWidth = pattern.length * moduleWidth;
@@ -272,7 +266,6 @@ export async function downloadCatalogoEan13Pdf(opts: {
       }
     }
 
-    // Dígitos legíveis abaixo das barras.
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     const textY = barY + barHeight + guardOverhang + 2.5;
@@ -287,11 +280,13 @@ export async function downloadCatalogoEan13Pdf(opts: {
     }
   };
 
-  const totalPages = Math.ceil(items.length / perPage);
   items.forEach((item, idx) => {
-    const pageIdx = Math.floor(idx / perPage);
-    if (idx > 0 && idx % perPage === 0) doc.addPage();
-    if (idx % perPage === 0) drawHeader(pageIdx, totalPages);
+    if (idx === 0) {
+      if (opts.startOnNewPage) doc.addPage();
+    } else if (idx % perPage === 0) {
+      doc.addPage();
+    }
+    if (idx % perPage === 0) drawHeader(Math.floor(idx / perPage));
     const inPage = idx % perPage;
     const col = inPage % cols;
     const row = Math.floor(inPage / cols);
@@ -300,6 +295,25 @@ export async function downloadCatalogoEan13Pdf(opts: {
     drawSlot(x, y, item);
   });
 
+  return items.length;
+}
+
+// Catálogo em PDF — uma página A4 contendo várias etiquetas em grid 2×4
+// (8 produtos por página). Cada slot mostra nome, preço, código EAN-13
+// numérico e a etiqueta visual com as barras. Produtos sem EAN válido
+// são silenciosamente omitidos (não há etiqueta a renderizar).
+export async function downloadCatalogoEan13Pdf(opts: {
+  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>;
+  filename?: string;
+  titulo?: string;
+}) {
+  const { default: jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const n = drawEtiquetasGridOnDoc(doc, opts.produtos, {
+    titulo: opts.titulo ?? 'Catálogo PDV — etiquetas EAN-13',
+    startOnNewPage: false,
+  });
+  if (n === 0) throw new Error('Nenhum produto com EAN-13 válido para gerar etiquetas.');
   const safe = (opts.filename || 'logmax-catalogo-pdv').replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`${safe}.pdf`);
 }

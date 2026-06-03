@@ -5,8 +5,8 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
-import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf } from '../lib/barcode';
+import { useFormValidation, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
+import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
 import {
   validarImagemProduto,
@@ -109,7 +109,58 @@ export const ProdutosView = ({ showToast }: any) => {
       d.ean ?? '', d.status ?? '',
     ];
   });
-  const handleExportPDF   = () => exportToPDF('Catálogo de Produtos', exportCols, exportRows(), 'logmax-produtos');
+  // PDF combinado: tabela com todos os campos (igual ao Excel) + páginas de
+  // etiquetas EAN-13 escaneáveis ao final, uma para cada produto com EAN válido.
+  const handleExportPDF = async () => {
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF();
+
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, 210, 32, 'F');
+      doc.setTextColor(16, 185, 129);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LogMax', 14, 14);
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Relatório Operacional', 14, 21);
+      doc.setFontSize(11);
+      doc.setTextColor(220, 220, 220);
+      doc.text('Catálogo de Produtos', 14, 29);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+
+      autoTable(doc, {
+        startY: 38,
+        head: [exportCols],
+        body: exportRows(),
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 247, 245] },
+      });
+
+      const etiquetaInput = filtered.map((p: any) => ({
+        nome:   p.nome,
+        ean:    p.ean,
+        codigo: p.codigo,
+        preco:  p.preco != null ? parseNum(p.preco) : null,
+      }));
+      drawEtiquetasGridOnDoc(doc, etiquetaInput, {
+        titulo: 'Etiquetas EAN-13 — Produtos',
+        startOnNewPage: true,
+      });
+
+      doc.save('logmax-produtos.pdf');
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao gerar PDF.', 'error', true);
+    }
+  };
   const handleExportExcel = () => exportToExcel('Produtos', exportCols, exportRows(), 'logmax-produtos');
 
   const openEdit = (item: any) => {
