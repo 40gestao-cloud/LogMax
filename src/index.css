@@ -746,6 +746,43 @@ html.theme-switching *::after {
   animation-play-state: paused;
 }
 
+/* ── Logo shimmer (sidebar) ──
+   Sweep diagonal lento e sutil sobre a logo. Pausa entre cada passagem
+   (animação 5s mas sweep ocupa ~40%, dando 3s de "descanso" antes da
+   próxima passagem) para não cansar o olho. */
+@keyframes logo-shimmer-sweep {
+  0%   { transform: translateX(-120%) skewX(-12deg); }
+  40%  { transform: translateX(120%)  skewX(-12deg); }
+  100% { transform: translateX(120%)  skewX(-12deg); }
+}
+
+.logo-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.0) 40%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.0) 60%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-12deg);
+  animation: logo-shimmer-sweep 5s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-shimmer::after { animation: none; }
+}
+
 /* LoginScreen — botão Entrar segue o tema dinâmico (--color-accent).
    Hover intensifica a sombra; focus-visible mostra anel acessível. */
 .login-submit:not(:disabled):hover {

@@ -159,14 +159,16 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
 
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
   <>
-    <div className="flex items-center gap-3 px-1 mb-2">
-      <img
-        src="/icon-logmax.png"
-        alt="LogMax"
-        className="w-12 h-12 rounded-full object-cover border-2 border-accent transition-colors"
-      />
+    <div className="relative flex justify-center px-1 mb-4">
+      <div className="logo-shimmer inline-block">
+        <img
+          src="/icon-logmax.png"
+          alt="LogMax"
+          className="w-36 h-36 object-contain block"
+        />
+      </div>
       {onClose && (
-        <button onClick={onClose} className="ml-auto w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+        <button onClick={onClose} className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
           <X size={16} />
         </button>
       )}

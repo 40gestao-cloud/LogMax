@@ -79,7 +79,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             }}
           >
             <img
-              src="/icon-logmax.png"
+              src={isLight ? '/icon-logmax-modoclaro.png' : '/icon-logmax.png'}
               alt="LogMax"
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
