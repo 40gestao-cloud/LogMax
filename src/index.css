@@ -747,17 +747,18 @@ html.theme-switching *::after {
 }
 
 /* ── Logo shimmer (sidebar) ──
-   Sweep diagonal lento e sutil sobre a logo. Pausa entre cada passagem
-   (animação 5s mas sweep ocupa ~40%, dando 3s de "descanso" antes da
-   próxima passagem) para não cansar o olho. */
+   Sweep diagonal lento sobre a logo. Pausa longa entre passagens
+   (animação 6s mas sweep ocupa ~35%, dando ~4s de "descanso") para
+   ficar discreto e não cansar o olho. */
 @keyframes logo-shimmer-sweep {
-  0%   { transform: translateX(-120%) skewX(-12deg); }
-  40%  { transform: translateX(120%)  skewX(-12deg); }
-  100% { transform: translateX(120%)  skewX(-12deg); }
+  0%   { transform: translateX(-150%) skewX(-15deg); }
+  35%  { transform: translateX(150%)  skewX(-15deg); }
+  100% { transform: translateX(150%)  skewX(-15deg); }
 }
 
 .logo-shimmer {
   position: relative;
+  display: inline-block;
   overflow: hidden;
 }
 
@@ -766,17 +767,14 @@ html.theme-switching *::after {
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    100deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.0) 40%,
-    rgba(255, 255, 255, 0.22) 50%,
-    rgba(255, 255, 255, 0.0) 60%,
-    transparent 100%
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 65%
   );
-  transform: translateX(-120%) skewX(-12deg);
-  animation: logo-shimmer-sweep 5s ease-in-out infinite;
+  transform: translateX(-150%) skewX(-15deg);
+  animation: logo-shimmer-sweep 6s ease-in-out infinite;
   pointer-events: none;
-  mix-blend-mode: screen;
 }
 
 @media (prefers-reduced-motion: reduce) {

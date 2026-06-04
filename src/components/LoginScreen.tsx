@@ -65,12 +65,14 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           zIndex: 1,
         }}
       >
-        {/* Logo — sem container/sombra, totalmente flat. */}
+        {/* Logo — sem container/sombra, totalmente flat.
+            Light usa variante dedicada (icon-logmax-modoclaro.png) num
+            tamanho um pouco maior conforme pedido do usuário. */}
         <div className="flex flex-col items-center mb-8">
           <div
             style={{
-              width: 140,
-              height: 140,
+              width: isLight ? 180 : 140,
+              height: isLight ? 180 : 140,
               borderRadius: '1.5rem',
               overflow: 'hidden',
               display: 'flex',
