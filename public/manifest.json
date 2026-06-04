@@ -12,13 +12,13 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/icon-logmax.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.png",
+      "src": "/icon-logmax.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

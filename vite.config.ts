@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
         // 'prompt' permite ao app mostrar banner "Nova versão disponível"
         // em vez de atualizar silenciosamente — vide PwaUpdatePrompt.tsx.
         registerType: 'prompt',
-        includeAssets: ['icon.png', 'logo-login.png'],
+        includeAssets: ['icon-logmax.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {
           // json incluído para precachear manifest.json e simulador-manifest.json

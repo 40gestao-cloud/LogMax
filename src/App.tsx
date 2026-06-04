@@ -161,7 +161,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
   <>
     <div className="flex items-center gap-3 px-1 mb-2">
       <img
-        src="/logo-login.png"
+        src="/icon-logmax.png"
         alt="LogMax"
         className="w-12 h-12 rounded-full object-cover border-2 border-accent transition-colors"
       />
