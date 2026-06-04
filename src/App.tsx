@@ -872,7 +872,7 @@ function LogMaxAppInner() {
               className="fixed inset-0 bg-black/60 z-40 lg:hidden" />
             <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed top-0 left-0 w-64 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat lg:hidden">
+              className="fixed top-0 left-0 w-64 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat sidebar-dark lg:hidden">
               <SidebarNav
                 activeView={activeView} navigate={navigate}
                 openModules={openModules} toggleModule={toggleModule}
@@ -885,7 +885,7 @@ function LogMaxAppInner() {
       </AnimatePresence>
 
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-64 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat relative">
+      <aside className="hidden lg:flex w-64 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative">
         <SidebarNav
           activeView={activeView} navigate={navigate}
           openModules={openModules} toggleModule={toggleModule}
