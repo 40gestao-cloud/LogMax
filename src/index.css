@@ -32,21 +32,20 @@
   --color-surface:        rgba(255, 255, 255, 0.03);
   --color-surface-md:     rgba(255, 255, 255, 0.06);
 
-  /* card / login */
-  --color-card-bg:       linear-gradient(145deg, #0f0f0f, #080808);
-  --color-card-shadow:   12px 12px 32px #050505, -6px -6px 20px #141414,
-                         inset 0 1px 0 rgba(255,255,255,0.04);
-  --color-card-border:   rgba(255, 255, 255, 0.04);
-  --color-input-bg:      linear-gradient(145deg, #070707, #0d0d0d);
-  --color-input-shadow:  inset 4px 4px 10px #040404, inset -2px -2px 6px #111111;
-  --color-input-border:  rgba(255, 255, 255, 0.04);
+  /* card / login — flat: sombra mínima + borda fina (feedback 2026-06-03) */
+  --color-card-bg:       #0d0d0d;
+  --color-card-shadow:   0 1px 2px rgba(0, 0, 0, 0.5);
+  --color-card-border:   rgba(255, 255, 255, 0.08);
+  --color-input-bg:      #080808;
+  --color-input-shadow:  inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  --color-input-border:  rgba(255, 255, 255, 0.08);
   --color-input-text:    #e0e0e0;
   --color-input-ph:      #4b5563;
 
-  /* icon-circle */
-  --color-icon-bg:       linear-gradient(145deg, #0f0f0f, #070707);
-  --color-icon-shadow:   6px 6px 14px #050505, -4px -4px 10px #141414,
-                         inset 0 0 0 1px rgba(16,185,129,0.2);
+  /* icon-circle — flat */
+  --color-icon-bg:       #0f0f0f;
+  --color-icon-shadow:   0 1px 2px rgba(0, 0, 0, 0.4),
+                         inset 0 0 0 1px rgba(16, 185, 129, 0.22);
 
   /* scrollbar */
   --color-scrollbar:       #1a1a1a;
@@ -63,9 +62,9 @@
   --color-header-widget-bg: var(--color-bg-base);
 
   /* inset shadow para .neu-input — partilhado pelo focus + pulse animation.
-     Light mode override mais abaixo. */
-  --neu-input-inset-shadow: inset 4px 4px 10px var(--color-bg-dark),
-                            inset -2px -2px 6px var(--color-bg-light);
+     Dark mode também flat (feedback 2026-06-03): inset mínimo, hierarquia
+     pela borda accent. Light mode override mais abaixo. */
+  --neu-input-inset-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /* ── Accent color palettes ── */
@@ -254,9 +253,9 @@
 }
 
 /* ── Light mode: superfícies "neu-*" achatadas ──
-   Feedback do usuário em 2026-05-29: o neumorfismo escuro fica bonito, mas
-   em fundo claro as sombras pufadas (offsets 4-14px) viram ruído visual.
-   Substituímos por elevação mínima + borda fina, mantendo a hierarquia
+   Light recebe sombras ainda mais suaves que o dark (que também é flat
+   desde 2026-06-03): rgba preto a 0.04-0.07 em vez de 0.35-0.5, porque em
+   fundo claro #E8E8E8 sombras mais densas ficam ruidosas. Mantém hierarquia
    (flat vs pressed vs button) só através de borda + sombra inset sutil.
    Cada override usa !important porque a regra-base é uma utility do mesmo
    nível (sem essa, a especificidade empata e o resultado é imprevisível). */
@@ -296,41 +295,42 @@
     color: var(--color-accent);
   }
 
-  /* ── Neumorphic classes (auto-adapt via variables) ── */
+  /* ── Neumorphic classes — agora flat em ambos os temas (feedback 2026-06-03)
+     Dark mode segue light: borda fina + sombra mínima. Hierarquia vem da
+     borda + variação leve de tom (bg-base vs bg-dark para pressed). Light
+     mode mantém seus próprios overrides !important mais acima. */
   .neu-flat {
     background: var(--color-bg-base);
-    box-shadow: 6px 6px 14px var(--color-bg-dark),
-               -4px -4px 10px var(--color-bg-light);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--color-border-md);
   }
 
   .neu-pressed {
     background: var(--color-bg-base);
-    box-shadow: inset 4px 4px 10px var(--color-bg-dark),
-                inset -2px -2px 6px var(--color-bg-light);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--color-border);
   }
 
   .neu-button {
     background: var(--color-bg-base);
-    box-shadow: 4px 4px 10px var(--color-bg-dark),
-               -2px -2px 8px var(--color-bg-light);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--color-border-md);
     transition: all 0.2s ease-in-out;
   }
 
   .neu-button:active {
-    box-shadow: inset 4px 4px 8px var(--color-bg-dark),
-                inset -2px -2px 6px var(--color-bg-light);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   }
 
   .neu-button-active {
     background: var(--color-bg-base);
-    box-shadow: inset 3px 3px 6px var(--color-bg-dark),
-                inset -2px -2px 5px var(--color-bg-light);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
   }
 
   .neu-button-accent {
     background: var(--color-accent);
-    box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3),
-               -2px -2px 6px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     color: var(--color-accent-text);
     transition: all 0.2s ease-in-out;
   }
@@ -340,8 +340,7 @@
   }
 
   .neu-button-accent:active {
-    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.3),
-                inset -2px -2px 6px rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.30);
   }
 
   .neu-input {
@@ -367,13 +366,13 @@
   .neu-circle {
     border-radius: 50%;
     background: var(--color-bg-base);
-    box-shadow: 4px 4px 10px var(--color-bg-dark),
-               -2px -2px 8px var(--color-bg-light);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--color-border-md);
   }
 
   .neu-progress-bar {
     background: var(--color-bg-dark);
-    box-shadow: inset 2px 2px 5px var(--color-bg-dark);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
     overflow: hidden;
   }
 
