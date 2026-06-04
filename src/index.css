@@ -467,12 +467,21 @@ table,
 [data-theme="light"] .text-gray-500     { color: #1f2937; }
 [data-theme="light"] .text-gray-600     { color: #374151; }
 
-[data-theme="light"] .border-white\/5   { border-color: rgba(0,0,0,0.10); }
-[data-theme="light"] .border-white\/10  { border-color: rgba(0,0,0,0.16); }
+/* Bordas elevadas em light mode: rgba(0,0,0,0.10) sobre #E8E8E8 dá contraste
+   1.18:1 (invisível). Bumpado para 0.20 (linhas) / 0.32 (cabeçalhos) para
+   que separadores de tabela apareçam claramente — queixa 2026-06-03. */
+[data-theme="light"] .border-white\/5   { border-color: rgba(0,0,0,0.20); }
+[data-theme="light"] .border-white\/10  { border-color: rgba(0,0,0,0.32); }
 
 [data-theme="light"] .bg-white\/5       { background-color: rgba(0,0,0,0.04); }
 [data-theme="light"] .bg-white\/\[0\.02\] { background-color: rgba(0,0,0,0.02); }
-[data-theme="light"] .border-dashed.border-white\/5 { border-color: rgba(0,0,0,0.12); }
+[data-theme="light"] .border-dashed.border-white\/5 { border-color: rgba(0,0,0,0.20); }
+
+/* Hovers de linha de tabela: em dark são rgba(255,255,255,0.X) — somem em
+   light. Mapeados para preto translúcido equivalente. */
+[data-theme="light"] .hover\:bg-white\/5:hover         { background-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(0,0,0,0.03); }
+[data-theme="light"] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgba(0,0,0,0.04); }
 
 [data-theme="light"] .bg-\[\#111\]      { background-color: #D4D4D4; }
 [data-theme="light"] .bg-\[\#111111\]   { background-color: #D4D4D4; }
