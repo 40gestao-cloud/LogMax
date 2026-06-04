@@ -221,10 +221,10 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
             onClick={() => onNavigate?.('central-tempo')}
             className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"
             style={{
-              background:  'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+              background:  'var(--color-accent)',
               color:       'var(--color-accent-text)',
               border:      'none',
-              boxShadow:   '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent)',
+              boxShadow:   '0 1px 2px rgba(0, 0, 0, 0.35)',
             }}>
             Abrir Central de Tempo <ArrowRight size={16} />
           </button>
