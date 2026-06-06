@@ -27,6 +27,16 @@ const statusCls = (s: string) =>
 const statusNext = (s: string): string | null =>
   s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : null;
 
+const statusNextLabel = (s: string): string | null =>
+  s === 'Pendente' ? 'Processar' : s === 'Processada' ? 'Pagar' : null;
+
+const statusNextTitle = (s: string): string =>
+  s === 'Pendente'
+    ? 'Clique para processar a folha (gera Conta a Pagar do líquido).'
+    : s === 'Processada'
+    ? 'Clique para marcar como Paga e creditar salário + benefícios na carteira MaxBank do colaborador.'
+    : 'Folha já paga.';
+
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
 export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
@@ -326,10 +336,17 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                       <td className="py-3 px-4 text-xs font-mono text-blue-400 text-right">+ R$ {Number(f.valor_beneficios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono font-bold text-green-400 text-right">R$ {Number(f.salario_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-center">
-                        <button onClick={() => handleStatusCycle(f)}
-                          className={`flex items-center gap-1.5 mx-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase hover:opacity-80 ${statusCls(f.status)}`}>
+                        <button
+                          onClick={() => handleStatusCycle(f)}
+                          disabled={!statusNext(f.status)}
+                          title={statusNextTitle(f.status)}
+                          className={`flex items-center gap-1.5 mx-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase hover:opacity-80 disabled:cursor-default ${statusCls(f.status)}`}
+                        >
                           {f.status === 'Paga' ? <CheckCircle size={11} /> : f.status === 'Processada' ? <DollarSign size={11} /> : <Clock size={11} />}
                           {f.status}
+                          {statusNextLabel(f.status) && (
+                            <span className="text-gray-500 font-semibold normal-case">→ {statusNextLabel(f.status)}</span>
+                          )}
                         </button>
                       </td>
                       <td className="py-3 px-4 text-right">
