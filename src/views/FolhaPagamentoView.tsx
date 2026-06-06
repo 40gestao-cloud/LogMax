@@ -27,7 +27,7 @@ const statusCls = (s: string) =>
 const statusNext = (s: string): string | null =>
   s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : null;
 
-const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', status: 'Pendente' };
+const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
 export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   // Guard: dados sensíveis (salário). RLS já bloqueia, mas evita UX confusa.
@@ -68,8 +68,10 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
     const base = Number(form.salario_base || 0);
     const desc = Number(form.descontos || 0);
+    const benef = Number(form.valor_beneficios || 0);
     // salario_bruto inicial = base; recalc do ponto pode aumentar via hora extra.
-    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, salario_liquido: base - desc };
+    // valor_beneficios é separado — não entra em descontos nem no líquido.
+    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc };
     setSaving(true);
     try {
       if (editId) {
@@ -96,11 +98,12 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     setEditId(f.id);
     const base = f.salario_base ?? f.salario_bruto;
     setForm({
-      funcionario_id: f.funcionario_id ?? '',
-      mes_ref:        f.mes_ref        ?? '',
-      salario_base:   base != null ? String(base) : '',
-      descontos:      f.descontos     != null ? String(f.descontos)     : '',
-      status:         f.status        ?? 'Pendente',
+      funcionario_id:   f.funcionario_id ?? '',
+      mes_ref:          f.mes_ref        ?? '',
+      salario_base:     base != null ? String(base) : '',
+      descontos:        f.descontos        != null ? String(f.descontos)        : '',
+      valor_beneficios: f.valor_beneficios != null ? String(f.valor_beneficios) : '',
+      status:           f.status        ?? 'Pendente',
     });
     setShowForm(true);
   };
@@ -171,12 +174,17 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       // do colaborador. Idempotência via UNIQUE parcial em maxbank_transacoes
       // (origem='folha_pagamento', origem_id=folha.id): chamar 2x é seguro.
       if (next === 'Paga' && supabase) {
-        const { error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
+        const { data, error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
         if (error) {
           console.error('[FolhaPagamento] erro ao creditar MaxBank:', error);
           showToast(`Folha marcada como Paga, mas falhou ao creditar MaxBank: ${error.message}`, 'error');
         } else {
-          showToast('Folha paga — saldo do colaborador atualizado no MaxBank.', 'success');
+          const benef = Number((data as any)?.valor_beneficios ?? f.valor_beneficios ?? 0);
+          if (benef > 0) {
+            showToast(`Folha paga — salário e R$ ${benef.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em benefícios creditados no MaxBank.`, 'success');
+          } else {
+            showToast('Folha paga — saldo do colaborador atualizado no MaxBank.', 'success');
+          }
         }
       }
 
@@ -270,6 +278,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 { label: 'Mês Ref. *', k: 'mes_ref', type: 'month' },
                 { label: 'Salário Base (R$)', k: 'salario_base', type: 'number' },
                 { label: 'Descontos (R$)', k: 'descontos', type: 'number' },
+                { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'number' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
                   <label htmlFor={`folha-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
@@ -300,6 +309,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 <th className="pb-4 font-bold px-4">Mês Ref.</th>
                 <th className="pb-4 font-bold px-4 text-right">Bruto</th>
                 <th className="pb-4 font-bold px-4 text-right">Descontos</th>
+                <th className="pb-4 font-bold px-4 text-right">Benefícios</th>
                 <th className="pb-4 font-bold px-4 text-right">Líquido</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
@@ -313,6 +323,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.mes_ref ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-right">R$ {Number(f.salario_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono text-red-500 text-right">- R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-blue-400 text-right">+ R$ {Number(f.valor_beneficios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono font-bold text-green-400 text-right">R$ {Number(f.salario_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-center">
                         <button onClick={() => handleStatusCycle(f)}
