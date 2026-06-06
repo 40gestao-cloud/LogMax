@@ -28,7 +28,10 @@ interface CartItem {
   filial?: string;
 }
 
-const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
+const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado', 'MaxBank Benefícios'];
+// Formas elegíveis pra cobrir o resto quando "MaxBank Benefícios" não cobre tudo.
+// Fiado fora — mistura crédito a prazo com débito imediato fica confuso pra v1.
+const FORMA_RESTO_OPTIONS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX'] as const;
 
 export const PDVView = ({ showToast, profile }: any) => {
   const { user } = useAuth();
@@ -54,6 +57,16 @@ export const PDVView = ({ showToast, profile }: any) => {
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
   // Pix em aguardo: payload na DB + snapshot do carrinho para chamar o RPC após confirmação
   const [pixPendente, setPixPendente] = useState<{ id: string; valor: number } | null>(null);
+  // Benefícios em aguardo (Fase 5): pendente em MaxPOS com código curto pro colaborador
+  const [beneficiosPendente, setBeneficiosPendente] = useState<{
+    id: string;
+    codigo: string;
+    valor_beneficios: number;
+    valor_resto: number;
+    forma_resto: string;
+  } | null>(null);
+  // Forma usada pra cobrir o restante quando benefícios não dão conta de tudo.
+  const [formaResto, setFormaResto] = useState<string>('Dinheiro');
   const vendaSnapshotRef = useRef<{
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
   } | null>(null);
@@ -97,6 +110,16 @@ export const PDVView = ({ showToast, profile }: any) => {
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
   const descontoNum = parseFloat(String(desconto).replace(',', '.')) || 0;
   const totalFinal = Math.max(0, subtotal - descontoNum);
+
+  // Quanto do carrinho aceita benefícios? Soma subtotais dos itens elegíveis.
+  // Desconto é aplicado proporcionalmente: clampamos pelo totalFinal pra
+  // não permitir benefícios > total efetivo a pagar.
+  const subtotalElegivelBenef = cart.reduce((s, i) => {
+    const p = produtos.find((p: any) => p.id === i.produto_id);
+    return s + (p?.elegivel_beneficios ? i.subtotal : 0);
+  }, 0);
+  const valorBeneficios = Math.min(subtotalElegivelBenef, totalFinal);
+  const valorResto = Math.max(0, totalFinal - valorBeneficios);
 
   const addToCart = useCallback((produto: any) => {
     const preco = Number(produto.preco) || 0;
@@ -386,6 +409,56 @@ export const PDVView = ({ showToast, profile }: any) => {
 
       if (!supabase) throw new Error('Supabase indisponível.');
 
+      // Fluxo MaxBank Benefícios (Fase 5): cria pendente em beneficios_pendentes
+      // com código curto. Colaborador digita no MaxBank stand-alone, autoriza →
+      // RPC debita saldo dele e marca pendente como pago. PDV via realtime
+      // chama criar_venda_pdv. Suporta pagamento misto: se valor_resto > 0,
+      // resto cobre na formaResto escolhida.
+      if (formaPagamento === 'MaxBank Benefícios') {
+        if (valorBeneficios <= 0) {
+          showToast?.('Nenhum item do carrinho aceita benefícios.', 'error', true);
+          setIsClosing(false);
+          return;
+        }
+        const itensElegiveisSnap = cart
+          .filter(i => {
+            const p = produtos.find((p: any) => p.id === i.produto_id);
+            return !!p?.elegivel_beneficios;
+          })
+          .map(i => ({ nome: i.nome_produto, qtd: i.qtd, subtotal: i.subtotal }));
+
+        const { data: pendente, error: insErr } = await supabase
+          .from('beneficios_pendentes')
+          .insert({
+            valor_beneficios: valorBeneficios,
+            valor_resto:      valorResto,
+            forma_resto:      valorResto > 0 ? formaResto : null,
+            filial_pdv:       profile?.filial ?? 'Matriz',
+            produtos:         itensElegiveisSnap,
+            cliente_id:       clienteId || null,
+            operador_id:      user?.id ?? null,
+          })
+          .select('id, codigo_curto, valor_beneficios, valor_resto, forma_resto')
+          .single();
+        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar pendente de benefícios.');
+
+        vendaSnapshotRef.current = {
+          cart: [...cart],
+          subtotal,
+          descontoNum,
+          totalFinal,
+          clienteId,
+        };
+        setBeneficiosPendente({
+          id:               pendente.id,
+          codigo:           pendente.codigo_curto,
+          valor_beneficios: Number(pendente.valor_beneficios),
+          valor_resto:      Number(pendente.valor_resto),
+          forma_resto:      pendente.forma_resto ?? '',
+        });
+        return;
+      }
+
       // Fluxo Pix: cria pendente, mostra QR e aguarda confirmação do simulador
       // via realtime. A venda só é persistida no RPC quando o cliente confirma.
       if (formaPagamento === 'PIX') {
@@ -497,6 +570,50 @@ export const PDVView = ({ showToast, profile }: any) => {
       .eq('id', pixPendente.id);
     vendaSnapshotRef.current = null;
     setPixPendente(null);
+    setIsClosing(false);
+  };
+
+  // Realtime: pendente de benefícios. Quando colaborador confirma no MaxBank,
+  // RPC dele debita o saldo + faz UPDATE pago aqui. Recebemos via realtime e
+  // chamamos criar_venda_pdv com forma combinada (Benefícios + resto).
+  useEffect(() => {
+    if (!beneficiosPendente || !supabase) return;
+    const channel = supabase
+      .channel(`beneficios_pendente_${beneficiosPendente.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'beneficios_pendentes', filter: `id=eq.${beneficiosPendente.id}` },
+        async (payload: any) => {
+          const novoStatus = payload?.new?.status;
+          if (novoStatus !== 'pago') return;
+          const snap = vendaSnapshotRef.current;
+          if (!snap) return;
+          try {
+            playPlim();
+            const formaCombinada = beneficiosPendente.valor_resto > 0
+              ? `MaxBank Benefícios + ${beneficiosPendente.forma_resto}`
+              : 'MaxBank Benefícios';
+            await finalizarVenda(snap, formaCombinada, 1);
+            vendaSnapshotRef.current = null;
+            setBeneficiosPendente(null);
+          } catch (err: any) {
+            showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+            setBeneficiosPendente(null);
+            setIsClosing(false);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [beneficiosPendente, showToast]);
+
+  const cancelarBeneficios = async () => {
+    if (!beneficiosPendente || !supabase) return;
+    await supabase.from('beneficios_pendentes')
+      .update({ status: 'cancelado' })
+      .eq('id', beneficiosPendente.id);
+    vendaSnapshotRef.current = null;
+    setBeneficiosPendente(null);
     setIsClosing(false);
   };
 
@@ -764,7 +881,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                       ? { background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
                       : { background: 'transparent', borderColor: 'rgba(255,255,255,0.05)', color: '#6b7280' }
                     }>
-                    {f}
+                    {f === 'MaxBank Benefícios' ? 'Benefícios' : f}
                   </button>
                 ))}
               </div>
@@ -790,6 +907,46 @@ export const PDVView = ({ showToast, profile }: any) => {
               )}
 
               <AnimatePresence>
+                {formaPagamento === 'MaxBank Benefícios' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden">
+                    <div className="flex flex-col gap-2 p-3 rounded-xl mt-1"
+                      style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-gray-400">Cobertura por benefícios</span>
+                        <span className="font-bold text-accent tabular-nums">
+                          {valorBeneficios.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                      </div>
+                      {valorResto > 0 ? (
+                        <>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-400">Restante</span>
+                            <span className="font-bold text-gray-200 tabular-nums">
+                              {valorResto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <label htmlFor="pdv-forma-resto" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Resto em</label>
+                            <select
+                              id="pdv-forma-resto"
+                              value={formaResto}
+                              onChange={e => setFormaResto(e.target.value)}
+                              className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none">
+                              {FORMA_RESTO_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-emerald-400 font-bold">Benefícios cobrem o carrinho inteiro.</p>
+                      )}
+                      {valorBeneficios <= 0 && (
+                        <p className="text-[10px] text-red-400 font-bold">Nenhum item elegível a benefícios no carrinho.</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
                 {formaPagamento === 'Cartão Crédito' && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
@@ -929,6 +1086,76 @@ export const PDVView = ({ showToast, profile }: any) => {
                 style={{ border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', background: 'rgba(239,68,68,0.05)' }}
               >
                 <X size={12} /> Cancelar pagamento
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Overlay MaxBank Benefícios — código de 6 dígitos pro colaborador digitar */}
+      <AnimatePresence>
+        {beneficiosPendente && (
+          <motion.div
+            key="beneficios-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              className="neu-flat rounded-3xl w-full max-w-sm p-6 flex flex-col items-center gap-4 border border-white/5 relative"
+              style={{ background: 'var(--color-bg-base)' }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Smartphone size={18} className="text-accent" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent animate-ping" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Aguardando colaborador</span>
+              </div>
+
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cobertura por benefícios</p>
+                <p className="text-3xl font-black text-gray-100 tabular-nums tracking-tight mt-1">
+                  {beneficiosPendente.valor_beneficios.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 px-6 py-5 flex flex-col items-center gap-1"
+                style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Código no MaxBank</span>
+                <span className="text-4xl font-black tracking-[0.4em] text-accent tabular-nums font-mono">
+                  {beneficiosPendente.codigo}
+                </span>
+              </div>
+
+              {beneficiosPendente.valor_resto > 0 && (
+                <div className="text-center text-[11px] text-gray-400 leading-relaxed max-w-[18rem]">
+                  Após confirmar, receba o restante de{' '}
+                  <span className="font-bold text-gray-200 tabular-nums">
+                    {beneficiosPendente.valor_resto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>{' '}
+                  em <span className="font-bold text-gray-200">{beneficiosPendente.forma_resto}</span>.
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 text-[11px] text-gray-500 text-center max-w-[18rem]">
+                <Smartphone size={12} className="shrink-0 text-accent" />
+                <span>Peça ao colaborador para abrir o <span className="font-bold text-gray-300">MaxBank → Pagar no PDV</span> e digitar este código.</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[10px] text-gray-600 font-mono">
+                <Loader2 size={10} className="animate-spin" />
+                <span>Escutando confirmação em tempo real…</span>
+              </div>
+
+              <button
+                onClick={cancelarBeneficios}
+                className="mt-1 w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                style={{ border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', background: 'rgba(239,68,68,0.05)' }}
+              >
+                <X size={12} /> Cancelar
               </button>
             </motion.div>
           </motion.div>

@@ -32,6 +32,7 @@ const EMPTY_EXTRAS = {
   patrimonio_numero:      '',
   patrimonio_responsavel: '',
   patrimonio_localizacao: '',
+  elegivel_beneficios:    false,
 };
 
 const parseNum = (v: string | number | undefined | null): number =>
@@ -184,6 +185,7 @@ export const ProdutosView = ({ showToast }: any) => {
       patrimonio_numero:      item.patrimonio_numero      ?? '',
       patrimonio_responsavel: item.patrimonio_responsavel ?? '',
       patrimonio_localizacao: item.patrimonio_localizacao ?? '',
+      elegivel_beneficios:    !!item.elegivel_beneficios,
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -267,6 +269,8 @@ export const ProdutosView = ({ showToast }: any) => {
         patrimonio_numero:      isPatrimonio ? (extras.patrimonio_numero      || null) : null,
         patrimonio_responsavel: isPatrimonio ? (extras.patrimonio_responsavel || null) : null,
         patrimonio_localizacao: isPatrimonio ? (extras.patrimonio_localizacao || null) : null,
+        // Patrimônio não vai pro PDV, então força elegivel_beneficios=false.
+        elegivel_beneficios:    isPatrimonio ? false : !!extras.elegivel_beneficios,
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
@@ -691,6 +695,18 @@ export const ProdutosView = ({ showToast }: any) => {
                       placeholder="0" />
                   </FormField>
                 </div>
+
+                {extras.tipo !== 'patrimonio' && (
+                  <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 mt-4">
+                    <input type="checkbox" checked={extras.elegivel_beneficios}
+                      onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
+                      className="accent-accent w-4 h-4" />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-gray-200">Aceita MaxBank Benefícios</span>
+                      <span className="text-[10px] text-gray-500">Colaborador pode pagar este item com saldo de benefícios no PDV.</span>
+                    </div>
+                  </label>
+                )}
               </div>
 
               <div className="flex gap-3 justify-end">
@@ -737,7 +753,14 @@ export const ProdutosView = ({ showToast }: any) => {
                         <td className="py-4 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{item.codigo}</td>
                         <td className="py-4 px-4">
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
-                          <p className="text-sm font-semibold text-gray-200">{item.nome}</p>
+                          <p className="text-sm font-semibold text-gray-200 flex items-center gap-1.5">
+                            {item.nome}
+                            {item.elegivel_beneficios && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400 border border-emerald-600/30" title="Aceita MaxBank Benefícios">
+                                Benef
+                              </span>
+                            )}
+                          </p>
                           {item.fornecedor && <p className="text-[10px] text-gray-600 mt-0.5">{item.fornecedor}</p>}
                         </td>
                         <td className="py-4 px-4 hidden lg:table-cell">
