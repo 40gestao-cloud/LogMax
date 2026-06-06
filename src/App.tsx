@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database,
+  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database, Target,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -58,6 +58,7 @@ const PatrimonioView               = lazy(() => import('./views/PatrimonioView')
 const FuncionariosView             = lazy(() => import('./views/FuncionariosView').then(m => ({ default: m.FuncionariosView })));
 const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoView').then(m => ({ default: m.FolhaPagamentoView })));
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
+const MetasView                    = lazy(() => import('./views/MetasView').then(m => ({ default: m.MetasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
@@ -201,6 +202,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
         <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
           <MessageSquare size={18} /><span>Feedback</span>
+        </button>
+        {/* Metas (Fase 4): colaborador vê próprias; gerente/admin/CEO/RH criam e aprovam — credita bonificação no MaxBank, R$ X dispara folga */}
+        <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <Target size={18} /><span>Metas</span>
         </button>
       </div>
 
@@ -834,6 +839,7 @@ function LogMaxAppInner() {
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
       case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
+      case 'metas':                        return <MetasView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
