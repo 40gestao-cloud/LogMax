@@ -110,6 +110,19 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
       setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? { ...x, status: next } : x));
 
+      // Processada → Paga: credita salário líquido na carteira MaxBank
+      // do colaborador. Idempotência via UNIQUE parcial em maxbank_transacoes
+      // (origem='folha_pagamento', origem_id=folha.id): chamar 2x é seguro.
+      if (next === 'Paga' && supabase) {
+        const { error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
+        if (error) {
+          console.error('[FolhaPagamento] erro ao creditar MaxBank:', error);
+          showToast(`Folha marcada como Paga, mas falhou ao creditar MaxBank: ${error.message}`, 'error');
+        } else {
+          showToast('Folha paga — saldo do colaborador atualizado no MaxBank.', 'success');
+        }
+      }
+
       // Pendente → Processada: gera Conta a Pagar para o líquido do funcionário.
       // Idempotência: marcador `[folha:${id}]` na descrição evita duplicados em race.
       if (next === 'Processada') {
