@@ -246,6 +246,20 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     });
   };
 
+  const recomputarSaldos = async () => {
+    if (!carteiraModal || !supabase) return;
+    if (!confirm('Recalcular os 3 saldos desta carteira a partir das transações existentes? Útil pra zerar drift de testes antigos.')) return;
+    try {
+      const { error } = await supabase.rpc('recompute_saldos_maxbank', { p_conta_id: carteiraModal.contaId });
+      if (error) throw error;
+      showToast('Saldos recalculados.', 'success');
+      await recarregarCarteira();
+    } catch (err: any) {
+      console.error('[FolhaPagamento] erro ao recomputar saldos:', err);
+      showToast(`Erro ao recomputar: ${err?.message ?? err}`, 'error');
+    }
+  };
+
   const excluirTransacao = async (tx: any) => {
     if (!supabase) return;
     if (!confirm(`Excluir o lançamento "${tx.descricao}" (R$ ${Number(tx.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})?\n\nO saldo da carteira será ajustado.`)) return;
@@ -629,7 +643,14 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 </ul>
               )}
 
-              <div className="flex justify-end mt-6">
+              <div className="flex justify-between items-center mt-6">
+                <button
+                  onClick={recomputarSaldos}
+                  className="text-[10px] text-gray-400 hover:text-accent underline uppercase tracking-wider font-bold"
+                  title="Recalcular saldos a partir das transações restantes"
+                >
+                  Recalcular saldos
+                </button>
                 <NeuButtonAccent variant="" onClick={() => setCarteiraModal(null)}>Fechar</NeuButtonAccent>
               </div>
             </motion.div>
