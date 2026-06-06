@@ -16,6 +16,7 @@ export interface UserProfile {
   criado_por: string | null;
   created_at: string;
   funcionario_id?: string | null;
+  foto_url?: string | null;
 }
 
 export function useUserProfile() {

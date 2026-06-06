@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
+import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { AuditoriaProvider } from './contexts/AuditoriaContext';
 
@@ -597,7 +598,7 @@ function AccentPicker() {
 
 function LogMaxAppInner() {
   const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
-  const { profile, isLoading: profileLoading } = useUserProfile();
+  const { profile, isLoading: profileLoading, refetch: refetchProfile } = useUserProfile();
   // Persistido em sessionStorage para sobreviver a F5/pull-to-refresh
   // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
   const [activeView, setActiveView] = useState<string>(() => {
@@ -651,6 +652,7 @@ function LogMaxAppInner() {
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [perfilFotoOpen, setPerfilFotoOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
@@ -871,6 +873,13 @@ function LogMaxAppInner() {
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       {canUseMaxAI && <AIAssistantFAB />}
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
+      <PerfilFotoModal
+        open={perfilFotoOpen}
+        profile={profile}
+        onClose={() => setPerfilFotoOpen(false)}
+        onUpdated={refetchProfile}
+        showToast={showToast}
+      />
 
       {/* MOBILE SIDEBAR OVERLAY */}
       <AnimatePresence>
@@ -936,10 +945,19 @@ function LogMaxAppInner() {
             <AccentPicker />
 
             <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-3 border border-white/5">
-              <div className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20 shrink-0"
-                style={{ background: 'var(--color-avatar-bg)' }}>
-                <User size={16} className="text-accent" />
-              </div>
+              <button
+                type="button"
+                onClick={() => setPerfilFotoOpen(true)}
+                title="Trocar foto de perfil"
+                className="w-9 h-9 rounded-full neu-pressed flex items-center justify-center border border-accent/20 shrink-0 overflow-hidden hover:border-accent transition-colors"
+                style={{ background: 'var(--color-avatar-bg)' }}
+              >
+                {profile.foto_url ? (
+                  <img src={profile.foto_url} alt="Foto de perfil" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={16} className="text-accent" />
+                )}
+              </button>
               <div className="hidden sm:flex flex-col pr-2">
                 <span className="text-sm font-bold text-gray-200 capitalize">{displayName}</span>
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
