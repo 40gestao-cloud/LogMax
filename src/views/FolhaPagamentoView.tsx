@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
+import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
+
+type RecalcBreakdown = {
+  valor_hora: number;
+  horas_atraso: number;
+  horas_falta: number;
+  horas_extras: number;
+  descontos: number;
+  bonus_extra: number;
+  salario_base: number;
+  salario_bruto: number;
+  salario_liquido: number;
+};
 
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
@@ -14,7 +27,7 @@ const statusCls = (s: string) =>
 const statusNext = (s: string): string | null =>
   s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : null;
 
-const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_bruto: '', descontos: '', status: 'Pendente' };
+const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', status: 'Pendente' };
 
 export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   // Guard: dados sensíveis (salário). RLS já bloqueia, mas evita UX confusa.
@@ -35,6 +48,8 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [recalcBreakdown, setRecalcBreakdown] = useState<{ folhaNome: string; data: RecalcBreakdown } | null>(null);
+  const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
 
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -51,9 +66,10 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
   const handleSave = async () => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
-    const bruto = Number(form.salario_bruto || 0);
+    const base = Number(form.salario_base || 0);
     const desc = Number(form.descontos || 0);
-    const payload = { ...form, salario_bruto: bruto, descontos: desc, salario_liquido: bruto - desc };
+    // salario_bruto inicial = base; recalc do ponto pode aumentar via hora extra.
+    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, salario_liquido: base - desc };
     setSaving(true);
     try {
       if (editId) {
@@ -78,10 +94,11 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
   const openEdit = (f: any) => {
     setEditId(f.id);
+    const base = f.salario_base ?? f.salario_bruto;
     setForm({
       funcionario_id: f.funcionario_id ?? '',
       mes_ref:        f.mes_ref        ?? '',
-      salario_bruto:  f.salario_bruto != null ? String(f.salario_bruto) : '',
+      salario_base:   base != null ? String(base) : '',
       descontos:      f.descontos     != null ? String(f.descontos)     : '',
       status:         f.status        ?? 'Pendente',
     });
@@ -102,6 +119,46 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   };
 
   const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY); };
+
+  // Fase 3: chama RPC recalcular_folha_do_ponto. Frontend passa horários
+  // da turma vindos de PONTO_HORARIOS (env por instância).
+  const handleRecalcular = async (f: any) => {
+    if (!supabase) return;
+    if (f.status !== 'Pendente') {
+      showToast('Recálculo só é permitido em folhas Pendente.', 'error');
+      return;
+    }
+    setRecalcLoading(f.id);
+    try {
+      const { data: result, error } = await supabase.rpc('recalcular_folha_do_ponto', {
+        p_folha_id:       f.id,
+        p_target_entrada: PONTO_HORARIOS.entrada,
+        p_target_retorno: PONTO_HORARIOS.retorno,
+        p_target_saida:   PONTO_HORARIOS.saida,
+      });
+      if (error) throw error;
+      const breakdown = result as RecalcBreakdown;
+      // Atualiza tabela local com os novos valores.
+      setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? {
+        ...x,
+        salario_base:    breakdown.salario_base,
+        salario_bruto:   breakdown.salario_bruto,
+        descontos:       breakdown.descontos,
+        salario_liquido: breakdown.salario_liquido,
+        horas_atraso:    breakdown.horas_atraso,
+        horas_falta:     breakdown.horas_falta,
+        horas_extras:    breakdown.horas_extras,
+      } : x));
+      const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+      setRecalcBreakdown({ folhaNome: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`, data: breakdown });
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      console.error('[FolhaPagamento] erro ao recalcular:', err);
+      showToast(`Erro ao recalcular: ${msg}`, 'error');
+    } finally {
+      setRecalcLoading(null);
+    }
+  };
 
   const handleStatusCycle = async (f: any) => {
     const next = statusNext(f.status);
@@ -211,7 +268,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
               </div>
               {[
                 { label: 'Mês Ref. *', k: 'mes_ref', type: 'month' },
-                { label: 'Salário Bruto (R$)', k: 'salario_bruto', type: 'number' },
+                { label: 'Salário Base (R$)', k: 'salario_base', type: 'number' },
                 { label: 'Descontos (R$)', k: 'descontos', type: 'number' },
               ].map(({ label, k, type }) => (
                 <div key={k} className="flex flex-col gap-1.5">
@@ -223,7 +280,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 {/* O "Líquido Estimado" é texto somente-leitura, sem input — usamos span por isso */}
                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</span>
                 <p className="neu-input rounded-xl px-3 py-2.5 text-sm text-green-400 font-mono font-bold">
-                  R$ {(Number(form.salario_bruto || 0) - Number(form.descontos || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {(Number(form.salario_base || 0) - Number(form.descontos || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -267,6 +324,16 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          {f.status === 'Pendente' && (
+                            <button
+                              onClick={() => handleRecalcular(f)}
+                              disabled={recalcLoading === f.id}
+                              title="Recalcular do Ponto"
+                              className="action-btn-edit disabled:opacity-50"
+                            >
+                              <Calculator size={12} />
+                            </button>
+                          )}
                           <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                           <button onClick={() => handleDelete(f.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
@@ -279,6 +346,60 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {recalcBreakdown && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setRecalcBreakdown(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-accent">Recálculo do Ponto</h3>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{recalcBreakdown.folhaNome}</p>
+                </div>
+                <button onClick={() => setRecalcBreakdown(null)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <Row label="Valor/hora (base ÷ 220)" value={`R$ ${recalcBreakdown.data.valor_hora.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                <div className="border-t border-white/5 my-3" />
+                <Row label="Horas de atraso" value={`${recalcBreakdown.data.horas_atraso.toFixed(2)} h`} muted />
+                <Row label="Horas de falta" value={`${recalcBreakdown.data.horas_falta.toFixed(2)} h`} muted />
+                <Row label="Descontos totais" value={`- R$ ${recalcBreakdown.data.descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                <div className="border-t border-white/5 my-3" />
+                <Row label="Horas extras" value={`${recalcBreakdown.data.horas_extras.toFixed(2)} h`} muted />
+                <Row label="Bônus hora extra (×1,5)" value={`+ R$ ${recalcBreakdown.data.bonus_extra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-blue-400" />
+                <div className="border-t border-white/5 my-3" />
+                <Row label="Salário base" value={`R$ ${recalcBreakdown.data.salario_base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} muted />
+                <Row label="Bruto efetivo (base + extra)" value={`R$ ${recalcBreakdown.data.salario_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                <Row label="Líquido final" value={`R$ ${recalcBreakdown.data.salario_liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-green-400" bold />
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <NeuButtonAccent variant="" onClick={() => setRecalcBreakdown(null)}>Fechar</NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
+
+function Row({ label, value, colorClass, muted, bold }: {
+  label: string; value: string; colorClass?: string; muted?: boolean; bold?: boolean;
+}) {
+  return (
+    <div className="flex justify-between items-center">
+      <span className={muted ? 'text-gray-500' : 'text-gray-400'}>{label}</span>
+      <span className={`font-mono ${bold ? 'font-black' : 'font-bold'} ${colorClass ?? 'text-gray-200'}`}>{value}</span>
+    </div>
+  );
+}
