@@ -643,14 +643,11 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 </ul>
               )}
 
-              <div className="flex justify-between items-center mt-6">
-                <button
-                  onClick={recomputarSaldos}
-                  className="text-[10px] text-gray-400 hover:text-accent underline uppercase tracking-wider font-bold"
-                  title="Recalcular saldos a partir das transações restantes"
-                >
+              <div className="flex justify-between items-center gap-3 mt-6">
+                <NeuButtonAccent variant="yellow" onClick={recomputarSaldos}>
+                  <Calculator size={14} />
                   Recalcular saldos
-                </button>
+                </NeuButtonAccent>
                 <NeuButtonAccent variant="" onClick={() => setCarteiraModal(null)}>Fechar</NeuButtonAccent>
               </div>
             </motion.div>
