@@ -1,30 +1,33 @@
 -- =================================================================
--- MaxPOS (instância 5) — beneficios_pendentes (Fase 5)
+-- LogMax PDV — beneficios_pendentes (Fase 5)
 -- =================================================================
 -- Fluxo:
---   1. PDV (MaxPOS) cria registro em beneficios_pendentes com
+--   1. PDV (LogMax) cria registro em beneficios_pendentes com
 --      valor_beneficios (parcial do carrinho elegível) e — se houver —
 --      valor_resto + forma_resto pra cobrir o restante.
 --   2. Gera codigo_curto de 6 chars (alfanumérico maiúsculo, sem
 --      caracteres confundíveis) e exibe pro vendedor mostrar ao
 --      colaborador.
 --   3. Colaborador abre MaxBank stand-alone (logado na própria
---      instância 1-4), entra em "Pagar no PDV", digita o código.
---      MaxBank faz lookup anon em MaxPOS por codigo_curto +
---      status='aguardando'. Mostra valor + filial_pdv + produtos.
+--      instância da turma dele), entra em "Pagar no PDV", digita o
+--      código. MaxBank faz lookup anon no LogMax do PDV por
+--      codigo_curto + status='aguardando'. Mostra valor + filial_pdv
+--      + produtos.
 --   4. Colaborador clica "Confirmar". MaxBank standalone:
 --      a) chama RPC debitar_maxbank_beneficios na instância dele
 --         (idempotente — UNIQUE parcial protege duplo crédito);
---      b) faz UPDATE anon do pendente em MaxPOS pra status='pago'
+--      b) faz UPDATE anon do pendente no LogMax pra status='pago'
 --         (também guarda colaborador_email + instancia_paga_id).
 --   5. PDV (realtime) vê o pago, chama criar_venda_pdv.
 --
 -- Segurança: codigo_curto é o segredo (6 chars). UNIQUE parcial por
 -- status='aguardando' libera reuso após consumir/expirar. Expiração
--- em 5 min reduz janela de ataque por chute (62^6 = 56B combinações).
+-- em 5 min reduz janela de ataque por chute (32^6 ≈ 1.07B combinações).
 --
--- RODAR APENAS NA INSTÂNCIA 5 (MaxPOS). NÃO rodar nas 1-4 — não
--- existem clientes/produtos lá no PDV (eles ficam só em MaxPOS).
+-- RODAR EM CADA SUPABASE DO LOGMAX QUE TEM PDV (todas as turmas:
+-- logmax-erp, logmax-aprendiz, logmax-contabilidade, logmax-adm).
+-- Sem FK pra clientes/auth.users — cliente_id/operador_id ficam
+-- como uuid livre só pra auditoria.
 -- =================================================================
 
 BEGIN;
