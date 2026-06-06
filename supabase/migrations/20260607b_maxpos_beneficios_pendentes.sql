@@ -40,8 +40,11 @@ CREATE TABLE IF NOT EXISTS beneficios_pendentes (
   produtos            jsonb NOT NULL DEFAULT '[]'::jsonb,
   status              text NOT NULL DEFAULT 'aguardando'
                        CHECK (status IN ('aguardando','pago','cancelado','expirado')),
-  cliente_id          uuid REFERENCES clientes(id) ON DELETE SET NULL,
-  operador_id         uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  -- cliente_id e operador_id sem FK: MaxPOS é instância minimal e pode não
+  -- ter `clientes`; e operador pode estar em projeto Vercel diferente.
+  -- Mantemos como uuid livre só pra auditoria.
+  cliente_id          uuid,
+  operador_id         uuid,
   colaborador_email   text,  -- preenchido quando confirma (auditoria)
   instancia_paga_id   text,  -- branch_id no MaxBank stand-alone (auditoria)
   created_at          timestamptz NOT NULL DEFAULT now(),
