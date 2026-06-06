@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -61,6 +61,18 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const [recalcBreakdown, setRecalcBreakdown] = useState<{ folhaNome: string; data: RecalcBreakdown } | null>(null);
   const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
 
+  // Modal admin: carteira MaxBank do colaborador (saldos + extrato + excluir).
+  // Aberto a partir de cada linha de folha — admin/CEO/RH usa pra limpar
+  // créditos de teste sem precisar abrir o app MaxBank.
+  const [carteiraModal, setCarteiraModal] = useState<{
+    funcionarioNome: string;
+    contaId: string;
+    saldos: { salario: number; beneficios: number; bonificacoes: number };
+    transacoes: any[];
+  } | null>(null);
+  const [carteiraLoading, setCarteiraLoading] = useState<boolean>(false);
+  const [excluindoTxId, setExcluindoTxId] = useState<string | null>(null);
+
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const folhasFiltradas = folhas.filter((f: any) => f.mes_ref === mesFiltro);
@@ -118,12 +130,35 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este lançamento de folha?')) return;
+  const handleDelete = async (folha: any) => {
+    const ehPaga = folha.status === 'Paga';
+    const ehProcessada = folha.status === 'Processada';
+    const aviso = ehPaga
+      ? 'Inativar este lançamento de folha?\n\nEla está PAGA — vou estornar o crédito da carteira MaxBank do colaborador (salário e benefícios) e inativar a Conta a Pagar gerada.'
+      : ehProcessada
+      ? 'Inativar este lançamento de folha?\n\nEla está PROCESSADA — vou inativar também a Conta a Pagar gerada.'
+      : 'Inativar este lançamento de folha?';
+    if (!confirm(aviso)) return;
     try {
-      await dbDelete('/api/folhapagamentoview', id);
-      setData((prev: any[]) => prev.filter((f: any) => f.id !== id));
-      showToast('Folha inativada.', 'success');
+      // Estorno admin: reverte crédito MaxBank (se houver) e inativa
+      // a conta_pagar derivada. RPC é idempotente — chamar mesmo em
+      // folhas Pendentes é no-op.
+      if (supabase && (ehPaga || ehProcessada)) {
+        const { data: res, error: revErr } = await supabase.rpc('reverter_folha_maxbank', { p_folha_id: folha.id });
+        if (revErr) {
+          console.error('[FolhaPagamento] erro ao reverter MaxBank:', revErr);
+          showToast(`Erro ao reverter MaxBank: ${revErr.message}`, 'error');
+          return;
+        }
+        const r = res as any;
+        const perda = Number(r?.perda_total_por_saldo_insuficiente ?? 0);
+        if (perda > 0) {
+          showToast(`Estorno parcial: colaborador já tinha gasto R$ ${perda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — saldo zerou onde não dava pra devolver.`, 'error');
+        }
+      }
+      await dbDelete('/api/folhapagamentoview', folha.id);
+      setData((prev: any[]) => prev.filter((f: any) => f.id !== folha.id));
+      showToast('Folha inativada e MaxBank revertido.', 'success');
     } catch (err: any) {
       const msg = err?.message ?? 'verifique o console';
       console.error('[FolhaPagamento] erro ao inativar:', err);
@@ -132,6 +167,101 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   };
 
   const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY); };
+
+  // Bridge funcionario → user_profile → maxbank_contas. Carrega saldos + extrato
+  // recente. Admin/CEO/RH consegue ler todos via RLS.
+  const abrirCarteira = async (f: any) => {
+    if (!supabase) return;
+    const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+    const nome = func?.nome ?? 'Colaborador';
+    setCarteiraLoading(true);
+    try {
+      const { data: funcRow, error: fnErr } = await supabase
+        .from('funcionarios')
+        .select('user_profile_id')
+        .eq('id', f.funcionario_id)
+        .maybeSingle();
+      if (fnErr) throw fnErr;
+      if (!funcRow?.user_profile_id) {
+        showToast(`${nome} não tem user_profile vinculado — sem carteira MaxBank.`, 'error');
+        return;
+      }
+      const { data: conta, error: cErr } = await supabase
+        .from('maxbank_contas')
+        .select('id, saldo_salario, saldo_beneficios, saldo_bonificacoes')
+        .eq('colaborador_id', funcRow.user_profile_id)
+        .maybeSingle();
+      if (cErr) throw cErr;
+      if (!conta) {
+        showToast(`Conta MaxBank de ${nome} ainda não existe.`, 'error');
+        return;
+      }
+      const { data: txs, error: tErr } = await supabase
+        .from('maxbank_transacoes')
+        .select('id, tipo, carteira, valor, descricao, origem, created_at')
+        .eq('conta_id', conta.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (tErr) throw tErr;
+      setCarteiraModal({
+        funcionarioNome: nome,
+        contaId: conta.id,
+        saldos: {
+          salario:      Number(conta.saldo_salario),
+          beneficios:   Number(conta.saldo_beneficios),
+          bonificacoes: Number(conta.saldo_bonificacoes),
+        },
+        transacoes: txs ?? [],
+      });
+    } catch (err: any) {
+      console.error('[FolhaPagamento] erro ao abrir carteira:', err);
+      showToast(`Erro ao abrir carteira: ${err?.message ?? err}`, 'error');
+    } finally {
+      setCarteiraLoading(false);
+    }
+  };
+
+  const recarregarCarteira = async () => {
+    if (!carteiraModal || !supabase) return;
+    const { data: conta } = await supabase
+      .from('maxbank_contas')
+      .select('saldo_salario, saldo_beneficios, saldo_bonificacoes')
+      .eq('id', carteiraModal.contaId)
+      .maybeSingle();
+    const { data: txs } = await supabase
+      .from('maxbank_transacoes')
+      .select('id, tipo, carteira, valor, descricao, origem, created_at')
+      .eq('conta_id', carteiraModal.contaId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (!conta) return;
+    setCarteiraModal({
+      ...carteiraModal,
+      saldos: {
+        salario:      Number(conta.saldo_salario),
+        beneficios:   Number(conta.saldo_beneficios),
+        bonificacoes: Number(conta.saldo_bonificacoes),
+      },
+      transacoes: txs ?? [],
+    });
+  };
+
+  const excluirTransacao = async (tx: any) => {
+    if (!supabase) return;
+    if (!confirm(`Excluir o lançamento "${tx.descricao}" (R$ ${Number(tx.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})?\n\nO saldo da carteira será ajustado.`)) return;
+    setExcluindoTxId(tx.id);
+    try {
+      const { error } = await supabase.rpc('excluir_transacao_maxbank', { p_transacao_id: tx.id });
+      if (error) throw error;
+      showToast('Lançamento excluído e saldo ajustado.', 'success');
+      await recarregarCarteira();
+    } catch (err: any) {
+      console.error('[FolhaPagamento] erro ao excluir lançamento:', err);
+      showToast(`Erro ao excluir: ${err?.message ?? err}`, 'error');
+    } finally {
+      setExcluindoTxId(null);
+    }
+  };
 
   // Fase 3: chama RPC recalcular_folha_do_ponto. Frontend passa horários
   // da turma vindos de PONTO_HORARIOS (env por instância).
@@ -362,8 +492,16 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                               <Calculator size={12} />
                             </button>
                           )}
+                          <button
+                            onClick={() => abrirCarteira(f)}
+                            disabled={carteiraLoading}
+                            title="Ver carteira MaxBank do colaborador"
+                            className="action-btn-edit disabled:opacity-50"
+                          >
+                            <Wallet size={12} />
+                          </button>
                           <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
-                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          <button onClick={() => handleDelete(f)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </motion.tr>
@@ -412,6 +550,87 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
               <div className="flex justify-end mt-6">
                 <NeuButtonAccent variant="" onClick={() => setRecalcBreakdown(null)}>Fechar</NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {carteiraModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setCarteiraModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-lg w-full max-h-[85vh] overflow-y-auto main-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-accent">Carteira MaxBank</h3>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{carteiraModal.funcionarioNome}</p>
+                </div>
+                <button onClick={() => setCarteiraModal(null)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-5">
+                <div className="neu-flat rounded-xl p-3 border border-white/5">
+                  <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Salário</p>
+                  <p className="text-sm font-black text-green-400 mt-1">R$ {carteiraModal.saldos.salario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="neu-flat rounded-xl p-3 border border-white/5">
+                  <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Benefícios</p>
+                  <p className="text-sm font-black text-blue-400 mt-1">R$ {carteiraModal.saldos.beneficios.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="neu-flat rounded-xl p-3 border border-white/5">
+                  <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Bonific.</p>
+                  <p className="text-sm font-black text-yellow-400 mt-1">R$ {carteiraModal.saldos.bonificacoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Extrato (50 últimos)</p>
+              {carteiraModal.transacoes.length === 0 ? (
+                <p className="text-xs text-gray-500 italic py-4 text-center">Nenhum lançamento.</p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {carteiraModal.transacoes.map((tx: any) => {
+                    const ehCredito = tx.tipo === 'credito';
+                    const cor = ehCredito ? 'text-green-400' : 'text-red-400';
+                    const sinal = ehCredito ? '+' : '−';
+                    const Icone = ehCredito ? ArrowDownLeft : ArrowUpRight;
+                    return (
+                      <li key={tx.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5">
+                        <div className={`w-7 h-7 neu-flat rounded-full flex items-center justify-center flex-shrink-0 ${cor}`}>
+                          <Icone size={12} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-gray-200 truncate">{tx.descricao}</p>
+                          <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wider">
+                            {tx.carteira} • {new Date(tx.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <p className={`text-xs font-mono font-black ${cor} flex-shrink-0`}>
+                          {sinal} R$ {Number(tx.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        <button
+                          onClick={() => excluirTransacao(tx)}
+                          disabled={excluindoTxId === tx.id}
+                          title="Excluir lançamento e ajustar saldo"
+                          className="action-btn-delete disabled:opacity-50"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <div className="flex justify-end mt-6">
+                <NeuButtonAccent variant="" onClick={() => setCarteiraModal(null)}>Fechar</NeuButtonAccent>
               </div>
             </motion.div>
           </motion.div>
