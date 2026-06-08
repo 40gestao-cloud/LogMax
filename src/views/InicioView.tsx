@@ -237,7 +237,7 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
             <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] border-[#0A0A0A] relative">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] border-[#000000] relative">
                 <div className="absolute inset-0 rounded-full border-t-[3px] border-accent animate-spin-slow" style={{ animationDuration: '6s' }}></div>
                 <span className="text-3xl sm:text-4xl font-black text-accent drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{contasReceberCount}</span>
               </div>
@@ -260,10 +260,10 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
                     <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
                     <XAxis dataKey="name" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                     <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1a1a1a', borderRadius: '12px', boxShadow: '8px 8px 16px #000' }} itemStyle={{ color: '#e0e0e0', fontWeight: 'bold', fontSize: '12px' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#000000', border: '1px solid #1a1a1a', borderRadius: '12px', boxShadow: '8px 8px 16px #000' }} itemStyle={{ color: '#e0e0e0', fontWeight: 'bold', fontSize: '12px' }} />
                     <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: '#9ca3af', paddingTop: '10px' }} />
                     <Bar dataKey="compra" fill="#1f2937" radius={[4, 4, 0, 0]} activeBar={{ fill: '#374151' }} stroke="#111827" strokeWidth={1} name="Compra" />
-                    <Line type="monotone" dataKey="pedido" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: '#0A0A0A', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#10B981', strokeWidth: 0 }} name="Pedido" />
+                    <Line type="monotone" dataKey="pedido" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: '#000000', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#10B981', strokeWidth: 0 }} name="Pedido" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>

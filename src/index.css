@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-base: #0A0A0A;
-  --color-bg-dark: #000000;
+  --color-bg-base: #000000;
+  --color-bg-dark: #0A0A0A;
   --color-bg-light: rgba(255, 255, 255, 0.05);
   --color-accent: #10B981;
   --color-accent-hover: #059669;
@@ -11,8 +11,8 @@
 
 /* ── Semantic token variables (dark mode default) ── */
 :root {
-  --color-bg-base:    #0A0A0A;
-  --color-bg-dark:    #000000;
+  --color-bg-base:    #000000;
+  --color-bg-dark:    #0A0A0A;
   --color-bg-light:   rgba(255, 255, 255, 0.05);
   --color-accent:      #10B981;
   --color-accent-hover: #059669;
@@ -582,8 +582,8 @@ table,
    reseta CSS vars + overrides com specificity maior do que os
    `[data-theme="light"]` para utilities Tailwind e classes .neu-*. */
 [data-theme="light"] .sidebar-dark {
-  --color-bg-base:    #0A0A0A;
-  --color-bg-dark:    #000000;
+  --color-bg-base:    #000000;
+  --color-bg-dark:    #0A0A0A;
   --color-bg-light:   rgba(255, 255, 255, 0.05);
 
   --color-text-primary:   #e0e0e0;
