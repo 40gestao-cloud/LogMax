@@ -42,19 +42,20 @@ export async function authenticate(
   const client = admin ?? getAdminClient(res);
   if (!client) return null;
 
-  const token = (req.headers.authorization ?? '').replace('Bearer ', '');
-  if (!token) {
-    res.status(401).json({ error: 'Token ausente. Faça login novamente.' });
+  const token = (req.headers.authorization ?? '').replace('Bearer ', '').trim();
+  // `Bearer ${session?.access_token}` no front vira "Bearer undefined" quando
+  // a sessão morre — tratamos como ausente em vez de mandar pra getUser, que
+  // devolveria "Auth session missing!" e confunde o usuário final.
+  if (!token || token === 'undefined' || token === 'null') {
+    res.status(401).json({ error: 'Sessão expirou. Faça login novamente.' });
     return null;
   }
 
   const { data: { user }, error } = await client.auth.getUser(token);
   if (error || !user) {
-    // Detalha o motivo (token expirado vs assinatura inválida vs Supabase
-    // URL/key inconsistentes entre Vercel e front) — sem isto o front só
-    // vê "Token inválido" e não sabe o que diagnosticar.
-    const detail = error?.message ?? 'usuário não encontrado';
-    res.status(401).json({ error: `Token inválido: ${detail}` });
+    // "Auth session missing!" / "invalid JWT" / "JWT expired" do Supabase
+    // viram todos uma mensagem amigável de re-login — o detalhe vai pro log.
+    res.status(401).json({ error: 'Sessão expirou. Faça login novamente.' });
     return null;
   }
 

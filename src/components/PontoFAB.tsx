@@ -31,12 +31,16 @@ export const PontoFAB = () => {
 
   const handleResult = useCallback(async (token: string) => {
     if (scanning) return;
+    if (!session?.access_token) {
+      setResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
+      return;
+    }
     setScanning(true);
     setResult(null);
     try {
       const res = await fetch('/api/register-ponto-qr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ token }),
       });
       const json = await res.json();

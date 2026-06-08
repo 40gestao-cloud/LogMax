@@ -410,12 +410,16 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
       setScanResult({ ok: false, msg: 'Código deve ter 6 dígitos.' });
       return;
     }
+    if (!session?.access_token) {
+      setScanResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
+      return;
+    }
     setEnviandoCodigo(true);
     setScanResult(null);
     try {
       const res = await fetch('/api/register-ponto-codigo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ codigo }),
       });
       const json = await res.json();
@@ -436,13 +440,18 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
 
   const handleQRResult = useCallback(async (token: string) => {
     if (scanning) return;
+    if (!session?.access_token) {
+      setScanResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
+      setShowScanner(false);
+      return;
+    }
     setScanning(true);
     setShowScanner(false);
     setScanResult(null);
     try {
       const res = await fetch('/api/register-ponto-qr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ token }),
       });
       const json = await res.json();
