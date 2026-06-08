@@ -241,6 +241,31 @@
                             inset -1px -1px 4px var(--color-bg-light);
 }
 
+/* ── Premium mode: preto puro + dourado clássico + branco ──
+   Preset coeso que ignora a escolha de data-accent — acent vira dourado fixo.
+   Especificidade (0,0,1,0) igual à dos blocos [data-accent="*"]; este bloco
+   vem DEPOIS, então ganha a "tie-break" e força o dourado sempre. Texts
+   herdam o dark (claros). Sidebar segue como sempre dark via .sidebar-dark
+   (não há override [data-theme="premium"] .sidebar-dark, então herda daqui).
+*/
+[data-theme="premium"] {
+  --color-bg-base:    #000000;
+  --color-bg-dark:    #1A1305;                   /* dourado escuro sutil pra inset shadows */
+  --color-bg-light:   rgba(212, 175, 55, 0.05);  /* glow dourado quase invisível */
+
+  --color-accent:       #D4AF37;                  /* dourado clássico */
+  --color-accent-hover: #B8941F;                  /* hover mais escuro */
+  --color-accent-text:  #000000;                  /* preto contra dourado */
+
+  /* Bordas/superfícies com tom dourado quente sutil — refina sem ofuscar */
+  --color-border:    rgba(212, 175, 55, 0.18);
+  --color-border-md: rgba(212, 175, 55, 0.28);
+  --color-surface:    rgba(212, 175, 55, 0.04);
+  --color-surface-md: rgba(212, 175, 55, 0.08);
+
+  --color-header-widget-bg: var(--color-bg-base);
+}
+
 /* Botão accent: a sombra fixa rgba(0,0,0,0.3) fica pesada em fundo claro. Suaviza
    ainda mais — halo pequeno, sem ruído. */
 [data-theme="light"] .neu-button-accent {

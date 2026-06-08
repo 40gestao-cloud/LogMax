@@ -14,7 +14,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
+  Sun, Moon, Sparkles, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
   Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database, Target,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
@@ -277,13 +277,17 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
+  // Ciclo dark → light → premium → dark. Ícone = próximo modo;
+  // tooltip explica o destino do clique.
+  const next = theme === 'dark' ? 'claro' : theme === 'light' ? 'premium' : 'escuro';
+  const Icon = theme === 'dark' ? Sun : theme === 'light' ? Sparkles : Moon;
   return (
     <button
       onClick={toggleTheme}
-      title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+      title={`Mudar para modo ${next}`}
       className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
     >
-      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+      <Icon size={16} />
     </button>
   );
 }

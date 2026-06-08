@@ -42,13 +42,18 @@
           if (t === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
             document.documentElement.style.backgroundColor = '#E8E8E8';
+          } else if (t === 'premium') {
+            document.documentElement.setAttribute('data-theme', 'premium');
+            document.documentElement.style.backgroundColor = '#000000';
           } else {
             document.documentElement.style.backgroundColor = '#000000';
           }
           if (a) document.documentElement.setAttribute('data-accent', a);
-          if (a && ACCENT_HEX[a]) {
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', ACCENT_HEX[a]);
+          // Premium ignora accent salvo e usa dourado fixo na meta theme-color.
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) {
+            if (t === 'premium')      meta.setAttribute('content', '#D4AF37');
+            else if (a && ACCENT_HEX[a]) meta.setAttribute('content', ACCENT_HEX[a]);
           }
         } catch (e) {
           document.documentElement.style.backgroundColor = '#000000';

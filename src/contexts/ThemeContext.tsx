@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
-type Theme = 'dark' | 'light';
+type Theme = 'dark' | 'light' | 'premium';
+
+const VALID_THEMES: Theme[] = ['dark', 'light', 'premium'];
 export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'red' | 'acessivel';
 
 const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink', 'red', 'acessivel'];
@@ -30,6 +32,7 @@ export const BRIGHTNESS_STEP = 10;
 interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
+  setTheme: (t: Theme) => void;
   accentColor: AccentColor;
   setAccentColor: (c: AccentColor) => void;
   brightness: number;
@@ -39,6 +42,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue>({
   theme: 'dark',
   toggleTheme: () => {},
+  setTheme: () => {},
   accentColor: 'green',
   setAccentColor: () => {},
   brightness: 100,
@@ -46,9 +50,9 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('logmax-theme');
-    return saved === 'light' ? 'light' : 'dark';
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const saved = localStorage.getItem('logmax-theme') as Theme | null;
+    return saved && VALID_THEMES.includes(saved) ? saved : 'dark';
   });
 
   const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
@@ -95,8 +99,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // /simulador-pagamento tem identidade própria (azul fixo) — não sobrescrever.
     if (window.location.pathname === '/simulador-pagamento') return;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', ACCENT_HEX[accentColor]);
-  }, [accentColor]);
+    // Premium ignora o accent escolhido — usa dourado clássico fixo.
+    const color = theme === 'premium' ? '#D4AF37' : ACCENT_HEX[accentColor];
+    if (meta) meta.setAttribute('content', color);
+  }, [accentColor, theme]);
 
   useEffect(() => {
     localStorage.setItem('logmax-brightness', String(brightness));
@@ -111,13 +117,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [brightness]);
 
-  const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+  // Ciclo: dark → light → premium → dark. Toggle continua existindo pro botão
+  // do topbar; quem quiser saltar direto pra um modo usa setTheme(t).
+  const toggleTheme = () => setThemeState(t =>
+    t === 'dark' ? 'light' : t === 'light' ? 'premium' : 'dark'
+  );
+  const setTheme = (t: Theme) => setThemeState(t);
   const setAccentColor = (c: AccentColor) => setAccentColorState(c);
   const setBrightness = (n: number) =>
     setBrightnessState(Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, Math.round(n))));
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, accentColor, setAccentColor, brightness, setBrightness }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, accentColor, setAccentColor, brightness, setBrightness }}>
       {children}
     </ThemeContext.Provider>
   );
