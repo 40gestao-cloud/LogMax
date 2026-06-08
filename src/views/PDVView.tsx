@@ -13,10 +13,15 @@ import { FILIAL_COLOR } from '../lib/filiais';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 
-// Filtro de unidade do PDV: 3 empresas operacionais (Matriz é administrativa,
-// não vende — fica em "Todas").
+// Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
+// Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
+// daquela unidade aberto. Colaborador é travado na própria filial; admin/CEO/
+// gerente podem alternar entre as três.
 const FILIAIS_PDV = ['SuperMax', 'MaxLook', 'TechMax'] as const;
-type FilialPDV = typeof FILIAIS_PDV[number] | 'todas';
+type FilialPDV = typeof FILIAIS_PDV[number];
+
+const podeAlternarFilial = (profile: any): boolean =>
+  profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
 
 interface CartItem {
   produto_id: string;
@@ -25,7 +30,6 @@ interface CartItem {
   qtd: number;
   subtotal: number;
   estoque: number;
-  filial?: string;
 }
 
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado', 'MaxBank Benefícios'];
@@ -35,18 +39,21 @@ const FORMA_RESTO_OPTIONS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 
 
 export const PDVView = ({ showToast, profile }: any) => {
   const { user } = useAuth();
-  const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto();
+  const podeAlternar = podeAlternarFilial(profile);
+  // Filial inicial: a do operador se operacional; admin/CEO/gerente sem filial
+  // operacional caem em SuperMax como padrão (pode alternar). Colaborador sem
+  // filial operacional não opera PDV (gate visual mais abaixo).
+  const filialInicial: FilialPDV =
+    (FILIAIS_PDV as readonly string[]).includes(profile?.filial)
+      ? (profile.filial as FilialPDV)
+      : 'SuperMax';
+  const [filialFiltro, setFilialFiltro] = useState<FilialPDV>(filialInicial);
+  const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto(filialFiltro);
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
   const { data: clientes } = useFetchData<any>('/api/crmview');
 
   const [search, setSearch] = useState('');
-  // Filial padrão: a do operador se for uma das 3 empresas; senão "Todas".
-  const filialInicial: FilialPDV =
-    (FILIAIS_PDV as readonly string[]).includes(profile?.filial)
-      ? (profile.filial as FilialPDV)
-      : 'todas';
-  const [filialFiltro, setFilialFiltro] = useState<FilialPDV>(filialInicial);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [desconto, setDesconto] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
@@ -96,12 +103,9 @@ export const PDVView = ({ showToast, profile }: any) => {
     (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio'
   );
   // Filial filter primeiro, depois busca textual. Critério: igual exato a `filial`
-  // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica fora
-  // dos 3 botões — só aparece em "Todas".
-  const produtosPorFilial =
-    filialFiltro === 'todas'
-      ? produtosAtivos
-      : produtosAtivos.filter((p: any) => p.filial === filialFiltro);
+  // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica
+  // fora — PDV opera só nas 3 unidades operacionais.
+  const produtosPorFilial = produtosAtivos.filter((p: any) => p.filial === filialFiltro);
   const searchLower = search.toLowerCase();
   const filtered = produtosPorFilial.filter((p: any) =>
     [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower))
@@ -141,7 +145,7 @@ export const PDVView = ({ showToast, profile }: any) => {
         return prev;
       }
       playBeep();
-      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999, filial: produto.filial }];
+      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999 }];
     });
   }, [showToast]);
 
@@ -179,8 +183,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       if (partial.length === 1) match = partial[0];
     }
     if (!match) {
-      const filialMsg = filialFiltro === 'todas' ? '' : ` em ${filialFiltro}`;
-      showToast?.(`Produto não encontrado${filialMsg}: ${termo}`, 'error', true);
+      showToast?.(`Produto não encontrado em ${filialFiltro}: ${termo}`, 'error', true);
     } else {
       addToCart(match);
     }
@@ -319,18 +322,9 @@ export const PDVView = ({ showToast, profile }: any) => {
       preco_unitario: item.preco_unitario,
       subtotal:      item.subtotal,
     }));
-    // Filial da venda: usa a filial do primeiro produto se todos os itens
-    // forem da mesma unidade; caso contrário (carrinho misto ou item sem
-    // filial), cai para a filial do operador (profile.filial). Default
-    // 'Matriz' se nada estiver definido — evita venda sem atribuição.
-    const filiaisCarrinho = Array.from(
-      new Set(snap.cart.map((it: any) => it.filial).filter(Boolean))
-    );
-    const filialVenda: string =
-      filiaisCarrinho.length === 1
-        ? String(filiaisCarrinho[0])
-        : (profile?.filial ?? 'Matriz');
-
+    // Filial da venda = filial atualmente selecionada no PDV. O filtro
+    // garante que só produtos dessa unidade entram no carrinho, então
+    // a venda é sempre coesa por filial.
     const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
       p_cliente_id:      snap.clienteId || null,
       p_total:           snap.subtotal,
@@ -339,7 +333,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       p_forma_pagamento: forma,
       p_parcelas:        forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
       p_itens:           itensPayload,
-      p_filial:          filialVenda,
+      p_filial:          filialFiltro,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
@@ -372,10 +366,12 @@ export const PDVView = ({ showToast, profile }: any) => {
           .from('controle_caixa')
           .select('id, status')
           .eq('data', today)
+          .eq('filial', filialFiltro)
           .eq('status', 'Aberto')
+          .eq('ativo', true)
           .limit(1);
         if (!caixaAtual || caixaAtual.length === 0) {
-          showToast?.('O caixa de hoje foi fechado. Abra um novo caixa em Financeiro → Controle de Caixa antes de continuar.', 'error', true);
+          showToast?.(`O caixa de ${filialFiltro} foi fechado. Abra um novo em Financeiro → Controle de Caixa antes de continuar.`, 'error', true);
           await refreshCaixa();
           setIsClosing(false);
           return;
@@ -433,7 +429,7 @@ export const PDVView = ({ showToast, profile }: any) => {
             valor_beneficios: valorBeneficios,
             valor_resto:      valorResto,
             forma_resto:      valorResto > 0 ? formaResto : null,
-            filial_pdv:       profile?.filial ?? 'Matriz',
+            filial_pdv:       filialFiltro,
             produtos:         itensElegiveisSnap,
             cliente_id:       clienteId || null,
             operador_id:      user?.id ?? null,
@@ -617,7 +613,33 @@ export const PDVView = ({ showToast, profile }: any) => {
     setIsClosing(false);
   };
 
+  // Troca de filial sempre limpa o carrinho — itens são por unidade, não dá
+  // pra carregar um produto da SuperMax e fechar como venda da MaxLook.
+  const trocarFilial = (nova: FilialPDV) => {
+    if (nova === filialFiltro) return;
+    if (cart.length > 0 && !confirm(`Trocar para ${nova} vai limpar o carrinho atual. Continuar?`)) return;
+    setCart([]);
+    setLastVenda(null);
+    setFilialFiltro(nova);
+  };
+
   if (loadingProd || caixaLoading) return <LoadingSpinner />;
+
+  // Colaborador sem filial operacional (ex: profile.filial='Matriz') não opera PDV.
+  // Admin/CEO/gerente caem em SuperMax como padrão, então nunca caem aqui.
+  if (!podeAlternar && !(FILIAIS_PDV as readonly string[]).includes(profile?.filial)) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
+      <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
+        <Lock size={28} className="text-gray-600" />
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-gray-300">Sem filial operacional</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs">
+          Seu perfil está em <span className="text-gray-300 font-bold">{profile?.filial ?? '—'}</span>, que não opera PDV. Peça ao admin pra te associar a SuperMax, MaxLook ou TechMax.
+        </p>
+      </div>
+    </div>
+  );
 
   if (!caixa) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
@@ -625,13 +647,33 @@ export const PDVView = ({ showToast, profile }: any) => {
         <Lock size={28} className="text-gray-600" />
       </div>
       <div>
-        <h3 className="text-lg font-bold text-gray-300">Caixa não aberto</h3>
+        <h3 className="text-lg font-bold text-gray-300">Caixa de {filialFiltro} não aberto</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-xs">
-          O caixa do dia ainda não foi aberto. Vá até{' '}
+          O caixa de hoje da unidade <span className="text-gray-300 font-bold">{filialFiltro}</span> ainda não foi aberto. Vá até{' '}
           <span className="text-accent font-bold">Financeiro → Controle de Caixa</span>{' '}
-          para realizar a abertura.
+          para abrir.
         </p>
       </div>
+      {podeAlternar && (
+        <div className="flex gap-2 flex-wrap justify-center" role="radiogroup" aria-label="Trocar unidade">
+          {FILIAIS_PDV.map(f => {
+            const ativo = filialFiltro === f;
+            const cor = FILIAL_COLOR[f];
+            return (
+              <button
+                key={f}
+                onClick={() => trocarFilial(f)}
+                role="radio"
+                aria-checked={ativo}
+                className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''}`}
+                style={!ativo ? { background: 'transparent', borderColor: 'transparent' } : {}}
+              >
+                {f}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <button onClick={refreshCaixa}
         className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
         Verificar novamente
@@ -649,11 +691,10 @@ export const PDVView = ({ showToast, profile }: any) => {
         <button
           onClick={async () => {
             try {
-              const sufixo = filialFiltro === 'todas' ? 'todas' : filialFiltro.toLowerCase();
               await downloadCatalogoEan13Pdf({
                 produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0) })),
-                titulo: `Catálogo PDV — ${filialFiltro === 'todas' ? 'todas as unidades' : filialFiltro}`,
-                filename: `logmax-catalogo-pdv-${sufixo}`,
+                titulo: `Catálogo PDV — ${filialFiltro}`,
+                filename: `logmax-catalogo-pdv-${filialFiltro.toLowerCase()}`,
               });
             } catch (err: any) {
               showToast(err?.message ?? 'Erro ao gerar PDF', 'error', true);
@@ -684,36 +725,32 @@ export const PDVView = ({ showToast, profile }: any) => {
             />
           </div>
 
-          {/* Filtro de unidade — 3 empresas + Todas */}
-          <div className="flex gap-2 flex-wrap shrink-0" role="radiogroup" aria-label="Filtrar produtos por unidade">
-            <button
-              onClick={() => setFilialFiltro('todas')}
-              role="radio"
-              aria-checked={filialFiltro === 'todas'}
-              className="py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button"
-              style={filialFiltro === 'todas'
-                ? { background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
-                : { background: 'transparent', borderColor: 'transparent' }
-              }
-            >
-              Todas
-            </button>
+          {/* Filtro de unidade — colaborador trava na própria; gerente/admin/CEO alterna */}
+          <div className="flex gap-2 flex-wrap shrink-0 items-center" role="radiogroup" aria-label="Unidade de venda">
             {FILIAIS_PDV.map(f => {
               const ativo = filialFiltro === f;
               const cor = FILIAL_COLOR[f];
+              const disabled = !podeAlternar && !ativo;
               return (
                 <button
                   key={f}
-                  onClick={() => setFilialFiltro(f)}
+                  onClick={() => !disabled && trocarFilial(f)}
                   role="radio"
                   aria-checked={ativo}
-                  className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''}`}
+                  disabled={disabled}
+                  className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''} disabled:opacity-30 disabled:cursor-not-allowed`}
                   style={!ativo ? { background: 'transparent', borderColor: 'transparent' } : {}}
+                  title={disabled ? 'Sua conta opera só nesta unidade — peça ao gerente pra trocar' : undefined}
                 >
                   {f}
                 </button>
               );
             })}
+            {!podeAlternar && (
+              <span className="text-[10px] text-gray-600 flex items-center gap-1 ml-1">
+                <Lock size={10} /> travado na sua unidade
+              </span>
+            )}
           </div>
 
           <AnimatePresence>
@@ -738,9 +775,7 @@ export const PDVView = ({ showToast, profile }: any) => {
               <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm text-center">
                 {search
                   ? 'Nenhum produto encontrado.'
-                  : filialFiltro !== 'todas'
-                    ? `Nenhum produto ativo cadastrado para ${filialFiltro}.`
-                    : 'Nenhum produto ativo cadastrado.'}
+                  : `Nenhum produto ativo cadastrado para ${filialFiltro}.`}
               </div>
             ) : (
               filtered.map((p: any) => {
