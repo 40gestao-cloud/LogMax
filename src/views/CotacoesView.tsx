@@ -56,8 +56,8 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
-  // mantendo apenas um ativo de cada vez.
-  const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'PJ' | 'PF' });
+  // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
+  const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -114,18 +114,20 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
     return ordem.filter(f => buckets.has(f)).map(f => ({ filial: f, items: buckets.get(f)! }));
   }, [requisicoesAprovadas, produtos]);
 
-  // Fornecedores divididos em PF / PJ, cada lista agrupada por filial.
-  const agruparFornecedoresPorFilial = (tipo: 'PJ' | 'PF') => {
-    const filtrados = fornecedores.filter((f: any) => (f.pessoa_tipo ?? 'PJ') === tipo);
+  // Fornecedores divididos em PJ / PF, cada lista agrupada por filial.
+  // CRMView grava pessoa_tipo como 'Empresa' / 'Pessoa Física' (não 'PJ'/'PF') —
+  // filtramos pelos valores reais do banco e tratamos NULL como Empresa.
+  const agruparFornecedoresPorFilial = (tipo: 'Empresa' | 'Pessoa Física') => {
+    const filtrados = fornecedores.filter((f: any) => (f.pessoa_tipo ?? 'Empresa') === tipo);
     return groupCadastrosParaSelect(filtrados).map(g => ({
-      // groupCadastrosParaSelect retorna label "PJ — TechMax". Aqui só queremos
+      // groupCadastrosParaSelect retorna label "Empresa — TechMax". Aqui só queremos
       // a filial (pessoa_tipo já está separada na nossa caixa).
-      label: g.label.replace(/^(PJ|PF)\s*—\s*/, ''),
+      label: g.label.replace(/^(Empresa|Pessoa Física)\s*—\s*/, ''),
       items: g.items,
     }));
   };
-  const fornecedoresPJ = useMemo(() => agruparFornecedoresPorFilial('PJ'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fornecedoresPF = useMemo(() => agruparFornecedoresPorFilial('PF'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fornecedoresPJ = useMemo(() => agruparFornecedoresPorFilial('Empresa'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fornecedoresPF = useMemo(() => agruparFornecedoresPorFilial('Pessoa Física'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enriched = data.map((c: any) => ({
     ...c,
@@ -379,8 +381,8 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                     </FormField>
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
-                        value={form.fornecedor_tipo === 'PJ' ? form.fornecedor_id : ''}
-                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'PJ' : '' })); clearError('fornecedor_id'); }}>
+                        value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
+                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Empresa' : '' })); clearError('fornecedor_id'); }}>
                         <option value="">Selecione um fornecedor PJ...</option>
                         {fornecedoresPJ.map(g => (
                           <optgroup key={g.label} label={g.label}>
@@ -393,8 +395,8 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                     </FormField>
                     <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
-                        value={form.fornecedor_tipo === 'PF' ? form.fornecedor_id : ''}
-                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'PF' : '' })); clearError('fornecedor_id'); }}>
+                        value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
+                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}>
                         <option value="">Selecione um fornecedor PF...</option>
                         {fornecedoresPF.map(g => (
                           <optgroup key={g.label} label={g.label}>
