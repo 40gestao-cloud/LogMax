@@ -4,6 +4,7 @@ import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users,
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
+import { setorLabel } from '../lib/setores';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
@@ -30,7 +31,13 @@ type Profile = {
   ativo?: boolean;
 };
 
-const SETORES = ['vendas', 'compras', 'logistica', 'financeiro', 'rh', 'marketing', 'ti', 'all'] as const;
+// Compras faz parte de Logística — não listamos separado aqui.
+const SETORES = ['vendas', 'logistica', 'financeiro', 'rh', 'marketing', 'ti', 'all'] as const;
+
+const SETOR_OPCAO_LABEL: Record<string, string> = {
+  all: 'Geral (todos)',
+};
+const labelSetorOpcao = (s: string) => SETOR_OPCAO_LABEL[s] ?? setorLabel(s);
 
 const EMPTY_META = {
   descricao: '',
@@ -79,6 +86,9 @@ export const MetasView = ({ showToast, profile }: any) => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectFeedback, setRejectFeedback] = useState('');
+
+  const [detailMeta, setDetailMeta] = useState<any | null>(null);
+  const [detailTarefa, setDetailTarefa] = useState<any | null>(null);
 
   // Threshold da folga conquistada (mantém modelo MaxBank existente).
   const [threshold, setThreshold] = useState<number>(2500);
@@ -448,7 +458,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                   onChange={e => setFormMeta(p => ({ ...p, setor: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Todos os setores</option>
-                  {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {SETORES.map(s => <option key={s} value={s}>{labelSetorOpcao(s)}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -506,7 +516,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <option value="">Selecionar...</option>
                   {metasElegiveis.map((m: any) => (
                     <option key={m.id} value={m.id}>
-                      {m.descricao} — {m.setor ?? 'Todos'} (limite {fmtBRL(Number(m.limite_bonificacao_individual ?? 0))})
+                      {m.descricao} — {m.setor ? labelSetorOpcao(m.setor) : 'Todos'} (limite {fmtBRL(Number(m.limite_bonificacao_individual ?? 0))})
                     </option>
                   ))}
                 </select>
@@ -584,14 +594,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <AnimatePresence>
                     {metas.map((m: any) => (
                       <motion.tr key={m.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        onClick={() => setDetailMeta(m)}
+                        className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           <div className="flex items-center gap-2">
                             <Target size={13} className="text-accent shrink-0" />
-                            <span className="truncate" title={m.descricao}>{m.descricao}</span>
+                            <span className="truncate" title="Clique para ler">{m.descricao}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-300">{m.setor ?? <span className="text-gray-500 italic">Todos</span>}</td>
+                        <td className="py-3 px-4 text-xs text-gray-300">{m.setor ? labelSetorOpcao(m.setor) : <span className="text-gray-500 italic">Todos</span>}</td>
                         <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(m.bonificacao_equipe ?? 0))}</td>
                         <td className="py-3 px-4 text-xs font-mono text-right text-gray-400">{fmtBRL(Number(m.limite_bonificacao_individual ?? 0))}</td>
                         <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{m.data_inicio} → {m.data_fim}</td>
@@ -602,13 +613,13 @@ export const MetasView = ({ showToast, profile }: any) => {
                           <div className="flex gap-1.5 justify-end items-center">
                             {m.status === 'Ativa' && isAdmin && (
                               <>
-                                <button onClick={() => handleConcluirMeta(m.id)}
+                                <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
                                   disabled={busyId === m.id}
                                   className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
                                   title="Concluir e dividir pool entre o setor">
                                   <Check size={13} />
                                 </button>
-                                <button onClick={() => handleCancelarMeta(m.id)}
+                                <button onClick={(e) => { e.stopPropagation(); handleCancelarMeta(m.id); }}
                                   disabled={busyId === m.id}
                                   className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
                                   title="Cancelar (sem pagar bonificação)">
@@ -657,7 +668,8 @@ export const MetasView = ({ showToast, profile }: any) => {
                       const aprovavel = podeAprovarTarefa(t);
                       return (
                         <motion.tr key={t.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                          className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          onClick={() => setDetailTarefa(t)}
+                          className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer">
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                             <div className="flex items-center gap-2">
                               <Users size={13} className="text-accent shrink-0" />
@@ -665,16 +677,16 @@ export const MetasView = ({ showToast, profile }: any) => {
                             </div>
                           </td>
                           <td className="py-3 px-4 text-xs text-gray-300 max-w-md">
-                            <div className="truncate" title={t.descricao}>{t.descricao}</div>
+                            <div className="truncate" title="Clique para ler">{t.descricao}</div>
                             {t.status === 'Rejeitada' && t.feedback_aprovacao && (
                               <div className="text-[10px] text-red-400 mt-1 flex items-start gap-1">
                                 <MessageSquare size={10} className="mt-0.5 shrink-0" />
-                                <span>{t.feedback_aprovacao}</span>
+                                <span className="truncate">{t.feedback_aprovacao}</span>
                               </div>
                             )}
                           </td>
                           <td className="py-3 px-4 text-[11px] text-gray-400 max-w-[180px]">
-                            <span className="truncate block" title={t.meta?.descricao ?? ''}>{t.meta?.descricao ?? '—'}</span>
+                            <span className="truncate block" title="Clique para ler">{t.meta?.descricao ?? '—'}</span>
                           </td>
                           <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(t.valor_bonificacao ?? 0))}</td>
                           <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{t.data_inicio} → {t.data_fim}</td>
@@ -684,7 +696,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                           <td className="py-3 px-4">
                             <div className="flex gap-1.5 justify-end items-center">
                               {t.status === 'Pendente' && sou_alvo && (
-                                <button onClick={() => handleConcluirTarefa(t.id)}
+                                <button onClick={(e) => { e.stopPropagation(); handleConcluirTarefa(t.id); }}
                                   disabled={busyId === t.id}
                                   className="text-[10px] text-blue-400 hover:underline transition-colors font-bold disabled:opacity-50">
                                   Concluir
@@ -692,13 +704,13 @@ export const MetasView = ({ showToast, profile }: any) => {
                               )}
                               {t.status === 'Concluida' && aprovavel && (
                                 <>
-                                  <button onClick={() => handleAprovarTarefa(t.id)}
+                                  <button onClick={(e) => { e.stopPropagation(); handleAprovarTarefa(t.id); }}
                                     disabled={busyId === t.id}
                                     className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
                                     title="Aprovar e creditar">
                                     <Check size={13} />
                                   </button>
-                                  <button onClick={() => { setRejectId(t.id); setRejectFeedback(''); }}
+                                  <button onClick={(e) => { e.stopPropagation(); setRejectId(t.id); setRejectFeedback(''); }}
                                     disabled={busyId === t.id}
                                     className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
                                     title="Rejeitar">
@@ -726,6 +738,106 @@ export const MetasView = ({ showToast, profile }: any) => {
 
       {/* Modais */}
       <AnimatePresence>
+        {detailMeta && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setDetailMeta(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/5 max-w-lg w-full max-h-[85vh] overflow-y-auto main-scrollbar">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Target size={16} className="text-accent shrink-0" />
+                  <h3 className="text-base font-bold text-gray-200">Meta Estratégica</h3>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
+              </div>
+              <div className="mb-5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
+                <p className="text-sm text-gray-100 whitespace-pre-wrap break-words leading-relaxed">{detailMeta.descricao}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Setor alvo</p>
+                  <p className="text-sm text-gray-200">{detailMeta.setor ? labelSetorOpcao(detailMeta.setor) : <span className="text-gray-500 italic">Todos</span>}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Período</p>
+                  <p className="text-sm font-mono text-gray-200">{detailMeta.data_inicio} → {detailMeta.data_fim}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Pool da equipe</p>
+                  <p className="text-sm font-mono text-accent font-bold">{fmtBRL(Number(detailMeta.bonificacao_equipe ?? 0))}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Limite individual</p>
+                  <p className="text-sm font-mono text-gray-200">{fmtBRL(Number(detailMeta.limite_bonificacao_individual ?? 0))}</p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => setDetailMeta(null)}
+                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors">Fechar</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {detailTarefa && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setDetailTarefa(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/5 max-w-lg w-full max-h-[85vh] overflow-y-auto main-scrollbar">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ClipboardList size={16} className="text-accent shrink-0" />
+                  <h3 className="text-base font-bold text-gray-200">Tarefa Tática</h3>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${statusCls(detailTarefa.status)}`}>{statusLabel(detailTarefa.status)}</span>
+              </div>
+              <div className="mb-5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
+                <p className="text-sm text-gray-100 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.descricao}</p>
+              </div>
+              {detailTarefa.meta?.descricao && (
+                <div className="mb-5">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Meta estratégica vinculada</p>
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.meta.descricao}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Colaborador</p>
+                  <p className="text-sm text-gray-200">{detailTarefa.colaborador?.nome ?? detailTarefa.colaborador?.email ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Período</p>
+                  <p className="text-sm font-mono text-gray-200">{detailTarefa.data_inicio} → {detailTarefa.data_fim}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Bonificação</p>
+                  <p className="text-sm font-mono text-accent font-bold">{fmtBRL(Number(detailTarefa.valor_bonificacao ?? 0))}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Setor</p>
+                  <p className="text-sm text-gray-200">{detailTarefa.setor ? labelSetorOpcao(detailTarefa.setor) : '—'}</p>
+                </div>
+              </div>
+              {detailTarefa.status === 'Rejeitada' && detailTarefa.feedback_aprovacao && (
+                <div className="mb-5 rounded-xl bg-red-950/30 border border-red-900/40 p-3">
+                  <p className="text-[10px] text-red-400 uppercase tracking-widest font-bold mb-2 flex items-center gap-1">
+                    <MessageSquare size={11} />Feedback da rejeição
+                  </p>
+                  <p className="text-sm text-red-200 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.feedback_aprovacao}</p>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button onClick={() => setDetailTarefa(null)}
+                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors">Fechar</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
         {showThresholdEdit && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
