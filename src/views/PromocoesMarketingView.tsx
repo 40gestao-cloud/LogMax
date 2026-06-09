@@ -4,7 +4,7 @@ import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
-import { exportToPDF, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
+import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 
@@ -387,6 +387,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                 <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
                 <input id="promo-preco-promocional" type="text" inputMode="numeric" value={form.preco_promocional}
                   onChange={e => setForm((f: any) => ({ ...f, preco_promocional: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
               </div>
               <div className="flex flex-col gap-1.5">

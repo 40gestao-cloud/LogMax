@@ -4,7 +4,7 @@ import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { GField, formatBRL, parseBRL } from '../lib/viewUtils';
+import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 
 export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
@@ -134,6 +134,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                             setFormState(s => ({ ...s, [f.key]: masked }));
                             setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; });
                           }}
+                          onKeyDown={handleMoneyKeyDown}
                           placeholder={f.placeholder ?? '0,00'} />
                       ) : (
                         <input type={f.type ?? 'text'} className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}

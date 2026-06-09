@@ -10,7 +10,7 @@ import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent, FilialBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasAnySetor } from '../lib/rbac';
-import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -167,7 +167,10 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
             placeholder="Valor de abertura"
             value={valorAbertura}
             onChange={e => setValorAbertura(formatBRL(e.target.value))}
-            onKeyDown={e => e.key === 'Enter' && handleAbrir()}
+            onKeyDown={e => {
+              handleMoneyKeyDown(e);
+              if (e.key === 'Enter') handleAbrir();
+            }}
           />
         </div>
         <input className="neu-input py-2.5 px-3 rounded-xl text-xs"

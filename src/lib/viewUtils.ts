@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 
 export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency'; options?: string[]; required?: boolean; placeholder?: string };
 
@@ -66,6 +66,18 @@ export const formatBRL = (v: string | number | null | undefined): string => {
   const intRaw = padded.slice(0, -2).replace(/^0+(?=\d)/, '');
   const intFmt = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `${intFmt},${cents}`;
+};
+
+// onKeyDown pra inputs de moeda que usam formatBRL. Bloqueia ponto e
+// vírgula (e qualquer outro caractere imprimível não-dígito) pra forçar
+// o modo cents-builder — operador antigo digitava "1.250,00" esperando
+// mil duzentos e cinquenta, mas formatBRL ignora os separadores e só
+// salva "12,50" no final. Permite teclas de controle (Backspace, setas,
+// Tab, atalhos com Ctrl/Meta).
+export const handleMoneyKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key.length !== 1) return;
+  if (!/[0-9]/.test(e.key)) e.preventDefault();
 };
 
 // Inverte formatBRL: "1.234,56" → 1234.56 ; "" → 0.

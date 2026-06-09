@@ -5,7 +5,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToExcel, formatBRL, parseBRL } from '../lib/viewUtils';
+import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
 import {
@@ -620,12 +620,12 @@ export const ProdutosView = ({ showToast }: any) => {
                   <FormField label="Preço de Custo (R$)">
                     <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
                       value={extras.preco_custo} onChange={e => setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) }))}
-                      placeholder="0,00" />
+                      onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
                   </FormField>
                   <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
                     <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
                       value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
-                      placeholder="0,00" />
+                      onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
                     {extras.unidade && extras.unidade !== 'UN' && (
                       <p className="text-[10px] text-gray-500 mt-1">
                         Vendido por <span className="font-bold text-accent">{extras.unidade}</span> — no PDV, o caixa digita a quantidade fracionária ao pesar.

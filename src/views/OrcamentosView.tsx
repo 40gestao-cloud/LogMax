@@ -4,7 +4,7 @@ import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
@@ -501,6 +501,7 @@ export const OrcamentosView = ({
                     className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={extras.desconto}
                     onChange={e => setExtras(x => ({ ...x, desconto: formatBRL(e.target.value) }))}
+                    onKeyDown={handleMoneyKeyDown}
                     placeholder="0,00"
                   />
                 </FormField>
@@ -560,6 +561,7 @@ export const OrcamentosView = ({
                             className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
                             value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
                             onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
+                            onKeyDown={handleMoneyKeyDown}
                             placeholder="Preço"
                           />
                         </div>

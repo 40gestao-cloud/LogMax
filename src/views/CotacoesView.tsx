@@ -5,7 +5,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
@@ -411,6 +411,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
                         value={extras.valor_total}
                         onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                        onKeyDown={handleMoneyKeyDown}
                         placeholder="0,00" />
                     </FormField>
                     <FormField label="Prazo de Entrega">

@@ -4,7 +4,7 @@ import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users,
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
-import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
@@ -455,6 +455,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Bonificação de equipe (pool R$)</label>
                 <input type="text" inputMode="numeric" value={formMeta.bonificacao_equipe}
                   onChange={e => setFormMeta(p => ({ ...p, bonificacao_equipe: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
                   placeholder="0,00"
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 <span className="text-[10px] text-gray-500">Dividido igualmente ao concluir a meta.</span>
@@ -463,6 +464,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Limite individual (R$)</label>
                 <input type="text" inputMode="numeric" value={formMeta.limite_bonificacao_individual}
                   onChange={e => setFormMeta(p => ({ ...p, limite_bonificacao_individual: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
                   placeholder="0,00"
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 <span className="text-[10px] text-gray-500">Teto por tarefa que o gerente atribui.</span>
@@ -534,6 +536,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                 </label>
                 <input type="text" inputMode="numeric" value={formTarefa.valor_bonificacao}
                   onChange={e => setFormTarefa(p => ({ ...p, valor_bonificacao: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
                   disabled={!metaSelecionada}
                   placeholder="0,00"
                   className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-40" />
@@ -737,6 +740,7 @@ export const MetasView = ({ showToast, profile }: any) => {
               <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Valor (R$)</label>
               <input type="text" inputMode="numeric" value={thresholdDraft}
                 onChange={e => setThresholdDraft(formatBRL(e.target.value))}
+                onKeyDown={handleMoneyKeyDown}
                 placeholder="2.500,00"
                 className="neu-input rounded-xl px-3 py-2.5 text-sm w-full mt-1 mb-4" />
               <div className="flex justify-end gap-2">

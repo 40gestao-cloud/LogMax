@@ -4,7 +4,7 @@ import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X } from 'lucide-re
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
@@ -202,7 +202,7 @@ export const ContasReceberView = ({ showToast }: any) => {
                 </FormField>
                 <FormField label="Valor (R$)">
                   <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} placeholder="0,00" />
+                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
                 </FormField>
                 <FormField label="Vencimento">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"

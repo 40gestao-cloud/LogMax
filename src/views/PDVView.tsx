@@ -12,6 +12,7 @@ import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
+import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -135,7 +136,7 @@ export const PDVView = ({ showToast, profile }: any) => {
   );
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
-  const descontoNum = parseFloat(String(desconto).replace(',', '.')) || 0;
+  const descontoNum = parseBRL(desconto);
   const totalFinal = Math.max(0, subtotal - descontoNum);
 
   // Quanto do carrinho aceita benefícios? Soma subtotais dos itens elegíveis.
@@ -1014,10 +1015,12 @@ export const PDVView = ({ showToast, profile }: any) => {
                 <span className="text-xs text-gray-400">Desconto (R$)</span>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={desconto}
-                  onChange={e => setDesconto(e.target.value)}
+                  onChange={e => setDesconto(formatBRL(e.target.value))}
+                  onKeyDown={handleMoneyKeyDown}
                   placeholder="0,00"
-                  className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono"
+                  className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums"
                 />
               </div>
               <div className="flex justify-between items-center">
