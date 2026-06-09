@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
@@ -20,6 +20,20 @@ import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 const FILIAIS_PDV = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialPDV = typeof FILIAIS_PDV[number];
 
+// Unidades em que a venda é por peso/volume — o PDV pede peso em vez de
+// incrementar +1. Operador digita "1,250" pra 1 kg e 250 g.
+const UNIDADES_FRACIONARIAS = new Set(['KG', 'L', 'M', 'M²', 'M³']);
+const isProdutoFracionario = (p: any): boolean =>
+  UNIDADES_FRACIONARIAS.has(String(p?.unidade ?? 'UN').toUpperCase());
+
+const formatQtd = (qtd: number, unidade: string): string => {
+  const u = (unidade || 'UN').toUpperCase();
+  if (UNIDADES_FRACIONARIAS.has(u)) {
+    return qtd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  }
+  return String(Math.round(qtd));
+};
+
 const podeAlternarFilial = (profile: any): boolean =>
   profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
 
@@ -30,6 +44,7 @@ interface CartItem {
   qtd: number;
   subtotal: number;
   estoque: number;
+  unidade: string;
 }
 
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado', 'MaxBank Benefícios'];
@@ -74,6 +89,14 @@ export const PDVView = ({ showToast, profile }: any) => {
   } | null>(null);
   // Forma usada pra cobrir o restante quando benefícios não dão conta de tudo.
   const [formaResto, setFormaResto] = useState<string>('Dinheiro');
+  // Modal de peso pra produtos vendidos em KG/L. `editIndex` !== null indica
+  // edição de item já no carrinho (em vez de inserção). Peso entra como
+  // string mascarada (vírgula decimal) e é parseado no confirmar.
+  const [pesoPrompt, setPesoPrompt] = useState<{
+    produto: any;
+    pesoInput: string;
+    editIndex: number | null;
+  } | null>(null);
   const vendaSnapshotRef = useRef<{
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
   } | null>(null);
@@ -126,6 +149,21 @@ export const PDVView = ({ showToast, profile }: any) => {
   const valorResto = Math.max(0, totalFinal - valorBeneficios);
 
   const addToCart = useCallback((produto: any) => {
+    // Produto fracionário (KG/L/...) abre modal de peso. O bloqueio de
+    // estoque <= 0 ainda se aplica — vendedor não pode pesar do que não tem.
+    if (isProdutoFracionario(produto)) {
+      if ((produto.estoque ?? 999) <= 0) {
+        showToast?.('Produto sem estoque.', 'error', true);
+        return;
+      }
+      const existingIdx = cart.findIndex(i => i.produto_id === produto.id);
+      setPesoPrompt({
+        produto,
+        pesoInput: existingIdx >= 0 ? formatQtd(cart[existingIdx].qtd, produto.unidade) : '',
+        editIndex: existingIdx >= 0 ? existingIdx : null,
+      });
+      return;
+    }
     const preco = Number(produto.preco) || 0;
     setCart(prev => {
       const existing = prev.find(i => i.produto_id === produto.id);
@@ -145,14 +183,16 @@ export const PDVView = ({ showToast, profile }: any) => {
         return prev;
       }
       playBeep();
-      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999 }];
+      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999, unidade: produto.unidade ?? 'UN' }];
     });
-  }, [showToast]);
+  }, [showToast, cart]);
 
   const changeQty = (produto_id: string, delta: number) => {
     setCart(prev => prev
       .map(i => {
         if (i.produto_id !== produto_id) return i;
+        // Item fracionário não usa +/- — só o modal de peso edita.
+        if (UNIDADES_FRACIONARIAS.has(i.unidade.toUpperCase())) return i;
         const newQty = i.qtd + delta;
         if (newQty <= 0) return null as any;
         if (newQty > i.estoque) { showToast?.('Quantidade máxima em estoque atingida.', 'error', true); return i; }
@@ -161,6 +201,53 @@ export const PDVView = ({ showToast, profile }: any) => {
       .filter(Boolean)
     );
   };
+
+  // Aceita peso digitado: até 3 decimais, vírgula ou ponto. Limpa caracteres
+  // estranhos e arredonda pra 3 casas. Não muda o estado do carrinho aqui —
+  // só formata o que o usuário está digitando.
+  const handlePesoChange = (raw: string) => {
+    const limpo = raw.replace(/[^\d.,]/g, '').replace('.', ',');
+    setPesoPrompt(p => p ? { ...p, pesoInput: limpo } : p);
+  };
+
+  const confirmarPeso = () => {
+    if (!pesoPrompt) return;
+    const peso = parseFloat(pesoPrompt.pesoInput.replace(',', '.'));
+    if (!Number.isFinite(peso) || peso <= 0) {
+      showToast?.('Informe um peso válido.', 'error', true);
+      return;
+    }
+    const pesoArred = Math.round(peso * 1000) / 1000;
+    const { produto, editIndex } = pesoPrompt;
+    const estoque = Number(produto.estoque ?? 999);
+    if (pesoArred > estoque) {
+      showToast?.(`Estoque insuficiente: disponível ${formatQtd(estoque, produto.unidade)} ${produto.unidade}.`, 'error', true);
+      return;
+    }
+    const preco = Number(produto.preco) || 0;
+    const subtotal = Math.round(pesoArred * preco * 100) / 100;
+    setCart(prev => {
+      if (editIndex !== null && prev[editIndex]) {
+        const copy = [...prev];
+        copy[editIndex] = { ...copy[editIndex], qtd: pesoArred, subtotal };
+        return copy;
+      }
+      return [...prev, {
+        produto_id:     produto.id,
+        nome_produto:   produto.nome,
+        preco_unitario: preco,
+        qtd:            pesoArred,
+        subtotal,
+        estoque,
+        unidade:        produto.unidade ?? 'KG',
+      }];
+    });
+    playBeep();
+    setPesoPrompt(null);
+    searchRef.current?.focus();
+  };
+
+  const cancelarPeso = () => setPesoPrompt(null);
 
   // Lógica de busca por código (EAN/código interno) ou termo livre. Usada
   // pelo Enter manual no input e pelo listener global do scanner. Recebe o
@@ -209,6 +296,8 @@ export const PDVView = ({ showToast, profile }: any) => {
   useEffect(() => { isClosingRef.current = isClosing; }, [isClosing]);
   const lastVendaRef = useRef(lastVenda);
   useEffect(() => { lastVendaRef.current = lastVenda; }, [lastVenda]);
+  const pesoPromptRef = useRef(pesoPrompt);
+  useEffect(() => { pesoPromptRef.current = pesoPrompt; }, [pesoPrompt]);
 
   // Leitor de código de barras (hardware): teclas chegam em <50ms entre si e
   // terminam com Enter. Listener global em fase de CAPTURE para que mesmo
@@ -226,7 +315,8 @@ export const PDVView = ({ showToast, profile }: any) => {
       const blocked =
         pixPendenteRef.current !== null ||
         isClosingRef.current ||
-        lastVendaRef.current !== null;
+        lastVendaRef.current !== null ||
+        pesoPromptRef.current !== null;
 
       const now = performance.now();
       const fast = now - lastTs < SCANNER_MAX_INTERVAL_MS;
@@ -781,6 +871,8 @@ export const PDVView = ({ showToast, profile }: any) => {
               filtered.map((p: any) => {
                 const inCart = cart.find(i => i.produto_id === p.id);
                 const semEstoque = (p.estoque ?? 999) <= 0;
+                const fracionario = isProdutoFracionario(p);
+                const unidade = String(p.unidade ?? 'UN').toUpperCase();
                 return (
                   <motion.button
                     key={p.id}
@@ -791,9 +883,15 @@ export const PDVView = ({ showToast, profile }: any) => {
                     style={inCart ? { borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 4%, transparent)' } : semEstoque ? { opacity: 0.4 } : {}}
                   >
                     {inCart && (
-                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
+                      <span className="absolute top-2 right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
-                        {inCart.qtd}
+                        {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
+                      </span>
+                    )}
+                    {fracionario && (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[9px] font-black z-10 uppercase tracking-wider"
+                        style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}>
+                        <Scale size={9} /> {unidade}
                       </span>
                     )}
                     <div className="flex gap-3 items-start">
@@ -807,9 +905,12 @@ export const PDVView = ({ showToast, profile }: any) => {
                     <div className="flex items-end justify-between mt-auto pt-1">
                       <span className="text-base font-black text-accent">
                         {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        {fracionario && <span className="text-[10px] font-bold text-gray-500"> /{unidade}</span>}
                       </span>
                       <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-500' : 'text-gray-500'}`}>
-                        {semEstoque ? 'Sem estoque' : `Saldo: ${p.estoque ?? '∞'}`}
+                        {semEstoque
+                          ? 'Sem estoque'
+                          : `Saldo: ${fracionario ? `${formatQtd(Number(p.estoque ?? 0), unidade)} ${unidade}` : (p.estoque ?? '∞')}`}
                       </span>
                     </div>
                   </motion.button>
@@ -846,36 +947,59 @@ export const PDVView = ({ showToast, profile }: any) => {
                 </div>
               ) : (
                 <AnimatePresence>
-                  {cart.map(item => (
-                    <motion.div key={item.produto_id}
-                      initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-                      className="flex items-center gap-2 p-3 neu-pressed rounded-xl">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-gray-200 truncate">{item.nome_produto}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} un.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => changeQty(item.produto_id, -1)}
-                          className="w-6 h-6 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                          <Minus size={10} />
+                  {cart.map((item, idx) => {
+                    const fracionario = UNIDADES_FRACIONARIAS.has(item.unidade.toUpperCase());
+                    const unidadeLabel = fracionario ? item.unidade.toUpperCase() : 'un.';
+                    return (
+                      <motion.div key={item.produto_id}
+                        initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                        className="flex items-center gap-2 p-3 neu-pressed rounded-xl">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-gray-200 truncate">{item.nome_produto}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /{unidadeLabel}
+                          </p>
+                        </div>
+                        {fracionario ? (
+                          // Pesar/editar peso — substitui +/- pra itens KG/L.
+                          <button
+                            onClick={() => {
+                              const produto = produtos.find((p: any) => p.id === item.produto_id);
+                              if (!produto) return;
+                              setPesoPrompt({
+                                produto,
+                                pesoInput: formatQtd(item.qtd, item.unidade),
+                                editIndex: idx,
+                              });
+                            }}
+                            className="flex items-center gap-1.5 neu-button rounded-lg px-2 py-1 text-[11px] font-bold text-gray-300 hover:text-accent transition-colors shrink-0"
+                            title="Editar peso">
+                            <Scale size={11} />
+                            <span className="tabular-nums">{formatQtd(item.qtd, item.unidade)} {item.unidade.toUpperCase()}</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => changeQty(item.produto_id, -1)}
+                              className="w-6 h-6 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                              <Minus size={10} />
+                            </button>
+                            <span className="text-xs font-bold text-gray-200 w-6 text-center">{item.qtd}</span>
+                            <button onClick={() => changeQty(item.produto_id, +1)}
+                              className="w-6 h-6 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                              <Plus size={10} />
+                            </button>
+                          </div>
+                        )}
+                        <div className="w-20 text-right shrink-0">
+                          <p className="text-xs font-bold text-accent">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        </div>
+                        <button onClick={() => removeFromCart(item.produto_id)}
+                          className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors shrink-0">
+                          <Trash2 size={11} />
                         </button>
-                        <span className="text-xs font-bold text-gray-200 w-6 text-center">{item.qtd}</span>
-                        <button onClick={() => changeQty(item.produto_id, +1)}
-                          className="w-6 h-6 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                          <Plus size={10} />
-                        </button>
-                      </div>
-                      <div className="w-20 text-right shrink-0">
-                        <p className="text-xs font-bold text-accent">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                      </div>
-                      <button onClick={() => removeFromCart(item.produto_id)}
-                        className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors shrink-0">
-                        <Trash2 size={11} />
-                      </button>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </AnimatePresence>
               )}
             </div>
@@ -1125,6 +1249,98 @@ export const PDVView = ({ showToast, profile }: any) => {
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Modal de peso — produtos KG/L pedem o peso em vez de incrementar +1 */}
+      <AnimatePresence>
+        {pesoPrompt && (() => {
+          const u = String(pesoPrompt.produto.unidade ?? 'KG').toUpperCase();
+          const preco = Number(pesoPrompt.produto.preco) || 0;
+          const pesoNum = parseFloat(pesoPrompt.pesoInput.replace(',', '.'));
+          const previewTotal = Number.isFinite(pesoNum) && pesoNum > 0 ? pesoNum * preco : 0;
+          return (
+            <motion.div
+              key="peso-overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }}
+              onClick={cancelarPeso}
+            >
+              <motion.div
+                initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
+                transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                className="neu-flat rounded-3xl w-full max-w-sm p-6 flex flex-col gap-4 border border-white/5"
+                style={{ background: 'var(--color-bg-base)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <Scale size={18} className="text-accent" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                    {pesoPrompt.editIndex !== null ? 'Editar peso' : 'Informar peso'}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-gray-100 leading-tight">{pesoPrompt.produto.nome}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / {u}
+                    {' · '}saldo {formatQtd(Number(pesoPrompt.produto.estoque ?? 0), u)} {u}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="pdv-peso-input" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    Peso ({u})
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="pdv-peso-input"
+                      type="text"
+                      inputMode="decimal"
+                      autoFocus
+                      value={pesoPrompt.pesoInput}
+                      onChange={e => handlePesoChange(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); confirmarPeso(); }
+                        if (e.key === 'Escape') { e.preventDefault(); cancelarPeso(); }
+                      }}
+                      placeholder="0,000"
+                      className="neu-input py-3 pl-4 pr-16 rounded-2xl text-2xl font-black tabular-nums w-full text-right"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500">{u}</span>
+                  </div>
+                  <p className="text-[10px] text-gray-600">Use vírgula para decimais (ex.: 1,250 = 1 kg e 250 g).</p>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-2xl border border-white/5"
+                  style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)' }}>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total</span>
+                  <span className="text-xl font-black text-accent tabular-nums">
+                    {previewTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelarPeso}
+                    className="flex-1 py-3 rounded-xl text-xs font-bold text-gray-400 neu-button transition-colors">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmarPeso}
+                    disabled={!pesoPrompt.pesoInput.trim()}
+                    className="flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
+                      color: 'var(--color-accent-text)',
+                    }}>
+                    <CheckCircle2 size={14} /> {pesoPrompt.editIndex !== null ? 'Atualizar' : 'Adicionar'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Overlay MaxBank Benefícios — código de 6 dígitos pro colaborador digitar */}

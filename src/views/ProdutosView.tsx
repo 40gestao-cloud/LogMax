@@ -622,10 +622,15 @@ export const ProdutosView = ({ showToast }: any) => {
                       value={extras.preco_custo} onChange={e => setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) }))}
                       placeholder="0,00" />
                   </FormField>
-                  <FormField label="Preço de Venda (R$) *" error={errors.preco}>
+                  <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
                     <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
                       value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
                       placeholder="0,00" />
+                    {extras.unidade && extras.unidade !== 'UN' && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Vendido por <span className="font-bold text-accent">{extras.unidade}</span> — no PDV, o caixa digita a quantidade fracionária ao pesar.
+                      </p>
+                    )}
                   </FormField>
                   {/* Margem calculada ao vivo */}
                   <div className="flex flex-col gap-1.5">
@@ -774,6 +779,9 @@ export const ProdutosView = ({ showToast }: any) => {
                         </td>
                         <td className="py-4 px-4 text-xs font-mono text-gray-200 text-right">
                           {item.preco != null ? fmtBRL(parseNum(item.preco)) : '—'}
+                          {item.unidade && item.unidade !== 'UN' && (
+                            <span className="text-[9px] text-gray-600 ml-0.5">/{item.unidade}</span>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-xs text-right hidden md:table-cell">
                           <MargemBadge venda={item.preco} custo={item.preco_custo} />
@@ -782,8 +790,14 @@ export const ProdutosView = ({ showToast }: any) => {
                           <div className="flex items-center justify-center gap-1.5">
                             {baixoEstoque && <AlertTriangle size={11} className="text-red-500 shrink-0" />}
                             <span className={`text-xs font-bold tabular-nums ${baixoEstoque ? 'text-red-400' : 'text-gray-300'}`}>
-                              {item.estoque ?? 0}
+                              {(() => {
+                                const e = parseNum(item.estoque);
+                                return Number.isInteger(e) ? e : e.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                              })()}
                             </span>
+                            {item.unidade && item.unidade !== 'UN' && (
+                              <span className="text-[9px] text-gray-600">{item.unidade}</span>
+                            )}
                             {estMin > 0 && (
                               <span className="text-[10px] text-gray-600">/ {estMin}</span>
                             )}

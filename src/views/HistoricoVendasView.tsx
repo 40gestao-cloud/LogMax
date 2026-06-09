@@ -252,14 +252,22 @@ export const HistoricoVendasView = ({ showToast }: any) => {
                           {/* Itens */}
                           <div className="flex flex-col gap-1">
                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Itens da venda</p>
-                            {v.itens?.length > 0 ? v.itens.map((item: any) => (
-                              <div key={item.id} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
-                                <span className="text-gray-300">{item.nome_produto}</span>
-                                <span className="text-gray-500 font-mono">
-                                  {item.qtd} × {Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} = <span className="text-gray-200 font-bold">{Number(item.subtotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                                </span>
-                              </div>
-                            )) : <p className="text-xs text-gray-600">Sem itens registrados.</p>}
+                            {v.itens?.length > 0 ? v.itens.map((item: any) => {
+                              // qtd em itens_venda agora é numeric(15,3) — itens vendidos por
+                              // peso (KG/L) vêm como 1.250. Mostra 3 casas só quando há decimais.
+                              const qtdNum = Number(item.qtd ?? 0);
+                              const qtdLabel = Number.isInteger(qtdNum)
+                                ? String(qtdNum)
+                                : qtdNum.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                              return (
+                                <div key={item.id} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
+                                  <span className="text-gray-300">{item.nome_produto}</span>
+                                  <span className="text-gray-500 font-mono">
+                                    {qtdLabel} × {Number(item.preco_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} = <span className="text-gray-200 font-bold">{Number(item.subtotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                  </span>
+                                </div>
+                              );
+                            }) : <p className="text-xs text-gray-600">Sem itens registrados.</p>}
                           </div>
                           {/* Resumo */}
                           <div className="flex items-center justify-between">
