@@ -155,11 +155,13 @@ BEGIN
     SELECT nome INTO v_cliente_nome FROM clientes WHERE id = p_cliente_id;
   END IF;
 
-  -- Resumo dos produtos. qtd != 1 → mostra a quantidade como veio do
-  -- JSON (front formata "1,250" pra KG e "2" pra UN); qtd = 1 → só o nome.
+  -- Resumo dos produtos. qtd != 1 → mostra a quantidade; qtd = 1 → só
+  -- o nome. Substitui o ponto decimal do JSON por vírgula pra exibir
+  -- "1,25 Carne" em vez de "1.25 Carne" no padrão pt-BR (a descrição
+  -- vai parar em contas_receber, visto pelo Financeiro).
   SELECT string_agg(
     CASE WHEN (item->>'qtd')::numeric <> 1
-      THEN (item->>'qtd') || 'x ' || (item->>'nome_produto')
+      THEN replace((item->>'qtd'), '.', ',') || 'x ' || (item->>'nome_produto')
       ELSE (item->>'nome_produto')
     END,
     ', '
