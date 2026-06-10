@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList } from 'lucide-react';
+import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
@@ -78,6 +78,7 @@ export const MetasView = ({ showToast, profile }: any) => {
   const [showFormMeta, setShowFormMeta] = useState(false);
   const [formMeta, setFormMeta] = useState(EMPTY_META);
   const [savingMeta, setSavingMeta] = useState(false);
+  const [editMetaId, setEditMetaId] = useState<string | null>(null);
 
   const [showFormTarefa, setShowFormTarefa] = useState(false);
   const [formTarefa, setFormTarefa] = useState(EMPTY_TAREFA);
@@ -180,6 +181,82 @@ export const MetasView = ({ showToast, profile }: any) => {
       if (error) throw error;
       setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Cancelada' } : m));
       showToast('Meta cancelada.', 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? err}`, 'error');
+    }
+    setBusyId(null);
+  };
+
+  const abrirEdicaoMeta = (m: any) => {
+    setEditMetaId(m.id);
+    setFormMeta({
+      descricao:                       m.descricao ?? '',
+      setor:                           m.setor ?? '',
+      bonificacao_equipe:              formatBRL(String(Number(m.bonificacao_equipe ?? 0).toFixed(2))),
+      limite_bonificacao_individual:   formatBRL(String(Number(m.limite_bonificacao_individual ?? 0).toFixed(2))),
+      data_inicio:                     m.data_inicio ?? '',
+      data_fim:                        m.data_fim ?? '',
+    });
+    setShowFormMeta(true);
+  };
+
+  const fecharFormMeta = () => {
+    setShowFormMeta(false);
+    setEditMetaId(null);
+    setFormMeta(EMPTY_META);
+  };
+
+  const handleEditarMeta = async () => {
+    if (!supabase || !editMetaId) return;
+    if (!formMeta.descricao.trim() || !formMeta.data_inicio || !formMeta.data_fim) {
+      showToast('Preencha descrição e período.', 'error');
+      return;
+    }
+    const bonusEquipe = formMeta.bonificacao_equipe ? parseBRL(formMeta.bonificacao_equipe) : 0;
+    const limite      = formMeta.limite_bonificacao_individual ? parseBRL(formMeta.limite_bonificacao_individual) : 0;
+    if (bonusEquipe < 0 || limite < 0) {
+      showToast('Valores não podem ser negativos.', 'error');
+      return;
+    }
+    setSavingMeta(true);
+    try {
+      const { error } = await supabase.rpc('editar_meta_estrategica', {
+        p_meta_id:                       editMetaId,
+        p_descricao:                     formMeta.descricao.trim(),
+        p_setor:                         formMeta.setor || null,
+        p_bonificacao_equipe:            bonusEquipe,
+        p_limite_bonificacao_individual: limite,
+        p_data_inicio:                   formMeta.data_inicio,
+        p_data_fim:                      formMeta.data_fim,
+      });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.map(m => m.id === editMetaId ? {
+        ...m,
+        descricao:                     formMeta.descricao.trim(),
+        setor:                         formMeta.setor || null,
+        bonificacao_equipe:            bonusEquipe,
+        limite_bonificacao_individual: limite,
+        data_inicio:                   formMeta.data_inicio,
+        data_fim:                      formMeta.data_fim,
+      } : m));
+      showToast('Meta atualizada.', 'success');
+      fecharFormMeta();
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? err}`, 'error');
+    }
+    setSavingMeta(false);
+  };
+
+  const handleApagarMeta = async (id: string) => {
+    if (!supabase) return;
+    if (!confirm('Apagar esta meta? As tarefas táticas vinculadas também serão removidas (pros gerentes e colaboradores). Esta ação não pode ser desfeita.')) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('apagar_meta_estrategica', { p_meta_id: id });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.filter(m => m.id !== id));
+      setTarefas((prev: any[]) => prev.filter(t => t.meta_estrategica_id !== id));
+      showToast('Meta apagada.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
@@ -425,7 +502,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* Botão criar */}
       {tab === 'estrategica' && podeCriarMeta && (
         <div className="flex justify-end shrink-0">
-          <NeuButtonAccent variant="" onClick={() => { setShowFormMeta(!showFormMeta); setFormMeta(EMPTY_META); }}>
+          <NeuButtonAccent variant="" onClick={() => { if (showFormMeta) fecharFormMeta(); else { setEditMetaId(null); setFormMeta(EMPTY_META); setShowFormMeta(true); } }}>
             <Plus size={14} />{showFormMeta ? 'Cancelar' : 'Nova Meta Estratégica'}
           </NeuButtonAccent>
         </div>
@@ -443,7 +520,7 @@ export const MetasView = ({ showToast, profile }: any) => {
         {tab === 'estrategica' && showFormMeta && podeCriarMeta && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <h3 className="text-sm font-bold text-gray-300 mb-5">Nova Meta Estratégica</h3>
+            <h3 className="text-sm font-bold text-gray-300 mb-5">{editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 lg:col-span-2">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
@@ -493,8 +570,8 @@ export const MetasView = ({ showToast, profile }: any) => {
               </div>
             </div>
             <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleCriarMeta} disabled={savingMeta}>
-                {savingMeta ? 'Salvando...' : 'Criar Meta'}
+              <NeuButtonAccent variant="" onClick={editMetaId ? handleEditarMeta : handleCriarMeta} disabled={savingMeta}>
+                {savingMeta ? 'Salvando...' : (editMetaId ? 'Salvar Alterações' : 'Criar Meta')}
               </NeuButtonAccent>
             </div>
           </motion.div>
@@ -619,6 +696,12 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   title="Concluir e dividir pool entre o setor">
                                   <Check size={13} />
                                 </button>
+                                <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMeta(m); }}
+                                  disabled={busyId === m.id}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                  title="Editar meta">
+                                  <Pencil size={13} />
+                                </button>
                                 <button onClick={(e) => { e.stopPropagation(); handleCancelarMeta(m.id); }}
                                   disabled={busyId === m.id}
                                   className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
@@ -626,6 +709,14 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   <XIcon size={13} />
                                 </button>
                               </>
+                            )}
+                            {m.status !== 'Concluida' && isAdmin && (
+                              <button onClick={(e) => { e.stopPropagation(); handleApagarMeta(m.id); }}
+                                disabled={busyId === m.id}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                title="Apagar meta e tarefas vinculadas">
+                                <Trash2 size={13} />
+                              </button>
                             )}
                             {m.status === 'Concluida' && (
                               <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
