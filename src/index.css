@@ -483,6 +483,17 @@ table,
   -webkit-touch-callout: default;
 }
 
+/* ── Global dark-mode overrides for Tailwind gray classes ──
+   Tons Tailwind crus de gray-500/600/700 ficam quase invisíveis em fundo
+   escuro (queixa de baixo contraste em 2026-06-10). Subimos cada tom 1
+   nível mantendo a hierarquia gray-300 > gray-400 > gray-500 > ... .
+   Sidebar tem seus próprios overrides em .sidebar-dark mais abaixo. */
+[data-theme="dark"] .text-gray-500  { color: #9ca3af; }   /* era #6b7280 — igual ao gray-400 */
+[data-theme="dark"] .text-gray-600  { color: #7c8493; }   /* era #4b5563 — entre 500 e 400 */
+[data-theme="dark"] .text-gray-700  { color: #6b7280; }   /* era #374151 — sobe pra gray-500 */
+[data-theme="dark"] .hover\:text-gray-300:hover { color: #e5e7eb; }
+[data-theme="dark"] .hover\:text-gray-400:hover { color: #d1d5db; }
+
 /* ── Global light-mode overrides for Tailwind gray classes ──
    Tons mais escuros para garantir contraste em fundo claro
    (queixa de baixo contraste em 2026-05-29). */
@@ -771,34 +782,35 @@ html.theme-switching *::after {
   animation-play-state: paused;
 }
 
-/* ── Logo shimmer (sidebar) ──
-   Sweep diagonal lento sobre a logo. Pausa longa entre passagens
-   (animação 6s mas sweep ocupa ~35%, dando ~4s de "descanso") para
-   ficar discreto e não cansar o olho. */
+/* ── Logo shimmer (sidebar + login) ──
+   Sweep diagonal sobre a logo. Animação 3.5s — sweep nos primeiros 45%
+   (~1.6s visível) + pausa nos 55% restantes. Opacidade subida pra .65
+   para ficar visível em qualquer fundo (dark, premium, login preto). */
 @keyframes logo-shimmer-sweep {
   0%   { transform: translateX(-150%) skewX(-15deg); }
-  35%  { transform: translateX(150%)  skewX(-15deg); }
+  45%  { transform: translateX(150%)  skewX(-15deg); }
   100% { transform: translateX(150%)  skewX(-15deg); }
 }
 
 .logo-shimmer {
   position: relative;
-  display: inline-block;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .logo-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: linear-gradient(
     105deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.35) 50%,
-    transparent 65%
+    transparent 30%,
+    rgba(255, 255, 255, 0.65) 50%,
+    transparent 70%
   );
   transform: translateX(-150%) skewX(-15deg);
-  animation: logo-shimmer-sweep 6s ease-in-out infinite;
+  animation: logo-shimmer-sweep 3.5s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -806,16 +818,13 @@ html.theme-switching *::after {
   .logo-shimmer::after { animation: none; }
 }
 
-/* LoginScreen — botão Entrar segue o tema dinâmico (--color-accent).
-   Hover intensifica a sombra; focus-visible mostra anel acessível. */
+/* LoginScreen — botão Entrar dourado fixo (#D4AF37). Sem box-shadow:
+   preferência explícita por design flat. Hover só clareia o tom. */
 .login-submit:not(:disabled):hover {
-  box-shadow:
-    0 6px 26px color-mix(in srgb, var(--color-accent) 38%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  filter: brightness(1.05);
+  filter: brightness(1.08);
 }
 .login-submit:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-accent) 65%, transparent);
+  outline: 2px solid rgba(212, 175, 55, 0.65);
   outline-offset: 2px;
 }
 
@@ -844,8 +853,6 @@ html.theme-switching *::after {
   flex-shrink: 0;
   background: rgba(239, 68, 68, 0.14);
   border: 1px solid rgba(239, 68, 68, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   color: rgb(248, 113, 113);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   cursor: pointer;
@@ -915,8 +922,6 @@ html.theme-switching *::after {
   flex-shrink: 0;
   background: rgba(59, 130, 246, 0.14);
   border: 1px solid rgba(59, 130, 246, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   color: rgb(96, 165, 250);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   cursor: pointer;
@@ -986,8 +991,6 @@ html.theme-switching *::after {
   flex-shrink: 0;
   background: rgba(156, 163, 175, 0.12);
   border: 1px solid rgba(156, 163, 175, 0.24);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   color: rgb(156, 163, 175);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   cursor: pointer;
@@ -1040,4 +1043,46 @@ html.theme-switching *::after {
     rgba(107, 114, 128, 0.10) 50%,
     transparent 100%
   );
+}
+
+/* ── Hover destacado dos itens da sidebar ──
+   Botão top-level e botões de módulo. No hover: salta 2px, ganha cor
+   do accent, borda accent e glow sutil — usa a variável --color-accent
+   pra acompanhar o tema escolhido (dark/light/premium). */
+.nav-item {
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.22s ease,
+    background-color 0.18s ease;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover:not(.is-active) {
+  color: var(--color-accent);
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  box-shadow:
+    0 6px 18px -6px color-mix(in srgb, var(--color-accent) 55%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent) inset;
+  background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+/* ── Hover destacado dos submódulos ──
+   Submenus têm border-l-2 indicando hierarquia. No hover: desliza 4px
+   pra direita, vira accent (texto + barra lateral) e glow leve. */
+.nav-subitem {
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.nav-subitem:hover:not(.is-active) {
+  color: var(--color-accent);
+  transform: translateX(4px);
+  border-left-color: var(--color-accent);
+  background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }

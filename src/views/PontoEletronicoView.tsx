@@ -362,7 +362,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
                             ) : (
                               <button onClick={() => setConfirmandoId(r.id)}
                                 title="Excluir registro"
-                                className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors ml-auto">
+                                className="action-btn-delete ml-auto">
                                 <Trash2 size={12} />
                               </button>
                             )}

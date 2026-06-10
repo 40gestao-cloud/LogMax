@@ -322,7 +322,7 @@ function AlarmesCard() {
                     }} />
                 </button>
                 <button onClick={() => removeAlarm(a.id)}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors"
+                  className="action-btn-delete"
                   aria-label="Excluir alarme">
                   <Trash2 size={12} />
                 </button>

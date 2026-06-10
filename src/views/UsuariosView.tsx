@@ -500,14 +500,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                             {canEdit(u) && (
                               <button onClick={() => openEdit(u)}
                                 title="Editar"
-                                className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-accent transition-colors">
+                                className="action-btn-edit">
                                 <Pencil size={13} />
                               </button>
                             )}
                             {u.id !== callerProfile.id && u.role !== 'admin' && !(u.role === 'ceo' && !isAdmin) && (
                               <button onClick={() => setConfirmDelete(u.id)}
                                 title="Excluir"
-                                className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors">
+                                className="action-btn-delete">
                                 <Trash2 size={13} />
                               </button>
                             )}

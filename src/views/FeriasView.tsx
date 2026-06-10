@@ -217,8 +217,8 @@ export const FeriasView = ({ showToast }: any) => {
                             <button onClick={() => setStatus(f.id, 'Concluída')}
                               className="text-[10px] text-gray-400 hover:underline transition-colors font-bold">Concluir</button>
                           )}
-                          <button onClick={() => openEdit(f)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"><Edit2 size={12} /></button>
-                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors"><Trash2 size={12} /></button>
+                          <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                          <button onClick={() => handleDelete(f.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </motion.tr>

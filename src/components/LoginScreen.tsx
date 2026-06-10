@@ -1,16 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  const { theme } = useTheme();
-  const isLight = theme === 'light';
+  // Login força tema Premium independente da preferência do usuário —
+  // identidade fixa da marca. Restaura o tema anterior ao desmontar.
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.getAttribute('data-theme');
+    root.setAttribute('data-theme', 'premium');
+    return () => {
+      if (previous) root.setAttribute('data-theme', previous);
+    };
+  }, []);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,7 +59,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
-      style={{ background: isLight ? '#FFFFFF' : 'var(--color-bg-base)' }}
+      style={{ background: '#000000' }}
     >
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -65,23 +72,22 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           zIndex: 1,
         }}
       >
-        {/* Logo — sem container/sombra, totalmente flat.
-            Light usa variante dedicada (icon-logmax-modoclaro.png) num
-            tamanho um pouco maior conforme pedido do usuário. */}
+        {/* Logo — identidade Premium fixa (variante dark) com shimmer.
+            Container flat, sem sombra. */}
         <div className="flex flex-col items-center mb-8">
           <div
+            className="logo-shimmer"
             style={{
-              width: isLight ? 180 : 140,
-              height: isLight ? 180 : 140,
+              width: 140,
+              height: 140,
               borderRadius: '1.5rem',
-              overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <img
-              src={isLight ? '/icon-logmax-modoclaro.png' : '/icon-logmax.png'}
+              src="/icon-logmax.png"
               alt="LogMax"
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -205,8 +211,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             )}
           </AnimatePresence>
 
-          {/* Submit — usa cor do tema (lida do localStorage pelo bootstrap em
-              index.html antes do React montar; first-load default = verde). */}
+          {/* Submit — dourado fixo (#D4AF37) com shimmer. Flat: sem glow/sombra
+              borrada — preferência explícita do usuário. */}
           <motion.button
             type="submit"
             disabled={isLoading}
@@ -218,20 +224,18 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               padding: '0.95rem',
               borderRadius: '0.875rem',
               background: isLoading
-                ? 'color-mix(in srgb, var(--color-accent) 50%, transparent)'
-                : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
-              boxShadow: isLoading
-                ? 'none'
-                : '0 4px 20px color-mix(in srgb, var(--color-accent) 25%, transparent), inset 0 1px 0 rgba(255,255,255,0.1)',
+                ? 'rgba(212, 175, 55, 0.5)'
+                : 'linear-gradient(135deg, #D4AF37, #B8941F)',
+              boxShadow: 'none',
               border: 'none',
-              color: 'var(--color-accent-text)',
+              color: '#0A0A0A',
               fontWeight: 800,
               fontSize: '0.875rem',
               letterSpacing: '0.08em',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               gap: '0.5rem',
-              transition: 'all 0.2s',
+              transition: 'filter 0.2s, background 0.2s',
             }}
           >
             {isLoading ? (

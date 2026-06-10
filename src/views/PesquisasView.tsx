@@ -357,7 +357,7 @@ function PesquisaCard({ pesquisa, expanded, onToggleExpand, onPublicar, onEncerr
           )}
           {(isRascunho || pesquisa.status === 'Encerrada') && (
             <button onClick={onDelete}
-              className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500">
+              className="action-btn-delete">
               <Trash2 size={13} />
             </button>
           )}

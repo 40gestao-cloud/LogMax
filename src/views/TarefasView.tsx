@@ -257,7 +257,7 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
                     )}
                     {canCreate && (
                       <button onClick={() => handleDelete(t.id)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors">
+                        className="action-btn-delete">
                         <X size={13} />
                       </button>
                     )}

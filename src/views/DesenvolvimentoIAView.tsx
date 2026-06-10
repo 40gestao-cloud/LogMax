@@ -326,13 +326,13 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
                       )}
                       {podeEditar && s.status !== 'Concluído' && (
                         <button onClick={() => openEdit(s)} title="Editar"
-                          className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-500 hover:text-accent transition-colors">
+                          className="action-btn-edit">
                           <Pencil size={12} />
                         </button>
                       )}
                       {podeEditar && (
                         <button onClick={() => handleDelete(s.id)} title="Cancelar"
-                          className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors">
+                          className="action-btn-delete">
                           <Trash2 size={12} />
                         </button>
                       )}

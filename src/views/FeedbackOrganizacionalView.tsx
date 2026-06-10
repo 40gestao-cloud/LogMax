@@ -242,7 +242,7 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
                     ) : (
                       <button onClick={() => setConfirmandoId(f.id)}
                         title="Excluir feedback"
-                        className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        className="action-btn-delete opacity-0 group-hover:opacity-100">
                         <Trash2 size={12} />
                       </button>
                     )}

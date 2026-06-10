@@ -178,47 +178,47 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
 
     <nav className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
       <div className="flex flex-col gap-2">
-        <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
         </button>
         {(profile?.role === 'admin' || profile?.role === 'ceo'
           || (profile?.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))) && (
-          <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
         {(profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || hasSetor(profile, 'rh')) && (
-          <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+          <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
         {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
-        <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <BookOpen size={18} /><span>Catálogo</span>
         </button>
         {/* Avaliações: visível para todos os roles — CEO avalia gerentes, gerente avalia equipe, colaborador dá feedback reverso */}
-        <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Star size={18} /><span>Avaliações</span>
         </button>
         {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
-        <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <MessageSquare size={18} /><span>Feedback</span>
         </button>
         {/* Metas (Fase 4): colaborador vê próprias; gerente/admin/CEO/RH criam e aprovam — credita bonificação no MaxBank, R$ X dispara folga */}
-        <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+        <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Target size={18} /><span>Metas</span>
         </button>
       </div>
 
       <div>
-        <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3 px-2">Módulos</h3>
+        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">Módulos</h3>
         <div className="flex flex-col gap-1.5">
           {visibleModules.map((mod: any) => {
             const isOpen = openModules[mod.id];
             const Icon = mod.icon;
             return (
               <div key={mod.id} className="flex flex-col">
-                <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'neu-flat text-gray-200 border border-white/5' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+                <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
                   <div className="flex items-center gap-3">
                     <Icon size={16}
                       className={isOpen && !mod.color ? 'text-accent' : ''}
@@ -246,7 +246,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             const isActive = activeView === viewId;
                             return (
                               <button key={label} onClick={() => { navigate(viewId); onClose?.(); }}
-                                className={`flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg transition-colors leading-tight border-l-2 ${isActive ? `font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-500 hover:text-gray-300 border-transparent hover:border-gray-500'}`}
+                                className={`nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
                                 style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                                 <span>{label}</span>
                                 {(badges?.[viewId] ?? 0) > 0 && (
@@ -269,7 +269,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
     </nav>
 
     <button onClick={handleSignOut}
-      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-gray-400 hover:text-red-500 transition-all mt-auto border border-transparent hover:border-red-500/10 text-sm font-medium">
+      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-gray-100 hover:text-red-500 transition-all mt-auto border border-transparent hover:border-red-500/10 text-sm font-medium">
       <LogOut size={16} /><span>Sair</span>
     </button>
   </>
