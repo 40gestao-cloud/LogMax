@@ -63,3 +63,10 @@ Endpoints Vercel (Node). Tudo precisa de service-role + checagem RBAC manual:
 - `.claude/settings.local.json` — preferências pessoais por máquina.
 - `.git/` — histórico (usar `git log`/`git diff` via Bash quando precisar).
 - `.claudesettings.json.txt` — backup antigo de config.
+
+## Como conversar comigo
+
+Regras de comportamento (calibradas pro Opus 4.8, que por padrão fala demais e pergunta demais):
+
+- **Silêncio entre tool calls é o padrão.** Só escreva texto quando encontrar algo, mudar de direção ou bater num bloqueador — uma frase cada. Sem narração de "Agora vou…", "Deixa eu ver…", "Olhando pra…".
+- **Decisões pequenas: decida e siga.** Para escolhas menores (nome de variável, valor default, qual de duas abordagens equivalentes), escolha uma opção razoável e anote em vez de perguntar. Para mudanças de escopo ou ações destrutivas (deletar dados, force push, derrubar migration aplicada), ainda pergunta antes.
