@@ -1,0 +1,54 @@
+# ── Dependências ──────────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── Builds e caches ───────────────────────────────────────────
+dist/
+dev-dist/
+.vercel/
+.vite/
+.cache/
+
+# ── Relatórios gerados ────────────────────────────────────────
+bundle-stats.html
+*.log
+*.tsbuildinfo
+coverage/
+
+# ── Segredos (manter só .env.example legível) ─────────────────
+.env
+.env.local
+.env.production
+.env.test
+.env.test.example
+
+# ── Git ───────────────────────────────────────────────────────
+.git/
+
+# ── Assets binários (não precisam ser lidos) ──────────────────
+public/sounds/
+public/*.png
+public/*.jpg
+public/*.jpeg
+public/*.webp
+public/*.svg
+public/*.ico
+src/**/*.png
+src/**/*.jpg
+src/**/*.jpeg
+src/**/*.webp
+
+# ── Sistema ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Claude / config local ─────────────────────────────────────
+.claude/settings.local.json
+.claudesettings.json.txt
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
