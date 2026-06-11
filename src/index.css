@@ -783,13 +783,15 @@ html.theme-switching *::after {
 }
 
 /* ── Logo shimmer (sidebar + login) ──
-   Sweep diagonal sobre a logo. Animação 3.5s — sweep nos primeiros 45%
-   (~1.6s visível) + pausa nos 55% restantes. Opacidade subida pra .65
-   para ficar visível em qualquer fundo (dark, premium, login preto). */
+   Sweep diagonal varrendo o silhueta do PNG da logo. O ::after fica parado
+   em cima do ícone, e o que anima é o background-position da faixa branca.
+   Como o próprio ::after é mascarado pelo alpha do PNG da logo, a faixa
+   só aparece dentro do contorno dourado — sem flash quadrado nem nas
+   sobras transparentes do PNG. Sweep nos primeiros 45% (~1.6s) + pausa. */
 @keyframes logo-shimmer-sweep {
-  0%   { transform: translateX(-150%) skewX(-15deg); }
-  45%  { transform: translateX(150%)  skewX(-15deg); }
-  100% { transform: translateX(150%)  skewX(-15deg); }
+  0%   { background-position: 150% 0; }
+  45%  { background-position: -50% 0; }
+  100% { background-position: -50% 0; }
 }
 
 .logo-shimmer {
@@ -803,13 +805,28 @@ html.theme-switching *::after {
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: linear-gradient(
+  background-image: linear-gradient(
     105deg,
     transparent 30%,
-    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0.85) 50%,
     transparent 70%
   );
-  transform: translateX(-150%) skewX(-15deg);
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 0;
+  /* Recorta a faixa branca pelo alpha do PNG da logo. A faixa varre
+     a horizontal via background-position, e o mask garante que só
+     apareça dentro do contorno do ícone. */
+  -webkit-mask-image: url('/icon-logmax.png');
+          mask-image: url('/icon-logmax.png');
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+          mask-position: center;
+  -webkit-mask-mode: alpha;
+          mask-mode: alpha;
   animation: logo-shimmer-sweep 3.5s ease-in-out infinite;
   pointer-events: none;
 }
