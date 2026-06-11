@@ -80,10 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         log.warn('user.permission_denied', { caller_id: caller.id, target_role: targetProfile.role, reason: 'gerente_role_mismatch' });
         return res.status(403).json({ error: 'Gerentes só podem excluir colaboradores.' });
       }
-      if (targetProfile.setor !== callerProfile.setor) {
-        log.warn('user.permission_denied', { caller_id: caller.id, caller_setor: callerProfile.setor, target_setor: targetProfile.setor, reason: 'gerente_setor_mismatch' });
-        return res.status(403).json({ error: 'Gerentes só podem excluir usuários do seu setor.' });
-      }
     }
 
     const { error } = await admin.auth.admin.deleteUser(userId);

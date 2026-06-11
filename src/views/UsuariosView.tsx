@@ -90,9 +90,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (!supabase) { setIsLoading(false); return; }
     (async () => {
       try {
-        let q = supabase!.from('user_profiles').select('*').order('created_at', { ascending: false });
-        if (isGerente) q = q.eq('setor', callerProfile.setor);
-        const { data, error } = await q;
+        const { data, error } = await supabase!.from('user_profiles').select('*').order('created_at', { ascending: false });
         if (error) showToast('Erro ao carregar usuários.', 'error');
         setUsers(data ?? []);
       } catch {
@@ -101,7 +99,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         setIsLoading(false);
       }
     })();
-  }, [isGerente, callerProfile.setor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtragem por filial (lista do banco já filtrada por setor para gerente)
   const filteredUsers = filialFiltro === 'todas'
@@ -169,9 +167,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       // Recarregar lista
       if (supabase) {
-        let q = supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
-        if (isGerente) q = q.eq('setor', callerProfile.setor);
-        const { data } = await q;
+        const { data } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
         setUsers(data ?? []);
       }
       setForm(emptyForm);
@@ -191,7 +187,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (u.id === callerProfile.id) return true; // self
     if (u.role === 'admin') return false;       // ninguém edita admin
     if (u.role === 'ceo' && !isAdmin) return false;
-    if (isGerente) return u.role === 'colaborador' && u.setor === callerProfile.setor;
+    if (isGerente) return u.role === 'colaborador';
     return isGlobal; // admin/CEO
   };
 
@@ -280,9 +276,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const setorOptions = isGlobal
-    ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti']
-    : [callerProfile.setor];
+  const setorOptions = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
 
   // Admin pode criar CEO/gerente/colaborador. CEO pode criar gerente/colaborador.
   // Gerente só cria colaborador.
@@ -298,9 +292,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Usuários</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          {isGlobal ? 'Gerencie todos os usuários do sistema.' : `Gerencie os colaboradores de ${SETOR_LABEL[callerProfile.setor]}.`}
-        </p>
+        <p className="text-sm text-gray-400 mt-1">Gerencie todos os usuários do sistema.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4 shrink-0">
@@ -365,7 +357,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="user-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
                 <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
-                  disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
                   {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
                 </select>
               </div>
@@ -427,7 +419,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        {filteredUsers.length === 0 ? <EmptyState message={filialFiltro === 'todas' ? 'Nenhum usuário cadastrado neste setor.' : `Nenhum usuário na filial ${filialFiltro}.`} /> : (
+        {filteredUsers.length === 0 ? <EmptyState message={filialFiltro === 'todas' ? 'Nenhum usuário cadastrado.' : `Nenhum usuário na filial ${filialFiltro}.`} /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>

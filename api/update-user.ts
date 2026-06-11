@@ -79,15 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Apenas administradores podem editar CEO.' });
     }
 
-    // Gerente: só edita colaboradores do seu próprio setor.
+    // Gerente: só edita colaboradores (independente de setor).
     if (callerProfile.role === 'gerente') {
       if (targetProfile.role !== 'colaborador') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_role: targetProfile.role, reason: 'gerente_role_mismatch' });
         return res.status(403).json({ error: 'Gerentes só podem editar colaboradores.' });
-      }
-      if (targetProfile.setor !== callerProfile.setor) {
-        log.warn('user.permission_denied', { caller_id: caller.id, caller_setor: callerProfile.setor, target_setor: targetProfile.setor, reason: 'gerente_setor_mismatch' });
-        return res.status(403).json({ error: 'Gerentes só podem editar usuários do seu setor.' });
       }
     }
 
