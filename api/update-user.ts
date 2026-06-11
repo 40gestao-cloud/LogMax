@@ -116,12 +116,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (setor !== undefined) {
-      if (!isGlobalCaller) {
-        log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_setor_change' });
-        return res.status(403).json({ error: 'Gerentes não podem alterar setor.' });
-      }
       if (!VALID_SETORES.includes(setor)) {
         return res.status(400).json({ error: 'Setor inválido.' });
+      }
+      // Gerente não pode atribuir 'all' (escopo CEO).
+      if (!isGlobalCaller && setor === 'all') {
+        log.warn('user.permission_denied', { caller_id: caller.id, target_setor: setor, reason: 'gerente_setor_all_forbidden' });
+        return res.status(403).json({ error: 'Gerentes não podem atribuir o escopo global.' });
       }
       updates.setor = setor;
     }

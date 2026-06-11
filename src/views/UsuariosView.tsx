@@ -240,7 +240,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           : (editForm.setores_extras ?? []).filter((s: string) => s !== payload.setor);
         payload.filial = editForm.filial;
       } else if (isGerente) {
-        // Gerente: só nome/email/senha + filial (sem Matriz).
+        // Gerente: nome/email/senha + setor + filial (sem Matriz). Não toca em role.
+        payload.setor = editForm.setor;
         if (editForm.filial && editForm.filial !== 'Matriz') payload.filial = editForm.filial;
       }
 
@@ -568,14 +569,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   </div>
                 </div>
 
-                {/* Setor — só admin/CEO podem alterar */}
+                {/* Setor — admin/CEO/gerente podem alterar (gerente só em colaboradores) */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="user-edit-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
                   <select id="user-edit-setor" value={editForm.setor}
                     onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
-                    disabled={!isGlobal || editForm.role === 'ceo'}
+                    disabled={editForm.role === 'ceo'}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {(isGlobal ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'] : [callerProfile.setor]).map(s => (
+                    {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'].map(s => (
                       <option key={s} value={s}>{SETOR_LABEL[s]}</option>
                     ))}
                     {editForm.role === 'ceo' && <option value="all">{SETOR_LABEL.all}</option>}
