@@ -17,6 +17,8 @@ export interface UserProfile {
   created_at: string;
   funcionario_id?: string | null;
   foto_url?: string | null;
+  /** Aplica-se só a role='gerente': quando false, perde acesso ao módulo Usuários. */
+  pode_acessar_usuarios?: boolean;
 }
 
 export function useUserProfile() {

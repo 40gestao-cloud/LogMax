@@ -187,7 +187,9 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
-        {(profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || hasSetor(profile, 'rh')) && (
+        {(profile?.role === 'admin' || profile?.role === 'ceo'
+          || (profile?.role === 'gerente' && profile?.pode_acessar_usuarios !== false)
+          || hasSetor(profile, 'rh')) && (
           <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>

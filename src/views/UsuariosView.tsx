@@ -201,6 +201,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       setores_extras: (u.setores_extras ?? []) as string[],
       filial: u.filial ?? FILIAL_DEFAULT,
       password: '',
+      // Default true preserva comportamento atual quando coluna ainda é nula em registros antigos.
+      pode_acessar_usuarios: u.pode_acessar_usuarios !== false,
     });
     setEditShowPass(false);
   };
@@ -239,6 +241,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           ? []
           : (editForm.setores_extras ?? []).filter((s: string) => s !== payload.setor);
         payload.filial = editForm.filial;
+        // Toggle de acesso ao módulo Usuários — só faz sentido em gerentes.
+        if (editForm.role === 'gerente') {
+          payload.pode_acessar_usuarios = !!editForm.pode_acessar_usuarios;
+        }
       } else if (isGerente) {
         // Gerente: nome/email/senha + setor + filial (sem Matriz). Não toca em role.
         payload.setor = editForm.setor;
@@ -264,6 +270,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           setor: payload.setor ?? u.setor,
           setores_extras: payload.setores_extras ?? u.setores_extras,
           filial: payload.filial ?? u.filial,
+          pode_acessar_usuarios: payload.pode_acessar_usuarios ?? u.pode_acessar_usuarios,
         };
       }));
       closeEdit();
@@ -620,6 +627,29 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   </select>
                 </div>
               </div>
+
+              {/* Toggle de acesso ao módulo Usuários — só admin/CEO, só em gerentes. */}
+              {isGlobal && editForm.role === 'gerente' && (
+                <div className="mt-4 neu-flat rounded-2xl p-4 border border-white/5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
+                        Acesso ao módulo Usuários
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Quando desativado, este gerente perde o item "Usuários" na sidebar e não pode criar, editar ou excluir colaboradores.
+                      </p>
+                    </div>
+                    <button type="button"
+                      onClick={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))}
+                      className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${editForm.pode_acessar_usuarios ? 'bg-accent' : 'bg-gray-700'}`}
+                      title={editForm.pode_acessar_usuarios ? 'Acesso habilitado' : 'Acesso desabilitado'}
+                      aria-pressed={editForm.pode_acessar_usuarios}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.pode_acessar_usuarios ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Setores extras — admin/CEO, exceto quando target é CEO (global). */}
               {isGlobal && editForm.role !== 'ceo' && (

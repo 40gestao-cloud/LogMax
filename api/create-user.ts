@@ -36,13 +36,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Buscar perfil do chamador
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor')
+      .select('role, setor, pode_acessar_usuarios')
       .eq('id', caller.id)
       .single();
 
     if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo' && callerProfile.role !== 'gerente')) {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile?.role });
       return res.status(403).json({ error: 'Sem permissão para criar usuários.' });
+    }
+
+    // Gerente com acesso revogado pelo admin/CEO: barrar antes de qualquer mutação.
+    if (callerProfile.role === 'gerente' && callerProfile.pode_acessar_usuarios === false) {
+      log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_access_revoked' });
+      return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
     }
 
     const { email, password, nome, role, filial, setores_extras } = req.body ?? {};

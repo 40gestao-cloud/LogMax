@@ -34,13 +34,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor')
+      .select('role, setor, pode_acessar_usuarios')
       .eq('id', caller.id)
       .single();
 
     if (!callerProfile || callerProfile.role === 'colaborador') {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile?.role });
       return res.status(403).json({ error: 'Sem permissão para excluir usuários.' });
+    }
+
+    // Gerente com acesso revogado pelo admin/CEO: barrar antes de qualquer mutação.
+    if (callerProfile.role === 'gerente' && callerProfile.pode_acessar_usuarios === false) {
+      log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_access_revoked' });
+      return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
     }
 
     const { userId } = req.body ?? {};

@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor')
+      .select('role, setor, pode_acessar_usuarios')
       .eq('id', caller.id)
       .single();
 
@@ -49,7 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Sem permissão para editar usuários.' });
     }
 
-    const { userId, nome, email, role, setor, filial, password, setores_extras } = req.body ?? {};
+    // Gerente com acesso revogado pelo admin/CEO: barrar antes de qualquer mutação.
+    if (callerProfile.role === 'gerente' && callerProfile.pode_acessar_usuarios === false) {
+      log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_access_revoked' });
+      return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
+    }
+
+    const { userId, nome, email, role, setor, filial, password, setores_extras, pode_acessar_usuarios } = req.body ?? {};
 
     if (!userId || typeof userId !== 'string') {
       log.warn('request.validation_failed', { missing: 'userId' });
@@ -158,6 +164,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
       }
       updates.filial = filial;
+    }
+
+    // Toggle de acesso ao módulo Usuários: só admin/CEO podem alterar e só faz sentido em gerentes.
+    if (pode_acessar_usuarios !== undefined) {
+      if (!isGlobalCaller) {
+        log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_toggle_acesso_usuarios' });
+        return res.status(403).json({ error: 'Apenas admin/CEO podem alterar o acesso ao módulo Usuários.' });
+      }
+      const targetRoleAfter = updates.role ?? targetProfile.role;
+      if (targetRoleAfter !== 'gerente') {
+        log.warn('user.invalid_field', { target_id: userId, target_role: targetRoleAfter, reason: 'pode_acessar_usuarios_non_gerente' });
+        return res.status(400).json({ error: 'O toggle só se aplica a gerentes.' });
+      }
+      if (typeof pode_acessar_usuarios !== 'boolean') {
+        return res.status(400).json({ error: 'pode_acessar_usuarios deve ser booleano.' });
+      }
+      updates.pode_acessar_usuarios = pode_acessar_usuarios;
     }
 
     // Atualizar Auth (email/password) se necessário — admin SDK.
