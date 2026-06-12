@@ -80,6 +80,7 @@ const ArtesPromocionaisView                = lazy(() => import('./views/ArtesPro
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
+const RegistroPontoExpressView             = lazy(() => import('./views/RegistroPontoExpressView').then(m => ({ default: m.RegistroPontoExpressView })));
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
@@ -999,12 +1000,29 @@ function isSimuladorPagamentoRoute(): boolean {
   return window.location.pathname === '/simulador-pagamento';
 }
 
+// Rota /p?t=<token>: destino do QR Code de ponto eletrônico lido pela
+// câmera nativa do celular. Faz o auth gate dentro do componente (LoginScreen
+// se preciso) e dispara o registro assim que a sessão estiver ativa.
+function isPontoExpressRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname === '/p';
+}
+
 export default function LogMaxApp() {
   if (isSimuladorPagamentoRoute()) {
     return (
       <ThemeProvider>
         <Suspense fallback={<PageLoadingFallback />}>
           <SimuladorPagamentoView />
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
+  if (isPontoExpressRoute()) {
+    return (
+      <ThemeProvider>
+        <Suspense fallback={<PageLoadingFallback />}>
+          <RegistroPontoExpressView />
         </Suspense>
       </ThemeProvider>
     );

@@ -12,6 +12,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
+import { buildPontoQrUrl, extractPontoToken } from '../lib/pontoQrUrl';
 
 const statusCls = (s: string) => {
   if (s === 'Falta') return 'bg-red-950/50 text-red-500';
@@ -121,7 +122,7 @@ const QRGenerator = () => {
           <motion.div key={tokenData.token} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col items-center gap-3">
             <div className="p-4 neu-pressed rounded-2xl border border-white/5">
-              <QRCodeSVG value={tokenData.token} size={200} bgColor="transparent" fgColor={qrFgColor} level="M" />
+              <QRCodeSVG value={buildPontoQrUrl(tokenData.token)} size={200} bgColor="transparent" fgColor={qrFgColor} level="M" />
             </div>
             {tokenData.codigo && (
               <div className="flex flex-col items-center gap-1">
@@ -438,10 +439,18 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
     }
   };
 
-  const handleQRResult = useCallback(async (token: string) => {
+  const handleQRResult = useCallback(async (scanned: string) => {
     if (scanning) return;
     if (!session?.access_token) {
       setScanResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
+      setShowScanner(false);
+      return;
+    }
+    // QR novo encoda URL `/p?t=<token>`, mas pode chegar token cru se for QR
+    // antigo ou se vier de outro app — extractPontoToken normaliza ambos.
+    const token = extractPontoToken(scanned);
+    if (!token) {
+      setScanResult({ ok: false, msg: 'QR Code inválido para registro de ponto.' });
       setShowScanner(false);
       return;
     }

@@ -5,6 +5,7 @@ import { RefreshCw, Clock, Wifi, WifiOff } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
+import { buildPontoQrUrl } from '../lib/pontoQrUrl';
 
 const CHECKPOINT_OPTIONS = [
   { key: 'entrada', label: 'Entrada',  time: PONTO_HORARIOS.entrada, color: 'text-emerald-400', activeBorder: 'border-emerald-500/40', activeBg: 'bg-emerald-900/20' },
@@ -124,7 +125,7 @@ export const QRTotemView = () => {
             )}
             <div className="p-5 neu-flat rounded-3xl border border-white/5">
               <QRCodeSVG
-                value={tokenData.token}
+                value={buildPontoQrUrl(tokenData.token)}
                 size={240}
                 bgColor="transparent"
                 fgColor={qrFgColor}
