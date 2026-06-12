@@ -79,17 +79,18 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [people, setPeople]     = useState<Auxiliar[]>([]);
 
+  // Apenas TI (gerente ou staff do setor) e admin/CEO criam treinamentos
+  // de IA — gerente de outro setor não deve aparecer com o botão "Novo
+  // Treinamento". Backend casa em supabase/migrations/20260612d_dev_ia_ti_only_*.sql.
   const canManage =
     profile?.role === 'admin' ||
     profile?.role === 'ceo' ||
-    profile?.role === 'gerente' ||
     hasSetor(profile, 'ti');
 
-  // Carrega gerentes + colaboradores como auxiliares possíveis.
-  // Usa a RPC porque a RLS de user_profiles bloqueia gerente de ver
-  // usuários de outros setores — sem a RPC, gerente de Marketing não
-  // conseguiria convidar alguém de Compras. RPC SECURITY DEFINER expõe
-  // só id/nome/role/setor.
+  // Carrega TODOS os usuários como auxiliares possíveis (admin/CEO/gerente/
+  // colaborador, qualquer setor). RPC SECURITY DEFINER expõe só id/nome/
+  // role/setor — fura a RLS de user_profiles que bloquearia o TI de ver
+  // gente de outro setor.
   useEffect(() => {
     if (!supabase || !showForm) return;
     let cancelled = false;
