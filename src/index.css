@@ -456,6 +456,14 @@
 }
 
 /* ── Body ── */
+html, body {
+  /* App estático: sem pull-to-refresh, sem rubber-band bounce em iOS/Android.
+     overscroll-behavior corta o efeito de "tela se mexendo" ao chegar nas pontas. */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+  touch-action: pan-x pan-y;
+}
+
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);

@@ -937,11 +937,11 @@ function LogMaxAppInner() {
                 <ArrowLeft size={18} />
               </button>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 hidden sm:block">
               <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
-                LogMax<span className="hidden sm:inline"> - Gestão Organizacional</span>
+                LogMax - Gestão Organizacional
               </h2>
-              <p className="hidden sm:block text-[11px] text-gray-500 uppercase tracking-widest mt-1">Desenvolvido por Igor Souza</p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-widest mt-1">Desenvolvido por Igor Souza</p>
             </div>
           </div>
 
