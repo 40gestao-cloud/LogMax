@@ -15,7 +15,7 @@ import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Sparkles, Megaphone, Palette, Check, ArrowLeft, Monitor, Accessibility,
-  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database, Target,
+  Star, MessageSquare, BookOpen, Lightbulb, Plus, Minus, Database, Target, Brain,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -62,6 +62,7 @@ const FeriasView                   = lazy(() => import('./views/FeriasView').the
 const MetasView                    = lazy(() => import('./views/MetasView').then(m => ({ default: m.MetasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
+const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const FeedbackOrganizacionalView   = lazy(() => import('./views/FeedbackOrganizacionalView').then(m => ({ default: m.FeedbackOrganizacionalView })));
@@ -190,6 +191,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || (profile?.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))) && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
+          </button>
+        )}
+        {(profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') && (
+          <button onClick={() => { navigate('painel-bi'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'painel-bi' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Brain size={18} /><span>Painel de BI</span>
           </button>
         )}
         {(profile?.role === 'admin' || profile?.role === 'ceo'
@@ -860,6 +866,7 @@ function LogMaxAppInner() {
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
+      case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

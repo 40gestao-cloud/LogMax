@@ -1111,3 +1111,61 @@ html.theme-switching *::after {
   border-left-color: var(--color-accent);
   background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
+
+/* ── BI Panel: Markdown ──
+   Estilo dedicado pro relatório executivo renderizado por react-markdown
+   na PainelBIView. Mantém hierarquia visual sem brigar com o tema (dark
+   accent + light fallback). */
+.bi-markdown h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  margin: 1.5rem 0 0.75rem;
+  letter-spacing: -0.01em;
+}
+.bi-markdown h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  margin: 1.75rem 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+.bi-markdown h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #e5e7eb);
+  margin: 1.25rem 0 0.5rem;
+}
+.bi-markdown p {
+  margin: 0.5rem 0;
+}
+.bi-markdown ul, .bi-markdown ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.bi-markdown ul li { list-style: disc; }
+.bi-markdown ol li { list-style: decimal; }
+.bi-markdown strong { color: var(--color-accent); font-weight: 700; }
+.bi-markdown em { font-style: italic; opacity: 0.85; }
+.bi-markdown code {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: 'Courier New', monospace;
+}
+.bi-markdown blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  opacity: 0.85;
+  font-style: italic;
+}
+.bi-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 1.5rem 0;
+}

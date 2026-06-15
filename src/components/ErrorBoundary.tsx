@@ -1,19 +1,21 @@
-// @ts-nocheck
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Sentry } from '../lib/sentry';
 
-export class ErrorBoundary extends React.Component {
-  constructor(props) {
+type Props = { children: React.ReactNode };
+type State = { hasError: boolean; error: Error | null };
+
+export class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error, info) {
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[LogMax] Render error:', error, info?.componentStack);
     // Envia para o Sentry com o componentStack como contexto adicional
     Sentry.captureException(error, {
