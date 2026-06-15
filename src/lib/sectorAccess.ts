@@ -6,7 +6,7 @@
 // ("o botão aparece e falha"), mas se alguém digitar o `activeView` direto
 // no console, a RLS continua barrando.
 //
-// 'empresa' é cadastro base (filiais, colaboradores, clientes, produtos...)
+// 'empresa' é cadastro base (filiais, clientes, produtos, fornecedores...)
 // e fica disponível para todos os setores. Os demais seguem o recorte
 // funcional de cada setor.
 export const SETOR_MODULES: Record<string, string[]> = {

@@ -27,7 +27,6 @@ import { AuditoriaProvider } from './contexts/AuditoriaContext';
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
 const DashboardAnalyticsView  = lazy(() => import('./views/DashboardAnalyticsView').then(m => ({ default: m.DashboardAnalyticsView })));
 const FiliaisView             = lazy(() => import('./views/FiliaisView').then(m => ({ default: m.FiliaisView })));
-const ColaboradoresView       = lazy(() => import('./views/ColaboradoresView').then(m => ({ default: m.ColaboradoresView })));
 const CRMView                 = lazy(() => import('./views/CRMView').then(m => ({ default: m.CRMView })));
 const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
 const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
@@ -133,7 +132,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Colaboradores', 'Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -629,14 +628,15 @@ function LogMaxAppInner() {
       const raw = sessionStorage.getItem('logmax:activeView') || 'inicio';
       // Migração de rotas após reorganização dos submenus:
       //   - Produtos/Serviços saíram de Empresa → módulo Cadastros (novo).
-      //   - Colaboradores saiu de Empresa → Recursos Humanos.
+      //   - Colaboradores removido (redundante com Funcionários em RH).
       //   - Clientes saiu de Empresa (já existia em Vendas).
       //   - Centros de custo saiu de Empresa → Financeiro.
       // Redireciona sessões antigas pra não cair no fallback "em desenvolvimento".
       const migrado = raw
         .replace(/^empresa-produtos$/,         'cadastros-produtos')
         .replace(/^empresa-serviços$/,         'cadastros-serviços')
-        .replace(/^empresa-colaboradores$/,    'rh-colaboradores')
+        .replace(/^empresa-colaboradores$/,    'rh-funcionários')
+        .replace(/^rh-colaboradores$/,         'rh-funcionários')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
         .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
         .replace(/^empresa-centrosdecusto$/,   'financeiro-centrosdecusto');
@@ -776,7 +776,6 @@ function LogMaxAppInner() {
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
-      case 'rh-colaboradores':                return <ColaboradoresView showToast={st} />;
       case 'cadastros-serviços':              return <GenericCRUDView showToast={st} title="Serviços" subtitle="Gerencie os serviços prestados." endpoint="/api/servicosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: SRV-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Instalação' }, { key: 'tipo', label: 'Tipo', placeholder: 'Ex: Manutenção' }, { key: 'filial', label: 'Empresa', type: 'select', options: ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Gerencie centros de custo e orçamentos." endpoint="/api/centroscustoview"
