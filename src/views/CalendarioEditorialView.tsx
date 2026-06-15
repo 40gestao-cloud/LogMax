@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
+import { useAuth } from '../hooks/useAuth';
 
 const CANAIS = [
   'Instagram Feed',
@@ -93,6 +94,7 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
 };
 
 export const CalendarioEditorialView = ({ showToast, profile }: any) => {
+  const { session } = useAuth();
   const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview');
   const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview');
 
@@ -102,6 +104,16 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
   const [saving, setSaving] = useState(false);
   const [filtroCanal, setFiltroCanal] = useState<string>('todos');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
+
+  // Modal de geração de legenda IA — mesmo endpoint usado em Promoções.
+  // Trazer a feature pra cá evita o "preciso sair pra Promoções e voltar".
+  const [legendaModal, setLegendaModal] = useState<null | {
+    payload: any;
+    legendas: { tom: string; texto: string }[] | null;
+    loading: boolean;
+    erro: string | null;
+  }>(null);
+  const [legendaCopiada, setLegendaCopiada] = useState<number | null>(null);
 
   const canCRUD = hasSetor(profile, 'marketing');
 
@@ -191,6 +203,62 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
       showToast('Post inativado.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error');
+    }
+  };
+
+  // Promoção vinculada → chama /api/ai-legenda. Payload casa com o usado
+  // em PromocoesMarketingView pra reaproveitar o mesmo prompt no backend.
+  const gerarLegenda = async () => {
+    const promo = (promocoes ?? []).find((p: any) => p.id === form.promocao_id) as any;
+    if (!promo) {
+      showToast('Vincule uma promoção antes de gerar a legenda.', 'error');
+      return;
+    }
+    const payload = {
+      produto:           promo.nome_produto,
+      tipo:              promo.tipo_origem,
+      preco_atual:       Number(promo.preco_atual),
+      preco_promocional: Number(promo.preco_promocional),
+      preco_custo:       Number(promo.preco_custo),
+      data_inicio:       promo.data_inicio,
+      data_fim:          promo.data_fim,
+      descricao:         promo.descricao ?? '',
+    };
+    setLegendaModal({ payload, legendas: null, loading: true, erro: null });
+    try {
+      const resp = await fetch('/api/ai-legenda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const detail = data?.finish ? ` (motivo: ${data.finish})` : '';
+        setLegendaModal(m => m ? { ...m, loading: false, erro: (data?.error ?? 'Falha na IA.') + detail } : null);
+        return;
+      }
+      setLegendaModal(m => m ? { ...m, loading: false, legendas: data.legendas ?? [] } : null);
+    } catch (err: any) {
+      setLegendaModal(m => m ? { ...m, loading: false, erro: err?.message ?? 'Erro de rede.' } : null);
+    }
+  };
+
+  const usarLegenda = (texto: string) => {
+    setForm(f => ({ ...f, conteudo: texto }));
+    setLegendaModal(null);
+    showToast('Legenda aplicada ao conteúdo do post.', 'success');
+  };
+
+  const copiarLegenda = async (texto: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setLegendaCopiada(idx);
+      setTimeout(() => setLegendaCopiada(c => c === idx ? null : c), 1500);
+    } catch {
+      showToast('Não consegui copiar — copie manualmente.', 'error');
     }
   };
 
@@ -325,11 +393,21 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="https://..." />
               </div>
               <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="cal-conteudo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Conteúdo / Legenda</label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="cal-conteudo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Conteúdo / Legenda</label>
+                  <button
+                    type="button"
+                    onClick={gerarLegenda}
+                    disabled={!form.promocao_id}
+                    title={form.promocao_id ? 'IA gera 3 variações com base na promoção vinculada' : 'Vincule uma promoção pra gerar a legenda'}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-2.5 py-1 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    <Sparkles size={10} />Gerar legenda com IA
+                  </button>
+                </div>
                 <textarea id="cal-conteudo" value={form.conteudo} rows={3}
                   onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                  placeholder="Copy do post. Use o botão Gerar legenda na tela de Promoções pra obter sugestões da IA." />
+                  placeholder="Copy do post. Vincule uma promoção e clique em Gerar legenda com IA acima pra obter 3 variações." />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">
@@ -413,6 +491,87 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
           </AnimatePresence>
         )}
       </div>
+
+      {/* Modal — Legendas geradas pela IA (mesmo endpoint de Promoções) */}
+      <AnimatePresence>
+        {legendaModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setLegendaModal(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-xl max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-accent" />
+                  <h3 className="text-sm font-bold text-gray-200">Legendas geradas pela IA</h3>
+                </div>
+                <button onClick={() => setLegendaModal(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 mb-4 shrink-0">
+                <span className="font-bold text-gray-300">{legendaModal.payload?.produto}</span>
+                {' · '}
+                <span className="text-accent">
+                  R$ {Number(legendaModal.payload?.preco_promocional ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+                {legendaModal.payload?.data_fim && <> · até <span className="text-gray-400">{legendaModal.payload.data_fim}</span></>}
+              </p>
+
+              {legendaModal.loading && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 size={28} className="text-accent animate-spin" />
+                  <p className="text-xs text-gray-500">Gerando 3 variações...</p>
+                </div>
+              )}
+
+              {legendaModal.erro && !legendaModal.loading && (
+                <div className="neu-pressed rounded-xl p-4 text-xs text-red-400 leading-relaxed">
+                  {legendaModal.erro}
+                </div>
+              )}
+
+              {legendaModal.legendas && legendaModal.legendas.length > 0 && (
+                <div className="flex-1 overflow-y-auto main-scrollbar pr-1 flex flex-col gap-3">
+                  {legendaModal.legendas.map((l, idx) => (
+                    <div key={idx} className="neu-flat rounded-xl p-4 border border-white/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                          Tom {l.tom}
+                        </span>
+                        <span className="text-[10px] text-gray-500 tabular-nums">{l.texto.length} chars</span>
+                      </div>
+                      <p className="text-sm text-gray-200 whitespace-pre-wrap break-words leading-relaxed">{l.texto}</p>
+                      <div className="flex justify-end gap-2 mt-3">
+                        <button onClick={() => usarLegenda(l.texto)}
+                          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-3 py-1.5 hover:bg-accent/10 transition-colors">
+                          Usar
+                        </button>
+                        <button onClick={() => copiarLegenda(l.texto, idx)}
+                          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 border border-white/10 rounded-lg px-3 py-1.5 hover:text-accent hover:border-accent/30 transition-colors">
+                          {legendaCopiada === idx ? <CheckCircle2 size={10} /> : <Copy size={10} />}
+                          {legendaCopiada === idx ? 'copiado' : 'copiar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[10px] text-gray-600 mt-3 shrink-0 leading-relaxed">
+                As sugestões são geradas por IA — revise antes de publicar.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
