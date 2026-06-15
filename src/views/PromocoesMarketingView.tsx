@@ -361,7 +361,10 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        setLegendaModal(m => m ? { ...m, loading: false, erro: data?.error ?? 'Falha na IA.' } : null);
+        // Adiciona detalhe técnico (finishReason) quando vier do servidor —
+        // facilita pra você reportar pra mim sem precisar olhar log do Vercel.
+        const detail = data?.finish ? ` (motivo: ${data.finish})` : '';
+        setLegendaModal(m => m ? { ...m, loading: false, erro: (data?.error ?? 'Falha na IA.') + detail } : null);
         return;
       }
       setLegendaModal(m => m ? { ...m, loading: false, legendas: data.legendas ?? [] } : null);

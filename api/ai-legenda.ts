@@ -163,34 +163,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        // Temperatura alta pra variar as 3 versões; teto baixo de tokens
-        // porque a saída é compacta. responseMimeType + responseSchema
-        // garantem estrutura — sem responseSchema o Gemini varia entre
-        // { legendas: [...] } e [...] direto, quebrando o parser.
+        // Temperatura média (varia legendas sem inventar produto) + budget
+        // generoso de tokens (3 legendas + envelope JSON cabem em ~1k tokens,
+        // mas margem evita truncamento que quebra JSON).
+        // Sem responseSchema: nem todo modelo (2.5-flash, 2.0-flash, 1.5-flash)
+        // suporta da mesma forma. Confiamos no prompt + responseMimeType +
+        // parser robusto pra cobrir todas as variações.
         generationConfig: {
-          temperature:      0.9,
-          maxOutputTokens:  800,
+          temperature:      0.85,
+          maxOutputTokens:  1500,
           topP:             0.95,
           responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'object',
-            properties: {
-              legendas: {
-                type: 'array',
-                minItems: 3,
-                maxItems: 3,
-                items: {
-                  type: 'object',
-                  properties: {
-                    tom:   { type: 'string' },
-                    texto: { type: 'string' },
-                  },
-                  required: ['tom', 'texto'],
-                },
-              },
-            },
-            required: ['legendas'],
-          },
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
@@ -236,15 +219,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const legendasRaw = extractLegendas(parsed);
 
     if (legendasRaw.length === 0) {
-      // Loga uma amostra do cru pra diagnóstico (key não vai aqui).
+      // Diagnóstico completo no log do Vercel + amostra do cru no payload
+      // pra que o usuário tenha pista do que aconteceu (truncado? bloqueado?).
+      const finishReason = data?.candidates?.[0]?.finishReason as string | undefined;
       log.warn('gemini.parse_failed', {
-        user_id: user.id,
-        raw_len: rawText.length,
-        raw_sample: rawText.slice(0, 200),
+        user_id:     user.id,
+        finish:      finishReason,
+        raw_len:     rawText.length,
+        raw_sample:  rawText.slice(0, 400),
+        model,
       });
-      return res.status(502).json({
-        error: 'IA devolveu formato inesperado. Tente novamente.',
-      });
+      let mensagem = 'IA devolveu formato inesperado. Tente novamente.';
+      if (finishReason === 'MAX_TOKENS') {
+        mensagem = 'A IA estourou o limite de tamanho. Tente novamente — pode acontecer em produtos com nome muito longo.';
+      } else if (finishReason === 'SAFETY') {
+        mensagem = 'A IA recusou gerar pra essa promoção (filtro de segurança). Ajuste o título/descrição.';
+      } else if (finishReason === 'RECITATION') {
+        mensagem = 'A IA detectou conteúdo protegido. Tente novamente.';
+      }
+      return res.status(502).json({ error: mensagem, finish: finishReason });
     }
 
     // Normaliza: garante shape { tom, texto }. Aceita variações de nome
