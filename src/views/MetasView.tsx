@@ -264,7 +264,11 @@ export const MetasView = ({ showToast, profile }: any) => {
   };
 
   // ── Tarefa tática ──────────────────────────────────────────────────
-  const podeCriarTarefa = isAdmin || isGerente;
+  // Decisão de produto: gerente NÃO cria mais tarefas táticas — só admin/CEO.
+  // Centraliza a hierarquia (meta estratégica + tática viram artefatos da
+  // diretoria; gerente é executor/aprovador). A RPC `criar_tarefa_tatica`
+  // também valida server-side (defesa em profundidade).
+  const podeCriarTarefa = isAdmin;
 
   // Metas estratégicas elegíveis pra criar tarefa: Ativa + setor compatível com criador.
   const metasElegiveis = useMemo(() => {
@@ -739,7 +743,13 @@ export const MetasView = ({ showToast, profile }: any) => {
       {tab === 'tatica' && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
           {enrichedTarefas.length === 0 ? (
-            <EmptyState message={podeCriarTarefa ? 'Nenhuma tarefa criada ainda.' : 'Você ainda não tem tarefas atribuídas.'} />
+            <EmptyState message={
+              isAdmin
+                ? 'Nenhuma tarefa criada ainda.'
+                : isGerente
+                  ? 'Nenhuma tarefa do seu setor. Admin/CEO atribuem a pauta tática.'
+                  : 'Você ainda não tem tarefas atribuídas.'
+            } />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
               <table className="w-full text-left border-collapse min-w-[820px]">
