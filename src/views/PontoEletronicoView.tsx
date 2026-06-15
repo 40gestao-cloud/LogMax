@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { useAuth } from '../hooks/useAuth';
@@ -154,9 +154,8 @@ const QRGenerator = () => {
 const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
   const { user } = useAuth();
   const canSeeAll = profile.role === 'admin' || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
-  // Hard-delete autorizado pra admin/CEO (RH também tem via RLS, mas a UI
-  // intencional aqui é "correção administrativa", então restringimos).
-  const canDelete = profile.role === 'admin' || profile.role === 'ceo';
+  // Hard-delete restrito a admin (RH/CEO continuam vendo, mas só admin corrige).
+  const canDelete = profile.role === 'admin';
 
   const [registros, setRegistros] = useState<any[]>([]);
   const [userMap, setUserMap] = useState<Record<string, { nome: string; email: string }>>({});
@@ -167,6 +166,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [filtroAluno, setFiltroAluno] = useState<string>('');
 
   const handleExcluir = async (id: string) => {
     if (!supabase) return;
@@ -237,14 +237,26 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
     loadData();
   }, [filtroMes, canSeeAll, user?.id]);
 
-  const noHorario = registros.filter(r => r.status === 'No Horário').length;
-  const atrasados  = registros.filter(r => r.status === 'Atrasado').length;
+  // Lista de alunos disponíveis no mês (alimenta o dropdown de filtro do admin).
+  const alunosOptions = canSeeAll
+    ? Object.entries(userMap)
+        .map(([id, p]) => ({ id, nome: p.nome ?? '—', email: p.email ?? '' }))
+        .sort((a, b) => a.nome.localeCompare(b.nome))
+    : [];
+
+  // Filtro client-side: KPIs, tabela e export operam sobre o que está visível.
+  const registrosVisiveis = filtroAluno
+    ? registros.filter(r => r.user_id === filtroAluno)
+    : registros;
+
+  const noHorario = registrosVisiveis.filter(r => r.status === 'No Horário').length;
+  const atrasados  = registrosVisiveis.filter(r => r.status === 'Atrasado').length;
 
   // ─── Export PDF / Excel ─────────────────────────────────────────────────
   // Exporta o que está visível (mês filtrado + escopo de visibilidade do user).
   const tipoLabel = (t: string) => t === 'entrada' ? 'Entrada' : t === 'retorno' ? 'Retorno' : 'Saída';
   const buildRows = (forExcel: boolean) =>
-    registros.map((r: any) => {
+    registrosVisiveis.map((r: any) => {
       const dt = new Date(r.registrado_em);
       const data = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
       const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
@@ -272,7 +284,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
       {/* Mini KPIs */}
       <div className="grid grid-cols-3 gap-3 shrink-0">
         {[
-          { label: 'Total',       value: registros.length, cls: 'text-gray-100' },
+          { label: 'Total',       value: registrosVisiveis.length, cls: 'text-gray-100' },
           { label: 'No Horário',  value: noHorario,        cls: 'text-emerald-400' },
           { label: 'Atrasados',   value: atrasados,        cls: atrasados > 0 ? 'text-red-500' : 'text-gray-400' },
         ].map(k => (
@@ -283,16 +295,32 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
         ))}
       </div>
 
-      {/* Filtro de mês + export */}
+      {/* Filtro de mês + aluno + export */}
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Calendar size={14} className="text-yellow-400" />
           <label htmlFor="ponto-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês de Referência</label>
           <input id="ponto-mes-filtro" type="month" value={filtroMes}
             onChange={e => setFiltroMes(e.target.value)}
             className="neu-input rounded-xl px-3 py-2 text-sm" />
+          {canSeeAll && (
+            <>
+              <label htmlFor="ponto-aluno-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Aluno</label>
+              <select id="ponto-aluno-filtro" value={filtroAluno}
+                onChange={e => setFiltroAluno(e.target.value)}
+                className="neu-input rounded-xl px-3 py-2 text-sm min-w-[180px]">
+                <option value="">Todos</option>
+                {alunosOptions.map(a => (
+                  <option key={a.id} value={a.id}>{a.nome}</option>
+                ))}
+              </select>
+              {filtroAluno && (
+                <button onClick={() => setFiltroAluno('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar</button>
+              )}
+            </>
+          )}
         </div>
-        {registros.length > 0 && (
+        {registrosVisiveis.length > 0 && (
           <div className="flex items-center gap-2">
             <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />
             <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
@@ -304,8 +332,8 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {loading ? (
           <div className="flex justify-center py-8"><LoadingSpinner /></div>
-        ) : registros.length === 0 ? (
-          <EmptyState message="Nenhum registro de ponto no período selecionado." />
+        ) : registrosVisiveis.length === 0 ? (
+          <EmptyState message={filtroAluno ? 'Este aluno não tem registros no mês selecionado.' : 'Nenhum registro de ponto no período selecionado.'} />
         ) : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -321,7 +349,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {registros.map((r: any, i: number) => {
+                  {registrosVisiveis.map((r: any, i: number) => {
                     const dt = new Date(r.registrado_em);
                     const dataFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
                     const horaFmt = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
@@ -396,6 +424,23 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
   const [tab, setTab] = useState<'ponto' | 'historico'>('ponto');
 
   const isAdmin = profile?.role === 'admin';
+
+  const [confirmandoManualId, setConfirmandoManualId] = useState<string | null>(null);
+  const [excluindoManualId, setExcluindoManualId] = useState<string | null>(null);
+
+  const handleExcluirManual = async (id: string) => {
+    setExcluindoManualId(id);
+    try {
+      await dbDelete('/api/pontoeletronicoview', id);
+      setData((prev: any[]) => prev.filter(p => p.id !== id));
+      showToast('Registro manual removido.', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setExcluindoManualId(null);
+      setConfirmandoManualId(null);
+    }
+  };
 
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -726,6 +771,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                     <th className="pb-4 font-bold px-4 text-center">Saída</th>
                     <th className="pb-4 font-bold px-4 text-center">Horas</th>
                     <th className="pb-4 font-bold px-4 text-center">Status</th>
+                    {isAdmin && <th className="pb-4 font-bold px-4 text-right">Ações</th>}
                   </tr></thead>
                   <tbody>
                     <AnimatePresence>
@@ -740,6 +786,28 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(p.status)}`}>{p.status}</span>
                           </td>
+                          {isAdmin && (
+                            <td className="py-3 px-4 text-right">
+                              {confirmandoManualId === p.id ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => handleExcluirManual(p.id)} disabled={excluindoManualId === p.id}
+                                    className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
+                                    {excluindoManualId === p.id ? '...' : 'Confirmar'}
+                                  </button>
+                                  <button onClick={() => setConfirmandoManualId(null)} disabled={excluindoManualId === p.id}
+                                    className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => setConfirmandoManualId(p.id)}
+                                  title="Excluir registro manual"
+                                  className="action-btn-delete ml-auto">
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </motion.tr>
                       ))}
                     </AnimatePresence>
