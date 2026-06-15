@@ -71,18 +71,51 @@ const buildUserPrompt = (p: LegendaPayload): string => {
   return lines.join('\n');
 };
 
-// Gemini às vezes envolve o JSON em ```json ... ``` ou adiciona "Aqui está".
-// Extrai o primeiro bloco { ... } válido. Devolve null se não conseguir.
+// Gemini às vezes envolve o JSON em ```json ... ```, adiciona "Aqui está"
+// antes, ou devolve array direto `[...]` em vez de `{ legendas: [...] }`.
+// Tentamos parse direto primeiro; se falhar, extraímos o maior bloco que
+// pareça JSON válido (array OU objeto). Devolve null se não rolar.
 const extractJsonBlock = (raw: string): any | null => {
   const trimmed = raw.trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/```\s*$/, '');
   try { return JSON.parse(trimmed); } catch { /* fallback abaixo */ }
 
-  const start = trimmed.indexOf('{');
-  const end   = trimmed.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) return null;
-  try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { return null; }
+  // Junta candidatos (array e/ou objeto) e tenta cada um. Escolhe o que
+  // começa primeiro no texto pra preservar a intenção do modelo.
+  const candidates: { start: number; text: string }[] = [];
+  const arrStart = trimmed.indexOf('[');
+  const arrEnd   = trimmed.lastIndexOf(']');
+  if (arrStart !== -1 && arrEnd > arrStart) {
+    candidates.push({ start: arrStart, text: trimmed.slice(arrStart, arrEnd + 1) });
+  }
+  const objStart = trimmed.indexOf('{');
+  const objEnd   = trimmed.lastIndexOf('}');
+  if (objStart !== -1 && objEnd > objStart) {
+    candidates.push({ start: objStart, text: trimmed.slice(objStart, objEnd + 1) });
+  }
+  candidates.sort((a, b) => a.start - b.start);
+
+  for (const c of candidates) {
+    try { return JSON.parse(c.text); } catch { /* tenta próximo */ }
+  }
+  return null;
+};
+
+// Normaliza o parsed pra sempre ter shape [{ tom, texto }, ...].
+// Aceita: array direto, { legendas }, { results }, { data }, ou
+// primeiro array que encontrar nas propriedades.
+const extractLegendas = (parsed: any): any[] => {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object') {
+    if (Array.isArray(parsed.legendas)) return parsed.legendas;
+    if (Array.isArray(parsed.results))  return parsed.results;
+    if (Array.isArray(parsed.data))     return parsed.data;
+    for (const v of Object.values(parsed)) {
+      if (Array.isArray(v)) return v;
+    }
+  }
+  return [];
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -131,12 +164,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         // Temperatura alta pra variar as 3 versões; teto baixo de tokens
-        // porque a saída é compacta. responseMimeType força JSON.
+        // porque a saída é compacta. responseMimeType + responseSchema
+        // garantem estrutura — sem responseSchema o Gemini varia entre
+        // { legendas: [...] } e [...] direto, quebrando o parser.
         generationConfig: {
-          temperature:      0.95,
+          temperature:      0.9,
           maxOutputTokens:  800,
           topP:             0.95,
           responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'object',
+            properties: {
+              legendas: {
+                type: 'array',
+                minItems: 3,
+                maxItems: 3,
+                items: {
+                  type: 'object',
+                  properties: {
+                    tom:   { type: 'string' },
+                    texto: { type: 'string' },
+                  },
+                  required: ['tom', 'texto'],
+                },
+              },
+            },
+            required: ['legendas'],
+          },
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
@@ -179,23 +233,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const parsed = extractJsonBlock(rawText);
-    if (!parsed || !Array.isArray(parsed.legendas) || parsed.legendas.length === 0) {
-      log.warn('gemini.parse_failed', { user_id: user.id, raw_len: rawText.length });
+    const legendasRaw = extractLegendas(parsed);
+
+    if (legendasRaw.length === 0) {
+      // Loga uma amostra do cru pra diagnóstico (key não vai aqui).
+      log.warn('gemini.parse_failed', {
+        user_id: user.id,
+        raw_len: rawText.length,
+        raw_sample: rawText.slice(0, 200),
+      });
       return res.status(502).json({
         error: 'IA devolveu formato inesperado. Tente novamente.',
       });
     }
 
-    // Normaliza: garante shape { tom, texto } e descarta vazios.
-    const legendas = parsed.legendas
-      .map((l: any) => ({
-        tom:   typeof l?.tom   === 'string' ? l.tom.trim()   : 'sugestão',
-        texto: typeof l?.texto === 'string' ? l.texto.trim() : '',
-      }))
+    // Normaliza: garante shape { tom, texto }. Aceita variações de nome
+    // (caption/text/legenda) que Gemini às vezes prefere sem schema.
+    const legendas = legendasRaw
+      .map((l: any) => {
+        const tom = typeof l?.tom === 'string'   ? l.tom
+                  : typeof l?.tone === 'string'  ? l.tone
+                  : typeof l?.estilo === 'string' ? l.estilo
+                  : 'sugestão';
+        const texto = typeof l?.texto === 'string'   ? l.texto
+                    : typeof l?.text === 'string'    ? l.text
+                    : typeof l?.caption === 'string' ? l.caption
+                    : typeof l?.legenda === 'string' ? l.legenda
+                    : typeof l === 'string'          ? l
+                    : '';
+        return { tom: String(tom).trim(), texto: String(texto).trim() };
+      })
       .filter((l: any) => l.texto.length > 0)
       .slice(0, 3);
 
     if (legendas.length === 0) {
+      log.warn('gemini.empty_after_normalize', {
+        user_id: user.id,
+        raw_sample: rawText.slice(0, 200),
+      });
       return res.status(502).json({ error: 'IA devolveu legendas vazias. Tente novamente.' });
     }
 
