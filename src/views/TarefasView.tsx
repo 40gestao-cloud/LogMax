@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, ChevronRight, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
@@ -214,6 +214,11 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
                       <span className={`text-[10px] font-black uppercase tracking-wide ${PRIO_STYLE[t.prioridade] ?? 'text-gray-500'}`}>
                         {t.prioridade}
                       </span>
+                      {t.origem === 'briefing_ia' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-full px-1.5 py-0.5">
+                          <Sparkles size={9} />Briefing IA
+                        </span>
+                      )}
                       {vencida && (
                         <span className="flex items-center gap-1 text-[10px] font-bold text-red-500">
                           <AlertCircle size={10} />Vencida
@@ -232,6 +237,12 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
                     {hasDescricao && (
                       <p className={`text-xs text-gray-500 mt-0.5 ${isExpanded ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
                         {t.descricao}
+                      </p>
+                    )}
+                    {isExpanded && t.contexto && (
+                      <p className="text-[11px] text-yellow-400/80 italic mt-1.5 flex items-start gap-1.5">
+                        <AlertCircle size={10} className="shrink-0 mt-0.5" />
+                        <span>Contexto da IA: {t.contexto}</span>
                       </p>
                     )}
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
