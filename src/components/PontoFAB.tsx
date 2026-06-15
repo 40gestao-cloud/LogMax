@@ -7,14 +7,13 @@ import { QRScanner } from './QRScanner';
 
 type ScanResult =
   | { ok: true; label: string; hora: string; status: string }
-  | { ok: false; msg: string }
-  | null;
+  | { ok: false; msg: string };
 
 export const PontoFAB = () => {
   const { session } = useAuth();
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<ScanResult>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -109,7 +108,7 @@ export const PontoFAB = () => {
                     exit={{ opacity: 0 }}
                     className={`flex flex-col items-center gap-3 rounded-2xl p-6 border ${result.ok ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-red-900/20 border-red-500/20'}`}
                   >
-                    {result.ok ? (
+                    {result.ok === true ? (
                       <>
                         <CheckCircle size={36} className="text-emerald-400" />
                         <p className="text-sm font-bold text-emerald-300 text-center">Ponto registrado!</p>

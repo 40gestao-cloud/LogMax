@@ -143,7 +143,7 @@ export const QRTotemView = () => {
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <Clock size={12} />
               <span>Atualiza em <span className="tabular-nums text-gray-400 font-bold">{countdown}s</span></span>
-              <button onClick={fetchToken} disabled={refreshing} className="ml-1 hover:text-gray-300 transition-colors disabled:opacity-40">
+              <button onClick={() => fetchToken()} disabled={refreshing} className="ml-1 hover:text-gray-300 transition-colors disabled:opacity-40">
                 <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
               </button>
             </div>

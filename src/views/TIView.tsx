@@ -19,6 +19,7 @@ type TIChamado = {
   urgencia: 'Baixa' | 'Média' | 'Alta';
   status: 'Aberto' | 'Em andamento' | 'Resolvido';
   nome_criador?: string | null;
+  criado_por?: string | null;
   created_at: string;
   resolvido_em?: string | null;
 };

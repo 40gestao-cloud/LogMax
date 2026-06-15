@@ -134,7 +134,7 @@ export function RegistroPontoExpressView() {
     );
   }
 
-  if (result && !result.ok) {
+  if (result && result.ok === false) {
     return (
       <Frame>
         <div className="flex flex-col items-center gap-5 text-center">

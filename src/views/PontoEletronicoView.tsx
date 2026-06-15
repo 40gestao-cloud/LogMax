@@ -383,7 +383,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
 };
 
 // ─── View principal ───────────────────────────────────────────────────────────
-type ScanResult = { ok: true; label: string; hora: string; status: string } | { ok: false; msg: string } | null;
+type ScanResult = { ok: true; label: string; hora: string; status: string } | { ok: false; msg: string };
 
 export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
@@ -399,7 +399,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
 
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanResult>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [qrRegistros, setQrRegistros] = useState<any[]>([]);
   const [showCodigo, setShowCodigo] = useState(false);
   const [codigoInput, setCodigoInput] = useState('');
@@ -575,7 +575,7 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
                   {scanResult && (
                     <motion.div key="result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
                       className={`flex items-center gap-4 rounded-2xl p-4 border ${scanResult.ok ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-red-900/20 border-red-500/20'}`}>
-                      {scanResult.ok ? (
+                      {scanResult.ok === true ? (
                         <>
                           <CheckCircle size={24} className="text-emerald-400 shrink-0" />
                           <div>
