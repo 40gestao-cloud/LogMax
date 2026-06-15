@@ -12,6 +12,7 @@ const SETOR_LABEL: Record<string, string> = {
   financeiro: 'Financeiro',
   rh:         'Recursos Humanos',
   vendas:     'Vendas',
+  marketing:  'Marketing',
 };
 
 const SETOR_COLOR: Record<string, string> = {
@@ -21,7 +22,11 @@ const SETOR_COLOR: Record<string, string> = {
   financeiro: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   rh:         'bg-pink-500/10    text-pink-400    border-pink-500/20',
   vendas:     'bg-cyan-500/10    text-cyan-400    border-cyan-500/20',
+  marketing:  'bg-orange-500/10  text-orange-400  border-orange-500/20',
 };
+
+const JANELAS_OPCOES = [7, 15, 30] as const;
+type JanelaDias = typeof JANELAS_OPCOES[number];
 
 const PRIO_BADGE: Record<string, string> = {
   'Alta':  'bg-red-500/10    text-red-400    border-red-500/20',
@@ -45,6 +50,7 @@ type TarefaProposta = {
 type Briefing = {
   id: string;
   data_referencia: string;
+  janela_dias: JanelaDias;
   status: 'rascunho_ia' | 'aprovado_parcial' | 'aprovado_total' | 'descartado';
   dados_snapshot: any;
   tarefas_propostas: TarefaProposta[];
@@ -82,6 +88,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
   const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo';
 
   const [dataRef, setDataRef]     = useState(todayAcre());
+  const [janelaDias, setJanelaDias] = useState<JanelaDias>(7);
   const [briefing, setBriefing]   = useState<Briefing | null>(null);
   const [tarefas, setTarefas]     = useState<TarefaProposta[]>([]);
   const [loading, setLoading]     = useState(false);
@@ -107,7 +114,9 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
   const totalAprovadas = tarefas.filter(t => t.aprovada && !t.descartada).length;
   const isReadonly     = briefing?.status === 'aprovado_total' || briefing?.status === 'aprovado_parcial';
 
-  // Carrega briefing existente do dia (se houver) ao montar.
+  // Carrega briefing existente da combinação (data, janela) se houver.
+  // O UNIQUE no DB é parcial (data + janela_dias) — trocar a janela pode
+  // mostrar um briefing diferente do mesmo dia.
   useEffect(() => {
     if (!podeAcessar || !supabase) return;
     (async () => {
@@ -115,6 +124,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
         .from('briefings_diarios')
         .select('*')
         .eq('data_referencia', dataRef)
+        .eq('janela_dias', janelaDias)
         .eq('ativo', true)
         .neq('status', 'descartado')
         .order('created_at', { ascending: false })
@@ -127,7 +137,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
         setTarefas([]);
       }
     })();
-  }, [podeAcessar, dataRef]);
+  }, [podeAcessar, dataRef, janelaDias]);
 
   const carregarHistorico = async () => {
     if (!supabase) return;
@@ -159,7 +169,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       const resp = await fetch('/api/ai-briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ data: dataRef }),
+        body: JSON.stringify({ data: dataRef, janela_dias: janelaDias }),
       });
       const data = await resp.json();
       if (!resp.ok) { setErro(data?.error ?? 'Falha na IA.'); setLoading(false); return; }
@@ -219,22 +229,53 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
     }
     setAprovando(true);
     try {
-      // 1. Insere as tarefas aprovadas na tabela `tarefas`.
-      const novasTarefas = aprovadas.map(t => ({
-        modulo:       t.modulo,
-        titulo:       t.titulo,
-        descricao:    t.descricao,
-        prioridade:   t.prioridade,
-        prazo:        dataMaisDias(briefing.data_referencia, t.prazo_dias),
-        status:       'Pendente',
-        nome_criador: `IA (briefing ${fmtDataBR(briefing.data_referencia)})`,
-        criado_por:   profile?.id ?? null,
-        origem:       'briefing_ia',
-        briefing_id:  briefing.id,
-        contexto:     t.contexto_origem || null,
-      }));
-      const { error: insErr } = await supabase.from('tarefas').insert(novasTarefas);
-      if (insErr) throw insErr;
+      // 1. Insere as tarefas aprovadas em DUAS tabelas distintas:
+      //    - `tarefas` (genérica)        → todos os módulos exceto marketing
+      //    - `marketing_tarefas` (própria) → marketing
+      // Marketing tem fluxo próprio (status "Em Produção", "Postado", link
+      // aprovação) — não cabe em `tarefas`. Ambas tabelas ganharam origem/
+      // briefing_id/contexto via migração 20260615c.
+      const nomeCriador = `IA (briefing ${fmtDataBR(briefing.data_referencia)})`;
+      const prazoIso = (prazoDias: number) => dataMaisDias(briefing.data_referencia, prazoDias);
+
+      const aprovadasGenericas = aprovadas.filter(t => t.modulo !== 'marketing');
+      const aprovadasMarketing = aprovadas.filter(t => t.modulo === 'marketing');
+
+      if (aprovadasGenericas.length > 0) {
+        const payload = aprovadasGenericas.map(t => ({
+          modulo:       t.modulo,
+          titulo:       t.titulo,
+          descricao:    t.descricao,
+          prioridade:   t.prioridade,
+          prazo:        prazoIso(t.prazo_dias),
+          status:       'Pendente',
+          nome_criador: nomeCriador,
+          criado_por:   profile?.id ?? null,
+          origem:       'briefing_ia',
+          briefing_id:  briefing.id,
+          contexto:     t.contexto_origem || null,
+        }));
+        const { error: insErr } = await supabase.from('tarefas').insert(payload);
+        if (insErr) throw insErr;
+      }
+
+      if (aprovadasMarketing.length > 0) {
+        // marketing_tarefas não tem coluna `modulo` (é implicitamente marketing).
+        const payload = aprovadasMarketing.map(t => ({
+          titulo:       t.titulo,
+          descricao:    t.descricao,
+          prioridade:   t.prioridade,
+          prazo:        prazoIso(t.prazo_dias),
+          status:       'Pendente',
+          nome_criador: nomeCriador,
+          criado_por:   profile?.id ?? null,
+          origem:       'briefing_ia',
+          briefing_id:  briefing.id,
+          contexto:     t.contexto_origem || null,
+        }));
+        const { error: insErr } = await supabase.from('marketing_tarefas').insert(payload);
+        if (insErr) throw insErr;
+      }
 
       // 2. Atualiza o briefing com flags + status final.
       const restantes = tarefas.filter(t => !t.descartada && !t.aprovada).length;
@@ -301,6 +342,10 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       setBriefing(data);
       setTarefas(data.tarefas_propostas ?? []);
       setDataRef(data.data_referencia);
+      // Briefings antigos podem não ter janela_dias — cai pro 7 antigo.
+      if (data.janela_dias && JANELAS_OPCOES.includes(data.janela_dias)) {
+        setJanelaDias(data.janela_dias);
+      }
       setShowHistorico(false);
     }
   };
@@ -332,7 +377,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
 
       {/* Filtros + ação */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Calendar size={14} className="text-gray-500" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Data</span>
           <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
@@ -341,6 +386,20 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
             className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors">
             hoje
           </button>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 ml-3">Janela</span>
+          <div className="flex items-center gap-1 neu-pressed rounded-lg p-0.5 border border-white/5"
+            title="Quantos dias para trás o snapshot do BI considera">
+            {JANELAS_OPCOES.map(d => (
+              <button key={d} onClick={() => setJanelaDias(d)}
+                className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md transition-colors ${
+                  janelaDias === d
+                    ? 'bg-accent/15 text-accent'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}>
+                {d}d
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex-1" />
         {briefing && (
@@ -412,7 +471,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
           {/* Status do briefing */}
           <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0 flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Briefing de {fmtDataBR(briefing.data_referencia)}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Briefing de {fmtDataBR(briefing.data_referencia)} · janela {briefing.janela_dias ?? 7}d</p>
               <p className="text-sm text-gray-300 mt-1">
                 {briefing.total_propostas} tarefa(s) propostas
                 {isReadonly && <> · <span className="text-accent">{briefing.total_aprovadas} aprovadas</span></>}

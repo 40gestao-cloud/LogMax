@@ -15,7 +15,9 @@ import { createLogger } from '../lib/log.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
-const SETORES = ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas'] as const;
+const SETORES = ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing'] as const;
+const JANELAS_VALIDAS = [7, 15, 30] as const;
+type Janela = typeof JANELAS_VALIDAS[number];
 
 const SYSTEM_PROMPT = `
 Você é o Diretor de Operações do LogMax preparando a pauta diária dos
@@ -30,6 +32,7 @@ Setores que recebem pauta:
 - financeiro  (contas, fluxo de caixa, aprovações de orçamento/cotação/promoção)
 - rh          (folha, ponto, treinamentos, avaliações, afastamentos)
 - vendas      (PDV, clientes, orçamentos, pedidos de venda)
+- marketing   (campanhas, promoções, cupons, calendário editorial, posts por canal)
 
 Diretrizes:
 - Cada tarefa DEVE ter base em algum dado do JSON. Não invente.
@@ -40,6 +43,10 @@ Diretrizes:
 - Distribua: 2-4 tarefas por setor. Não force pauta vazia — se um setor
   está com tudo OK, devolve só 1-2 tarefas mais leves (manutenção,
   documentação, revisão).
+- Pra marketing especificamente, foque em: campanhas vencendo, promoções
+  sem arte aprovada, calendário com gaps na semana, posts atrasados de
+  status "Agendado", cupons expirados. Marketing não recebe tarefa de
+  estoque/financeiro — só de comunicação/conteúdo.
 - Prioridade reflete urgência: Alta (algo vencendo/quebrando),
   Média (atenção da semana), Baixa (manutenção/follow-up).
 - Prazos curtos: maioria em 1-3 dias, no máximo 7 dias.
@@ -128,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Briefing Diário disponível apenas para Admin e CEO.' });
     }
 
-    const { data } = (req.body ?? {}) as { data?: string };
+    const { data, janela_dias } = (req.body ?? {}) as { data?: string; janela_dias?: number };
     // Default = hoje no fuso do Acre (UTC-5).
     const dataRef = data && /^\d{4}-\d{2}-\d{2}$/.test(data)
       ? data
@@ -136,6 +143,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           timeZone: 'America/Rio_Branco',
           year: 'numeric', month: '2-digit', day: '2-digit',
         }).format(new Date());
+
+    // Janela do snapshot: 7 (default), 15 ou 30. Qualquer outro valor cai
+    // pro default — não devolvemos erro pra não atrapalhar a turma se um
+    // cliente antigo enviar payload sem janela_dias.
+    const janelaDias: Janela = JANELAS_VALIDAS.includes(janela_dias as Janela)
+      ? (janela_dias as Janela)
+      : 7;
 
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
@@ -147,11 +161,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const admin = getAdminClient(res);
     if (!admin) return;
 
-    // ─── Cache forte: 1 briefing ativo por data ───────────────────
+    // ─── Cache forte: 1 briefing ativo por (data, janela_dias) ─────
+    // Trocar a janela sem descartar o briefing antigo gera um novo —
+    // o UNIQUE parcial permite essas combinações em paralelo.
     const { data: existente, error: cacheErr } = await admin
       .from('briefings_diarios')
-      .select('id, data_referencia, status, dados_snapshot, tarefas_propostas, total_propostas, total_aprovadas, gerado_por, nome_gerador, modelo_ia, created_at')
+      .select('id, data_referencia, janela_dias, status, dados_snapshot, tarefas_propostas, total_propostas, total_aprovadas, gerado_por, nome_gerador, modelo_ia, created_at')
       .eq('data_referencia', dataRef)
+      .eq('janela_dias', janelaDias)
       .eq('ativo', true)
       .neq('status', 'descartado')
       .order('created_at', { ascending: false })
@@ -166,11 +183,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // ─── Snapshot via RPC do BI (mesmo dia em janela única) ────────
-    // Pega últimos 7 dias pra trás incluindo o dia de hoje — dá contexto
-    // de tendência sem precisar de janela maior.
+    // ─── Snapshot via RPC do BI (janela configurável) ──────────────
+    // Admin escolhe 7/15/30 dias na tela. Janelas maiores dão mais
+    // contexto histórico mas custam mais tokens no Gemini.
     const inicioJanela = new Date(dataRef + 'T00:00:00');
-    inicioJanela.setDate(inicioJanela.getDate() - 7);
+    inicioJanela.setDate(inicioJanela.getDate() - janelaDias);
     const inicioStr = `${inicioJanela.getFullYear()}-${String(inicioJanela.getMonth()+1).padStart(2,'0')}-${String(inicioJanela.getDate()).padStart(2,'0')}`;
 
     const { data: snapshot, error: rpcErr } = await admin.rpc('gerar_painel_bi', {
@@ -257,6 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .from('briefings_diarios')
       .insert({
         data_referencia:   dataRef,
+        janela_dias:       janelaDias,
         status:            'rascunho_ia',
         dados_snapshot:    snapshot,
         tarefas_propostas: tarefas,
