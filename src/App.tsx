@@ -61,6 +61,7 @@ const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoVi
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
 const MetasView                    = lazy(() => import('./views/MetasView').then(m => ({ default: m.MetasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
+const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const FeedbackOrganizacionalView   = lazy(() => import('./views/FeedbackOrganizacionalView').then(m => ({ default: m.FeedbackOrganizacionalView })));
@@ -71,6 +72,9 @@ const QRTotemView                  = lazy(() => import('./views/QRTotemView').th
 const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
 const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
+const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
+const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
+const CalendarioEditorialView              = lazy(() => import('./views/CalendarioEditorialView').then(m => ({ default: m.CalendarioEditorialView })));
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
 const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
 const TarefasView                          = lazy(() => import('./views/TarefasView').then(m => ({ default: m.TarefasView })));
@@ -127,7 +131,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Colaboradores', 'Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Colaboradores', 'Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -137,7 +141,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
-    submenus: ['Promoções', 'Tarefas'],
+    submenus: ['Campanhas', 'Promoções', 'Cupons', 'Calendário', 'Tarefas'],
   },
   {
     id: 'ti', label: 'TI & Suporte', icon: Monitor,
@@ -818,6 +822,7 @@ function LogMaxAppInner() {
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} />;
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
+      case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
       case 'rh-totemqr':          return <QRTotemView />;
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
@@ -834,7 +839,10 @@ function LogMaxAppInner() {
       case 'estoque-pedidosdevenda':       return <PedidosVendaView showToast={st} profile={profile} />;
       case 'financeiro-pedidosdevenda':    return <PedidosVendaView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdeorçamento': return <OrcamentosView showToast={st} profile={profile} mode="financeiro" />;
+      case 'marketing-campanhas':          return <CampanhasMarketingView showToast={st} profile={profile} />;
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
+      case 'marketing-cupons':             return <CuponsMarketingView showToast={st} profile={profile} />;
+      case 'marketing-calendário':         return <CalendarioEditorialView showToast={st} profile={profile} />;
       case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
       case 'empresa-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="empresa" />;
       case 'compras-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="compras" />;

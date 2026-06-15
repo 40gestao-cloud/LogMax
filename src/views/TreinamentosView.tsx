@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, BookOpen, X, Edit2, Trash2 } from 'lucide-react';
+import { Plus, BookOpen, X, Edit2, Trash2, Users } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 
 const statusCls = (s: string) => {
   if (s === 'Concluído') return 'bg-green-900/30 text-green-400';
@@ -23,6 +24,7 @@ export const TreinamentosView = ({ showToast }: any) => {
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [inscricoesAbertas, setInscricoesAbertas] = useState<any | null>(null);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -166,6 +168,16 @@ export const TreinamentosView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {inscricoesAbertas && (
+          <TreinamentoInscricoesModal
+            treinamento={inscricoesAbertas}
+            onClose={() => setInscricoesAbertas(null)}
+            showToast={showToast}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {filtered.length === 0 ? <EmptyState /> : (
           <div className="overflow-x-auto main-scrollbar">
@@ -205,9 +217,15 @@ export const TreinamentosView = ({ showToast }: any) => {
                           </button>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openEdit(t)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(t.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => setInscricoesAbertas(t)} title="Gerenciar inscrições e certificados"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-2 py-1 hover:bg-accent/10 transition-colors">
+                              <Users size={10} />Inscrições
+                            </button>
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => openEdit(t)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                              <button onClick={() => handleDelete(t.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            </div>
                           </div>
                         </td>
                       </motion.tr>

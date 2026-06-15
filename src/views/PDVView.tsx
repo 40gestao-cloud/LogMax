@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useAuth } from '../hooks/useAuth';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -90,6 +91,13 @@ export const PDVView = ({ showToast, profile }: any) => {
   } | null>(null);
   // Forma usada pra cobrir o restante quando benefícios não dão conta de tudo.
   const [formaResto, setFormaResto] = useState<string>('Dinheiro');
+  // Cupom: código digitado + resultado da última validação no servidor. O
+  // valor de `desconto` no aplicado é authoritativo (servidor recalcula no
+  // RPC `criar_venda_pdv`); aqui só usamos pra UI e pra mandar pro RPC.
+  const [cupomCodigo, setCupomCodigo] = useState('');
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number; descricao: string | null; tipo: string } | null>(null);
+  const [cupomErro, setCupomErro] = useState<string | null>(null);
+  const [cupomLoading, setCupomLoading] = useState(false);
   // Modal de peso pra produtos vendidos em KG/L. `editIndex` !== null indica
   // edição de item já no carrinho (em vez de inserção). Peso entra como
   // string mascarada (vírgula decimal) e é parseado no confirmar.
@@ -100,6 +108,7 @@ export const PDVView = ({ showToast, profile }: any) => {
   } | null>(null);
   const vendaSnapshotRef = useRef<{
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
+    cupomCodigo: string | null; cupomDesconto: number;
   } | null>(null);
 
   // Quando o usuário troca de forma de pagamento, sempre volta parcelas para 1
@@ -137,7 +146,12 @@ export const PDVView = ({ showToast, profile }: any) => {
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
   const descontoNum = parseBRL(desconto);
-  const totalFinal = Math.max(0, subtotal - descontoNum);
+  // Cupom só vale se o subtotal ainda comporta o desconto (clamp por segurança).
+  const cupomDesconto = Math.min(cupomAplicado?.desconto ?? 0, Math.max(0, subtotal - descontoNum));
+  const totalFinal = Math.max(0, subtotal - descontoNum - cupomDesconto);
+  // Desconto total enviado ao RPC = manual + cupom (o servidor valida cada
+  // parte; manual continua livre, cupom é re-checado contra o código).
+  const descontoTotal = descontoNum + cupomDesconto;
 
   // Quanto do carrinho aceita benefícios? Soma subtotais dos itens elegíveis.
   // Desconto é aplicado proporcionalmente: clampamos pelo totalFinal pra
@@ -395,7 +409,43 @@ export const PDVView = ({ showToast, profile }: any) => {
   }, [user?.id, showToast]);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
-  const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); };
+  const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
+
+  // Cupom: re-valida server-side (RPC `validar_cupom`) a cada mudança
+  // estável do código, do subtotal ou da filial. Subtotal entra porque
+  // cupom pode ter compra mínima; filial porque cupom pode ser exclusivo
+  // de uma unidade. Erro/sucesso vão pra UI; a aplicação real do desconto
+  // só persiste após o caixa fechar a venda (RPC re-valida sob lock).
+  const cupomCodigoDebounced = useDebouncedValue(cupomCodigo.trim().toUpperCase(), 350);
+  useEffect(() => {
+    if (!cupomCodigoDebounced) { setCupomAplicado(null); setCupomErro(null); return; }
+    if (subtotal <= 0)         { setCupomAplicado(null); setCupomErro(null); return; }
+    if (!supabase) return;
+    let cancelled = false;
+    setCupomLoading(true);
+    supabase.rpc('validar_cupom', {
+      p_codigo:   cupomCodigoDebounced,
+      p_filial:   filialFiltro,
+      p_subtotal: subtotal - descontoNum,
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      setCupomLoading(false);
+      if (error) { setCupomErro('Erro ao validar cupom.'); setCupomAplicado(null); return; }
+      if (data?.valido) {
+        setCupomAplicado({
+          codigo:    data.codigo,
+          desconto:  Number(data.desconto ?? 0),
+          descricao: data.descricao ?? null,
+          tipo:      data.tipo,
+        });
+        setCupomErro(null);
+      } else {
+        setCupomAplicado(null);
+        setCupomErro(data?.motivo ?? 'Cupom inválido.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [cupomCodigoDebounced, filialFiltro, subtotal, descontoNum]);
 
   const valorPorParcela = parcelas > 1 ? totalFinal / parcelas : totalFinal;
 
@@ -404,6 +454,7 @@ export const PDVView = ({ showToast, profile }: any) => {
   // que o fluxo Pix possa usar o estado capturado no momento da geração do QR.
   const finalizarVenda = async (snap: {
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
+    cupomCodigo?: string | null; cupomDesconto?: number;
   }, forma: string, parcelasEfetivas: number) => {
     if (!supabase) throw new Error('Supabase indisponível.');
     const itensPayload = snap.cart.map(item => ({
@@ -416,15 +467,23 @@ export const PDVView = ({ showToast, profile }: any) => {
     // Filial da venda = filial atualmente selecionada no PDV. O filtro
     // garante que só produtos dessa unidade entram no carrinho, então
     // a venda é sempre coesa por filial.
+    // Desconto enviado ao RPC = manual + cupom. O servidor re-valida o
+    // cupom sob lock pessimista e exige que o desconto do cupom bata
+    // com o cálculo dele.
+    const cupomCod = snap.cupomCodigo ?? null;
+    const cupomDesc = snap.cupomDesconto ?? 0;
+    const descontoEnviado = snap.descontoNum + cupomDesc;
     const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
       p_cliente_id:      snap.clienteId || null,
       p_total:           snap.subtotal,
-      p_desconto:        snap.descontoNum,
+      p_desconto:        descontoEnviado,
       p_total_final:     snap.totalFinal,
       p_forma_pagamento: forma,
       p_parcelas:        forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
       p_itens:           itensPayload,
       p_filial:          filialFiltro,
+      p_cupom_codigo:    cupomCod,
+      p_cupom_desconto:  cupomDesc,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
@@ -535,6 +594,8 @@ export const PDVView = ({ showToast, profile }: any) => {
           descontoNum,
           totalFinal,
           clienteId,
+          cupomCodigo:   cupomAplicado?.codigo ?? null,
+          cupomDesconto: cupomDesconto,
         };
         setBeneficiosPendente({
           id:               pendente.id,
@@ -567,6 +628,8 @@ export const PDVView = ({ showToast, profile }: any) => {
           descontoNum,
           totalFinal,
           clienteId,
+          cupomCodigo:   cupomAplicado?.codigo ?? null,
+          cupomDesconto: cupomDesconto,
         };
         setPixPendente({ id: pendente.id, valor: Number(pendente.valor) });
         // isClosing fica true enquanto o overlay está aberto (botão "Fechar Venda" desabilitado)
@@ -574,7 +637,11 @@ export const PDVView = ({ showToast, profile }: any) => {
       }
 
       await finalizarVenda(
-        { cart, subtotal, descontoNum, totalFinal, clienteId },
+        {
+          cart, subtotal, descontoNum, totalFinal, clienteId,
+          cupomCodigo:   cupomAplicado?.codigo ?? null,
+          cupomDesconto: cupomDesconto,
+        },
         formaPagamento,
         parcelas,
       );
@@ -1022,6 +1089,47 @@ export const PDVView = ({ showToast, profile }: any) => {
                   placeholder="0,00"
                   className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums"
                 />
+              </div>
+              {/* Cupom — digitação acima/abaixo de 0 dispara revalidação no servidor */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                    <Ticket size={11} className={cupomAplicado ? 'text-accent' : 'text-gray-500'} />
+                    Cupom
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={cupomCodigo}
+                      onChange={e => setCupomCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32))}
+                      placeholder="código"
+                      className={`neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums uppercase tracking-wider ${
+                        cupomAplicado ? 'text-accent font-bold' : cupomErro ? 'text-red-400' : ''
+                      }`}
+                    />
+                    {cupomLoading && (
+                      <Loader2 size={11} className="absolute right-1.5 top-1/2 -translate-y-1/2 animate-spin text-gray-500" />
+                    )}
+                  </div>
+                </div>
+                {cupomAplicado && (
+                  <div className="flex items-center justify-between gap-3 text-[10px]">
+                    <span className="text-accent">
+                      −{cupomDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {cupomAplicado.descricao && <span className="text-gray-500 ml-1.5 truncate inline-block max-w-[140px] align-bottom">· {cupomAplicado.descricao}</span>}
+                    </span>
+                    <button
+                      onClick={() => { setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); }}
+                      className="text-gray-500 hover:text-red-400 transition-colors"
+                      title="Remover cupom"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
+                {cupomErro && !cupomLoading && cupomCodigoDebounced && (
+                  <p className="text-[10px] text-red-400 leading-tight">{cupomErro}</p>
+                )}
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-gray-200">Total</span>

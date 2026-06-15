@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3 } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
@@ -54,12 +55,14 @@ const EMPTY_FORM = {
   data_inicio: '',
   data_fim: '',
   descricao: '',
+  campanha_id: '',
 };
 
 export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const { data: servicos } = useFetchData<any>('/api/servicosview');
+  const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview');
   const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', undefined, true);
   const { data: feedbacks } = useFetchData<any>('/api/marketingartefeedbackview', undefined, true);
   const [showForm, setShowForm] = useState(false);
@@ -72,6 +75,21 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const [arteUrl, setArteUrl] = useState('');
   const [savingArte, setSavingArte] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState<{ arte: any } | null>(null);
+
+  // Modal de geração de legenda via Gemini (endpoint /api/ai-legenda).
+  // Aberto pelo botão na tabela (uma promoção) ou no form (sugestão pra
+  // descrição antes de submeter). `payload` é o snapshot que vai pro
+  // endpoint; `legendas` chega como [{ tom, texto }]. Loading=true durante
+  // a chamada; erro string vai pra UI.
+  const [legendaModal, setLegendaModal] = useState<null | {
+    payload: any;
+    legendas: { tom: string; texto: string }[] | null;
+    loading: boolean;
+    erro: string | null;
+    aplicarNaDescricao: boolean; // true quando vem do form (botão "usar" preenche `form.descricao`)
+  }>(null);
+  const [legendaCopiada, setLegendaCopiada] = useState<number | null>(null);
+  const { session } = useAuth();
 
   // Publicar/editar arte é privilégio de Marketing (gerente/colaborador) e
   // admin/CEO. Financeiro consegue ler `marketing_promocoes` (e abrir esta
@@ -195,6 +213,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
         data_inicio:       form.data_inicio  || null,
         data_fim:          form.data_fim     || null,
         descricao:         form.descricao    || null,
+        campanha_id:       form.campanha_id  || null,
         status:            'Aguardando Aprovação',
         nome_criador:      profile?.nome ?? '',
       };
@@ -294,6 +313,77 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       console.error('[Promocoes] erro ao inativar:', err);
       showToast(`Erro ao inativar: ${msg}`, 'error');
     }
+  };
+
+  // Abre o modal e dispara a chamada. `aplicarNaDescricao` controla se o
+  // botão "Usar" preenche `form.descricao` (fluxo do form) ou só copia.
+  const gerarLegenda = async (origem: { promocao?: any; doForm?: boolean }) => {
+    let payload: any;
+    if (origem.promocao) {
+      const p = origem.promocao;
+      payload = {
+        produto:           p.nome_produto,
+        tipo:              p.tipo_origem,
+        preco_atual:       Number(p.preco_atual),
+        preco_promocional: Number(p.preco_promocional),
+        preco_custo:       Number(p.preco_custo),
+        data_inicio:       p.data_inicio,
+        data_fim:          p.data_fim,
+        descricao:         p.descricao ?? '',
+      };
+    } else {
+      // Origem = form aberto. Precisa de produto + preço promo no mínimo.
+      const item = itens.find(i => i.id === form.produto_id);
+      if (!item) { showToast('Selecione o produto/serviço antes.', 'error'); return; }
+      if (!form.preco_promocional) { showToast('Informe o preço promocional.', 'error'); return; }
+      payload = {
+        produto:           item.nome,
+        tipo:              form.tipo_origem,
+        preco_atual:       parseBRL(form.preco_atual),
+        preco_promocional: parseBRL(form.preco_promocional),
+        preco_custo:       parseBRL(form.preco_custo || '0'),
+        data_inicio:       form.data_inicio || null,
+        data_fim:          form.data_fim || null,
+        descricao:         form.descricao,
+      };
+    }
+
+    setLegendaModal({ payload, legendas: null, loading: true, erro: null, aplicarNaDescricao: !!origem.doForm });
+
+    try {
+      const resp = await fetch('/api/ai-legenda', {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          Authorization:   `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setLegendaModal(m => m ? { ...m, loading: false, erro: data?.error ?? 'Falha na IA.' } : null);
+        return;
+      }
+      setLegendaModal(m => m ? { ...m, loading: false, legendas: data.legendas ?? [] } : null);
+    } catch (err: any) {
+      setLegendaModal(m => m ? { ...m, loading: false, erro: err?.message ?? 'Erro de rede.' } : null);
+    }
+  };
+
+  const copiarLegenda = async (texto: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setLegendaCopiada(idx);
+      setTimeout(() => setLegendaCopiada(c => c === idx ? null : c), 1500);
+    } catch {
+      showToast('Não consegui copiar — copie manualmente.', 'error');
+    }
+  };
+
+  const usarLegendaNaDescricao = (texto: string) => {
+    setForm((f: any) => ({ ...f, descricao: texto }));
+    setLegendaModal(null);
+    showToast('Legenda aplicada como descrição da promoção.', 'success');
   };
 
   const exportCols = ['Produto', 'Preço Atual', 'Preço Promo', 'Início', 'Fim', 'Status'];
@@ -401,12 +491,34 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Campanha</label>
+                <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>
                 <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Promoção de verão" />
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Black Friday" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="promo-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha (opcional)</label>
+                <select id="promo-campanha" value={form.campanha_id}
+                  onChange={e => setForm((f: any) => ({ ...f, campanha_id: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Sem campanha</option>
+                  {(campanhas ?? [])
+                    .filter((c: any) => c.status !== 'Cancelada')
+                    .map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>
+                    ))}
+                </select>
               </div>
             </div>
-            <div className="flex justify-end mt-5">
+            <div className="flex justify-between items-center mt-5 gap-2">
+              <button
+                type="button"
+                onClick={() => gerarLegenda({ doForm: true })}
+                disabled={!form.produto_id || !form.preco_promocional}
+                title={!form.produto_id || !form.preco_promocional ? 'Preencha produto e preço promocional primeiro' : 'IA gera 3 variações de legenda'}
+                className="inline-flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded-xl border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Sparkles size={12} />Gerar legenda com IA
+              </button>
               <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
                 {saving ? 'Enviando...' : 'Enviar para Aprovação'}
               </NeuButtonAccent>
@@ -513,6 +625,12 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {canPublicarArte && (
+                              <button onClick={() => gerarLegenda({ promocao: p })} title="Gerar legenda com IA"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors">
+                                <Sparkles size={11} />
+                              </button>
+                            )}
                             <button onClick={() => handleDelete(p.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
@@ -667,6 +785,89 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Modal — Legendas geradas pela IA (Gemini via /api/ai-legenda) */}
+      <AnimatePresence>
+        {legendaModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setLegendaModal(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-xl max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-accent" />
+                  <h3 className="text-sm font-bold text-gray-200">Legendas geradas pela IA</h3>
+                </div>
+                <button onClick={() => setLegendaModal(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 mb-4 shrink-0">
+                <span className="font-bold text-gray-300">{legendaModal.payload?.produto}</span>
+                {' · '}
+                <span className="text-accent">
+                  R$ {Number(legendaModal.payload?.preco_promocional ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+                {legendaModal.payload?.data_fim && <> · até <span className="text-gray-400">{legendaModal.payload.data_fim}</span></>}
+              </p>
+
+              {legendaModal.loading && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 size={28} className="text-accent animate-spin" />
+                  <p className="text-xs text-gray-500">Gerando 3 variações...</p>
+                </div>
+              )}
+
+              {legendaModal.erro && !legendaModal.loading && (
+                <div className="neu-pressed rounded-xl p-4 text-xs text-red-400 leading-relaxed">
+                  {legendaModal.erro}
+                </div>
+              )}
+
+              {legendaModal.legendas && legendaModal.legendas.length > 0 && (
+                <div className="flex-1 overflow-y-auto main-scrollbar pr-1 flex flex-col gap-3">
+                  {legendaModal.legendas.map((l, idx) => (
+                    <div key={idx} className="neu-flat rounded-xl p-4 border border-white/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                          Tom {l.tom}
+                        </span>
+                        <span className="text-[10px] text-gray-500 tabular-nums">{l.texto.length} chars</span>
+                      </div>
+                      <p className="text-sm text-gray-200 whitespace-pre-wrap break-words leading-relaxed">{l.texto}</p>
+                      <div className="flex justify-end gap-2 mt-3">
+                        {legendaModal.aplicarNaDescricao && (
+                          <button onClick={() => usarLegendaNaDescricao(l.texto)}
+                            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-3 py-1.5 hover:bg-accent/10 transition-colors">
+                            Usar
+                          </button>
+                        )}
+                        <button onClick={() => copiarLegenda(l.texto, idx)}
+                          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 border border-white/10 rounded-lg px-3 py-1.5 hover:text-accent hover:border-accent/30 transition-colors">
+                          {legendaCopiada === idx ? <CheckCircle2 size={10} /> : <Copy size={10} />}
+                          {legendaCopiada === idx ? 'copiado' : 'copiar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[10px] text-gray-600 mt-3 shrink-0 leading-relaxed">
+                As sugestões são geradas por IA — revise antes de publicar.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Modal — observação completa (ex: motivo da reprovação pelo Financeiro) */}

@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { PDISection } from '../components/PDISection';
+import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 
@@ -320,7 +322,12 @@ const CardAvaliacao: React.FC<{
   onEditar?: () => void;
   canExcluir?: boolean;
   onExcluir?: () => void;
-}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir }) => {
+  // PDI: avaliador OU admin/CEO pode adicionar/editar metas; resto só lê.
+  canEditarPDI?: boolean;
+  profile: UserProfile;
+  treinamentos: { id: string; nome: string; status: string }[];
+  showToast?: any;
+}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir, canEditarPDI, profile, treinamentos, showToast }) => {
   const [expanded, setExpanded] = useState(false);
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
@@ -416,6 +423,14 @@ const CardAvaliacao: React.FC<{
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PDISection
+        avaliacaoId={avaliacao.id}
+        canEditar={!!canEditarPDI}
+        profile={profile}
+        treinamentos={treinamentos}
+        showToast={showToast}
+      />
     </div>
   );
 };
@@ -441,6 +456,11 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo';
   const isGerente   = profile.role === 'gerente';
+
+  // Catálogo de treinamentos pra vincular nos itens de PDI. useFetchData
+  // já bate na `treinamentos` (RLS pública nessa tabela legada). Não passa
+  // pelo reload() centralizado porque o PDI é lazy e local ao card.
+  const { data: treinamentos } = useFetchData<any>('/api/treinamentosview');
 
   // Helper: pode editar uma avaliação? RPC `atualizar_avaliacao` faz o
   // check autoritativo no banco; aqui é só pra esconder UI quando não
@@ -1067,6 +1087,10 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 criterios={r.criterios}
                 direcaoLabel="de"
                 nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+                canEditarPDI={isAdminOuCEO}
+                profile={profile}
+                treinamentos={treinamentos}
+                showToast={showToast}
               />
             ))}
           </div>
@@ -1100,6 +1124,10 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 onEditar={() => abrirEdicao(f.avaliacao)}
                 canExcluir={isAdminOuCEO}
                 onExcluir={() => excluirAvaliacao(f.avaliacao)}
+                canEditarPDI={isAdminOuCEO || f.avaliacao.avaliador_id === profile.id}
+                profile={profile}
+                treinamentos={treinamentos}
+                showToast={showToast}
               />
             ))}
           </div>
