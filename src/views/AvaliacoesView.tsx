@@ -6,7 +6,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../com
 import { PDISection } from '../components/PDISection';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { allSetores } from '../lib/rbac';
+import { allSetores, hasSetor } from '../lib/rbac';
 
 // ----------------------------------------------------------------------
 // Critérios hardcoded (Etapa 1). Etapa 2 pode tornar configurável.
@@ -456,6 +456,11 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo';
   const isGerente   = profile.role === 'gerente';
+  // RH (qualquer role com 'rh' em setor primário ou setores_extras) tem
+  // visão cross-setor: vê consolidado de TUDO e propõe PDI em qualquer
+  // avaliação. Não pode editar/excluir avaliação alheia — só admin/CEO.
+  const isRH        = hasSetor(profile, 'rh');
+  const podeVerConsolidado = isAdminOuCEO || isRH;
 
   // Catálogo de treinamentos pra vincular nos itens de PDI. useFetchData
   // já bate na `treinamentos` (RLS pública nessa tabela legada). Não passa
@@ -683,9 +688,13 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
   }, [avaliacoes, criterios, users, ciclos, profile.id]);
 
-  // ── Consolidado do ciclo (admin/CEO) — seção E ────────────────────────
+  // ── Consolidado do ciclo (admin/CEO + RH) — seção E ────────────────────────
   const [cicloConsolidadoId, setCicloConsolidadoId] = useState<string | null>(null);
   const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
+  // PDI inline no consolidado: guarda qual avaliacaoId está com painel
+  // aberto. Pra RH/admin propor PDI sem precisar voltar pra própria
+  // seção de avaliações recebidas/feitas (que mostra só as do user).
+  const [pdiAvaliacaoAberta, setPdiAvaliacaoAberta] = useState<string | null>(null);
 
   // Default: ciclo aberto; senão o mais recente. Só dispara se ainda não escolhido.
   useEffect(() => {
@@ -695,7 +704,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
   }, [ciclos, cicloConsolidadoId]);
 
   const consolidado = useMemo(() => {
-    if (!isAdminOuCEO || !cicloConsolidadoId) return null;
+    if (!podeVerConsolidado || !cicloConsolidadoId) return null;
     const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId);
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
@@ -770,7 +779,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       cicloStatus: ciclo?.status ?? 'Aberto',
       grupos,
     };
-  }, [isAdminOuCEO, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
+  }, [podeVerConsolidado, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -782,8 +791,9 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho</h2>
         <p className="text-sm text-gray-400 mt-1">
           {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
-          {isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
-          {profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
+          {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
+          {!isRH && isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
+          {!isRH && profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
           Veja o histórico do que você avaliou e o que recebeu.
         </p>
       </div>
@@ -852,8 +862,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
         </div>
       )}
 
-      {/* ── E. CONSOLIDADO DO CICLO (admin/CEO) ── */}
-      {isAdminOuCEO && ciclos.length > 0 && (
+      {/* ── E. CONSOLIDADO DO CICLO (admin/CEO + RH) ── */}
+      {podeVerConsolidado && ciclos.length > 0 && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
           {/* Header com seletor de ciclo + badge de status, bem destacado pra
               deixar claro que cada ciclo é independente e selecionável. */}
@@ -966,12 +976,25 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                                         {l.porAvaliador.map(pa => {
                                           const avObj = avaliacoes.find(a => a.id === pa.avaliacaoId);
                                           const podeEdit = avObj ? podeEditarAvaliacao(avObj) : false;
+                                          const pdiAberto = pdiAvaliacaoAberta === pa.avaliacaoId;
+                                          // RH e admin/CEO podem propor PDI sem ter avaliado. Avaliador
+                                          // sempre pode no contexto da avaliação dele (RLS permite).
+                                          const podeEditarPDIAqui = isAdminOuCEO || isRH || (avObj?.avaliador_id === profile.id);
                                           return (
                                             <div key={pa.avaliacaoId} className="flex flex-col gap-1 pb-2 border-b border-white/5 last:border-0 last:pb-0">
                                               <div className="flex items-center justify-between text-xs gap-2">
                                                 <span className="text-gray-300">{pa.nome}</span>
                                                 <div className="flex items-center gap-2">
                                                   <span className="font-bold text-gray-200 tabular-nums">{pa.media.toFixed(1)}</span>
+                                                  <button
+                                                    onClick={() => setPdiAvaliacaoAberta(pdiAberto ? null : pa.avaliacaoId)}
+                                                    title={pdiAberto ? 'Fechar PDI' : 'Ver / propor PDI'}
+                                                    className={`h-6 px-2 neu-button rounded-md flex items-center justify-center text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                                                      pdiAberto ? 'text-accent border border-accent/30' : 'text-gray-500 hover:text-accent'
+                                                    }`}
+                                                  >
+                                                    PDI
+                                                  </button>
                                                   {podeEdit && avObj && (
                                                     <button
                                                       onClick={() => abrirEdicao(avObj)}
@@ -996,6 +1019,17 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                                                 <p className="text-[11px] text-gray-400 italic pl-2 border-l-2 border-accent/30 whitespace-pre-wrap">
                                                   "{pa.observacao}"
                                                 </p>
+                                              )}
+                                              {pdiAberto && (
+                                                <div className="mt-2 neu-pressed rounded-xl p-3 border border-white/5">
+                                                  <PDISection
+                                                    avaliacaoId={pa.avaliacaoId}
+                                                    canEditar={podeEditarPDIAqui}
+                                                    profile={profile}
+                                                    treinamentos={treinamentos}
+                                                    showToast={showToast}
+                                                  />
+                                                </div>
                                               )}
                                             </div>
                                           );
@@ -1087,7 +1121,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 criterios={r.criterios}
                 direcaoLabel="de"
                 nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
-                canEditarPDI={isAdminOuCEO}
+                canEditarPDI={isAdminOuCEO || isRH}
                 profile={profile}
                 treinamentos={treinamentos}
                 showToast={showToast}
@@ -1124,7 +1158,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 onEditar={() => abrirEdicao(f.avaliacao)}
                 canExcluir={isAdminOuCEO}
                 onExcluir={() => excluirAvaliacao(f.avaliacao)}
-                canEditarPDI={isAdminOuCEO || f.avaliacao.avaliador_id === profile.id}
+                canEditarPDI={isAdminOuCEO || isRH || f.avaliacao.avaliador_id === profile.id}
                 profile={profile}
                 treinamentos={treinamentos}
                 showToast={showToast}
