@@ -203,30 +203,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const endpoint =
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
-    const upstream = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: buildUserPrompt(snapshot, dataRef) }] }],
-        generationConfig: {
-          temperature:      0.7,
-          // 7 setores × 2-4 tarefas × título+descrição+contexto em PT-BR
-          // estoura 3000 fácil. 8000 dá folga sem custo grande no flash.
-          maxOutputTokens:  8000,
-          topP:             0.95,
-          responseMimeType: 'application/json',
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-        ],
-      }),
+    const requestBody = JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: buildUserPrompt(snapshot, dataRef) }] }],
+      generationConfig: {
+        temperature:      0.7,
+        // 7 setores × 2-4 tarefas × título+descrição+contexto em PT-BR
+        // estoura 3000 fácil. 8000 dá folga sem custo grande no flash.
+        maxOutputTokens:  8000,
+        topP:             0.95,
+        responseMimeType: 'application/json',
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+      ],
     });
 
-    const data2 = await upstream.json() as any;
+    // Retry com backoff em 503/UNAVAILABLE (modelo sobrecarregado). Gemini
+    // 2.5 flash devolve "model overloaded" em picos — tentar de novo em 2-4s
+    // costuma resolver sem o usuário ver o erro.
+    const RETRY_DELAYS_MS = [1500, 3500];
+    let upstream!: Response;
+    let data2: any = null;
+    for (let tentativa = 0; tentativa <= RETRY_DELAYS_MS.length; tentativa++) {
+      upstream = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: requestBody,
+      });
+      data2 = await upstream.json() as any;
+      const isOverload = upstream.status === 503 || upstream.status === 429;
+      if (!isOverload || tentativa === RETRY_DELAYS_MS.length) break;
+      log.warn('gemini.retry', {
+        user_id: user.id, tentativa: tentativa + 1, status: upstream.status,
+      });
+      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[tentativa]));
+    }
 
     if (!upstream.ok) {
       log.warn('gemini.failed', {
@@ -234,11 +249,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error_message: data2?.error?.message, model,
       });
       const friendly =
-        upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
+        upstream.status === 503 ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo.'
+        : upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
         : upstream.status === 400 || upstream.status === 401 || upstream.status === 403
           ? 'Chave da IA inválida. Verifique GEMINI_API_KEY no Vercel.'
         : data2?.error?.message ?? 'Erro na IA.';
-      return res.status(upstream.status === 429 ? 429 : 502).json({ error: friendly });
+      const httpStatus =
+        upstream.status === 429 ? 429
+        : upstream.status === 503 ? 503
+        : 502;
+      return res.status(httpStatus).json({ error: friendly });
     }
 
     const rawText: string =
