@@ -211,7 +211,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contents: [{ role: 'user', parts: [{ text: buildUserPrompt(snapshot, dataRef) }] }],
         generationConfig: {
           temperature:      0.7,
-          maxOutputTokens:  3000,
+          // 7 setores × 2-4 tarefas × título+descrição+contexto em PT-BR
+          // estoura 3000 fácil. 8000 dá folga sem custo grande no flash.
+          maxOutputTokens:  8000,
           topP:             0.95,
           responseMimeType: 'application/json',
         },
@@ -255,8 +257,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsed = extractJson(rawText);
     const tarefasRaw: any[] = Array.isArray(parsed?.tarefas) ? parsed.tarefas : [];
     if (tarefasRaw.length === 0) {
-      log.warn('gemini.empty_tarefas', { user_id: user.id, raw_sample: rawText.slice(0, 300) });
-      return res.status(502).json({ error: 'IA não devolveu tarefas. Tente novamente.' });
+      const finish = data2?.candidates?.[0]?.finishReason;
+      log.warn('gemini.empty_tarefas', {
+        user_id: user.id, finish, parsed_ok: parsed !== null,
+        raw_sample: rawText.slice(0, 300),
+      });
+      const friendly =
+        finish === 'MAX_TOKENS' ? 'A IA estourou o limite de tamanho — tente uma janela menor (7 ou 15 dias).'
+        : finish === 'SAFETY'   ? 'A IA recusou gerar o briefing (filtro de segurança).'
+        : parsed === null       ? 'A IA devolveu JSON inválido. Tente novamente.'
+        :                         'IA não devolveu tarefas. Tente novamente.';
+      return res.status(502).json({ error: friendly, finish });
     }
 
     // Normaliza + filtra inválidas + adiciona flags de revisão.
