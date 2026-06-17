@@ -112,7 +112,12 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
 
   const totalAtivas    = tarefas.filter(t => !t.descartada).length;
   const totalAprovadas = tarefas.filter(t => t.aprovada && !t.descartada).length;
-  const isReadonly     = briefing?.status === 'aprovado_total' || briefing?.status === 'aprovado_parcial';
+  // isAprovado: já passou pelo "Enviar pros setores". Não permite re-aprovar
+  // nem desmarcar (checkbox + footer somem), mas admin/CEO ainda pode editar
+  // OU descartar tarefas individuais — as mudanças vão pro DB via RPC e
+  // propagam pras linhas em tarefas/marketing_tarefas que ainda estão
+  // Pendente (preserva trabalho já iniciado).
+  const isAprovado     = briefing?.status === 'aprovado_total' || briefing?.status === 'aprovado_parcial';
 
   // Carrega briefing existente da combinação (data, janela) se houver.
   // O UNIQUE no DB é parcial (data + janela_dias) — trocar a janela pode
@@ -184,37 +189,91 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
     setLoading(false);
   };
 
+  // Aprovação só faz sentido em rascunho. Briefing já enviado pros setores
+  // (aprovado_parcial/total) não tem como "re-aprovar" — admin pode editar
+  // ou descartar tarefas individuais via RPC (abaixo).
   const toggleAprovacao = (id: string) => {
-    if (isReadonly) return;
+    if (isAprovado) return;
     setTarefas(prev => prev.map(t => t._id === id ? { ...t, aprovada: !t.aprovada } : t));
   };
 
   const aprovarTodas = () => {
-    if (isReadonly) return;
+    if (isAprovado) return;
     setTarefas(prev => prev.map(t => t.descartada ? t : { ...t, aprovada: true }));
   };
 
-  const descartarTodas = () => {
-    if (isReadonly) return;
+  const desmarcarTodas = () => {
+    if (isAprovado) return;
     setTarefas(prev => prev.map(t => ({ ...t, aprovada: false })));
   };
 
-  const descartar = (id: string) => {
-    if (isReadonly) return;
-    setTarefas(prev => prev.map(t => t._id === id ? { ...t, descartada: true, aprovada: false } : t));
+  const parseIdx = (id: string): number => {
+    const m = /^t-(\d+)$/.exec(id);
+    return m ? Number(m[1]) : 0;
+  };
+
+  // Descartar tarefa individual: em rascunho_ia é só state local (vai pro DB
+  // quando aprovar). Em briefing já aprovado, RPC propaga: marca descartada
+  // no JSON + apaga linha em tarefas/marketing_tarefas (se Pendente).
+  const descartar = async (id: string) => {
+    if (!isAprovado) {
+      setTarefas(prev => prev.map(t => t._id === id ? { ...t, descartada: true, aprovada: false } : t));
+      return;
+    }
+    if (!briefing || !supabase) return;
+    if (!confirm('Descartar esta tarefa? Se algum setor ainda não começou a executar, ela some imediatamente do submenu Tarefas.')) return;
+    try {
+      const { data, error } = await supabase.rpc('descartar_tarefa_briefing', {
+        p_briefing_id: briefing.id,
+        p_idx:         parseIdx(id),
+      });
+      if (error) throw error;
+      setTarefas(prev => prev.map(t => t._id === id ? { ...t, descartada: true, aprovada: false } : t));
+      const apagada = (data as any)?.tarefa_apagada === true;
+      showToast?.(apagada ? 'Tarefa descartada e removida do setor.' : 'Tarefa descartada. (Setor já havia iniciado — linha mantida.)', 'success');
+      carregarHistorico();
+    } catch (err: any) {
+      showToast?.(`Erro: ${err?.message ?? '—'}`, 'error');
+    }
   };
 
   const abrirEdicao = (t: TarefaProposta) => {
-    if (isReadonly) return;
     setEditandoId(t._id);
     setEditForm({ titulo: t.titulo, descricao: t.descricao, prazo_dias: t.prazo_dias });
   };
 
-  const salvarEdicao = () => {
+  // Em rascunho_ia, salva no state local (vai pro DB quando aprovar). Em
+  // briefing já aprovado, chama RPC que atualiza JSON + propaga pra tarefas
+  // derivadas Pendentes em tarefas/marketing_tarefas.
+  const salvarEdicao = async () => {
     if (!editandoId) return;
     if (!editForm.titulo.trim()) { showToast?.('Título não pode ficar vazio.', 'error'); return; }
+    const prazoDias = Math.max(1, Math.min(14, editForm.prazo_dias));
+    const tarefaAtual = tarefas.find(t => t._id === editandoId);
+    if (!tarefaAtual) { setEditandoId(null); return; }
+
+    if (isAprovado && briefing && supabase) {
+      try {
+        const { data, error } = await supabase.rpc('editar_tarefa_briefing', {
+          p_briefing_id: briefing.id,
+          p_idx:         parseIdx(editandoId),
+          p_titulo:      editForm.titulo.trim(),
+          p_descricao:   editForm.descricao.trim(),
+          p_prioridade:  tarefaAtual.prioridade,
+          p_prazo_dias:  prazoDias,
+        });
+        if (error) throw error;
+        const propagada = (data as any)?.tarefa_propagada === true;
+        showToast?.(propagada ? 'Tarefa atualizada no briefing e no setor.' : 'Tarefa atualizada no briefing. (Setor já iniciou — linha mantida intacta.)', 'success');
+        carregarHistorico();
+      } catch (err: any) {
+        showToast?.(`Erro: ${err?.message ?? '—'}`, 'error');
+        return;
+      }
+    }
+
     setTarefas(prev => prev.map(t => t._id === editandoId
-      ? { ...t, titulo: editForm.titulo.trim(), descricao: editForm.descricao.trim(), prazo_dias: Math.max(1, Math.min(14, editForm.prazo_dias)), editada: true }
+      ? { ...t, titulo: editForm.titulo.trim(), descricao: editForm.descricao.trim(), prazo_dias: prazoDias, editada: true }
       : t,
     ));
     setEditandoId(null);
@@ -241,19 +300,28 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       const aprovadasGenericas = aprovadas.filter(t => t.modulo !== 'marketing');
       const aprovadasMarketing = aprovadas.filter(t => t.modulo === 'marketing');
 
+      // Extrai índice estável do _id ("t-N" → N) — usado pra linkar a tarefa
+      // derivada ao item no JSON pra propagar edições/exclusões posteriores
+      // via RPCs editar_tarefa_briefing / descartar_tarefa_briefing.
+      const parseIdx = (id: string): number => {
+        const m = /^t-(\d+)$/.exec(id);
+        return m ? Number(m[1]) : 0;
+      };
+
       if (aprovadasGenericas.length > 0) {
         const payload = aprovadasGenericas.map(t => ({
-          modulo:       t.modulo,
-          titulo:       t.titulo,
-          descricao:    t.descricao,
-          prioridade:   t.prioridade,
-          prazo:        prazoIso(t.prazo_dias),
-          status:       'Pendente',
-          nome_criador: nomeCriador,
-          criado_por:   profile?.id ?? null,
-          origem:       'briefing_ia',
-          briefing_id:  briefing.id,
-          contexto:     t.contexto_origem || null,
+          modulo:               t.modulo,
+          titulo:               t.titulo,
+          descricao:            t.descricao,
+          prioridade:           t.prioridade,
+          prazo:                prazoIso(t.prazo_dias),
+          status:               'Pendente',
+          nome_criador:         nomeCriador,
+          criado_por:           profile?.id ?? null,
+          origem:               'briefing_ia',
+          briefing_id:          briefing.id,
+          briefing_tarefa_idx:  parseIdx(t._id),
+          contexto:             t.contexto_origem || null,
         }));
         const { error: insErr } = await supabase.from('tarefas').insert(payload);
         if (insErr) throw insErr;
@@ -262,16 +330,17 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       if (aprovadasMarketing.length > 0) {
         // marketing_tarefas não tem coluna `modulo` (é implicitamente marketing).
         const payload = aprovadasMarketing.map(t => ({
-          titulo:       t.titulo,
-          descricao:    t.descricao,
-          prioridade:   t.prioridade,
-          prazo:        prazoIso(t.prazo_dias),
-          status:       'Pendente',
-          nome_criador: nomeCriador,
-          criado_por:   profile?.id ?? null,
-          origem:       'briefing_ia',
-          briefing_id:  briefing.id,
-          contexto:     t.contexto_origem || null,
+          titulo:               t.titulo,
+          descricao:            t.descricao,
+          prioridade:           t.prioridade,
+          prazo:                prazoIso(t.prazo_dias),
+          status:               'Pendente',
+          nome_criador:         nomeCriador,
+          criado_por:           profile?.id ?? null,
+          origem:               'briefing_ia',
+          briefing_id:          briefing.id,
+          briefing_tarefa_idx:  parseIdx(t._id),
+          contexto:             t.contexto_origem || null,
         }));
         const { error: insErr } = await supabase.from('marketing_tarefas').insert(payload);
         if (insErr) throw insErr;
@@ -319,16 +388,30 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
     setAprovando(false);
   };
 
-  const descartarBriefing = async () => {
+  // Exclusão definitiva: usa RPC com cascade.
+  //   - rascunho_ia: só marca como descartado (nenhuma tarefa derivada existe ainda).
+  //   - aprovado_*: marca briefing + APAGA tarefas derivadas Pendentes em
+  //     tarefas/marketing_tarefas. Tarefas Em Andamento/Concluído ficam (não
+  //     destrói trabalho já iniciado).
+  const excluirBriefing = async () => {
     if (!briefing || !supabase) return;
-    if (!confirm('Descartar este briefing? Você poderá gerar outro pro mesmo dia.')) return;
+    const msg = isAprovado
+      ? 'Excluir este briefing? As tarefas Pendentes nos setores vão sumir. As que já estão Em Andamento ou Concluído são preservadas.'
+      : 'Descartar este briefing? Você poderá gerar outro pro mesmo dia.';
+    if (!confirm(msg)) return;
     try {
-      await supabase.from('briefings_diarios')
-        .update({ status: 'descartado' })
-        .eq('id', briefing.id);
+      const { data, error } = await supabase.rpc('excluir_briefing_cascade', {
+        p_briefing_id: briefing.id,
+      });
+      if (error) throw error;
       setBriefing(null);
       setTarefas([]);
-      showToast?.('Briefing descartado.', 'success');
+      const r = data as any;
+      const total = (r?.tarefas_apagadas ?? 0) + (r?.marketing_apagadas ?? 0);
+      showToast?.(
+        total > 0 ? `Briefing excluído. ${total} tarefa(s) Pendente(s) removida(s) dos setores.` : 'Briefing excluído.',
+        'success',
+      );
       carregarHistorico();
     } catch (err: any) {
       showToast?.(`Erro: ${err?.message ?? '—'}`, 'error');
@@ -413,7 +496,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
             {loading ? <><Loader2 size={14} className="animate-spin" />Analisando…</> : <><Sparkles size={14} />Gerar Briefing do Dia</>}
           </NeuButtonAccent>
         )}
-        {briefing && !isReadonly && (
+        {briefing && !isAprovado && (
           <button onClick={() => gerar(true)} disabled={loading}
             className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-yellow-400/30 text-yellow-400 rounded-lg px-3 py-2 hover:bg-yellow-400/10 transition-colors">
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />Gerar nova versão
@@ -474,32 +557,35 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Briefing de {fmtDataBR(briefing.data_referencia)} · janela {briefing.janela_dias ?? 7}d</p>
               <p className="text-sm text-gray-300 mt-1">
                 {briefing.total_propostas} tarefa(s) propostas
-                {isReadonly && <> · <span className="text-accent">{briefing.total_aprovadas} aprovadas</span></>}
+                {isAprovado && <> · <span className="text-accent">{briefing.total_aprovadas} aprovadas</span></>}
                 {briefing.nome_gerador && <span className="text-gray-500"> · gerado por {briefing.nome_gerador}</span>}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {!isReadonly && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Em rascunho: ações de aprovação em lote + descartar */}
+              {!isAprovado && (
                 <>
                   <button onClick={aprovarTodas}
                     className="text-[10px] font-bold uppercase tracking-widest border border-accent/30 text-accent rounded-lg px-3 py-1.5 hover:bg-accent/10 transition-colors">
                     Aprovar todas
                   </button>
-                  <button onClick={descartarTodas}
+                  <button onClick={desmarcarTodas}
                     className="text-[10px] font-bold uppercase tracking-widest border border-white/10 text-gray-400 rounded-lg px-3 py-1.5 hover:text-white transition-colors">
                     Desmarcar
                   </button>
-                  <button onClick={descartarBriefing}
-                    className="text-[10px] font-bold uppercase tracking-widest border border-red-400/30 text-red-400 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors">
-                    Descartar briefing
-                  </button>
                 </>
               )}
-              {isReadonly && (
+              {/* Em briefing aprovado: badge de status */}
+              {isAprovado && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-3 py-1.5">
                   <CheckCircle2 size={10} />Briefing aplicado
                 </span>
               )}
+              {/* Excluir sempre disponível pra admin/CEO — RPC propaga */}
+              <button onClick={excluirBriefing}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest border border-red-400/30 text-red-400 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors">
+                <Trash2 size={10} />Excluir briefing
+              </button>
             </div>
           </div>
 
@@ -550,7 +636,8 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
                           </div>
                         ) : (
                           <div className="flex items-start gap-3">
-                            {!isReadonly && (
+                            {/* Checkbox de aprovação só em rascunho */}
+                            {!isAprovado && (
                               <button onClick={() => toggleAprovacao(t._id)}
                                 className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${
                                   t.aprovada ? 'bg-accent border-accent' : 'border-white/20 hover:border-accent/50'
@@ -575,16 +662,16 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
                                 </p>
                               )}
                             </div>
-                            {!isReadonly && (
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button onClick={() => abrirEdicao(t)} title="Editar" className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-accent transition-colors">
-                                  <Edit3 size={12} />
-                                </button>
-                                <button onClick={() => descartar(t._id)} title="Descartar" className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
-                                  <X size={12} />
-                                </button>
-                              </div>
-                            )}
+                            {/* Editar/Descartar individual sempre disponível pra admin/CEO.
+                                Em rascunho: muda só local. Em aprovado: RPC propaga pra tarefas/marketing_tarefas. */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => abrirEdicao(t)} title={isAprovado ? 'Editar (propaga pro setor)' : 'Editar'} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-accent transition-colors">
+                                <Edit3 size={12} />
+                              </button>
+                              <button onClick={() => descartar(t._id)} title={isAprovado ? 'Descartar (remove do setor)' : 'Descartar'} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
+                                <X size={12} />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -596,7 +683,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
           )}
 
           {/* Footer com ação principal */}
-          {!isReadonly && totalAtivas > 0 && (
+          {!isAprovado && totalAtivas > 0 && (
             <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0 flex items-center justify-between gap-4 sticky bottom-0"
               style={{ background: 'color-mix(in srgb, var(--color-bg-base) 95%, transparent)' }}>
               <p className="text-sm text-gray-300">
