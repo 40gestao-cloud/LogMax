@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { callLLM } from '../lib/llm.js';
 
 // Endpoint dedicado pro Painel BI. Diferente de /api/ai-chat (chat
 // multi-turno com Google Search) e /api/ai-legenda (copy curto):
@@ -9,8 +10,6 @@ import { createLogger } from '../lib/log.js';
 //
 // Cache: se o mesmo usuário pediu o mesmo período < 1h atrás, devolve
 // o relatório existente sem chamar Gemini de novo (economia + rapidez).
-
-const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `
 Você atua como Diretor de Operações e BI do LogMax (holding com 3 marcas:
@@ -81,12 +80,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Data fim não pode ser anterior à data início.' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY ausente'));
+    // callLLM() faz orquestração Gemini → OpenRouter; precisa de pelo
+    // menos uma chave.
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
       return res.status(500).json({ error: 'IA não configurada no servidor.' });
     }
-    const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
 
     const admin = getAdminClient(res);
     if (!admin) return;
@@ -128,66 +127,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: `Erro ao agregar dados: ${rpcErr.message}` });
     }
 
-    // ─── Chamada Gemini ────────────────────────────────────────────
-    const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
+    const llm = await callLLM({
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt:   buildUserPrompt(dados, inicio, fim),
+      // Temperatura baixa pra ser frio/factual. Tokens generosos
+      // (relatório executivo pode chegar a 8-10k chars).
+      temperature:     0.4,
+      maxOutputTokens: 4096,
+      topP:            0.9,
+    }, log);
 
-    const upstream = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: buildUserPrompt(dados, inicio, fim) }] }],
-        // Temperatura baixa pra ser frio/factual. Tokens generosos
-        // (relatório executivo pode chegar a 8-10k chars).
-        generationConfig: {
-          temperature:     0.4,
-          maxOutputTokens: 4096,
-          topP:            0.9,
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-        ],
-      }),
-    });
-
-    const data = await upstream.json() as any;
-
-    if (!upstream.ok) {
-      log.warn('gemini.failed', {
-        user_id: user.id,
-        status: upstream.status,
-        error_kind: data?.error?.status,
-        error_message: data?.error?.message,
-        model,
-      });
-      const friendly =
-        upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
-        : upstream.status === 400 || upstream.status === 401 || upstream.status === 403
-          ? 'Chave da IA inválida. Verifique GEMINI_API_KEY no Vercel.'
-        : data?.error?.message ?? 'Erro na IA.';
-      return res.status(upstream.status === 429 ? 429 : 502).json({ error: friendly });
+    if (!llm.ok) {
+      return res.status(llm.httpStatus).json({ error: llm.friendlyMessage, finish: llm.finishReason });
     }
-
-    const markdown: string =
-      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
-
-    if (!markdown.trim()) {
-      const finish = data?.candidates?.[0]?.finishReason;
-      log.warn('gemini.empty', { user_id: user.id, finish });
-      return res.status(502).json({
-        error: finish === 'SAFETY'
-          ? 'A IA recusou gerar esse relatório (filtro de segurança).'
-          : 'A IA não retornou conteúdo. Tente novamente.',
-        finish,
-      });
-    }
+    const markdown = llm.text;
 
     // ─── Persiste no histórico ─────────────────────────────────────
     const { data: salvo, error: insErr } = await admin
@@ -199,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         markdown,
         gerado_por:     user.id,
         nome_gerador:   user.email?.split('@')[0] ?? null,
-        modelo_ia:      model,
+        modelo_ia:      `${llm.provider}:${llm.modelUsed}`,
       })
       .select('id, created_at')
       .single();
@@ -210,8 +164,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log.warn('persist.failed', { user_id: user.id, error_message: insErr.message });
     }
 
-    log.info('gemini.ok', {
+    log.info('llm.ok', {
       user_id: user.id,
+      provider: llm.provider,
+      model: llm.modelUsed,
       chars_out: markdown.length,
       relatorio_id: salvo?.id,
     });
@@ -221,7 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       markdown,
       dados,
       gerado_em: salvo?.created_at ?? new Date().toISOString(),
-      modelo:    model,
+      modelo:    `${llm.provider}:${llm.modelUsed}`,
       from_cache: false,
     });
   } catch (err) {

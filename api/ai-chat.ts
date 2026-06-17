@@ -1,12 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
-
-// Modelo Gemini default — 2.5-flash é o GA atual com free tier; 1.5 foi
-// deprecated no v1beta e 2.0-flash vem com limit:0 em alguns projetos
-// novos do AI Studio. Para listar modelos disponíveis para a chave,
-// chame GET /api/ai-models. Override via env GEMINI_MODEL.
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+import { callLLM, type LLMMessage } from '../lib/llm.js';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'model'; content: string };
 
@@ -60,14 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });
     }
 
-    // .trim() defensivo: copiar do AI Studio às vezes traz espaço/quebra-linha
-    // que invalida silenciosamente a chave do lado do Google.
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY ausente'));
-      return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY nas env vars do Vercel.' });
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
+      return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY (e/ou OPENROUTER_API_KEY) nas env vars do Vercel.' });
     }
-    const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
 
     const { messages } = (req.body ?? {}) as { messages?: ChatMessage[] };
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -85,106 +76,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Gemini espera role: 'user' | 'model'. Mapeamos 'assistant' → 'model'.
-    const contents = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : m.role,
-      parts: [{ text: m.content }],
+    // Normaliza 'model' (legado) → 'assistant' pro helper unificado.
+    const llmMessages: LLMMessage[] = messages.map(m => ({
+      role: m.role === 'model' ? 'assistant' : m.role,
+      content: m.content,
     }));
 
-    // Header em vez de query string: evita logar a chave em access logs
-    // e é o método recomendado pelo Google.
-    const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
+    // Google Search grounding só roda no Gemini (geminiTools). Se cair pro
+    // OpenRouter, perde fontes/queries mas mantém resposta.
+    const llm = await callLLM({
+      systemPrompt: buildSystemPrompt(user.setor, user.role),
+      messages:     llmMessages,
+      temperature:  0.6,
+      maxOutputTokens: 1024,
+      topP:         0.95,
+      geminiTools:  [{ google_search: {} }],
+    }, log);
 
-    const upstream = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildSystemPrompt(user.setor, user.role) }] },
-        contents,
-        // Google Search nativo (grounding): o modelo decide sozinho quando
-        // pesquisar. Vem com cota gratuita generosa no AI Studio e adiciona
-        // citações em groundingMetadata.groundingChunks da resposta.
-        tools: [{ google_search: {} }],
-        generationConfig: {
-          temperature: 0.6,
-          maxOutputTokens: 1024,
-          topP: 0.95,
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-        ],
-      }),
-    });
-
-    const data = await upstream.json() as any;
-
-    if (!upstream.ok) {
-      // Inclui o erro cru do Google no log pra diagnóstico (a key não é logada)
-      log.warn('gemini.failed', {
-        user_id: user.id,
-        status: upstream.status,
-        error_kind: data?.error?.status,
-        error_message: data?.error?.message,
-        key_len: apiKey.length,
-        key_prefix: apiKey.slice(0, 4),
-        model,
-      });
-      const isAuthErr = upstream.status === 400 || upstream.status === 401 || upstream.status === 403;
-      const friendly =
-        upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
-        : isAuthErr ? 'Chave da IA inválida ou sem permissão. Verifique a env var GEMINI_API_KEY no Vercel e refaça o deploy.'
-        : data?.error?.message ?? 'Erro na IA.';
-      return res.status(upstream.status === 429 ? 429 : 502).json({ error: friendly });
+    if (!llm.ok) {
+      return res.status(llm.httpStatus).json({ error: llm.friendlyMessage });
     }
 
-    const text: string =
-      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
-
-    // Quando o modelo usa Google Search, vem groundingMetadata com fontes.
-    // Dedupe por URI e limita a 6 — o suficiente pra UI sem virar parede de links.
-    const grounding = data?.candidates?.[0]?.groundingMetadata;
+    // Extrai grounding só se veio do Gemini — OpenRouter não tem grounding.
     const sources: { uri: string; title: string }[] = [];
-    if (Array.isArray(grounding?.groundingChunks)) {
-      const seen = new Set<string>();
-      for (const chunk of grounding.groundingChunks) {
-        const uri = chunk?.web?.uri;
-        if (!uri || seen.has(uri)) continue;
-        seen.add(uri);
-        sources.push({ uri, title: chunk.web.title ?? uri });
-        if (sources.length >= 6) break;
+    const searchQueries: string[] = [];
+    if (llm.provider === 'gemini' && llm.geminiRaw) {
+      const grounding = llm.geminiRaw?.candidates?.[0]?.groundingMetadata;
+      if (Array.isArray(grounding?.groundingChunks)) {
+        const seen = new Set<string>();
+        for (const chunk of grounding.groundingChunks) {
+          const uri = chunk?.web?.uri;
+          if (!uri || seen.has(uri)) continue;
+          seen.add(uri);
+          sources.push({ uri, title: chunk.web.title ?? uri });
+          if (sources.length >= 6) break;
+        }
+      }
+      if (Array.isArray(grounding?.webSearchQueries)) {
+        searchQueries.push(...grounding.webSearchQueries.slice(0, 4));
       }
     }
-    const searchQueries: string[] = Array.isArray(grounding?.webSearchQueries)
-      ? grounding.webSearchQueries.slice(0, 4)
-      : [];
 
-    if (!text.trim()) {
-      const finish = data?.candidates?.[0]?.finishReason;
-      log.info('gemini.empty', { user_id: user.id, finish });
-      return res.status(200).json({
-        reply: finish === 'SAFETY'
-          ? 'Não consigo responder a essa pergunta. Tente reformular.'
-          : 'A IA não retornou resposta. Tente novamente.',
-        finishReason: finish,
-      });
-    }
-
-    log.info('gemini.ok', {
+    log.info('llm.ok', {
       user_id: user.id,
+      provider: llm.provider,
+      model: llm.modelUsed,
       chars_in: messages.reduce((s, m) => s + m.content.length, 0),
-      chars_out: text.length,
+      chars_out: llm.text.length,
       grounded: sources.length > 0,
       sources_count: sources.length,
       search_queries: searchQueries,
     });
-    return res.status(200).json({ reply: text, sources, searchQueries });
+    return res.status(200).json({ reply: llm.text, sources, searchQueries });
   } catch (err) {
     log.error('handler.unhandled', err);
     return res.status(500).json({ error: 'Erro interno na IA.' });

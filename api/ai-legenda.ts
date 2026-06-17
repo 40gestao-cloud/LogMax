@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { callLLM } from '../lib/llm.js';
 
 // Endpoint dedicado pra geração de copy/legenda de promoções via Gemini.
 // Separado de /api/ai-chat porque:
@@ -8,8 +9,6 @@ import { createLogger } from '../lib/log.js';
 //   • Prompt é estruturado e JSON-only — sem tools, sem grounding, sem
 //     conversa multi-turno. Mais simples e mais barato.
 //   • Saída padronizada (3 variações) facilita a UI consumir sem parser.
-
-const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 interface LegendaPayload {
   produto?: string;
@@ -138,82 +137,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Geração de legenda disponível apenas para Marketing, Admin e CEO.' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY ausente'));
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
       return res.status(500).json({ error: 'IA não configurada no servidor.' });
     }
-    const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
 
     const payload = (req.body ?? {}) as LegendaPayload;
     if (!payload.produto || typeof payload.produto !== 'string' || !payload.produto.trim()) {
       return res.status(400).json({ error: 'Informe o produto/serviço da promoção.' });
     }
 
-    const userPrompt = buildUserPrompt(payload);
-    const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
+    const llm = await callLLM({
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt:   buildUserPrompt(payload),
+      // Temperatura média (varia legendas sem inventar produto) + budget
+      // generoso de tokens (3 legendas + envelope JSON cabem em ~1k tokens,
+      // mas margem evita truncamento que quebra JSON).
+      temperature:     0.85,
+      maxOutputTokens: 1500,
+      topP:            0.95,
+      jsonMode:        true,
+    }, log);
 
-    const upstream = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        // Temperatura média (varia legendas sem inventar produto) + budget
-        // generoso de tokens (3 legendas + envelope JSON cabem em ~1k tokens,
-        // mas margem evita truncamento que quebra JSON).
-        // Sem responseSchema: nem todo modelo (2.5-flash, 2.0-flash, 1.5-flash)
-        // suporta da mesma forma. Confiamos no prompt + responseMimeType +
-        // parser robusto pra cobrir todas as variações.
-        generationConfig: {
-          temperature:      0.85,
-          maxOutputTokens:  1500,
-          topP:             0.95,
-          responseMimeType: 'application/json',
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-        ],
-      }),
-    });
-
-    const data = await upstream.json() as any;
-
-    if (!upstream.ok) {
-      log.warn('gemini.failed', {
-        user_id: user.id,
-        status: upstream.status,
-        error_kind: data?.error?.status,
-        error_message: data?.error?.message,
-        model,
-      });
-      const isAuthErr = upstream.status === 400 || upstream.status === 401 || upstream.status === 403;
-      const friendly =
-        upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
-        : isAuthErr ? 'Chave da IA inválida. Verifique GEMINI_API_KEY no Vercel.'
-        : data?.error?.message ?? 'Erro na IA.';
-      return res.status(upstream.status === 429 ? 429 : 502).json({ error: friendly });
+    if (!llm.ok) {
+      return res.status(llm.httpStatus).json({ error: llm.friendlyMessage, finish: llm.finishReason });
     }
-
-    const rawText: string =
-      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
-
-    if (!rawText.trim()) {
-      const finish = data?.candidates?.[0]?.finishReason;
-      log.info('gemini.empty', { user_id: user.id, finish });
-      return res.status(200).json({
-        error: finish === 'SAFETY'
-          ? 'A IA recusou gerar essa legenda. Reformule o briefing.'
-          : 'A IA não retornou resposta. Tente novamente.',
-      });
-    }
+    const rawText = llm.text;
 
     const parsed = extractJsonBlock(rawText);
     const legendasRaw = extractLegendas(parsed);
@@ -221,23 +171,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (legendasRaw.length === 0) {
       // Diagnóstico completo no log do Vercel + amostra do cru no payload
       // pra que o usuário tenha pista do que aconteceu (truncado? bloqueado?).
-      const finishReason = data?.candidates?.[0]?.finishReason as string | undefined;
-      log.warn('gemini.parse_failed', {
-        user_id:     user.id,
-        finish:      finishReason,
-        raw_len:     rawText.length,
-        raw_sample:  rawText.slice(0, 400),
-        model,
+      log.warn('llm.parse_failed', {
+        user_id:    user.id,
+        provider:   llm.provider,
+        model:      llm.modelUsed,
+        finish:     llm.finishReason,
+        raw_len:    rawText.length,
+        raw_sample: rawText.slice(0, 400),
       });
       let mensagem = 'IA devolveu formato inesperado. Tente novamente.';
-      if (finishReason === 'MAX_TOKENS') {
+      if (llm.finishReason === 'MAX_TOKENS' || llm.finishReason === 'length') {
         mensagem = 'A IA estourou o limite de tamanho. Tente novamente — pode acontecer em produtos com nome muito longo.';
-      } else if (finishReason === 'SAFETY') {
-        mensagem = 'A IA recusou gerar pra essa promoção (filtro de segurança). Ajuste o título/descrição.';
-      } else if (finishReason === 'RECITATION') {
+      } else if (llm.finishReason === 'RECITATION') {
         mensagem = 'A IA detectou conteúdo protegido. Tente novamente.';
       }
-      return res.status(502).json({ error: mensagem, finish: finishReason });
+      return res.status(502).json({ error: mensagem, finish: llm.finishReason });
     }
 
     // Normaliza: garante shape { tom, texto }. Aceita variações de nome
@@ -267,8 +215,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'IA devolveu legendas vazias. Tente novamente.' });
     }
 
-    log.info('gemini.ok', {
+    log.info('llm.ok', {
       user_id: user.id,
+      provider: llm.provider,
+      model: llm.modelUsed,
       legendas_count: legendas.length,
       chars_out: rawText.length,
     });

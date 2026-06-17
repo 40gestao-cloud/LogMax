@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { callLLM } from '../lib/llm.js';
 
 // Endpoint: Briefing Diário. Recebe `data` (default = hoje no Acre) e
 // devolve um briefing com N tarefas propostas por setor baseadas no
@@ -12,8 +13,6 @@ import { createLogger } from '../lib/log.js';
 // Cache forte: 1 briefing ATIVO por data. Se já existe em rascunho_ia
 // ou aprovado_*, devolve o existente (admin pode descartar pra gerar
 // outro).
-
-const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const SETORES = ['empresa', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing'] as const;
 const JANELAS_VALIDAS = [7, 15, 30] as const;
@@ -151,12 +150,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? (janela_dias as Janela)
       : 7;
 
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY ausente'));
+    // Validação leve: chave de PELO MENOS um provedor precisa existir.
+    // callLLM() faz a orquestração entre Gemini + OpenRouter.
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
       return res.status(500).json({ error: 'IA não configurada no servidor.' });
     }
-    const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
 
     const admin = getAdminClient(res);
     if (!admin) return;
@@ -199,95 +198,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: `Erro ao agregar dados: ${rpcErr.message}` });
     }
 
-    // ─── Gemini ────────────────────────────────────────────────────
-    const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
+    const llm = await callLLM({
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt:   buildUserPrompt(snapshot, dataRef),
+      temperature:  0.7,
+      // 7 setores × 2-4 tarefas × título+descrição+contexto em PT-BR
+      // estoura 3000 fácil. 8000 dá folga em ambos provedores.
+      maxOutputTokens: 8000,
+      topP:         0.95,
+      jsonMode:     true,
+    }, log);
 
-    const requestBody = JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: buildUserPrompt(snapshot, dataRef) }] }],
-      generationConfig: {
-        temperature:      0.7,
-        // 7 setores × 2-4 tarefas × título+descrição+contexto em PT-BR
-        // estoura 3000 fácil. 8000 dá folga sem custo grande no flash.
-        maxOutputTokens:  8000,
-        topP:             0.95,
-        responseMimeType: 'application/json',
-      },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-      ],
-    });
-
-    // Retry com backoff em 503/UNAVAILABLE (modelo sobrecarregado). Gemini
-    // 2.5 flash devolve "model overloaded" em picos — tentar de novo em 2-4s
-    // costuma resolver sem o usuário ver o erro.
-    const RETRY_DELAYS_MS = [1500, 3500];
-    let upstream!: Response;
-    let data2: any = null;
-    for (let tentativa = 0; tentativa <= RETRY_DELAYS_MS.length; tentativa++) {
-      upstream = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: requestBody,
-      });
-      data2 = await upstream.json() as any;
-      const isOverload = upstream.status === 503 || upstream.status === 429;
-      if (!isOverload || tentativa === RETRY_DELAYS_MS.length) break;
-      log.warn('gemini.retry', {
-        user_id: user.id, tentativa: tentativa + 1, status: upstream.status,
-      });
-      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[tentativa]));
+    if (!llm.ok) {
+      return res.status(llm.httpStatus).json({ error: llm.friendlyMessage, finish: llm.finishReason });
     }
 
-    if (!upstream.ok) {
-      log.warn('gemini.failed', {
-        user_id: user.id, status: upstream.status,
-        error_message: data2?.error?.message, model,
-      });
-      const friendly =
-        upstream.status === 503 ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo.'
-        : upstream.status === 429 ? 'Limite de uso da IA atingido. Tente novamente em alguns minutos.'
-        : upstream.status === 400 || upstream.status === 401 || upstream.status === 403
-          ? 'Chave da IA inválida. Verifique GEMINI_API_KEY no Vercel.'
-        : data2?.error?.message ?? 'Erro na IA.';
-      const httpStatus =
-        upstream.status === 429 ? 429
-        : upstream.status === 503 ? 503
-        : 502;
-      return res.status(httpStatus).json({ error: friendly });
-    }
-
-    const rawText: string =
-      data2?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
-
-    if (!rawText.trim()) {
-      const finish = data2?.candidates?.[0]?.finishReason;
-      return res.status(502).json({
-        error: finish === 'SAFETY'
-          ? 'A IA recusou gerar o briefing (filtro de segurança).'
-          : 'A IA não retornou conteúdo. Tente novamente.',
-        finish,
-      });
-    }
-
-    const parsed = extractJson(rawText);
+    const parsed = extractJson(llm.text);
     const tarefasRaw: any[] = Array.isArray(parsed?.tarefas) ? parsed.tarefas : [];
     if (tarefasRaw.length === 0) {
-      const finish = data2?.candidates?.[0]?.finishReason;
-      log.warn('gemini.empty_tarefas', {
-        user_id: user.id, finish, parsed_ok: parsed !== null,
-        raw_sample: rawText.slice(0, 300),
+      log.warn('llm.empty_tarefas', {
+        user_id: user.id, provider: llm.provider, model: llm.modelUsed,
+        finish: llm.finishReason, parsed_ok: parsed !== null,
+        raw_sample: llm.text.slice(0, 300),
       });
       const friendly =
-        finish === 'MAX_TOKENS' ? 'A IA estourou o limite de tamanho — tente uma janela menor (7 ou 15 dias).'
-        : finish === 'SAFETY'   ? 'A IA recusou gerar o briefing (filtro de segurança).'
-        : parsed === null       ? 'A IA devolveu JSON inválido. Tente novamente.'
-        :                         'IA não devolveu tarefas. Tente novamente.';
-      return res.status(502).json({ error: friendly, finish });
+        llm.finishReason === 'MAX_TOKENS' || llm.finishReason === 'length'
+          ? 'A IA estourou o limite de tamanho — tente uma janela menor (7 ou 15 dias).'
+        : parsed === null
+          ? 'A IA devolveu JSON inválido. Tente novamente.'
+        : 'IA não devolveu tarefas. Tente novamente.';
+      return res.status(502).json({ error: friendly, finish: llm.finishReason });
     }
 
     // Normaliza + filtra inválidas + adiciona flags de revisão.
@@ -313,7 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         total_aprovadas:   0,
         gerado_por:        user.id,
         nome_gerador:      user.email?.split('@')[0] ?? null,
-        modelo_ia:         model,
+        modelo_ia:         `${llm.provider}:${llm.modelUsed}`,
       })
       .select('*')
       .single();
