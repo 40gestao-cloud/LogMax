@@ -82,8 +82,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // callLLM() faz orquestração Gemini → OpenRouter; precisa de pelo
     // menos uma chave.
-    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.GROQ_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('Nenhuma chave de IA configurada'));
       return res.status(500).json({ error: 'IA não configurada no servidor.' });
     }
 

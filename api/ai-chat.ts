@@ -55,9 +55,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });
     }
 
-    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
-      log.error('config.missing_key', new Error('GEMINI_API_KEY e OPENROUTER_API_KEY ausentes'));
-      return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY (e/ou OPENROUTER_API_KEY) nas env vars do Vercel.' });
+    if (!process.env.GEMINI_API_KEY?.trim() && !process.env.GROQ_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
+      log.error('config.missing_key', new Error('Nenhuma chave de IA configurada'));
+      return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY (e/ou GROQ_API_KEY / OPENROUTER_API_KEY) nas env vars do Vercel.' });
     }
 
     const { messages } = (req.body ?? {}) as { messages?: ChatMessage[] };

@@ -1,22 +1,35 @@
 import type { Logger } from './log.js';
 
-// Camada unificada de chamada a LLMs com fallback automático:
+// Camada unificada de chamada a LLMs com fallback automático em cascata:
 //   1. Gemini (primário) com retry em 503/429.
-//   2. OpenRouter (fallback) com cadeia de modelos free.
+//   2. Groq (tier 2) — LPU rápida, free tier alto (~14k req/dia).
+//   3. OpenRouter (tier 3) — agrega ~50 provedores, free tier baixo.
 //
-// Por que: o Gemini free entra em "modelo sobrecarregado" em picos de
-// demanda. OpenRouter agrega ~50 provedores numa única API OpenAI-
-// compatível e aceita lista de modelos numa única chamada — failover
-// interno é automático, sem orquestração extra do nosso lado.
+// Ordem escolhida pela combinação custo/qualidade/velocidade:
+//   - Gemini primeiro: quota free maior, qualidade alta, Google Search
+//     grounding em ai-chat.
+//   - Groq segundo: free tier ~14k req/dia (vs 50/dia/modelo no OR), e
+//     LPU é ~3x mais rápido que GPU. Cai aqui quando Gemini está fora.
+//   - OpenRouter por último: backup do backup, cobertura ampla mas
+//     limites baixos.
 //
-// Modelos free do OpenRouter (limite ~50 req/dia por modelo, mas
-// rotativo entre vários): cobre o uso didático do LogMax sem custo.
+// Os 3 provedores são OpenAI-compatíveis (Groq e OpenRouter expõem
+// /chat/completions) ou são adaptados na hora (Gemini usa formato
+// próprio em toGeminiContents).
 //
 // Os 4 endpoints de IA (ai-briefing, ai-bi, ai-chat, ai-legenda) usam
 // esta camada. ai-chat passa `geminiTools` pra ativar Google Search no
-// Gemini — se cair pro OpenRouter, perde grounding mas mantém resposta.
+// Gemini — se cair pra Groq/OpenRouter, perde grounding mas mantém
+// resposta.
 
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+
+// Cadeia Groq (free tier). Tenta na ordem; se 429/erro, vai pro próximo.
+// Override via GROQ_MODELS (CSV). Lista válida em console.groq.com.
+const GROQ_DEFAULT_MODELS = [
+  'llama-3.3-70b-versatile',   // 70B, qualidade alta, bom em PT-BR
+  'llama-3.1-8b-instant',      // 8B, último recurso ultra-rápido
+];
 
 // Cadeia de modelos free no OpenRouter. Override via OPENROUTER_MODELS
 // (CSV) se quiser priorizar outros. OpenRouter tenta na ordem e cai pro
@@ -54,11 +67,13 @@ export type LLMRequest = {
 // projeto não roda em strict mode, e isso quebra narrowing automático
 // com `if (!llm.ok)`. Campos opcionais ficam undefined no caminho que
 // não os usa.
+export type LLMProvider = 'gemini' | 'groq' | 'openrouter';
+
 export type LLMResult = {
   ok: boolean;
   // Quando ok=true:
   text: string;
-  provider: 'gemini' | 'openrouter' | null;
+  provider: LLMProvider | null;
   modelUsed: string;
   finishReason?: string;
   // Resposta crua do Gemini — só preenchido quando provider==='gemini'.
@@ -71,7 +86,7 @@ export type LLMResult = {
 
 const okResult = (
   text: string,
-  provider: 'gemini' | 'openrouter',
+  provider: LLMProvider,
   modelUsed: string,
   finishReason?: string,
   geminiRaw?: any,
@@ -153,6 +168,33 @@ async function callGeminiOnce(
   return { status: resp.status, data };
 }
 
+async function callGroqOnce(
+  req: LLMRequest,
+  model: string,
+  apiKey: string,
+): Promise<{ status: number; data: any }> {
+  const body = {
+    // Groq não suporta array `models` como OpenRouter — um modelo por chamada.
+    model,
+    messages: toOpenAIMessages(req),
+    temperature: req.temperature     ?? 0.7,
+    max_tokens:  req.maxOutputTokens ?? 4000,
+    top_p:       req.topP            ?? 0.95,
+    ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+  };
+
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json() as any;
+  return { status: resp.status, data };
+}
+
 async function callOpenRouterOnce(
   req: LLMRequest,
   models: string[],
@@ -190,8 +232,12 @@ async function callOpenRouterOnce(
 
 export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> {
   const geminiKey     = process.env.GEMINI_API_KEY?.trim();
+  const groqKey       = process.env.GROQ_API_KEY?.trim();
   const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
   const geminiModel   = (process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
+  const groqModelsEnv = (process.env.GROQ_MODELS || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const groqModels = groqModelsEnv.length > 0 ? groqModelsEnv : GROQ_DEFAULT_MODELS;
   const openrouterModels = (process.env.OPENROUTER_MODELS || '')
     .split(',').map(s => s.trim()).filter(Boolean);
   const orModels = openrouterModels.length > 0 ? openrouterModels : OPENROUTER_DEFAULT_MODELS;
@@ -262,7 +308,47 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
     }
   }
 
-  // ─── 2. Fallback: OpenRouter com cadeia de modelos ───────────
+  // ─── 2. Tier 2: Groq (LPU rápida, free tier alto) ────────────
+  // Itera modelos sequencialmente. 429 num modelo = tenta o próximo
+  // (cota Groq é por modelo). 4xx permanente = sai.
+  if (groqKey) {
+    let lastGroqStatus = 0;
+    for (const model of groqModels) {
+      try {
+        const { status, data } = await callGroqOnce(req, model, groqKey);
+        lastGroqStatus = status;
+
+        if (status >= 200 && status < 300) {
+          const text: string = data?.choices?.[0]?.message?.content ?? '';
+          const finish = data?.choices?.[0]?.finish_reason;
+          if (text.trim()) {
+            log.info('groq.ok', { model, finish });
+            return okResult(text, 'groq', model, finish);
+          }
+          log.warn('groq.empty', { model, finish });
+          continue;
+        }
+
+        log.warn('groq.failed', {
+          model, status, msg: data?.error?.message ?? data?.message,
+        });
+        // Auth/permissão: sai (vai pro OpenRouter).
+        if (status === 401 || status === 403) break;
+        // Rate-limit naquele modelo específico: tenta próximo.
+        if (status === 429) continue;
+        // 4xx genérico: provavelmente erro permanente (modelo deprecado etc.).
+        if (status >= 400 && status < 500) continue;
+        // 5xx: também tenta próximo modelo.
+      } catch (err: any) {
+        log.warn('groq.exception', { model, error: err?.message });
+        // Erro de rede: tenta próximo.
+        continue;
+      }
+    }
+    log.warn('groq.exhausted', { lastGroqStatus });
+  }
+
+  // ─── 3. Tier 3: OpenRouter com cadeia de modelos ─────────────
   if (openrouterKey) {
     try {
       const { status, data } = await callOpenRouterOnce(req, orModels, openrouterKey);
@@ -287,19 +373,19 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
     }
   }
 
-  // ─── 3. Todos os provedores falharam ─────────────────────────
-  const noKeys = !geminiKey && !openrouterKey;
+  // ─── 4. Todos os provedores falharam ─────────────────────────
+  const noKeys = !geminiKey && !groqKey && !openrouterKey;
   if (noKeys) {
     return failResult(500, 'Nenhum provedor de IA configurado no servidor.');
   }
 
-  // Mensagens específicas pro caso mais comum: Gemini sobrecarregado +
-  // sem OpenRouter configurado.
-  if (!openrouterKey && (lastGeminiStatus === 503 || lastGeminiStatus === 429)) {
+  // Mensagem específica pro caso mais comum: Gemini sobrecarregado +
+  // nenhum fallback configurado.
+  if (!groqKey && !openrouterKey && (lastGeminiStatus === 503 || lastGeminiStatus === 429)) {
     return failResult(
       lastGeminiStatus,
       lastGeminiStatus === 503
-        ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo. (Configure OPENROUTER_API_KEY para fallback automático.)'
+        ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo. (Configure GROQ_API_KEY ou OPENROUTER_API_KEY para fallback automático.)'
         : 'Limite de uso da IA atingido. Tente novamente em alguns minutos.',
     );
   }
@@ -307,7 +393,7 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   if (lastGeminiStatus === 400 || lastGeminiStatus === 401 || lastGeminiStatus === 403) {
     return failResult(
       502,
-      'Chave da IA inválida. Verifique GEMINI_API_KEY/OPENROUTER_API_KEY no Vercel.',
+      'Chave da IA inválida. Verifique GEMINI_API_KEY/GROQ_API_KEY/OPENROUTER_API_KEY no Vercel.',
     );
   }
 
