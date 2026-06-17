@@ -21,11 +21,15 @@ const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 // Cadeia de modelos free no OpenRouter. Override via OPENROUTER_MODELS
 // (CSV) se quiser priorizar outros. OpenRouter tenta na ordem e cai pro
 // próximo automaticamente.
+//
+// IMPORTANTE: lista de free models do OpenRouter rotaciona com frequência.
+// Verificar em https://openrouter.ai/models?max_price=0 e atualizar se
+// começar a falhar. Conferido pela última vez em 2026-06-16.
 const OPENROUTER_DEFAULT_MODELS = [
-  'deepseek/deepseek-chat-v3-0324:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'google/gemini-2.0-flash-exp:free',
+  'meta-llama/llama-3.3-70b-instruct:free',  // 70B reliável, bom em PT-BR
+  'openai/gpt-oss-120b:free',                // 120B open-source da OpenAI
+  'qwen/qwen3-next-80b-a3b-instruct:free',   // Qwen3 MoE 80B multilíngue
+  'nvidia/nemotron-3-super-120b-a12b:free',  // Nemotron 120B reasoning
 ];
 
 const RETRY_DELAYS_MS = [1500, 3500];
