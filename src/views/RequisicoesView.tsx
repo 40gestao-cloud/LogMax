@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
-import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -37,8 +38,6 @@ export const RequisicoesView = ({ showToast }: any) => {
   const [form, setForm] = useState({ item: '', solicitante: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
-
-  const today = new Date().toISOString().split('T')[0];
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -91,11 +90,19 @@ export const RequisicoesView = ({ showToast }: any) => {
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
         showToast("Requisição atualizada!", 'success', true);
       } else {
-        const saved = await dbInsert('/api/requisicoesview', { ...payload, status: 'Pendente', data: today });
-        if (saved) {
-          await dbInsert('/api/minhasaprovacoesview', { requisicao_id: (saved as any).id, status: 'Pendente' });
-          setData((prev: any[]) => [saved, ...prev]);
-        }
+        // RPC transacional: cria requisicao + aprovacao_compras pendente
+        // atomicamente. Resolve a categoria do bug em que a aprovação
+        // ficava órfã quando a 2ª INSERT batia em RLS.
+        if (!supabase) throw new Error('Supabase não configurado');
+        const { data: saved, error: rpcErr } = await supabase.rpc('criar_requisicao_compra', {
+          p_item:         payload.item,
+          p_solicitante:  payload.solicitante,
+          p_qtd:          payload.qtd,
+          p_urgencia:     payload.urgencia,
+          p_centro_custo: payload.centro_custo,
+        });
+        if (rpcErr) throw new Error(rpcErr.message);
+        if (saved) setData((prev: any[]) => [saved, ...prev]);
         showToast("Requisição criada e enviada para aprovação!", 'success', true);
       }
       closeForm();

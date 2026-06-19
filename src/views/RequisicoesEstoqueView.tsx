@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
-import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 
@@ -36,8 +37,17 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
         showToast("Requisição atualizada!", 'success', true);
       } else {
-        const saved = await dbInsert('/api/requisicoesestoqueview', { ...form, qtd: Number(extras.qtd) || 1, destino: extras.destino, status: 'Pendente' });
-        if (saved) await dbInsert('/api/minhasaprovacoesestoqueview', { requisicao_estoque_id: (saved as any).id, status: 'Pendente' });
+        // RPC transacional: cria requisicao_estoque + aprovacao_estoque
+        // pendente atomicamente. Ver migration 20260619c — substitui o par
+        // de dbInserts que podia deixar aprovação órfã se a 2ª batesse em RLS.
+        if (!supabase) throw new Error('Supabase não configurado');
+        const { data: saved, error: rpcErr } = await supabase.rpc('criar_requisicao_estoque', {
+          p_produto_id:  form.produto_id,
+          p_solicitante: form.solicitante,
+          p_qtd:         Number(extras.qtd) || 1,
+          p_destino:     extras.destino,
+        });
+        if (rpcErr) throw new Error(rpcErr.message);
         setData([saved ?? { id: Date.now(), ...form, status: 'Pendente' }, ...data]);
         showToast("Requisição criada!", 'success', true);
       }
