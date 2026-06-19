@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { VitrineCarousel } from './VitrineCarousel';
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
@@ -58,20 +59,28 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
+      className="min-h-screen w-full flex flex-col md:flex-row relative overflow-hidden"
       style={{ background: '#000000' }}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-        className="w-[calc(100%-1.5rem)] sm:w-full p-6 sm:p-10"
-        style={{
-          maxWidth: 420,
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
+      {/* Vitrine pública — só desktop. Mobile mantém o card de login centralizado. */}
+      <div className="hidden md:block md:flex-1 md:min-h-screen relative">
+        <VitrineCarousel />
+      </div>
+
+      {/* Coluna do login: flex-1 no mobile (full screen) + largura fixa no desktop.
+          Em ambos os casos centraliza o card vertical e horizontalmente. */}
+      <div className="flex-1 md:flex-none md:w-[480px] flex items-center justify-center p-6 md:p-10">
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+          className="w-full"
+          style={{
+            maxWidth: 420,
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
         {/* Logo — identidade Premium fixa (variante dark) com shimmer.
             Container flat, sem sombra. */}
         <div className="flex flex-col items-center mb-8">
@@ -263,7 +272,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             Desenvolvido por Igor Souza
           </p>
         </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 }
