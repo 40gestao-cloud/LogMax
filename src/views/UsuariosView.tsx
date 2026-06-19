@@ -648,8 +648,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                 Apaga <strong className="text-gray-200">TODOS os dados e cadastros</strong> (vendas, estoque, financeiro,
-                folha, ponto, avaliações, marketing, MaxBank, produtos, clientes, fornecedores etc.)
-                e preserva apenas os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial).
+                folha, ponto, avaliações, marketing, histórico MaxBank, produtos, clientes, fornecedores etc.).
+                Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial)
+                e as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais).
                 Use ao trocar a turma de setor pra começar do zero.
                 Operação irreversível.
               </p>
@@ -689,12 +690,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <li>RH: ponto, folha, férias, afastamentos, treinamentos</li>
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
-                  <li>MaxBank: contas, transações, transferências, metas</li>
+                  <li>MaxBank: transações, transferências, metas, folgas, créditos de folha (carteiras preservadas)</li>
                   <li>Cadastros: produtos, serviços, clientes, fornecedores, funcionários</li>
                   <li>Filiais, configurações, formas de pagamento</li>
                 </ul>
                 <p className="text-emerald-400 text-xs pt-2">
-                  ✓ <strong>Preserva:</strong> todos os usuários do sistema (login + setor + filial).
+                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial) e as carteiras MaxBank
+                  (saldo de salário, benefícios e bonificações).
                 </p>
               </div>
               <div className="flex flex-col gap-2 mb-4">

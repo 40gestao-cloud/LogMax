@@ -9,6 +9,9 @@
 -- O que preserva:
 --   • user_profiles (todos, sem WHERE)
 --   • auth.users    (não é tocada)
+--   • maxbank_contas (carteiras com saldo de cada usuário — preservadas
+--     a pedido do operador; o histórico de transações é zerado mas o
+--     saldo atual continua intacto)
 --
 -- O que apaga (TRUNCATE CASCADE em uma transação atômica):
 --   • Transacionais: vendas, estoque, compras, financeiro, RH operacional,
@@ -87,9 +90,11 @@ BEGIN
     marketing_campanhas,
     -- vendas B2B
     orcamentos, pedidos_venda, clientes_especiais,
-    -- maxbank
+    -- maxbank — histórico zerado; maxbank_contas NÃO entra (saldo preservado).
+    -- As FKs de transacoes/transferencias/etc. apontam pra maxbank_contas,
+    -- não o contrário, então TRUNCATE delas não cascateia em contas.
     maxbank_transacoes, maxbank_transferencias, maxbank_creditos_folha,
-    maxbank_folgas_conquistadas, maxbank_metas, maxbank_contas,
+    maxbank_folgas_conquistadas, maxbank_metas,
     -- metas / tarefas
     tarefas_taticas, tarefas, metas_estrategicas,
     -- TI / dev
@@ -112,8 +117,9 @@ BEGIN
   SELECT count(*) INTO v_usuarios_preservados FROM user_profiles;
 
   RETURN jsonb_build_object(
-    'sucesso',             true,
+    'sucesso',              true,
     'usuarios_preservados', v_usuarios_preservados,
+    'carteiras_preservadas', (SELECT count(*) FROM maxbank_contas),
     'executado_em',         now()
   );
 END;
@@ -130,7 +136,9 @@ COMMIT;
 --   SELECT resetar_dados_operacionais();
 --   -- como gerente/colaborador:
 --   --   ERROR: Apenas admin e CEO podem executar este reset.
---   SELECT count(*) FROM user_profiles;  -- intacto
+--   SELECT count(*) FROM user_profiles;   -- intacto
+--   SELECT count(*) FROM maxbank_contas;  -- intacto (carteiras preservadas)
+--   SELECT count(*) FROM maxbank_transacoes; -- 0 (histórico zerado)
 --   SELECT count(*) FROM vendas;          -- 0
 --   SELECT count(*) FROM funcionarios;    -- 0
 -- =================================================================
