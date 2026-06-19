@@ -14,9 +14,15 @@ import { allSetores, hasSetor } from '../lib/rbac';
 
 const CRITERIOS = {
   tecnica: ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
-  comportamental: ['Iniciativa', 'Colaboração', 'Pontualidade'],
-  socioemocional: ['Inteligência emocional', 'Comunicação', 'Resiliência'],
+  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
+  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
 } as const;
+
+// Escala 0-10. Default 5 = neutro (centro da escala).
+const ESCALA_MIN = 0;
+const ESCALA_MAX = 10;
+const NOTA_DEFAULT = 5;
+const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => i + ESCALA_MIN);
 
 const CATEGORIA_LABEL: Record<string, string> = {
   tecnica: 'Técnicas',
@@ -60,11 +66,11 @@ function ModalAvaliacao({
 }) {
   const isEdicao = !!avaliacaoExistente;
 
-  // Notas por categoria/critério (default 3 = neutro, ou os valores existentes em edição)
+  // Notas por categoria/critério (default = neutro, ou valores existentes em edição)
   const [notas, setNotas] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     (Object.keys(CRITERIOS) as Categoria[]).forEach(cat => {
-      CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = 3; });
+      CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
     });
     if (avaliacaoExistente) {
       avaliacaoExistente.criterios.forEach(c => {
@@ -147,14 +153,14 @@ function ModalAvaliacao({
                   const key = `${cat}::${c}`;
                   const nota = notas[key];
                   return (
-                    <div key={key} className="flex items-center justify-between gap-3">
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <span className="text-sm text-gray-300 flex-1">{c}</span>
-                      <div className="flex gap-1.5">
-                        {[1, 2, 3, 4, 5].map(n => (
+                      <div className="flex flex-wrap gap-1">
+                        {NOTAS.map(n => (
                           <button
                             key={n}
                             onClick={() => setNotas(prev => ({ ...prev, [key]: n }))}
-                            className="w-9 h-9 rounded-xl font-bold text-sm transition-all"
+                            className="w-8 h-8 rounded-lg font-bold text-xs transition-all"
                             style={
                               n === nota
                                 ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }
@@ -416,7 +422,7 @@ const CardAvaliacao: React.FC<{
               {criterios.map(c => (
                 <div key={c.id} className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">{c.criterio}</span>
-                  <span className="font-bold text-gray-200">{c.nota}/5</span>
+                  <span className="font-bold text-gray-200">{c.nota}/{ESCALA_MAX}</span>
                 </div>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
@@ -79,6 +79,91 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
+  const [setorFiltro, setSetorFiltro] = useState<string>('todos');
+
+  // Export PDF — admin only.
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF({ orientation: 'landscape' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 14;
+
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, 28, 'F');
+      doc.setTextColor(16, 185, 129);
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+      doc.text('LogMax — Usuários', margin, 13);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180, 180, 180);
+      doc.text(`Total: ${filteredUsers.length}`, margin, 20);
+      doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+      doc.text(
+        `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}`,
+        pageWidth - margin, 20, { align: 'right' }
+      );
+
+      const rows = filteredUsers.map(u => {
+        const extras = (u.setores_extras ?? []).map(s => SETOR_LABEL[s] ?? s).join(', ');
+        return [
+          u.nome ?? '—',
+          u.email ?? '—',
+          ROLE_LABEL[u.role] ?? u.role,
+          (SETOR_LABEL[u.setor] ?? u.setor) + (extras ? ` (+${extras})` : ''),
+          u.filial ?? FILIAL_DEFAULT,
+          u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—',
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 34,
+        head: [['Nome', 'E-mail', 'Cargo', 'Setor (+extras)', 'Filial', 'Criado em']],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: [50, 50, 50], fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 247, 245] },
+        margin: { left: margin, right: margin },
+      });
+
+      doc.save(`logmax-usuarios-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err: any) {
+      showToast(`Erro ao gerar PDF: ${err?.message ?? '—'}`, 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  // Reset operacional — admin only. Modal com type-to-confirm pra evitar
+  // disparo acidental (operação irreversível em transação atômica).
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetRunning, setResetRunning] = useState(false);
+  const TEXTO_CONFIRMACAO = 'APAGAR TUDO';
+  const handleReset = async () => {
+    if (!supabase) return;
+    if (resetConfirm !== TEXTO_CONFIRMACAO) return;
+    setResetRunning(true);
+    try {
+      const { data, error } = await supabase.rpc('resetar_dados_operacionais');
+      if (error) throw error;
+      const preservados = (data as any)?.usuarios_preservados ?? users.length;
+      showToast(`Reset concluído. ${preservados} usuário(s) preservado(s).`, 'success');
+      setResetOpen(false);
+      setResetConfirm('');
+      // Reload imediato pra UI refletir o estado zerado.
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err: any) {
+      showToast(`Erro no reset: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setResetRunning(false);
+    }
+  };
 
   // Edição
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -90,7 +175,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (!supabase) { setIsLoading(false); return; }
     (async () => {
       try {
-        const { data, error } = await supabase!.from('user_profiles').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabase!.from('user_profiles').select('*').order('nome', { ascending: true });
         if (error) showToast('Erro ao carregar usuários.', 'error');
         setUsers(data ?? []);
       } catch {
@@ -101,10 +186,16 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtragem por filial (lista do banco já filtrada por setor para gerente)
-  const filteredUsers = filialFiltro === 'todas'
-    ? users
-    : users.filter(u => (u.filial ?? FILIAL_DEFAULT) === filialFiltro);
+  // Filtragem por filial e setor (lista do banco já filtrada por setor para gerente).
+  // Setor casa primário OU extras — `all` (CEO/admin) sempre passa em qualquer filtro.
+  const filteredUsers = users.filter(u => {
+    if (filialFiltro !== 'todas' && (u.filial ?? FILIAL_DEFAULT) !== filialFiltro) return false;
+    if (setorFiltro !== 'todos') {
+      const setores = [u.setor, ...(u.setores_extras ?? [])];
+      if (u.setor !== 'all' && !setores.includes(setorFiltro as any)) return false;
+    }
+    return true;
+  });
 
   // KPIs
   const totalGerentes     = filteredUsers.filter(u => u.role === 'gerente').length;
@@ -167,7 +258,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       // Recarregar lista
       if (supabase) {
-        const { data } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
+        const { data } = await supabase.from('user_profiles').select('*').order('nome', { ascending: true });
         setUsers(data ?? []);
       }
       setForm(emptyForm);
@@ -317,14 +408,32 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
-          className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
-          <option value="todas">Todas filiais</option>
-          {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
-          <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
-        </NeuButtonAccent>
+        <div className="flex flex-wrap gap-2">
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
+            <option value="todas">Todas filiais</option>
+            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
+            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por setor">
+            <option value="todos">Todos setores</option>
+            {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'].map(s => (
+              <option key={s} value={s}>{SETOR_LABEL[s]}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {isAdmin && (
+            <button onClick={handleExportPdf} disabled={exportingPdf || filteredUsers.length === 0}
+              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
+              title="Baixar lista em PDF">
+              <FileDown size={14} />{exportingPdf ? 'Gerando...' : 'PDF'}
+            </button>
+          )}
+          <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
+            <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
+          </NeuButtonAccent>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -427,7 +536,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        {filteredUsers.length === 0 ? <EmptyState message={filialFiltro === 'todas' ? 'Nenhum usuário cadastrado.' : `Nenhum usuário na filial ${filialFiltro}.`} /> : (
+        {filteredUsers.length === 0 ? <EmptyState message={
+          filialFiltro === 'todas' && setorFiltro === 'todos'
+            ? 'Nenhum usuário cadastrado.'
+            : `Nenhum usuário com os filtros aplicados.`
+        } /> : (
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -437,7 +550,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
-                  <th className="pb-4 font-bold px-4">Funcionário (Ponto QR)</th>
+                  <th className="pb-4 font-bold px-4">Vínculo RH</th>
                   <th className="pb-4 font-bold px-4 text-center">Criado em</th>
                   <th className="pb-4 px-4"></th>
                 </tr>
@@ -522,6 +635,95 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           </div>
         )}
       </div>
+
+      {/* Zona de Perigo — admin e CEO. Reset operacional preservando os usuários. */}
+      {isGlobal && (
+        <div className="neu-flat rounded-3xl p-6 border border-red-500/30 shrink-0"
+             style={{ background: 'color-mix(in srgb, rgb(239 68 68) 4%, transparent)' }}>
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 neu-pressed rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={18} className="text-red-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
+              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                Apaga <strong className="text-gray-200">TODOS os dados e cadastros</strong> (vendas, estoque, financeiro,
+                folha, ponto, avaliações, marketing, MaxBank, produtos, clientes, fornecedores etc.)
+                e preserva apenas os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial).
+                Use ao trocar a turma de setor pra começar do zero.
+                Operação irreversível.
+              </p>
+            </div>
+          </div>
+          <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
+                       bg-red-500/10 text-red-400 border border-red-500/30
+                       hover:bg-red-500/20 hover:text-red-300 transition-colors">
+            <Trash2 size={13} /> Apagar tudo (manter usuários)
+          </button>
+        </div>
+      )}
+
+      {/* Modal de confirmação do reset */}
+      <AnimatePresence>
+        {resetOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !resetRunning && setResetOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-red-500/30 w-full max-w-md">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertTriangle size={20} className="text-red-500" />
+                <h3 className="text-base font-bold text-red-400">Apagar TODOS os dados?</h3>
+              </div>
+              <div className="text-sm text-gray-300 space-y-2 mb-4">
+                <p>Esta operação vai <strong className="text-red-400">apagar permanentemente</strong>:</p>
+                <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
+                  <li>Vendas, estoque, recebimentos, expedição</li>
+                  <li>Financeiro: contas a pagar/receber, caixa, conciliações</li>
+                  <li>RH: ponto, folha, férias, afastamentos, treinamentos</li>
+                  <li>Avaliações, pesquisas, feedbacks, PDIs</li>
+                  <li>Marketing: campanhas, promoções, cupons, calendário</li>
+                  <li>MaxBank: contas, transações, transferências, metas</li>
+                  <li>Cadastros: produtos, serviços, clientes, fornecedores, funcionários</li>
+                  <li>Filiais, configurações, formas de pagamento</li>
+                </ul>
+                <p className="text-emerald-400 text-xs pt-2">
+                  ✓ <strong>Preserva:</strong> todos os usuários do sistema (login + setor + filial).
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 mb-4">
+                <label htmlFor="reset-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  Digite <span className="text-red-400">{TEXTO_CONFIRMACAO}</span> para liberar o botão
+                </label>
+                <input id="reset-confirm" type="text" value={resetConfirm} autoFocus
+                  onChange={e => setResetConfirm(e.target.value)}
+                  disabled={resetRunning}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono"
+                  placeholder={TEXTO_CONFIRMACAO} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setResetOpen(false)} disabled={resetRunning}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={handleReset}
+                  disabled={resetRunning || resetConfirm !== TEXTO_CONFIRMACAO}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest
+                             bg-red-500 text-white hover:bg-red-600 transition-colors
+                             disabled:opacity-30 disabled:cursor-not-allowed">
+                  {resetRunning ? 'Apagando...' : 'Confirmar e apagar tudo'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal de edição */}
       <AnimatePresence>

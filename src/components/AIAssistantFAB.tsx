@@ -92,15 +92,14 @@ export const AIAssistantFAB = () => {
     <>
       <motion.button
         onClick={() => setOpen(true)}
-        initial={{ opacity: 0, scale: 0.5 }}
+        initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         whileTap={{ scale: 0.92 }}
         aria-label="Abrir assistente de IA"
-        title="Assistente LogMax"
-        className="fixed bottom-6 left-6 z-40 w-14 h-14 rounded-full neu-flat border border-accent/30 flex items-center justify-center text-accent hover:text-white hover:border-accent/60 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-        style={{ background: 'var(--color-card-bg)' }}
+        title="Assistente LogMax (MaxAI)"
+        className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-accent hover:text-white transition-colors border border-accent/20 hover:border-accent/40"
       >
-        <Sparkles size={22} />
+        <Sparkles size={16} />
       </motion.button>
 
       <AnimatePresence>

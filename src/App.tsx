@@ -899,7 +899,6 @@ function LogMaxAppInner() {
     <AIAssistantProvider>
     <AuditoriaProvider>
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
-      {canUseMaxAI && <AIAssistantFAB />}
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
       <PerfilFotoModal
         open={perfilFotoOpen}
@@ -968,6 +967,7 @@ function LogMaxAppInner() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell setor={profile.setor} onNavigate={navigate} />
+            {canUseMaxAI && <AIAssistantFAB />}
             <BrightnessControl />
             <ThemeToggle />
             <AccentPicker />

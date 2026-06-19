@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2, Heart } from 'lucide-react';
+import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2, Heart, Users } from 'lucide-react';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -24,36 +24,47 @@ const CATEGORIA_CLS: Record<string, string> = {
   outro:       'bg-gray-800 text-gray-400',
 };
 
+const DESTINATARIOS = [
+  { key: 'ceo',         label: 'CEO' },
+  { key: 'gerente',     label: 'Gerente' },
+  { key: 'colaborador', label: 'Colaboradores' },
+] as const;
+
+const DESTINATARIO_LABEL: Record<string, string> = Object.fromEntries(DESTINATARIOS.map(d => [d.key, d.label]));
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
 
-// ─── Form de envio (colaborador / gerente) ────────────────────────────────────
+// ─── Form de envio ────────────────────────────────────────────────────────────
 const FormularioEnvio = ({ showToast }: { showToast: any }) => {
   const [texto, setTexto] = useState('');
   const [categoria, setCategoria] = useState<string>('');
+  const [destinatarios, setDestinatarios] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
 
+  const toggleDest = (k: string) =>
+    setDestinatarios(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]);
+
   const handleEnviar = async () => {
     const t = texto.trim();
-    if (t.length < 5) {
-      showToast('Escreva ao menos 5 caracteres.', 'error');
-      return;
+    if (t.length < 5) { showToast('Escreva ao menos 5 caracteres.', 'error'); return; }
+    if (!categoria)    { showToast('Selecione uma categoria.', 'error'); return; }
+    if (destinatarios.length === 0) {
+      showToast('Selecione ao menos um destinatário.', 'error'); return;
     }
     setEnviando(true);
     try {
-      // RPC SECURITY DEFINER — colaboradores não têm SELECT em
-      // feedbacks_organizacao (RLS), então o INSERT via PostgREST com
-      // .select() RETURNING falha. A RPC contorna isso e mantém
-      // anonimato técnico (auth.uid() não é gravado).
       if (!supabase) throw new Error('Supabase não configurado');
       const { error } = await supabase.rpc('enviar_feedback_anonimo', {
-        p_texto: t,
-        p_categoria: categoria || null,
+        p_texto:                t,
+        p_categoria:            categoria,
+        p_destinatarios_roles:  destinatarios,
       });
       if (error) throw error;
       setTexto('');
       setCategoria('');
+      setDestinatarios([]);
       setSucesso(true);
     } catch (err: any) {
       showToast(`Erro ao enviar: ${err?.message ?? 'verifique o console'}`, 'error');
@@ -61,6 +72,8 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
       setEnviando(false);
     }
   };
+
+  const bloqueado = enviando || texto.trim().length < 5 || !categoria || destinatarios.length === 0;
 
   return (
     <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col gap-4">
@@ -71,13 +84,34 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
         <div>
           <h3 className="text-sm font-bold text-gray-200">Envie um feedback</h3>
           <p className="text-[11px] text-gray-500 mt-0.5">
-            Totalmente anônimo. A diretoria (admin/CEO) lê sem saber quem enviou — nem sua identidade é registrada.
+            Totalmente anônimo. Quem recebe lê sem saber quem enviou — nem sua identidade é registrada.
           </p>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="fb-categoria" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Categoria (opcional)</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold flex items-center gap-1.5">
+          <Users size={11} /> Para quem? *
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {DESTINATARIOS.map(d => {
+            const active = destinatarios.includes(d.key);
+            return (
+              <button key={d.key} type="button"
+                onClick={() => toggleDest(d.key)}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all
+                  ${active
+                    ? 'bg-accent/15 text-accent border-accent/30'
+                    : 'neu-button border-white/5 text-gray-600 hover:text-gray-300'}`}>
+                {d.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Categoria *</label>
         <div className="flex flex-wrap gap-2">
           {CATEGORIAS.map(c => (
             <button key={c.key} type="button"
@@ -93,7 +127,7 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="fb-texto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Seu feedback</label>
+        <label htmlFor="fb-texto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Seu feedback *</label>
         <textarea id="fb-texto" rows={6}
           value={texto} onChange={e => setTexto(e.target.value)}
           placeholder="Escreva à vontade. Sugestões, elogios, críticas construtivas, ideias..."
@@ -105,7 +139,7 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
         <p className="text-[10px] text-gray-600 flex items-center gap-1.5">
           <Lock size={10} /> Anônimo — não é possível rastrear o autor.
         </p>
-        <NeuButtonAccent variant="" onClick={handleEnviar} disabled={enviando || texto.trim().length < 5}>
+        <NeuButtonAccent variant="" onClick={handleEnviar} disabled={bloqueado}>
           <Send size={14} /> {enviando ? 'Enviando...' : 'Enviar feedback'}
         </NeuButtonAccent>
       </div>
@@ -146,8 +180,9 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
   );
 };
 
-// ─── Lista (admin/CEO) ────────────────────────────────────────────────────────
-const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
+// ─── Inbox ────────────────────────────────────────────────────────────────────
+const InboxFeedbacks = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
+  const isDiretoria = profile.role === 'admin' || profile.role === 'ceo';
   const [page, setPage] = useState(0);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const extraFilter = filtroCategoria ? { categoria: filtroCategoria } : undefined;
@@ -160,8 +195,6 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
   const handleExcluir = async (id: string) => {
     setExcluindo(id);
     try {
-      // dbDelete faz soft-delete (UPDATE ativo=false) — feedbacks_organizacao
-      // está em TABLES_WITH_ATIVO. Preserva histórico para auditoria.
       await dbDelete('/api/feedbacksorganizacaoview', id);
       setData((prev: any[]) => prev.filter(f => f.id !== id));
       showToast('Feedback removido.', 'success');
@@ -173,7 +206,6 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
     }
   };
 
-  // KPIs sumarizados (sobre a página atual — sem agregação server-side)
   const porCategoria = (data ?? []).reduce((acc: Record<string, number>, f: any) => {
     const cat = f.categoria ?? 'sem_categoria';
     acc[cat] = (acc[cat] ?? 0) + 1;
@@ -182,7 +214,6 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
         <Filter size={14} className="text-yellow-400" />
         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filtrar por categoria</span>
@@ -202,12 +233,16 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
         </div>
       </div>
 
-      {/* Lista */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5">
         {isLoading ? (
           <div className="flex justify-center py-8"><LoadingSpinner /></div>
         ) : (data ?? []).length === 0 ? (
-          <EmptyState message={filtroCategoria ? 'Nenhum feedback nessa categoria.' : 'Nenhum feedback recebido ainda.'} />
+          <EmptyState message={
+            filtroCategoria
+              ? 'Nenhum feedback nessa categoria.'
+              : isDiretoria
+                ? 'Nenhum feedback recebido ainda.'
+                : 'Nenhum feedback direcionado a você ainda.'} />
         ) : (
           <div className="flex flex-col gap-3">
             {data.map((f: any) => (
@@ -222,29 +257,36 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
                         {CATEGORIA_LABEL[f.categoria] ?? f.categoria}
                       </span>
                     )}
+                    {Array.isArray(f.destinatarios_roles) && f.destinatarios_roles.length > 0 && (
+                      <span className="ml-1 px-2 py-0.5 rounded bg-white/5 text-gray-400 text-[10px] font-bold uppercase">
+                        Para: {f.destinatarios_roles.map((r: string) => DESTINATARIO_LABEL[r] ?? r).join(' · ')}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
                       <Calendar size={11} />
                       <span className="font-mono">{fmtDate(f.created_at)}</span>
                     </div>
-                    {confirmandoId === f.id ? (
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleExcluir(f.id)} disabled={excluindo === f.id}
-                          className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
-                          {excluindo === f.id ? '...' : 'Confirmar'}
+                    {isDiretoria && (
+                      confirmandoId === f.id ? (
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleExcluir(f.id)} disabled={excluindo === f.id}
+                            className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
+                            {excluindo === f.id ? '...' : 'Confirmar'}
+                          </button>
+                          <button onClick={() => setConfirmandoId(null)} disabled={excluindo === f.id}
+                            className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmandoId(f.id)}
+                          title="Excluir feedback"
+                          className="action-btn-delete opacity-0 group-hover:opacity-100">
+                          <Trash2 size={12} />
                         </button>
-                        <button onClick={() => setConfirmandoId(null)} disabled={excluindo === f.id}
-                          className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setConfirmandoId(f.id)}
-                        title="Excluir feedback"
-                        className="action-btn-delete opacity-0 group-hover:opacity-100">
-                        <Trash2 size={12} />
-                      </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -254,7 +296,6 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
           </div>
         )}
 
-        {/* Paginação simplificada (sem componente, pra evitar import extra; lista raramente cresce muito) */}
         {(data ?? []).length > 0 && totalCount && totalCount > 50 && (
           <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5 text-xs text-gray-500">
             <span>Página {page + 1} · {totalCount} feedbacks</span>
@@ -269,7 +310,6 @@ const ListaParaDiretoria = ({ showToast }: { showToast: any }) => {
         )}
       </div>
 
-      {/* Resumo por categoria (página atual) */}
       {(data ?? []).length > 0 && (
         <div className="flex flex-wrap gap-2 px-2">
           <span className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mr-1">Distribuição:</span>
@@ -298,13 +338,14 @@ export const FeedbackOrganizacionalView = ({ showToast, profile }: { showToast: 
           Feedback Organizacional
         </h2>
         <p className="text-sm text-gray-400 mt-1">
-          {isDiretoria
-            ? 'Feedbacks anônimos enviados por colaboradores e gerentes. Não é possível identificar quem enviou.'
-            : 'Canal anônimo para envio de feedback à diretoria. Suas sugestões chegam direto a admin e CEO.'}
+          Canal anônimo. Escolha categoria e quem deve receber. {isDiretoria
+            ? 'Como diretoria, você vê todos os feedbacks enviados (de qualquer destinatário).'
+            : 'Você lê apenas os feedbacks endereçados ao seu papel.'}
         </p>
       </div>
 
-      {isDiretoria ? <ListaParaDiretoria showToast={showToast} /> : <FormularioEnvio showToast={showToast} />}
+      <FormularioEnvio showToast={showToast} />
+      <InboxFeedbacks profile={profile} showToast={showToast} />
     </motion.div>
   );
 };

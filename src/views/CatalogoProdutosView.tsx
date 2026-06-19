@@ -22,7 +22,7 @@ const calcMargem = (venda: number, custo: number): number | null => {
 
 // Catálogo é vitrine read-only para todos os setores. CRUD continua em
 // Empresa → Produtos (ProdutosView). Bloco financeiro (custo + margem) é
-// gated por admin/CEO/financeiro — demais setores só veem preço de venda.
+// gated por admin/CEO/financeiro/marketing — demais setores só veem preço de venda.
 export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
@@ -40,7 +40,8 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   );
 
   const podeVerCusto =
-    profile.role === 'admin' || profile.role === 'ceo' || hasSetor(profile, 'financeiro');
+    profile.role === 'admin' || profile.role === 'ceo'
+    || hasSetor(profile, 'financeiro') || hasSetor(profile, 'marketing');
 
   // Catálogo = só itens vendáveis ativos. Patrimônio (tipo='patrimonio') é gestão
   // contábil, não pertence ao catálogo público.
@@ -301,7 +302,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
               {!podeVerCusto && (
                 <div className="flex items-center gap-2 text-[10px] text-gray-500">
                   <AlertCircle size={11} />
-                  <span>Informações de custo e margem ficam disponíveis para Financeiro, admin e CEO.</span>
+                  <span>Informações de custo e margem ficam disponíveis para Financeiro, Marketing, admin e CEO.</span>
                 </div>
               )}
             </motion.div>
