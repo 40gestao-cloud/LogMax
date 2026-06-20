@@ -191,43 +191,62 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
         </div>
 
         <div
-          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden border border-accent/20"
+          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col md:flex-row md:items-center md:gap-6 relative overflow-hidden border border-accent/20"
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none"
             style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }} />
-          <div className="flex items-center gap-4 mb-6 relative z-10">
-            <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent">
-              <Clock size={24} />
+
+          {/* Coluna esquerda: texto + CTA. No mobile ocupa tudo, no md+
+              vira 1ª coluna do flex-row e a logo fica à direita. */}
+          <div className="flex flex-col md:flex-1 md:min-w-0 relative z-10">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent shrink-0">
+                <Clock size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-200">Central de Tempo</h3>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                  Produtividade Operacional
+                </span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-200">Central de Tempo</h3>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                Produtividade Operacional
-              </span>
-            </div>
+
+            <h2 className="text-2xl font-bold text-white leading-snug">
+              Relógio, alarmes, cronômetro e timer
+              <span className="block mt-1 text-accent">numa só tela.</span>
+            </h2>
+            <p className="text-gray-500 text-sm mt-2 mb-5">
+              Fuso horário Brasília-Acre
+            </p>
+
+            {/* Só este botão navega — antes o card inteiro era <button> e
+                qualquer clique abria a view. */}
+            <button
+              onClick={() => onNavigate?.('central-tempo')}
+              className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all"
+              style={{
+                background:  'var(--color-accent)',
+                color:       'var(--color-accent-text)',
+                border:      'none',
+                boxShadow:   '0 1px 2px rgba(0, 0, 0, 0.35)',
+              }}>
+              Abrir Central de Tempo <ArrowRight size={16} />
+            </button>
           </div>
 
-          <h2 className="text-2xl font-bold text-white leading-snug relative z-10">
-            Relógio, alarmes, cronômetro e timer
-            <span className="block mt-1 text-accent">numa só tela.</span>
-          </h2>
-          <p className="text-gray-500 text-sm mt-2 mb-5 relative z-10">
-            Fuso horário Brasília-Acre
-          </p>
-
-          {/* Só este botão navega — antes o card inteiro era <button> e
-              qualquer clique abria a view. */}
-          <button
-            onClick={() => onNavigate?.('central-tempo')}
-            className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all relative z-10"
-            style={{
-              background:  'var(--color-accent)',
-              color:       'var(--color-accent-text)',
-              border:      'none',
-              boxShadow:   '0 1px 2px rgba(0, 0, 0, 0.35)',
-            }}>
-            Abrir Central de Tempo <ArrowRight size={16} />
-          </button>
+          {/* Coluna direita: logo horizontal decorativa com shimmer.
+              Escondida no mobile pra não competir com o conteúdo. */}
+          <div
+            className="logo-shimmer-horizontal hidden md:block shrink-0 pointer-events-none"
+            aria-hidden="true"
+            style={{ width: 'min(560px, 62%)', aspectRatio: '4 / 1' }}
+          >
+            <img
+              src="/icon-logmax-horizontal.png"
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            />
+          </div>
         </div>
       </div>
 
