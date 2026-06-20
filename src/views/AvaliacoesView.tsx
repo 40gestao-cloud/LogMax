@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { PDISection } from '../components/PDISection';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor } from '../lib/rbac';
+import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
 
 // ----------------------------------------------------------------------
 // Critérios hardcoded (Etapa 1). Etapa 2 pode tornar configurável.
@@ -328,12 +329,16 @@ const CardAvaliacao: React.FC<{
   onEditar?: () => void;
   canExcluir?: boolean;
   onExcluir?: () => void;
+  // Export PDF individual — opcional. Hoje só ativo em "Recebidas",
+  // mas o card serve as duas seções (recebidas/feitas) e o callback
+  // resolve o conteúdo do PDF (rótulo da contraparte muda).
+  onExportPDF?: () => void;
   // PDI: avaliador OU admin/CEO pode adicionar/editar metas; resto só lê.
   canEditarPDI?: boolean;
   profile: UserProfile;
   treinamentos: { id: string; nome: string; status: string }[];
   showToast?: any;
-}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir, canEditarPDI, profile, treinamentos, showToast }) => {
+}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir, onExportPDF, canEditarPDI, profile, treinamentos, showToast }) => {
   const [expanded, setExpanded] = useState(false);
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
@@ -361,6 +366,15 @@ const CardAvaliacao: React.FC<{
           <p className="text-sm font-bold text-gray-200">{nomeContraparte}</p>
         </div>
         <div className="flex items-center gap-2">
+          {onExportPDF && (
+            <button
+              onClick={onExportPDF}
+              title="Baixar PDF desta avaliação"
+              className="w-7 h-7 neu-button rounded-md flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+            >
+              <FileDown size={12} />
+            </button>
+          )}
           {canEditar && (
             <button
               onClick={onEditar}
@@ -697,6 +711,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
   // ── Consolidado do ciclo (admin/CEO + RH) — seção E ────────────────────────
   const [cicloConsolidadoId, setCicloConsolidadoId] = useState<string | null>(null);
   const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
+  const [exportandoPDF, setExportandoPDF] = useState(false);
   // PDI inline no consolidado: guarda qual avaliacaoId está com painel
   // aberto. Pra RH/admin propor PDI sem precisar voltar pra própria
   // seção de avaliações recebidas/feitas (que mostra só as do user).
@@ -786,6 +801,75 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       grupos,
     };
   }, [podeVerConsolidado, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
+
+  // Export do ciclo inteiro (admin/CEO + RH). Usa o `consolidado` já
+  // calculado em memória — sem nova query — e os critérios já carregados.
+  const handleExportarCicloPDF = async () => {
+    const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
+    if (!ciclo || !consolidado) return;
+    setExportandoPDF(true);
+    try {
+      const slug = ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
+      await exportAvaliacoesCicloPDF(
+        {
+          id: ciclo.id,
+          nome: ciclo.nome,
+          data_inicio: ciclo.data_inicio,
+          data_fim: ciclo.data_fim,
+          status: ciclo.status,
+          feedback_anonimo: ciclo.feedback_anonimo,
+        },
+        {
+          totalAvaliacoes: consolidado.totalAvaliacoes,
+          totalAvaliados: consolidado.totalAvaliados,
+          mediaCiclo: consolidado.mediaCiclo,
+          grupos: consolidado.grupos,
+        },
+        criterios.map(c => ({
+          avaliacao_id: c.avaliacao_id,
+          categoria: c.categoria,
+          criterio: c.criterio,
+          nota: c.nota,
+        })),
+        `avaliacoes-${slug}`,
+      );
+      showToast?.('PDF do ciclo gerado.', 'success');
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    } finally {
+      setExportandoPDF(false);
+    }
+  };
+
+  // Export individual de uma avaliação recebida (perspectiva do avaliado).
+  // Respeita anonimato do ciclo em feedback_colaborador.
+  const handleExportarAvaliacaoIndividualPDF = async (av: Avaliacao) => {
+    const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+    const avaliador = users.find(u => u.id === av.avaliador_id);
+    const avaliado = users.find(u => u.id === av.avaliado_id);
+    if (!ciclo || !avaliado) return;
+    const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo.feedback_anonimo ?? true);
+    try {
+      const slug = `${(avaliado.nome ?? 'avaliado').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}-${ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
+      await exportAvaliacaoIndividualPDF(
+        {
+          avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+          avaliadoNome: avaliado.nome,
+          cicloNome: ciclo.nome,
+          cicloPeriodo: { inicio: ciclo.data_inicio, fim: ciclo.data_fim },
+          tipo: av.tipo,
+          observacao: av.observacao,
+          criterios: criterios
+            .filter(c => c.avaliacao_id === av.id)
+            .map(c => ({ avaliacao_id: c.avaliacao_id, categoria: c.categoria, criterio: c.criterio, nota: c.nota })),
+        },
+        `avaliacao-${slug}`,
+      );
+      showToast?.('PDF gerado.', 'success');
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    }
+  };
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -883,7 +967,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                   : <span className="px-2 py-1 rounded-lg bg-gray-700/50 text-gray-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Lock size={10} /> Fechado</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <label htmlFor="aval-consolidado-ciclo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Ciclo</label>
               <select
                 id="aval-consolidado-ciclo"
@@ -895,6 +979,13 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                   <option key={c.id} value={c.id}>{c.nome} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
                 ))}
               </select>
+              <NeuButtonAccent
+                onClick={handleExportarCicloPDF}
+                isLoading={exportandoPDF}
+                disabled={!consolidado || consolidado.totalAvaliacoes === 0}
+              >
+                <FileDown size={14} /> PDF
+              </NeuButtonAccent>
             </div>
           </div>
 
@@ -1127,6 +1218,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
                 criterios={r.criterios}
                 direcaoLabel="de"
                 nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+                onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
                 canEditarPDI={isAdminOuCEO || isRH}
                 profile={profile}
                 treinamentos={treinamentos}
