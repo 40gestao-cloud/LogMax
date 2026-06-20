@@ -9,6 +9,7 @@ type VitrineItem = {
   titulo: string;
   descricao: string | null;
   imagem_url: string | null;
+  imagem_fallback: string | null;  // produto.imagem_url quando arte_url existir mas quebrar
   preco_promocional: number | null;
   data_inicio: string | null;
   data_fim: string | null;
@@ -190,18 +191,32 @@ export function VitrineCarousel() {
 }
 
 function Slide({ item }: { item: VitrineItem }) {
+  // Tenta imagem_url primeiro; se falhar, troca pra fallback (produto.imagem_url).
+  // Se ambas falharem, marca erro e mostra ImageOff.
+  const [imgSrc, setImgSrc] = useState<string | null>(item.imagem_url);
+  const [usedFallback, setUsedFallback] = useState(false);
   const [imgError, setImgError] = useState(false);
+
+  const handleError = () => {
+    if (!usedFallback && item.imagem_fallback && item.imagem_fallback !== imgSrc) {
+      setImgSrc(item.imagem_fallback);
+      setUsedFallback(true);
+    } else {
+      setImgError(true);
+    }
+  };
+
   const preco = formatBRL(item.preco_promocional);
 
   return (
     <>
       {/* Imagem ocupa ~60% do card, mantém aspecto natural. */}
       <div style={{ flex: '0 0 60%', position: 'relative', overflow: 'hidden' }}>
-        {item.imagem_url && !imgError ? (
+        {imgSrc && !imgError ? (
           <img
-            src={item.imagem_url}
+            src={imgSrc}
             alt={item.titulo}
-            onError={() => setImgError(true)}
+            onError={handleError}
             style={{
               width: '100%',
               height: '100%',

@@ -10,6 +10,7 @@ type Candidato = {
   titulo: string;
   descricao: string | null;
   imagem_url: string | null;
+  imagem_fallback: string | null;  // produto.imagem_url quando arte_url quebrar
   preco_promocional: number | null;
   vitrine_publica: boolean;
   created_at: string;
@@ -141,7 +142,18 @@ function Card({
   saving: string | null;
   onToggle: (item: Candidato) => void;
 }) {
+  // Tenta imagem_url primeiro; em onError, troca pra fallback (produto.imagem_url).
+  const [imgSrc, setImgSrc] = useState<string | null>(item.imagem_url);
+  const [usedFallback, setUsedFallback] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const handleImgError = () => {
+    if (!usedFallback && item.imagem_fallback && item.imagem_fallback !== imgSrc) {
+      setImgSrc(item.imagem_fallback);
+      setUsedFallback(true);
+    } else {
+      setImgError(true);
+    }
+  };
   const preco = formatBRL(item.preco_promocional);
   const key = `${item.tipo}:${item.id}`;
   const isSaving = saving === key;
@@ -155,11 +167,11 @@ function Card({
       style={{ outline: ativo ? '2px solid rgba(212,175,55,0.55)' : 'none' }}
     >
       <div style={{ aspectRatio: '4 / 3', position: 'relative', overflow: 'hidden', background: 'rgba(212,175,55,0.04)' }}>
-        {item.imagem_url && !imgError ? (
+        {imgSrc && !imgError ? (
           <img
-            src={item.imagem_url}
+            src={imgSrc}
             alt={item.titulo}
-            onError={() => setImgError(true)}
+            onError={handleImgError}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
