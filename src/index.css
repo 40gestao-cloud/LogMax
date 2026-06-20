@@ -620,6 +620,38 @@ table,
 [data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 [data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 
+/* ── Role & Setor badges em UsuariosView ──
+   Antes usavam Tailwind bg-X-900/30 + text-X-400, ambos no mesmo hue:
+   "marketing rosa com rosa" (eye blend). Texto agora bem mais claro
+   (-200/-300) pra dar contraste de luminância dentro da mesma cor. */
+.role-badge--admin       { background: rgba(168,85,247,0.18); color: #e9d5ff; }
+.role-badge--ceo         { background: rgba(245,158,11,0.18); color: #fde68a; }
+.role-badge--gerente     { background: rgba(234,179,8,0.18);  color: #fef08a; }
+.role-badge--colaborador { background: rgba(59,130,246,0.18); color: #bfdbfe; }
+
+[data-theme="light"] .role-badge--admin       { background: #f3e8ff; color: #581c87; }
+[data-theme="light"] .role-badge--ceo         { background: #fef3c7; color: #78350f; }
+[data-theme="light"] .role-badge--gerente     { background: #fef9c3; color: #713f12; }
+[data-theme="light"] .role-badge--colaborador { background: #dbeafe; color: #1e3a8a; }
+
+.setor-badge--logistica  { background: rgba(34,197,94,0.18);  color: #bbf7d0; }
+.setor-badge--vendas     { background: rgba(249,115,22,0.18); color: #fed7aa; }
+.setor-badge--financeiro { background: rgba(6,182,212,0.18);  color: #a5f3fc; }
+.setor-badge--rh         { background: rgba(244,63,94,0.18);  color: #fecdd3; }
+.setor-badge--marketing  { background: rgba(217,70,239,0.18); color: #f5d0fe; }
+.setor-badge--ti         { background: rgba(14,165,233,0.18); color: #bae6fd; }
+.setor-badge--compras    { background: rgba(20,184,166,0.18); color: #99f6e4; }
+.setor-badge--default    { background: rgba(107,114,128,0.25); color: #e5e7eb; }
+
+[data-theme="light"] .setor-badge--logistica  { background: #dcfce7; color: #14532d; }
+[data-theme="light"] .setor-badge--vendas     { background: #ffedd5; color: #7c2d12; }
+[data-theme="light"] .setor-badge--financeiro { background: #cffafe; color: #164e63; }
+[data-theme="light"] .setor-badge--rh         { background: #ffe4e6; color: #881337; }
+[data-theme="light"] .setor-badge--marketing  { background: #fae8ff; color: #701a75; }
+[data-theme="light"] .setor-badge--ti         { background: #e0f2fe; color: #0c4a6e; }
+[data-theme="light"] .setor-badge--compras    { background: #ccfbf1; color: #134e4a; }
+[data-theme="light"] .setor-badge--default    { background: #e5e7eb; color: #1f2937; }
+
 /* ── Sidebar (menu esquerdo) sempre em dark mode ──
    Feedback 2026-06-03: ao trocar para light mode, o menu da esquerda deve
    permanecer idêntico ao dark. Solução: classe `.sidebar-dark` no <aside>

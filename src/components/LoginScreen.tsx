@@ -59,17 +59,20 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col md:flex-row relative overflow-hidden"
+      className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
       style={{ background: '#000000' }}
     >
-      {/* Vitrine pública — só desktop. Mobile mantém o card de login centralizado. */}
-      <div className="hidden md:block md:flex-1 md:min-h-screen relative">
-        <VitrineCarousel />
-      </div>
+      {/* Container central com largura controlada — evita que vitrine e login
+          fiquem grudados nas bordas em telas widescreen. Inspirado no Bling:
+          conteúdo agrupado no meio, espaço preto sobrando nas laterais. */}
+      <div className="w-full max-w-6xl flex flex-col md:flex-row md:min-h-screen items-center">
+        {/* Vitrine pública — só desktop. Mobile mantém o card de login centralizado. */}
+        <div className="hidden md:flex md:flex-1 md:min-h-screen items-center justify-center">
+          <VitrineCarousel />
+        </div>
 
-      {/* Coluna do login: flex-1 no mobile (full screen) + largura fixa no desktop.
-          Em ambos os casos centraliza o card vertical e horizontalmente. */}
-      <div className="flex-1 md:flex-none md:w-[480px] flex items-center justify-center p-6 md:p-10">
+        {/* Coluna do login: flex-1 em ambos os breakpoints. */}
+        <div className="flex-1 flex items-center justify-center p-6 md:p-10 w-full">
         <motion.div
           initial={{ opacity: 0, y: 24, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -272,7 +275,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             Desenvolvido por Igor Souza
           </p>
         </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { ImageOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -106,18 +106,19 @@ export function VitrineCarousel() {
           boxShadow: '0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset',
         }}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={current.id}
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -40 }}
-            transition={{ duration: reducedMotion ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
-            style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}
-          >
-            <Slide item={current} />
-          </motion.div>
-        </AnimatePresence>
+        {/* Sem AnimatePresence mode="wait" — bug do motion travava exit em
+            alguns casos, fazendo o DOM ficar parado mesmo com idx mudando.
+            Aqui cada slide eh montado com fade-in via key={idx}; o anterior
+            desmonta instantaneamente. Simples e infalivel. */}
+        <motion.div
+          key={current.id}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
+          style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}
+        >
+          <Slide item={current} />
+        </motion.div>
 
         {/* Barra de progresso no topo do card — pista visual de que está rotacionando. */}
         {items.length > 1 && (

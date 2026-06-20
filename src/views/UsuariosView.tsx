@@ -25,20 +25,19 @@ const ROLE_LABEL: Record<string, string> = {
   colaborador: 'Colaborador',
 };
 
-const roleCls = (r: string) =>
-  r === 'admin' ? 'bg-purple-900/30 text-purple-400'
-  : r === 'ceo' ? 'bg-amber-900/30 text-amber-400'
-  : r === 'gerente' ? 'bg-yellow-900/30 text-yellow-400'
-  : 'bg-blue-900/30 text-blue-400';
+// Classes CSS dedicadas (.role-badge--* / .setor-badge--* em index.css).
+// Antes Tailwind bg-X-900/30 + text-X-400 — mesmo hue no bg e no texto
+// ("marketing rosa com rosa", eye blend). Agora texto bem mais claro
+// (-200/-300) em dark, e tom escuro saturado em fundo claro pra modo claro.
+const roleCls = (r: string) => {
+  const known = ['admin', 'ceo', 'gerente', 'colaborador'];
+  return `role-badge--${known.includes(r) ? r : 'colaborador'}`;
+};
 
-const setorCls = (s: string) =>
-  s === 'logistica'  ? 'bg-green-900/30 text-green-400'
-  : s === 'vendas'   ? 'bg-orange-900/30 text-orange-400'
-  : s === 'financeiro' ? 'bg-cyan-900/30 text-cyan-400'
-  : s === 'rh'       ? 'bg-rose-900/30 text-rose-400'
-  : s === 'marketing' ? 'bg-fuchsia-900/30 text-fuchsia-400'
-  : s === 'ti'        ? 'bg-sky-900/30 text-sky-400'
-  : 'bg-gray-800/50 text-gray-400';
+const setorCls = (s: string) => {
+  const known = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras'];
+  return `setor-badge--${known.includes(s) ? s : 'default'}`;
+};
 
 // Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
 const FILIAIS_GERENTE = FILIAIS_HOLDING.filter(f => f !== 'Matriz');
