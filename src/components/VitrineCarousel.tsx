@@ -15,23 +15,23 @@ type VitrineItem = {
   created_at: string;
 };
 
-const ROTATE_MS = 5000;
+const ROTATE_MS = 4500;
 
 const formatBRL = (v: number | null | undefined): string | null => {
   if (v === null || v === undefined) return null;
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// Carrossel público — sem login necessário. Lê via RPC `get_vitrine_publica`
-// que devolve artes + produtos com imagem. Desenhado pra LoginScreen no tema
-// Premium (preto + dourado), mas reusável em outras vitrines.
+// Carrossel público — card contido, sem ocupar a tela inteira. Lê via RPC
+// `get_vitrine_publica` (só itens marcados como vitrine pelo Marketing).
+// Tema Premium (preto + dourado) compatível com a LoginScreen.
 export function VitrineCarousel() {
   const [items, setItems] = useState<VitrineItem[]>([]);
   const [idx, setIdx] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // tick incrementa a cada slide pra reiniciar a animação da barra de progresso.
+  const tickRef = useRef(0);
 
-  // prefers-reduced-motion: respeita preferência do SO e desliga auto-rotação.
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -53,31 +53,27 @@ export function VitrineCarousel() {
     return () => { cancelled = true; };
   }, []);
 
-  // Auto-advance. Pausa quando hover/foco no carrossel ou prefers-reduced.
   useEffect(() => {
-    if (paused || reducedMotion || items.length <= 1) return;
+    if (reducedMotion || items.length <= 1) return;
     const t = setInterval(() => {
+      tickRef.current += 1;
       setIdx(i => (i + 1) % items.length);
     }, ROTATE_MS);
     return () => clearInterval(t);
-  }, [paused, reducedMotion, items.length]);
+  }, [reducedMotion, items.length]);
 
-  // Reseta para o índice 0 quando os itens mudam pra evitar idx fora de range.
-  useEffect(() => { setIdx(0); }, [items.length]);
+  useEffect(() => { setIdx(0); tickRef.current = 0; }, [items.length]);
 
   if (!loaded || items.length === 0) {
-    // Sem dados: estado neutro discreto. Não atrapalha o login se a vitrine
-    // estiver vazia (banco recém-resetado, etc.).
     return (
       <div
-        className="hidden md:flex flex-col items-center justify-center w-full h-full p-12"
-        style={{ color: 'rgba(212, 175, 55, 0.35)' }}
+        className="hidden md:flex flex-col items-center justify-center w-full h-full"
         aria-hidden="true"
       >
         <img
           src="/icon-logmax.png"
           alt=""
-          style={{ width: 180, height: 180, opacity: 0.4, objectFit: 'cover', borderRadius: '1.5rem' }}
+          style={{ width: 160, height: 160, opacity: 0.35, objectFit: 'cover', borderRadius: '1.5rem' }}
         />
       </div>
     );
@@ -87,38 +83,71 @@ export function VitrineCarousel() {
 
   return (
     <div
-      className="hidden md:flex relative w-full h-full overflow-hidden"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={() => setPaused(false)}
+      className="hidden md:flex flex-col items-center justify-center w-full h-full p-10"
       role="region"
       aria-label="Vitrine de destaques"
       aria-roledescription="carrossel"
     >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={current.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: reducedMotion ? 0 : 0.6 }}
-          className="absolute inset-0"
-        >
-          <Slide item={current} />
-        </motion.div>
-      </AnimatePresence>
+      {/* Card contido — largura controlada, não estoura a coluna. */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 460,
+          aspectRatio: '4 / 5',
+          borderRadius: '1.5rem',
+          overflow: 'hidden',
+          position: 'relative',
+          background: 'linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01))',
+          border: '1px solid rgba(212, 175, 55, 0.2)',
+          boxShadow: '0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset',
+        }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -40 }}
+            transition={{ duration: reducedMotion ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}
+          >
+            <Slide item={current} />
+          </motion.div>
+        </AnimatePresence>
 
-      {/* Dots — clicável pra ir direto. Só aparece se há >= 2 itens. */}
+        {/* Barra de progresso no topo do card — pista visual de que está rotacionando. */}
+        {items.length > 1 && !reducedMotion && (
+          <div
+            key={`progress-${idx}-${tickRef.current}`}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0,
+              height: 3,
+              background: 'rgba(255,255,255,0.08)',
+              zIndex: 3,
+              overflow: 'hidden',
+            }}
+          >
+            <motion.div
+              initial={{ width: '0%' }}
+              animate={{ width: '100%' }}
+              transition={{ duration: ROTATE_MS / 1000, ease: 'linear' }}
+              style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #D4AF37, #F4D070)',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Dots fora do card, perto pra dar sensação de controle imediato. */}
       {items.length > 1 && (
-        <div
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2"
-          style={{ zIndex: 2 }}
-        >
+        <div className="flex gap-2 mt-6">
           {items.map((it, i) => (
             <button
               key={it.id}
-              onClick={() => setIdx(i)}
+              onClick={() => { setIdx(i); tickRef.current += 1; }}
               aria-label={`Slide ${i + 1} de ${items.length}`}
               aria-current={i === idx}
               style={{
@@ -128,7 +157,7 @@ export function VitrineCarousel() {
                 border: 'none',
                 background: i === idx
                   ? 'linear-gradient(135deg, #D4AF37, #B8941F)'
-                  : 'rgba(255,255,255,0.25)',
+                  : 'rgba(255,255,255,0.18)',
                 cursor: 'pointer',
                 transition: 'width 0.3s, background 0.3s',
               }}
@@ -136,6 +165,21 @@ export function VitrineCarousel() {
           ))}
         </div>
       )}
+
+      {/* Tagline pequena abaixo. Reforça que o LogMax tem vida. */}
+      <p
+        style={{
+          marginTop: '1.25rem',
+          textAlign: 'center',
+          fontSize: '0.7rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(212,175,55,0.55)',
+          fontWeight: 700,
+        }}
+      >
+        Vitrine LogMax
+      </p>
     </div>
   );
 }
@@ -145,60 +189,70 @@ function Slide({ item }: { item: VitrineItem }) {
   const preco = formatBRL(item.preco_promocional);
 
   return (
-    <div className="relative w-full h-full">
-      {item.imagem_url && !imgError ? (
-        <img
-          src={item.imagem_url}
-          alt={item.titulo}
-          onError={() => setImgError(true)}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-        />
-      ) : (
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ background: 'rgba(212, 175, 55, 0.05)' }}
-        >
-          <ImageOff size={64} style={{ color: 'rgba(212, 175, 55, 0.3)' }} />
-        </div>
-      )}
+    <>
+      {/* Imagem ocupa ~60% do card, mantém aspecto natural. */}
+      <div style={{ flex: '0 0 60%', position: 'relative', overflow: 'hidden' }}>
+        {item.imagem_url && !imgError ? (
+          <img
+            src={item.imagem_url}
+            alt={item.titulo}
+            onError={() => setImgError(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ background: 'rgba(212, 175, 55, 0.05)' }}
+          >
+            <ImageOff size={48} style={{ color: 'rgba(212, 175, 55, 0.3)' }} />
+          </div>
+        )}
+      </div>
 
-      {/* Overlay gradiente + texto. Garante legibilidade sobre qualquer imagem. */}
+      {/* Bloco de texto abaixo da imagem — não overlay. Mais legível. */}
       <div
-        className="absolute inset-0 flex flex-col justify-end p-10 pb-20"
         style={{
-          background: 'linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.85) 100%)',
+          flex: '1 1 auto',
+          padding: '1.25rem 1.5rem 1.75rem',
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
         }}
       >
         <span
           style={{
-            display: 'inline-block',
             alignSelf: 'flex-start',
-            fontSize: '0.6rem',
+            fontSize: '0.55rem',
             fontWeight: 800,
             letterSpacing: '0.2em',
             textTransform: 'uppercase',
             color: '#D4AF37',
-            padding: '0.35rem 0.75rem',
+            padding: '0.3rem 0.7rem',
             borderRadius: '999px',
             background: 'rgba(212, 175, 55, 0.1)',
             border: '1px solid rgba(212, 175, 55, 0.3)',
-            marginBottom: '0.75rem',
           }}
         >
           {item.tipo === 'arte' ? 'Promoção' : 'Produto'}
         </span>
         <h3
           style={{
-            fontSize: '1.5rem',
+            fontSize: '1.05rem',
             fontWeight: 800,
             color: '#fff',
             margin: 0,
-            lineHeight: 1.2,
+            lineHeight: 1.25,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
           }}
         >
           {item.titulo}
@@ -206,11 +260,10 @@ function Slide({ item }: { item: VitrineItem }) {
         {item.descricao && (
           <p
             style={{
-              marginTop: '0.5rem',
-              color: 'rgba(255,255,255,0.7)',
-              fontSize: '0.85rem',
-              lineHeight: 1.5,
-              maxWidth: 460,
+              margin: 0,
+              color: 'rgba(255,255,255,0.62)',
+              fontSize: '0.75rem',
+              lineHeight: 1.4,
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -223,8 +276,8 @@ function Slide({ item }: { item: VitrineItem }) {
         {preco && (
           <p
             style={{
-              marginTop: '0.75rem',
-              fontSize: '1.25rem',
+              marginTop: '0.25rem',
+              fontSize: '1.15rem',
               fontWeight: 800,
               color: '#D4AF37',
               letterSpacing: '0.02em',
@@ -234,6 +287,6 @@ function Slide({ item }: { item: VitrineItem }) {
           </p>
         )}
       </div>
-    </div>
+    </>
   );
 }

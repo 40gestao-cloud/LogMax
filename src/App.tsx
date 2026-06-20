@@ -31,6 +31,7 @@ const CRMView                 = lazy(() => import('./views/CRMView').then(m => (
 const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
 const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
 const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
+const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
 const CotacoesView            = lazy(() => import('./views/CotacoesView').then(m => ({ default: m.CotacoesView })));
 const PedidosView             = lazy(() => import('./views/PedidosView').then(m => ({ default: m.PedidosView })));
 const NotasRecebidasView      = lazy(() => import('./views/NotasRecebidasView').then(m => ({ default: m.NotasRecebidasView })));
@@ -142,7 +143,11 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
-    submenus: ['Campanhas', 'Promoções', 'Cupons', 'Calendário', 'Tarefas'],
+    submenus: [
+      'Campanhas', 'Promoções', 'Cupons', 'Calendário',
+      { label: 'Vitrine Pública', requireSetor: ['marketing'] },
+      'Tarefas',
+    ],
   },
   {
     id: 'ti', label: 'TI & Suporte', icon: Monitor,
@@ -854,6 +859,7 @@ function LogMaxAppInner() {
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-cupons':             return <CuponsMarketingView showToast={st} profile={profile} />;
       case 'marketing-calendário':         return <CalendarioEditorialView showToast={st} profile={profile} />;
+      case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} />;
       case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
       case 'empresa-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="empresa" />;
       case 'compras-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="compras" />;
