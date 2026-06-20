@@ -53,14 +53,18 @@ export function VitrineCarousel() {
     return () => { cancelled = true; };
   }, []);
 
+  // Auto-rotação acontece SEMPRE (o ponto de uma vitrine é mover).
+  // prefers-reduced-motion só afeta a duração da transição visual abaixo —
+  // não desliga o avanço. Antes desligava, e usuários com Windows
+  // Accessibility > Animation effects = OFF viam carrossel estático.
   useEffect(() => {
-    if (reducedMotion || items.length <= 1) return;
+    if (items.length <= 1) return;
     const t = setInterval(() => {
       tickRef.current += 1;
       setIdx(i => (i + 1) % items.length);
     }, ROTATE_MS);
     return () => clearInterval(t);
-  }, [reducedMotion, items.length]);
+  }, [items.length]);
 
   useEffect(() => { setIdx(0); tickRef.current = 0; }, [items.length]);
 
@@ -116,7 +120,7 @@ export function VitrineCarousel() {
         </AnimatePresence>
 
         {/* Barra de progresso no topo do card — pista visual de que está rotacionando. */}
-        {items.length > 1 && !reducedMotion && (
+        {items.length > 1 && (
           <div
             key={`progress-${idx}-${tickRef.current}`}
             style={{
