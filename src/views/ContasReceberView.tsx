@@ -9,6 +9,7 @@ import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
 
 export const ContasReceberView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
@@ -36,22 +37,34 @@ export const ContasReceberView = ({ showToast }: any) => {
 
   const bancosAtivos = bancos.filter((b: any) => b.status === 'Ativo' || !b.status);
 
-  // Total agregado server-side (independente da página).
+  // Política de juros/multa do Financeiro. Definida em Financeiro → Configurações.
+  const [jurosCfg, setJurosCfg] = useState<JurosConfig | null>(null);
+  useEffect(() => {
+    fetchJurosConfig().then(setJurosCfg);
+  }, []);
+
+  // Total agregado server-side (independente da página). Soma valor original.
   const [totalAberto, setTotalAberto] = useState(0);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('contas_receber').select('valor').eq('status', 'Aberto').eq('ativo', true)
+    supabase.from('contas_receber').select('valor, vencimento, status').eq('status', 'Aberto').eq('ativo', true)
       .then(({ data: rows }) => {
         if (cancelled) return;
-        setTotalAberto((rows ?? []).reduce((s: number, c: any) => s + Number(c.valor || 0), 0));
+        // Soma valor atualizado (com juros/multa pra vencidas) — total real esperado a receber.
+        const total = (rows ?? []).reduce((s: number, c: any) => {
+          const b = calcularJuros(c.valor, c.vencimento, c.status, jurosCfg);
+          return s + b.total;
+        }, 0);
+        setTotalAberto(total);
       });
     return () => { cancelled = true; };
-  }, [data]);
+  }, [data, jurosCfg]);
 
   const enriched = data.map((c: any) => ({
     ...c,
     cliente: clientes.find((cl: any) => cl.id === c.cliente_id),
+    juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
 
   const filtered = enriched.filter((c: any) =>
@@ -118,15 +131,14 @@ export const ContasReceberView = ({ showToast }: any) => {
     if (!recBankId) { showToast('Selecione a conta bancária de crédito.', 'error', true); return; }
     const banco = bancos.find((b: any) => b.id === recBankId);
     if (!banco) { showToast('Conta bancária não encontrada.', 'error', true); return; }
-    const valor = Number(conta.valor ?? 0);
+    const breakdown = calcularJuros(conta.valor, conta.vencimento, conta.status, jurosCfg);
+    const valor = breakdown.total;  // valor atualizado (com juros + multa se vencido)
     if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
     setRecSaving(true);
     try {
-      // 1) Marca a conta como Paga.
       const updated = await dbUpdate('/api/contasreceberview', conta.id, { status: 'Pago' });
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
 
-      // 2) Credita no saldo do banco escolhido.
       if (supabase) {
         const novoSaldo = Number(banco.saldo ?? 0) + valor;
         const { error } = await supabase
@@ -140,7 +152,13 @@ export const ContasReceberView = ({ showToast }: any) => {
         }
       }
 
-      showToast(`Recebimento registrado e R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} creditado em ${banco.banco ?? banco.conta}.`, 'success', true);
+      const msgJuros = breakdown.vencido && (breakdown.juros + breakdown.multa) > 0
+        ? ` (inclui R$ ${(breakdown.juros + breakdown.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
+        : '';
+      showToast(
+        `Recebimento de R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} creditado em ${banco.banco ?? banco.conta}.`,
+        'success', true,
+      );
       closeReceber();
     } catch {
       showToast('Erro ao registar recebimento.', 'error', true);
@@ -255,8 +273,25 @@ export const ContasReceberView = ({ showToast }: any) => {
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.cliente?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-center hidden sm:table-cell"><FilialBadge filial={item.filial} /></td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.vencimento || '—'}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                          <div>R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                          {item.juros.vencido && (item.juros.juros + item.juros.multa) > 0 && (
+                            <div className="text-[10px] text-red-400 mt-0.5" title={`${item.juros.dias_atraso} dia(s) de atraso · multa R$ ${item.juros.multa.toFixed(2)} + juros R$ ${item.juros.juros.toFixed(2)}`}>
+                              + R$ {(item.juros.juros + item.juros.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} mora
+                            </div>
+                          )}
+                          {item.juros.vencido && (item.juros.juros + item.juros.multa) > 0 && (
+                            <div className="text-[10px] text-accent font-bold mt-0.5">
+                              = R$ {item.juros.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">
+                          {item.vencimento || '—'}
+                          {item.juros.vencido && item.juros.dias_atraso > 0 && (
+                            <div className="text-[10px] text-red-400 mt-0.5">{item.juros.dias_atraso}d atraso</div>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

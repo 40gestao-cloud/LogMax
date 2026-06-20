@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
@@ -38,8 +38,90 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
   const [valorAbertura, setValorAbertura] = useState('');
   const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
-  const [confirmFechar, setConfirmFechar] = useState(false);
+  // Painel ativo dentro do card aberto: sangria, suprimento, fechar ou nenhum.
+  const [painel, setPainel] = useState<'none' | 'sangria' | 'suprimento' | 'fechar'>('none');
+  const [movValor, setMovValor] = useState('');
+  const [movMotivo, setMovMotivo] = useState('');
+  const [valorContado, setValorContado] = useState('');
+  const [obsFechamento, setObsFechamento] = useState('');
+  const [movs, setMovs] = useState<any[]>([]);
   const today = todayBR();
+
+  // Lista de movimentações do caixa aberto (sangria/suprimento).
+  useEffect(() => {
+    if (!caixa?.id || !supabase) { setMovs([]); return; }
+    let cancelled = false;
+    supabase.from('movimentacoes_caixa')
+      .select('id, tipo, valor, motivo, criado_por_nome, created_at')
+      .eq('controle_caixa_id', caixa.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled) setMovs(data ?? []);
+      });
+    return () => { cancelled = true; };
+  }, [caixa?.id]);
+
+  const totalSangria    = movs.filter(m => m.tipo === 'sangria').reduce((s, m) => s + Number(m.valor || 0), 0);
+  const totalSuprimento = movs.filter(m => m.tipo === 'suprimento').reduce((s, m) => s + Number(m.valor || 0), 0);
+
+  const resetPainel = () => {
+    setPainel('none');
+    setMovValor(''); setMovMotivo('');
+    setValorContado(''); setObsFechamento('');
+  };
+
+  const handleMovimentacao = async (tipo: 'sangria' | 'suprimento') => {
+    const valor = parseBRL(movValor);
+    if (!valor || valor <= 0) { showToast('Informe um valor válido.', 'error'); return; }
+    if (!supabase) return;
+    setSaving(true);
+    const { error } = await supabase.rpc('registrar_movimentacao_caixa', {
+      p_controle_id: caixa.id,
+      p_tipo:        tipo,
+      p_valor:       valor,
+      p_motivo:      movMotivo.trim() || null,
+    });
+    setSaving(false);
+    if (error) { showToast(`Erro: ${error.message}`, 'error'); return; }
+    // Refetch movimentações
+    if (supabase) {
+      const { data: novas } = await supabase.from('movimentacoes_caixa')
+        .select('id, tipo, valor, motivo, criado_por_nome, created_at')
+        .eq('controle_caixa_id', caixa.id)
+        .order('created_at', { ascending: false });
+      setMovs(novas ?? []);
+    }
+    showToast(`${tipo === 'sangria' ? 'Sangria' : 'Suprimento'} de ${fmtBRL(valor)} registrado.`, 'success');
+    resetPainel();
+  };
+
+  const handleFecharConferido = async () => {
+    const valor = parseBRL(valorContado);
+    if (valor === undefined || valor === null || Number.isNaN(valor) || valor < 0) {
+      showToast('Informe o valor contado em dinheiro.', 'error');
+      return;
+    }
+    if (!supabase) return;
+    setSaving(true);
+    const { data, error } = await supabase.rpc('fechar_caixa_conferido', {
+      p_controle_id:   caixa.id,
+      p_valor_contado: valor,
+      p_observacao:    obsFechamento.trim() || null,
+    });
+    setSaving(false);
+    if (error) { showToast(`Erro ao fechar: ${error.message}`, 'error'); return; }
+    const res = data as any;
+    const tipo = res?.tipo as string;
+    const dif = Number(res?.diferenca ?? 0);
+    const msg = tipo === 'exato'
+      ? 'Caixa fechado — valor exato.'
+      : tipo === 'sobra'
+        ? `Caixa fechado com SOBRA de ${fmtBRL(dif)}.`
+        : `Caixa fechado com FALTA de ${fmtBRL(Math.abs(dif))}.`;
+    showToast(msg, tipo === 'exato' ? 'success' : 'info');
+    resetPainel();
+    onChanged();
+  };
 
   const handleAbrir = async () => {
     const valor = parseBRL(valorAbertura);
@@ -74,30 +156,6 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
     }
   };
 
-  const handleFechar = async () => {
-    if (!caixa || !supabase) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('controle_caixa')
-        .update({
-          status:           'Fechado',
-          fechado_por:      user?.id ?? null,
-          fechado_por_nome: profile?.nome ?? user?.email ?? 'Usuário',
-          fechado_em:       new Date().toISOString(),
-        })
-        .eq('id', caixa.id);
-      if (error) throw error;
-      setConfirmFechar(false);
-      onChanged();
-      showToast(`Caixa ${filial} fechado.`, 'success');
-    } catch {
-      showToast('Erro ao fechar o caixa.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return caixa ? (
     /* ── CAIXA ABERTO ── */
     <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
@@ -121,25 +179,106 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        {!confirmFechar ? (
-          <button onClick={() => setConfirmFechar(true)}
-            className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5">
-            <Lock size={12} /> Fechar
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button onClick={handleFechar} disabled={saving}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-300 bg-red-900/30 border border-red-500/20 hover:bg-red-900/50 transition-colors disabled:opacity-50">
-              {saving ? '...' : 'Confirmar'}
-            </button>
-            <button onClick={() => setConfirmFechar(false)}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-gray-500 hover:text-gray-300 transition-colors">
-              Cancelar
-            </button>
+      {/* Totais de sangria/suprimento do dia, se houver movimentações */}
+      {(totalSangria > 0 || totalSuprimento > 0) && (
+        <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="neu-pressed rounded-lg px-2 py-1.5">
+            <div className="text-gray-500 uppercase font-bold tracking-widest">Suprimentos</div>
+            <div className="text-emerald-300 font-bold tabular-nums">+ {fmtBRL(totalSuprimento)}</div>
           </div>
-        )}
+          <div className="neu-pressed rounded-lg px-2 py-1.5">
+            <div className="text-gray-500 uppercase font-bold tracking-widest">Sangrias</div>
+            <div className="text-red-300 font-bold tabular-nums">− {fmtBRL(totalSangria)}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 justify-end">
+        <button onClick={() => setPainel(painel === 'suprimento' ? 'none' : 'suprimento')}
+          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5">
+          <ArrowDownToLine size={11} /> Suprimento
+        </button>
+        <button onClick={() => setPainel(painel === 'sangria' ? 'none' : 'sangria')}
+          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-orange-300 hover:text-orange-200 flex items-center gap-1.5">
+          <ArrowUpFromLine size={11} /> Sangria
+        </button>
+        <button onClick={() => setPainel(painel === 'fechar' ? 'none' : 'fechar')}
+          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-gray-400 hover:text-red-400 flex items-center gap-1.5">
+          <Lock size={11} /> Fechar
+        </button>
       </div>
+
+      <AnimatePresence>
+        {(painel === 'sangria' || painel === 'suprimento') && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="neu-pressed rounded-2xl p-4 flex flex-col gap-3 overflow-hidden">
+            <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">
+              {painel === 'sangria' ? 'Sangria (retirada de caixa)' : 'Suprimento (entrada de troco/reforço)'}
+            </div>
+            <input type="text" inputMode="numeric" placeholder="Valor (R$)"
+              className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+              value={movValor}
+              onChange={e => setMovValor(formatBRL(e.target.value))}
+              onKeyDown={handleMoneyKeyDown} />
+            <input type="text" placeholder={painel === 'sangria' ? 'Motivo: ex. depósito banco' : 'Motivo: ex. troco inicial'}
+              className="neu-input py-2 px-3 rounded-xl text-sm"
+              value={movMotivo}
+              onChange={e => setMovMotivo(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <button onClick={resetPainel} className="neu-button px-3 py-1.5 rounded-lg text-xs text-gray-400 flex items-center gap-1"><X size={11} /> Cancelar</button>
+              <NeuButtonAccent onClick={() => handleMovimentacao(painel as 'sangria' | 'suprimento')} isLoading={saving}>Confirmar</NeuButtonAccent>
+            </div>
+          </motion.div>
+        )}
+
+        {painel === 'fechar' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="neu-pressed rounded-2xl p-4 flex flex-col gap-3 overflow-hidden">
+            <div className="text-xs font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2">
+              <Calculator size={12} /> Fechamento conferido
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Informe o valor em <b>dinheiro</b> contado fisicamente. O sistema calcula o esperado (abertura + vendas em dinheiro + suprimentos − sangrias) e mostra a diferença.
+            </p>
+            <input type="text" inputMode="numeric" placeholder="Valor contado em dinheiro"
+              className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+              value={valorContado}
+              onChange={e => setValorContado(formatBRL(e.target.value))}
+              onKeyDown={handleMoneyKeyDown} />
+            <input type="text" placeholder="Observação (opcional)"
+              className="neu-input py-2 px-3 rounded-xl text-sm"
+              value={obsFechamento}
+              onChange={e => setObsFechamento(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <button onClick={resetPainel} className="neu-button px-3 py-1.5 rounded-lg text-xs text-gray-400 flex items-center gap-1"><X size={11} /> Cancelar</button>
+              <button onClick={handleFecharConferido} disabled={saving}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-300 bg-red-900/30 border border-red-500/20 hover:bg-red-900/50 disabled:opacity-50">
+                {saving ? '...' : 'Fechar caixa'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Histórico curto de movimentações do dia */}
+      {movs.length > 0 && (
+        <details className="text-[10px]">
+          <summary className="cursor-pointer text-gray-500 uppercase font-bold tracking-widest hover:text-gray-300">
+            Movimentações do dia ({movs.length})
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1 max-h-40 overflow-y-auto main-scrollbar pr-1">
+            {movs.map(m => (
+              <li key={m.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-black/20">
+                <span className={`font-bold uppercase ${m.tipo === 'sangria' ? 'text-orange-300' : 'text-emerald-300'}`}>
+                  {m.tipo === 'sangria' ? '−' : '+'} {fmtBRL(Number(m.valor))}
+                </span>
+                <span className="text-gray-500 truncate flex-1">{m.motivo || '—'}</span>
+                <span className="text-gray-600">{fmtHora(m.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </motion.div>
   ) : (
     /* ── CAIXA FECHADO ── */

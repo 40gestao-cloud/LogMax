@@ -32,6 +32,7 @@ const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m
 const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
 const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
 const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
+const ConfigJurosView         = lazy(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
 const CotacoesView            = lazy(() => import('./views/CotacoesView').then(m => ({ default: m.CotacoesView })));
 const PedidosView             = lazy(() => import('./views/PedidosView').then(m => ({ default: m.PedidosView })));
 const NotasRecebidasView      = lazy(() => import('./views/NotasRecebidasView').then(m => ({ default: m.NotasRecebidasView })));
@@ -127,7 +128,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Centros de custo', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Centros de custo', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária',
+      { label: 'Juros & Multa', requireSetor: ['financeiro'] },
+      'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       'Gerenciamento', 'Relatórios', 'Tarefas']
   },
@@ -825,6 +828,7 @@ function LogMaxAppInner() {
       case 'financeiro-caixabancos':          return <GenericCRUDView showToast={st} title="Caixa / Bancos" subtitle="Gerencie contas bancárias e saldos." endpoint="/api/caixabancosview"
         fields={[{ key: 'conta', label: 'Conta', required: true, placeholder: 'Ex: 12345-6' }, { key: 'banco', label: 'Banco', placeholder: 'Ex: Banco do Brasil' }, { key: 'agencia', label: 'Agência', placeholder: 'Ex: 0001' }, { key: 'saldo', label: 'Saldo (R$)', type: 'currency', placeholder: '0,00' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
+      case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
       case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
