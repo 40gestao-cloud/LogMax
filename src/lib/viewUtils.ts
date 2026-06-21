@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 
-export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency'; options?: string[]; required?: boolean; placeholder?: string };
+export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency' | 'textarea'; options?: string[]; required?: boolean; placeholder?: string; fullWidth?: boolean };
 
 export function useFormValidation<T extends Record<string, string>>(fields: T) {
   const [errors, setErrors] = useState<Partial<Record<keyof T, string>>>({});

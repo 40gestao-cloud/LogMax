@@ -116,34 +116,48 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar' : 'Novo'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {fields.map(f => (
-                  <React.Fragment key={f.key}>
-                    <FormField label={`${f.label}${f.required ? ' *' : ''}`} error={valErrors[f.key]}>
-                      {f.type === 'select' ? (
-                        <select className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
-                          value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}>
-                          <option value="">Selecione...</option>
-                          {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : f.type === 'currency' ? (
-                        <input type="text" inputMode="numeric"
-                          className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
-                          value={formState[f.key]}
-                          onChange={e => {
-                            const masked = formatBRL(e.target.value);
-                            setFormState(s => ({ ...s, [f.key]: masked }));
-                            setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; });
-                          }}
-                          onKeyDown={handleMoneyKeyDown}
-                          placeholder={f.placeholder ?? '0,00'} />
-                      ) : (
-                        <input type={f.type ?? 'text'} className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
-                          value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}
-                          placeholder={f.placeholder} />
-                      )}
-                    </FormField>
-                  </React.Fragment>
-                ))}
+                {fields.map(f => {
+                  // textarea + fullWidth ocupam a linha inteira (md:col-span-3).
+                  const spanClass = (f.type === 'textarea' || f.fullWidth) ? 'md:col-span-3' : '';
+                  return (
+                    <React.Fragment key={f.key}>
+                      <div className={spanClass}>
+                        <FormField label={`${f.label}${f.required ? ' *' : ''}`} error={valErrors[f.key]}>
+                          {f.type === 'select' ? (
+                            <select className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
+                              value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}>
+                              <option value="">Selecione...</option>
+                              {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : f.type === 'currency' ? (
+                            <input type="text" inputMode="numeric"
+                              className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
+                              value={formState[f.key]}
+                              onChange={e => {
+                                const masked = formatBRL(e.target.value);
+                                setFormState(s => ({ ...s, [f.key]: masked }));
+                                setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; });
+                              }}
+                              onKeyDown={handleMoneyKeyDown}
+                              placeholder={f.placeholder ?? '0,00'} />
+                          ) : f.type === 'textarea' ? (
+                            <textarea
+                              rows={3}
+                              className={`neu-input py-2 px-3 rounded-xl text-sm w-full resize-y ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
+                              value={formState[f.key]}
+                              onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}
+                              placeholder={f.placeholder}
+                            />
+                          ) : (
+                            <input type={f.type ?? 'text'} className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
+                              value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}
+                              placeholder={f.placeholder} />
+                          )}
+                        </FormField>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -170,15 +184,28 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                   <AnimatePresence>
                     {filtered.map((item: any) => (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        {fields.map((f, idx) => (
-                          <td key={f.key} className={`py-4 px-4 ${idx === 0 ? 'text-sm font-semibold text-gray-200' : 'text-xs text-gray-400'} ${f.type === 'currency' ? 'tabular-nums' : ''}`}>
-                            {f.key === 'status'
-                              ? <StatusBadge status={item[f.key]} />
-                              : f.type === 'currency'
-                                ? (item[f.key] != null && item[f.key] !== '' ? `R$ ${formatBRL(Number(item[f.key]))}` : '—')
-                                : String(item[f.key] ?? '—')}
-                          </td>
-                        ))}
+                        {fields.map((f, idx) => {
+                          const raw = item[f.key];
+                          // textarea pode ser longo: trunca em 60 chars no resumo e
+                          // mostra o conteúdo completo no title (tooltip nativo).
+                          const renderTextarea = () => {
+                            const s = String(raw ?? '');
+                            if (!s) return '—';
+                            const truncated = s.length > 60 ? `${s.slice(0, 60)}…` : s;
+                            return <span title={s} className="whitespace-pre-wrap">{truncated}</span>;
+                          };
+                          return (
+                            <td key={f.key} className={`py-4 px-4 ${idx === 0 ? 'text-sm font-semibold text-gray-200' : 'text-xs text-gray-400'} ${f.type === 'currency' ? 'tabular-nums' : ''}`}>
+                              {f.key === 'status'
+                                ? <StatusBadge status={raw} />
+                                : f.type === 'currency'
+                                  ? (raw != null && raw !== '' ? `R$ ${formatBRL(Number(raw))}` : '—')
+                                  : f.type === 'textarea'
+                                    ? renderTextarea()
+                                    : String(raw ?? '—')}
+                            </td>
+                          );
+                        })}
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
