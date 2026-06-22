@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -35,6 +35,10 @@ export const RecebimentosView = ({ showToast }: any) => {
   const confirmingRef = useRef<string | null>(null);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
+  const produtosOrdenados = useMemo(
+    () => [...produtos].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' })),
+    [produtos]
+  );
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
 
@@ -150,11 +154,14 @@ export const RecebimentosView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => <option key={p.id} value={p.id}>Pedido #{p.id.slice(-6).toUpperCase()} — {p.status}</option>)}</select></FormField>
+                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
+                  const desc = p.item_descricao ?? p.req?.item ?? '';
+                  return <option key={p.id} value={p.id}>Pedido #{p.id.slice(-6).toUpperCase()}{desc ? ` — ${desc}` : ''} — {p.status}</option>;
+                })}</select></FormField>
                 <FormField label="Produto recebido">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.produto_id} onChange={e => setExtras(x => ({ ...x, produto_id: e.target.value }))}>
                     <option value="">Selecionar para atualizar estoque...</option>
-                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo atual: {p.estoque ?? 0})</option>)}
+                    {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo atual: {p.estoque ?? 0})</option>)}
                   </select>
                 </FormField>
                 <FormField label="Qtd Recebida"><input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
@@ -208,7 +215,7 @@ export const RecebimentosView = ({ showToast }: any) => {
                                   <label htmlFor={`receb-produto-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
                                   <select id={`receb-produto-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
                                     <option value="">Selecione o produto...</option>
-                                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
+                                    {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
                                   </select>
                                 </div>
                                 <div className="flex flex-col gap-1">
