@@ -35,10 +35,18 @@ export const RecebimentosView = ({ showToast }: any) => {
   const confirmingRef = useRef<string | null>(null);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
-  const produtosOrdenados = useMemo(
-    () => [...produtos].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' })),
-    [produtos]
-  );
+  const produtosOrdenados = useMemo(() => {
+    // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
+    // Sem normalizar, `localeCompare` deixa itens com leading whitespace
+    // (ou caracteres invisíveis tipo BOM) num bloco antes do A.
+    const chave = (p: any) =>
+      String(p.nome ?? '')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .trim()
+        .toLowerCase();
+    return [...produtos].sort((a: any, b: any) => chave(a).localeCompare(chave(b), 'pt-BR'));
+  }, [produtos]);
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
 
