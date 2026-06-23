@@ -267,13 +267,11 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           }}>
             Gestão Organizacional LogMax {new Date().getFullYear()}
           </p>
-          <p style={{
-            textAlign: 'center', fontSize: '0.7rem',
-            color: 'var(--color-text-dim)',
-            letterSpacing: '0.02em', fontWeight: 500,
-          }}>
-            Desenvolvido por Igor Souza
-          </p>
+          <img
+            src="/icon-assinatura.png"
+            alt="Assinatura"
+            style={{ height: '4rem', width: 'auto', opacity: 0.9 }}
+          />
         </div>
           </motion.div>
         </div>

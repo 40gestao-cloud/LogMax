@@ -971,7 +971,7 @@ function LogMaxAppInner() {
               <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
                 LogMax - Gestão Organizacional
               </h2>
-              <p className="text-[11px] text-gray-500 uppercase tracking-widest mt-1">Desenvolvido por Igor Souza</p>
+              <img src="/icon-assinatura.png" alt="Assinatura" className="h-16 w-auto opacity-85 mt-1" />
             </div>
           </div>
 
