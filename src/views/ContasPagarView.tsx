@@ -132,7 +132,7 @@ export const ContasPagarView = ({ showToast }: any) => {
     if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
     setPaySaving(true);
     try {
-      const updated = await dbUpdate('/api/contaspagarview', conta.id, { status: 'Pago' });
+      const updated = await dbUpdate('/api/contaspagarview', conta.id, { status: 'Pago', banco_id: payBankId });
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
 
       if (supabase) {

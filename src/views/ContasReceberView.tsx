@@ -136,7 +136,7 @@ export const ContasReceberView = ({ showToast }: any) => {
     if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
     setRecSaving(true);
     try {
-      const updated = await dbUpdate('/api/contasreceberview', conta.id, { status: 'Pago' });
+      const updated = await dbUpdate('/api/contasreceberview', conta.id, { status: 'Pago', banco_id: recBankId });
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
 
       if (supabase) {
