@@ -23,7 +23,7 @@ export const ContasPagarView = ({ showToast }: any) => {
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
-  const { data: bancos } = useFetchData<any>('/api/caixabancosview');
+  const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -136,16 +136,22 @@ export const ContasPagarView = ({ showToast }: any) => {
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
 
       if (supabase) {
+        // Why: o array `bancos` vem de useFetchData sem realtime; sem refrescar
+        // o estado local após cada baixa, a próxima conta paga lê o `saldo`
+        // antigo e a 2ª gravação sobrescreve a 1ª (só o último pagamento vinga).
         const novoSaldo = Number(banco.saldo ?? 0) - valor;
-        const { error } = await supabase
+        const { data: updatedBanco, error } = await supabase
           .from('caixa_bancos')
           .update({ saldo: novoSaldo })
-          .eq('id', payBankId);
-        if (error) {
+          .eq('id', payBankId)
+          .select()
+          .single();
+        if (error || !updatedBanco) {
           showToast(`Conta paga, mas falhou ao atualizar o saldo de "${banco.banco ?? banco.conta}". Ajuste manualmente.`, 'error', false);
           closePay();
           return;
         }
+        setBancos((prev: any[]) => prev.map((b: any) => b.id === payBankId ? updatedBanco : b));
       }
 
       const msgJuros = breakdown.vencido && (breakdown.juros + breakdown.multa) > 0
