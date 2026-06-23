@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { TrendingUp, TrendingDown, Landmark, FileText, CreditCard, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, BancoThumb } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -270,8 +270,13 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {bancosAtivos.map((b: any) => (
               <div key={b.id} className="neu-flat rounded-2xl p-4 border border-white/5">
-                <p className="text-xs font-bold text-gray-400">{b.banco ?? '—'}</p>
-                <p className="text-[10px] text-gray-600 mt-0.5">{b.tipo ?? '—'} · {b.conta ?? '—'}</p>
+                <div className="flex items-center gap-3">
+                  <BancoThumb url={b.imagem_url} size="xs" alt={b.banco ?? b.conta ?? 'Banco'} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-400 truncate">{b.banco ?? '—'}</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5 truncate">{b.tipo ?? '—'} · {b.conta ?? '—'}</p>
+                  </div>
+                </div>
                 <p className={`text-lg font-black font-mono mt-2 ${Number(b.saldo) < 0 ? 'text-red-500' : 'text-green-400'}`}>
                   R$ {Number(b.saldo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>

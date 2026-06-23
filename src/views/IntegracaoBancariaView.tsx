@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Landmark, Plus, Trash2, CheckCircle, AlertTriangle, Clock, Building2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, AlertTriangle, Clock, Building2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb } from '../components/ui';
 
 const statusIcon = (s: string) => {
   if (s === 'Processado') return <CheckCircle size={12} className="text-green-400" />;
@@ -96,10 +96,10 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
             <p className="text-xs text-gray-600 col-span-3 py-4">Nenhuma conta ativa cadastrada.</p>
           ) : contasAtivas.map((c: any) => (
             <div key={c.id} className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Landmark size={14} className="text-accent" />
-                  <span className="text-xs font-bold text-gray-300">{c.banco ?? '—'}</span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <BancoThumb url={c.imagem_url} size="xs" alt={c.banco ?? c.conta ?? 'Banco'} />
+                  <span className="text-xs font-bold text-gray-300 truncate">{c.banco ?? '—'}</span>
                 </div>
                 <StatusBadge status={c.status} />
               </div>

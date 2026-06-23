@@ -39,6 +39,7 @@ const NotasRecebidasView      = lazy(() => import('./views/NotasRecebidasView').
 const RecebimentosView        = lazy(() => import('./views/RecebimentosView').then(m => ({ default: m.RecebimentosView })));
 const ContasPagarView         = lazy(() => import('./views/ContasPagarView').then(m => ({ default: m.ContasPagarView })));
 const ContasReceberView       = lazy(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
+const CaixaBancosView         = lazy(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
 const GenericCRUDView         = lazy(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
 const MovimentacoesEstoqueView = lazy(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
 const SaldosEstoqueView       = lazy(() => import('./views/SaldosEstoqueView').then(m => ({ default: m.SaldosEstoqueView })));
@@ -825,8 +826,7 @@ function LogMaxAppInner() {
       case 'financeiro-duplicatas':           return <GenericCRUDView showToast={st} title="Duplicatas" subtitle="Gerencie duplicatas a receber e a pagar." endpoint="/api/duplicatasview"
         fields={[{ key: 'numero', label: 'Número', required: true, placeholder: 'Ex: DUP-001' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['A Receber', 'A Pagar'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'vencimento', label: 'Vencimento', type: 'date' }, { key: 'sacado', label: 'Sacado', placeholder: 'Ex: Empresa XYZ' }, { key: 'status', label: 'Status', type: 'select', options: ['Emitida', 'Paga', 'Vencida', 'Cancelada'] }]} />;
       case 'financeiro-patrimônio':           return <PatrimonioView showToast={st} />;
-      case 'financeiro-caixabancos':          return <GenericCRUDView showToast={st} title="Caixa / Bancos" subtitle="Gerencie contas bancárias e saldos." endpoint="/api/caixabancosview"
-        fields={[{ key: 'conta', label: 'Conta', required: true, placeholder: 'Ex: 12345-6' }, { key: 'banco', label: 'Banco', placeholder: 'Ex: Banco do Brasil' }, { key: 'agencia', label: 'Agência', placeholder: 'Ex: 0001' }, { key: 'saldo', label: 'Saldo (R$)', type: 'currency', placeholder: '0,00' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
+      case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} />;
       case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package } from 'lucide-react';
+import { Package, Landmark } from 'lucide-react';
 
 export const StatusBadge = ({ status }: { status: string }) => {
   let colorClass = 'text-gray-400';
@@ -275,6 +275,51 @@ export const ProdutoThumb = ({
   return (
     <div className={`${base} text-gray-600`}>
       <Package size={iconSize[size]} strokeWidth={1.5} />
+    </div>
+  );
+};
+
+// Miniatura/logo de banco. Mesmas dimensões e cantos da ProdutoThumb;
+// fallback usa Landmark (ícone bancário) e tem object-contain em vez de
+// object-cover porque logos costumam ter espaço em branco em volta.
+export const BancoThumb = ({
+  url,
+  alt,
+  size = 'sm',
+  rounded = 'rounded-xl',
+}: {
+  url?: string | null;
+  alt?: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  rounded?: string;
+}) => {
+  const dim: Record<string, string> = {
+    xs: 'w-10 h-10',
+    sm: 'w-14 h-14',
+    md: 'w-20 h-20',
+    lg: 'w-24 h-24',
+  };
+  const iconSize: Record<string, number> = { xs: 16, sm: 20, md: 26, lg: 32 };
+  const base = `${dim[size]} ${rounded} shrink-0 overflow-hidden flex items-center justify-center neu-pressed border border-white/5 bg-white/5`;
+  if (url) {
+    return (
+      <div className={base}>
+        <img
+          src={url}
+          alt={alt ?? 'Logo do banco'}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-contain p-1.5"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className={`${base} text-gray-500`}>
+      <Landmark size={iconSize[size]} strokeWidth={1.5} />
     </div>
   );
 };
