@@ -36,7 +36,13 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
     '/api/produtosview',
     filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
     false,
-    { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'] }
+    {
+      page,
+      searchTerm: debouncedSearch,
+      searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'],
+      orderBy: 'codigo',
+      ascending: false,
+    }
   );
 
   const podeVerCusto =
@@ -45,12 +51,23 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
 
   // Catálogo = só itens vendáveis ativos. Patrimônio (tipo='patrimonio') é gestão
   // contábil, não pertence ao catálogo público.
+  // Ordem: agrupar por filial (FILIAIS_HOLDING fixa a ordem) e dentro de cada
+  // filial mostrar codigo DESC com `numeric: true` (ML-10 > ML-9).
+  const filialRank = (f?: string) => {
+    const idx = (FILIAIS_HOLDING as readonly string[]).indexOf(f ?? '');
+    return idx === -1 ? FILIAIS_HOLDING.length : idx;
+  };
   const produtosVisiveis = useMemo(
     () => data.filter((p: any) =>
       (p.status === 'Ativo' || !p.status) &&
       p.tipo !== 'patrimonio' &&
       (categoriaFiltro === 'todas' || p.categoria === categoriaFiltro)
-    ),
+    ).slice().sort((a: any, b: any) => {
+      const ra = filialRank(a.filial);
+      const rb = filialRank(b.filial);
+      if (ra !== rb) return ra - rb;
+      return String(b.codigo ?? '').localeCompare(String(a.codigo ?? ''), 'pt-BR', { numeric: true });
+    }),
     [data, categoriaFiltro]
   );
 

@@ -630,6 +630,10 @@ function AccentPicker() {
 function LogMaxAppInner() {
   const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
   const { profile, isLoading: profileLoading, refetch: refetchProfile } = useUserProfile();
+  const { theme } = useTheme();
+  // Assinatura tem 2 variantes: padrão (dourado claro) para fundos escuros e
+  // -modoclaro (escura) para fundo branco do tema light.
+  const assinaturaSrc = theme === 'light' ? '/icon-assinatura-modoclaro.png' : '/icon-assinatura.png';
   // Persistido em sessionStorage para sobreviver a F5/pull-to-refresh
   // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
   const [activeView, setActiveView] = useState<string>(() => {
@@ -971,7 +975,7 @@ function LogMaxAppInner() {
               <h2 className="text-lg sm:text-xl font-bold text-gray-200 tracking-wide truncate">
                 LogMax - Gestão Organizacional
               </h2>
-              <img src="/icon-assinatura.png" alt="Assinatura" className="h-16 w-auto opacity-85 mt-1" />
+              <img src={assinaturaSrc} alt="Assinatura" className="h-16 w-auto opacity-85 mt-1" />
             </div>
           </div>
 

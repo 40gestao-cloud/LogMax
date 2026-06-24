@@ -45,9 +45,12 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
+  // Busca é feita client-side em `enriched` (nome do produto vem de requisicoes.item,
+  // que é tabela diferente). useFetchData só sabe fazer ilike em colunas da própria
+  // tabela, então qualquer searchColumns aqui filtra a coisa errada.
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/cotacoesview', undefined, false,
-    { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao', 'requisicao_id'] }
+    { page }
   );
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
@@ -134,6 +137,18 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
     req: requisicoes.find((r: any) => r.id === c.requisicao_id),
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
   }));
+
+  const enrichedFiltered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return enriched;
+    return enriched.filter((c: any) => {
+      const item = String(c.req?.item ?? '').toLowerCase();
+      const forn = String(c.forn?.nome ?? '').toLowerCase();
+      const status = String(c.status ?? '').toLowerCase();
+      const obs = String(c.observacao ?? '').toLowerCase();
+      return item.includes(q) || forn.includes(q) || status.includes(q) || obs.includes(q);
+    });
+  }, [enriched, debouncedSearch]);
 
   const closeForm = () => {
     setShowForm(false);
@@ -436,7 +451,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
+      {isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -455,7 +470,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {enriched.map((item: any) => (
+                  {enrichedFiltered.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.req?.item ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>

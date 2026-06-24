@@ -70,7 +70,7 @@ export const ProdutosView = ({ showToast }: any) => {
       searchTerm: debouncedSearch,
       searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'],
       orderBy: 'codigo',
-      ascending: true,
+      ascending: false,
     }
   );
   const [isSaving, setIsSaving]   = useState(false);
@@ -88,14 +88,19 @@ export const ProdutosView = ({ showToast }: any) => {
   const [imagemUploading, setImagemUploading] = useState(false);
   const imagemInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Pesquisa agora é server-side; já não há filtro client-side.
-  // Re-sort numérico por código na página atual: o servidor ordena
-  // lexicograficamente, então "PRD-10" viria antes de "PRD-2". Aqui
-  // comparamos pelo número embutido pra exibir 1, 2, 10 na ordem certa.
+  // Pesquisa é server-side. Ordem de exibição: agrupar por filial (ordem fixa
+  // de FILIAIS_HOLDING) e dentro de cada filial mostrar do código maior para
+  // o menor (último cadastrado primeiro). `numeric: true` trata ML-10 > ML-9
+  // corretamente mesmo sem zero-padding.
+  const filialRank = (f?: string) => {
+    const idx = (FILIAIS_HOLDING as readonly string[]).indexOf(f ?? '');
+    return idx === -1 ? FILIAIS_HOLDING.length : idx;
+  };
   const filtered = [...data].sort((a: any, b: any) => {
-    const ca = String(a.codigo ?? '');
-    const cb = String(b.codigo ?? '');
-    return ca.localeCompare(cb, 'pt-BR', { numeric: true, sensitivity: 'base' });
+    const ra = filialRank(a.filial);
+    const rb = filialRank(b.filial);
+    if (ra !== rb) return ra - rb;
+    return String(b.codigo ?? '').localeCompare(String(a.codigo ?? ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
   });
 
   const exportCols = ['Código', 'Nome', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Margem', 'Estoque', 'Est. Mín', 'EAN', 'Status'];

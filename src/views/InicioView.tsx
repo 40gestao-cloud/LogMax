@@ -193,9 +193,6 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
         <div
           className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col md:flex-row md:items-center md:gap-6 relative overflow-hidden border border-accent/20"
         >
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full blur-3xl pointer-events-none"
-            style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }} />
-
           {/* Coluna esquerda: texto + CTA. No mobile ocupa tudo, no md+
               vira 1ª coluna do flex-row e a logo fica à direita. */}
           <div className="flex flex-col md:flex-1 md:min-w-0 relative z-10">
