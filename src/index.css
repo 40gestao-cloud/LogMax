@@ -875,6 +875,55 @@ html.theme-switching *::after {
   .logo-shimmer::after { animation: none; }
 }
 
+/* ── Vitrine card — borda dourada animada ──
+   Conic-gradient rotativo confinado ao "anel" de 1.5px da borda via
+   mask-composite (truque padding+mask): o ::before pinta o anel todo
+   e o mask recorta o miolo, deixando só a moldura visível. @property
+   permite animar o ângulo CSS em vez de transform:rotate, que ficaria
+   visivelmente distorcido por causa do aspect ratio do card. */
+@property --vitrine-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.vitrine-card-shimmer {
+  position: relative;
+}
+
+.vitrine-card-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--vitrine-angle),
+    rgba(212, 175, 55, 0.2) 0deg,
+    rgba(212, 175, 55, 0.2) 70deg,
+    rgba(244, 208, 112, 0.9) 95deg,
+    #fff 105deg,
+    rgba(244, 208, 112, 0.9) 115deg,
+    rgba(212, 175, 55, 0.2) 140deg,
+    rgba(212, 175, 55, 0.2) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: vitrine-border-spin 4s linear infinite;
+  pointer-events: none;
+  z-index: 4;
+}
+
+@keyframes vitrine-border-spin {
+  to { --vitrine-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vitrine-card-shimmer::before { animation: none; }
+}
+
 
 /* LoginScreen — botão Entrar dourado fixo (#D4AF37). Sem box-shadow:
    preferência explícita por design flat. Hover só clareia o tom. */

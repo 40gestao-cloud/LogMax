@@ -93,8 +93,11 @@ export function VitrineCarousel() {
       aria-label="Vitrine de destaques"
       aria-roledescription="carrossel"
     >
-      {/* Card contido — largura controlada, não estoura a coluna. */}
+      {/* Card contido — largura controlada, não estoura a coluna.
+          A borda dourada vem do ::before animado de `.vitrine-card-shimmer`
+          (conic-gradient rotativo); sem `border:` inline para não dobrar. */}
       <div
+        className="vitrine-card-shimmer"
         style={{
           width: '100%',
           maxWidth: 460,
@@ -103,7 +106,6 @@ export function VitrineCarousel() {
           overflow: 'hidden',
           position: 'relative',
           background: 'linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01))',
-          border: '1px solid rgba(212, 175, 55, 0.2)',
           boxShadow: '0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset',
         }}
       >
