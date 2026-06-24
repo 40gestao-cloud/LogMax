@@ -234,10 +234,10 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
             </button>
           </div>
 
-          {/* Coluna direita: logo horizontal decorativa com shimmer.
+          {/* Coluna direita: logo horizontal decorativa.
               Escondida no mobile pra não competir com o conteúdo. */}
           <div
-            className="logo-shimmer-horizontal hidden md:block shrink-0 pointer-events-none"
+            className="hidden md:block shrink-0 pointer-events-none"
             aria-hidden="true"
             style={{ width: 'min(560px, 62%)', aspectRatio: '4 / 1' }}
           >
