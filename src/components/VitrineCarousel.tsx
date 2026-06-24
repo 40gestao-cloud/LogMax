@@ -210,8 +210,8 @@ function Slide({ item }: { item: VitrineItem }) {
 
   return (
     <>
-      {/* Imagem ocupa ~60% do card, mantém aspecto natural. */}
-      <div style={{ flex: '0 0 60%', position: 'relative', overflow: 'hidden' }}>
+      {/* Imagem ocupa ~52% do card; texto ganha mais espaço pra respirar. */}
+      <div style={{ flex: '0 0 52%', position: 'relative', overflow: 'hidden' }}>
         {imgSrc && !imgError ? (
           <img
             src={imgSrc}
@@ -238,23 +238,23 @@ function Slide({ item }: { item: VitrineItem }) {
       <div
         style={{
           flex: '1 1 auto',
-          padding: '1.25rem 1.5rem 1.75rem',
+          padding: '1.5rem 1.75rem 2rem',
           background: 'rgba(0,0,0,0.55)',
           backdropFilter: 'blur(6px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.5rem',
+          gap: '0.65rem',
         }}
       >
         <span
           style={{
             alignSelf: 'flex-start',
-            fontSize: '0.55rem',
+            fontSize: '0.7rem',
             fontWeight: 800,
             letterSpacing: '0.2em',
             textTransform: 'uppercase',
             color: '#D4AF37',
-            padding: '0.3rem 0.7rem',
+            padding: '0.35rem 0.85rem',
             borderRadius: '999px',
             background: 'rgba(212, 175, 55, 0.1)',
             border: '1px solid rgba(212, 175, 55, 0.3)',
@@ -264,11 +264,11 @@ function Slide({ item }: { item: VitrineItem }) {
         </span>
         <h3
           style={{
-            fontSize: '1.05rem',
+            fontSize: '1.45rem',
             fontWeight: 800,
             color: '#fff',
             margin: 0,
-            lineHeight: 1.25,
+            lineHeight: 1.2,
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -281,11 +281,11 @@ function Slide({ item }: { item: VitrineItem }) {
           <p
             style={{
               margin: 0,
-              color: 'rgba(255,255,255,0.62)',
-              fontSize: '0.75rem',
-              lineHeight: 1.4,
+              color: 'rgba(255,255,255,0.72)',
+              fontSize: '0.95rem',
+              lineHeight: 1.45,
               display: '-webkit-box',
-              WebkitLineClamp: 2,
+              WebkitLineClamp: 3,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
             }}
@@ -296,8 +296,8 @@ function Slide({ item }: { item: VitrineItem }) {
         {preco && (
           <p
             style={{
-              marginTop: '0.25rem',
-              fontSize: '1.15rem',
+              marginTop: '0.4rem',
+              fontSize: '1.7rem',
               fontWeight: 800,
               color: '#D4AF37',
               letterSpacing: '0.02em',
