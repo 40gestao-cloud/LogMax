@@ -90,8 +90,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           <div
             className="logo-shimmer"
             style={{
-              width: 140,
-              height: 140,
+              width: 220,
+              height: 220,
               borderRadius: '1.5rem',
               display: 'flex',
               alignItems: 'center',
@@ -101,7 +101,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             <img
               src="/icon-logmax.png"
               alt="LogMax"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           </div>
         </div>
