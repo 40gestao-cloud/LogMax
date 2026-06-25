@@ -856,11 +856,14 @@ html.theme-switching *::after {
   background-position: 150% 0;
   /* Recorta a faixa branca pelo alpha do PNG da logo. A faixa varre
      a horizontal via background-position, e o mask garante que só
-     apareça dentro do contorno do ícone. */
+     apareça dentro do contorno do ícone.
+     mask-size: contain (não 100% 100%) preserva a proporção do PNG,
+     igualando o <img object-fit:contain> visível — sem isso a máscara
+     estica e o shimmer vaza num retângulo fora do silhueta da logo. */
   -webkit-mask-image: url('/icon-logmax.png');
           mask-image: url('/icon-logmax.png');
-  -webkit-mask-size: 100% 100%;
-          mask-size: 100% 100%;
+  -webkit-mask-size: contain;
+          mask-size: contain;
   -webkit-mask-repeat: no-repeat;
           mask-repeat: no-repeat;
   -webkit-mask-position: center;
