@@ -3,14 +3,14 @@ import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   X, Loader2, Lock, DollarSign, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, Search,
+  Maximize2, Minimize2, Search, FileDown,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
-import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
@@ -86,7 +86,15 @@ export const PDVViewSupermax = ({
   const [cart, setCart]                 = useState<CartItem[]>([]);
   const [lastAdded, setLastAdded]       = useState<CartItem | null>(null);
   const [isClosing, setIsClosing]       = useState(false);
-  const [lastVenda, setLastVenda]       = useState<{ id: string; total: number } | null>(null);
+  const [lastVenda, setLastVenda]       = useState<{
+    id: string;
+    total: number;
+    subtotal: number;
+    desconto: number;
+    forma: string;
+    cliente: string | null;
+    itens: { nome_produto: string; qtd: number; preco_unitario: number; subtotal: number }[];
+  } | null>(null);
   const [codeMsg, setCodeMsg]           = useState<{ type: 'err'; text: string } | null>(null);
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
 
@@ -306,6 +314,15 @@ export const PDVViewSupermax = ({
       if (retry) requestAnimationFrame(() => tryFocus(false));
     };
     requestAnimationFrame(() => tryFocus(true));
+  };
+
+  // Foco no FECHAR VENDA da tela principal (não o do modal de pagamento).
+  // Usado após aplicar desconto pra operador apertar Enter direto.
+  const focusFecharVendaPDV = () => {
+    requestAnimationFrame(() => {
+      const btn = document.querySelector<HTMLButtonElement>('[data-action="fechar-venda-pdv"]');
+      if (btn && !btn.disabled) btn.focus();
+    });
   };
 
   // Suporta N*EAN ou N×EAN com decimal vírgula (ex: 0,350*7891)
@@ -587,7 +604,21 @@ export const PDVViewSupermax = ({
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
     const shortId = String(vendaId).slice(-6).toUpperCase();
-    setLastVenda({ id: shortId, total: totalFinal });
+    const clienteNome = cid ? ((clientes as any[]).find(c => c.id === cid)?.nome ?? null) : null;
+    setLastVenda({
+      id: shortId,
+      total: totalFinal,
+      subtotal,
+      desconto: descontoAplicado,
+      forma,
+      cliente: clienteNome,
+      itens: itensPayload.map(i => ({
+        nome_produto: i.nome_produto,
+        qtd: i.qtd,
+        preco_unitario: i.preco_unitario,
+        subtotal: i.subtotal,
+      })),
+    });
     playKaching();
     clearAll();
     // NÃO foca o código aqui — caller decide (changeModal → thankYou →
@@ -809,6 +840,7 @@ export const PDVViewSupermax = ({
       setCashMoveModal(null);
       setCashMoveValor('');
       setCashMoveMotivo('');
+      requestAnimationFrame(() => codeInputRef.current?.focus());
     } catch (err: any) {
       showToast?.(`Erro: ${err?.message ?? '—'}`, 'error', true);
     } finally {
@@ -947,13 +979,14 @@ export const PDVViewSupermax = ({
       <div className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-1 flex flex-col min-w-0 border-r border-gray-300">
           <div
-            className="grid grid-cols-[70px_160px_1fr_80px_130px_150px_40px] gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wide shrink-0 text-white"
+            className="grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wide shrink-0 text-white"
             style={{ background: NAVY_DARK }}
           >
             <div>ITEM</div>
             <div>CÓDIGO</div>
             <div>DESCRIÇÃO</div>
             <div className="text-right">QTD</div>
+            <div className="text-right">ESTOQUE</div>
             <div className="text-right">UNIT R$</div>
             <div className="text-right">TOTAL R$</div>
             <div></div>
@@ -968,7 +1001,7 @@ export const PDVViewSupermax = ({
               return (
               <div
                 key={item.produto_id}
-                className={`grid grid-cols-[70px_160px_1fr_80px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b border-gray-200 ${idx === cart.length - 1 ? 'bg-yellow-50' : ''}`}
+                className={`grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b border-gray-200 ${idx === cart.length - 1 ? 'bg-yellow-50' : ''}`}
               >
                 <div className="text-gray-500">{String(idx + 1).padStart(3, '0')}</div>
                 <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
@@ -985,6 +1018,7 @@ export const PDVViewSupermax = ({
                   )}
                 </div>
                 <div className="text-right">{item.qtd}</div>
+                <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
                 <div className="text-right">{fmt(item.preco_unitario)}</div>
                 <div className="text-right font-bold">{fmt(item.subtotal)}</div>
                 <button
@@ -1135,6 +1169,7 @@ export const PDVViewSupermax = ({
             CANCELAR VENDA
           </button>
           <button
+            data-action="fechar-venda-pdv"
             onClick={openPayment}
             disabled={cart.length === 0 || isClosing}
             className="px-6 py-2.5 text-lg font-bold text-white transition disabled:opacity-30 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-green-700"
@@ -1484,12 +1519,12 @@ export const PDVViewSupermax = ({
         <div
           className="fixed inset-0 z-[300] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setHelpOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); } }}
           tabIndex={-1}
           ref={(el) => { if (el && helpOpen && !el.contains(document.activeElement)) el.focus(); }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setHelpOpen(false); }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
@@ -1504,7 +1539,7 @@ export const PDVViewSupermax = ({
                   <div className="text-xl font-black tracking-wide" style={{ color: NAVY_DARK }}>PDV SuperMax</div>
                 </div>
               </div>
-              <button onClick={() => setHelpOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center border-2 hover:bg-white/40" style={{ borderColor: NAVY_DARK, color: NAVY_DARK }} aria-label="Fechar">
+              <button onClick={() => { setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="w-9 h-9 rounded-full flex items-center justify-center border-2 hover:bg-white/40" style={{ borderColor: NAVY_DARK, color: NAVY_DARK }} aria-label="Fechar">
                 <X size={18} />
               </button>
             </div>
@@ -1669,6 +1704,29 @@ export const PDVViewSupermax = ({
             >
               Pressione ENTER para continuar
             </div>
+            {lastVenda && (
+              <button
+                onClick={() => gerarReciboVendaPDF({
+                  id: lastVenda.id,
+                  shortId: lastVenda.id,
+                  data: new Date().toLocaleDateString('pt-BR'),
+                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                  filial,
+                  cliente: lastVenda.cliente,
+                  operador: operadorNome,
+                  itens: lastVenda.itens,
+                  subtotal: lastVenda.subtotal,
+                  desconto: lastVenda.desconto,
+                  total: lastVenda.total,
+                  formaPagamento: lastVenda.forma,
+                })}
+                tabIndex={-1}
+                className="mt-4 px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shrink-0 hover:brightness-110 transition"
+                style={{ background: NAVY_DARK, color: 'white' }}
+              >
+                <FileDown size={16} /> Imprimir Recibo (PDF)
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1853,7 +1911,7 @@ export const PDVViewSupermax = ({
           tabIndex={-1}
           ref={(el) => { if (el && confirmCancel) el.focus(); }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmCancel(false); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
             if (e.key === 'Tab') {
               e.preventDefault(); e.stopPropagation();
               setConfirmFocusIdx(i => (i === 0 ? 1 : 0));
@@ -1864,7 +1922,7 @@ export const PDVViewSupermax = ({
             if (e.key === 'Enter') {
               e.preventDefault(); e.stopPropagation();
               if (confirmFocusIdx === 1) reallyCancelSale();
-              else setConfirmCancel(false);
+              else { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }
               return;
             }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
@@ -1881,7 +1939,7 @@ export const PDVViewSupermax = ({
               </p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setConfirmCancel(false)}
+                  onClick={() => { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
                   onMouseEnter={() => setConfirmFocusIdx(0)}
                   className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm ${confirmFocusIdx === 0 ? 'bg-gray-100' : ''}`}
                   style={{ borderColor: confirmFocusIdx === 0 ? NAVY_DARK : '#9ca3af', color: NAVY_DARK, boxShadow: confirmFocusIdx === 0 ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
@@ -1912,7 +1970,7 @@ export const PDVViewSupermax = ({
           style={{ background: 'rgba(0,0,0,0.5)' }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearchModalOpen(false); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
@@ -1921,7 +1979,7 @@ export const PDVViewSupermax = ({
               <span className="font-black tracking-wide text-sm uppercase flex items-center gap-2">
                 <Search size={16} /> F8/F10 · Busca de produtos
               </span>
-              <button onClick={() => setSearchModalOpen(false)} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
+              <button onClick={() => { setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
             </div>
             <div className="p-4">
               <input
@@ -1929,7 +1987,7 @@ export const PDVViewSupermax = ({
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setSearchIdx(0); }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); setSearchModalOpen(false); return; }
+                  if (e.key === 'Escape') { e.preventDefault(); setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setSearchIdx(i => Math.min(i + 1, filteredSearch.length - 1));
@@ -1991,14 +2049,14 @@ export const PDVViewSupermax = ({
           style={{ background: 'rgba(0,0,0,0.5)' }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPriceQueryOpen(false); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
           <div className="w-full max-w-3xl mt-12 bg-white border-4 shadow-2xl" style={{ borderColor: NAVY_DARK }}>
             <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
               <span className="font-black tracking-wide text-sm uppercase">F7 · Consulta de preço</span>
-              <button onClick={() => setPriceQueryOpen(false)} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
+              <button onClick={() => { setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
             </div>
             <div className="p-4">
               <input
@@ -2006,7 +2064,7 @@ export const PDVViewSupermax = ({
                 value={priceQueryTerm}
                 onChange={(e) => { setPriceQueryTerm(e.target.value); setPriceQueryIdx(0); }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); setPriceQueryOpen(false); return; }
+                  if (e.key === 'Escape') { e.preventDefault(); setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
                   if (e.key === 'ArrowDown') { e.preventDefault(); setPriceQueryIdx(i => Math.min(i + 1, filteredPriceQuery.length - 1)); return; }
                   if (e.key === 'ArrowUp')   { e.preventDefault(); setPriceQueryIdx(i => Math.max(i - 1, 0)); return; }
                 }}
@@ -2113,10 +2171,15 @@ export const PDVViewSupermax = ({
           : parsed;
         const valorClamp = Math.min(valorReais, subtotal);
         const novoTotal = Math.max(0, subtotal - valorClamp);
+        const fecharDesconto = () => {
+          setDiscountModalOpen(false);
+          requestAnimationFrame(() => codeInputRef.current?.focus());
+        };
         const aplicar = () => {
           if (valorClamp <= 0) { showToast?.('Informe um desconto maior que zero.', 'error', true); return; }
           setDesconto(valorClamp);
           setDiscountModalOpen(false);
+          focusFecharVendaPDV();
         };
         return (
           <div
@@ -2124,7 +2187,7 @@ export const PDVViewSupermax = ({
             style={{ background: 'rgba(0,0,0,0.7)' }}
             onKeyDown={(e) => {
               if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDiscountModalOpen(false); }
+              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharDesconto(); }
               if (e.key === '%') { e.preventDefault(); setDiscountKind('percent'); }
               if (e.key === '$') { e.preventDefault(); setDiscountKind('reais'); }
               if (/^F\d+$/.test(e.key)) e.stopPropagation();
@@ -2164,7 +2227,7 @@ export const PDVViewSupermax = ({
                     onChange={(e) => setDiscountValue(formatBRL(parseBRL(e.target.value)))}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') { e.preventDefault(); aplicar(); }
-                      if (e.key === 'Escape') { e.preventDefault(); setDiscountModalOpen(false); }
+                      if (e.key === 'Escape') { e.preventDefault(); fecharDesconto(); }
                     }}
                     placeholder="0,00"
                     className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
@@ -2182,7 +2245,7 @@ export const PDVViewSupermax = ({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setDesconto(0); setDiscountModalOpen(false); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
+                  <button onClick={() => { setDesconto(0); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
                     {desconto > 0 ? 'Remover' : 'Voltar'}
                   </button>
                   <button onClick={aplicar} className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm" style={{ background: NAVY_DARK }}>
@@ -2205,7 +2268,7 @@ export const PDVViewSupermax = ({
           style={{ background: 'rgba(0,0,0,0.7)' }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCashMoveModal(null); }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
@@ -2229,7 +2292,7 @@ export const PDVViewSupermax = ({
                   onChange={(e) => setCashMoveValor(formatBRL(parseBRL(e.target.value)))}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); handleCashMoveConfirm(); }
-                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); }
+                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
                   }}
                   placeholder="0,00"
                   className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
@@ -2246,7 +2309,7 @@ export const PDVViewSupermax = ({
                   onChange={(e) => setCashMoveMotivo(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); handleCashMoveConfirm(); }
-                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); }
+                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
                   }}
                   placeholder={cashMoveModal.tipo === 'sangria' ? 'Depósito no banco, pagto fornecedor...' : 'Troco inicial, reforço...'}
                   className="w-full border-2 text-base px-3 py-2 outline-none focus:border-blue-700"
@@ -2254,7 +2317,7 @@ export const PDVViewSupermax = ({
                 />
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setCashMoveModal(null)} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
+                <button onClick={() => { setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
                   Voltar
                 </button>
                 <button
@@ -2284,6 +2347,26 @@ export const PDVViewSupermax = ({
               <div className="text-2xl font-black tabular-nums mt-1" style={{ color: MONEY }}>
                 R$ {fmt(lastVenda.total)}
               </div>
+              <button
+                onClick={() => gerarReciboVendaPDF({
+                  id: lastVenda.id,
+                  shortId: lastVenda.id,
+                  data: new Date().toLocaleDateString('pt-BR'),
+                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                  filial,
+                  cliente: lastVenda.cliente,
+                  operador: operadorNome,
+                  itens: lastVenda.itens,
+                  subtotal: lastVenda.subtotal,
+                  desconto: lastVenda.desconto,
+                  total: lastVenda.total,
+                  formaPagamento: lastVenda.forma,
+                })}
+                className="mt-2 flex items-center gap-1.5 text-xs font-bold hover:underline"
+                style={{ color: NAVY_DARK }}
+              >
+                <FileDown size={12} /> Recibo (PDF)
+              </button>
             </div>
             <button onClick={() => setLastVenda(null)} className="text-gray-400 hover:text-gray-700">
               <X size={16} />

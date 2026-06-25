@@ -10,9 +10,15 @@ export const SugestoesComprasView = ({ showToast }: any) => {
   const [search, setSearch] = useState('');
   const [filtroMode, setFiltroMode] = useState<'todos' | 'zerados'>('todos');
   const [requestingItem, setRequestingItem] = useState<any | null>(null);
+  const [qtdSolicitada, setQtdSolicitada] = useState<string>('');
   const [urgencia, setUrgencia] = useState('Normal');
   const [solicitante, setSolicitante] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const openSolicitar = (p: any) => {
+    setRequestingItem(p);
+    setQtdSolicitada(String(p.qtd_sugerida));
+  };
 
   const ativos = produtos.filter((p: any) => p.status === 'Ativo');
   const limiteMin = (p: any) => Number(p.estoque_minimo ?? 0) || 10;
@@ -37,13 +43,18 @@ export const SugestoesComprasView = ({ showToast }: any) => {
 
   const handleSolicitar = async () => {
     if (!requestingItem) return;
+    const qtdNum = Number(qtdSolicitada);
+    if (!Number.isFinite(qtdNum) || qtdNum <= 0) {
+      showToast("Informe uma quantidade válida.", 'error', true);
+      return;
+    }
     setIsSaving(true);
     showToast("Criando requisição...", 'info', false);
     try {
       const today = new Date().toISOString().slice(0, 10);
       await dbInsert('/api/requisicoesview', {
         item: requestingItem.nome,
-        qtd: requestingItem.qtd_sugerida,
+        qtd: qtdNum,
         urgencia,
         solicitante,
         status: 'Pendente',
@@ -51,6 +62,7 @@ export const SugestoesComprasView = ({ showToast }: any) => {
       });
       showToast("Requisição criada!", 'success', true);
       setRequestingItem(null);
+      setQtdSolicitada('');
       setSolicitante('');
       setUrgencia('Normal');
     } catch {
@@ -129,9 +141,12 @@ export const SugestoesComprasView = ({ showToast }: any) => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  {/* Qtd Sugerida é texto fixo read-only, sem input — span em vez de label */}
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Qtd Sugerida</span>
-                  <div className="neu-input py-2 px-3 rounded-xl text-sm text-accent font-mono font-bold">{requestingItem.qtd_sugerida} {requestingItem.unidade}</div>
+                  <label htmlFor="sug-qtd" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    Quantidade <span className="text-gray-600 normal-case font-medium tracking-normal">(sugerido: {requestingItem.qtd_sugerida} {requestingItem.unidade})</span>
+                  </label>
+                  <input id="sug-qtd" type="text" inputMode="decimal"
+                    className="neu-input py-2 px-3 rounded-xl text-sm text-accent font-mono font-bold"
+                    value={qtdSolicitada} onChange={e => setQtdSolicitada(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="sug-urgencia" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Urgência</label>
@@ -153,47 +168,89 @@ export const SugestoesComprasView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
+      <div className="neu-flat rounded-3xl p-3 sm:p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
         <div className="overflow-x-auto overflow-y-auto h-full main-scrollbar">
           {isLoading ? <LoadingSpinner /> : sugestoes.length === 0 ? (
             <EmptyState message={filtroMode === 'zerados' ? 'Nenhum produto com estoque zerado.' : 'Nenhum produto com estoque crítico ou baixo.'} />
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                <th className="pb-4 font-bold px-4">Código</th>
-                <th className="pb-4 font-bold px-4">Produto</th>
-                <th className="pb-4 font-bold px-4 text-right">Estoque Atual</th>
-                <th className="pb-4 font-bold px-4">Unidade</th>
-                <th className="pb-4 font-bold px-4 text-center">Situação</th>
-                <th className="pb-4 font-bold px-4 text-right">Qtd Sugerida</th>
-                <th className="pb-4 font-bold px-4 text-right">Valor Est.</th>
-                <th className="pb-4 font-bold px-4 text-right">Ação</th>
-              </tr></thead>
-              <tbody>
+            <>
+              {/* Mobile: cards */}
+              <div className="sm:hidden flex flex-col gap-3">
                 <AnimatePresence>
                   {sugestoes.map((p: any) => {
                     const sit = situacao(p.estoque);
                     return (
-                      <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.codigo ?? '—'}</td>
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome ?? '—'}</td>
-                        <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-500' : 'text-yellow-400'}`}>{p.estoque}</td>
-                        <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
-                        <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span></td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{p.qtd_sugerida}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {p.valor_est.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right">
-                          <button onClick={() => setRequestingItem(p)}
-                            className="flex items-center gap-1.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity neu-button px-3 py-1.5 rounded-lg text-xs text-accent font-semibold hover:border-accent/20 border border-transparent">
-                            <ShoppingCart size={12} /> Solicitar
-                          </button>
-                        </td>
-                      </motion.tr>
+                      <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                        className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-100 truncate">{p.nome ?? '—'}</p>
+                            <p className="text-[11px] font-mono text-gray-500 mt-0.5">{p.codigo ?? '—'}</p>
+                          </div>
+                          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Estoque</p>
+                            <p className={`text-sm font-mono font-bold ${p.estoque === 0 ? 'text-red-500' : 'text-yellow-400'}`}>{p.estoque}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Sugerido</p>
+                            <p className="text-sm font-mono font-bold text-gray-200">{p.qtd_sugerida}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Valor</p>
+                            <p className="text-sm font-mono font-bold text-gray-200">R$ {p.valor_est.toFixed(2)}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => openSolicitar(p)}
+                          className="w-full flex items-center justify-center gap-2 neu-button py-2.5 rounded-xl text-sm text-accent font-semibold border border-accent/20">
+                          <ShoppingCart size={14} /> Solicitar
+                        </button>
+                      </motion.div>
                     );
                   })}
                 </AnimatePresence>
-              </tbody>
-            </table>
+              </div>
+
+              {/* Desktop: tabela */}
+              <table className="hidden sm:table w-full text-left border-collapse">
+                <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-4 font-bold px-4">Código</th>
+                  <th className="pb-4 font-bold px-4">Produto</th>
+                  <th className="pb-4 font-bold px-4 text-right">Estoque Atual</th>
+                  <th className="pb-4 font-bold px-4">Unidade</th>
+                  <th className="pb-4 font-bold px-4 text-center">Situação</th>
+                  <th className="pb-4 font-bold px-4 text-right">Qtd Sugerida</th>
+                  <th className="pb-4 font-bold px-4 text-right">Valor Est.</th>
+                  <th className="pb-4 font-bold px-4 text-right">Ação</th>
+                </tr></thead>
+                <tbody>
+                  <AnimatePresence>
+                    {sugestoes.map((p: any) => {
+                      const sit = situacao(p.estoque);
+                      return (
+                        <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                          <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.codigo ?? '—'}</td>
+                          <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome ?? '—'}</td>
+                          <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-500' : 'text-yellow-400'}`}>{p.estoque}</td>
+                          <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
+                          <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span></td>
+                          <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{p.qtd_sugerida}</td>
+                          <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {p.valor_est.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button onClick={() => openSolicitar(p)}
+                              className="flex items-center gap-1.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity neu-button px-3 py-1.5 rounded-lg text-xs text-accent font-semibold hover:border-accent/20 border border-transparent">
+                              <ShoppingCart size={12} /> Solicitar
+                            </button>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </div>

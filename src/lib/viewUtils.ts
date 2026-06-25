@@ -201,6 +201,131 @@ export async function exportToPDFAgrupado(title: string, columns: string[], grup
   doc.save(`${filename}.pdf`);
 }
 
+export type ReciboItem = {
+  nome_produto: string;
+  qtd: number;
+  preco_unitario: number;
+  subtotal: number;
+};
+
+export type ReciboVenda = {
+  id: string;
+  shortId: string;
+  data: string;
+  hora?: string;
+  filial?: string | null;
+  cliente?: string | null;
+  itens: ReciboItem[];
+  subtotal: number;
+  desconto: number;
+  total: number;
+  formaPagamento: string;
+  operador?: string | null;
+};
+
+/**
+ * Recibo de venda (PDV). Formato A4 retrato, cabeçalho LogMax, dados da venda,
+ * tabela de itens e bloco de totais. Salva como `recibo-{shortId}.pdf`.
+ */
+export async function gerarReciboVendaPDF(venda: ReciboVenda) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
+  const doc = new jsPDF();
+
+  doc.setFillColor(10, 10, 10);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LogMax', 14, 14);
+  doc.setFontSize(9);
+  doc.setTextColor(150, 150, 150);
+  doc.text('Recibo de Venda', 14, 21);
+  doc.setFontSize(11);
+  doc.setTextColor(220, 220, 220);
+  doc.text(`Venda #${venda.shortId}`, 14, 29);
+
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  const emissao = `${venda.data}${venda.hora ? ' ' + venda.hora : ''}`;
+  doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+
+  // Bloco de cabeçalho da venda
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(9);
+  let y = 42;
+  const linha = (label: string, value: string) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label, 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(value, 50, y);
+    y += 5;
+  };
+  linha('Data/Hora:', emissao || '—');
+  if (venda.filial) linha('Filial:', venda.filial);
+  if (venda.cliente) linha('Cliente:', venda.cliente);
+  if (venda.operador) linha('Operador:', venda.operador);
+
+  const fmtBR = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtQtd = (n: number) => Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+
+  autoTable(doc, {
+    startY: y + 2,
+    head: [['Produto', 'Qtd', 'Unit.', 'Subtotal']],
+    body: venda.itens.map(it => [
+      it.nome_produto,
+      fmtQtd(Number(it.qtd)),
+      fmtBR(Number(it.preco_unitario)),
+      fmtBR(Number(it.subtotal)),
+    ]),
+    theme: 'grid',
+    headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { textColor: [60, 60, 60], fontSize: 9 },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+    },
+    alternateRowStyles: { fillColor: [245, 247, 245] },
+  });
+
+  let cursorY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Subtotal', 140, cursorY);
+  doc.text(fmtBR(venda.subtotal), 196, cursorY, { align: 'right' });
+  cursorY += 6;
+  if (venda.desconto > 0) {
+    doc.setTextColor(190, 30, 30);
+    doc.text('Desconto', 140, cursorY);
+    doc.text(`- ${fmtBR(venda.desconto)}`, 196, cursorY, { align: 'right' });
+    cursorY += 6;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(16, 185, 129);
+  doc.text('TOTAL', 140, cursorY);
+  doc.text(fmtBR(venda.total), 196, cursorY, { align: 'right' });
+  cursorY += 8;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Forma de pagamento: ${venda.formaPagamento}`, 14, cursorY);
+
+  doc.setFontSize(7);
+  doc.setTextColor(140, 140, 140);
+  doc.text('Documento não fiscal · LogMax PDV', 105, 287, { align: 'center' });
+
+  doc.save(`recibo-${venda.shortId}.pdf`);
+}
+
 /**
  * Excel agrupado: uma aba (worksheet) por grupo. Cada aba leva as mesmas
  * colunas. Nome da aba truncado a 31 chars (limite do Excel).
