@@ -14,6 +14,7 @@ import { FILIAL_COLOR } from '../lib/filiais';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { PDVViewSupermax } from './PDVViewSupermax';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -838,6 +839,22 @@ export const PDVView = ({ showToast, profile }: any) => {
       </button>
     </div>
   );
+
+  // Dispatch: SuperMax tem PDV proprio (UX estilo supermercado MaxPOS).
+  // Demais filiais (MaxLook, TechMax) continuam no PDV generico abaixo.
+  // Todos os hooks acima ja rodaram — esta condicional so afeta o JSX retornado.
+  if (filialFiltro === 'SuperMax') {
+    return (
+      <PDVViewSupermax
+        showToast={showToast}
+        profile={profile}
+        onSwitchFilial={podeAlternar ? (setFilialFiltro as (f: string) => void) : undefined}
+        caixa={caixa}
+        caixaLoading={caixaLoading}
+        refreshCaixa={refreshCaixa}
+      />
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">

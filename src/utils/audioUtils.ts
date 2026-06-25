@@ -9,11 +9,16 @@
 
 let audioCtx: AudioContext | null = null;
 let kachingAudio: HTMLAudioElement | null = null;
+let scannerBeepAudio: HTMLAudioElement | null = null;
 
 // Caminho do MP3 da caixa registradora. O arquivo deve ser colocado em
 // public/sounds/kaching.mp3 — se estiver ausente, a função simplesmente
 // falha em silêncio (catch no .play()).
 const KACHING_URL = '/sounds/kaching.mp3';
+
+// Beep do leitor de código de barras (MP3 real). Usado no PDV SuperMax,
+// que prefere som autêntico de scanner em vez do beep sintetizado.
+const SCANNER_BEEP_URL = '/sounds/freesound_community-store-scanner-beep-90395.mp3';
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -78,6 +83,24 @@ export function playBeep(): void {
 export function playPlim(): void {
   playTone({ freq: 659.25, durationMs: 140, type: 'sine', peakGain: 0.16 });
   playTone({ freq: 880.00, durationMs: 220, type: 'sine', peakGain: 0.16, startDelayMs: 90 });
+}
+
+// Beep MP3 de scanner de supermercado — usado no PDV SuperMax pra cada item
+// adicionado ao carrinho. Mais "autêntico" que o playBeep sintetizado.
+export function playScannerBeep(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!scannerBeepAudio) {
+      scannerBeepAudio = new Audio(SCANNER_BEEP_URL);
+      scannerBeepAudio.preload = 'auto';
+      scannerBeepAudio.volume = 0.5;
+    }
+    scannerBeepAudio.currentTime = 0;
+    const p = scannerBeepAudio.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch {
+    // Engolir.
+  }
 }
 
 // Caixa registradora — som de venda concluída (dinheiro/cartão/fiado).
