@@ -464,11 +464,12 @@ export const PDVViewSupermax = ({
   //  4) sugestões    → adiciona a primeira (resolve "FEIJÃO" com múltiplos)
   //  5) fallback     → processCode (trata N*EAN e mensagem de erro)
   const handleCodeEnter = () => {
-    if (code.trim() === '') {
+    const raw = codeInputRef.current?.value ?? code;
+    if (raw.trim() === '') {
       if (cart.length > 0) openPayment();
       return;
     }
-    const termo = code.trim();
+    const termo = raw.trim();
     const lower = norm(termo);
     const exact = produtosDisponiveis.find((p: any) =>
       String(p.ean ?? '').trim() === termo ||
@@ -492,7 +493,7 @@ export const PDVViewSupermax = ({
       setSuggestionIdx(-1);
       return;
     }
-    processCode(code);
+    processCode(raw);
   };
 
   // F-key listeners globais — só ativos fora de modais
