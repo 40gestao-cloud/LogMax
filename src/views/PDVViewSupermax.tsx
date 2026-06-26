@@ -176,8 +176,9 @@ export const PDVViewSupermax = ({
 
   const [cupomSeq]   = useState(() => String(Date.now()).slice(-6));
   const [nowTick, setNowTick] = useState(0);
-  const codeInputRef = useRef<HTMLInputElement>(null);
-  const cashInputRef = useRef<HTMLInputElement>(null);
+  const codeInputRef  = useRef<HTMLInputElement>(null);
+  const codeNativeRef = useRef('');
+  const cashInputRef  = useRef<HTMLInputElement>(null);
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
@@ -364,7 +365,7 @@ export const PDVViewSupermax = ({
       return;
     }
     addToCart(match, qtd);
-    setCode('');
+    setCode(''); codeNativeRef.current = '';
     setSuggestionIdx(-1);
     codeInputRef.current?.focus();
   }, [produtosDisponiveis, addToCart]);
@@ -464,7 +465,7 @@ export const PDVViewSupermax = ({
   //  4) sugestões    → adiciona a primeira (resolve "FEIJÃO" com múltiplos)
   //  5) fallback     → processCode (trata N*EAN e mensagem de erro)
   const handleCodeEnter = () => {
-    const raw = codeInputRef.current?.value ?? code;
+    const raw = codeNativeRef.current || code;
     if (raw.trim() === '') {
       if (cart.length > 0) openPayment();
       return;
@@ -477,19 +478,19 @@ export const PDVViewSupermax = ({
     );
     if (exact) {
       addToCart(exact);
-      setCode('');
+      setCode(''); codeNativeRef.current = '';
       setSuggestionIdx(-1);
       return;
     }
     if (suggestionIdx >= 0 && suggestions[suggestionIdx]) {
       addToCart(suggestions[suggestionIdx]);
-      setCode('');
+      setCode(''); codeNativeRef.current = '';
       setSuggestionIdx(-1);
       return;
     }
     if (suggestions.length > 0) {
       addToCart(suggestions[0]);
-      setCode('');
+      setCode(''); codeNativeRef.current = '';
       setSuggestionIdx(-1);
       return;
     }
@@ -1165,7 +1166,7 @@ export const PDVViewSupermax = ({
             <input
               ref={codeInputRef}
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => { codeNativeRef.current = e.target.value; setCode(e.target.value); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -1178,7 +1179,7 @@ export const PDVViewSupermax = ({
                   setSuggestionIdx(prev => Math.max(prev - 1, 0));
                 } else if (e.key === 'Escape' && code.length > 0) {
                   e.preventDefault();
-                  setCode('');
+                  setCode(''); codeNativeRef.current = '';
                   setSuggestionIdx(-1);
                 }
               }}
