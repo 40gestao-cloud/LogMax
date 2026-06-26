@@ -12,7 +12,7 @@ export interface CaixaAberto {
   data: string;
   filial: FilialOperacional;
   valor_abertura: number;
-  status: 'Aberto' | 'Fechado';
+  status: 'Aberto' | 'Fechado' | 'Suspenso';
   aberto_por: string | null;
   aberto_por_nome: string | null;
   aberto_em: string | null;

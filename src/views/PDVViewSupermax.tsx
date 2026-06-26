@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, Search, FileDown,
+  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
@@ -139,6 +139,11 @@ export const PDVViewSupermax = ({
   const [cashMoveModal, setCashMoveModal] = useState<{ tipo: 'suprimento' | 'sangria' } | null>(null);
   const [cashMoveValor, setCashMoveValor] = useState('');
   const [cashMoveMotivo, setCashMoveMotivo] = useState('');
+
+  // Fechar/Suspender caixa pelo operador (F3)
+  const [caixaOpModal, setCaixaOpModal] = useState<'fechar' | 'suspender' | null>(null);
+  const [caixaOpValor, setCaixaOpValor] = useState('');
+  const [caixaOpObs, setCaixaOpObs] = useState('');
 
   // Desconto (F6) — % ou R$ aplicado no total da venda atual.
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
@@ -506,7 +511,7 @@ export const PDVViewSupermax = ({
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || isClosing;
 
       if (e.key === 'F4' || e.key === 'F5') {
         e.preventDefault();
@@ -558,6 +563,16 @@ export const PDVViewSupermax = ({
         }
         return;
       }
+      // F3 — fechar/suspender caixa pelo operador
+      if (e.key === 'F3') {
+        e.preventDefault();
+        if (!anyModal && cart.length === 0) {
+          setCaixaOpValor('');
+          setCaixaOpObs('');
+          setCaixaOpModal('fechar');
+        }
+        return;
+      }
       // F6 — desconto no total (só faz sentido com itens)
       if (e.key === 'F6') {
         e.preventDefault();
@@ -589,7 +604,7 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast]);
+  }, [cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast]);
 
   // === FINALIZAR ===
   const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1) => {
@@ -920,6 +935,58 @@ export const PDVViewSupermax = ({
     }
   };
 
+  const handleCaixaOpConfirm = async () => {
+    if (!caixa || !supabase || !caixaOpModal) return;
+    if (caixaOpModal === 'fechar') {
+      const valor = parseBRL(caixaOpValor);
+      if (valor <= 0) {
+        showToast?.('Informe o valor contado em dinheiro.', 'error', true);
+        return;
+      }
+      try {
+        setIsClosing(true);
+        const { data, error } = await supabase.rpc('fechar_caixa_conferido', {
+          p_controle_id: caixa.id,
+          p_valor_contado: valor,
+          p_observacao: caixaOpObs.trim() || null,
+          p_origem: 'operador',
+        });
+        if (error) throw error;
+        const res = data as any;
+        const tipo = res?.tipo as string;
+        const dif = Number(res?.diferenca ?? 0);
+        const msg = tipo === 'exato'
+          ? 'Caixa fechado pelo operador — valor exato.'
+          : tipo === 'sobra'
+            ? `Caixa fechado com SOBRA de ${formatBRL(dif)}.`
+            : `Caixa fechado com FALTA de ${formatBRL(Math.abs(dif))}.`;
+        showToast?.(msg, tipo === 'exato' ? 'success' : 'info', true);
+        setCaixaOpModal(null);
+        await refreshCaixa();
+      } catch (err: any) {
+        showToast?.(`Erro ao fechar: ${err?.message ?? '—'}`, 'error', true);
+      } finally {
+        setIsClosing(false);
+      }
+    } else {
+      try {
+        setIsClosing(true);
+        const { error } = await supabase.rpc('suspender_caixa', {
+          p_controle_id: caixa.id,
+          p_observacao: caixaOpObs.trim() || null,
+        });
+        if (error) throw error;
+        showToast?.('Caixa suspenso pelo operador.', 'info', true);
+        setCaixaOpModal(null);
+        await refreshCaixa();
+      } catch (err: any) {
+        showToast?.(`Erro ao suspender: ${err?.message ?? '—'}`, 'error', true);
+      } finally {
+        setIsClosing(false);
+      }
+    }
+  };
+
   const cancelarPix = async () => {
     if (!pixModal || !supabase) {
       setConfirmPixCancel(false);
@@ -1131,19 +1198,19 @@ export const PDVViewSupermax = ({
               <div className="h-32" />
             )}
           </div>
-          <div className="px-5 py-5 flex-1 space-y-3 text-lg">
-            <div className="flex justify-between">
+          <div className="px-5 py-5 flex-1 space-y-4 text-lg">
+            <div className="flex justify-between items-baseline">
               <span className="text-gray-600">QTD. ITENS</span>
-              <span className="tabular-nums font-bold text-gray-900">{totalItens}</span>
+              <span className="tabular-nums font-bold text-gray-900 text-2xl">{totalItens}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-baseline">
               <span className="text-gray-600">SUBTOTAL</span>
-              <span className="tabular-nums font-bold text-gray-900">R$ {fmt(subtotal)}</span>
+              <span className="tabular-nums font-bold text-gray-900 text-2xl">R$ {fmt(subtotal)}</span>
             </div>
             {descontoAplicado > 0 && (
-              <div className="flex justify-between">
+              <div className="flex justify-between items-baseline">
                 <span className="text-gray-600">DESCONTO</span>
-                <span className="tabular-nums font-bold" style={{ color: RED }}>− R$ {fmt(descontoAplicado)}</span>
+                <span className="tabular-nums font-bold text-2xl" style={{ color: RED }}>− R$ {fmt(descontoAplicado)}</span>
               </div>
             )}
           </div>
@@ -1304,6 +1371,8 @@ export const PDVViewSupermax = ({
           <span><b>F7</b> Consulta preço</span>
           <span className="opacity-40">·</span>
           <span><b>F11</b> Suprimento · <b>F12</b> Sangria</span>
+          <span className="opacity-40">·</span>
+          <span><b>F3</b> Fechar/Suspender caixa</span>
         </div>
       </div>
 
@@ -2562,6 +2631,109 @@ export const PDVViewSupermax = ({
                   style={{ background: cashMoveModal.tipo === 'suprimento' ? MONEY : RED }}
                 >
                   {isClosing ? <><Loader2 size={16} className="animate-spin" /> Registrando...</> : 'Confirmar (Enter)'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal fechar/suspender caixa pelo operador (F3) */}
+      {caixaOpModal && (
+        <div
+          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCaixaOpModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
+            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-lg w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F3 · Operador</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">Fechar / Suspender Caixa</div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCaixaOpModal('fechar')}
+                  className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${caixaOpModal === 'fechar' ? 'text-white' : ''}`}
+                  style={caixaOpModal === 'fechar' ? { background: RED, borderColor: RED, color: 'white' } : { borderColor: '#9ca3af', color: NAVY_DARK }}
+                >
+                  <Calculator size={16} /> Fechar
+                </button>
+                <button
+                  onClick={() => setCaixaOpModal('suspender')}
+                  className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${caixaOpModal === 'suspender' ? 'text-white' : ''}`}
+                  style={caixaOpModal === 'suspender' ? { background: YELLOW_DARK, borderColor: YELLOW_DARK, color: 'white' } : { borderColor: '#9ca3af', color: NAVY_DARK }}
+                >
+                  <PauseCircle size={16} /> Suspender
+                </button>
+              </div>
+
+              {caixaOpModal === 'fechar' && (
+                <>
+                  <p className="text-xs text-gray-500">
+                    Conte o dinheiro fisicamente e informe abaixo. O sistema calcula o esperado e mostra a diferença para conferência do financeiro.
+                  </p>
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Valor contado em dinheiro</label>
+                    <input
+                      autoFocus
+                      type="text"
+                      inputMode="numeric"
+                      value={caixaOpValor}
+                      onChange={(e) => setCaixaOpValor(formatBRL(parseBRL(e.target.value)))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleCaixaOpConfirm(); }
+                      }}
+                      placeholder="0,00"
+                      className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
+                      style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
+                    />
+                  </div>
+                </>
+              )}
+              {caixaOpModal === 'suspender' && (
+                <p className="text-xs text-gray-500">
+                  Suspender pausa o caixa temporariamente (troca de turno, intervalo). O financeiro poderá reabrir ou fechar definitivamente.
+                </p>
+              )}
+
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Observação (opcional)</label>
+                <input
+                  autoFocus={caixaOpModal === 'suspender'}
+                  type="text"
+                  value={caixaOpObs}
+                  onChange={(e) => setCaixaOpObs(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleCaixaOpConfirm(); }
+                  }}
+                  placeholder={caixaOpModal === 'suspender' ? 'Ex: troca de turno, intervalo...' : 'Ex: fechamento fim do expediente'}
+                  className="w-full border-2 text-base px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af' }}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setCaixaOpModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+                  className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
+                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={handleCaixaOpConfirm}
+                  disabled={isClosing || (caixaOpModal === 'fechar' && parseBRL(caixaOpValor) <= 0)}
+                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-30 flex items-center justify-center gap-2"
+                  style={{ background: caixaOpModal === 'fechar' ? RED : YELLOW_DARK }}
+                >
+                  {isClosing
+                    ? <><Loader2 size={16} className="animate-spin" /> Processando...</>
+                    : caixaOpModal === 'fechar' ? 'Fechar caixa (Enter)' : 'Suspender caixa (Enter)'}
                 </button>
               </div>
             </div>

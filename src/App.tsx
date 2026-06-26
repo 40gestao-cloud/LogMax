@@ -65,6 +65,7 @@ const FeriasView                   = lazy(() => import('./views/FeriasView').the
 const MetasView                    = lazy(() => import('./views/MetasView').then(m => ({ default: m.MetasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
+const FrequenciaTrabalhoView       = lazy(() => import('./views/FrequenciaTrabalhoView').then(m => ({ default: m.FrequenciaTrabalhoView })));
 const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
@@ -139,7 +140,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -849,6 +850,7 @@ function LogMaxAppInner() {
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} />;
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
+      case 'rh-frequênciadetrabalho': return <FrequenciaTrabalhoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
       case 'rh-totemqr':          return <QRTotemView />;
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"

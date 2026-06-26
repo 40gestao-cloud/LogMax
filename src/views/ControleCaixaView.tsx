@@ -107,6 +107,7 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
       p_controle_id:   caixa.id,
       p_valor_contado: valor,
       p_observacao:    obsFechamento.trim() || null,
+      p_origem:        'financeiro',
     });
     setSaving(false);
     if (error) { showToast(`Erro ao fechar: ${error.message}`, 'error'); return; }
@@ -362,6 +363,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
           fechado_por: null,
           fechado_por_nome: null,
           fechado_em: null,
+          origem_fechamento: null,
         })
         .eq('id', h.id);
       if (error) throw error;
@@ -435,7 +437,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
           <p className="text-sm text-gray-600 text-center py-6">Nenhuma sessão registrada.</p>
         ) : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[720px]">
+            <table className="w-full text-left border-collapse min-w-[920px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-4">Data</th>
@@ -444,13 +446,15 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                   <th className="pb-3 font-bold px-4">Aberto por</th>
                   <th className="pb-3 font-bold px-4 text-center">Hora Abert.</th>
                   <th className="pb-3 font-bold px-4 text-center">Hora Fech.</th>
+                  <th className="pb-3 font-bold px-4">Fechado por</th>
                   <th className="pb-3 font-bold px-4 text-center">Status</th>
+                  <th className="pb-3 font-bold px-4 text-center">Origem</th>
                   <th className="pb-3 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {historico.map((h: any) => {
-                  const podeReabrir = h.status === 'Fechado' && h.data === today
+                  const podeReabrir = (h.status === 'Fechado' || h.status === 'Suspenso') && h.data === today
                     && (FILIAIS_OPERACIONAIS as readonly string[]).includes(h.filial)
                     && !caixas[h.filial as FilialOperacional];
                   return (
@@ -461,11 +465,20 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                       <td className="py-3 px-4 text-xs text-gray-400">{h.aberto_por_nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">{fmtHora(h.aberto_em)}</td>
                       <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">{fmtHora(h.fechado_em)}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400">{h.fechado_por_nome ?? '—'}</td>
                       <td className="py-3 px-4 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.status === 'Aberto' ? 'bg-emerald-500/15 text-emerald-500' : 'text-gray-500'}`}
-                          style={h.status !== 'Aberto' ? { background: 'var(--color-badge-neutral-bg)' } : {}}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.status === 'Aberto' ? 'bg-emerald-500/15 text-emerald-500' : h.status === 'Suspenso' ? 'bg-yellow-500/15 text-yellow-500' : 'text-gray-500'}`}
+                          style={h.status !== 'Aberto' && h.status !== 'Suspenso' ? { background: 'var(--color-badge-neutral-bg)' } : {}}
                         >{h.status}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {h.origem_fechamento ? (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.origem_fechamento === 'operador' ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500'}`}
+                            style={h.origem_fechamento !== 'operador' ? { background: 'var(--color-badge-neutral-bg)' } : {}}>
+                            {h.origem_fechamento === 'operador' ? 'PDV' : 'Financeiro'}
+                          </span>
+                        ) : <span className="text-gray-600 text-[10px]">—</span>}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2">
