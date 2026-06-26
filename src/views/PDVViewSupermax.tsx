@@ -150,15 +150,22 @@ export const PDVViewSupermax = ({
   // Sem migration na RPC: forma_pagamento concatena 'Misto: X+Y'. Fiado
   // fica bloqueado no misto (gera conta_receber pelo valor cheio, não
   // pelo parcial — incoerente sem refactor do RPC).
-  type PaymentLine = { forma: Exclude<FormaPagamento, 'Fiado'>; valor: number };
+  // troco fica gravado na linha do Dinheiro (não em stash agregado), pra
+  // que remover uma linha decremente o troco corretamente. parcelas só é
+  // usado quando Cartão Crédito é forma única (RPC ignora em misto).
+  type PaymentLine = { forma: Exclude<FormaPagamento, 'Fiado'>; valor: number; troco?: number; parcelas?: number };
   const [pagamentos, setPagamentos] = useState<PaymentLine[]>([]);
   const [parcialValor, setParcialValor] = useState('');
-  // Troco do dinheiro fica em standby até finalizarVendaMisto rodar — só
-  // mostra o modal de troco depois que a venda fechou de verdade.
-  const [trocoStash, setTrocoStash] = useState(0);
 
-  // Tela de agradecimento — pisa em cima após troco/exato OU direto após
-  // Cartão/PIX/Fiado. Só fecha com Enter; rouba o foco do PDV.
+  // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
+  // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
+  const [parcelasModalOpen, setParcelasModalOpen] = useState(false);
+  const [parcelasIdx, setParcelasIdx] = useState(0);
+
+  // Modal do recibo — exibe resumo da venda + download PDF antes do agradecimento.
+  const [reciboModalOpen, setReciboModalOpen] = useState(false);
+
+  // Tela de agradecimento — pisa em cima após recibo. Só fecha com Enter.
   const [thankYouOpen, setThankYouOpen] = useState(false);
 
   // Erro inline do payment modal — toast global some atrás do fullscreen.
@@ -301,7 +308,6 @@ export const PDVViewSupermax = ({
     setDiscountValue('');
     setPagamentos([]);
     setParcialValor('');
-    setTrocoStash(0);
   };
 
   // Foco vai pro botão CONFIRMAR após adicionar pagamento. Tenta em rAF
@@ -494,7 +500,7 @@ export const PDVViewSupermax = ({
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || thankYouOpen || helpOpen || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || isClosing;
 
       if (e.key === 'F4' || e.key === 'F5') {
         e.preventDefault();
@@ -577,10 +583,10 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, priceQueryOpen, cashMoveModal, discountModalOpen, thankYouOpen, helpOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast]);
+  }, [cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast]);
 
   // === FINALIZAR ===
-  const finalizarVenda = async (forma: string, cidOverride?: string) => {
+  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1) => {
     if (!supabase) throw new Error('Supabase indisponível.');
     const cid = cidOverride !== undefined ? cidOverride : null;
     const itensPayload = cart.map(item => ({
@@ -596,7 +602,7 @@ export const PDVViewSupermax = ({
       p_desconto:        descontoAplicado,
       p_total_final:     totalFinal,
       p_forma_pagamento: forma,
-      p_parcelas:        1,
+      p_parcelas:        parcelas,
       p_itens:           itensPayload,
       p_filial:          filial,
       p_cupom_codigo:    null,
@@ -659,8 +665,17 @@ export const PDVViewSupermax = ({
     if (pagamentos.length === 0) return;
     // Captura tudo do estado ANTES do await — clearAll() vai zerar.
     const forma = composeFormaMisto(pagamentos);
-    const trocoFinal = trocoStash;
+    // Troco = soma dos trocos por linha (Dinheiro). Recalcular daqui
+    // garante que remover/editar pagamento Dinheiro mantenha o troco
+    // coerente — versão antiga usava trocoStash agregado e ficava
+    // dessincronizado ao remover linha.
+    const trocoFinal = parseFloat(pagamentos.reduce((s, p) => s + (p.troco ?? 0), 0).toFixed(2));
     const houveDinheiro = pagamentos.some(p => p.forma === 'Dinheiro');
+    // Parcelamento só aplica quando Cartão Crédito é forma única; em
+    // misto a RPC cai no ELSE genérico (status='Pago') e ignora p_parcelas.
+    const parcelas = (pagamentos.length === 1 && pagamentos[0].forma === 'Cartão Crédito')
+      ? (pagamentos[0].parcelas ?? 1)
+      : 1;
     try {
       setIsClosing(true);
       setPaymentError(null);
@@ -668,13 +683,13 @@ export const PDVViewSupermax = ({
       // handlePayChoice. O tempo entre cash modal e FECHAR VENDA é de
       // segundos; revalidar gera falso-negativo silencioso (toast some
       // atrás do overlay fullscreen z-100) e mata a venda.
-      await finalizarVenda(forma);
+      await finalizarVenda(forma, undefined, parcelas);
       setPaymentModalOpen(false);
       // Sequência de feedback final: troco/exato (se aplicável) → agradecimento.
       // Cartão puro pula direto pro agradecimento (sem feedback redundante).
       if (trocoFinal > 0.001) setChangeModal({ amount: trocoFinal });
       else if (houveDinheiro) setChangeModal({ amount: 0 });
-      else setThankYouOpen(true);
+      else setReciboModalOpen(true);
     } catch (err: any) {
       // Banner inline dentro do modal — toast global some atrás do overlay
       // fullscreen, e o operador ficava sem feedback nenhum.
@@ -687,6 +702,10 @@ export const PDVViewSupermax = ({
   };
 
   const handlePayChoice = async (forma: FormaPagamento) => {
+    // Idempotência — F3 + clique simultâneo no PIX criava 2 pix_pendentes.
+    // openPayment já protege a entrada, aqui protege as escolhas dentro
+    // do payment modal.
+    if (isClosing) return;
     const parcial = parseBRL(parcialValor);
     const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
     if (valorDevido <= 0 && pagamentos.length > 0) return;
@@ -740,10 +759,36 @@ export const PDVViewSupermax = ({
       return;
     }
 
-    // Cartão Débito / Crédito — adiciona à lista e foca FECHAR VENDA. Sem
-    // auto-finalize: operador confere a lista e confirma explicitamente.
+    // Cartão Crédito como forma única → pergunta parcelas (1x-12x). Em
+    // misto vai direto 1x porque a RPC ignora p_parcelas na string 'Misto:'.
+    if (forma === 'Cartão Crédito') {
+      const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+      if (!isMistoActive) {
+        setParcelasIdx(0);
+        setParcelasModalOpen(true);
+        return;
+      }
+    }
+
+    // Cartão Débito ou Cartão Crédito em misto — adiciona à lista e foca
+    // FECHAR VENDA. Sem auto-finalize: operador confere e confirma.
     setPagamentos(prev => [...prev, { forma, valor: parseFloat(valorDevido.toFixed(2)) }]);
     setParcialValor('');
+    focusFecharVenda();
+  };
+
+  // Confirma parcelamento Cartão Crédito (forma única). Adiciona pagamento
+  // com .parcelas pra que finalizarVendaMisto passe p_parcelas correto.
+  const confirmarParcelas = (n: number) => {
+    const parcial = parseBRL(parcialValor);
+    const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+    setPagamentos(prev => [...prev, {
+      forma: 'Cartão Crédito',
+      valor: parseFloat(valorDevido.toFixed(2)),
+      parcelas: n,
+    }]);
+    setParcialValor('');
+    setParcelasModalOpen(false);
     focusFecharVenda();
   };
 
@@ -758,9 +803,12 @@ export const PDVViewSupermax = ({
       showToast?.(`Valor recebido (R$ ${formatBRL(recebido)}) menor que devido (R$ ${formatBRL(valorDevido)}).`, 'error', true);
       return;
     }
-    const trocoDessaForma = recebido - valorDevido;
-    setPagamentos(prev => [...prev, { forma: 'Dinheiro', valor: parseFloat(valorDevido.toFixed(2)) }]);
-    setTrocoStash(t => t + trocoDessaForma);
+    const trocoDessaForma = parseFloat((recebido - valorDevido).toFixed(2));
+    setPagamentos(prev => [...prev, {
+      forma: 'Dinheiro',
+      valor: parseFloat(valorDevido.toFixed(2)),
+      troco: trocoDessaForma,
+    }]);
     setParcialValor('');
     setCashReceived('');
     setCashModalOpen(false);
@@ -771,8 +819,17 @@ export const PDVViewSupermax = ({
     setClientPickerOpen(false);
     try {
       setIsClosing(true);
+      // Revalida caixa — o operador pode ter ficado tempo escolhendo o
+      // cliente no picker; o gerente pode ter fechado o caixa nesse
+      // intervalo. Sem esse check, criar_venda_pdv roda com caixa fechado.
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`Caixa de ${filial} foi fechado. Abra em Financeiro → Controle de Caixa.`, 'error', true);
+        await refreshCaixa();
+        return;
+      }
       await finalizarVenda('Fiado', cid);
-      setThankYouOpen(true);
+      setReciboModalOpen(true);
     } catch (err: any) {
       showToast?.(`Erro Fiado: ${err?.message ?? '—'}`, 'error', true);
     } finally {
@@ -802,7 +859,7 @@ export const PDVViewSupermax = ({
           try {
             await finalizarVenda('PIX');
             setPixModal(null);
-            setThankYouOpen(true);
+            setReciboModalOpen(true);
           } catch (err: any) {
             showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
             setPixModal(null);
@@ -825,7 +882,15 @@ export const PDVViewSupermax = ({
       showToast?.('Valor deve ser maior que zero.', 'error', true);
       return;
     }
-    const motivo = cashMoveMotivo.trim() || null;
+    const motivoTrimmed = cashMoveMotivo.trim();
+    // Sangria precisa de motivo — o label da UI diz "obrigatório registrar
+    // onde foi"; sem essa validação, operador podia confirmar vazio e
+    // ficar uma saída de caixa sem rastro.
+    if (cashMoveModal.tipo === 'sangria' && !motivoTrimmed) {
+      showToast?.('Sangria requer motivo (onde foi o dinheiro).', 'error', true);
+      return;
+    }
+    const motivo = motivoTrimmed || null;
     try {
       setIsClosing(true);
       const { error } = await supabase.rpc('registrar_movimentacao_caixa', {
@@ -1222,7 +1287,6 @@ export const PDVViewSupermax = ({
               if (pagamentos.length > 0) {
                 setPagamentos([]);
                 setParcialValor('');
-                setTrocoStash(0);
                 return;
               }
               setPaymentModalOpen(false);
@@ -1314,7 +1378,11 @@ export const PDVViewSupermax = ({
                   </div>
                   {pagamentos.map((p, idx) => (
                     <div key={idx} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0 border-gray-200">
-                      <span className="font-bold">{p.forma}</span>
+                      <span className="font-bold">
+                        {p.forma}
+                        {p.parcelas && p.parcelas > 1 ? ` ${p.parcelas}x` : ''}
+                        {p.troco && p.troco > 0.001 ? ` (troco R$ ${fmt(p.troco)})` : ''}
+                      </span>
                       <div className="flex items-center gap-3">
                         <span className="tabular-nums font-bold" style={{ color: MONEY }}>R$ {fmt(p.valor)}</span>
                         <button
@@ -1482,7 +1550,7 @@ export const PDVViewSupermax = ({
             if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
               e.preventDefault(); e.stopPropagation();
               setChangeModal(null);
-              setThankYouOpen(true);
+              setReciboModalOpen(true);
             }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
@@ -1503,7 +1571,7 @@ export const PDVViewSupermax = ({
               </>
             )}
             <button
-              onClick={() => { setChangeModal(null); setThankYouOpen(true); }}
+              onClick={() => { setChangeModal(null); setReciboModalOpen(true); }}
               className="mt-12 px-10 py-4 text-white font-black uppercase tracking-wide text-lg border-2"
               style={{ background: changeModal.amount > 0 ? MONEY : NAVY_DARK, borderColor: 'white' }}
               autoFocus
@@ -1585,6 +1653,9 @@ export const PDVViewSupermax = ({
                     <b>Conferir troco</b> (se houve dinheiro): tela cheia mostra o valor a entregar (ou <b>PAGAMENTO EXATO</b>). <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> avança.
                   </li>
                   <li>
+                    <b>Recibo da venda.</b> Baixe o PDF se necessário; <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> avança.
+                  </li>
+                  <li>
                     <b>Tela de agradecimento.</b> <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> volta pro campo CÓDIGO pronto pra próxima venda.
                   </li>
                 </ol>
@@ -1663,23 +1734,107 @@ export const PDVViewSupermax = ({
         </div>
       )}
 
+      {/* Recibo — resumo da venda com opção de baixar PDF antes do agradecimento */}
+      {reciboModalOpen && lastVenda && (
+        <div
+          className="fixed inset-0 z-[310] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && reciboModalOpen) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault(); e.stopPropagation();
+              setReciboModalOpen(false);
+              setThankYouOpen(true);
+            } else {
+              e.stopPropagation();
+            }
+          }}
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ border: `3px solid ${NAVY_DARK}` }}>
+            <div className="px-5 py-4 text-center" style={{ background: NAVY_DARK, color: 'white' }}>
+              <div className="text-xs font-bold uppercase tracking-[0.3em] opacity-70">Venda concluída</div>
+              <div className="text-3xl font-black tabular-nums mt-1" style={{ color: YELLOW }}>
+                R$ {fmt(lastVenda.total)}
+              </div>
+              <div className="text-xs font-mono opacity-60 mt-1">#{lastVenda.id}</div>
+            </div>
+            <div className="px-5 py-3 max-h-[40vh] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b" style={{ color: NAVY_DARK }}>
+                    <th className="text-left py-1 font-bold">Item</th>
+                    <th className="text-center py-1 font-bold w-12">Qtd</th>
+                    <th className="text-right py-1 font-bold w-20">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lastVenda.itens.map((it, i) => (
+                    <tr key={i} className="border-b border-gray-100">
+                      <td className="py-1 text-gray-700">{it.nome_produto}</td>
+                      <td className="py-1 text-center text-gray-500">{it.qtd}</td>
+                      <td className="py-1 text-right font-mono text-gray-700">R$ {fmt(it.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {lastVenda.desconto > 0 && (
+                <div className="flex justify-between text-xs mt-2 text-red-600 font-bold">
+                  <span>Desconto</span>
+                  <span>- R$ {fmt(lastVenda.desconto)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm mt-2 font-black" style={{ color: NAVY_DARK }}>
+                <span>Total</span>
+                <span>R$ {fmt(lastVenda.total)}</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{lastVenda.forma}</div>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-2 border-t">
+              <button
+                onClick={() => gerarReciboVendaPDF({
+                  id: lastVenda.id,
+                  shortId: lastVenda.id,
+                  data: new Date().toLocaleDateString('pt-BR'),
+                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                  filial,
+                  cliente: lastVenda.cliente,
+                  operador: operadorNome,
+                  itens: lastVenda.itens,
+                  subtotal: lastVenda.subtotal,
+                  desconto: lastVenda.desconto,
+                  total: lastVenda.total,
+                  formaPagamento: lastVenda.forma,
+                })}
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:brightness-110 transition"
+                style={{ background: NAVY_DARK, color: 'white' }}
+              >
+                <FileDown size={16} /> Baixar Recibo (PDF)
+              </button>
+              <button
+                onClick={() => { setReciboModalOpen(false); setThankYouOpen(true); }}
+                className="w-full px-4 py-3 rounded-lg text-base font-black uppercase tracking-wider hover:brightness-110 transition"
+                style={{ background: YELLOW, color: NAVY_DARK, border: `2px solid ${YELLOW_DARK}` }}
+                autoFocus
+              >
+                Continuar · Enter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Agradecimento — tela final supermercado (só fecha com Enter) */}
       {thankYouOpen && (
         <div
-          className="fixed inset-0 z-[310] flex items-center justify-center"
+          className="fixed inset-0 z-[320] flex items-center justify-center"
           style={{ background: 'rgba(255,255,255,0.98)' }}
           tabIndex={-1}
           ref={(el) => { if (el && thankYouOpen) el.focus(); }}
           onKeyDown={(e) => {
-            // Só Enter fecha — Esc/Space/clique ignorados pra evitar fechar
-            // sem o cliente ter visto. Todo resto do teclado fica preso pra
-            // não vazar pro PDV atrás.
             if (e.key === 'Enter') {
               e.preventDefault(); e.stopPropagation();
               setThankYouOpen(false);
-              // Limpa o toast 'Venda concluída' — a tela de agradecimento já
-              // é o feedback principal; sem isso o card ficava no canto da
-              // tela pra sempre, até o operador clicar o X.
               setLastVenda(null);
               setTimeout(() => codeInputRef.current?.focus(), 50);
             } else {
@@ -1704,29 +1859,6 @@ export const PDVViewSupermax = ({
             >
               Pressione ENTER para continuar
             </div>
-            {lastVenda && (
-              <button
-                onClick={() => gerarReciboVendaPDF({
-                  id: lastVenda.id,
-                  shortId: lastVenda.id,
-                  data: new Date().toLocaleDateString('pt-BR'),
-                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                  filial,
-                  cliente: lastVenda.cliente,
-                  operador: operadorNome,
-                  itens: lastVenda.itens,
-                  subtotal: lastVenda.subtotal,
-                  desconto: lastVenda.desconto,
-                  total: lastVenda.total,
-                  formaPagamento: lastVenda.forma,
-                })}
-                tabIndex={-1}
-                className="mt-4 px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 shrink-0 hover:brightness-110 transition"
-                style={{ background: NAVY_DARK, color: 'white' }}
-              >
-                <FileDown size={16} /> Imprimir Recibo (PDF)
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -2163,6 +2295,70 @@ export const PDVViewSupermax = ({
         </div>
       )}
 
+      {/* Parcelas Cartão Crédito (1x-12x) — só forma única; misto não pergunta */}
+      {parcelasModalOpen && (() => {
+        const parcial = parseBRL(parcialValor);
+        const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+        return (
+        <div
+          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && parcelasModalOpen && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setParcelasModalOpen(false); return; }
+            if (e.key === 'Tab') {
+              e.preventDefault(); e.stopPropagation();
+              setParcelasIdx(i => (i + 1) % 12);
+              return;
+            }
+            if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.min(i + 1, 11)); return; }
+            if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.max(i - 1, 0)); return; }
+            if (e.key === 'ArrowDown')  { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.min(i + 4, 11)); return; }
+            if (e.key === 'ArrowUp')    { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.max(i - 4, 0)); return; }
+            if (e.key === 'Enter') {
+              e.preventDefault(); e.stopPropagation();
+              confirmarParcelas(parcelasIdx + 1);
+              return;
+            }
+            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Cartão Crédito</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">Em quantas parcelas? · R$ {fmt(valorDevido)}</div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-4 gap-2">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+                  const active = n - 1 === parcelasIdx;
+                  const valorParcela = parseFloat((valorDevido / n).toFixed(2));
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => confirmarParcelas(n)}
+                      onMouseEnter={() => setParcelasIdx(n - 1)}
+                      className={`border-2 px-2 py-3 flex flex-col items-center gap-0.5 font-black uppercase tracking-wide ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
+                      style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
+                    >
+                      <span className="text-lg">{n}x</span>
+                      <span className="text-[10px] text-gray-600 tabular-nums normal-case">
+                        {n === 1 ? 'à vista' : `R$ ${fmt(valorParcela)}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
+                ↑↓←→ navegar · Enter confirmar · Esc voltar
+              </div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
       {/* Desconto (F6) — % ou R$ aplicado no total · Enter aplica · Esc cancela */}
       {discountModalOpen && (() => {
         const parsed = parseBRL(discountValue);
@@ -2347,26 +2543,6 @@ export const PDVViewSupermax = ({
               <div className="text-2xl font-black tabular-nums mt-1" style={{ color: MONEY }}>
                 R$ {fmt(lastVenda.total)}
               </div>
-              <button
-                onClick={() => gerarReciboVendaPDF({
-                  id: lastVenda.id,
-                  shortId: lastVenda.id,
-                  data: new Date().toLocaleDateString('pt-BR'),
-                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                  filial,
-                  cliente: lastVenda.cliente,
-                  operador: operadorNome,
-                  itens: lastVenda.itens,
-                  subtotal: lastVenda.subtotal,
-                  desconto: lastVenda.desconto,
-                  total: lastVenda.total,
-                  formaPagamento: lastVenda.forma,
-                })}
-                className="mt-2 flex items-center gap-1.5 text-xs font-bold hover:underline"
-                style={{ color: NAVY_DARK }}
-              >
-                <FileDown size={12} /> Recibo (PDF)
-              </button>
             </div>
             <button onClick={() => setLastVenda(null)} className="text-gray-400 hover:text-gray-700">
               <X size={16} />
