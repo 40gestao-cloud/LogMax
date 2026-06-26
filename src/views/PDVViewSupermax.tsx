@@ -459,19 +459,13 @@ export const PDVViewSupermax = ({
 
   // Enter no campo CÓDIGO:
   //  1) vazio        → SUBTOTAL (fechar venda)
-  //  2) idx >= 0     → adiciona a sugestão destacada (usuário usou ↑↓)
-  //  3) match exato  → adiciona produto por EAN/código
+  //  2) match exato  → EAN/código exato (prioridade pra scanner)
+  //  3) idx >= 0     → adiciona a sugestão destacada (usuário usou ↑↓)
   //  4) sugestões    → adiciona a primeira (resolve "FEIJÃO" com múltiplos)
   //  5) fallback     → processCode (trata N*EAN e mensagem de erro)
   const handleCodeEnter = () => {
     if (code.trim() === '') {
       if (cart.length > 0) openPayment();
-      return;
-    }
-    if (suggestionIdx >= 0 && suggestions[suggestionIdx]) {
-      addToCart(suggestions[suggestionIdx]);
-      setCode('');
-      setSuggestionIdx(-1);
       return;
     }
     const termo = code.trim();
@@ -482,6 +476,12 @@ export const PDVViewSupermax = ({
     );
     if (exact) {
       addToCart(exact);
+      setCode('');
+      setSuggestionIdx(-1);
+      return;
+    }
+    if (suggestionIdx >= 0 && suggestions[suggestionIdx]) {
+      addToCart(suggestions[suggestionIdx]);
       setCode('');
       setSuggestionIdx(-1);
       return;
