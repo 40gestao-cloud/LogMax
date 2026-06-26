@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  X, Loader2, Lock, DollarSign, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
+  X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
   Maximize2, Minimize2, Search, FileDown,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -1742,6 +1742,7 @@ export const PDVViewSupermax = ({
           tabIndex={-1}
           ref={(el) => { if (el && reciboModalOpen) el.focus(); }}
           onKeyDown={(e) => {
+            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
             if (e.key === 'Enter') {
               e.preventDefault(); e.stopPropagation();
               setReciboModalOpen(false);
@@ -2530,26 +2531,6 @@ export const PDVViewSupermax = ({
         </div>
       )}
 
-      {/* Toast venda concluída */}
-      {lastVenda && (
-        <div className="fixed bottom-6 right-6 z-[150] bg-white border-4 shadow-2xl p-4 min-w-[280px]" style={{ borderColor: MONEY }}>
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-full" style={{ background: '#dcfce7' }}>
-              <DollarSign size={20} style={{ color: MONEY }} />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-black uppercase tracking-widest text-gray-600">Venda concluída</div>
-              <div className="font-mono text-xs text-gray-500 mt-0.5">#{lastVenda.id}</div>
-              <div className="text-2xl font-black tabular-nums mt-1" style={{ color: MONEY }}>
-                R$ {fmt(lastVenda.total)}
-              </div>
-            </div>
-            <button onClick={() => setLastVenda(null)} className="text-gray-400 hover:text-gray-700">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 };
