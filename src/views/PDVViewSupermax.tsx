@@ -176,9 +176,10 @@ export const PDVViewSupermax = ({
 
   const [cupomSeq]   = useState(() => String(Date.now()).slice(-6));
   const [nowTick, setNowTick] = useState(0);
-  const codeInputRef  = useRef<HTMLInputElement>(null);
-  const codeNativeRef = useRef('');
-  const cashInputRef  = useRef<HTMLInputElement>(null);
+  const codeInputRef   = useRef<HTMLInputElement>(null);
+  const codeNativeRef  = useRef('');
+  const scanBufferRef  = useRef({ chars: '' as string, lastTime: 0, timer: 0 as any });
+  const cashInputRef   = useRef<HTMLInputElement>(null);
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
@@ -1166,7 +1167,36 @@ export const PDVViewSupermax = ({
             <input
               ref={codeInputRef}
               value={code}
-              onChange={(e) => { codeNativeRef.current = e.target.value; setCode(e.target.value); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                codeNativeRef.current = val;
+                setCode(val);
+                const now = performance.now();
+                const buf = scanBufferRef.current;
+                if (now - buf.lastTime < 80) {
+                  buf.chars = val;
+                } else {
+                  buf.chars = val;
+                }
+                buf.lastTime = now;
+                clearTimeout(buf.timer);
+                buf.timer = setTimeout(() => {
+                  const v = buf.chars.trim();
+                  if (v.length >= 8 && /^\d+$/.test(v)) {
+                    const lower = norm(v);
+                    const exact = produtosDisponiveis.find((p: any) =>
+                      String(p.ean ?? '').trim() === v ||
+                      norm(p.codigo) === lower
+                    );
+                    if (exact) {
+                      addToCart(exact);
+                      setCode(''); codeNativeRef.current = '';
+                      setSuggestionIdx(-1);
+                      buf.chars = '';
+                    }
+                  }
+                }, 120);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
