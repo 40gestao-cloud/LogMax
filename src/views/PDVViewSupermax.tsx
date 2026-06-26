@@ -181,6 +181,9 @@ export const PDVViewSupermax = ({
   const scanBufferRef  = useRef({ chars: '' as string, lastTime: 0, timer: 0 as any });
   const cashInputRef   = useRef<HTMLInputElement>(null);
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
+  const cartRef              = useRef(cart);
+  cartRef.current            = cart;
+  const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number) => Promise<void>>(null!);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
   useEffect(() => {
@@ -635,6 +638,7 @@ export const PDVViewSupermax = ({
     // antes do agradecimento renderizar e o usuário começava a digitar
     // por baixo do overlay.
   };
+  finalizarVendaRef.current = finalizarVenda;
 
   // Checa se ainda existe caixa aberto pra esta filial hoje. Usado antes de
   // qualquer finalização — inclusive no callback do PIX (que pode demorar
@@ -860,7 +864,7 @@ export const PDVViewSupermax = ({
             return;
           }
           try {
-            await finalizarVenda('PIX');
+            await finalizarVendaRef.current('PIX');
             setPixModal(null);
             setReciboModalOpen(true);
           } catch (err: any) {
@@ -976,7 +980,7 @@ export const PDVViewSupermax = ({
 
   const operadorNome = (profile?.nome ?? user?.email ?? '—').toUpperCase();
   // nowTick é dep só pra forçar recálculo a cada 30s
-  const datetime = useMemo(() => new Date().toLocaleString('pt-BR'), [nowTick]);
+  const datetime = useMemo(() => new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' }), [nowTick]);
 
   // Classe do container raiz — fullscreen sobrepõe o app shell (sidebar+topbar).
   const rootClass = fullscreen ? 'fixed inset-0 z-[100]' : 'h-full';
@@ -1772,13 +1776,15 @@ export const PDVViewSupermax = ({
           className="fixed inset-0 z-[310] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           tabIndex={-1}
-          ref={(el) => { if (el && reciboModalOpen) el.focus(); }}
+          ref={(el) => { if (el && reciboModalOpen) { const btn = el.querySelector<HTMLButtonElement>('button:last-of-type'); if (btn) btn.focus(); else el.focus(); } }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
               e.preventDefault(); e.stopPropagation();
               setReciboModalOpen(false);
               setThankYouOpen(true);
+            } else if (e.key === 'Escape') {
+              e.stopPropagation();
             } else {
               e.stopPropagation();
             }
@@ -1828,8 +1834,8 @@ export const PDVViewSupermax = ({
                 onClick={() => gerarReciboVendaPDF({
                   id: lastVenda.id,
                   shortId: lastVenda.id,
-                  data: new Date().toLocaleDateString('pt-BR'),
-                  hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                  data: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' }),
+                  hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Rio_Branco', hour: '2-digit', minute: '2-digit' }),
                   filial,
                   cliente: lastVenda.cliente,
                   operador: operadorNome,
@@ -2366,7 +2372,7 @@ export const PDVViewSupermax = ({
               <div className="grid grid-cols-4 gap-2">
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
                   const active = n - 1 === parcelasIdx;
-                  const valorParcela = parseFloat((valorDevido / n).toFixed(2));
+                  const valorParcela = Math.ceil(valorDevido * 100 / n) / 100;
                   return (
                     <button
                       key={n}
