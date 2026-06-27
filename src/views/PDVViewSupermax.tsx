@@ -2788,17 +2788,15 @@ const Header = ({
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {onSwitchFilial && (
-        <select
-          onChange={(e) => { if (e.target.value && e.target.value !== 'SuperMax') onSwitchFilial(e.target.value); }}
-          value="SuperMax"
-          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-2 bg-white outline-none"
+        <button
+          type="button"
+          onClick={() => onSwitchFilial('')}
+          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-2 bg-white flex items-center gap-1.5"
           style={{ color: NAVY_DARK, borderColor: NAVY_DARK }}
-          title="Trocar para outra filial"
+          title="Trocar de PDV"
         >
-          <option value="SuperMax">Filial: SuperMax</option>
-          <option value="MaxLook">→ MaxLook</option>
-          <option value="TechMax">→ TechMax</option>
-        </select>
+          Trocar PDV
+        </button>
       )}
       <button
         type="button"

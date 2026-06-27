@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
@@ -55,17 +55,93 @@ const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado
 // Fiado fora — mistura crédito a prazo com débito imediato fica confuso pra v1.
 const FORMA_RESTO_OPTIONS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX'] as const;
 
+const FILIAL_META: Record<FilialPDV, { logo: string; desc: string; logoBg?: string }> = {
+  SuperMax: { logo: '/icon-supermax.png', desc: 'Supermercado', logoBg: '#ffffff' },
+  MaxLook:  { logo: '/icon-maxlook.png',  desc: 'Roupas, Calçados e Acessórios Femininos e Masculinos' },
+  TechMax:  { logo: '/icon-techmax.png',  desc: 'Eletrônicos e Assistência Técnica' },
+};
+
 export const PDVView = ({ showToast, profile }: any) => {
-  const { user } = useAuth();
   const podeAlternar = podeAlternarFilial(profile);
-  // Filial inicial: a do operador se operacional; admin/CEO/gerente sem filial
-  // operacional caem em SuperMax como padrão (pode alternar). Colaborador sem
-  // filial operacional não opera PDV (gate visual mais abaixo).
-  const filialInicial: FilialPDV =
+  const filialDoOperador: FilialPDV | null =
     (FILIAIS_PDV as readonly string[]).includes(profile?.filial)
       ? (profile.filial as FilialPDV)
-      : 'SuperMax';
-  const [filialFiltro, setFilialFiltro] = useState<FilialPDV>(filialInicial);
+      : null;
+  const [filialEscolhida, setFilialEscolhida] = useState<FilialPDV | null>(
+    podeAlternar ? null : (filialDoOperador ?? null)
+  );
+
+  if (!podeAlternar && !filialDoOperador) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
+        <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
+          <Lock size={28} className="text-gray-600" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-300">Sem filial operacional</h3>
+          <p className="text-sm text-gray-500 mt-1 max-w-xs">
+            Seu perfil está em <span className="text-gray-300 font-bold">{profile?.filial ?? '—'}</span>, que não opera PDV.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (filialEscolhida) {
+    return (
+      <PDVViewInner
+        showToast={showToast}
+        profile={profile}
+        filialInicial={filialEscolhida}
+        onVoltar={podeAlternar ? () => setFilialEscolhida(null) : undefined}
+      />
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="flex-1 flex flex-col items-center justify-center gap-8 py-12 px-4">
+      <div className="text-center">
+        <h2 className="text-2xl sm:text-3xl font-black text-accent tracking-tight">Ponto de Venda</h2>
+        <p className="text-sm text-gray-400 mt-2">Selecione o PDV que deseja operar.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
+        {FILIAIS_PDV.map(f => {
+          const cor = FILIAL_COLOR[f];
+          const meta = FILIAL_META[f];
+          return (
+            <motion.button
+              key={f}
+              onClick={() => setFilialEscolhida(f)}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className={`neu-button rounded-2xl p-6 flex flex-col items-center gap-4 text-center transition-all border-2 ${cor.border} hover:border-accent`}
+            >
+              <div className="w-24 h-24 rounded-2xl flex items-center justify-center overflow-hidden"
+                style={meta.logoBg ? { background: meta.logoBg } : undefined}>
+                <img src={meta.logo} alt={f} className={meta.logoBg ? 'w-[88px] h-[88px] object-contain' : 'w-20 h-20 object-contain rounded-2xl'} />
+              </div>
+              <div>
+                <p className={`text-lg font-black ${cor.text}`}>{f}</p>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{meta.desc}</p>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+};
+
+const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
+  showToast: any;
+  profile: any;
+  filialInicial: FilialPDV;
+  onVoltar?: () => void;
+}) => {
+  const { user } = useAuth();
+  const podeAlternar = podeAlternarFilial(profile);
+  const [filialFiltro] = useState<FilialPDV>(filialInicial);
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto(filialFiltro);
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
@@ -107,6 +183,8 @@ export const PDVView = ({ showToast, profile }: any) => {
     pesoInput: string;
     editIndex: number | null;
   } | null>(null);
+  const [fullscreen, setFullscreen] = useState(true);
+  const [mobileTab, setMobileTab] = useState<'produtos' | 'carrinho'>('produtos');
   const vendaSnapshotRef = useRef<{
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
     cupomCodigo: string | null; cupomDesconto: number;
@@ -120,6 +198,23 @@ export const PDVView = ({ showToast, profile }: any) => {
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { searchRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreen) {
+        e.preventDefault();
+        setFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [fullscreen]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [fullscreen]);
 
   // Keep cart estoque values fresh when realtime pushes produto updates from other cashiers
   useEffect(() => {
@@ -774,13 +869,6 @@ export const PDVView = ({ showToast, profile }: any) => {
 
   // Troca de filial sempre limpa o carrinho — itens são por unidade, não dá
   // pra carregar um produto da SuperMax e fechar como venda da MaxLook.
-  const trocarFilial = (nova: FilialPDV) => {
-    if (nova === filialFiltro) return;
-    if (cart.length > 0 && !confirm(`Trocar para ${nova} vai limpar o carrinho atual. Continuar?`)) return;
-    setCart([]);
-    setLastVenda(null);
-    setFilialFiltro(nova);
-  };
 
   if (loadingProd || caixaLoading) return <LoadingSpinner />;
 
@@ -813,30 +901,18 @@ export const PDVView = ({ showToast, profile }: any) => {
           para abrir.
         </p>
       </div>
-      {podeAlternar && (
-        <div className="flex gap-2 flex-wrap justify-center" role="radiogroup" aria-label="Trocar unidade">
-          {FILIAIS_PDV.map(f => {
-            const ativo = filialFiltro === f;
-            const cor = FILIAL_COLOR[f];
-            return (
-              <button
-                key={f}
-                onClick={() => trocarFilial(f)}
-                role="radio"
-                aria-checked={ativo}
-                className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''}`}
-                style={!ativo ? { background: 'transparent', borderColor: 'transparent' } : {}}
-              >
-                {f}
-              </button>
-            );
-          })}
-        </div>
-      )}
-      <button onClick={refreshCaixa}
-        className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
-        Verificar novamente
-      </button>
+      <div className="flex gap-3 flex-wrap justify-center">
+        <button onClick={refreshCaixa}
+          className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
+          Verificar novamente
+        </button>
+        {onVoltar && (
+          <button onClick={onVoltar}
+            className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-2">
+            <ArrowLeft size={14} /> Trocar PDV
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -848,7 +924,7 @@ export const PDVView = ({ showToast, profile }: any) => {
       <PDVViewSupermax
         showToast={showToast}
         profile={profile}
-        onSwitchFilial={podeAlternar ? (setFilialFiltro as (f: string) => void) : undefined}
+        onSwitchFilial={onVoltar ? () => onVoltar() : undefined}
         caixa={caixa}
         caixaLoading={caixaLoading}
         refreshCaixa={refreshCaixa}
@@ -856,82 +932,100 @@ export const PDVView = ({ showToast, profile }: any) => {
     );
   }
 
+  const filialCor = FILIAL_COLOR[filialFiltro];
+  const rootClass = fullscreen ? 'fixed inset-0 z-[100] bg-[var(--color-bg-base)] overflow-hidden' : 'h-full';
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-0 -mt-2">
-      <div className="flex items-center justify-between mb-5 shrink-0 gap-3">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">PDV</h2>
-          <p className="text-sm text-gray-400 mt-1">Ponto de Venda — registre vendas e baixe o estoque automaticamente.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`flex flex-col ${rootClass}`}
+      style={{ overscrollBehavior: 'none', touchAction: 'pan-y' }}>
+      {/* Header com identidade da filial */}
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 shrink-0 border-b border-white/5"
+        style={{ background: 'color-mix(in srgb, var(--color-bg-base) 95%, transparent)' }}>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {onVoltar && (
+            <button onClick={onVoltar}
+              className="neu-button p-2 rounded-lg text-gray-400 hover:text-accent shrink-0"
+              title="Trocar PDV">
+              <ArrowLeft size={16} />
+            </button>
+          )}
+          <h2 className={`text-lg sm:text-2xl font-black tracking-tight ${filialCor.text}`}>{filialFiltro}</h2>
+          <span className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">Ponto de Venda</span>
         </div>
+        <div className="flex items-center gap-2">
+          {onVoltar && (
+            <button onClick={onVoltar}
+              className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5"
+              title="Trocar PDV">
+              <Store size={12} /> Trocar PDV
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              try {
+                await downloadCatalogoEan13Pdf({
+                  produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0) })),
+                  titulo: `Catálogo PDV — ${filialFiltro}`,
+                  filename: `logmax-catalogo-pdv-${filialFiltro.toLowerCase()}`,
+                });
+              } catch (err: any) {
+                showToast(err?.message ?? 'Erro ao gerar PDF', 'error', true);
+              }
+            }}
+            disabled={filtered.length === 0}
+            className="neu-button p-2 rounded-lg text-gray-400 hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Baixar catálogo PDF">
+            <FileDown size={14} />
+          </button>
+          <button onClick={() => setFullscreen(f => !f)}
+            className="neu-button p-2 rounded-lg text-gray-400 hover:text-accent"
+            title={fullscreen ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}>
+            {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Abas mobile: Produtos / Carrinho */}
+      <div className="flex lg:hidden shrink-0 border-b border-white/5">
         <button
-          onClick={async () => {
-            try {
-              await downloadCatalogoEan13Pdf({
-                produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0) })),
-                titulo: `Catálogo PDV — ${filialFiltro}`,
-                filename: `logmax-catalogo-pdv-${filialFiltro.toLowerCase()}`,
-              });
-            } catch (err: any) {
-              showToast(err?.message ?? 'Erro ao gerar PDF', 'error', true);
-            }
-          }}
-          disabled={filtered.length === 0}
-          className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-accent hover:bg-accent/10 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          title="Baixar catálogo dos produtos exibidos em PDF (com etiquetas EAN-13)"
-        >
-          <FileDown size={14} /> PDF
+          onClick={() => setMobileTab('produtos')}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${mobileTab === 'produtos' ? `${filialCor.text} border-b-2` : 'text-gray-500'}`}
+          style={mobileTab === 'produtos' ? { borderColor: 'var(--color-accent)' } : {}}>
+          <Package size={13} /> Produtos ({filtered.length})
+        </button>
+        <button
+          onClick={() => setMobileTab('carrinho')}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors relative ${mobileTab === 'carrinho' ? `${filialCor.text} border-b-2` : 'text-gray-500'}`}
+          style={mobileTab === 'carrinho' ? { borderColor: 'var(--color-accent)' } : {}}>
+          <ShoppingCart size={13} /> Carrinho
+          {cart.length > 0 && (
+            <span className="min-w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{cart.length}</span>
+          )}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5 flex-1 min-h-0 p-3 sm:p-5">
 
-        {/* LEFT — busca + grade de produtos */}
-        <div className="lg:col-span-7 flex flex-col gap-4 min-h-0">
+        {/* LEFT — busca + grade de produtos (hidden on mobile when carrinho tab active) */}
+        <div className={`lg:col-span-7 flex-col gap-3 sm:gap-4 min-h-0 ${mobileTab === 'produtos' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="relative shrink-0">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               ref={searchRef}
               type="text"
-              placeholder="Buscar por nome, código ou bipar o código de barras..."
-              className="neu-input py-3 pl-10 pr-4 rounded-2xl text-sm w-full"
+              placeholder="Buscar por nome, código ou bipar..."
+              className="neu-input py-2.5 sm:py-3 pl-10 pr-4 rounded-2xl text-sm w-full"
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); } }}
             />
           </div>
 
-          {/* Filtro de unidade — colaborador trava na própria; gerente/admin/CEO alterna */}
-          <div className="flex gap-2 flex-wrap shrink-0 items-center" role="radiogroup" aria-label="Unidade de venda">
-            {FILIAIS_PDV.map(f => {
-              const ativo = filialFiltro === f;
-              const cor = FILIAL_COLOR[f];
-              const disabled = !podeAlternar && !ativo;
-              return (
-                <button
-                  key={f}
-                  onClick={() => !disabled && trocarFilial(f)}
-                  role="radio"
-                  aria-checked={ativo}
-                  disabled={disabled}
-                  className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border neu-button ${ativo ? `${cor.bg} ${cor.text} ${cor.border}` : ''} disabled:opacity-30 disabled:cursor-not-allowed`}
-                  style={!ativo ? { background: 'transparent', borderColor: 'transparent' } : {}}
-                  title={disabled ? 'Sua conta opera só nesta unidade — peça ao gerente pra trocar' : undefined}
-                >
-                  {f}
-                </button>
-              );
-            })}
-            {!podeAlternar && (
-              <span className="text-[10px] text-gray-600 flex items-center gap-1 ml-1">
-                <Lock size={10} /> travado na sua unidade
-              </span>
-            )}
-          </div>
-
           <AnimatePresence>
             {lastVenda && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex items-center justify-between p-4 rounded-2xl shrink-0"
+                className="flex items-center justify-between p-3 sm:p-4 rounded-2xl shrink-0"
                 style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}>
                 <div className="flex items-center gap-3">
                   <CheckCircle2 size={18} className="text-accent" />
@@ -945,7 +1039,8 @@ export const PDVView = ({ showToast, profile }: any) => {
             )}
           </AnimatePresence>
 
-          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 max-h-[45vh] lg:max-h-none">
+          <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 flex-1 min-h-0"
+            style={{ overscrollBehavior: 'contain' }}>
             {filtered.length === 0 ? (
               <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm text-center">
                 {search
@@ -961,38 +1056,42 @@ export const PDVView = ({ showToast, profile }: any) => {
                 return (
                   <motion.button
                     key={p.id}
-                    onClick={() => !semEstoque && addToCart(p)}
+                    onClick={() => {
+                      if (semEstoque) return;
+                      addToCart(p);
+                      if (window.innerWidth < 1024 && cart.length === 0) setMobileTab('carrinho');
+                    }}
                     whileTap={!semEstoque ? { scale: 0.97 } : {}}
                     disabled={semEstoque}
-                    className="neu-button rounded-2xl p-3 flex flex-col gap-2 text-left transition-all border border-transparent relative"
+                    className="neu-button rounded-xl sm:rounded-2xl p-2 sm:p-3 flex flex-col gap-1.5 sm:gap-2 text-left transition-all border border-transparent relative"
                     style={inCart ? { borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 4%, transparent)' } : semEstoque ? { opacity: 0.4 } : {}}
                   >
                     {inCart && (
-                      <span className="absolute top-2 right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
+                      <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
                         style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
                         {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
                       </span>
                     )}
                     {fracionario && (
-                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[9px] font-black z-10 uppercase tracking-wider"
+                      <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 px-1 sm:px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[8px] sm:text-[9px] font-black z-10 uppercase tracking-wider"
                         style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}>
-                        <Scale size={9} /> {unidade}
+                        <Scale size={8} /> {unidade}
                       </span>
                     )}
-                    <div className="flex gap-3 items-start">
-                      <ProdutoThumb url={p.imagem_url} size="md" alt={p.nome} />
-                      <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <div className="flex gap-2 sm:gap-3 items-start">
+                      <ProdutoThumb url={p.imagem_url} size="sm" alt={p.nome} />
+                      <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
                         {p.filial && <FilialBadge filial={p.filial} />}
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">{p.codigo || '—'}</span>
-                        <span className="text-sm font-bold text-gray-200 leading-tight line-clamp-2">{p.nome}</span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">{p.codigo || '—'}</span>
+                        <span className="text-xs sm:text-sm font-bold text-gray-200 leading-tight line-clamp-2">{p.nome}</span>
                       </div>
                     </div>
-                    <div className="flex items-end justify-between mt-auto pt-1">
-                      <span className="text-base font-black text-accent">
+                    <div className="flex items-end justify-between mt-auto pt-0.5 sm:pt-1">
+                      <span className="text-sm sm:text-base font-black text-accent">
                         {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        {fracionario && <span className="text-[10px] font-bold text-gray-500"> /{unidade}</span>}
+                        {fracionario && <span className="text-[9px] sm:text-[10px] font-bold text-gray-500"> /{unidade}</span>}
                       </span>
-                      <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-500' : 'text-gray-500'}`}>
+                      <span className={`text-[9px] sm:text-[10px] font-bold ${semEstoque ? 'text-red-500' : 'text-gray-500'} hidden sm:inline`}>
                         {semEstoque
                           ? 'Sem estoque'
                           : `Saldo: ${fracionario ? `${formatQtd(Number(p.estoque ?? 0), unidade)} ${unidade}` : (p.estoque ?? '∞')}`}
@@ -1005,9 +1104,9 @@ export const PDVView = ({ showToast, profile }: any) => {
           </div>
         </div>
 
-        {/* RIGHT — carrinho + pagamento */}
-        <div className="lg:col-span-5 flex flex-col gap-4 min-h-0">
-          <div className="neu-flat rounded-3xl p-5 flex flex-col gap-3 flex-1 min-h-0 border border-white/5">
+        {/* RIGHT — carrinho + pagamento (hidden on mobile when produtos tab active) */}
+        <div className={`lg:col-span-5 flex-col gap-3 sm:gap-4 min-h-0 ${mobileTab === 'carrinho' ? 'flex' : 'hidden lg:flex'}`}>
+          <div className="neu-flat rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col gap-3 flex-1 min-h-0 border border-white/5">
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={16} className="text-accent" />
@@ -1025,7 +1124,8 @@ export const PDVView = ({ showToast, profile }: any) => {
             </div>
 
             {/* Itens do carrinho */}
-            <div className="flex flex-col gap-2 overflow-y-auto main-scrollbar flex-1 min-h-0">
+            <div className="flex flex-col gap-2 overflow-y-auto main-scrollbar flex-1 min-h-0"
+              style={{ overscrollBehavior: 'contain' }}>
               {cart.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <p className="text-xs text-gray-600 text-center">Clique em um produto<br />para adicionar ao carrinho</p>
@@ -1273,16 +1373,14 @@ export const PDVView = ({ showToast, profile }: any) => {
                 <motion.div
                   key="network-error"
                   initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                  className="w-full rounded-2xl flex flex-col gap-3 p-4 shrink-0 mt-1"
+                  className="w-full rounded-2xl flex flex-col gap-3 p-3 sm:p-4 shrink-0 mt-1"
                   style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
                   <div className="flex items-start gap-2.5">
                     <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-red-500">Erro de conexão</p>
                       <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                        Antes de tentar novamente, verifique no{' '}
-                        <span className="font-bold text-gray-300">Histórico de Vendas</span>{' '}
-                        se a venda já foi registrada para evitar duplicidade.
+                        Verifique no <span className="font-bold text-gray-300">Histórico de Vendas</span> se a venda já foi registrada.
                       </p>
                     </div>
                   </div>
@@ -1299,14 +1397,14 @@ export const PDVView = ({ showToast, profile }: any) => {
                   onClick={handleFecharVenda}
                   disabled={cart.length === 0 || isClosing}
                   whileTap={cart.length > 0 && !isClosing ? { scale: 0.98 } : {}}
-                  className="w-full py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1"
+                  className="w-full py-3 sm:py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1"
                   style={{
                     background: cart.length === 0 || isClosing ? 'color-mix(in srgb, var(--color-accent) 20%, transparent)' : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
                     color: cart.length === 0 || isClosing ? '#4b5563' : 'var(--color-accent-text)',
                     boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'none',
                     cursor: cart.length === 0 || isClosing ? 'not-allowed' : 'pointer',
                   }}>
-                  {isClosing ? <><Loader2 size={16} className="animate-spin" /> Processando...</> : <><CheckCircle2 size={16} /> Fechar Venda</>}
+                  {isClosing ? <><Loader2 size={16} className="animate-spin" /> Processando...</> : <><CheckCircle2 size={16} /> Fechar Venda · {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</>}
                 </motion.button>
               )}
             </AnimatePresence>

@@ -838,6 +838,7 @@ html.theme-switching *::after {
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  border-radius: 1rem;
 }
 
 .logo-shimmer::after {
