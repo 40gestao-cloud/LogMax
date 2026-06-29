@@ -2072,7 +2072,7 @@ export const PDVViewSupermax = ({
               <div className="flex justify-center">
                 <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
                   <QRCodeSVG
-                    value={`logmax-pix:${pixModal.id}:${pixModal.valor.toFixed(2)}`}
+                    value={`LOGMAX-PIX-${pixModal.id}`}
                     size={220}
                     level="M"
                   />
