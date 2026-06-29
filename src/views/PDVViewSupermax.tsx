@@ -103,6 +103,7 @@ export const PDVViewSupermax = ({
   const [cashReceived, setCashReceived]         = useState('');
   const [changeModal, setChangeModal]           = useState<{ amount: number } | null>(null);
   const [pixModal, setPixModal]                 = useState<{ id: string; valor: number } | null>(null);
+  const [cartaoModal, setCartaoModal]           = useState<{ id: string; valor: number; metodo: 'debito' | 'credito'; parcelas: number } | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch]         = useState('');
   const [confirmCancel, setConfirmCancel]       = useState(false);
@@ -129,6 +130,7 @@ export const PDVViewSupermax = ({
   // antes de marcar pix_pendentes como cancelado. Sem isso, encostar no Esc
   // por engano cancelava um PIX possivelmente a 1s da confirmação.
   const [confirmPixCancel, setConfirmPixCancel] = useState(false);
+  const [confirmCartaoCancel, setConfirmCartaoCancel] = useState(false);
 
   // Consulta de preço (F7) — read-only, não adiciona ao carrinho.
   const [priceQueryOpen, setPriceQueryOpen] = useState(false);
@@ -445,7 +447,7 @@ export const PDVViewSupermax = ({
       showToast?.('Carrinho vazio.', 'error', true);
       return;
     }
-    if (isClosing || paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen) return;
+    if (isClosing || paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen) return;
     // Sempre abre limpo — pagamentos parciais de venda anterior poderiam
     // vazar pra esta se o operador cancelou e voltou.
     setPagamentos([]);
@@ -511,7 +513,7 @@ export const PDVViewSupermax = ({
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || isClosing;
 
       if (e.key === 'F4' || e.key === 'F5') {
         e.preventDefault();
@@ -803,26 +805,78 @@ export const PDVViewSupermax = ({
       }
     }
 
-    // Cartão Débito ou Cartão Crédito em misto — adiciona à lista e foca
-    // FECHAR VENDA. Sem auto-finalize: operador confere e confirma.
+    // Cartão Débito como forma única → cria pendente para maquininha (MaxPay)
+    if (forma === 'Cartão Débito') {
+      const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+      if (!isMistoActive) {
+        setPaymentModalOpen(false);
+        await criarCartaoPendente('debito', totalFinal, 1);
+        return;
+      }
+    }
+
+    // Cartão em misto — adiciona à lista e foca FECHAR VENDA.
     setPagamentos(prev => [...prev, { forma, valor: parseFloat(valorDevido.toFixed(2)) }]);
     setParcialValor('');
     focusFecharVenda();
   };
 
-  // Confirma parcelamento Cartão Crédito (forma única). Adiciona pagamento
-  // com .parcelas pra que finalizarVendaMisto passe p_parcelas correto.
-  const confirmarParcelas = (n: number) => {
+  // Cria cartao_pendentes e abre overlay aguardando aproximação na maquininha.
+  // Quando MaxBank autoriza, realtime/polling finaliza venda.
+  const criarCartaoPendente = async (metodo: 'debito' | 'credito', valor: number, parcelas: number) => {
+    try {
+      if (!supabase) throw new Error('Supabase indisponível.');
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`Caixa de ${filial} foi fechado.`, 'error', true);
+        await refreshCaixa();
+        return;
+      }
+      setIsClosing(true);
+      // Cancela pendentes antigos do mesmo operador (> 30s)
+      if (user?.id) {
+        const cutoff = new Date(Date.now() - 30_000).toISOString();
+        await supabase
+          .from('cartao_pendentes')
+          .update({ status: 'cancelado' })
+          .eq('operador_id', user.id)
+          .eq('status', 'aguardando')
+          .lt('created_at', cutoff);
+      }
+      const { data: pendente, error: insErr } = await supabase
+        .from('cartao_pendentes')
+        .insert({
+          valor,
+          metodo,
+          parcelas,
+          status: 'aguardando',
+          operador_id: user?.id ?? null,
+        })
+        .select('id, valor, metodo, parcelas')
+        .single();
+      if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao criar cobrança.');
+      setCartaoModal({
+        id: pendente.id,
+        valor: Number(pendente.valor),
+        metodo: pendente.metodo,
+        parcelas: pendente.parcelas,
+      });
+    } catch (err: any) {
+      showToast?.(`Erro Cartão: ${err?.message ?? '—'}`, 'error', true);
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  // Confirma parcelamento Cartão Crédito (forma única). Em vez de adicionar
+  // à lista, cria cartao_pendentes para a maquininha.
+  const confirmarParcelas = async (n: number) => {
     const parcial = parseBRL(parcialValor);
     const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
-    setPagamentos(prev => [...prev, {
-      forma: 'Cartão Crédito',
-      valor: parseFloat(valorDevido.toFixed(2)),
-      parcelas: n,
-    }]);
-    setParcialValor('');
     setParcelasModalOpen(false);
-    focusFecharVenda();
+    setParcialValor('');
+    setPaymentModalOpen(false);
+    await criarCartaoPendente('credito', parseFloat(valorDevido.toFixed(2)), n);
   };
 
   // Cash modal não finaliza mais — adiciona Dinheiro à lista de pagamentos
@@ -916,6 +970,54 @@ export const PDVViewSupermax = ({
     return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixModal]);
+
+  // Cartão (maquininha) realtime + polling — finaliza venda quando MaxBank autoriza
+  useEffect(() => {
+    if (!cartaoModal || !supabase) return;
+    let handled = false;
+
+    const onAutorizado = async () => {
+      if (handled) return;
+      handled = true;
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`Cartão autorizado mas caixa de ${filial} foi fechado.`, 'error', true);
+        setCartaoModal(null);
+        return;
+      }
+      try {
+        const formaCanon = cartaoModal.metodo === 'debito' ? 'Cartão Débito' : 'Cartão Crédito';
+        await finalizarVendaRef.current(formaCanon as any, undefined, cartaoModal.parcelas);
+        setCartaoModal(null);
+        setReciboModalOpen(true);
+      } catch (err: any) {
+        showToast?.(`Autorizado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
+        setCartaoModal(null);
+      }
+    };
+
+    const channel = supabase
+      .channel(`smx_cartao_${cartaoModal.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'cartao_pendentes', filter: `id=eq.${cartaoModal.id}` },
+        (payload: any) => { if (payload?.new?.status === 'autorizado') onAutorizado(); }
+      )
+      .subscribe();
+
+    const timer = setInterval(async () => {
+      if (handled) return;
+      const { data } = await supabase
+        .from('cartao_pendentes')
+        .select('status')
+        .eq('id', cartaoModal.id)
+        .maybeSingle();
+      if (data?.status === 'autorizado') onAutorizado();
+    }, 2000);
+
+    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartaoModal]);
 
   // Confirma cancelamento — UPDATE pode falhar (rede caiu, RLS rejeitou). Sem
   // try/catch, modal fechava e pix_pendentes ficava 'aguardando' eternamente.
@@ -1029,6 +1131,27 @@ export const PDVViewSupermax = ({
     } finally {
       setConfirmPixCancel(false);
       setPixModal(null);
+    }
+  };
+
+  const cancelarCartao = async () => {
+    if (!cartaoModal || !supabase) {
+      setConfirmCartaoCancel(false);
+      setCartaoModal(null);
+      return;
+    }
+    const cartaoId = cartaoModal.id;
+    try {
+      const { error } = await supabase
+        .from('cartao_pendentes')
+        .update({ status: 'cancelado' })
+        .eq('id', cartaoId);
+      if (error) throw error;
+    } catch (err: any) {
+      showToast?.(`Falha ao cancelar cartão (${err?.message ?? '—'}).`, 'error', true);
+    } finally {
+      setConfirmCartaoCancel(false);
+      setCartaoModal(null);
     }
   };
 
@@ -2158,6 +2281,104 @@ export const PDVViewSupermax = ({
                       style={{ background: RED }}
                     >
                       Cancelar PIX (Enter)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cartão (Maquininha) aguardando — MaxPay/MaxBank autoriza */}
+      {cartaoModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && cartaoModal && !confirmCartaoCancel) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !confirmCartaoCancel) {
+              e.preventDefault(); e.stopPropagation();
+              setConfirmCartaoCancel(true);
+              return;
+            }
+            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Aguardando maquininha</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">
+                Cartão {cartaoModal.metodo === 'debito' ? 'Débito' : 'Crédito'}
+                {cartaoModal.parcelas > 1 && ` ${cartaoModal.parcelas}x`}
+              </div>
+            </div>
+            <div className="p-6 space-y-4 text-center">
+              <div className="flex justify-center">
+                <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
+                  <QRCodeSVG
+                    value={`LOGMAX-CARTAO-${cartaoModal.id}`}
+                    size={220}
+                    level="M"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1">Valor</div>
+                <div className="text-4xl font-black tabular-nums" style={{ color: MONEY }}>
+                  R$ {fmt(cartaoModal.valor)}
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Operador digita o valor na <b>MaxPay</b> e o cliente aproxima o cartão (lendo o QR no <b>MaxBank</b>). A venda fecha sozinha quando for autorizado.
+              </p>
+              <button
+                onClick={() => setConfirmCartaoCancel(true)}
+                className="w-full px-4 py-3 border-2 text-gray-700 font-bold uppercase text-sm tracking-wide"
+                style={{ borderColor: '#9ca3af' }}
+              >
+                Cancelar Cartão
+              </button>
+            </div>
+          </div>
+
+          {confirmCartaoCancel && (
+            <div
+              className="fixed inset-0 z-[215] flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.85)' }}
+              tabIndex={-1}
+              ref={(el) => { if (el && confirmCartaoCancel) el.focus(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmCartaoCancel(false); return; }
+                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); cancelarCartao(); return; }
+                if (/^F\d+$/.test(e.key)) e.stopPropagation();
+              }}
+            >
+              <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: RED }}>
+                <div className="px-5 py-4 text-white" style={{ background: RED }}>
+                  <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Confirmar</div>
+                  <div className="text-2xl font-black tracking-wide mt-0.5">Cancelar Cartão?</div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Se o cliente já autorizou no MaxBank, este cancelamento <b>não estorna</b> o valor — é só do nosso lado.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmCartaoCancel(false)}
+                      autoFocus
+                      className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
+                      style={{ borderColor: NAVY_DARK, color: NAVY_DARK }}
+                    >
+                      Voltar (Esc)
+                    </button>
+                    <button
+                      onClick={cancelarCartao}
+                      className="flex-1 px-4 py-3 text-white font-black uppercase tracking-wide text-sm"
+                      style={{ background: RED }}
+                    >
+                      Cancelar (Enter)
                     </button>
                   </div>
                 </div>
