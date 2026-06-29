@@ -131,6 +131,12 @@ export const PDVViewSupermax = ({
   // por engano cancelava um PIX possivelmente a 1s da confirmação.
   const [confirmPixCancel, setConfirmPixCancel] = useState(false);
   const [confirmCartaoCancel, setConfirmCartaoCancel] = useState(false);
+  // PIX pago no MaxBank mas criar_venda_pdv falhou — modal segura erro
+  // visível com retry, em vez de fechar e mostrar toast que some atrás
+  // do overlay (sintoma: PIX pago no banco mas sem venda no LogMax).
+  const [pixError, setPixError] = useState<string | null>(null);
+  const [pixProcessing, setPixProcessing] = useState(false);
+  const pixHandledRef = useRef(false);
 
   // Consulta de preço (F7) — read-only, não adiciona ao carrinho.
   const [priceQueryOpen, setPriceQueryOpen] = useState(false);
@@ -924,28 +930,45 @@ export const PDVViewSupermax = ({
     }
   };
 
+  // Reseta estado de erro/processamento sempre que abre/troca pix_modal
+  useEffect(() => {
+    pixHandledRef.current = false;
+    setPixError(null);
+    setPixProcessing(false);
+  }, [pixModal?.id]);
+
+  // Registra a venda quando o pix vira 'pago'. Idempotente: pode ser chamado
+  // pelo realtime, polling ou botão "Tentar Novamente" — só dispara uma vez
+  // por sessão de pixModal, e libera retry quando o RPC falha.
+  const processarPagamentoPix = useCallback(async () => {
+    if (!pixModal) return;
+    setPixError(null);
+    setPixProcessing(true);
+    try {
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        throw new Error(`Caixa de ${filial} foi fechado. Reabra em Financeiro → Controle de Caixa e clique em "Tentar Novamente". O PIX já foi pago no MaxBank — NÃO cancele aqui.`);
+      }
+      await finalizarVendaRef.current('PIX');
+      setPixModal(null);
+      setReciboModalOpen(true);
+    } catch (err: any) {
+      setPixError(err?.message ?? String(err));
+      pixHandledRef.current = false; // permite retry manual ou novo trigger
+    } finally {
+      setPixProcessing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixModal, filial]);
+
   // PIX realtime + polling — finaliza venda quando MaxBank/MaxPay confirma
   useEffect(() => {
     if (!pixModal || !supabase) return;
-    let handled = false;
 
-    const onPago = async () => {
-      if (handled) return;
-      handled = true;
-      const aberto = await caixaAindaAberto();
-      if (!aberto) {
-        showToast?.(`PIX pago mas caixa de ${filial} foi fechado. Estorne no MaxBank ou reabra o caixa e refaça a venda.`, 'error', true);
-        setPixModal(null);
-        return;
-      }
-      try {
-        await finalizarVendaRef.current('PIX');
-        setPixModal(null);
-        setReciboModalOpen(true);
-      } catch (err: any) {
-        showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
-        setPixModal(null);
-      }
+    const tryProcess = () => {
+      if (pixHandledRef.current) return;
+      pixHandledRef.current = true;
+      processarPagamentoPix();
     };
 
     const channel = supabase
@@ -953,21 +976,21 @@ export const PDVViewSupermax = ({
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixModal.id}` },
-        (payload: any) => { if (payload?.new?.status === 'pago') onPago(); }
+        (payload: any) => { if (payload?.new?.status === 'pago') tryProcess(); }
       )
       .subscribe();
 
     const timer = setInterval(async () => {
-      if (handled) return;
+      if (pixHandledRef.current) return;
       const { data } = await supabase
         .from('pix_pendentes')
         .select('status')
         .eq('id', pixModal.id)
         .maybeSingle();
-      if (data?.status === 'pago') onPago();
+      if (data?.status === 'pago') tryProcess();
     }, 2000);
 
-    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
+    return () => { supabase.removeChannel(channel); clearInterval(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixModal]);
 
@@ -2231,15 +2254,37 @@ export const PDVViewSupermax = ({
                   R$ {fmt(pixModal.valor)}
                 </div>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                Cliente lê o QR no <b>MaxBank</b>. A venda fecha sozinha quando o pagamento for confirmado.
-              </p>
+              {pixError ? (
+                <div className="border-2 p-4 space-y-3 text-left" style={{ borderColor: RED }}>
+                  <div className="text-xs font-black uppercase tracking-widest" style={{ color: RED }}>
+                    ⚠ PIX recebido — falha ao registrar venda
+                  </div>
+                  <div className="text-sm text-gray-900 font-mono whitespace-pre-wrap break-words bg-gray-50 p-2 border" style={{ borderColor: '#d1d5db' }}>
+                    {pixError}
+                  </div>
+                  <div className="text-xs text-gray-700 leading-relaxed">
+                    O cliente já pagou no MaxBank. <b>NÃO cancele</b> — corrija o problema acima e clique em Tentar Novamente.
+                  </div>
+                  <button
+                    onClick={processarPagamentoPix}
+                    disabled={pixProcessing}
+                    className="w-full px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-50"
+                    style={{ background: NAVY_DARK }}
+                  >
+                    {pixProcessing ? 'Tentando...' : 'Tentar Novamente'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Cliente lê o QR no <b>MaxBank</b>. A venda fecha sozinha quando o pagamento for confirmado.
+                </p>
+              )}
               <button
                 onClick={() => setConfirmPixCancel(true)}
                 className="w-full px-4 py-3 border-2 text-gray-700 font-bold uppercase text-sm tracking-wide"
                 style={{ borderColor: '#9ca3af' }}
               >
-                Cancelar PIX
+                {pixError ? 'Descartar (PIX já pago — vai perder o registro)' : 'Cancelar PIX'}
               </button>
             </div>
           </div>
