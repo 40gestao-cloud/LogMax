@@ -100,7 +100,11 @@ export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo';
 
   const funcionariosAtivos = useMemo(
-    () => (funcionarios ?? []).filter((f: any) => (f.status ?? 'Ativo') === 'Ativo').sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '')),
+    () => (funcionarios ?? [])
+      .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
+      .sort((a: any, b: any) =>
+        (a.nome ?? '').trim().localeCompare((b.nome ?? '').trim(), 'pt-BR', { sensitivity: 'base' })
+      ),
     [funcionarios],
   );
 
