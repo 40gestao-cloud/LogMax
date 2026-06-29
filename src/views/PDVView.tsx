@@ -781,59 +781,35 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     }
   };
 
-  // Realtime + polling fallback: escuta a linha do pendente Pix.
-  // Quando UPDATE marca status='pago', chama o RPC com o snapshot do carrinho.
+  // Realtime: escuta a linha do pendente Pix. Quando UPDATE marca status='pago',
+  // chama o RPC com o snapshot do carrinho. Cancelamento manual ou cancelado
+  // simplesmente fecha o overlay e devolve o controlo ao operador.
   useEffect(() => {
     if (!pixPendente || !supabase) return;
-    let done = false;
-
-    const handlePago = async () => {
-      if (done) return;
-      done = true;
-      const snap = vendaSnapshotRef.current;
-      if (!snap) return;
-      try {
-        playPlim();
-        await finalizarVenda(snap, 'PIX', 1);
-        vendaSnapshotRef.current = null;
-        setPixPendente(null);
-      } catch (err: any) {
-        showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
-        setPixPendente(null);
-        setIsClosing(false);
-      }
-    };
-
-    // Realtime (primary)
     const channel = supabase
       .channel(`pix_pendente_${pixPendente.id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixPendente.id}` },
         async (payload: any) => {
-          if (payload?.new?.status === 'pago') handlePago();
+          const novoStatus = payload?.new?.status;
+          if (novoStatus !== 'pago') return;
+          const snap = vendaSnapshotRef.current;
+          if (!snap) return;
+          try {
+            playPlim();
+            await finalizarVenda(snap, 'PIX', 1);
+            vendaSnapshotRef.current = null;
+            setPixPendente(null);
+          } catch (err: any) {
+            showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+            setPixPendente(null);
+            setIsClosing(false);
+          }
         },
       )
       .subscribe();
-
-    // Polling fallback (every 3s)
-    const poll = setInterval(async () => {
-      if (done) return;
-      try {
-        const { data } = await supabase
-          .from('pix_pendentes')
-          .select('status')
-          .eq('id', pixPendente.id)
-          .single();
-        if (data?.status === 'pago') handlePago();
-      } catch {}
-    }, 3000);
-
-    return () => {
-      done = true;
-      supabase.removeChannel(channel);
-      clearInterval(poll);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [pixPendente, showToast]);
 
   const cancelarPix = async () => {
