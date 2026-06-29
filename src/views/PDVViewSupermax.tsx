@@ -859,37 +859,46 @@ export const PDVViewSupermax = ({
     }
   };
 
-  // PIX realtime — finaliza venda quando MaxBank confirma
+  // PIX realtime + polling — finaliza venda quando MaxBank/MaxPay confirma
   useEffect(() => {
     if (!pixModal || !supabase) return;
+    let handled = false;
+
+    const onPago = async () => {
+      if (handled) return;
+      handled = true;
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`PIX pago mas caixa de ${filial} foi fechado. Estorne no MaxBank ou reabra o caixa e refaça a venda.`, 'error', true);
+        setPixModal(null);
+        return;
+      }
+      try {
+        await finalizarVendaRef.current('PIX');
+        setPixModal(null);
+        setReciboModalOpen(true);
+      } catch (err: any) {
+        showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
+        setPixModal(null);
+      }
+    };
+
     const channel = supabase
       .channel(`smx_pix_${pixModal.id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixModal.id}` },
-        async (payload: any) => {
-          if (payload?.new?.status !== 'pago') return;
-          // Cliente pagou mas o caixa fechou no meio tempo — não dá pra registrar
-          // a venda. Avisa o operador (com persist:true) pra que ele estorne
-          // manualmente no MaxBank ou abra o caixa de novo antes de tentar.
-          const aberto = await caixaAindaAberto();
-          if (!aberto) {
-            showToast?.(`PIX pago mas caixa de ${filial} foi fechado. Estorne no MaxBank ou reabra o caixa e refaça a venda.`, 'error', true);
-            setPixModal(null);
-            return;
-          }
-          try {
-            await finalizarVendaRef.current('PIX');
-            setPixModal(null);
-            setReciboModalOpen(true);
-          } catch (err: any) {
-            showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
-            setPixModal(null);
-          }
-        }
+        (payload: any) => { if (payload?.new?.status === 'pago') onPago(); }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    const timer = setInterval(async () => {
+      if (handled) return;
+      const { data } = await supabase.from('pix_pendentes').select('status').eq('id', pixModal.id).single();
+      if (data?.status === 'pago') onPago();
+    }, 2000);
+
+    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixModal]);
 
