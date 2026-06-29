@@ -752,6 +752,17 @@ export const PDVViewSupermax = ({
       try {
         if (!supabase) throw new Error('Supabase indisponível.');
         setIsClosing(true);
+        // Cancela pendentes 'aguardando' antigos do mesmo operador (> 30s)
+        // para evitar que MaxPay/MaxBank confunda com cobrança nova.
+        if (user?.id) {
+          const cutoff = new Date(Date.now() - 30_000).toISOString();
+          await supabase
+            .from('pix_pendentes')
+            .update({ status: 'cancelado' })
+            .eq('operador_id', user.id)
+            .eq('status', 'aguardando')
+            .lt('created_at', cutoff);
+        }
         const { data: pendente, error: insErr } = await supabase
           .from('pix_pendentes')
           .insert({
