@@ -859,37 +859,60 @@ export const PDVViewSupermax = ({
     }
   };
 
-  // PIX realtime — finaliza venda quando MaxBank confirma
+  // PIX realtime + polling fallback — finaliza venda quando MaxBank/MaxPay confirma
   useEffect(() => {
     if (!pixModal || !supabase) return;
+    let done = false;
+
+    const handlePago = async () => {
+      if (done) return;
+      done = true;
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`PIX pago mas caixa de ${filial} foi fechado. Estorne no MaxBank ou reabra o caixa e refaça a venda.`, 'error', true);
+        setPixModal(null);
+        return;
+      }
+      try {
+        await finalizarVendaRef.current('PIX');
+        setPixModal(null);
+        setReciboModalOpen(true);
+      } catch (err: any) {
+        showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
+        setPixModal(null);
+      }
+    };
+
+    // Realtime (primary)
     const channel = supabase
       .channel(`smx_pix_${pixModal.id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixModal.id}` },
         async (payload: any) => {
-          if (payload?.new?.status !== 'pago') return;
-          // Cliente pagou mas o caixa fechou no meio tempo — não dá pra registrar
-          // a venda. Avisa o operador (com persist:true) pra que ele estorne
-          // manualmente no MaxBank ou abra o caixa de novo antes de tentar.
-          const aberto = await caixaAindaAberto();
-          if (!aberto) {
-            showToast?.(`PIX pago mas caixa de ${filial} foi fechado. Estorne no MaxBank ou reabra o caixa e refaça a venda.`, 'error', true);
-            setPixModal(null);
-            return;
-          }
-          try {
-            await finalizarVendaRef.current('PIX');
-            setPixModal(null);
-            setReciboModalOpen(true);
-          } catch (err: any) {
-            showToast?.(`Pagamento confirmado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
-            setPixModal(null);
-          }
+          if (payload?.new?.status === 'pago') handlePago();
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Polling fallback (every 3s)
+    const poll = setInterval(async () => {
+      if (done) return;
+      try {
+        const { data } = await supabase
+          .from('pix_pendentes')
+          .select('status')
+          .eq('id', pixModal.id)
+          .single();
+        if (data?.status === 'pago') handlePago();
+      } catch {}
+    }, 3000);
+
+    return () => {
+      done = true;
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixModal]);
 

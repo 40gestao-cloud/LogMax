@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2,
+  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
@@ -83,6 +83,7 @@ export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
   const { user } = useAuth();
   const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview');
   const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>('/api/funcionariosview');
+  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview');
 
   const today = todayBR();
   const [dataSelecionada, setDataSelecionada] = useState(today);
@@ -415,6 +416,47 @@ export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Justificativas de falta recebidas */}
+      {(justificativas ?? []).length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
+          <div className="flex items-center gap-2 mb-4">
+            <MessageSquarePlus size={14} className="text-yellow-400" />
+            <h3 className="text-sm font-bold text-gray-300">Justificativas de Falta Recebidas</h3>
+            <span className="ml-auto text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+              {(justificativas ?? []).length}
+            </span>
+          </div>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-3 font-bold px-3">Funcionário</th>
+                  <th className="pb-3 font-bold px-3">Data</th>
+                  <th className="pb-3 font-bold px-3">Motivo</th>
+                  <th className="pb-3 font-bold px-3">Enviado por</th>
+                  <th className="pb-3 font-bold px-3">Cargo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(justificativas ?? []).map((j: any) => (
+                  <tr key={j.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="py-2.5 px-3 text-sm font-semibold text-gray-200">{j.nome_funcionario ?? '—'}</td>
+                    <td className="py-2.5 px-3 text-xs font-mono text-gray-400">{j.data ? fmtData(j.data) : '—'}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-300 max-w-[300px]">{j.motivo ?? '—'}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500">{j.nome_criador ?? '—'}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/20">
+                        {j.role_criador ?? '—'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
