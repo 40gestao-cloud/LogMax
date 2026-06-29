@@ -894,8 +894,9 @@ export const PDVViewSupermax = ({
 
     const timer = setInterval(async () => {
       if (handled) return;
-      const { data } = await supabase.from('pix_pendentes').select('status').eq('id', pixModal.id).single();
-      if (data?.status === 'pago') onPago();
+      const { data, error } = await supabase.from('pix_pendentes').select('id').eq('id', pixModal.id).maybeSingle();
+      if (error) return;
+      if (!data) onPago();
     }, 2000);
 
     return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
