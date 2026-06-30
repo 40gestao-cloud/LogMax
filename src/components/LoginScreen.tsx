@@ -258,13 +258,6 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         {/* Footer */}
         <div style={{ marginTop: '1.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-          <p style={{
-            textAlign: 'center', fontSize: '0.65rem',
-            color: 'var(--color-text-ghost)',
-            letterSpacing: '0.05em',
-          }}>
-            Gestão Organizacional LogMax {new Date().getFullYear()}
-          </p>
           <img
             src="/icon-assinatura.png"
             alt="Assinatura"
