@@ -8,30 +8,9 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
+import { CRITERIOS, Categoria, ESCALA_MAX, CATEGORIA_LABEL } from '../lib/avaliacaoCriterios';
+import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 
-// ----------------------------------------------------------------------
-// Critérios hardcoded (Etapa 1). Etapa 2 pode tornar configurável.
-// ----------------------------------------------------------------------
-
-const CRITERIOS = {
-  tecnica: ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
-  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
-  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
-} as const;
-
-// Escala 0-10. Default 5 = neutro (centro da escala).
-const ESCALA_MIN = 0;
-const ESCALA_MAX = 10;
-const NOTA_DEFAULT = 5;
-const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => i + ESCALA_MIN);
-
-const CATEGORIA_LABEL: Record<string, string> = {
-  tecnica: 'Técnicas',
-  comportamental: 'Comportamentais',
-  socioemocional: 'Socioemocionais',
-};
-
-type Categoria = keyof typeof CRITERIOS;
 type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean };
 type Avaliacao = {
   id: string;
@@ -69,10 +48,7 @@ function ModalAvaliacao({
 
   // Notas por categoria/critério (default = neutro, ou valores existentes em edição)
   const [notas, setNotas] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    (Object.keys(CRITERIOS) as Categoria[]).forEach(cat => {
-      CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
-    });
+    const init = notasIniciais();
     if (avaliacaoExistente) {
       avaliacaoExistente.criterios.forEach(c => {
         init[`${c.categoria}::${c.criterio}`] = c.nota;
@@ -144,40 +120,7 @@ function ModalAvaliacao({
         </div>
 
         <div className="flex flex-col gap-6">
-          {(Object.keys(CRITERIOS) as Categoria[]).map(cat => (
-            <div key={cat}>
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                {CATEGORIA_LABEL[cat]}
-              </h4>
-              <div className="flex flex-col gap-3">
-                {CRITERIOS[cat].map(c => {
-                  const key = `${cat}::${c}`;
-                  const nota = notas[key];
-                  return (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <span className="text-sm text-gray-300 flex-1">{c}</span>
-                      <div className="flex flex-wrap gap-1">
-                        {NOTAS.map(n => (
-                          <button
-                            key={n}
-                            onClick={() => setNotas(prev => ({ ...prev, [key]: n }))}
-                            className="w-8 h-8 rounded-lg font-bold text-xs transition-all"
-                            style={
-                              n === nota
-                                ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }
-                                : { background: 'var(--color-bg-base)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.05)' }
-                            }
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <CriteriosAvaliacaoForm notas={notas} setNotas={setNotas} />
 
           <div>
             <label htmlFor="avaliacao-observacao" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">

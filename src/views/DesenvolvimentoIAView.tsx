@@ -9,27 +9,10 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
+import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
+import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 
 type Auxiliar = { id: string; nome: string; role: string; setor: string };
-
-// Mesmos critérios/escala do módulo Avaliações (src/views/AvaliacoesView.tsx),
-// duplicados aqui de propósito: avaliação por treinamento é um fluxo pontual
-// e independente de ciclo, não vale acoplar os dois arquivos por isso.
-const CRITERIOS = {
-  tecnica: ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
-  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
-  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
-} as const;
-type CategoriaCrit = keyof typeof CRITERIOS;
-const ESCALA_MIN = 0;
-const ESCALA_MAX = 10;
-const NOTA_DEFAULT = 5;
-const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => i + ESCALA_MIN);
-const CATEGORIA_LABEL: Record<string, string> = {
-  tecnica: 'Técnicas',
-  comportamental: 'Comportamentais',
-  socioemocional: 'Socioemocionais',
-};
 
 type AvaliacaoDevIA = { id: string; desenvolvimento_ia_id: string; avaliado_id: string };
 
@@ -476,13 +459,7 @@ function ModalAvaliarParticipante({
   onSaved: () => Promise<void>;
   showToast: (msg: string, type?: string) => void;
 }) {
-  const [notas, setNotas] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    (Object.keys(CRITERIOS) as CategoriaCrit[]).forEach(cat => {
-      CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
-    });
-    return init;
-  });
+  const [notas, setNotas] = useState<Record<string, number>>(notasIniciais);
   const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -490,7 +467,7 @@ function ModalAvaliarParticipante({
     if (!supabase) return;
     setSaving(true);
     try {
-      const p_criterios = (Object.keys(CRITERIOS) as CategoriaCrit[]).flatMap(cat =>
+      const p_criterios = (Object.keys(CRITERIOS) as CategoriaCriterio[]).flatMap(cat =>
         CRITERIOS[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
       );
       const { error } = await supabase.rpc('criar_avaliacao_ti_dev_ia', {
@@ -537,40 +514,7 @@ function ModalAvaliarParticipante({
         </div>
 
         <div className="flex flex-col gap-6">
-          {(Object.keys(CRITERIOS) as CategoriaCrit[]).map(cat => (
-            <div key={cat}>
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                {CATEGORIA_LABEL[cat]}
-              </h4>
-              <div className="flex flex-col gap-3">
-                {CRITERIOS[cat].map(c => {
-                  const key = `${cat}::${c}`;
-                  const nota = notas[key];
-                  return (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <span className="text-sm text-gray-300 flex-1">{c}</span>
-                      <div className="flex flex-wrap gap-1">
-                        {NOTAS.map(n => (
-                          <button
-                            key={n}
-                            onClick={() => setNotas(prev => ({ ...prev, [key]: n }))}
-                            className="w-8 h-8 rounded-lg font-bold text-xs transition-all"
-                            style={
-                              n === nota
-                                ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }
-                                : { background: 'var(--color-bg-base)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.05)' }
-                            }
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <CriteriosAvaliacaoForm notas={notas} setNotas={setNotas} />
 
           <div>
             <label htmlFor="dev-ia-avaliacao-observacao" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
