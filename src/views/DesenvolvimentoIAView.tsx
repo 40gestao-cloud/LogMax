@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Cpu, Plus, X, Loader2, ChevronRight, Check, Users, Trash2,
-  Calendar, Clock, Pencil,
+  Calendar, Clock, Pencil, Star,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,27 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
 
 type Auxiliar = { id: string; nome: string; role: string; setor: string };
+
+// Mesmos critérios/escala do módulo Avaliações (src/views/AvaliacoesView.tsx),
+// duplicados aqui de propósito: avaliação por treinamento é um fluxo pontual
+// e independente de ciclo, não vale acoplar os dois arquivos por isso.
+const CRITERIOS = {
+  tecnica: ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
+  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
+  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
+} as const;
+type CategoriaCrit = keyof typeof CRITERIOS;
+const ESCALA_MIN = 0;
+const ESCALA_MAX = 10;
+const NOTA_DEFAULT = 5;
+const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => i + ESCALA_MIN);
+const CATEGORIA_LABEL: Record<string, string> = {
+  tecnica: 'Técnicas',
+  comportamental: 'Comportamentais',
+  socioemocional: 'Socioemocionais',
+};
+
+type AvaliacaoDevIA = { id: string; desenvolvimento_ia_id: string; avaliado_id: string };
 
 type DesenvolvimentoIA = {
   id: string;
@@ -78,6 +99,8 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
   const [saving, setSaving]     = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [people, setPeople]     = useState<Auxiliar[]>([]);
+  const [avaliacoesDevIA, setAvaliacoesDevIA] = useState<AvaliacaoDevIA[]>([]);
+  const [avaliarAlvo, setAvaliarAlvo] = useState<{ sessao: DesenvolvimentoIA; auxiliar: Auxiliar } | null>(null);
 
   // Apenas TI (gerente ou staff do setor) e admin/CEO criam treinamentos
   // de IA — gerente de outro setor não deve aparecer com o botão "Novo
@@ -87,12 +110,15 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
     profile?.role === 'ceo' ||
     hasSetor(profile, 'ti');
 
-  // Carrega TODOS os usuários como auxiliares possíveis (admin/CEO/gerente/
-  // colaborador, qualquer setor). RPC SECURITY DEFINER expõe só id/nome/
-  // role/setor — fura a RLS de user_profiles que bloquearia o TI de ver
-  // gente de outro setor.
+  const canAvaliar = profile?.role === 'admin' || profile?.role === 'ceo' || hasSetor(profile, 'ti');
+
+  // Carrega TODOS os usuários (admin/CEO/gerente/colaborador, qualquer
+  // setor): usados tanto como auxiliares possíveis no form quanto como
+  // pool de "demais colaboradores" avaliáveis nos cards. RPC SECURITY
+  // DEFINER expõe só id/nome/role/setor — fura a RLS de user_profiles
+  // que bloquearia o TI de ver gente de outro setor.
   useEffect(() => {
-    if (!supabase || !showForm) return;
+    if (!supabase || !(showForm || canAvaliar)) return;
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase.rpc('listar_pessoas_treinamento_ia');
@@ -104,7 +130,23 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
       setPeople((data ?? []) as Auxiliar[]);
     })();
     return () => { cancelled = true; };
-  }, [showForm]);
+  }, [showForm, canAvaliar]);
+
+  const reloadAvaliacoesDevIA = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .select('id, desenvolvimento_ia_id, avaliado_id')
+      .eq('tipo', 'ti_dev_ia');
+    if (error) { console.warn('[DesenvolvimentoIA] erro ao buscar avaliações:', error.message); return; }
+    setAvaliacoesDevIA((data ?? []) as AvaliacaoDevIA[]);
+  };
+
+  useEffect(() => {
+    if (!supabase || !canAvaliar) return;
+    reloadAvaliacoesDevIA();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAvaliar]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -308,13 +350,64 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
                       {Array.isArray(s.auxiliares) && s.auxiliares.length > 0 && (
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           <Users size={11} className="text-gray-500" />
-                          {s.auxiliares.map(a => (
-                            <span key={a.id} className="text-[10px] px-2 py-0.5 rounded-full neu-pressed text-gray-300 border border-white/5">
-                              {a.nome}
-                            </span>
-                          ))}
+                          {s.auxiliares.map(a => {
+                            const jaAvaliado = avaliacoesDevIA.some(
+                              av => av.desenvolvimento_ia_id === s.id && av.avaliado_id === a.id
+                            );
+                            const avaliavel = a.role !== 'admin' && a.id !== s.criador_id;
+                            return (
+                              <span key={a.id}
+                                className="text-[10px] pl-2 pr-1 py-0.5 rounded-full neu-pressed text-gray-300 border border-white/5 flex items-center gap-1">
+                                {a.nome}
+                                {canAvaliar && avaliavel && a.id !== profile.id && (
+                                  jaAvaliado ? (
+                                    <span title="Já avaliado" className="text-accent flex items-center"><Star size={10} fill="currentColor" /></span>
+                                  ) : (
+                                    <button type="button" onClick={() => setAvaliarAlvo({ sessao: s, auxiliar: a })}
+                                      title="Avaliar participante"
+                                      className="text-gray-500 hover:text-accent transition-colors">
+                                      <Star size={10} />
+                                    </button>
+                                  )
+                                )}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
+
+                      {canAvaliar && (() => {
+                        const auxIds = new Set((Array.isArray(s.auxiliares) ? s.auxiliares : []).map(a => a.id));
+                        const demais = people.filter(p =>
+                          p.role !== 'admin' && p.id !== s.criador_id && p.id !== profile.id && !auxIds.has(p.id)
+                        );
+                        if (demais.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className="text-[9px] text-gray-600 uppercase tracking-widest font-bold">Demais:</span>
+                            {demais.map(p => {
+                              const jaAvaliado = avaliacoesDevIA.some(
+                                av => av.desenvolvimento_ia_id === s.id && av.avaliado_id === p.id
+                              );
+                              return (
+                                <span key={p.id}
+                                  className="text-[10px] pl-2 pr-1 py-0.5 rounded-full neu-pressed text-gray-400 border border-white/5 flex items-center gap-1">
+                                  {p.nome}
+                                  {jaAvaliado ? (
+                                    <span title="Já avaliado" className="text-accent flex items-center"><Star size={10} fill="currentColor" /></span>
+                                  ) : (
+                                    <button type="button" onClick={() => setAvaliarAlvo({ sessao: s, auxiliar: p })}
+                                      title="Avaliar participante"
+                                      className="text-gray-500 hover:text-accent transition-colors">
+                                      <Star size={10} />
+                                    </button>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -357,9 +450,159 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
         people={people}
         toggleAuxiliar={toggleAuxiliar}
       />
+
+      {avaliarAlvo && (
+        <ModalAvaliarParticipante
+          sessao={avaliarAlvo.sessao}
+          auxiliar={avaliarAlvo.auxiliar}
+          onClose={() => setAvaliarAlvo(null)}
+          onSaved={async () => { await reloadAvaliacoesDevIA(); }}
+          showToast={showToast}
+        />
+      )}
     </motion.div>
   );
 };
+
+// ──────────────────────────────────────────────
+// Modal de avaliação de participante (TI avalia quem fez o treinamento)
+// ──────────────────────────────────────────────
+function ModalAvaliarParticipante({
+  sessao, auxiliar, onClose, onSaved, showToast,
+}: {
+  sessao: DesenvolvimentoIA;
+  auxiliar: Auxiliar;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  showToast: (msg: string, type?: string) => void;
+}) {
+  const [notas, setNotas] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    (Object.keys(CRITERIOS) as CategoriaCrit[]).forEach(cat => {
+      CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
+    });
+    return init;
+  });
+  const [observacao, setObservacao] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSalvar = async () => {
+    if (!supabase) return;
+    setSaving(true);
+    try {
+      const p_criterios = (Object.keys(CRITERIOS) as CategoriaCrit[]).flatMap(cat =>
+        CRITERIOS[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
+      );
+      const { error } = await supabase.rpc('criar_avaliacao_ti_dev_ia', {
+        p_desenvolvimento_ia_id: sessao.id,
+        p_avaliado_id: auxiliar.id,
+        p_observacao: observacao || null,
+        p_criterios,
+      });
+      if (error) throw error;
+      showToast('Avaliação registrada com sucesso.', 'success');
+      await onSaved();
+      onClose();
+    } catch (err: any) {
+      const msg = err?.message?.includes('unq_avaliacao_dev_ia')
+        ? 'Você já avaliou essa pessoa neste treinamento.'
+        : err?.message ?? 'Erro ao salvar avaliação.';
+      showToast(msg, 'error');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }}
+        className="neu-flat rounded-3xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto main-scrollbar border border-white/5"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-accent">Avaliar Participante</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              <span className="font-bold text-gray-300">{auxiliar.nome}</span> · {sessao.nome}
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {(Object.keys(CRITERIOS) as CategoriaCrit[]).map(cat => (
+            <div key={cat}>
+              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                {CATEGORIA_LABEL[cat]}
+              </h4>
+              <div className="flex flex-col gap-3">
+                {CRITERIOS[cat].map(c => {
+                  const key = `${cat}::${c}`;
+                  const nota = notas[key];
+                  return (
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <span className="text-sm text-gray-300 flex-1">{c}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {NOTAS.map(n => (
+                          <button
+                            key={n}
+                            onClick={() => setNotas(prev => ({ ...prev, [key]: n }))}
+                            className="w-8 h-8 rounded-lg font-bold text-xs transition-all"
+                            style={
+                              n === nota
+                                ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }
+                                : { background: 'var(--color-bg-base)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.05)' }
+                            }
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div>
+            <label htmlFor="dev-ia-avaliacao-observacao" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
+              Observação (opcional)
+            </label>
+            <textarea
+              id="dev-ia-avaliacao-observacao"
+              value={observacao}
+              onChange={e => setObservacao(e.target.value)}
+              rows={3}
+              placeholder="Comentários sobre o desempenho no treinamento..."
+              className="neu-input rounded-xl px-3 py-2.5 text-sm w-full resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 neu-button hover:text-white"
+            >
+              Cancelar
+            </button>
+            <NeuButtonAccent variant="" onClick={handleSalvar} disabled={saving}>
+              {saving ? <><Loader2 size={14} className="animate-spin" />Salvando...</>
+                : <><Star size={14} />Salvar Avaliação</>}
+            </NeuButtonAccent>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 // ──────────────────────────────────────────────
 // Modal de criação / edição
