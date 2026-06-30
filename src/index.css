@@ -2,21 +2,21 @@
 
 @theme {
   --color-bg-base: #000000;
-  --color-bg-dark: #0A0A0A;
-  --color-bg-light: rgba(255, 255, 255, 0.05);
-  --color-accent: #10B981;
-  --color-accent-hover: #059669;
+  --color-bg-dark: #1A1305;
+  --color-bg-light: rgba(212, 175, 55, 0.05);
+  --color-accent: #D4AF37;
+  --color-accent-hover: #B8941F;
   --animate-spin-slow: spin 6s linear infinite;
 }
 
 /* ── Semantic token variables (dark mode default) ── */
 :root {
   --color-bg-base:    #000000;
-  --color-bg-dark:    #0A0A0A;
-  --color-bg-light:   rgba(255, 255, 255, 0.05);
-  --color-accent:      #10B981;
-  --color-accent-hover: #059669;
-  --color-accent-text:  #0A0A0A;
+  --color-bg-dark:    #1A1305;
+  --color-bg-light:   rgba(212, 175, 55, 0.05);
+  --color-accent:      #D4AF37;
+  --color-accent-hover: #B8941F;
+  --color-accent-text:  #000000;
 
   /* text */
   --color-text-primary:   #e0e0e0;
@@ -27,10 +27,10 @@
   --color-text-ghost:     #374151;
 
   /* borders & surfaces */
-  --color-border:         rgba(255, 255, 255, 0.05);
-  --color-border-md:      rgba(255, 255, 255, 0.10);
-  --color-surface:        rgba(255, 255, 255, 0.03);
-  --color-surface-md:     rgba(255, 255, 255, 0.06);
+  --color-border:         rgba(212, 175, 55, 0.18);
+  --color-border-md:      rgba(212, 175, 55, 0.28);
+  --color-surface:        rgba(212, 175, 55, 0.04);
+  --color-surface-md:     rgba(212, 175, 55, 0.08);
 
   /* card / login — flat: sombra mínima + borda fina (feedback 2026-06-03) */
   --color-card-bg:       #0d0d0d;
@@ -45,7 +45,7 @@
   /* icon-circle — flat */
   --color-icon-bg:       #0f0f0f;
   --color-icon-shadow:   0 1px 2px rgba(0, 0, 0, 0.4),
-                         inset 0 0 0 1px rgba(16, 185, 129, 0.22);
+                         inset 0 0 0 1px rgba(212, 175, 55, 0.22);
 
   /* scrollbar */
   --color-scrollbar:       #1a1a1a;
@@ -69,45 +69,9 @@
 
 /* ── Accent color palettes ── */
 [data-accent="green"] {
-  --color-accent:      #10B981;
-  --color-accent-hover: #059669;
-  --color-accent-text:  #0A0A0A;
-}
-
-[data-accent="yellow"] {
-  --color-accent:      #FACC15;
-  --color-accent-hover: #EAB308;
-  --color-accent-text:  #0A0A0A;
-}
-
-[data-accent="purple"] {
-  --color-accent:      #A855F7;
-  --color-accent-hover: #9333EA;
-  --color-accent-text:  #ffffff;
-}
-
-[data-accent="orange"] {
-  --color-accent:      #F97316;
-  --color-accent-hover: #EA580C;
-  --color-accent-text:  #0A0A0A;
-}
-
-[data-accent="blue"] {
-  --color-accent:      #3B82F6;  /* blue-500 */
-  --color-accent-hover: #2563EB;  /* blue-600 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-accent="pink"] {
-  --color-accent:      #EC4899;  /* pink-500 */
-  --color-accent-hover: #DB2777;  /* pink-600 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-accent="red"] {
-  --color-accent:      #DC2626;  /* red-600 — red-500 (#EF4444) parecia laranja em monitores quentes */
-  --color-accent-hover: #B91C1C;  /* red-700 */
-  --color-accent-text:  #ffffff;
+  --color-accent:      #D4AF37;
+  --color-accent-hover: #B8941F;
+  --color-accent-text:  #000000;
 }
 
 /* ── Acessibilidade visual (orange + light blue) ──
@@ -129,44 +93,8 @@
    identidade da cor mas com contraste AA garantido. O `accent-text` (cor ON button)
    passa a branco para os tons que ficaram demasiado escuros para texto preto. */
 [data-theme="light"][data-accent="green"] {
-  --color-accent:      #047857;  /* emerald-700 */
-  --color-accent-hover: #065f46;  /* emerald-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="yellow"] {
-  --color-accent:      #a16207;  /* yellow-700 (amber escuro) */
-  --color-accent-hover: #854d0e;  /* yellow-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="purple"] {
-  --color-accent:      #7e22ce;  /* purple-700 */
-  --color-accent-hover: #6b21a8;  /* purple-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="orange"] {
-  --color-accent:      #c2410c;  /* orange-700 */
-  --color-accent-hover: #9a3412;  /* orange-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="blue"] {
-  --color-accent:      #1d4ed8;  /* blue-700 */
-  --color-accent-hover: #1e40af;  /* blue-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="pink"] {
-  --color-accent:      #be185d;  /* pink-700 */
-  --color-accent-hover: #9d174d;  /* pink-800 */
-  --color-accent-text:  #ffffff;
-}
-
-[data-theme="light"][data-accent="red"] {
-  --color-accent:      #b91c1c;  /* red-700 */
-  --color-accent-hover: #991b1b;  /* red-800 */
+  --color-accent:      #BF9B30;
+  --color-accent-hover: #A37F1F;
   --color-accent-text:  #ffffff;
 }
 
@@ -188,13 +116,10 @@
 
 /* ── Light mode overrides ── */
 [data-theme="light"] {
-  --color-bg-base:    #E8E8E8;
-  /* Sombras suavizadas: menor contraste contra bg-base para um neumorfismo subtil. */
-  --color-bg-dark:    #DCDCDC;
-  --color-bg-light:   #F2F2F2;
+  --color-bg-base:    #FFFFFF;
+  --color-bg-dark:    #F0F0F0;
+  --color-bg-light:   #FFFFFF;
 
-  /* Texto: escala mais escura para garantir contraste em fundos claros
-     (queixa do usuário em 2026-05-29: cinzas estavam fracos demais). */
   --color-text-primary:   #0b0b0b;
   --color-text-secondary: #111827;
   --color-text-muted:     #1f2937;
@@ -202,43 +127,34 @@
   --color-text-faint:     #4b5563;
   --color-text-ghost:     #6b7280;
 
-  /* Bordas elevadas (queixa 2026-06-03: cards e linhas somem em light).
-     0.12/0.18 dava contraste ~1.2:1 contra #E8E8E8 — invisível.
-     Agora 0.24/0.36 dá separação clara mantendo o design flat. */
-  --color-border:         rgba(0, 0, 0, 0.24);
-  --color-border-md:      rgba(0, 0, 0, 0.36);
-  --color-surface:        rgba(0, 0, 0, 0.04);
-  --color-surface-md:     rgba(0, 0, 0, 0.08);
+  --color-border:         rgba(0, 0, 0, 0.15);
+  --color-border-md:      rgba(0, 0, 0, 0.25);
+  --color-surface:        rgba(0, 0, 0, 0.03);
+  --color-surface-md:     rgba(0, 0, 0, 0.06);
 
-  /* Sombras mais pronunciadas no card pra dar elevação visível em fundo claro,
-     mantendo flat (offsets pequenos, sem halo grande). */
-  --color-card-bg:       linear-gradient(180deg, #FAFAFA, #ECECEC);
-  --color-card-shadow:   0 1px 2px rgba(0,0,0,0.10),
-                         0 2px 6px rgba(0,0,0,0.06),
-                         inset 0 1px 0 rgba(255,255,255,0.6);
-  --color-card-border:   rgba(0, 0, 0, 0.22);
-  --color-input-bg:      #F4F4F4;
-  --color-input-shadow:  inset 0 1px 2px rgba(0,0,0,0.10);
-  --color-input-border:  rgba(0, 0, 0, 0.22);
+  --color-card-bg:       #FFFFFF;
+  --color-card-shadow:   0 1px 3px rgba(0,0,0,0.08),
+                         0 4px 12px rgba(0,0,0,0.05);
+  --color-card-border:   rgba(0, 0, 0, 0.12);
+  --color-input-bg:      #FFFFFF;
+  --color-input-shadow:  inset 0 1px 2px rgba(0,0,0,0.06);
+  --color-input-border:  rgba(0, 0, 0, 0.18);
   --color-input-text:    #0b0b0b;
   --color-input-ph:      #6b7280;
 
-  --color-icon-bg:       linear-gradient(180deg, #F5F5F5, #E4E4E4);
-  --color-icon-shadow:   0 1px 2px rgba(0,0,0,0.08),
-                         inset 0 1px 0 rgba(255,255,255,0.6),
-                         inset 0 0 0 1px rgba(0,0,0,0.12);
+  --color-icon-bg:       #FFFFFF;
+  --color-icon-shadow:   0 1px 3px rgba(0,0,0,0.08),
+                         inset 0 0 0 1px rgba(0,0,0,0.08);
 
-  --color-scrollbar:       #C0C0C0;
-  --color-scrollbar-hover: #A0A0A0;
+  --color-scrollbar:       #C8C8C8;
+  --color-scrollbar-hover: #A8A8A8;
 
-  --color-badge-neutral-bg:   #D8D8D8;
-  --color-badge-neutral-text: #4b5563;
+  --color-badge-neutral-bg:   #E8E8E8;
+  --color-badge-neutral-text: #374151;
 
-  --color-avatar-bg: #D8D8D8;
+  --color-avatar-bg: #E8E8E8;
 
-  /* inset shadow do .neu-input mais subtil para combinar com sombras suaves */
-  --neu-input-inset-shadow: inset 2px 2px 6px var(--color-bg-dark),
-                            inset -1px -1px 4px var(--color-bg-light);
+  --neu-input-inset-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
 }
 
 /* ── Premium mode: preto puro + dourado clássico + branco ──
@@ -246,25 +162,8 @@
    Especificidade (0,0,1,0) igual à dos blocos [data-accent="*"]; este bloco
    vem DEPOIS, então ganha a "tie-break" e força o dourado sempre. Texts
    herdam o dark (claros). Sidebar segue como sempre dark via .sidebar-dark
-   (não há override [data-theme="premium"] .sidebar-dark, então herda daqui).
+   Sidebar segue como sempre dark via .sidebar-dark.
 */
-[data-theme="premium"] {
-  --color-bg-base:    #000000;
-  --color-bg-dark:    #1A1305;                   /* dourado escuro sutil pra inset shadows */
-  --color-bg-light:   rgba(212, 175, 55, 0.05);  /* glow dourado quase invisível */
-
-  --color-accent:       #D4AF37;                  /* dourado clássico */
-  --color-accent-hover: #B8941F;                  /* hover mais escuro */
-  --color-accent-text:  #000000;                  /* preto contra dourado */
-
-  /* Bordas/superfícies com tom dourado quente sutil — refina sem ofuscar */
-  --color-border:    rgba(212, 175, 55, 0.18);
-  --color-border-md: rgba(212, 175, 55, 0.28);
-  --color-surface:    rgba(212, 175, 55, 0.04);
-  --color-surface-md: rgba(212, 175, 55, 0.08);
-
-  --color-header-widget-bg: var(--color-bg-base);
-}
 
 /* Botão accent: a sombra fixa rgba(0,0,0,0.3) fica pesada em fundo claro. Suaviza
    ainda mais — halo pequeno, sem ruído. */
@@ -286,30 +185,33 @@
    Cada override usa !important porque a regra-base é uma utility do mesmo
    nível (sem essa, a especificidade empata e o resultado é imprevisível). */
 [data-theme="light"] .neu-flat {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10),
-              0 2px 6px rgba(0, 0, 0, 0.06) !important;
-  border: 1px solid var(--color-border);
+  background-color: #FFFFFF !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="light"] .neu-button {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10) !important;
-  border: 1px solid var(--color-border);
+  background-color: #FFFFFF !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="light"] .neu-button:active,
 [data-theme="light"] .neu-button-active {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14) !important;
-  border: 1px solid var(--color-border-md);
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.30);
 }
 
 [data-theme="light"] .neu-pressed {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12) !important;
-  border: 1px solid var(--color-border);
+  background-color: #F5F5F5 !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="light"] .neu-circle {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10) !important;
-  border: 1px solid var(--color-border);
+  background-color: #FFFFFF !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.20);
 }
 
 /* ── Utility classes ── */
@@ -597,26 +499,65 @@ table,
 /* ── FilialBadge: cores dedicadas por unidade ──
    Tons mais escuros no modo claro para garantir contraste WCAG.
    Classes próprias evitam que overrides globais quebrem outros componentes. */
+@keyframes filial-shimmer-green {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes filial-shimmer-nude {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes filial-shimmer-gold {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
 .filial-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 10px;
+  border-radius: 9999px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   border: 1px solid transparent;
+  background-size: 200% auto;
 }
-.filial-badge--supermax { background: rgba(16,185,129,0.10);  color: #34d399; border-color: rgba(16,185,129,0.22); }
-.filial-badge--maxlook  { background: rgba(217,70,239,0.10);  color: #e879f9; border-color: rgba(217,70,239,0.22); }
-.filial-badge--techmax  { background: rgba(249,115,22,0.10);  color: #fb923c; border-color: rgba(249,115,22,0.22); }
+
+/* SuperMax: verde sólido com shimmer */
+.filial-badge--supermax {
+  background: linear-gradient(100deg, #15803d 0%, #22c55e 35%, #4ade80 50%, #22c55e 65%, #15803d 100%);
+  background-size: 200% auto;
+  color: #fff;
+  border-color: #22c55e;
+  animation: filial-shimmer-green 2.8s linear infinite;
+}
+
+/* MaxLook: nude sólido com shimmer */
+.filial-badge--maxlook {
+  background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%);
+  background-size: 200% auto;
+  color: #3b1f0a;
+  border-color: #c9a882;
+  animation: filial-shimmer-nude 2.8s linear infinite;
+}
+
+/* TechMax: preto com texto dourado e shimmer dourado */
+.filial-badge--techmax {
+  background: linear-gradient(100deg, #000 0%, #1a1400 35%, #2a2200 50%, #1a1400 65%, #000 100%);
+  background-size: 200% auto;
+  color: #D4AF37;
+  border-color: #D4AF37;
+  animation: filial-shimmer-gold 2.8s linear infinite;
+}
+
 .filial-badge--matriz   { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
 .filial-badge--unknown  { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
 
-[data-theme="light"] .filial-badge--supermax { background: rgba(16,185,129,0.18);  color: #065f46; border-color: rgba(16,185,129,0.50); }
-[data-theme="light"] .filial-badge--maxlook  { background: rgba(217,70,239,0.16);  color: #86198f; border-color: rgba(217,70,239,0.50); }
-[data-theme="light"] .filial-badge--techmax  { background: rgba(249,115,22,0.18);  color: #9a3412; border-color: rgba(249,115,22,0.50); }
+[data-theme="light"] .filial-badge--supermax { background: linear-gradient(100deg, #15803d 0%, #22c55e 35%, #4ade80 50%, #22c55e 65%, #15803d 100%); background-size: 200% auto; color: #fff; border-color: #22c55e; animation: filial-shimmer-green 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%); background-size: 200% auto; color: #3b1f0a; border-color: #c9a882; animation: filial-shimmer-nude 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--techmax  { background: linear-gradient(100deg, #000 0%, #1a1400 35%, #2a2200 50%, #1a1400 65%, #000 100%); background-size: 200% auto; color: #D4AF37; border-color: #D4AF37; animation: filial-shimmer-gold 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 [data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 
@@ -624,33 +565,70 @@ table,
    Antes usavam Tailwind bg-X-900/30 + text-X-400, ambos no mesmo hue:
    "marketing rosa com rosa" (eye blend). Texto agora bem mais claro
    (-200/-300) pra dar contraste de luminância dentro da mesma cor. */
-.role-badge--admin       { background: rgba(168,85,247,0.18); color: #e9d5ff; }
-.role-badge--ceo         { background: rgba(245,158,11,0.18); color: #fde68a; }
-.role-badge--gerente     { background: rgba(234,179,8,0.18);  color: #fef08a; }
-.role-badge--colaborador { background: rgba(59,130,246,0.18); color: #bfdbfe; }
+@keyframes badge-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
 
-[data-theme="light"] .role-badge--admin       { background: #f3e8ff; color: #581c87; }
-[data-theme="light"] .role-badge--ceo         { background: #fef3c7; color: #78350f; }
-[data-theme="light"] .role-badge--gerente     { background: #fef9c3; color: #713f12; }
-[data-theme="light"] .role-badge--colaborador { background: #dbeafe; color: #1e3a8a; }
+/* Admin/CEO: pílula dourada com shimmer */
+.role-badge--admin,
+.role-badge--ceo {
+  background: linear-gradient(100deg, #B8860B 0%, #D4AF37 35%, #dfc060 50%, #D4AF37 65%, #B8860B 100%);
+  background-size: 200% auto;
+  color: #000;
+  border-color: #D4AF37 !important;
+  animation: badge-shimmer 2.4s linear infinite;
+}
+@keyframes badge-shimmer-glass {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
 
-.setor-badge--logistica  { background: rgba(34,197,94,0.18);  color: #bbf7d0; }
-.setor-badge--vendas     { background: rgba(249,115,22,0.18); color: #fed7aa; }
-.setor-badge--financeiro { background: rgba(6,182,212,0.18);  color: #a5f3fc; }
-.setor-badge--rh         { background: rgba(244,63,94,0.18);  color: #fecdd3; }
-.setor-badge--marketing  { background: rgba(217,70,239,0.18); color: #f5d0fe; }
-.setor-badge--ti         { background: rgba(14,165,233,0.18); color: #bae6fd; }
-.setor-badge--compras    { background: rgba(20,184,166,0.18); color: #99f6e4; }
-.setor-badge--default    { background: rgba(107,114,128,0.25); color: #e5e7eb; }
+/* Gerente: vidro escuro com shimmer dourado sutil */
+.role-badge--gerente {
+  background: linear-gradient(100deg,
+    rgba(0,0,0,0.7) 0%,
+    rgba(212,175,55,0.15) 30%,
+    rgba(255,240,160,0.12) 50%,
+    rgba(212,175,55,0.15) 70%,
+    rgba(0,0,0,0.7) 100%);
+  background-size: 200% auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border-color: #D4AF37 !important;
+  animation: badge-shimmer-glass 2.8s linear infinite;
+}
+/* Colaborador: fundo preto + borda branca + texto branco */
+.role-badge--colaborador { background: #000; color: #fff; border-color: #fff !important; }
 
-[data-theme="light"] .setor-badge--logistica  { background: #dcfce7; color: #14532d; }
-[data-theme="light"] .setor-badge--vendas     { background: #ffedd5; color: #7c2d12; }
-[data-theme="light"] .setor-badge--financeiro { background: #cffafe; color: #164e63; }
-[data-theme="light"] .setor-badge--rh         { background: #ffe4e6; color: #881337; }
-[data-theme="light"] .setor-badge--marketing  { background: #fae8ff; color: #701a75; }
-[data-theme="light"] .setor-badge--ti         { background: #e0f2fe; color: #0c4a6e; }
-[data-theme="light"] .setor-badge--compras    { background: #ccfbf1; color: #134e4a; }
-[data-theme="light"] .setor-badge--default    { background: #e5e7eb; color: #1f2937; }
+[data-theme="light"] .role-badge--admin       { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
+[data-theme="light"] .role-badge--ceo         { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
+[data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #D4AF37 !important; }
+[data-theme="light"] .role-badge--colaborador { background: #111; color: #fff; border-color: #fff !important; }
+
+/* Setor global (principal): dourado igual admin */
+.setor-badge--global { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
+[data-theme="light"] .setor-badge--global { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
+
+/* Setores extras: cinza neutro */
+.setor-badge--logistica,
+.setor-badge--vendas,
+.setor-badge--financeiro,
+.setor-badge--rh,
+.setor-badge--marketing,
+.setor-badge--ti,
+.setor-badge--compras,
+.setor-badge--default { background: rgba(148,163,184,0.18); color: #cbd5e1; border-color: rgba(148,163,184,0.35) !important; }
+
+[data-theme="light"] .setor-badge--logistica,
+[data-theme="light"] .setor-badge--vendas,
+[data-theme="light"] .setor-badge--financeiro,
+[data-theme="light"] .setor-badge--rh,
+[data-theme="light"] .setor-badge--marketing,
+[data-theme="light"] .setor-badge--ti,
+[data-theme="light"] .setor-badge--compras,
+[data-theme="light"] .setor-badge--default { background: #e2e8f0; color: #334155; border-color: #94a3b8 !important; }
 
 /* ── Sidebar (menu esquerdo) sempre em dark mode ──
    Feedback 2026-06-03: ao trocar para light mode, o menu da esquerda deve
@@ -681,15 +659,8 @@ table,
   color: var(--color-text-primary);
 }
 
-/* Reverte accent ao tom do dark mode para cada paleta (necessário porque
-   light mode redefine cada accent em [data-theme="light"][data-accent="..."]). */
-[data-theme="light"][data-accent="green"]     .sidebar-dark { --color-accent: #10B981; --color-accent-hover: #059669; --color-accent-text: #0A0A0A; }
-[data-theme="light"][data-accent="yellow"]    .sidebar-dark { --color-accent: #FACC15; --color-accent-hover: #EAB308; --color-accent-text: #0A0A0A; }
-[data-theme="light"][data-accent="purple"]    .sidebar-dark { --color-accent: #A855F7; --color-accent-hover: #9333EA; --color-accent-text: #ffffff; }
-[data-theme="light"][data-accent="orange"]    .sidebar-dark { --color-accent: #F97316; --color-accent-hover: #EA580C; --color-accent-text: #0A0A0A; }
-[data-theme="light"][data-accent="blue"]      .sidebar-dark { --color-accent: #3B82F6; --color-accent-hover: #2563EB; --color-accent-text: #ffffff; }
-[data-theme="light"][data-accent="pink"]      .sidebar-dark { --color-accent: #EC4899; --color-accent-hover: #DB2777; --color-accent-text: #ffffff; }
-[data-theme="light"][data-accent="red"]       .sidebar-dark { --color-accent: #DC2626; --color-accent-hover: #B91C1C; --color-accent-text: #ffffff; }
+/* Reverte accent ao tom do dark mode dentro do sidebar (light mode redefine accent). */
+[data-theme="light"][data-accent="green"]     .sidebar-dark { --color-accent: #D4AF37; --color-accent-hover: #B8941F; --color-accent-text: #000000; }
 [data-theme="light"][data-accent="acessivel"] .sidebar-dark { --color-accent: #F97316; --color-accent-hover: #EA580C; --color-accent-text: #0A0A0A; --color-accent-icon: #7DD3FC; }
 
 /* Reverte utilities Tailwind dentro do sidebar (specificity 0,3,0 vence
@@ -715,22 +686,27 @@ table,
    (light mode flatten é mais leve e ficaria invisível em fundo escuro). */
 [data-theme="light"] .sidebar-dark.neu-flat,
 [data-theme="light"] .sidebar-dark .neu-flat {
+  background-color: #000000 !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
   border-color: rgba(255, 255, 255, 0.10);
 }
 [data-theme="light"] .sidebar-dark .neu-button {
+  background-color: #000000 !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
   border-color: rgba(255, 255, 255, 0.10);
 }
 [data-theme="light"] .sidebar-dark .neu-button:active,
 [data-theme="light"] .sidebar-dark .neu-button-active {
+  background-color: #000000 !important;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35) !important;
 }
 [data-theme="light"] .sidebar-dark .neu-pressed {
+  background-color: #000000 !important;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35) !important;
   border-color: rgba(255, 255, 255, 0.05);
 }
 [data-theme="light"] .sidebar-dark .neu-circle {
+  background-color: #000000 !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
   border-color: rgba(255, 255, 255, 0.10);
 }
@@ -1109,7 +1085,7 @@ html.theme-switching *::after {
 /* ── Hover destacado dos itens da sidebar ──
    Botão top-level e botões de módulo. No hover: salta 2px, ganha cor
    do accent, borda accent e glow sutil — usa a variável --color-accent
-   pra acompanhar o tema escolhido (dark/light/premium). */
+   pra acompanhar o tema escolhido (dark/light). */
 .nav-item {
   transition:
     color 0.18s ease,

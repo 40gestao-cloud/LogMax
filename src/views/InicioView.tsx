@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Clock } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import {
@@ -191,36 +191,19 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
         </div>
 
         <div
-          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col md:flex-row md:items-center md:gap-6 relative overflow-hidden border border-accent/20"
+          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden border border-accent/20"
         >
-          {/* Coluna esquerda: texto + CTA. No mobile ocupa tudo, no md+
-              vira 1ª coluna do flex-row e a logo fica à direita. */}
-          <div className="flex flex-col md:flex-1 md:min-w-0 relative z-10">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 neu-circle flex items-center justify-center text-accent shrink-0">
-                <Clock size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-200">Central de Tempo</h3>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                  Produtividade Operacional
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-col items-center justify-center text-center w-full py-4">
+            <img src="/icon-relogio-central.png" alt="Relógio" className="w-40 h-40 object-contain mb-5" />
+            <h3 className="text-4xl font-bold text-accent mb-5">Central de Tempo</h3>
 
-            <h2 className="text-2xl font-bold text-white leading-snug">
+            <h2 className="text-xl font-semibold text-white leading-snug mb-6">
               Relógio, alarmes, cronômetro e timer
-              <span className="block mt-1 text-accent">numa só tela.</span>
             </h2>
-            <p className="text-gray-500 text-sm mt-2 mb-5">
-              Fuso horário Brasília-Acre
-            </p>
 
-            {/* Só este botão navega — antes o card inteiro era <button> e
-                qualquer clique abria a view. */}
             <button
               onClick={() => onNavigate?.('central-tempo')}
-              className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 self-start transition-all"
+              className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all"
               style={{
                 background:  'var(--color-accent)',
                 color:       'var(--color-accent-text)',
@@ -229,20 +212,6 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
               }}>
               Abrir Central de Tempo <ArrowRight size={16} />
             </button>
-          </div>
-
-          {/* Coluna direita: logo horizontal decorativa.
-              Escondida no mobile pra não competir com o conteúdo. */}
-          <div
-            className="hidden md:block shrink-0 pointer-events-none"
-            aria-hidden="true"
-            style={{ width: 'min(560px, 62%)', aspectRatio: '4 / 1' }}
-          >
-            <img
-              src="/icon-logmax-horizontal.png"
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-            />
           </div>
         </div>
       </div>

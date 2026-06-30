@@ -563,19 +563,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       <td className="py-3 px-4 text-xs text-gray-400 font-mono">{u.email}</td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex flex-wrap gap-1 justify-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${setorCls(u.setor)}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${u.setor === 'all' ? 'setor-badge--global' : `border-current/25 ${setorCls(u.setor)}`}`}>
                             {SETOR_LABEL[u.setor] ?? u.setor}
                           </span>
-                          {(u.setores_extras ?? []).map(s => (
-                            <span key={s} title="Setor extra"
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${setorCls(s)} opacity-70`}>
-                              +{SETOR_LABEL[s] ?? s}
-                            </span>
-                          ))}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${roleCls(u.role)}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-current/25 ${roleCls(u.role)}`}>
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
                       </td>

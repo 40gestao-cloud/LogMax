@@ -2,7 +2,9 @@
 
 > Lista **numerada e exata** dos scripts a rodar no Supabase SQL Editor pra criar um banco LogMax do zero.
 >
-> Execute na ordem dos números (1 → 60). Todos os scripts são **idempotentes** — rodar 2× não quebra.
+> Execute na ordem dos números (1 → 109). Todos os scripts são **idempotentes** — rodar 2× não quebra.
+>
+> **Atualizado em: 2026-06-29**
 
 ---
 
@@ -10,78 +12,169 @@
 
 1. **Crie um projeto Supabase novo** (banco totalmente vazio).
 2. Em **Authentication → Providers → Email**: habilite "Email" (com senha).
-3. **Decida o e-mail do admin master** — você vai usar ele no passo 56.
+3. **Decida o e-mail do admin master** — você vai usar ele no passo 109.
 
 ---
 
-## 📋 Sequência completa (1 → 60)
+## 📋 Sequência completa
 
-| # | Arquivo | Fase | O que faz |
-|---|---|---|---|
-| 1  | `logmax_supabase_schema.sql` | Schema base | Cadastros e tabelas operacionais (filiais, clientes, fornecedores, produtos, requisições, cotações, pedidos, recebimentos, estoque, contas, RH básico). |
-| 2  | `user_profiles_table.sql` | Schema base | Tabela `user_profiles` (RBAC) + policy `auth_read`. |
-| 3  | `pdv_tables.sql` | Schema base | `vendas`, `itens_venda`. |
-| 4  | `marketing_tables.sql` | Schema base | `marketing_promocoes`, `marketing_tarefas`. |
-| 5  | `qr_ponto_table.sql` | Schema base | `ponto_qr_registros`. |
-| 6  | `rh_tables.sql` | Schema base | Tabelas RH complementares (idempotente — algumas já existem do passo 1). |
-| 7  | `tarefas_table.sql` | Schema base | `tarefas` (genérica, usada em todos os módulos). |
-| 8  | `pesquisas_tables.sql` | Schema base | Pesquisas + RPC `responder_pesquisa`. |
-| 9  | `rls_policies.sql` | Schema base | Cria `controle_caixa` + RLS aberta inicial. |
-| 10 | `logmax_rls.sql` | RLS transitória | Habilita RLS em todas as tabelas + policies `auth_all` (serão substituídas em #21). |
-| 11 | `p0_fixes.sql` | Patches | Trigger `trg_atualiza_estoque`, trigger `trg_sync_ponto`, UNIQUE em ponto_eletronico, FK CASCADE em aprovações. |
-| 12 | `p2_fixes.sql` | Patches | Coluna `pedidos.requisicao_id` + tabela `configuracoes`. |
-| 13 | `promocoes_reversao.sql` | Patches | RPC `reverter_promocoes_expiradas`. |
-| 14 | `supabase/migrations/20260515_unify_status.sql` | Migrações | Normaliza status feminino → masculino + snapshot em pedidos. |
-| 15 | `supabase/migrations/20260516_colaboradores_celular.sql` | Migrações | ADD COLUMN celular em colaboradores. |
-| 16 | `supabase/migrations/20260516_crm_align_schemas.sql` | Migrações | Alinha colunas CRM. |
-| 17 | `supabase/migrations/20260516_filiais_align_ui.sql` | Migrações | Alinha colunas filiais. |
-| 18 | `supabase/migrations/20260516_produtos_colunas_em_falta.sql` | Migrações | Colunas extras em produtos. |
-| 19 | `supabase/migrations/20260516_pdv_financeiro_integration.sql` | Migrações | RPC `criar_venda_pdv` (versão inicial). |
-| 20 | `supabase/migrations/20260516_pix_pendentes.sql` | Migrações | Tabela `pix_pendentes` + realtime publication. |
-| 21 | `supabase/migrations/20260516_rls_hardening.sql` ⚡ | **Migrações CRÍTICA** | Cria helpers `auth_user_role()`, `auth_user_setor()`, `auth_is_admin()`, `auth_in_setor()` e reescreve TODAS as policies por setor. **Tudo a partir daqui depende destes helpers**. |
-| 22 | `supabase/migrations/20260516_rls_ceo_role.sql` | Migrações | Adiciona suporte ao role 'ceo' nos helpers. |
-| 23 | `supabase/migrations/20260516_avaliacoes.sql` | Migrações | 4 tabelas de avaliações + RPC `criar_avaliacao`. |
-| 24 | `supabase/migrations/20260517_estoque_lock.sql` | Migrações | Redefine `fn_atualiza_estoque_produto` com flag-guard + trigger `trg_block_estoque_manual`. |
-| 25 | `supabase/migrations/20260517_filiais_codigo_nullable.sql` | Migrações | `filiais.codigo` passa a aceitar NULL. |
-| 26 | `supabase/migrations/20260517_fk_cleanup.sql` | Migrações | Ajusta FKs com CASCADE/SET NULL. |
-| 27 | `supabase/migrations/20260517_holding_filial.sql` | Migrações | ADD `filial` em produtos/clientes/fornecedores/user_profiles/vendas + atualiza `criar_venda_pdv`. |
-| 28 | `supabase/migrations/20260517_soft_delete.sql` | Migrações | ADD COLUMN `ativo BOOLEAN` em várias tabelas (cria também em `controle_caixa`, prerrequisito do passo 29). |
-| 29 | `supabase/migrations/20260518_caixa_unique_ativo.sql` | Migrações | UNIQUE parcial `controle_caixa(data) WHERE ativo=true`. |
-| 30 | `supabase/migrations/20260518_produto_imagem.sql` | Migrações | Bucket `produto-imagens` + coluna `produtos.imagem_url`. |
-| 31 | `supabase/migrations/20260519_confirmar_pix_pendente_rpc.sql` | Migrações | RPC `confirmar_pix_pendente`. |
-| 32 | `supabase/migrations/20260520_ti_e_notificacoes.sql` | Migrações | Tabelas `ti_chamados` + `notificacoes` + RPC `notificar_setor` + `marcar_notificacao_lida` + realtime. |
-| 33 | `supabase/migrations/20260520_ti_setor_logistica.sql` | Migrações | Logística pode abrir chamados TI. |
-| 34 | `supabase/migrations/20260520_ti_setor_responsavel.sql` | Migrações | Refina policies de `ti_chamados`. |
-| 35 | `supabase/migrations/20260521_marketing_artes_feedback.sql` | Migrações | Tabelas `marketing_artes` + `marketing_arte_feedback` + RPC `dar_feedback_arte`. |
-| 36 | `supabase/migrations/20260522_marketing_artes_rls_fix.sql` | Migrações | Ajuste RLS em marketing_artes. |
-| 37 | `supabase/migrations/20260522b_indices_e_pesquisa_created_at.sql` | Migrações | Índices de performance + `created_at` em pesquisa_resposta_itens. |
-| 38 | `supabase/migrations/20260522c_search_trigram.sql` | Migrações | Extensão `pg_trgm` + índices GIN. |
-| 39 | `supabase/migrations/20260523_pdv_safety.sql` | Migrações | Reescreve `criar_venda_pdv` com lock pessimista + validação de saldo. |
-| 40 | `supabase/migrations/20260523b_pdv_validar_totais.sql` | Migrações | Valida totais (cliente vs servidor) na RPC do PDV. |
-| 41 | `supabase/migrations/20260525_ponto_timezone_acre.sql` | Migrações | Trigger `fn_sync_ponto_eletronico` passa a usar `America/Rio_Branco`. |
-| 42 | `supabase/migrations/20260525_multi_setor.sql` | Migrações | Coluna `setores_extras` + helper `auth_user_setores()` + atualiza `auth_in_setor()` + RPC `responder_pesquisa`. |
-| 43 | `supabase/migrations/20260525_cotacao_financeiro.sql` | Migrações | Cotações com aprovação do Financeiro + status `'Aguardando Financeiro'`. |
-| 44 | `supabase/migrations/20260525_recebimento_idempotencia.sql` | Migrações | FK `movimentacoes_estoque.recebimento_id` + UNIQUE parcial. |
-| 45 | `supabase/migrations/20260525c_drop_trigger_fantasma.sql` | Migrações | DROP do trigger fantasma `trg_sync_estoque` (no-op em banco novo, seguro). |
-| 46 | `supabase/migrations/20260525d_feedback_organizacional.sql` | Migrações | Tabela `feedbacks_organizacao` (anonimato técnico) + RLS. |
-| 47 | `supabase/migrations/20260525e_avaliacoes_multi_setor.sql` | Migrações | Policy `avaliacoes_read` passa a usar `auth_user_setores()`. |
-| 48 | `supabase/migrations/20260525f_enviar_feedback_anonimo_rpc.sql` | Migrações | RPC `enviar_feedback_anonimo` (SECURITY DEFINER). |
-| 49 | `supabase/migrations/20260525g_ti_chamados_multi_setor.sql` | Migrações | Policies de ti_chamados usam `auth_in_setor('ti')`. |
-| 50 | `supabase/migrations/20260525h_aprovacao_estoque_idempotencia.sql` | Migrações | FK `movimentacoes_estoque.requisicao_estoque_id` + UNIQUE parcial. |
-| 51 | `supabase/migrations/20260525i_status_contas_check.sql` | Migrações | CHECK constraints (NOT VALID) em `contas_receber.status` e `contas_pagar.status`. |
-| 52 | `supabase/migrations/20260525j_feedback_org_delete_ceo.sql` | Migrações | Policy UPDATE de feedbacks_organizacao libera CEO. |
-| 53 | `supabase/migrations/20260525k_ponto_delete_admin_ceo.sql` | Migrações | DELETE em ponto_qr_registros pra admin/CEO + trigger `trg_recompute_ponto`. |
-| 54 | `supabase/migrations/20260526_cotacoes_logistica.sql` | Migrações | RLS de `cotacoes`/`pedidos` aceita 'logistica' (par operacional de Compras); SELECT em `requisicoes` idem. |
-| 55 | `supabase/migrations/20260526b_atualizar_avaliacao.sql` | Migrações | RPC `atualizar_avaliacao` — admin/CEO editam qualquer avaliação; demais só as próprias; ciclo fechado bloqueia. |
-| 56 | `supabase/migrations/20260526c_produtos_patrimonio.sql` | Migrações | Coluna `tipo` em `produtos` (estoque_venda \| patrimonio) + campos tag/responsável/localização. Patrimônio some do PDV. |
-| 57 | `supabase/migrations/20260526d_criar_avaliacao_ciclo_aberto.sql` | Migrações | RPC `criar_avaliacao` bloqueia ciclo não-Aberto (semântica "fechado = imutável" alinhada à `atualizar_avaliacao`). |
-| 58 | **(Bloco SQL inline — não é arquivo)** | Cleanup | Dropa policies `auth_all`/`auth_read` que sobreviveram ao hardening. **Cole o bloco abaixo.** |
-| 59 | `marketing_links_migration.sql` | Patches finais | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas` (idempotente). |
-| 60 | `supabase/migrations/20260516_seed_admin_master.sql` | **Admin** | **Substitua `'admin@example.com'` pelo e-mail real ANTES de rodar.** Vincula a linha em user_profiles ao usuário criado no Auth Dashboard. |
+### Fase 1 — Schema base (1–13)
+
+Estes scripts criam as tabelas fundamentais. Estão na raiz do repositório.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 1  | `logmax_supabase_schema.sql` | Cadastros e tabelas operacionais (filiais, clientes, fornecedores, produtos, requisições, cotações, pedidos, recebimentos, estoque, contas, RH básico). |
+| 2  | `user_profiles_table.sql` | Tabela `user_profiles` (RBAC) + policy `auth_read`. |
+| 3  | `pdv_tables.sql` | `vendas`, `itens_venda`. |
+| 4  | `marketing_tables.sql` | `marketing_promocoes`, `marketing_tarefas`. |
+| 5  | `qr_ponto_table.sql` | `ponto_qr_registros`. |
+| 6  | `rh_tables.sql` | Tabelas RH complementares (idempotente — algumas já existem do passo 1). |
+| 7  | `tarefas_table.sql` | `tarefas` (genérica, usada em todos os módulos). |
+| 8  | `pesquisas_tables.sql` | Pesquisas + RPC `responder_pesquisa`. |
+| 9  | `rls_policies.sql` | Cria `controle_caixa` + RLS aberta inicial. |
+| 10 | `logmax_rls.sql` | Habilita RLS em todas as tabelas + policies `auth_all` (substituídas no passo 21). |
+| 11 | `p0_fixes.sql` | Trigger `trg_atualiza_estoque`, trigger `trg_sync_ponto`, UNIQUE em ponto_eletronico, FK CASCADE em aprovações. |
+| 12 | `p2_fixes.sql` | Coluna `pedidos.requisicao_id` + tabela `configuracoes`. |
+| 13 | `promocoes_reversao.sql` | RPC `reverter_promocoes_expiradas`. |
+
+### Fase 2 — Migrações (14–107)
+
+Todos os arquivos estão em `supabase/migrations/`. Execute em ordem.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 14 | `20260515_unify_status.sql` | Normaliza status feminino → masculino + snapshot em pedidos. |
+| 15 | `20260516_colaboradores_celular.sql` | ADD COLUMN celular em colaboradores. |
+| 16 | `20260516_crm_align_schemas.sql` | Alinha colunas CRM. |
+| 17 | `20260516_filiais_align_ui.sql` | Alinha colunas filiais. |
+| 18 | `20260516_produtos_colunas_em_falta.sql` | Colunas extras em produtos. |
+| 19 | `20260516_pdv_financeiro_integration.sql` | RPC `criar_venda_pdv` (versão inicial). |
+| 20 | `20260516_pix_pendentes.sql` | Tabela `pix_pendentes` + realtime publication. |
+| 21 | `20260516_rls_hardening.sql` ⚡ | **CRÍTICA.** Cria helpers `auth_user_role()`, `auth_user_setor()`, `auth_is_admin()`, `auth_in_setor()` e reescreve TODAS as policies por setor. **Tudo a partir daqui depende destes helpers.** |
+| 22 | `20260516_rls_ceo_role.sql` | Adiciona suporte ao role 'ceo' nos helpers. |
+| 23 | `20260516_avaliacoes.sql` | 4 tabelas de avaliações + RPC `criar_avaliacao`. |
+| 24 | `20260517_estoque_lock.sql` | Redefine `fn_atualiza_estoque_produto` com flag-guard + trigger `trg_block_estoque_manual`. |
+| 25 | `20260517_filiais_codigo_nullable.sql` | `filiais.codigo` passa a aceitar NULL. |
+| 26 | `20260517_fk_cleanup.sql` | Ajusta FKs com CASCADE/SET NULL. |
+| 27 | `20260517_holding_filial.sql` | ADD `filial` em produtos/clientes/fornecedores/user_profiles/vendas + atualiza `criar_venda_pdv`. |
+| 28 | `20260517_soft_delete.sql` | ADD COLUMN `ativo BOOLEAN` em várias tabelas (cria também em `controle_caixa`, prerrequisito do passo 29). |
+| 29 | `20260518_caixa_unique_ativo.sql` | UNIQUE parcial `controle_caixa(data) WHERE ativo=true`. |
+| 30 | `20260518_produto_imagem.sql` | Bucket `produto-imagens` + coluna `produtos.imagem_url`. |
+| 31 | `20260519_confirmar_pix_pendente_rpc.sql` | RPC `confirmar_pix_pendente`. |
+| 32 | `20260520_ti_e_notificacoes.sql` | Tabelas `ti_chamados` + `notificacoes` + RPC `notificar_setor` + `marcar_notificacao_lida` + realtime. |
+| 33 | `20260520_ti_setor_logistica.sql` | Logística pode abrir chamados TI. |
+| 34 | `20260520_ti_setor_responsavel.sql` | Refina policies de `ti_chamados`. |
+| 35 | `20260521_marketing_artes_feedback.sql` | Tabelas `marketing_artes` + `marketing_arte_feedback` + RPC `dar_feedback_arte`. |
+| 36 | `20260522_marketing_artes_rls_fix.sql` | Ajuste RLS em marketing_artes. |
+| 37 | `20260522b_indices_e_pesquisa_created_at.sql` | Índices de performance + `created_at` em pesquisa_resposta_itens. |
+| 38 | `20260522c_search_trigram.sql` | Extensão `pg_trgm` + índices GIN. |
+| 39 | `20260523_pdv_safety.sql` | Reescreve `criar_venda_pdv` com lock pessimista + validação de saldo. |
+| 40 | `20260523b_pdv_validar_totais.sql` | Valida totais (cliente vs servidor) na RPC do PDV. |
+| 41 | `20260525_ponto_timezone_acre.sql` | Trigger `fn_sync_ponto_eletronico` passa a usar `America/Rio_Branco`. |
+| 42 | `20260525_multi_setor.sql` | Coluna `setores_extras` + helper `auth_user_setores()` + atualiza `auth_in_setor()` + RPC `responder_pesquisa`. |
+| 43 | `20260525_cotacao_financeiro.sql` | Cotações com aprovação do Financeiro + status `'Aguardando Financeiro'`. |
+| 44 | `20260525_recebimento_idempotencia.sql` | FK `movimentacoes_estoque.recebimento_id` + UNIQUE parcial. |
+| 45 | `20260525c_drop_trigger_fantasma.sql` | DROP do trigger fantasma `trg_sync_estoque` (no-op em banco novo, seguro). |
+| 46 | `20260525d_feedback_organizacional.sql` | Tabela `feedbacks_organizacao` (anonimato técnico) + RLS. |
+| 47 | `20260525e_avaliacoes_multi_setor.sql` | Policy `avaliacoes_read` passa a usar `auth_user_setores()`. |
+| 48 | `20260525f_enviar_feedback_anonimo_rpc.sql` | RPC `enviar_feedback_anonimo` (SECURITY DEFINER). |
+| 49 | `20260525g_ti_chamados_multi_setor.sql` | Policies de ti_chamados usam `auth_in_setor('ti')`. |
+| 50 | `20260525h_aprovacao_estoque_idempotencia.sql` | FK `movimentacoes_estoque.requisicao_estoque_id` + UNIQUE parcial. |
+| 51 | `20260525i_status_contas_check.sql` | CHECK constraints (NOT VALID) em `contas_receber.status` e `contas_pagar.status`. |
+| 52 | `20260525j_feedback_org_delete_ceo.sql` | Policy UPDATE de feedbacks_organizacao libera CEO. |
+| 53 | `20260525k_ponto_delete_admin_ceo.sql` | DELETE em ponto_qr_registros pra admin/CEO + trigger `trg_recompute_ponto`. |
+| 54 | `20260526_cotacoes_logistica.sql` | RLS de `cotacoes`/`pedidos` aceita 'logistica' (par operacional de Compras); SELECT em `requisicoes` idem. |
+| 55 | `20260526b_atualizar_avaliacao.sql` | RPC `atualizar_avaliacao` — admin/CEO editam qualquer avaliação; demais só as próprias; ciclo fechado bloqueia. |
+| 56 | `20260526c_produtos_patrimonio.sql` | Coluna `tipo` em `produtos` (estoque_venda / patrimonio) + campos tag/responsável/localização. |
+| 57 | `20260526d_criar_avaliacao_ciclo_aberto.sql` | RPC `criar_avaliacao` bloqueia ciclo não-Aberto. |
+| 58 | `20260527_orfaos_contas_pagar_pedido_inativo.sql` | Limpa contas_pagar órfãs vinculadas a pedido inativo. |
+| 59 | `20260529_orcamentos_e_pedidos_venda.sql` | Módulo Orçamentos & Pedidos de Venda (tabelas + RPCs + RLS). |
+| 60 | `20260529b_corrigir_link_view_notificacoes_pedido_venda.sql` | Fix link_view por destinatário na RPC converter_orcamento_em_pedido. |
+| 61 | `20260529c_ti_desenvolvimento_ia.sql` | Submódulo "Desenvolvimento com IA" em TI (treinamentos IA + auxiliares). |
+| 62 | `20260530_acre_timezone_fix.sql` | Alinhamento de fuso horário no SQL (Acre / UTC-5) em todas as RPCs. |
+| 63 | `20260601_filial_contas.sql` | Coluna `filial` em contas_pagar e contas_receber. |
+| 64 | `20260601b_filial_contas_pdv.sql` | Propaga p_filial para contas_receber em `criar_venda_pdv`. |
+| 65 | `20260602_auditoria_quem_fez.sql` | Auditoria: criado_por, atualizado_por, updated_at em 20 tabelas operacionais. |
+| 66 | `20260602b_auditoria_cadastros.sql` | Auditoria Fase 2: cadastros mestres. |
+| 67 | `20260602c_unique_parcial_cadastros.sql` | UNIQUE parcial em cadastros com soft-delete. |
+| 68 | `20260602d_marketing_tipo_origem.sql` | Promoções de serviços (`tipo_origem` em marketing_promocoes). |
+| 69 | `20260602e_servicos_filial.sql` | Coluna `filial` em servicos. |
+| 70 | `20260602f_produtos_unidade.sql` | Coluna `unidade` em produtos (UN, KG, L, M, CX, PC). |
+| 71 | `20260605_maxbank_carteira.sql` | MaxBank Carteira Fase 1: saldo + extrato. |
+| 72 | `20260605b_maxbank_credito_folha.sql` | MaxBank Fase 2: crédito automático ao pagar folha. |
+| 73 | `20260606_contas_pagar_folha_link.sql` | Link contas_pagar → folha_pagamento → carteira. |
+| 74 | `20260606b_ponto_folha_recalculo.sql` | Fase 3: Ponto → desconto/bônus na folha + RPC `recalcular_folha_do_ponto`. |
+| 75 | `20260606c_maxbank_metas.sql` | MaxBank Fase 4: metas/gamificação com bonificação. |
+| 76 | `20260607_folha_valor_beneficios.sql` | Split de benefícios na folha (saldo_salario + saldo_beneficios). |
+| 77 | `20260607b_maxpos_beneficios_pendentes.sql` | PDV: beneficios_pendentes (Fase 5). |
+| 78 | `20260607c_produtos_beneficios_e_debito.sql` | Produtos elegíveis a benefícios + RPC debitar (Fase 5). |
+| 79 | `20260608_maxbank_transferencias.sql` | MaxBank Fase 6: Pix entre colaboradores. |
+| 80 | `20260608b_reverter_e_excluir_maxbank.sql` | Reversão administrativa (folha + lançamentos individuais). |
+| 81 | `20260608c_maxbank_excluir_recompute.sql` | Fix excluir_transacao_maxbank: recompute em vez de delta. |
+| 82 | `20260608d_caixa_por_filial.sql` | Controle de Caixa por filial (1 por dia por unidade). |
+| 83 | `20260608e_metas_estrategicas_taticas.sql` | Metas em 2 níveis: Estratégico + Tático. |
+| 84 | `20260608f_metas_rls_e_fanout_fix.sql` | Hotfix RLS + fanout das metas. |
+| 85 | `20260609_perfil_foto.sql` | Foto de perfil: bucket `perfil-fotos` + coluna `foto_url`. |
+| 86 | `20260609b_fix_role_case_reverter.sql` | Fix case do role no gate de reversão MaxBank (CEO → ceo). |
+| 87 | `20260610_perfil_fotos_path_scope.sql` | Escopa policies do bucket perfil-fotos por user_id. |
+| 88 | `20260611_pdv_contasreceber_descricao_produtos.sql` | Descrição com nomes dos produtos em contas_receber (PDV). |
+| 89 | `20260612_pdv_qtd_decimal_kg.sql` | Venda por peso (KG/L): qtd em numeric(15,3). |
+| 90 | `20260612b_metas_editar_apagar.sql` | Metas estratégicas: editar + apagar (soft-delete cascade). |
+| 91 | `20260612c_gerente_acesso_usuarios.sql` | Toggle por gerente: acesso ao módulo Usuários. |
+| 92 | `20260612d_dev_ia_ti_only_auxiliares_abertos.sql` | Dev IA: TI cria, auxiliares abertos. |
+| 93 | `20260614_marketing_campanhas_cupons.sql` | Marketing: Campanhas (ROI) + Cupons promocionais. |
+| 94 | `20260614b_marketing_calendario_editorial.sql` | Marketing: Calendário Editorial. |
+| 95 | `20260614c_rh_pdi_presenca_afastamentos.sql` | RH: PDI + Presença em Treinamentos + Afastamentos. |
+| 96 | `20260614d_painel_bi.sql` | Painel de Inteligência Estratégica (BI) + RPC `gerar_painel_bi`. |
+| 97 | `20260614e_briefing_diario.sql` | Briefing Diário com IA (Pauta do Dia). |
+| 98 | `20260615_metas_apenas_admin_ceo.sql` | Metas: criação restrita a Admin/CEO. |
+| 99 | `20260615b_drop_colaboradores.sql` | DROP TABLE colaboradores (redundância com funcionarios). |
+| 100 | `20260615c_briefing_marketing_e_janela.sql` | Briefing: janela configurável (7/15/30 dias) + inclusão de Marketing. |
+| 101 | `20260615d_avaliacoes_pdi_rh.sql` | RH ganha leitura cross-setor em avaliações + gestão PDI. |
+| 102 | `20260616a_briefing_editar_excluir.sql` | Briefing: editar/excluir com cascade nas tarefas. |
+| 103 | `20260618_treinamentos_descricao_horarios_multi_instrutor.sql` | Treinamentos: descrição, horários, multi-instrutor. |
+| 104 | `20260618b_feedback_destinatarios_categoria.sql` | Feedback: destinatários por role + categoria obrigatória. |
+| 105 | `20260618c_avaliacoes_criterios_e_escala_10.sql` | Avaliações: renomear critérios + escala 0-10. |
+| 106 | `20260618d_resetar_dados_operacionais.sql` | RPC `resetar_dados_operacionais` (wipe preservando usuários). |
+| 107 | `20260618e_fix_delete_user_maxbank_fk.sql` | Fix "Database error deleting user": FKs maxbank. |
+| 108 | `20260618f_fix_user_profiles_criado_por_fk.sql` | Fix #2 delete user: FK user_profiles.criado_por. |
+| 109 | `20260619a_fix_delete_user_ponto_trigger.sql` | Fix #3 delete user: trigger ponto com search_path. |
+| 110 | `20260619b_fix_aprovacoes_insert_rls.sql` | Fix requisição não aparece em aprovações: RLS INSERT. |
+| 111 | `20260619c_rpc_criar_requisicao.sql` | RPCs transacionais: criar_requisicao_compra + criar_requisicao_estoque. |
+| 112 | `20260619d_rpc_get_vitrine_publica.sql` | RPC pública `get_vitrine_publica`. |
+| 113 | `20260619e_vitrine_publica_toggle.sql` | Toggle `vitrine_publica` em marketing_artes e produtos. |
+| 114 | `20260619f_financeiro_juros_caixa.sql` | Financeiro: juros + multa + sangria/suprimento + conferência de caixa. |
+| 115 | `20260619g_vitrine_fallback_produto_imagem.sql` | Vitrine: fallback arte_url vazia → produto.imagem_url. |
+| 116 | `20260619h_vitrine_fallback_onerror.sql` | Vitrine: separa imagem_url e imagem_fallback pra onError no front. |
+| 117 | `20260619i_vitrine_aumenta_limite.sql` | Vitrine: aumenta limite de candidatos. |
+| 118 | `20260620a_projetos_descricao.sql` | Projetos: campo descrição livre (textarea). |
+| 119 | `20260623_baixa_banco_id.sql` | Audit trail de baixas: qual banco foi debitado/creditado. |
+| 120 | `20260623b_caixa_bancos_logo.sql` | Logo por banco: bucket `banco-logos` + coluna `imagem_url`. |
+| 121 | `20260626_caixa_operador_fechar_suspender.sql` | Operador PDV pode fechar/suspender caixa + coluna origem. |
+| 122 | `20260626b_drop_fechar_caixa_overload.sql` | Remove overload antiga de `fechar_caixa_conferido` (3 params). |
+| 123 | `20260626c_frequencia_trabalho.sql` | Frequência de Trabalho: registro diário de presença/falta/atraso. |
+| 124 | `20260627_justificativas_falta.sql` | Justificativas de falta com notificação hierárquica. |
+| 125 | `20260628_renotificar_pix_pago.sql` | RPC `renotificar_pix_pago` (re-dispara evento realtime). |
+| 126 | `20260629_cartao_pendentes.sql` | Fluxo Cartão (Maquininha) interativo: `cartao_pendentes` + RPCs. |
+| 127 | `20260629b_carteira_fatura.sql` | Adiciona carteira 'fatura' em maxbank_transacoes. |
+
+### Fase 3 — Cleanup e Admin (108–109)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 108 | **(Bloco SQL inline — cole no Editor)** | Dropa policies `auth_all`/`auth_read` que sobreviveram ao hardening. **Veja abaixo.** |
+| 109 | `marketing_links_migration.sql` (raiz) | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas`. |
+
+### Fase 4 — Seed do Admin Master (110)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 110 | `supabase/migrations/20260516_seed_admin_master.sql` | **Substitua `'admin@example.com'` pelo e-mail real ANTES de rodar.** |
 
 ---
 
-## Passo 58 — Bloco SQL de cleanup (cole no Editor)
+## Passo 108 — Bloco SQL de cleanup (cole no Editor)
 
 ```sql
 -- Remove policies abertas que sobraram dos passos 1–10 e não foram dropadas
@@ -111,7 +204,7 @@ SELECT schemaname, tablename, policyname
 
 ---
 
-## Passo 60 — Como executar o seed do admin
+## Passo 110 — Como executar o seed do admin
 
 1. **Supabase Dashboard → Authentication → Users → "Add user"**
    - E-mail: `<e-mail do admin>`
@@ -140,7 +233,7 @@ SELECT schemaname, tablename, policyname
 
 ## 🔐 Variáveis de ambiente Vercel (fora do SQL)
 
-Sem isso o app não conecta. Configure em **Vercel → Project Settings → Environment Variables**:
+Configure em **Vercel → Project Settings → Environment Variables**:
 
 | Variável | Onde pegar | Obrigatória? |
 |---|---|---|
@@ -149,7 +242,17 @@ Sem isso o app não conecta. Configure em **Vercel → Project Settings → Envi
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role (secret) | sim |
 | `QR_TOKEN_SECRET` | Gere com `openssl rand -hex 32` | sim (Ponto QR/código) |
 | `GEMINI_API_KEY` | Google AI Studio | opcional (MaxAI assistant) |
+| `GROQ_API_KEY` | Groq Cloud | opcional (fallback IA) |
+| `OPENROUTER_API_KEY` | OpenRouter | opcional (fallback IA) |
 | `CRON_SECRET` | Gere com `openssl rand -hex 32` | opcional (crons Vercel) |
+| `PONTO_HORA_ENTRADA` | Horário de entrada da turma (ex: `07:40`) | sim (Ponto) |
+| `PONTO_HORA_ALMOCO_SAIDA` | Horário saída almoço (ex: `09:20`) | sim (Ponto) |
+| `PONTO_HORA_ALMOCO_VOLTA` | Horário volta almoço (ex: `09:20`) | sim (Ponto) |
+| `PONTO_HORA_SAIDA` | Horário de saída (ex: `11:20`) | sim (Ponto) |
+| `VITE_PONTO_HORA_ENTRADA` | Mesmo valor (frontend) | sim |
+| `VITE_PONTO_HORA_ALMOCO_SAIDA` | Mesmo valor (frontend) | sim |
+| `VITE_PONTO_HORA_ALMOCO_VOLTA` | Mesmo valor (frontend) | sim |
+| `VITE_PONTO_HORA_SAIDA` | Mesmo valor (frontend) | sim |
 
 ---
 
@@ -157,11 +260,12 @@ Sem isso o app não conecta. Configure em **Vercel → Project Settings → Envi
 
 - [ ] Banco Supabase criado
 - [ ] Email/senha auth habilitado no Supabase
-- [ ] Passos **1–57** executados em ordem
-- [ ] Passo **58** (cleanup) executado — verificação retorna 0 linhas
-- [ ] Passo **59** (marketing_links) executado
+- [ ] Passos **1–13** (schema base) executados em ordem
+- [ ] Passos **14–127** (migrações) executados em ordem
+- [ ] Passo **108** (cleanup) executado — verificação retorna 0 linhas
+- [ ] Passo **109** (marketing_links) executado
 - [ ] Admin master criado em Authentication → Add User
-- [ ] Passo **60** (seed_admin_master) executado com e-mail real substituído
+- [ ] Passo **110** (seed_admin_master) executado com e-mail real substituído
 - [ ] Variáveis de ambiente configuradas no Vercel
 - [ ] Deploy disparado na Vercel
 - [ ] Login bem-sucedido na app com o admin master

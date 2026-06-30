@@ -29,11 +29,7 @@
     <script>
       (function () {
         var ACCENT_HEX = {
-          green:  '#10B981', yellow: '#FACC15', purple: '#A855F7',
-          orange: '#F97316', blue:   '#3B82F6', pink:   '#EC4899',
-          red:    '#EF4444',
-          // Acessibilidade: laranja é a cor visível em botões/badges,
-          // ícones em azul claro são CSS-only.
+          green: '#D4AF37',
           acessivel: '#F97316'
         };
         try {
@@ -41,19 +37,16 @@
           var a = localStorage.getItem('logmax-accent');
           if (t === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
-            document.documentElement.style.backgroundColor = '#E8E8E8';
-          } else if (t === 'premium') {
-            document.documentElement.setAttribute('data-theme', 'premium');
-            document.documentElement.style.backgroundColor = '#000000';
+            document.documentElement.style.backgroundColor = '#FFFFFF';
           } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
             document.documentElement.style.backgroundColor = '#000000';
           }
           if (a) document.documentElement.setAttribute('data-accent', a);
-          // Premium ignora accent salvo e usa dourado fixo na meta theme-color.
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta) {
-            if (t === 'premium')      meta.setAttribute('content', '#D4AF37');
-            else if (a && ACCENT_HEX[a]) meta.setAttribute('content', ACCENT_HEX[a]);
+            if (a && ACCENT_HEX[a]) meta.setAttribute('content', ACCENT_HEX[a]);
+            else meta.setAttribute('content', '#D4AF37');
           }
         } catch (e) {
           document.documentElement.style.backgroundColor = '#000000';

@@ -9,12 +9,10 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  // Login força tema Premium independente da preferência do usuário —
-  // identidade fixa da marca. Restaura o tema anterior ao desmontar.
   useEffect(() => {
     const root = document.documentElement;
     const previous = root.getAttribute('data-theme');
-    root.setAttribute('data-theme', 'premium');
+    root.setAttribute('data-theme', 'dark');
     return () => {
       if (previous) root.setAttribute('data-theme', previous);
     };

@@ -1,22 +1,20 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
-type Theme = 'dark' | 'light' | 'premium';
+type Theme = 'dark' | 'light';
 
-const VALID_THEMES: Theme[] = ['dark', 'light', 'premium'];
+const VALID_THEMES: Theme[] = ['dark', 'light'];
 export type AccentColor = 'green' | 'yellow' | 'purple' | 'orange' | 'blue' | 'pink' | 'red' | 'acessivel';
 
 const VALID_ACCENTS: AccentColor[] = ['green', 'yellow', 'purple', 'orange', 'blue', 'pink', 'red', 'acessivel'];
 
 const ACCENT_HEX: Record<AccentColor, string> = {
-  green:  '#10B981',
-  yellow: '#FACC15',
-  purple: '#A855F7',
-  orange: '#F97316',
-  blue:   '#3B82F6',
-  pink:   '#EC4899',
-  red:    '#DC2626',
-  // Acessibilidade: laranja principal (theme-color do browser/PWA segue o
-  // accent visível em botões). Os ícones recebem azul claro via CSS.
+  green:     '#D4AF37',
+  yellow:    '#D4AF37',
+  purple:    '#D4AF37',
+  orange:    '#D4AF37',
+  blue:      '#D4AF37',
+  pink:      '#D4AF37',
+  red:       '#D4AF37',
   acessivel: '#F97316',
 };
 
@@ -99,8 +97,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // /simulador-pagamento tem identidade própria (azul fixo) — não sobrescrever.
     if (window.location.pathname === '/simulador-pagamento') return;
     const meta = document.querySelector('meta[name="theme-color"]');
-    // Premium ignora o accent escolhido — usa dourado clássico fixo.
-    const color = theme === 'premium' ? '#D4AF37' : ACCENT_HEX[accentColor];
+    const color = ACCENT_HEX[accentColor];
     if (meta) meta.setAttribute('content', color);
   }, [accentColor, theme]);
 
@@ -117,11 +114,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [brightness]);
 
-  // Ciclo: dark → light → premium → dark. Toggle continua existindo pro botão
-  // do topbar; quem quiser saltar direto pra um modo usa setTheme(t).
-  const toggleTheme = () => setThemeState(t =>
-    t === 'dark' ? 'light' : t === 'light' ? 'premium' : 'dark'
-  );
+  const toggleTheme = () => setThemeState(t => t === 'dark' ? 'light' : 'dark');
   const setTheme = (t: Theme) => setThemeState(t);
   const setAccentColor = (c: AccentColor) => setAccentColorState(c);
   const setBrightness = (n: number) =>
