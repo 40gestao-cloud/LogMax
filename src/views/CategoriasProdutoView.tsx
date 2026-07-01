@@ -112,6 +112,8 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
   const [previewUrl, setPreviewUrl]   = useState<string>(initial.imagem_url);
 
   const handlePreview = (file: File, url: string) => {
+    // libera blob URL anterior antes de sobrescrever (evita leak de memória)
+    if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
     setPendingFile(file);
     setPreviewUrl(url);
     setF(p => ({ ...p, imagem_url: url }));
@@ -125,20 +127,27 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
 
   const handleSubmit = async () => {
     let finalImagemUrl = f.imagem_url;
+    let urlUpada: string | null = null;
 
     if (pendingFile) {
-      // Se havia imagem anterior diferente da preview, remove a antiga
-      if (initial.imagem_url && !initial.imagem_url.startsWith('blob:')) {
-        removerImagemCategoria(initial.imagem_url);
-      }
+      // Faz upload primeiro; se onSave falhar, remove o arquivo upado (rollback best-effort)
       finalImagemUrl = await uploadImagemCategoria(pendingFile, itemId);
-    } else if (!f.imagem_url && initial.imagem_url && !initial.imagem_url.startsWith('blob:')) {
-      // Usuário clicou em "limpar" — remove do storage
-      removerImagemCategoria(initial.imagem_url);
+      urlUpada = finalImagemUrl;
+    } else if (!f.imagem_url && initial.imagem_url) {
+      // Usuário limpou a imagem
       finalImagemUrl = '';
     }
 
-    await onSave({ ...f, imagem_url: finalImagemUrl });
+    try {
+      await onSave({ ...f, imagem_url: finalImagemUrl });
+      // Só remove a imagem antiga depois que o save confirmou
+      if (pendingFile && initial.imagem_url) removerImagemCategoria(initial.imagem_url);
+      if (!f.imagem_url && initial.imagem_url) removerImagemCategoria(initial.imagem_url);
+    } catch (err) {
+      // Save falhou — remove a imagem que acabou de ser upada para não deixar órfã
+      if (urlUpada) removerImagemCategoria(urlUpada);
+      throw err;
+    }
   };
 
   return (
@@ -197,8 +206,9 @@ function PainelCategorias({ canEdit, selectedId, onSelect }: {
 
   const handleDelete = async (item: any) => {
     if (!confirm(`Excluir categoria "${item.nome}"? As subcategorias serão removidas e produtos vinculados perderão a categoria.`)) return;
-    removerImagemCategoria(item.imagem_url);
     await dbDelete('categorias_produto', item.id);
+    // Remove imagem só após confirmar exclusão do registro no DB
+    removerImagemCategoria(item.imagem_url);
     reload();
   };
 
@@ -308,8 +318,8 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
 
   const handleDelete = async (item: any) => {
     if (!confirm(`Excluir subcategoria "${item.nome}"?`)) return;
-    removerImagemCategoria(item.imagem_url);
     await dbDelete('subcategorias_produto', item.id);
+    removerImagemCategoria(item.imagem_url);
     reload();
   };
 

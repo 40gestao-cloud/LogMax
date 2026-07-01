@@ -2,12 +2,13 @@ import { supabase } from './supabase';
 
 export const CATEGORIA_IMAGEM_BUCKET   = 'categoria-imagens';
 export const CATEGORIA_IMAGEM_MAX_BYTES = 1 * 1024 * 1024; // 1 MB
-export const CATEGORIA_IMAGEM_ACCEPT    = 'image/jpeg,image/jpg,image/png,image/webp,image/svg+xml';
+export const CATEGORIA_IMAGEM_ACCEPT    = 'image/jpeg,image/jpg,image/png,image/webp';
 
-const ALLOWED_MIME = new Set(['image/jpeg','image/jpg','image/png','image/webp','image/svg+xml']);
-const ALLOWED_EXT  = new Set(['jpg','jpeg','png','webp','svg']);
+const ALLOWED_MIME = new Set(['image/jpeg','image/jpg','image/png','image/webp']);
+const ALLOWED_EXT  = new Set(['jpg','jpeg','png','webp']);
 
 export function validarImagemCategoria(file: File): { ok: boolean; motivo: string; ext: string } {
+  // SVG excluído intencionalmente (risco XSS se Content-Type mudar no storage)
   const rawExt = file.name.toLowerCase().includes('.')
     ? file.name.toLowerCase().split('.').pop()! : '';
   if (!ALLOWED_MIME.has(file.type) && !ALLOWED_EXT.has(rawExt))
