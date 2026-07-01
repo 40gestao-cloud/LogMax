@@ -92,8 +92,10 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/metasestrategicasview':        'metas_estrategicas',
   '/api/tarefastaticasview':           'tarefas_taticas',
   '/api/justificativasfaltaview':     'justificativas_falta',
-  // Orçamento por categoria
+  // Orçamento por categoria + subcategorias + itens de campanha
   'categorias_produto':               'categorias_produto',
+  'subcategorias_produto':            'subcategorias_produto',
+  'itens_campanha':                   'itens_campanha',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra

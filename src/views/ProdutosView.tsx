@@ -21,6 +21,7 @@ const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as cons
 const EMPTY_EXTRAS = {
   categoria:              '',
   categoria_id:           '' as string,
+  subcategoria_id:        '' as string,
   preco_custo:            '',
   estoque:                '',
   qtd_comprada:           '',
@@ -62,7 +63,8 @@ export const ProdutosView = ({ showToast }: any) => {
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
-  const { data: categoriasProduto } = useFetchData<any>('categorias_produto');
+  const { data: categoriasProduto }  = useFetchData<any>('categorias_produto');
+  const { data: subcategoriasProduto } = useFetchData<any>('subcategorias_produto');
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/produtosview',
@@ -182,6 +184,7 @@ export const ProdutosView = ({ showToast }: any) => {
     setExtras({
       categoria:              item.categoria      ?? '',
       categoria_id:           item.categoria_id   ?? '',
+      subcategoria_id:        item.subcategoria_id ?? '',
       preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
       estoque:                item.estoque        !== undefined ? String(item.estoque)        : '',
       qtd_comprada:           '', // sempre vazio na edição — é movimentação one-shot, não persiste
@@ -272,6 +275,7 @@ export const ProdutosView = ({ showToast }: any) => {
         fornecedor:             extras.fornecedor,
         filial:                 extras.filial || FILIAL_DEFAULT,
         categoria_id:           extras.categoria_id || null,
+        subcategoria_id:        extras.subcategoria_id || null,
         imagem_url:             imagemUrl || null,
         tipo:                   extras.tipo,
         // Campos de patrimônio só viajam quando tipo='patrimonio' — limpa quando
@@ -460,7 +464,7 @@ export const ProdutosView = ({ showToast }: any) => {
                         value={extras.categoria_id}
                         onChange={e => {
                           const cat = categoriasProduto.find((c: any) => c.id === e.target.value);
-                          setExtras(x => ({ ...x, categoria_id: e.target.value, categoria: cat?.nome ?? '' }));
+                          setExtras(x => ({ ...x, categoria_id: e.target.value, categoria: cat?.nome ?? '', subcategoria_id: '' }));
                         }}>
                         <option value="">— Sem categoria —</option>
                         {categoriasProduto.filter((c: any) => c.ativo).map((c: any) => (
@@ -473,6 +477,21 @@ export const ProdutosView = ({ showToast }: any) => {
                         placeholder="Ex: Fixadores, Eletrônicos" />
                     )}
                   </FormField>
+                  {extras.categoria_id && (() => {
+                    const subs = subcategoriasProduto.filter((s: any) => s.categoria_id === extras.categoria_id && s.ativo);
+                    return subs.length > 0 ? (
+                      <FormField label="Subcategoria">
+                        <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                          value={extras.subcategoria_id}
+                          onChange={e => setExtras(x => ({ ...x, subcategoria_id: e.target.value }))}>
+                          <option value="">— Sem subcategoria —</option>
+                          {subs.map((s: any) => (
+                            <option key={s.id} value={s.id}>{s.icone} {s.nome}</option>
+                          ))}
+                        </select>
+                      </FormField>
+                    ) : null;
+                  })()}
                   <FormField label="Cód. Barras EAN">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
                       value={extras.ean} onChange={e => setExtras(x => ({ ...x, ean: e.target.value }))}

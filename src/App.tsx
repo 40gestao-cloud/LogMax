@@ -95,6 +95,7 @@ const TIView                               = lazy(() => import('./views/TIView')
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const OrcamentoCategoriaView               = lazy(() => import('./views/OrcamentoCategoriaView').then(m => ({ default: m.OrcamentoCategoriaView })));
+const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
 const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
@@ -109,7 +110,7 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
+    submenus: ['Categorias', 'Filiais', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
   },
   {
     // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
@@ -513,6 +514,7 @@ function LogMaxAppInner() {
     switch (activeView) {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
+      case 'empresa-categorias':              return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
