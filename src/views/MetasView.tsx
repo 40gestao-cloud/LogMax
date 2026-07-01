@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2, FileDown } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
@@ -421,6 +421,109 @@ export const MetasView = ({ showToast, profile }: any) => {
     setSavingThreshold(false);
   };
 
+  const gerarPdfMeta = (m: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { jsPDF } = require('jspdf');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('jspdf-autotable');
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const accent = [34, 197, 94] as [number, number, number]; // verde
+
+    doc.setFontSize(18).setFont('helvetica', 'bold');
+    doc.text('Meta Estratégica', 40, 50);
+
+    doc.setFontSize(9).setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text(`Status: ${m.status}`, 40, 68);
+    doc.setTextColor(0);
+
+    doc.setFontSize(10).setFont('helvetica', 'bold');
+    doc.text('Descrição', 40, 96);
+    doc.setFont('helvetica', 'normal').setFontSize(10);
+    const descLines = doc.splitTextToSize(m.descricao ?? '', 515);
+    doc.text(descLines, 40, 112);
+
+    const afterDesc = 112 + descLines.length * 14 + 12;
+
+    (doc as any).autoTable({
+      startY: afterDesc,
+      head: [['Campo', 'Valor']],
+      body: [
+        ['Setor alvo', m.setor ? labelSetorOpcao(m.setor) : 'Todos os setores'],
+        ['Período', `${m.data_inicio} → ${m.data_fim}`],
+        ['Pool da equipe', fmtBRL(Number(m.bonificacao_equipe ?? 0))],
+        ['Limite individual por tarefa', fmtBRL(Number(m.limite_bonificacao_individual ?? 0))],
+      ],
+      headStyles: { fillColor: accent, fontSize: 9, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 200, fontStyle: 'bold' } },
+      margin: { left: 40, right: 40 },
+    });
+
+    doc.save(`meta-estrategica-${m.id?.slice(0, 8) ?? 'doc'}.pdf`);
+  };
+
+  const gerarPdfTarefa = (t: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { jsPDF } = require('jspdf');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('jspdf-autotable');
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const accent = [34, 197, 94] as [number, number, number];
+    const colabNome = t.colaborador?.nome ?? t.colaborador?.email ?? '—';
+    const metaDesc  = t.meta?.descricao ?? '—';
+
+    doc.setFontSize(18).setFont('helvetica', 'bold');
+    doc.text('Tarefa Tática', 40, 50);
+
+    doc.setFontSize(9).setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text(`Status: ${statusLabel(t.status)}`, 40, 68);
+    doc.setTextColor(0);
+
+    doc.setFontSize(10).setFont('helvetica', 'bold');
+    doc.text('Descrição', 40, 96);
+    doc.setFont('helvetica', 'normal').setFontSize(10);
+    const descLines = doc.splitTextToSize(t.descricao ?? '', 515);
+    doc.text(descLines, 40, 112);
+
+    let y = 112 + descLines.length * 14 + 12;
+
+    doc.setFont('helvetica', 'bold').setFontSize(10);
+    doc.text('Meta estratégica vinculada', 40, y);
+    y += 16;
+    doc.setFont('helvetica', 'normal');
+    const metaLines = doc.splitTextToSize(metaDesc, 515);
+    doc.text(metaLines, 40, y);
+    y += metaLines.length * 14 + 12;
+
+    (doc as any).autoTable({
+      startY: y,
+      head: [['Campo', 'Valor']],
+      body: [
+        ['Colaborador', colabNome],
+        ['Setor', t.setor ? labelSetorOpcao(t.setor) : '—'],
+        ['Bonificação', fmtBRL(Number(t.valor_bonificacao ?? 0))],
+        ['Período', `${t.data_inicio} → ${t.data_fim}`],
+      ],
+      headStyles: { fillColor: accent, fontSize: 9, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 200, fontStyle: 'bold' } },
+      margin: { left: 40, right: 40 },
+    });
+
+    if (t.status === 'Rejeitada' && t.feedback_aprovacao) {
+      const finalY = (doc as any).lastAutoTable.finalY + 20;
+      doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(180, 0, 0);
+      doc.text('Feedback da rejeição', 40, finalY);
+      doc.setFont('helvetica', 'normal').setTextColor(0);
+      const fbLines = doc.splitTextToSize(t.feedback_aprovacao, 515);
+      doc.text(fbLines, 40, finalY + 16);
+    }
+
+    doc.save(`tarefa-tatica-${t.id?.slice(0, 8) ?? 'doc'}.pdf`);
+  };
+
   // Pode aprovar tarefa: admin/CEO/RH global; gerente só do setor da tarefa.
   const podeAprovarTarefa = (t: any) => {
     if (!profile) return false;
@@ -692,6 +795,13 @@ export const MetasView = ({ showToast, profile }: any) => {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex gap-1.5 justify-end items-center">
+                            {(isAdmin || isGerente) && (
+                              <button onClick={(e) => { e.stopPropagation(); gerarPdfMeta(m); }}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"
+                                title="Baixar PDF">
+                                <FileDown size={13} />
+                              </button>
+                            )}
                             {m.status === 'Ativa' && isAdmin && (
                               <>
                                 <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
@@ -796,6 +906,13 @@ export const MetasView = ({ showToast, profile }: any) => {
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex gap-1.5 justify-end items-center">
+                              {(isAdmin || isGerente || sou_alvo) && (
+                                <button onClick={(e) => { e.stopPropagation(); gerarPdfTarefa(t); }}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"
+                                  title="Baixar PDF">
+                                  <FileDown size={13} />
+                                </button>
+                              )}
                               {t.status === 'Pendente' && sou_alvo && (
                                 <button onClick={(e) => { e.stopPropagation(); handleConcluirTarefa(t.id); }}
                                   disabled={busyId === t.id}
@@ -875,9 +992,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <p className="text-sm font-mono text-gray-200">{fmtBRL(Number(detailMeta.limite_bonificacao_individual ?? 0))}</p>
                 </div>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center">
+                {(isAdmin || isGerente) && (
+                  <button onClick={() => gerarPdfMeta(detailMeta)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-accent px-3 py-2 transition-colors neu-button rounded-xl">
+                    <FileDown size={13} />PDF
+                  </button>
+                )}
                 <button onClick={() => setDetailMeta(null)}
-                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors">Fechar</button>
+                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors ml-auto">Fechar</button>
               </div>
             </motion.div>
           </motion.div>
@@ -932,9 +1055,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <p className="text-sm text-red-200 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.feedback_aprovacao}</p>
                 </div>
               )}
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center">
+                {(isAdmin || isGerente || detailTarefa.colaborador_id === profile?.id) && (
+                  <button onClick={() => gerarPdfTarefa(detailTarefa)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-accent px-3 py-2 transition-colors neu-button rounded-xl">
+                    <FileDown size={13} />PDF
+                  </button>
+                )}
                 <button onClick={() => setDetailTarefa(null)}
-                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors">Fechar</button>
+                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors ml-auto">Fechar</button>
               </div>
             </motion.div>
           </motion.div>
