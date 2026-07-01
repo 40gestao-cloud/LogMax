@@ -202,25 +202,40 @@ function AbaCampanhas({ showToast }: any) {
   };
 
   const handleAprovarTudo = async (camp: any) => {
-    const itens = itensDaCamp(camp.id);
+    const itens = itensDaCamp(camp.id).filter((i: any) => i.status === 'Pendente');
+    if (itens.length === 0) { showToast('Nenhum item Pendente para aprovar.', 'error', true); return; }
     setProcessing(`bulk-${camp.id}`);
     try {
-      for (const item of itens) await atualizaItem(item.id, 'Aprovado');
-      await finalizarCampanha(camp, itens.map(i => ({ ...i, status: 'Aprovado' })));
-    } catch (err: any) { showToast(err.message, 'error', true); }
-    finally { setProcessing(null); }
+      for (const item of itens) {
+        await atualizaItem(item.id, 'Aprovado');
+      }
+      // re-lê estado dos itens após loop para calcular status correto
+      const todosItensAtuais = itensDaCamp(camp.id).map((i: any) =>
+        itens.find((x: any) => x.id === i.id) ? { ...i, status: 'Aprovado' } : i
+      );
+      await finalizarCampanha(camp, todosItensAtuais);
+    } catch (err: any) {
+      showToast(`Erro ao aprovar: ${err.message ?? 'verifique o console'}. Alguns itens podem não ter sido atualizados.`, 'error', true);
+    } finally { setProcessing(null); }
   };
 
   const handleReprovarTudo = async (camp: any) => {
     const motivo = motivos[`bulk-${camp.id}`]?.trim();
     if (!motivo) { showToast('Informe o motivo para reprovar tudo.', 'error', true); return; }
-    const itens = itensDaCamp(camp.id);
+    const itens = itensDaCamp(camp.id).filter((i: any) => i.status === 'Pendente');
+    if (itens.length === 0) { showToast('Nenhum item Pendente para reprovar.', 'error', true); return; }
     setProcessing(`bulk-${camp.id}`);
     try {
-      for (const item of itens) await atualizaItem(item.id, 'Reprovado', motivo);
-      await finalizarCampanha(camp, itens.map(i => ({ ...i, status: 'Reprovado' })));
-    } catch (err: any) { showToast(err.message, 'error', true); }
-    finally { setProcessing(null); }
+      for (const item of itens) {
+        await atualizaItem(item.id, 'Reprovado', motivo);
+      }
+      const todosItensAtuais = itensDaCamp(camp.id).map((i: any) =>
+        itens.find((x: any) => x.id === i.id) ? { ...i, status: 'Reprovado' } : i
+      );
+      await finalizarCampanha(camp, todosItensAtuais);
+    } catch (err: any) {
+      showToast(`Erro ao reprovar: ${err.message ?? 'verifique o console'}. Alguns itens podem não ter sido atualizados.`, 'error', true);
+    } finally { setProcessing(null); }
   };
 
   const handleFinalizar = async (camp: any) => {

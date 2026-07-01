@@ -87,9 +87,13 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
   const toggleProduto = async (prod: any) => {
     if (!supabase) return;
     if (isAdicionado(prod.id)) {
-      // remover
+      // remover — só permite se item ainda está Pendente
       const item = itensCampanha.find((i: any) => i.produto_id === prod.id);
       if (!item) return;
+      if (item.status !== 'Pendente') {
+        showToast(`Não é possível remover: item já está "${item.status}".`, 'error');
+        return;
+      }
       const { error } = await supabase.from('itens_campanha').delete().eq('id', item.id);
       if (error) { showToast(error.message, 'error'); return; }
       setItensSaved((prev: any[]) => prev.filter((i: any) => i.id !== item.id));

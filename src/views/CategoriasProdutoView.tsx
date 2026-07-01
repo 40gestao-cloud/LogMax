@@ -82,7 +82,7 @@ function PainelCategorias({ canEdit, selectedId, onSelect }: {
   };
 
   const handleDelete = async (item: any) => {
-    if (!confirm(`Excluir categoria "${item.nome}"? Subcategorias e vínculos serão removidos.`)) return;
+    if (!confirm(`Excluir categoria "${item.nome}"? As subcategorias serão removidas e produtos vinculados perderão a categoria.`)) return;
     await dbDelete('categorias_produto', item.id);
     reload();
   };
@@ -323,7 +323,7 @@ function _PainelCategoriasWrapper({ canEdit, selectedId, onSelect }: {
   };
 
   const handleDelete = async (item: any) => {
-    if (!confirm(`Excluir categoria "${item.nome}"? Subcategorias e vínculos serão removidos.`)) return;
+    if (!confirm(`Excluir categoria "${item.nome}"? As subcategorias serão removidas e produtos vinculados perderão a categoria.`)) return;
     await dbDelete('categorias_produto', item.id);
     reload();
   };

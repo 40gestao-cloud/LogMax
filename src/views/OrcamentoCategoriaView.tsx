@@ -31,7 +31,7 @@ export const OrcamentoCategoriaView = ({ showToast, profile }: { showToast: any;
   const [linhas, setLinhas] = useState<Record<string, { percentual: string; valor_limite: string }>>({});
 
   const fetchOrcamento = useCallback(async () => {
-    if (!categorias.length) return;
+    if (!categorias.length || !supabase) return;
     const { data } = await supabase
       .from('orcamento_mensal_categoria')
       .select('*')
@@ -59,6 +59,7 @@ export const OrcamentoCategoriaView = ({ showToast, profile }: { showToast: any;
     .reduce((acc, l) => acc + (parseFloat(l.percentual) || 0), 0);
 
   const handleSave = async () => {
+    if (!supabase) { showToast('Supabase não configurado.', 'error', true); return; }
     setIsSaving(true);
     try {
       const rows = ativas.map((c: any) => ({
