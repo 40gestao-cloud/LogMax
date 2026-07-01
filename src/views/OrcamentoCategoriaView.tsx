@@ -194,9 +194,11 @@ export const OrcamentoCategoriaView = ({ showToast, profile }: { showToast: any;
                   <div key={cat.id} className="hover:bg-white/2 transition-colors">
                     <div className="grid grid-cols-12 gap-2 px-4 py-3 items-center">
                       <div className="col-span-4 flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 overflow-hidden"
                           style={{ background: cat.cor + '22', border: `1px solid ${cat.cor}44` }}>
-                          {cat.icone}
+                          {cat.imagem_url
+                            ? <img src={cat.imagem_url} alt="" className="w-full h-full object-cover" />
+                            : cat.icone}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-200 truncate">{cat.nome}</p>
