@@ -20,6 +20,7 @@ const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as cons
 
 const EMPTY_EXTRAS = {
   categoria:              '',
+  categoria_id:           '' as string,
   preco_custo:            '',
   estoque:                '',
   qtd_comprada:           '',
@@ -60,6 +61,8 @@ export const ProdutosView = ({ showToast }: any) => {
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
+
+  const { data: categoriasProduto } = useFetchData<any>('categorias_produto');
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/produtosview',
@@ -178,6 +181,7 @@ export const ProdutosView = ({ showToast }: any) => {
     });
     setExtras({
       categoria:              item.categoria      ?? '',
+      categoria_id:           item.categoria_id   ?? '',
       preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
       estoque:                item.estoque        !== undefined ? String(item.estoque)        : '',
       qtd_comprada:           '', // sempre vazio na edição — é movimentação one-shot, não persiste
@@ -267,6 +271,7 @@ export const ProdutosView = ({ showToast }: any) => {
         ean:                    extras.ean,
         fornecedor:             extras.fornecedor,
         filial:                 extras.filial || FILIAL_DEFAULT,
+        categoria_id:           extras.categoria_id || null,
         imagem_url:             imagemUrl || null,
         tipo:                   extras.tipo,
         // Campos de patrimônio só viajam quando tipo='patrimonio' — limpa quando
@@ -450,9 +455,23 @@ export const ProdutosView = ({ showToast }: any) => {
                       placeholder="Ex: Parafuso M6" />
                   </FormField>
                   <FormField label="Categoria">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.categoria} onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
-                      placeholder="Ex: Fixadores, Eletrônicos" />
+                    {categoriasProduto.length > 0 ? (
+                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.categoria_id}
+                        onChange={e => {
+                          const cat = categoriasProduto.find((c: any) => c.id === e.target.value);
+                          setExtras(x => ({ ...x, categoria_id: e.target.value, categoria: cat?.nome ?? '' }));
+                        }}>
+                        <option value="">— Sem categoria —</option>
+                        {categoriasProduto.filter((c: any) => c.ativo).map((c: any) => (
+                          <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.categoria} onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
+                        placeholder="Ex: Fixadores, Eletrônicos" />
+                    )}
                   </FormField>
                   <FormField label="Cód. Barras EAN">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"

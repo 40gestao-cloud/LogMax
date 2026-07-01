@@ -94,6 +94,7 @@ const RegistroPontoExpressView             = lazy(() => import('./views/Registro
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
+const OrcamentoCategoriaView               = lazy(() => import('./views/OrcamentoCategoriaView').then(m => ({ default: m.OrcamentoCategoriaView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
 const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
@@ -121,7 +122,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Planejamento orçamentário', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Planejamento orçamentário', 'Orçamento por Categoria', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
@@ -537,6 +538,7 @@ function LogMaxAppInner() {
       case 'compras-recebimentos':            return <RecebimentosView showToast={st} />;
       case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} />;
       case 'compras-planejamentoorçamentário': return <PlanejamentoOrcamentarioView showToast={st} />;
+      case 'compras-orçamentoporcategoria':   return <OrcamentoCategoriaView showToast={st} profile={profile} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
       case 'compras-relatórios':              return <RelatoriosComprasView showToast={st} />;
       case 'estoque-minhasaprovações':        return <AprovacoesEstoqueView showToast={st} />;
