@@ -1,6 +1,6 @@
 -- Adiciona imagem_url em categorias e subcategorias de produto.
--- O bucket 'categoria-imagens' deve ser criado manualmente no Supabase Dashboard
--- (Storage → New bucket → nome: categoria-imagens, Public: true).
+-- ATENÇÃO: crie o bucket 'categoria-imagens' manualmente no Supabase Dashboard
+-- (Storage → New bucket → nome: categoria-imagens, Public: true) ANTES de rodar este script.
 
 ALTER TABLE public.categorias_produto
   ADD COLUMN IF NOT EXISTS imagem_url text;
@@ -8,28 +8,31 @@ ALTER TABLE public.categorias_produto
 ALTER TABLE public.subcategorias_produto
   ADD COLUMN IF NOT EXISTS imagem_url text;
 
--- Políticas de storage para o bucket categoria-imagens
--- (execute após criar o bucket no dashboard)
+-- Bucket via SQL (idempotente)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'categoria-imagens',
   'categoria-imagens',
   true,
-  1048576,  -- 1 MB
-  ARRAY['image/jpeg','image/jpg','image/png','image/webp','image/svg+xml']
+  1048576,
+  ARRAY['image/jpeg','image/jpg','image/png','image/webp']
 )
 ON CONFLICT (id) DO UPDATE SET
-  public            = true,
-  file_size_limit   = 1048576,
-  allowed_mime_types = ARRAY['image/jpeg','image/jpg','image/png','image/webp','image/svg+xml'];
+  public             = true,
+  file_size_limit    = 1048576,
+  allowed_mime_types = ARRAY['image/jpeg','image/jpg','image/png','image/webp'];
 
--- Leitura pública
-CREATE POLICY IF NOT EXISTS "categoria_imagens_select"
+-- Storage policies (DROP antes de criar para ser idempotente)
+DROP POLICY IF EXISTS "categoria_imagens_select" ON storage.objects;
+DROP POLICY IF EXISTS "categoria_imagens_insert" ON storage.objects;
+DROP POLICY IF EXISTS "categoria_imagens_update" ON storage.objects;
+DROP POLICY IF EXISTS "categoria_imagens_delete" ON storage.objects;
+
+CREATE POLICY "categoria_imagens_select"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'categoria-imagens');
 
--- Upload: logística + admin/CEO
-CREATE POLICY IF NOT EXISTS "categoria_imagens_insert"
+CREATE POLICY "categoria_imagens_insert"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'categoria-imagens'
@@ -42,8 +45,7 @@ CREATE POLICY IF NOT EXISTS "categoria_imagens_insert"
     )
   );
 
--- Atualizar/substituir: mesma restrição
-CREATE POLICY IF NOT EXISTS "categoria_imagens_update"
+CREATE POLICY "categoria_imagens_update"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'categoria-imagens'
@@ -56,8 +58,7 @@ CREATE POLICY IF NOT EXISTS "categoria_imagens_update"
     )
   );
 
--- Remover imagem antiga: admin/CEO + logística
-CREATE POLICY IF NOT EXISTS "categoria_imagens_delete"
+CREATE POLICY "categoria_imagens_delete"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'categoria-imagens'
