@@ -83,6 +83,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null);
+  const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null);
+  const formPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // Export PDF — admin only.
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -279,12 +282,23 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao criar usuário.', 'error'); return; }
 
+      // Upload de foto, se selecionada
+      const newUserId: string = json.userId;
+      if (formPhotoFile && supabase) {
+        try {
+          const url = await uploadFotoPerfil(formPhotoFile, newUserId);
+          await supabase.rpc('atualizar_foto_usuario', { p_user_id: newUserId, p_foto_url: url });
+        } catch { /* não bloqueia o fluxo */ }
+      }
+
       // Recarregar lista
       if (supabase) {
         const { data } = await supabase.from('user_profiles').select('*').order('nome', { ascending: true });
         setUsers(data ?? []);
       }
       setForm(emptyForm);
+      setFormPhotoFile(null);
+      setFormPhotoPreview(null);
       setShowForm(false);
       showToast('Usuário criado com sucesso.', 'success');
     } catch {
@@ -465,8 +479,36 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Novo Usuário</h3>
-              <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <button onClick={() => { setShowForm(false); setFormPhotoFile(null); setFormPhotoPreview(null); }} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
+            {/* Foto */}
+            <div className="flex items-center gap-4 mb-5">
+              <button type="button" onClick={() => formPhotoInputRef.current?.click()}
+                className="relative w-16 h-16 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors shrink-0"
+                title="Adicionar foto (opcional)">
+                {formPhotoPreview
+                  ? <img src={formPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                  : <Camera size={22} />}
+              </button>
+              <div>
+                <p className="text-xs text-gray-300 font-semibold">Foto do usuário <span className="text-gray-600 font-normal">(opcional)</span></p>
+                <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
+                {formPhotoPreview && (
+                  <button type="button" onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); }}
+                    className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
+                )}
+              </div>
+              <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]; e.target.value = '';
+                  if (!f) return;
+                  const val = validarFotoPerfil(f);
+                  if (!val.ok) { showToast(val.motivo, 'error'); return; }
+                  setFormPhotoFile(f);
+                  setFormPhotoPreview(URL.createObjectURL(f));
+                }} />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 { label: 'Nome *', k: 'nome', type: 'text' },

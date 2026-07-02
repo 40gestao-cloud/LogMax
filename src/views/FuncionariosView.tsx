@@ -26,6 +26,9 @@ export const FuncionariosView = ({ showToast }: any) => {
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null);
+  const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null);
+  const formPhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showForm) {
@@ -55,7 +58,7 @@ export const FuncionariosView = ({ showToast }: any) => {
     .filter((f: any) =>
       [f.nome, f.cargo, f.departamento, f.cpf, f.email].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
     )
-    .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
+    .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' }));
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setShowForm(true); };
   const openEdit = (f: any) => {
@@ -68,7 +71,7 @@ export const FuncionariosView = ({ showToast }: any) => {
     setEditing(f);
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); };
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); setFormPhotoFile(null); setFormPhotoPreview(null); };
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
@@ -81,6 +84,14 @@ export const FuncionariosView = ({ showToast }: any) => {
         showToast('Funcionário atualizado.', 'success');
       } else {
         const created = await dbInsert('/api/funcionariosview', payload);
+        // Upload de foto, se selecionada
+        if (formPhotoFile && created?.id) {
+          try {
+            const url = await uploadFotoPerfil(formPhotoFile, `func-${created.id}`);
+            await dbUpdate('/api/funcionariosview', created.id, { foto_url: url });
+            created.foto_url = url;
+          } catch { /* não bloqueia */ }
+        }
         setData((prev: any[]) => [created, ...prev]);
         showToast('Funcionário cadastrado.', 'success');
       }
@@ -173,6 +184,34 @@ export const FuncionariosView = ({ showToast }: any) => {
               <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
               <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
+            {/* Foto */}
+            <div className="flex items-center gap-4 mb-5">
+              <button type="button" onClick={() => formPhotoInputRef.current?.click()}
+                className="relative w-16 h-16 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors shrink-0"
+                title="Adicionar foto (opcional)">
+                {formPhotoPreview || form.foto_url
+                  ? <img src={formPhotoPreview ?? form.foto_url} alt="preview" className="w-full h-full object-cover" />
+                  : <Camera size={22} />}
+              </button>
+              <div>
+                <p className="text-xs text-gray-300 font-semibold">Foto do funcionário <span className="text-gray-600 font-normal">(opcional)</span></p>
+                <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
+                {(formPhotoPreview || (!editing && form.foto_url)) && (
+                  <button type="button" onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); }}
+                    className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
+                )}
+              </div>
+              <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]; e.target.value = '';
+                  if (!f) return;
+                  const val = validarFotoPerfil(f);
+                  if (!val.ok) { showToast(val.motivo, 'error'); return; }
+                  setFormPhotoFile(f);
+                  setFormPhotoPreview(URL.createObjectURL(f));
+                }} />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 { label: 'Nome *', k: 'nome', type: 'text' },
