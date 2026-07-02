@@ -53,8 +53,9 @@ const SETOR_OPCAO_LABEL: Record<string, string> = {
 const labelSetorOpcao = (s: string) => SETOR_OPCAO_LABEL[s] ?? setorLabel(s);
 
 const EMPTY_META = {
+  titulo: '',
   descricao: '',
-  setor: '',                              // '' = todos os setores
+  setor: '',
   bonificacao_equipe: '',
   limite_bonificacao_individual: '',
   data_inicio: '',
@@ -63,8 +64,9 @@ const EMPTY_META = {
 
 const EMPTY_TAREFA = {
   meta_estrategica_id: '',
+  titulo: '',
   descricao: '',
-  colaborador_id: '',                     // '' = todos do setor
+  colaborador_id: '',
   valor_bonificacao: '',
   data_inicio: '',
   data_fim: '',
@@ -130,8 +132,8 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleCriarMeta = async () => {
     if (!supabase) return;
-    if (!formMeta.descricao.trim() || !formMeta.data_inicio || !formMeta.data_fim) {
-      showToast('Preencha descrição e período.', 'error');
+    if (!formMeta.titulo.trim() || !formMeta.data_inicio || !formMeta.data_fim) {
+      showToast('Preencha título e período.', 'error');
       return;
     }
     const bonusEquipe = formMeta.bonificacao_equipe ? parseBRL(formMeta.bonificacao_equipe) : 0;
@@ -143,6 +145,7 @@ export const MetasView = ({ showToast, profile }: any) => {
     setSavingMeta(true);
     try {
       const { data: id, error } = await supabase.rpc('criar_meta_estrategica', {
+        p_titulo:                        formMeta.titulo.trim(),
         p_descricao:                     formMeta.descricao.trim(),
         p_setor:                         formMeta.setor || null,
         p_bonificacao_equipe:            bonusEquipe,
@@ -203,6 +206,7 @@ export const MetasView = ({ showToast, profile }: any) => {
   const abrirEdicaoMeta = (m: any) => {
     setEditMetaId(m.id);
     setFormMeta({
+      titulo:                          m.titulo ?? '',
       descricao:                       m.descricao ?? '',
       setor:                           m.setor ?? '',
       bonificacao_equipe:              formatBRL(String(Number(m.bonificacao_equipe ?? 0).toFixed(2))),
@@ -221,8 +225,8 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleEditarMeta = async () => {
     if (!supabase || !editMetaId) return;
-    if (!formMeta.descricao.trim() || !formMeta.data_inicio || !formMeta.data_fim) {
-      showToast('Preencha descrição e período.', 'error');
+    if (!formMeta.titulo.trim() || !formMeta.data_inicio || !formMeta.data_fim) {
+      showToast('Preencha título e período.', 'error');
       return;
     }
     const bonusEquipe = formMeta.bonificacao_equipe ? parseBRL(formMeta.bonificacao_equipe) : 0;
@@ -235,6 +239,7 @@ export const MetasView = ({ showToast, profile }: any) => {
     try {
       const { error } = await supabase.rpc('editar_meta_estrategica', {
         p_meta_id:                       editMetaId,
+        p_titulo:                        formMeta.titulo.trim(),
         p_descricao:                     formMeta.descricao.trim(),
         p_setor:                         formMeta.setor || null,
         p_bonificacao_equipe:            bonusEquipe,
@@ -245,6 +250,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       if (error) throw error;
       setMetas((prev: any[]) => prev.map(m => m.id === editMetaId ? {
         ...m,
+        titulo:                        formMeta.titulo.trim(),
         descricao:                     formMeta.descricao.trim(),
         setor:                         formMeta.setor || null,
         bonificacao_equipe:            bonusEquipe,
@@ -325,9 +331,9 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleCriarTarefa = async () => {
     if (!supabase) return;
-    if (!formTarefa.meta_estrategica_id || !formTarefa.descricao.trim() ||
+    if (!formTarefa.meta_estrategica_id || !formTarefa.titulo.trim() ||
         !formTarefa.data_inicio || !formTarefa.data_fim) {
-      showToast('Preencha meta, descrição e período.', 'error');
+      showToast('Preencha meta, título e período.', 'error');
       return;
     }
     const valor = formTarefa.valor_bonificacao ? parseBRL(formTarefa.valor_bonificacao) : 0;
@@ -340,6 +346,7 @@ export const MetasView = ({ showToast, profile }: any) => {
     try {
       const { data: ids, error } = await supabase.rpc('criar_tarefa_tatica', {
         p_meta_estrategica_id: formTarefa.meta_estrategica_id,
+        p_titulo:              formTarefa.titulo.trim(),
         p_descricao:           formTarefa.descricao.trim(),
         p_colaborador_id:      formTarefa.colaborador_id || null,
         p_valor_bonificacao:   valor,
@@ -542,21 +549,28 @@ export const MetasView = ({ showToast, profile }: any) => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const accent = [34, 197, 94] as [number, number, number]; // verde
 
-    doc.setFontSize(18).setFont('helvetica', 'bold');
-    doc.text('Meta Estratégica', 40, 50);
+    doc.setFontSize(11).setFont('helvetica', 'normal').setTextColor(150);
+    doc.text('Meta Estratégica', 40, 40);
+    doc.setFontSize(16).setFont('helvetica', 'bold').setTextColor(0);
+    const titleLines = doc.splitTextToSize(m.titulo || m.descricao || '', 515);
+    doc.text(titleLines, 40, 56);
 
-    doc.setFontSize(9).setFont('helvetica', 'normal');
-    doc.setTextColor(100);
-    doc.text(`Status: ${m.status}`, 40, 68);
+    let afterTitle = 56 + titleLines.length * 20 + 6;
+    doc.setFontSize(9).setFont('helvetica', 'normal').setTextColor(100);
+    doc.text(`Status: ${m.status}`, 40, afterTitle);
+    afterTitle += 18;
     doc.setTextColor(0);
 
-    doc.setFontSize(10).setFont('helvetica', 'bold');
-    doc.text('Descrição', 40, 96);
-    doc.setFont('helvetica', 'normal').setFontSize(10);
-    const descLines = doc.splitTextToSize(m.descricao ?? '', 515);
-    doc.text(descLines, 40, 112);
-
-    const afterDesc = 112 + descLines.length * 14 + 12;
+    let afterDesc = afterTitle;
+    if (m.descricao && m.titulo) {
+      doc.setFontSize(10).setFont('helvetica', 'bold');
+      doc.text('Descrição', 40, afterDesc);
+      afterDesc += 14;
+      doc.setFont('helvetica', 'normal').setFontSize(10);
+      const descLines = doc.splitTextToSize(m.descricao ?? '', 515);
+      doc.text(descLines, 40, afterDesc);
+      afterDesc += descLines.length * 14 + 12;
+    }
 
     (doc as any).autoTable({
       startY: afterDesc,
@@ -586,21 +600,27 @@ export const MetasView = ({ showToast, profile }: any) => {
     const colabNome = t.colaborador?.nome ?? t.colaborador?.email ?? '—';
     const metaDesc  = t.meta?.descricao ?? '—';
 
-    doc.setFontSize(18).setFont('helvetica', 'bold');
-    doc.text('Tarefa Tática', 40, 50);
+    doc.setFontSize(11).setFont('helvetica', 'normal').setTextColor(150);
+    doc.text('Tarefa Tática', 40, 40);
+    doc.setFontSize(16).setFont('helvetica', 'bold').setTextColor(0);
+    const titleLines = doc.splitTextToSize(t.titulo || t.descricao || '', 515);
+    doc.text(titleLines, 40, 56);
 
-    doc.setFontSize(9).setFont('helvetica', 'normal');
-    doc.setTextColor(100);
-    doc.text(`Status: ${statusLabel(t.status)}`, 40, 68);
+    let y = 56 + titleLines.length * 20 + 6;
+    doc.setFontSize(9).setFont('helvetica', 'normal').setTextColor(100);
+    doc.text(`Situação: ${t.situacao ?? 'Em Produção'} · Aprovação: ${statusLabel(t.status)}`, 40, y);
+    y += 18;
     doc.setTextColor(0);
 
-    doc.setFontSize(10).setFont('helvetica', 'bold');
-    doc.text('Descrição', 40, 96);
-    doc.setFont('helvetica', 'normal').setFontSize(10);
-    const descLines = doc.splitTextToSize(t.descricao ?? '', 515);
-    doc.text(descLines, 40, 112);
-
-    let y = 112 + descLines.length * 14 + 12;
+    if (t.descricao && t.titulo) {
+      doc.setFontSize(10).setFont('helvetica', 'bold');
+      doc.text('Descrição', 40, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal').setFontSize(10);
+      const descLines = doc.splitTextToSize(t.descricao ?? '', 515);
+      doc.text(descLines, 40, y);
+      y += descLines.length * 14 + 12;
+    }
 
     doc.setFont('helvetica', 'bold').setFontSize(10);
     doc.text('Meta estratégica vinculada', 40, y);
@@ -749,12 +769,20 @@ export const MetasView = ({ showToast, profile }: any) => {
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
-                <input value={formMeta.descricao}
-                  onChange={e => setFormMeta(p => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Ex.: Aumentar 20% em vendas no Q3"
+              <div className="flex flex-col gap-1.5 lg:col-span-3">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+                <input value={formMeta.titulo}
+                  onChange={e => setFormMeta(p => ({ ...p, titulo: e.target.value }))}
+                  placeholder="Ex.: Aumentar vendas Q3"
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5 lg:col-span-2">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+                <textarea value={formMeta.descricao}
+                  onChange={e => setFormMeta(p => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Detalhes, critérios, contexto..."
+                  rows={3}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor alvo</label>
@@ -842,12 +870,20 @@ export const MetasView = ({ showToast, profile }: any) => {
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
-                <input value={formTarefa.descricao}
-                  onChange={e => setFormTarefa(p => ({ ...p, descricao: e.target.value }))}
+              <div className="flex flex-col gap-1.5 lg:col-span-3">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+                <input value={formTarefa.titulo}
+                  onChange={e => setFormTarefa(p => ({ ...p, titulo: e.target.value }))}
                   placeholder="Ex.: Fechar 5 vendas acima de R$ 10k"
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5 lg:col-span-2">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+                <textarea value={formTarefa.descricao}
+                  onChange={e => setFormTarefa(p => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Detalhes, critérios, contexto..."
+                  rows={3}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
@@ -908,7 +944,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           <div className="flex items-center gap-2">
                             <Target size={13} className="text-accent shrink-0" />
-                            <span className="truncate" title="Clique para ler">{m.descricao}</span>
+                            <span className="truncate" title="Clique para ver detalhes">{m.titulo || m.descricao}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-300">{m.setor ? labelSetorOpcao(m.setor) : <span className="text-gray-500 italic">Todos</span>}</td>
@@ -1044,7 +1080,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                             </div>
                           </td>
                           <td className="py-3 px-4 text-xs text-gray-300 max-w-md">
-                            <div className="truncate" title="Clique para ler">{t.descricao}</div>
+                            <div className="truncate font-semibold text-gray-200" title="Clique para ver detalhes">{t.titulo || t.descricao}</div>
                             {t.status === 'Rejeitada' && t.feedback_aprovacao && (
                               <div className="text-[10px] text-red-400 mt-1 flex items-start gap-1">
                                 <MessageSquare size={10} className="mt-0.5 shrink-0" />
@@ -1167,10 +1203,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
               </div>
-              <div className="mb-5">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
-                <p className="text-sm text-gray-100 whitespace-pre-wrap break-words leading-relaxed">{detailMeta.descricao}</p>
+              <div className="mb-3">
+                <p className="text-lg font-bold text-gray-100 leading-snug">{detailMeta.titulo || detailMeta.descricao}</p>
               </div>
+              {detailMeta.descricao && detailMeta.titulo && (
+                <div className="mb-5">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">{detailMeta.descricao}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 mb-5">
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Setor alvo</p>
@@ -1219,10 +1260,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(detailTarefa.status)}`}>{statusLabel(detailTarefa.status)}</span>
                 </div>
               </div>
-              <div className="mb-5">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
-                <p className="text-sm text-gray-100 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.descricao}</p>
+              <div className="mb-3">
+                <p className="text-lg font-bold text-gray-100 leading-snug">{detailTarefa.titulo || detailTarefa.descricao}</p>
               </div>
+              {detailTarefa.descricao && detailTarefa.titulo && (
+                <div className="mb-5">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">{detailTarefa.descricao}</p>
+                </div>
+              )}
               {detailTarefa.meta?.descricao && (
                 <div className="mb-5">
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Meta estratégica vinculada</p>
