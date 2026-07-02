@@ -16,7 +16,7 @@ const MASK_FOR: Record<string, (v: string) => string> = {
 const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '' };
 
 export const FuncionariosView = ({ showToast }: any) => {
-  const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview');
+  const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', undefined, false, { orderBy: 'nome', ascending: true });
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
