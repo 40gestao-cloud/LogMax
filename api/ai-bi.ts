@@ -11,11 +11,91 @@ import { callLLM } from '../lib/llm.js';
 // Cache: se o mesmo usuário pediu o mesmo período < 1h atrás, devolve
 // o relatório existente sem chamar Gemini de novo (economia + rapidez).
 
-const SYSTEM_PROMPT = `
-Você atua como Diretor de Operações e BI do LogMax (holding com 3 marcas:
-TechMax, SuperMax e MaxLook). Recebe uma agregação de dados consolidados
-do período pedido (vendas, financeiro, RH, estoque, marketing) e tem que
-devolver um relatório executivo objetivo, frio e acionável.
+type Setor = 'geral' | 'vendas' | 'financeiro' | 'rh' | 'estoque' | 'marketing';
+
+const SETOR_META: Record<Setor, { label: string; dadosKey: string; estrutura: string }> = {
+  geral: {
+    label: 'Visão Geral',
+    dadosKey: '',
+    estrutura: `
+  # Relatório Executivo — período DD/MM a DD/MM
+  ## Resumo do período
+  ## Vendas e faturamento por marca
+  ## Saúde financeira
+  ## Recursos humanos
+  ## Estoque e produtos
+  ## Marketing e campanhas
+  ## Ações imediatas`.trim(),
+  },
+  vendas: {
+    label: 'Vendas',
+    dadosKey: 'vendas',
+    estrutura: `
+  # Relatório de Vendas — período DD/MM a DD/MM
+  ## Resumo executivo de vendas
+  ## Faturamento e ticket médio por marca
+  ## Produtos mais vendidos
+  ## Métodos de pagamento
+  ## Tendências e variações
+  ## Ações imediatas`.trim(),
+  },
+  financeiro: {
+    label: 'Financeiro',
+    dadosKey: 'financeiro',
+    estrutura: `
+  # Relatório Financeiro — período DD/MM a DD/MM
+  ## Resumo de saúde financeira
+  ## Saldo e variação
+  ## Contas a pagar
+  ## Contas a receber
+  ## Fluxo de caixa
+  ## Ações imediatas`.trim(),
+  },
+  rh: {
+    label: 'RH',
+    dadosKey: 'rh',
+    estrutura: `
+  # Relatório de RH — período DD/MM a DD/MM
+  ## Resumo de pessoal
+  ## Folha salarial e benefícios
+  ## Faltas e pontualidade
+  ## Treinamentos e PDI
+  ## Afastamentos
+  ## Ações imediatas`.trim(),
+  },
+  estoque: {
+    label: 'Estoque',
+    dadosKey: 'estoque',
+    estrutura: `
+  # Relatório de Estoque — período DD/MM a DD/MM
+  ## Resumo do estoque
+  ## Produtos com baixo estoque
+  ## Giro de produtos
+  ## Recebimentos e movimentações
+  ## Ações imediatas`.trim(),
+  },
+  marketing: {
+    label: 'Marketing',
+    dadosKey: 'marketing',
+    estrutura: `
+  # Relatório de Marketing — período DD/MM a DD/MM
+  ## Resumo de campanhas
+  ## Investimento e ROI
+  ## Cupons e conversão
+  ## Calendário editorial
+  ## Ações imediatas`.trim(),
+  },
+};
+
+const buildSystemPrompt = (setor: Setor): string => {
+  const meta = SETOR_META[setor];
+  const foco = setor === 'geral'
+    ? 'Recebe uma agregação consolidada de todos os setores (vendas, financeiro, RH, estoque, marketing) e gera um relatório executivo completo.'
+    : `Recebe dados agregados do LogMax e tem foco EXCLUSIVO no setor de **${meta.label}**. Analise apenas os dados desse setor em profundidade. Para os demais setores, mencione apenas se houver impacto direto no foco solicitado.`;
+
+  return `
+Você atua como Diretor de Operações e BI do LogMax (holding com 3 marcas: TechMax, SuperMax e MaxLook).
+${foco}
 
 Diretrizes:
 - Português brasileiro, tom executivo (CEO/diretoria), sem floreios.
@@ -25,34 +105,32 @@ Diretrizes:
 - Mencione variação vs. período anterior quando o payload trouxer
   (chave 'variacao_*_pct').
 - Quando uma métrica não existir ou for zero, fale explicitamente
-  ("Não houve vendas registradas no período") em vez de omitir.
-- Identifique gargalos: relação faltas no RH × vendas no PDV, dívidas a
-  pagar × receitas a receber, estoque parado × vendas concentradas em
-  poucos itens, gasto de marketing × retorno em vendas.
+  ("Não houve registros no período") em vez de omitir.
+- Identifique gargalos e oportunidades específicos do foco pedido.
 - Termine com seção "## Ações imediatas" listando EXATAMENTE 3
   recomendações práticas e mensuráveis. Cada uma com responsável
   sugerido (Setor) e prazo (em dias).
 
 Estrutura sugerida (não rígida):
-  # Relatório Executivo — período DD/MM a DD/MM
-  ## Resumo do período
-  ## Vendas e faturamento por marca
-  ## Saúde financeira
-  ## Recursos humanos
-  ## Estoque e produtos
-  ## Marketing e campanhas
-  ## Ações imediatas
+${meta.estrutura}
 `.trim();
+};
 
-const buildUserPrompt = (dados: any, inicio: string, fim: string): string => {
+const buildUserPrompt = (dados: any, inicio: string, fim: string, setor: Setor): string => {
+  const meta = SETOR_META[setor];
+  const dadosFoco = (setor !== 'geral' && meta.dadosKey && dados[meta.dadosKey])
+    ? { periodo: dados.periodo, [meta.dadosKey]: dados[meta.dadosKey] }
+    : dados;
+
   return `Período: ${inicio} a ${fim}
+Foco: ${meta.label}
 
-DADOS CONSOLIDADOS (JSON):
+DADOS (JSON):
 \`\`\`json
-${JSON.stringify(dados, null, 2)}
+${JSON.stringify(dadosFoco, null, 2)}
 \`\`\`
 
-Gere o relatório executivo em Markdown conforme as diretrizes do system prompt.`;
+Gere o relatório em Markdown conforme as diretrizes do system prompt.`;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -72,13 +150,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Painel BI disponível apenas para Admin, CEO e Gerentes.' });
     }
 
-    const { inicio, fim } = (req.body ?? {}) as { inicio?: string; fim?: string };
+    const { inicio, fim, setor: setorRaw } = (req.body ?? {}) as { inicio?: string; fim?: string; setor?: string };
     if (!inicio || !fim || !/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fim)) {
       return res.status(400).json({ error: 'Informe inicio e fim no formato YYYY-MM-DD.' });
     }
     if (fim < inicio) {
       return res.status(400).json({ error: 'Data fim não pode ser anterior à data início.' });
     }
+    const SETORES_VALIDOS: Setor[] = ['geral', 'vendas', 'financeiro', 'rh', 'estoque', 'marketing'];
+    const setor: Setor = SETORES_VALIDOS.includes(setorRaw as Setor) ? (setorRaw as Setor) : 'geral';
 
     // callLLM() faz orquestração Gemini → OpenRouter; precisa de pelo
     // menos uma chave.
@@ -99,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('gerado_por', user.id)
       .eq('periodo_inicio', inicio)
       .eq('periodo_fim', fim)
+      .eq('setor', setor)
       .eq('ativo', true)
       .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
@@ -129,8 +210,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
     const llm = await callLLM({
-      systemPrompt: SYSTEM_PROMPT,
-      userPrompt:   buildUserPrompt(dados, inicio, fim),
+      systemPrompt: buildSystemPrompt(setor),
+      userPrompt:   buildUserPrompt(dados, inicio, fim, setor),
       // Temperatura baixa pra ser frio/factual. Tokens generosos
       // (relatório executivo pode chegar a 8-10k chars).
       temperature:     0.4,
@@ -149,6 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .insert({
         periodo_inicio: inicio,
         periodo_fim:    fim,
+        setor,
         dados_json:     dados,
         markdown,
         gerado_por:     user.id,

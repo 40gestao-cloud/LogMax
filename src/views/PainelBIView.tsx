@@ -35,6 +35,16 @@ const firstOfQuarterISO = (): string => {
 };
 
 type Preset = 'mes' | '30dias' | 'trimestre' | 'custom';
+type Setor = 'geral' | 'vendas' | 'financeiro' | 'rh' | 'estoque' | 'marketing';
+
+const SETORES: { id: Setor; label: string }[] = [
+  { id: 'geral',       label: 'Visão Geral'  },
+  { id: 'vendas',      label: 'Vendas'       },
+  { id: 'financeiro',  label: 'Financeiro'   },
+  { id: 'rh',         label: 'RH'           },
+  { id: 'estoque',     label: 'Estoque'      },
+  { id: 'marketing',   label: 'Marketing'    },
+];
 
 const PRESETS: { id: Preset; label: string; getRange: () => { inicio: string; fim: string } }[] = [
   { id: 'mes',       label: 'Mês atual',       getRange: () => ({ inicio: firstOfMonthISO(),    fim: todayISO() }) },
@@ -62,6 +72,7 @@ type Relatorio = {
   gerado_em: string;
   modelo?: string;
   from_cache?: boolean;
+  setor?: Setor;
 };
 
 type HistoricoRow = {
@@ -70,6 +81,7 @@ type HistoricoRow = {
   periodo_fim: string;
   created_at: string;
   nome_gerador: string | null;
+  setor: Setor | null;
 };
 
 export const PainelBIView = ({ showToast, profile }: any) => {
@@ -79,6 +91,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
   const [preset, setPreset]   = useState<Preset>('mes');
   const [inicio, setInicio]   = useState<string>(firstOfMonthISO());
   const [fim, setFim]         = useState<string>(todayISO());
+  const [setor, setSetor]     = useState<Setor>('geral');
 
   const [loading, setLoading]       = useState(false);
   const [relatorio, setRelatorio]   = useState<Relatorio | null>(null);
@@ -101,7 +114,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
     if (!supabase) return;
     const { data } = await supabase
       .from('relatorios_bi')
-      .select('id, periodo_inicio, periodo_fim, created_at, nome_gerador')
+      .select('id, periodo_inicio, periodo_fim, created_at, nome_gerador, setor')
       .eq('ativo', true)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -119,7 +132,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
       const resp = await fetch('/api/ai-bi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ inicio, fim }),
+        body: JSON.stringify({ inicio, fim, setor }),
       });
       const data = await resp.json();
       if (!resp.ok) {
@@ -135,6 +148,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         gerado_em:  data.gerado_em,
         modelo:     data.modelo,
         from_cache: data.from_cache,
+        setor,
       });
       if (data.from_cache) {
         showToast?.('Relatório recuperado do cache (gerado há menos de 1h).', 'success');
@@ -166,6 +180,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         gerado_em:  data.created_at,
         modelo:     data.modelo_ia,
         from_cache: false,
+        setor:      data.setor ?? 'geral',
       });
       setInicio(data.periodo_inicio);
       setFim(data.periodo_fim);
@@ -247,7 +262,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         </p>
       </div>
 
-      {/* Filtros de período */}
+      {/* Filtros de período e foco */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <Calendar size={14} className="text-gray-500" />
@@ -260,6 +275,20 @@ export const PainelBIView = ({ showToast, profile }: any) => {
                   : 'neu-button text-gray-400 hover:text-white'
               }`}>
               {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Sparkles size={14} className="text-gray-500" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Foco do relatório</span>
+          {SETORES.map(s => (
+            <button key={s.id} onClick={() => setSetor(s.id)}
+              className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors ${
+                setor === s.id
+                  ? 'bg-accent/15 text-accent border border-accent/30'
+                  : 'neu-button text-gray-400 hover:text-white'
+              }`}>
+              {s.label}
             </button>
           ))}
         </div>
@@ -347,7 +376,12 @@ export const PainelBIView = ({ showToast, profile }: any) => {
                   <div className="flex items-center gap-2 min-w-0">
                     <Clock size={11} className="text-gray-500 shrink-0" />
                     <span className="text-xs text-gray-300 truncate">{fmtDataBR(h.periodo_inicio)} → {fmtDataBR(h.periodo_fim)}</span>
-                    {h.nome_gerador && <span className="text-[10px] text-gray-500">· {h.nome_gerador}</span>}
+                    {h.setor && h.setor !== 'geral' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 shrink-0">
+                        {SETORES.find(s => s.id === h.setor)?.label ?? h.setor}
+                      </span>
+                    )}
+                    {h.nome_gerador && <span className="text-[10px] text-gray-500 truncate">· {h.nome_gerador}</span>}
                   </div>
                   <span className="text-[10px] text-gray-500 shrink-0">{new Date(h.created_at).toLocaleString('pt-BR')}</span>
                 </button>
@@ -362,7 +396,14 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         <div className="neu-flat rounded-3xl p-6 sm:p-8 border border-white/5 shrink-0">
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/5">
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Análise Executiva</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Análise Executiva
+                {relatorio.setor && relatorio.setor !== 'geral' && (
+                  <span className="ml-2 px-2 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/30 normal-case tracking-normal text-[10px]">
+                    {SETORES.find(s => s.id === relatorio.setor)?.label ?? relatorio.setor}
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {fmtDataBR(relatorio.dados.periodo.inicio)} → {fmtDataBR(relatorio.dados.periodo.fim)} ({relatorio.dados.periodo.dias} dias)
                 {relatorio.from_cache && <span className="ml-2 text-yellow-400">· cache</span>}

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
@@ -16,8 +16,9 @@ export const ContasReceberView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
   // Realtime: vendas Fiado de outros caixas geram contas a receber — esta view actualiza-se sozinha (#21).
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
@@ -69,9 +70,72 @@ export const ContasReceberView = ({ showToast }: any) => {
     juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
 
-  const filtered = enriched.filter((c: any) =>
-    [c.descricao, c.status, c.cliente?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = enriched.filter((c: any) => {
+    const matchSearch = [c.descricao, c.status, c.cliente?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()));
+    const matchFilial = !filialFiltro || c.filial === filialFiltro;
+    return matchSearch && matchFilial;
+  });
+
+  const exportCols = ['Empresa', 'Descrição', 'Cliente', 'Valor (R$)', 'Vencimento', 'Status'];
+  const exportRows = () => filtered.map((c: any) => [
+    c.filial ?? '—',
+    c.descricao ?? '—',
+    c.cliente?.nome ?? '—',
+    c.juros.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+    c.vencimento ?? '—',
+    c.status ?? '—',
+  ]);
+
+  const handleExportPDF = async () => {
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF();
+      const titulo = filialFiltro ? `Contas a Receber — ${filialFiltro}` : 'Contas a Receber — Geral';
+
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, 210, 32, 'F');
+      doc.setTextColor(16, 185, 129);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LogMax', 14, 14);
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Relatório Financeiro', 14, 21);
+      doc.setFontSize(11);
+      doc.setTextColor(220, 220, 220);
+      doc.text(titulo, 14, 29);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+
+      autoTable(doc, {
+        startY: 38,
+        head: [exportCols],
+        body: exportRows(),
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 247, 245] },
+      });
+
+      const slug = filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral';
+      doc.save(`logmax-contas-receber-${slug}.pdf`);
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao gerar PDF.', 'error', true);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    const slug = filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral';
+    try {
+      await exportToExcel('Contas a Receber', exportCols, exportRows(), `logmax-contas-receber-${slug}`);
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao gerar Excel.', 'error', true);
+    }
+  };
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -199,12 +263,18 @@ export const ContasReceberView = ({ showToast }: any) => {
             Total em aberto: <span className="text-accent font-bold">R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </p>
         </div>
-        <div className="flex gap-3 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+          <select className="neu-input py-2.5 px-3 rounded-xl text-sm" value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}>
+            <option value="">Todas as empresas</option>
+            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar conta..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <button onClick={handleExportPDF} title="Exportar PDF" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300"><FileDown size={15} /> PDF</button>
+          <button onClick={handleExportExcel} title="Exportar Excel" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300"><Sheet size={15} /> Excel</button>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova</NeuButtonAccent>
         </div>
       </div>
@@ -255,7 +325,7 @@ export const ContasReceberView = ({ showToast }: any) => {
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : (error || enriched.length === 0) ? <EmptyState error={error} message="Nenhuma conta a receber" /> : (
+      {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} message="Nenhuma conta a receber" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -272,7 +342,7 @@ export const ContasReceberView = ({ showToast }: any) => {
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {enriched.map((item: any) => (
+                  {filtered.map((item: any) => (
                     <React.Fragment key={item.id}>
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
@@ -349,14 +419,20 @@ export const ContasReceberView = ({ showToast }: any) => {
               </tbody>
             </table>
           </div>
-          <Pagination
-            page={page}
-            totalCount={totalCount}
-            isLoading={isLoading}
-            onPrev={() => setPage(p => Math.max(0, p - 1))}
-            onNext={() => setPage(p => p + 1)}
-            onReload={reload}
-          />
+          {filialFiltro ? (
+            <p className="text-[10px] text-gray-500 mt-3 text-center">
+              {filtered.length} conta(s) da {filialFiltro} nesta página · remova o filtro para ver paginação completa
+            </p>
+          ) : (
+            <Pagination
+              page={page}
+              totalCount={totalCount}
+              isLoading={isLoading}
+              onPrev={() => setPage(p => Math.max(0, p - 1))}
+              onNext={() => setPage(p => p + 1)}
+              onReload={reload}
+            />
+          )}
         </div>
       )}
     </motion.div>
