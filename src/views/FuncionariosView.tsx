@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera } from 'lucide-react';
-import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
+import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -14,6 +14,10 @@ const MASK_FOR: Record<string, (v: string) => string> = {
 };
 
 const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '' };
+
+// Remove diacríticos e converte para minúsculas para sort consistente
+const normSort = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export const FuncionariosView = ({ showToast }: any) => {
   const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', undefined, false, { orderBy: 'nome', ascending: true });
@@ -58,7 +62,11 @@ export const FuncionariosView = ({ showToast }: any) => {
     .filter((f: any) =>
       [f.nome, f.cargo, f.departamento, f.cpf, f.email].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
     )
-    .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' }));
+    .sort((a: any, b: any) => {
+      const an = normSort(a.nome ?? '');
+      const bn = normSort(b.nome ?? '');
+      return an < bn ? -1 : an > bn ? 1 : 0;
+    });
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setShowForm(true); };
   const openEdit = (f: any) => {
@@ -184,6 +192,7 @@ export const FuncionariosView = ({ showToast }: any) => {
               <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
               <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
+
             {/* Foto */}
             <div className="flex items-center gap-4 mb-5">
               <button type="button" onClick={() => formPhotoInputRef.current?.click()}
@@ -316,6 +325,7 @@ export const FuncionariosView = ({ showToast }: any) => {
           </div>
         )}
       </div>
+
       <input ref={photoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden" onChange={handlePhotoUpload} />
     </motion.div>
   );
