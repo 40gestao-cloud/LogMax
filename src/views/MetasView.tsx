@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2, FileDown, Play, Pause, RefreshCw, StopCircle } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -95,6 +95,8 @@ export const MetasView = ({ showToast, profile }: any) => {
   const [tab, setTab] = useState<Tab>(isColaborador ? 'tatica' : 'estrategica');
 
   const [showFormMeta, setShowFormMeta] = useState(false);
+  const formMetaRef = useRef<HTMLDivElement>(null);
+  const formTarefaRef = useRef<HTMLDivElement>(null);
   const [formMeta, setFormMeta] = useState(EMPTY_META);
   const [savingMeta, setSavingMeta] = useState(false);
   const [editMetaId, setEditMetaId] = useState<string | null>(null);
@@ -223,6 +225,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       hora_fim:                        m.hora_fim ?? '',
     });
     setShowFormMeta(true);
+    requestAnimationFrame(() => formMetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const fecharFormMeta = () => {
@@ -756,14 +759,14 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* Botão criar */}
       {tab === 'estrategica' && podeCriarMeta && (
         <div className="flex justify-end shrink-0">
-          <NeuButtonAccent variant="" onClick={() => { if (showFormMeta) fecharFormMeta(); else { setEditMetaId(null); setFormMeta(EMPTY_META); setShowFormMeta(true); } }}>
+          <NeuButtonAccent variant="" onClick={() => { if (showFormMeta) fecharFormMeta(); else { setEditMetaId(null); setFormMeta(EMPTY_META); setShowFormMeta(true); requestAnimationFrame(() => formMetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); } }}>
             <Plus size={14} />{showFormMeta ? 'Cancelar' : 'Nova Meta Estratégica'}
           </NeuButtonAccent>
         </div>
       )}
       {tab === 'tatica' && podeCriarTarefa && (
         <div className="flex justify-end shrink-0">
-          <NeuButtonAccent variant="" onClick={() => { setShowFormTarefa(!showFormTarefa); setFormTarefa(EMPTY_TAREFA); }}>
+          <NeuButtonAccent variant="" onClick={() => { const next = !showFormTarefa; setShowFormTarefa(next); setFormTarefa(EMPTY_TAREFA); if (next) requestAnimationFrame(() => formTarefaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>
             <Plus size={14} />{showFormTarefa ? 'Cancelar' : 'Nova Tarefa'}
           </NeuButtonAccent>
         </div>
@@ -772,8 +775,8 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* Form Meta Estratégica */}
       <AnimatePresence>
         {tab === 'estrategica' && showFormMeta && podeCriarMeta && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <motion.div ref={formMetaRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}</h3>
               {!editMetaId && (
@@ -862,8 +865,8 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* Form Tarefa Tática */}
       <AnimatePresence>
         {tab === 'tatica' && showFormTarefa && podeCriarTarefa && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <motion.div ref={formTarefaRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Nova Tarefa</h3>
               <span className="text-[10px] bg-gray-700/50 text-gray-400 px-2.5 py-1 rounded-lg border border-white/5">
