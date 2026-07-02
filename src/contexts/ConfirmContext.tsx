@@ -15,13 +15,18 @@ const ConfirmContext = createContext<(opts: ConfirmOptions | string) => Promise<
   async () => false
 );
 
+// Heurística: verbos destrutivos ligam o botão vermelho por default.
+// Override explícito via { danger: false } continua funcionando.
+const VERBO_DESTRUTIVO = /\b(excluir|inativar|cancelar|apagar|remover|descartar|estornar)\b/i;
+
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ConfirmState | null>(null);
 
   const confirm = (opts: ConfirmOptions | string): Promise<boolean> =>
     new Promise(resolve => {
       const options = typeof opts === 'string' ? { message: opts } : opts;
-      setState({ ...options, resolve });
+      const danger = options.danger ?? VERBO_DESTRUTIVO.test(options.message);
+      setState({ ...options, danger, resolve });
     });
 
   const answer = (v: boolean) => {
