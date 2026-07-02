@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useRef, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface ConfirmOptions {
   message: string;
@@ -47,7 +47,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => answer(true)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  state.danger !== false
+                  state.danger
                     ? 'bg-red-600 hover:bg-red-500 text-white'
                     : 'bg-accent hover:bg-accent/80 text-white'
                 }`}

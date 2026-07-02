@@ -217,6 +217,7 @@ export const FuncionariosView = ({ showToast }: any) => {
                   const val = validarFotoPerfil(f);
                   if (!val.ok) { showToast(val.motivo, 'error'); return; }
                   setFormPhotoFile(f);
+                  if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
                   setFormPhotoPreview(URL.createObjectURL(f));
                 }} />
             </div>

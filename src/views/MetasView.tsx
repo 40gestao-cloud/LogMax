@@ -183,7 +183,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       const { data, error } = await supabase.rpc('concluir_meta_estrategica', { p_meta_id: id });
       if (error) throw error;
       const r = data as { colaboradores_beneficiados?: number; valor_por_colaborador?: number; folgas_total?: number } | null;
-      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Concluida', concluida_em: new Date().toISOString() } : m));
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada', pool_distribuido: true, concluida_em: new Date().toISOString() } : m));
       const colabs = Number(r?.colaboradores_beneficiados ?? 0);
       const valor  = Number(r?.valor_por_colaborador ?? 0);
       const folgas = Number(r?.folgas_total ?? 0);
@@ -698,7 +698,7 @@ export const MetasView = ({ showToast, profile }: any) => {
   // KPIs por tab
   const kpisMetas = [
     { label: 'Em Produção', value: metas.filter((m: any) => m.status === 'Em Produção').length },
-    { label: 'Concluídas', value: metas.filter((m: any) => m.status === 'Concluida').length },
+    { label: 'Concluídas', value: metas.filter((m: any) => m.status === 'Encerrada' && m.pool_distribuido).length },
     { label: 'Bonificação acumulada', value: fmtBRL(metas.reduce((acc: number, m: any) => acc + Number(m.bonificacao_equipe ?? 0), 0)), isText: true },
   ];
 
