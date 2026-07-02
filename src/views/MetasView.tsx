@@ -740,7 +740,14 @@ export const MetasView = ({ showToast, profile }: any) => {
         {tab === 'estrategica' && showFormMeta && podeCriarMeta && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <h3 className="text-sm font-bold text-gray-300 mb-5">{editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}</h3>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-bold text-gray-300">{editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}</h3>
+              {!editMetaId && (
+                <span className="text-[10px] bg-gray-700/50 text-gray-400 px-2.5 py-1 rounded-lg border border-white/5">
+                  Salva como Rascunho — publique quando quiser enviar aos gerentes
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 lg:col-span-2">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição *</label>
@@ -791,7 +798,7 @@ export const MetasView = ({ showToast, profile }: any) => {
             </div>
             <div className="flex justify-end mt-5">
               <NeuButtonAccent variant="" onClick={editMetaId ? handleEditarMeta : handleCriarMeta} disabled={savingMeta}>
-                {savingMeta ? 'Salvando...' : (editMetaId ? 'Salvar Alterações' : 'Criar Meta')}
+                {savingMeta ? 'Salvando...' : (editMetaId ? 'Salvar Alterações' : 'Salvar Rascunho')}
               </NeuButtonAccent>
             </div>
           </motion.div>
@@ -803,7 +810,12 @@ export const MetasView = ({ showToast, profile }: any) => {
         {tab === 'tatica' && showFormTarefa && podeCriarTarefa && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <h3 className="text-sm font-bold text-gray-300 mb-5">Nova Tarefa</h3>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-bold text-gray-300">Nova Tarefa</h3>
+              <span className="text-[10px] bg-gray-700/50 text-gray-400 px-2.5 py-1 rounded-lg border border-white/5">
+                Salva como Rascunho — publique quando quiser enviar ao colaborador
+              </span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 lg:col-span-2">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Meta Estratégica *</label>
@@ -863,7 +875,7 @@ export const MetasView = ({ showToast, profile }: any) => {
             </div>
             <div className="flex justify-end mt-5">
               <NeuButtonAccent variant="" onClick={handleCriarTarefa} disabled={savingTarefa}>
-                {savingTarefa ? 'Salvando...' : (formTarefa.colaborador_id ? 'Criar Tarefa' : 'Criar para todos do setor')}
+                {savingTarefa ? 'Salvando...' : (formTarefa.colaborador_id ? 'Salvar Rascunho' : 'Salvar Rascunho para todos do setor')}
               </NeuButtonAccent>
             </div>
           </motion.div>
