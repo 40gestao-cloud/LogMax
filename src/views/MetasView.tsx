@@ -1130,7 +1130,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                             )}
                           </td>
                           <td className="py-3 px-4 text-[11px] text-gray-400 max-w-[180px]">
-                            <span className="truncate block" title="Clique para ler">{t.meta?.titulo || t.meta?.descricao ?? '—'}</span>
+                            <span className="truncate block" title="Clique para ler">{t.meta?.titulo || t.meta?.descricao || '—'}</span>
                           </td>
                           <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(t.valor_bonificacao ?? 0))}</td>
                           <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{t.data_inicio} → {t.data_fim}</td>
