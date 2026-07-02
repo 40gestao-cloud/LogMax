@@ -10,9 +10,11 @@ import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const ContasPagarView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
@@ -170,7 +172,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta conta?')) return;
+    if (!await confirm('Excluir esta conta?')) return;
     try {
       await dbDelete('/api/contaspagarview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

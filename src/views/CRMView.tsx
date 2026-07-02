@@ -7,6 +7,7 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, F
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
 
@@ -22,6 +23,7 @@ const EMPTY_EXTRAS = {
 
 export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
   const isClientes = type === 'clientes';
+  const confirm = useConfirm();
   const endpoint = isClientes ? '/api/crmview' : '/api/crmview-fornecedores';
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
@@ -123,7 +125,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
 
   const handleDelete = async (id: string) => {
     const label = isClientes ? 'cliente' : 'fornecedor';
-    if (!confirm(`Excluir este ${label}?`)) return;
+    if (!await confirm(`Excluir este ${label}?`)) return;
     try {
       await dbDelete(endpoint, id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

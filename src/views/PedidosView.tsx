@@ -5,9 +5,11 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const PedidosView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', undefined, undefined, { page });
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
   const { data: cotacoes } = useFetchData<any>('/api/cotacoesview');
@@ -79,7 +81,7 @@ export const PedidosView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este pedido?')) return;
+    if (!await confirm('Inativar este pedido?')) return;
     try {
       // Pedido aprovado gera Conta a Pagar com pedido_id. Inativar só o pedido
       // deixava a conta órfã visível em Despesas Operacionais. Inativamos

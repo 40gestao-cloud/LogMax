@@ -5,6 +5,7 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const TIPOS = [
   'Atestado médico',
@@ -68,6 +69,7 @@ const diasNoPeriodo = (ini: string, fim: string): number => {
 
 export const AfastamentosView = ({ showToast, profile }: any) => {
   const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview');
+  const confirm = useConfirm();
   const { data: funcionarios } = useFetchData<Funcionario>('/api/funcionariosview');
 
   const [showForm, setShowForm] = useState(false);
@@ -140,7 +142,7 @@ export const AfastamentosView = ({ showToast, profile }: any) => {
   };
 
   const handleDelete = async (a: Afastamento) => {
-    if (!confirm(`Inativar o afastamento "${a.tipo}" de ${a.nome_funcionario ?? '—'}?\n\nObs.: o ponto eletrônico dos dias afetados continua marcado como Justificado — ajuste manualmente se for o caso.`)) return;
+    if (!await confirm(`Inativar o afastamento "${a.tipo}" de ${a.nome_funcionario ?? '—'}?\n\nObs.: o ponto eletrônico dos dias afetados continua marcado como Justificado — ajuste manualmente se for o caso.`)) return;
     try {
       await dbDelete('/api/afastamentosview', a.id);
       setData((prev: any[]) => prev.filter((x: any) => x.id !== a.id));

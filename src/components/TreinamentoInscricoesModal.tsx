@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { X, UserPlus, UserMinus, Check, Loader2, Award, CheckCircle2, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Treinamento = {
   id: string;
@@ -124,6 +125,7 @@ export const TreinamentoInscricoesModal: React.FC<{
   const [adicionando, setAdicionando] = useState('');
   const [savingAdd, setSavingAdd] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const podeEmitirCertificado = treinamento.status === 'Concluído';
 
@@ -195,7 +197,7 @@ export const TreinamentoInscricoesModal: React.FC<{
 
   const handleRemover = async (insc: Inscricao) => {
     if (!supabase) return;
-    if (!confirm(`Remover inscrição de ${insc.nome_funcionario ?? 'colaborador'}?`)) return;
+    if (!await confirm(`Remover inscrição de ${insc.nome_funcionario ?? 'colaborador'}?`)) return;
     try {
       // Soft delete pra liberar o UNIQUE parcial (treinamento, funcionario)
       // — assim o RH pode re-inscrever depois sem conflito de chave.

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Target, X, Check, Clock, CheckCircle2, AlertCircle, BookOpen, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const STATUS_FLOW = ['Pendente', 'Em Andamento', 'Concluído', 'Cancelado'] as const;
 type Status = typeof STATUS_FLOW[number];
@@ -47,6 +48,7 @@ export const PDISection: React.FC<{
   const [adicionando, setAdicionando] = useState(false);
   const [form, setForm] = useState({ descricao: '', prazo: '', treinamento_id: '', observacao: '' });
   const [saving, setSaving] = useState(false);
+  const confirm = useConfirm();
 
   const treinamentosAtivos = treinamentos.filter(t => t.status !== 'Cancelado');
   const treinamentoNome = (id: string | null) => treinamentos.find(t => t.id === id)?.nome ?? '';
@@ -122,7 +124,7 @@ export const PDISection: React.FC<{
 
   const handleDelete = async (item: PdiItem) => {
     if (!supabase) return;
-    if (!confirm('Remover esta meta do PDI?')) return;
+    if (!await confirm('Remover esta meta do PDI?')) return;
     try {
       const { error } = await supabase.from('pdi_itens').delete().eq('id', item.id);
       if (error) throw error;

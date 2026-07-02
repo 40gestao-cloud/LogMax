@@ -1,0 +1,18 @@
+Quero realizar alterações em como é usado o MaxBank. Além de simular pagamentos via pix, quero que o MaxBank se torne o 'banco' de cada colaborador, porém, interligado com o aplicativo LogMax. Como funcionaria:
+Cada colaborador usaria as credenciais já cadastradas no LogMax para acessar a conta do 'banco' MaxBank. No LogMax, o setor de Recursos Humanos controla a folha de pagamento, e ao criar Nova Folha, Registrar e Realizar pagamento, o 'valor' seria atualizado no MaxBank (salário + Benefícios) separados.
+Os colaboradores receberiam o salário + benefícios (+ bonificações ) por desempenho, presença, bater o ponto (se atrasar ou faltar desconta do salário).
+E iria ter metas, atividades que valeriam 100 reais, 500 reais, 1000 reais... E aqueles que alcançassem 2.500 reais em um período de avaliação (Recebe folga) - Não realiza a próxima atividade, e pode ter descanso durante aquele tempo que os demais estão trabalhando.
+Enquanto isso, o MaxBank continuaria sendo usado para pagamentos via pix no PDV do LogMax.
+
+##O que torna viável:
+Autenticação unificada — usar as credenciais do LogMax no MaxBank é o padrão de mercado (SSO/OAuth). Tecnicamente simples se os dois apps já compartilham backend ou banco de dados.
+Folha de pagamento → saldo no MaxBank — o RH já registra os dados no LogMax. Bastaria um evento disparado ao "Realizar Pagamento" que atualiza o saldo do colaborador no MaxBank, separando salário e benefícios em carteiras distintas.
+Gamificação com metas e bonificações — é um sistema de incentivo bem estabelecido em RH moderno. A lógica de "acumulou R$2.500 → ganha folga" é simples de implementar como regra de negócio.
+PDV continua funcionando — o fluxo de pagamento via Pix no PDV não muda, apenas o MaxBank ganha mais contexto (saldo real do colaborador).
+
+###Pontos de atenção:
+Regulatório — o MaxBank é um simulador, não um banco real. Se os colaboradores passarem a receber salário nele, você precisa garantir que isso não configure relação com legislação bancária (BACEN). Recomendo deixar claro nos termos que é um sistema interno de créditos, não uma conta bancária real.
+Separação de carteiras — salário, benefícios e bonificações precisam ser saldos distintos, com regras diferentes de uso (ex: benefícios só no PDV interno, salário pode ser "sacado" de alguma forma).
+Ponto eletrônico integrado — atrasos/faltas descontando do salário exige que o módulo de ponto do LogMax alimente a folha automaticamente antes do fechamento.
+
+Devemos ir por etapas, para que a ideia seja sólida.

@@ -11,6 +11,7 @@ import { LoadingSpinner, NeuButtonAccent, FilialBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasAnySetor } from '../lib/rbac';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -330,6 +331,7 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
 
 export const ControleCaixaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   // Guard: caixa é financeiro+vendas (RLS já reflete isso).
+  const confirm = useConfirm();
   if (!hasAnySetor(profile, 'financeiro', 'vendas')) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
@@ -354,7 +356,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
   const handleReabrir = async (h: any) => {
     if (!supabase) return;
-    if (!confirm(`Reabrir esta sessão de ${h.filial}? O fechamento anterior será descartado.`)) return;
+    if (!await confirm(`Reabrir esta sessão de ${h.filial}? O fechamento anterior será descartado.`)) return;
     try {
       const { error } = await supabase
         .from('controle_caixa')
@@ -376,7 +378,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   };
 
   const handleDeleteSessao = async (id: string) => {
-    if (!confirm('Inativar esta sessão de caixa? O histórico será preservado mas não aparecerá mais na listagem.')) return;
+    if (!await confirm('Inativar esta sessão de caixa? O histórico será preservado mas não aparecerá mais na listagem.')) return;
     try {
       await dbDelete('/api/controlecaixaview', id);
       await reload();

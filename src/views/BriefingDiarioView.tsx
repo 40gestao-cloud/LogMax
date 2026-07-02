@@ -4,6 +4,7 @@ import { Sparkles, Loader2, Lock, Calendar, CheckCircle2, X, Edit3, History, Lis
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const SETOR_LABEL: Record<string, string> = {
   empresa:    'Empresa',
@@ -85,6 +86,7 @@ const dataMaisDias = (iso: string, dias: number): string => {
 
 export const BriefingDiarioView = ({ showToast, profile }: any) => {
   const { session } = useAuth();
+  const confirm = useConfirm();
   const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo';
 
   const [dataRef, setDataRef]     = useState(todayAcre());
@@ -221,7 +223,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       return;
     }
     if (!briefing || !supabase) return;
-    if (!confirm('Descartar esta tarefa? Se algum setor ainda não começou a executar, ela some imediatamente do submenu Tarefas.')) return;
+    if (!await confirm('Descartar esta tarefa? Se algum setor ainda não começou a executar, ela some imediatamente do submenu Tarefas.')) return;
     try {
       const { data, error } = await supabase.rpc('descartar_tarefa_briefing', {
         p_briefing_id: briefing.id,
@@ -398,7 +400,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
     const msg = isAprovado
       ? 'Excluir este briefing? As tarefas Pendentes nos setores vão sumir. As que já estão Em Andamento ou Concluído são preservadas.'
       : 'Descartar este briefing? Você poderá gerar outro pro mesmo dia.';
-    if (!confirm(msg)) return;
+    if (!await confirm(msg)) return;
     try {
       const { data, error } = await supabase.rpc('excluir_briefing_cascade', {
         p_briefing_id: briefing.id,

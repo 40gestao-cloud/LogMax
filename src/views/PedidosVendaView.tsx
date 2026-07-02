@@ -7,9 +7,11 @@ import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../componen
 import { formatBRL } from '../lib/viewUtils';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/pedidosvendaview', undefined, true, { page }
   );
@@ -70,7 +72,7 @@ export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profi
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Cancelar este pedido de venda?')) return;
+    if (!await confirm('Cancelar este pedido de venda?')) return;
     try {
       await dbDelete('/api/pedidosvendaview', id);
       setData((prev: any[]) => prev.filter(p => p.id !== id));

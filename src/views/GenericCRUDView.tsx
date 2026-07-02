@@ -5,10 +5,12 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
 }) => {
+  const confirm = useConfirm();
   const { data, setData, isLoading } = useFetchData<any>(endpoint);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -79,7 +81,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir este registro?')) return;
+    if (!await confirm('Excluir este registro?')) return;
     try {
       await dbDelete(endpoint, id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

@@ -6,9 +6,11 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const RecebimentosView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
@@ -73,7 +75,7 @@ export const RecebimentosView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este recebimento? Ele sairá da lista mas o histórico fica preservado.')) return;
+    if (!await confirm('Inativar este recebimento? Ele sairá da lista mas o histórico fica preservado.')) return;
     try {
       await dbDelete('/api/recebimentosview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

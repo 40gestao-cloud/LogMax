@@ -6,9 +6,11 @@ import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const RequisicoesEstoqueView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview');
+  const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -60,7 +62,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta requisição?')) return;
+    if (!await confirm('Excluir esta requisição?')) return;
     try {
       await dbDelete('/api/requisicoesestoqueview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

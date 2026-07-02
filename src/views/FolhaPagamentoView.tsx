@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type RecalcBreakdown = {
   valor_hora: number;
@@ -60,6 +61,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const [saving, setSaving] = useState(false);
   const [recalcBreakdown, setRecalcBreakdown] = useState<{ folhaNome: string; data: RecalcBreakdown } | null>(null);
   const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   // Modal admin: carteira MaxBank do colaborador (saldos + extrato + excluir).
   // Aberto a partir de cada linha de folha — admin/CEO/RH usa pra limpar
@@ -138,7 +140,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       : ehProcessada
       ? 'Inativar este lançamento de folha?\n\nEla está PROCESSADA — vou inativar também a Conta a Pagar gerada.'
       : 'Inativar este lançamento de folha?';
-    if (!confirm(aviso)) return;
+    if (!await confirm(aviso)) return;
     try {
       // Estorno admin: reverte crédito MaxBank (se houver) e inativa
       // a conta_pagar derivada. RPC é idempotente — chamar mesmo em
@@ -248,7 +250,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
   const recomputarSaldos = async () => {
     if (!carteiraModal || !supabase) return;
-    if (!confirm('Recalcular os 3 saldos desta carteira a partir das transações existentes? Útil pra zerar drift de testes antigos.')) return;
+    if (!await confirm('Recalcular os 3 saldos desta carteira a partir das transações existentes? Útil pra zerar drift de testes antigos.')) return;
     try {
       const { error } = await supabase.rpc('recompute_saldos_maxbank', { p_conta_id: carteiraModal.contaId });
       if (error) throw error;
@@ -262,7 +264,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
   const excluirTransacao = async (tx: any) => {
     if (!supabase) return;
-    if (!confirm(`Excluir o lançamento "${tx.descricao}" (R$ ${Number(tx.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})?\n\nO saldo da carteira será ajustado.`)) return;
+    if (!await confirm(`Excluir o lançamento "${tx.descricao}" (R$ ${Number(tx.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})?\n\nO saldo da carteira será ajustado.`)) return;
     setExcluindoTxId(tx.id);
     try {
       const { error } = await supabase.rpc('excluir_transacao_maxbank', { p_transacao_id: tx.id });

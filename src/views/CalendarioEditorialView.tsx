@@ -6,6 +6,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
 import { useAuth } from '../hooks/useAuth';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const CANAIS = [
   'Instagram Feed',
@@ -95,6 +96,7 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
 
 export const CalendarioEditorialView = ({ showToast, profile }: any) => {
   const { session } = useAuth();
+  const confirm = useConfirm();
   const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview');
   const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview');
 
@@ -196,7 +198,7 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
   };
 
   const handleDelete = async (p: Post) => {
-    if (!confirm(`Inativar o post "${p.titulo}"?`)) return;
+    if (!await confirm(`Inativar o post "${p.titulo}"?`)) return;
     try {
       await dbDelete('/api/marketingcalendarioview', p.id);
       setData((prev: any[]) => prev.filter((x: any) => x.id !== p.id));

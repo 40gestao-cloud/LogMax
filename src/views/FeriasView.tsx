@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const statusCls = (s: string) => {
   if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
@@ -16,6 +17,7 @@ const EMPTY: any = { funcionario_id: '', data_inicio: '', data_fim: '', dias: '3
 
 export const FeriasView = ({ showToast }: any) => {
   const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview');
+  const confirm = useConfirm();
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export const FeriasView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este pedido de férias?')) return;
+    if (!await confirm('Inativar este pedido de férias?')) return;
     try {
       await dbDelete('/api/feriasview', id);
       setData((prev: any[]) => prev.filter((f: any) => f.id !== id));

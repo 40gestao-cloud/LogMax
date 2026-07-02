@@ -5,9 +5,11 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const ExpedicaoView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/expedicao');
+  const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview');
   const [isSaving, setIsSaving] = useState(false);
@@ -53,7 +55,7 @@ export const ExpedicaoView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar esta expedição?')) return;
+    if (!await confirm('Inativar esta expedição?')) return;
     try {
       await dbDelete('/api/expedicao', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

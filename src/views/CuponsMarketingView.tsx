@@ -6,6 +6,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { FILIAIS_HOLDING } from '../lib/filiais';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Tipo = 'percentual' | 'fixo';
 
@@ -52,6 +53,7 @@ const sanitizeCodigo = (s: string) =>
 
 export const CuponsMarketingView = ({ showToast, profile }: any) => {
   const { data: cupons, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview');
+  const confirm = useConfirm();
   const { data: campanhas } = useFetchData<Campanha>('/api/marketingcampanhasview');
 
   const [showForm, setShowForm] = useState(false);
@@ -146,7 +148,7 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
   };
 
   const handleDelete = async (c: Cupom) => {
-    if (!confirm(`Inativar o cupom "${c.codigo}"?`)) return;
+    if (!await confirm(`Inativar o cupom "${c.codigo}"?`)) return;
     try {
       await dbDelete('/api/marketingcuponsview', c.id);
       setData((prev: any[]) => prev.filter((x: any) => x.id !== c.id));

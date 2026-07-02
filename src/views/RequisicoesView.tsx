@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -14,6 +15,7 @@ const ITEM_OUTRO = '__outro__';
 
 export const RequisicoesView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
@@ -114,7 +116,7 @@ export const RequisicoesView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta requisição?')) return;
+    if (!await confirm('Excluir esta requisição?')) return;
     try {
       await dbDelete('/api/requisicoesview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

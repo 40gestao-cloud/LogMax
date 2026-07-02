@@ -11,6 +11,7 @@ import {
   removerFotoPerfilAntiga,
 } from '../lib/perfilFoto';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Props = {
   open: boolean;
@@ -26,6 +27,7 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  const confirm = useConfirm();
   const fotoAtual = profile.foto_url;
 
   const onPickFile = () => fileInputRef.current?.click();
@@ -80,7 +82,7 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
 
   const remover = async () => {
     if (!fotoAtual || !supabase) return;
-    if (!confirm('Remover sua foto de perfil?')) return;
+    if (!await confirm('Remover sua foto de perfil?')) return;
     setSalvando(true);
     try {
       const { error: updErr } = await supabase

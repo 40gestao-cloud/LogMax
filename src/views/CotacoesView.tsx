@@ -11,6 +11,7 @@ import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // notificar_setor: RPC já existente em 20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -42,6 +43,7 @@ async function notificarSetor(args: {
 
 export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
@@ -315,7 +317,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   };
 
   const handleCancelar = async (id: string) => {
-    if (!confirm('Cancelar esta cotação?')) return;
+    if (!await confirm('Cancelar esta cotação?')) return;
     try {
       const updated = await dbUpdate('/api/cotacoesview', id, { status: 'Cancelado' });
       setData((prev: any[]) => prev.map(c => c.id === id ? (updated ?? { ...c, status: 'Cancelado' }) : c));
@@ -326,7 +328,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar esta cotação?')) return;
+    if (!await confirm('Inativar esta cotação?')) return;
     try {
       await dbDelete('/api/cotacoesview', id);
       setData((prev: any[]) => prev.filter(c => c.id !== id));

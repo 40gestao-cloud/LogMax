@@ -22,6 +22,7 @@ import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { AuditoriaProvider } from './contexts/AuditoriaContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -792,8 +793,10 @@ export default function LogMaxApp() {
   }
   return (
     <ThemeProvider>
-      <PwaUpdatePrompt />
-      <LogMaxAppInner />
+      <ConfirmProvider>
+        <PwaUpdatePrompt />
+        <LogMaxAppInner />
+      </ConfirmProvider>
     </ThemeProvider>
   );
 }

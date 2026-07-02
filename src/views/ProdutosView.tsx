@@ -15,6 +15,7 @@ import {
   PRODUTO_IMAGEM_ACCEPT,
   PRODUTO_IMAGEM_MAX_LABEL,
 } from '../lib/produtoImagem';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
 
@@ -58,6 +59,7 @@ const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string |
 
 export const ProdutosView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -355,7 +357,7 @@ export const ProdutosView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir este produto?')) return;
+    if (!await confirm('Excluir este produto?')) return;
     try {
       await dbDelete('/api/produtosview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

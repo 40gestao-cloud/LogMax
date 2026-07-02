@@ -6,9 +6,11 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const NotasRecebidasView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/notasrecebidasview');
+  const confirm = useConfirm();
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -47,7 +49,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir?')) return;
+    if (!await confirm('Excluir?')) return;
     try {
       await dbDelete('/api/notasrecebidasview', id);
       setData((p: any[]) => p.filter(d => d.id !== id));

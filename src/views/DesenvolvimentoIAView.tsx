@@ -11,6 +11,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor } from '../lib/rbac';
 import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Auxiliar = { id: string; nome: string; role: string; setor: string };
 
@@ -73,6 +74,7 @@ type Props = {
 };
 
 export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
+  const confirm = useConfirm();
   const { data: sessoes, setData, isLoading } =
     useFetchData<DesenvolvimentoIA>('/api/desenvolvimentosiaview', undefined, true);
 
@@ -232,7 +234,7 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Cancelar este treinamento?')) return;
+    if (!await confirm('Cancelar este treinamento?')) return;
     try {
       await dbDelete('/api/desenvolvimentosiaview', id);
       setData(prev => prev.filter(s => s.id !== id));

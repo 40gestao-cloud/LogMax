@@ -5,9 +5,11 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const MovimentacoesEstoqueView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview');
+  const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -52,7 +54,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar esta movimentação? O saldo de estoque NÃO é revertido automaticamente — faça um ajuste manual se necessário.')) return;
+    if (!await confirm('Inativar esta movimentação? O saldo de estoque NÃO é revertido automaticamente — faça um ajuste manual se necessário.')) return;
     try {
       await dbDelete('/api/movimentacoesestoqueview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

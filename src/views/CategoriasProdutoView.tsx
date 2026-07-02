@@ -8,6 +8,7 @@ import {
   uploadImagemCategoria, removerImagemCategoria,
   validarImagemCategoria, CATEGORIA_IMAGEM_ACCEPT,
 } from '../lib/categoriaImagem';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const COR_PRESETS = [
   '#D4AF37','#22c55e','#3b82f6','#f59e0b','#ef4444',
@@ -205,7 +206,7 @@ function PainelCategorias({ canEdit, selectedId, onSelect }: {
   };
 
   const handleDelete = async (item: any) => {
-    if (!confirm(`Excluir categoria "${item.nome}"? As subcategorias serão removidas e produtos vinculados perderão a categoria.`)) return;
+    if (!await confirm(`Excluir categoria "${item.nome}"? As subcategorias serão removidas e produtos vinculados perderão a categoria.`)) return;
     await dbDelete('categorias_produto', item.id);
     // Remove imagem só após confirmar exclusão do registro no DB
     removerImagemCategoria(item.imagem_url);
@@ -317,7 +318,7 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
   };
 
   const handleDelete = async (item: any) => {
-    if (!confirm(`Excluir subcategoria "${item.nome}"?`)) return;
+    if (!await confirm(`Excluir subcategoria "${item.nome}"?`)) return;
     await dbDelete('subcategorias_produto', item.id);
     removerImagemCategoria(item.imagem_url);
     reload();
@@ -392,6 +393,7 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
 // ── View principal ────────────────────────────────────────────────────────────
 export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
   const [selectedCatId,   setSelectedCatId]   = useState<string | null>(null);
+  const confirm = useConfirm();
   const [selectedCatNome, setSelectedCatNome] = useState('');
 
   const canEdit = profile?.role === 'admin' || profile?.role === 'ceo' || hasSetor(profile, 'logistica');

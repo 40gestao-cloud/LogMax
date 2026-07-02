@@ -10,6 +10,7 @@ import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // notificar_setor existe em 20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
 async function notificarSetor(args: {
@@ -68,6 +69,7 @@ export const OrcamentosView = ({
   /** 'vendas' (criar/gerenciar) | 'financeiro' (aprovar) | undefined (auto). */
   mode?: 'vendas' | 'financeiro';
 }) => {
+  const confirm = useConfirm();
   const [page, setPage] = useState(0);
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
   // Reset paginação ao mudar filtro client-side — senão o usuário pode estar
@@ -393,7 +395,7 @@ export const OrcamentosView = ({
   };
 
   const handleCancelar = async (id: string) => {
-    if (!confirm('Cancelar este orçamento?')) return;
+    if (!await confirm('Cancelar este orçamento?')) return;
     try {
       const updated = await dbUpdate('/api/orcamentosview', id, { status: 'Cancelado' });
       setData((prev: any[]) => prev.map(o => o.id === id ? (updated ?? { ...o, status: 'Cancelado' }) : o));
@@ -404,7 +406,7 @@ export const OrcamentosView = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este orçamento?')) return;
+    if (!await confirm('Inativar este orçamento?')) return;
     try {
       await dbDelete('/api/orcamentosview', id);
       setData((prev: any[]) => prev.filter(o => o.id !== id));

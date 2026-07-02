@@ -5,6 +5,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hook
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Funcionario = { id: string; nome: string; cargo?: string | null; status?: string | null };
 
@@ -97,6 +98,7 @@ const FuncPicker: React.FC<{
 
 export const TreinamentosView = ({ showToast }: any) => {
   const { data: treinamentos, setData, isLoading } = useFetchData<any>('/api/treinamentosview');
+  const confirm = useConfirm();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -278,7 +280,7 @@ export const TreinamentosView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar este treinamento?')) return;
+    if (!await confirm('Inativar este treinamento?')) return;
     try {
       await dbDelete('/api/treinamentosview', id);
       setData((prev: any[]) => prev.filter((t: any) => t.id !== id));

@@ -7,6 +7,7 @@ import { hasSetor } from '../lib/rbac';
 import { setorLabel } from '../lib/setores';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
@@ -77,6 +78,7 @@ const EMPTY_TAREFA = {
 };
 
 export const MetasView = ({ showToast, profile }: any) => {
+  const confirm = useConfirm();
   const { data: metas, setData: setMetas, isLoading: loadingMetas, reload: reloadMetas } =
     useFetchData<any>('/api/metasestrategicasview');
   const { data: tarefas, setData: setTarefas, isLoading: loadingTarefas, reload: reloadTarefas } =
@@ -175,7 +177,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleConcluirMeta = async (id: string) => {
     if (!supabase) return;
-    if (!confirm('Concluir esta meta vai dividir a bonificação de equipe entre os colaboradores do setor. Continuar?')) return;
+    if (!await confirm('Concluir esta meta vai dividir a bonificação de equipe entre os colaboradores do setor. Continuar?')) return;
     setBusyId(id);
     try {
       const { data, error } = await supabase.rpc('concluir_meta_estrategica', { p_meta_id: id });
@@ -198,7 +200,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleCancelarMeta = async (id: string) => {
     if (!supabase) return;
-    if (!confirm('Cancelar esta meta? Nenhuma bonificação de equipe será paga.')) return;
+    if (!await confirm('Cancelar esta meta? Nenhuma bonificação de equipe será paga.')) return;
     setBusyId(id);
     try {
       const { error } = await supabase.rpc('cancelar_meta_estrategica', { p_meta_id: id });
@@ -283,7 +285,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleApagarMeta = async (id: string) => {
     if (!supabase) return;
-    if (!confirm('Apagar esta meta? As tarefas táticas vinculadas também serão removidas (pros gerentes e colaboradores). Esta ação não pode ser desfeita.')) return;
+    if (!await confirm('Apagar esta meta? As tarefas táticas vinculadas também serão removidas (pros gerentes e colaboradores). Esta ação não pode ser desfeita.')) return;
     setBusyId(id);
     try {
       const { error } = await supabase.rpc('apagar_meta_estrategica', { p_meta_id: id });
@@ -485,7 +487,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleEncerrarMeta = async (id: string) => {
     if (!supabase) return;
-    if (!confirm('Encerrar esta meta sem distribuir o pool? Esta ação pode ser revertida.')) return;
+    if (!await confirm('Encerrar esta meta sem distribuir o pool? Esta ação pode ser revertida.')) return;
     setBusyId(id);
     try {
       const { error } = await supabase.rpc('encerrar_meta_estrategica', { p_meta_id: id });
@@ -535,7 +537,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleEncerrarTarefa = async (id: string) => {
     if (!supabase) return;
-    if (!confirm('Encerrar esta tarefa? O colaborador não poderá mais agir sobre ela (pode reabrir).')) return;
+    if (!await confirm('Encerrar esta tarefa? O colaborador não poderá mais agir sobre ela (pode reabrir).')) return;
     setBusyId(id);
     try {
       const { error } = await supabase.rpc('encerrar_tarefa_tatica', { p_tarefa_id: id });

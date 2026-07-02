@@ -8,6 +8,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../co
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { FILIAIS_HOLDING } from '../lib/filiais';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'CEO/Admin',
@@ -60,6 +61,7 @@ const EMPTY_FORM = {
 
 export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
+  const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const { data: servicos } = useFetchData<any>('/api/servicosview');
   const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview');
@@ -303,7 +305,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Inativar esta promoção?')) return;
+    if (!await confirm('Inativar esta promoção?')) return;
     try {
       await dbDelete('/api/marketingpromocoesview', id);
       setData((prev: any[]) => prev.filter((p: any) => p.id !== id));

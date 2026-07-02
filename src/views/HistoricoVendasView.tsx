@@ -8,9 +8,11 @@ import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import { useAIContext } from '../contexts/AIAssistantContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const HistoricoVendasView = ({ showToast }: any) => {
   const [page, setPage] = useState(0);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
@@ -109,7 +111,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
       showToast('Esta venda já está cancelada.', 'info', true);
       return;
     }
-    if (!confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque automaticamente.')) return;
+    if (!await confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque automaticamente.')) return;
     setCanceling(venda.id);
     try {
       await dbUpdate('/api/vendasview', venda.id, { status: 'Cancelada' });
@@ -155,7 +157,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
   };
 
   const handleExcluir = async (venda: any) => {
-    if (!confirm('Inativar esta venda? Ela sairá da listagem mas o histórico fica preservado no banco.')) return;
+    if (!await confirm('Inativar esta venda? Ela sairá da listagem mas o histórico fica preservado no banco.')) return;
     try {
       await dbDelete('/api/vendasview', venda.id);
       setVendas((prev: any[]) => prev.filter(v => v.id !== venda.id));

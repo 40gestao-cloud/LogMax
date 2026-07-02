@@ -12,6 +12,7 @@ import {
   uploadLogoBanco,
   validarLogoBanco,
 } from '../lib/bancoLogo';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const ENDPOINT = '/api/caixabancosview';
 const TIPOS = ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'];
@@ -37,6 +38,7 @@ const EMPTY_FORM: FormState = {
 
 export const CaixaBancosView = ({ showToast }: { showToast: any }) => {
   const { data, setData, isLoading } = useFetchData<any>(ENDPOINT);
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -151,7 +153,7 @@ export const CaixaBancosView = ({ showToast }: { showToast: any }) => {
   };
 
   const handleDelete = async (item: any) => {
-    if (!confirm('Excluir esta conta bancária?')) return;
+    if (!await confirm('Excluir esta conta bancária?')) return;
     try {
       await dbDelete(ENDPOINT, item.id);
       setData((prev: any[]) => prev.filter(d => d.id !== item.id));

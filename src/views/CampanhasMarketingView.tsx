@@ -7,6 +7,7 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const STATUS_STYLE: Record<string, string> = {
   'Rascunho':                 'bg-gray-500/10  text-gray-400  border-gray-500/20',
@@ -118,7 +119,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 
   const handleEnviarFinanceiro = async () => {
     if (itensCampanha.length === 0) { showToast('Adicione pelo menos 1 produto antes de enviar.', 'error'); return; }
-    if (!confirm('Enviar campanha para aprovação do Financeiro?')) return;
+    if (!await confirm('Enviar campanha para aprovação do Financeiro?')) return;
     setEnviando(true);
     try {
       const updated = await dbUpdate('/api/marketingcampanhasview', campanha.id, { status: 'Aguardando Financeiro' } as any);
@@ -264,6 +265,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 // ── View Principal ────────────────────────────────────────────────────────────
 export const CampanhasMarketingView = ({ showToast, profile }: any) => {
   const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview');
+  const confirm = useConfirm();
   const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview');
 
   const [showForm,  setShowForm]  = useState(false);
@@ -339,7 +341,7 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
   };
 
   const handleDelete = async (c: Campanha) => {
-    if (!confirm(`Inativar a campanha "${c.nome}"?`)) return;
+    if (!await confirm(`Inativar a campanha "${c.nome}"?`)) return;
     try {
       await dbDelete('/api/marketingcampanhasview', c.id);
       setData((prev: any[]) => prev.filter((x: any) => x.id !== c.id));

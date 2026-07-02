@@ -10,6 +10,7 @@ import { allSetores, hasSetor } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
 import { CRITERIOS, Categoria, ESCALA_MAX, CATEGORIA_LABEL } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean };
 type Avaliacao = {
@@ -404,6 +405,7 @@ const CardAvaliacao: React.FC<{
 
 export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  const confirm = useConfirm();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [criterios, setCriterios] = useState<Criterio[]>([]);
@@ -456,7 +458,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       `  • Ciclo: ${ciclo?.nome ?? '—'}\n` +
       `  • ${critsCount} critério(s) com notas\n\n` +
       `Esta ação é irreversível.`;
-    if (!window.confirm(msg)) return;
+    if (!await confirm(msg)) return;
     try {
       const { data, error } = await supabase
         .from('avaliacoes')
@@ -556,7 +558,7 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       `  • ${avaliacoesCiclo.length} avaliação(ões)\n` +
       `  • ${critsCount} critério(s) com notas\n\n` +
       `Esta ação é irreversível.`;
-    if (!window.confirm(msg)) return;
+    if (!await confirm(msg)) return;
 
     try {
       const { data, error } = await supabase

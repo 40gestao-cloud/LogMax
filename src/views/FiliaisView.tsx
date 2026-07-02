@@ -5,10 +5,12 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // ✅ FiliaisView com validação de formulário + exportação
 export const FiliaisView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/filiaisview');
+  const confirm = useConfirm();
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -69,7 +71,7 @@ export const FiliaisView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta filial? Esta ação não pode ser desfeita.')) return;
+    if (!await confirm('Excluir esta filial? Esta ação não pode ser desfeita.')) return;
     try {
       await dbDelete('/api/filiaisview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));

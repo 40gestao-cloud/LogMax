@@ -5,9 +5,11 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const VencimentosEstoqueView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/vencimentosestoqueview');
+  const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -42,7 +44,7 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir?')) return;
+    if (!await confirm('Excluir?')) return;
     try {
       await dbDelete('/api/vencimentosestoqueview', id);
       setData((p: any[]) => p.filter(d => d.id !== id));
