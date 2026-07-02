@@ -79,7 +79,7 @@ export const FuncionariosView = ({ showToast }: any) => {
     setEditing(f);
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); setFormPhotoFile(null); setFormPhotoPreview(null); };
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
@@ -206,7 +206,7 @@ export const FuncionariosView = ({ showToast }: any) => {
                 <p className="text-xs text-gray-300 font-semibold">Foto do funcionário <span className="text-gray-600 font-normal">(opcional)</span></p>
                 <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
                 {(formPhotoPreview || (!editing && form.foto_url)) && (
-                  <button type="button" onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); }}
+                  <button type="button" onClick={() => { setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
                     className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
                 )}
               </div>

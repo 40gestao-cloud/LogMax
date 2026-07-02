@@ -203,8 +203,8 @@ export const MetasView = ({ showToast, profile }: any) => {
     try {
       const { error } = await supabase.rpc('cancelar_meta_estrategica', { p_meta_id: id });
       if (error) throw error;
-      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Cancelada' } : m));
-      showToast('Meta cancelada.', 'success');
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada' } : m));
+      showToast('Meta encerrada.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
@@ -695,7 +695,7 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   // KPIs por tab
   const kpisMetas = [
-    { label: 'Ativas', value: metas.filter((m: any) => m.status === 'Ativa').length },
+    { label: 'Em Produção', value: metas.filter((m: any) => m.status === 'Em Produção').length },
     { label: 'Concluídas', value: metas.filter((m: any) => m.status === 'Concluida').length },
     { label: 'Bonificação acumulada', value: fmtBRL(metas.reduce((acc: number, m: any) => acc + Number(m.bonificacao_equipe ?? 0), 0)), isText: true },
   ];
@@ -882,7 +882,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <option value="">Selecionar...</option>
                   {metasElegiveis.map((m: any) => (
                     <option key={m.id} value={m.id}>
-                      {m.descricao} — {m.setor ? labelSetorOpcao(m.setor) : 'Todos'} (limite {fmtBRL(Number(m.limite_bonificacao_individual ?? 0))})
+                      {m.titulo || m.descricao} — {m.setor ? labelSetorOpcao(m.setor) : 'Todos'} (limite {fmtBRL(Number(m.limite_bonificacao_individual ?? 0))})
                     </option>
                   ))}
                 </select>
@@ -1130,7 +1130,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                             )}
                           </td>
                           <td className="py-3 px-4 text-[11px] text-gray-400 max-w-[180px]">
-                            <span className="truncate block" title="Clique para ler">{t.meta?.descricao ?? '—'}</span>
+                            <span className="truncate block" title="Clique para ler">{t.meta?.titulo || t.meta?.descricao ?? '—'}</span>
                           </td>
                           <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(t.valor_bonificacao ?? 0))}</td>
                           <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{t.data_inicio} → {t.data_fim}</td>

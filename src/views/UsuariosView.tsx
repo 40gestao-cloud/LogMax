@@ -297,6 +297,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         setUsers(data ?? []);
       }
       setForm(emptyForm);
+      if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
       setFormPhotoFile(null);
       setFormPhotoPreview(null);
       setShowForm(false);
@@ -479,7 +480,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">Novo Usuário</h3>
-              <button onClick={() => { setShowForm(false); setFormPhotoFile(null); setFormPhotoPreview(null); }} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <button onClick={() => { setShowForm(false); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
             {/* Foto */}
             <div className="flex items-center gap-4 mb-5">
@@ -494,7 +495,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <p className="text-xs text-gray-300 font-semibold">Foto do usuário <span className="text-gray-600 font-normal">(opcional)</span></p>
                 <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
                 {formPhotoPreview && (
-                  <button type="button" onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); }}
+                  <button type="button" onClick={() => { setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
                     className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
                 )}
               </div>
