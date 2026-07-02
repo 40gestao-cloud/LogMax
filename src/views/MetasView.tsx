@@ -59,7 +59,9 @@ const EMPTY_META = {
   bonificacao_equipe: '',
   limite_bonificacao_individual: '',
   data_inicio: '',
+  hora_inicio: '',
   data_fim: '',
+  hora_fim: '',
 };
 
 const EMPTY_TAREFA = {
@@ -69,7 +71,9 @@ const EMPTY_TAREFA = {
   colaborador_id: '',
   valor_bonificacao: '',
   data_inicio: '',
+  hora_inicio: '',
   data_fim: '',
+  hora_fim: '',
 };
 
 export const MetasView = ({ showToast, profile }: any) => {
@@ -152,6 +156,8 @@ export const MetasView = ({ showToast, profile }: any) => {
         p_limite_bonificacao_individual: limite,
         p_data_inicio:                   formMeta.data_inicio,
         p_data_fim:                      formMeta.data_fim,
+        p_hora_inicio:                   formMeta.hora_inicio || null,
+        p_hora_fim:                      formMeta.hora_fim || null,
       });
       if (error) throw error;
       const { data: nova } = await supabase.from('metas_estrategicas').select('*').eq('id', id).single();
@@ -212,7 +218,9 @@ export const MetasView = ({ showToast, profile }: any) => {
       bonificacao_equipe:              formatBRL(String(Number(m.bonificacao_equipe ?? 0).toFixed(2))),
       limite_bonificacao_individual:   formatBRL(String(Number(m.limite_bonificacao_individual ?? 0).toFixed(2))),
       data_inicio:                     m.data_inicio ?? '',
+      hora_inicio:                     m.hora_inicio ?? '',
       data_fim:                        m.data_fim ?? '',
+      hora_fim:                        m.hora_fim ?? '',
     });
     setShowFormMeta(true);
   };
@@ -246,6 +254,8 @@ export const MetasView = ({ showToast, profile }: any) => {
         p_limite_bonificacao_individual: limite,
         p_data_inicio:                   formMeta.data_inicio,
         p_data_fim:                      formMeta.data_fim,
+        p_hora_inicio:                   formMeta.hora_inicio || null,
+        p_hora_fim:                      formMeta.hora_fim || null,
       });
       if (error) throw error;
       setMetas((prev: any[]) => prev.map(m => m.id === editMetaId ? {
@@ -253,6 +263,8 @@ export const MetasView = ({ showToast, profile }: any) => {
         titulo:                        formMeta.titulo.trim(),
         descricao:                     formMeta.descricao.trim(),
         setor:                         formMeta.setor || null,
+        hora_inicio:                   formMeta.hora_inicio || null,
+        hora_fim:                      formMeta.hora_fim || null,
         bonificacao_equipe:            bonusEquipe,
         limite_bonificacao_individual: limite,
         data_inicio:                   formMeta.data_inicio,
@@ -352,6 +364,8 @@ export const MetasView = ({ showToast, profile }: any) => {
         p_valor_bonificacao:   valor,
         p_data_inicio:         formTarefa.data_inicio,
         p_data_fim:            formTarefa.data_fim,
+        p_hora_inicio:         formTarefa.hora_inicio || null,
+        p_hora_fim:            formTarefa.hora_fim || null,
       });
       if (error) throw error;
       await reloadTarefas();
@@ -812,15 +826,27 @@ export const MetasView = ({ showToast, profile }: any) => {
                 <span className="text-[10px] text-gray-500">Teto por tarefa que o gerente atribui.</span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
                 <input type="date" value={formMeta.data_inicio}
                   onChange={e => setFormMeta(p => ({ ...p, data_inicio: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de início</label>
+                <input type="time" value={formMeta.hora_inicio}
+                  onChange={e => setFormMeta(p => ({ ...p, hora_inicio: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de fim *</label>
                 <input type="date" value={formMeta.data_fim}
                   onChange={e => setFormMeta(p => ({ ...p, data_fim: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de fim</label>
+                <input type="time" value={formMeta.hora_fim}
+                  onChange={e => setFormMeta(p => ({ ...p, hora_fim: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>
@@ -897,15 +923,27 @@ export const MetasView = ({ showToast, profile }: any) => {
                   className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-40" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
                 <input type="date" value={formTarefa.data_inicio}
                   onChange={e => setFormTarefa(p => ({ ...p, data_inicio: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de início</label>
+                <input type="time" value={formTarefa.hora_inicio}
+                  onChange={e => setFormTarefa(p => ({ ...p, hora_inicio: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de fim *</label>
                 <input type="date" value={formTarefa.data_fim}
                   onChange={e => setFormTarefa(p => ({ ...p, data_fim: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de fim</label>
+                <input type="time" value={formTarefa.hora_fim}
+                  onChange={e => setFormTarefa(p => ({ ...p, hora_fim: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
             </div>
@@ -1219,7 +1257,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Período</p>
-                  <p className="text-sm font-mono text-gray-200">{detailMeta.data_inicio} → {detailMeta.data_fim}</p>
+                  <p className="text-sm font-mono text-gray-200">{detailMeta.data_inicio}{detailMeta.hora_inicio ? ` ${detailMeta.hora_inicio}` : ''} → {detailMeta.data_fim}{detailMeta.hora_fim ? ` ${detailMeta.hora_fim}` : ''}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Pool da equipe</p>
@@ -1282,7 +1320,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Período</p>
-                  <p className="text-sm font-mono text-gray-200">{detailTarefa.data_inicio} → {detailTarefa.data_fim}</p>
+                  <p className="text-sm font-mono text-gray-200">{detailTarefa.data_inicio}{detailTarefa.hora_inicio ? ` ${detailTarefa.hora_inicio}` : ''} → {detailTarefa.data_fim}{detailTarefa.hora_fim ? ` ${detailTarefa.hora_fim}` : ''}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Bonificação</p>
