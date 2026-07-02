@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, AlertTriangle } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, AlertTriangle, Camera } from 'lucide-react';
+import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
@@ -79,6 +80,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [deleting, setDeleting] = useState(false);
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const [setorFiltro, setSetorFiltro] = useState<string>('todos');
+  const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Export PDF — admin only.
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -136,6 +140,26 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     } finally {
       setExportingPdf(false);
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !photoUploadId || !supabase) return;
+    const val = validarFotoPerfil(file);
+    if (!val.ok) { showToast(val.motivo, 'error'); return; }
+    setPhotoUploading(true);
+    try {
+      const url = await uploadFotoPerfil(file, photoUploadId);
+      const { error } = await supabase.rpc('atualizar_foto_usuario', { p_user_id: photoUploadId, p_foto_url: url });
+      if (error) throw error;
+      setUsers(prev => prev.map(u => u.id === photoUploadId ? { ...u, foto_url: url } : u));
+      showToast('Foto atualizada.', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao enviar foto: ${err.message ?? err}`, 'error');
+    }
+    setPhotoUploading(false);
+    setPhotoUploadId(null);
   };
 
   // Reset operacional — admin only. Modal com type-to-confirm pra evitar
@@ -544,6 +568,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-4 font-bold px-2 w-10"></th>
                   <th className="pb-4 font-bold px-4">Nome</th>
                   <th className="pb-4 font-bold px-4">E-mail</th>
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
@@ -558,7 +583,22 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <AnimatePresence>
                   {filteredUsers.map(u => (
                     <motion.tr key={u.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors group/row">
+                      <td className="py-3 px-2 w-10">
+                        <div className="relative w-8 h-8 shrink-0">
+                          {u.foto_url
+                            ? <img src={u.foto_url} alt={u.nome ?? ''} className="w-8 h-8 rounded-full object-cover" />
+                            : <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300">{(u.nome?.[0] ?? '?').toUpperCase()}</div>
+                          }
+                          <button
+                            onClick={() => { setPhotoUploadId(u.id); setTimeout(() => photoInputRef.current?.click(), 0); }}
+                            disabled={photoUploading}
+                            title="Alterar foto"
+                            className="absolute inset-0 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity disabled:cursor-wait">
+                            <Camera size={12} className="text-white" />
+                          </button>
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
                       <td className="py-3 px-4 text-xs text-gray-400 font-mono">{u.email}</td>
                       <td className="py-3 px-4 text-center">
@@ -719,6 +759,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           </motion.div>
         )}
       </AnimatePresence>
+
+      <input ref={photoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden" onChange={handlePhotoUpload} />
 
       {/* Modal de edição */}
       <AnimatePresence>

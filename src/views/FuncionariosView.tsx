@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera } from 'lucide-react';
+import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -12,7 +13,7 @@ const MASK_FOR: Record<string, (v: string) => string> = {
   salario:  formatBRL,
 };
 
-const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo' };
+const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '' };
 
 export const FuncionariosView = ({ showToast }: any) => {
   const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview');
@@ -22,6 +23,9 @@ export const FuncionariosView = ({ showToast }: any) => {
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showForm) {
@@ -47,9 +51,11 @@ export const FuncionariosView = ({ showToast }: any) => {
     { label: 'Admissões no Mês', value: admissoesMes, warn: false },
   ];
 
-  const filtered = funcionarios.filter((f: any) =>
-    [f.nome, f.cargo, f.departamento, f.cpf, f.email].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = funcionarios
+    .filter((f: any) =>
+      [f.nome, f.cargo, f.departamento, f.cpf, f.email].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setShowForm(true); };
   const openEdit = (f: any) => {
@@ -97,6 +103,25 @@ export const FuncionariosView = ({ showToast }: any) => {
       console.error('[Funcionarios] erro ao remover:', err);
       showToast(`Erro ao remover: ${msg}`, 'error');
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !photoUploadId) return;
+    const val = validarFotoPerfil(file);
+    if (!val.ok) { showToast(val.motivo, 'error'); return; }
+    setPhotoUploading(true);
+    try {
+      const url = await uploadFotoPerfil(file, `func-${photoUploadId}`);
+      await dbUpdate('/api/funcionariosview', photoUploadId, { foto_url: url });
+      setData((prev: any[]) => prev.map((f: any) => f.id === photoUploadId ? { ...f, foto_url: url } : f));
+      showToast('Foto atualizada.', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao enviar foto: ${err.message ?? err}`, 'error');
+    }
+    setPhotoUploading(false);
+    setPhotoUploadId(null);
   };
 
   const exportCols = ['Nome', 'CPF', 'Cargo', 'Departamento', 'Admissão', 'Salário', 'Status'];
@@ -200,6 +225,7 @@ export const FuncionariosView = ({ showToast }: any) => {
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                <th className="pb-4 font-bold px-2 w-10"></th>
                 <th className="pb-4 font-bold px-4">Nome</th>
                 <th className="pb-4 font-bold px-4">CPF</th>
                 <th className="pb-4 font-bold px-4">Cargo</th>
@@ -213,7 +239,22 @@ export const FuncionariosView = ({ showToast }: any) => {
                 <AnimatePresence>
                   {filtered.map((f: any) => (
                     <motion.tr key={f.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors group/row">
+                      <td className="py-3 px-2 w-10">
+                        <div className="relative w-8 h-8 shrink-0">
+                          {f.foto_url
+                            ? <img src={f.foto_url} alt={f.nome ?? ''} className="w-8 h-8 rounded-full object-cover" />
+                            : <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300">{(f.nome?.[0] ?? '?').toUpperCase()}</div>
+                          }
+                          <button
+                            onClick={() => { setPhotoUploadId(f.id); setTimeout(() => photoInputRef.current?.click(), 0); }}
+                            disabled={photoUploading}
+                            title="Alterar foto"
+                            className="absolute inset-0 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity disabled:cursor-wait">
+                            <Camera size={12} className="text-white" />
+                          </button>
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.cpf ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.cargo ?? '—'}</td>
@@ -236,6 +277,7 @@ export const FuncionariosView = ({ showToast }: any) => {
           </div>
         )}
       </div>
+      <input ref={photoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden" onChange={handlePhotoUpload} />
     </motion.div>
   );
 };
