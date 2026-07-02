@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2, FileDown } from 'lucide-react';
+import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2, FileDown, Play, Pause, RefreshCw, StopCircle } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
@@ -11,15 +11,28 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
 const statusCls = (s: string) => {
-  if (s === 'Aprovada')  return 'bg-green-900/30 text-green-400';
-  if (s === 'Rejeitada') return 'bg-red-950/50 text-red-500';
-  if (s === 'Concluida') return 'bg-blue-900/30 text-blue-400';
-  if (s === 'Ativa')     return 'bg-emerald-900/30 text-emerald-400';
-  if (s === 'Cancelada') return 'bg-gray-700/40 text-gray-400';
+  if (s === 'Aprovada')    return 'bg-green-900/30 text-green-400';
+  if (s === 'Rejeitada')   return 'bg-red-950/50 text-red-500';
+  if (s === 'Em Produção') return 'bg-emerald-900/30 text-emerald-400';
+  if (s === 'Rascunho')    return 'bg-gray-700/40 text-gray-400';
+  if (s === 'Pausada')     return 'bg-yellow-900/30 text-yellow-400';
+  if (s === 'Encerrada')   return 'bg-blue-900/30 text-blue-400';
+  // status aprovação tarefas
+  if (s === 'Concluida')   return 'bg-purple-900/30 text-purple-400';
   return 'bg-yellow-900/30 text-yellow-400'; // Pendente
 };
 
+// "Concluida" no status de tarefa = aguardando aprovação
 const statusLabel = (s: string) => s === 'Concluida' ? 'Aguardando' : s;
+
+// Situacao da tarefa (ciclo de vida)
+const situacaoCls = (s: string) => {
+  if (s === 'Em Produção') return 'bg-emerald-900/30 text-emerald-400';
+  if (s === 'Rascunho')    return 'bg-gray-700/40 text-gray-400';
+  if (s === 'Pausada')     return 'bg-yellow-900/30 text-yellow-400';
+  if (s === 'Encerrada')   return 'bg-blue-900/30 text-blue-400';
+  return 'bg-gray-700/40 text-gray-400';
+};
 
 type Profile = {
   id: string;
@@ -277,7 +290,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       ? [profile.setor, ...(profile.setores_extras ?? [])].filter(Boolean)
       : null;
     return metas.filter((m: any) => {
-      if (m.status !== 'Ativa' || !m.ativo) return false;
+      if (!['Em Produção', 'Rascunho'].includes(m.status) || !m.ativo) return false;
       if (isAdmin) return true;
       // Gerente: meta sem setor (=todos) OU meta do seu setor.
       if (!m.setor) return true;
@@ -419,6 +432,106 @@ export const MetasView = ({ showToast, profile }: any) => {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
     setSavingThreshold(false);
+  };
+
+  // ── Ciclo de vida — Metas ─────────────────────────────────────────
+  const handlePublicarMeta = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('publicar_meta_estrategica', { p_meta_id: id });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Em Produção' } : m));
+      showToast('Meta publicada — gerentes já conseguem visualizar.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handlePausarMeta = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('pausar_meta_estrategica', { p_meta_id: id });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Pausada' } : m));
+      showToast('Meta pausada.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handleEncerrarMeta = async (id: string) => {
+    if (!supabase) return;
+    if (!confirm('Encerrar esta meta sem distribuir o pool? Esta ação pode ser revertida.')) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('encerrar_meta_estrategica', { p_meta_id: id });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada' } : m));
+      showToast('Meta encerrada.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handleReabrirMeta = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('reabrir_meta_estrategica', { p_meta_id: id });
+      if (error) throw error;
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Em Produção', concluida_em: null } : m));
+      showToast('Meta reaberta — está Em Produção novamente.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  // ── Ciclo de vida — Tarefas ───────────────────────────────────────
+  const handlePublicarTarefa = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('publicar_tarefa_tatica', { p_tarefa_id: id });
+      if (error) throw error;
+      setTarefas((prev: any[]) => prev.map(t => t.id === id ? { ...t, situacao: 'Em Produção' } : t));
+      showToast('Tarefa publicada — colaborador já consegue visualizar.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handlePausarTarefa = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('pausar_tarefa_tatica', { p_tarefa_id: id });
+      if (error) throw error;
+      setTarefas((prev: any[]) => prev.map(t => t.id === id ? { ...t, situacao: 'Pausada' } : t));
+      showToast('Tarefa pausada.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handleEncerrarTarefa = async (id: string) => {
+    if (!supabase) return;
+    if (!confirm('Encerrar esta tarefa? O colaborador não poderá mais agir sobre ela (pode reabrir).')) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('encerrar_tarefa_tatica', { p_tarefa_id: id });
+      if (error) throw error;
+      setTarefas((prev: any[]) => prev.map(t => t.id === id ? { ...t, situacao: 'Encerrada' } : t));
+      showToast('Tarefa encerrada.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
+  };
+
+  const handleReabrirTarefa = async (id: string) => {
+    if (!supabase) return;
+    setBusyId(id);
+    try {
+      const { error } = await supabase.rpc('reabrir_tarefa_tatica', { p_tarefa_id: id });
+      if (error) throw error;
+      setTarefas((prev: any[]) => prev.map(t => t.id === id ? { ...t, situacao: 'Em Produção' } : t));
+      showToast('Tarefa reaberta — está Em Produção novamente.', 'success');
+    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
+    setBusyId(null);
   };
 
   const gerarPdfMeta = (m: any) => {
@@ -791,7 +904,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                         <td className="py-3 px-4 text-xs font-mono text-right text-gray-400">{fmtBRL(Number(m.limite_bonificacao_individual ?? 0))}</td>
                         <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{m.data_inicio} → {m.data_fim}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(m.status)}`}>{m.status}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(m.status)}`}>{m.status}</span>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex gap-1.5 justify-end items-center">
@@ -802,40 +915,70 @@ export const MetasView = ({ showToast, profile }: any) => {
                                 <FileDown size={13} />
                               </button>
                             )}
-                            {m.status === 'Ativa' && isAdmin && (
+                            {isAdmin && (
                               <>
-                                <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
-                                  disabled={busyId === m.id}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
-                                  title="Concluir e dividir pool entre o setor">
-                                  <Check size={13} />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMeta(m); }}
-                                  disabled={busyId === m.id}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
-                                  title="Editar meta">
-                                  <Pencil size={13} />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleCancelarMeta(m.id); }}
-                                  disabled={busyId === m.id}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
-                                  title="Cancelar (sem pagar bonificação)">
-                                  <XIcon size={13} />
-                                </button>
+                                {(m.status === 'Rascunho' || m.status === 'Pausada') && (
+                                  <button onClick={(e) => { e.stopPropagation(); handlePublicarMeta(m.id); }}
+                                    disabled={busyId === m.id}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                    title={m.status === 'Rascunho' ? 'Publicar (enviar para gerentes)' : 'Retomar'}>
+                                    <Play size={13} />
+                                  </button>
+                                )}
+                                {m.status === 'Em Produção' && (
+                                  <>
+                                    <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
+                                      disabled={busyId === m.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                      title="Concluir e distribuir pool">
+                                      <Check size={13} />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); handlePausarMeta(m.id); }}
+                                      disabled={busyId === m.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-yellow-400 transition-colors disabled:opacity-50"
+                                      title="Pausar">
+                                      <Pause size={13} />
+                                    </button>
+                                  </>
+                                )}
+                                {(m.status === 'Rascunho' || m.status === 'Em Produção') && (
+                                  <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMeta(m); }}
+                                    disabled={busyId === m.id}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                    title="Editar meta">
+                                    <Pencil size={13} />
+                                  </button>
+                                )}
+                                {m.status !== 'Encerrada' && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleEncerrarMeta(m.id); }}
+                                    disabled={busyId === m.id}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                    title="Encerrar (sem distribuir pool)">
+                                    <StopCircle size={13} />
+                                  </button>
+                                )}
+                                {m.status === 'Encerrada' && !m.pool_distribuido && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleReabrirMeta(m.id); }}
+                                    disabled={busyId === m.id}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                    title="Reabrir meta">
+                                    <RefreshCw size={13} />
+                                  </button>
+                                )}
+                                {m.status !== 'Encerrada' && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleApagarMeta(m.id); }}
+                                    disabled={busyId === m.id}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                    title="Apagar meta e tarefas vinculadas">
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                                {m.status === 'Encerrada' && m.pool_distribuido && (
+                                  <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
+                                    <Award size={11} />Distribuída
+                                  </span>
+                                )}
                               </>
-                            )}
-                            {m.status !== 'Concluida' && isAdmin && (
-                              <button onClick={(e) => { e.stopPropagation(); handleApagarMeta(m.id); }}
-                                disabled={busyId === m.id}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
-                                title="Apagar meta e tarefas vinculadas">
-                                <Trash2 size={13} />
-                              </button>
-                            )}
-                            {m.status === 'Concluida' && (
-                              <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
-                                <Award size={11} />Distribuída
-                              </span>
                             )}
                           </div>
                         </td>
@@ -862,14 +1005,15 @@ export const MetasView = ({ showToast, profile }: any) => {
             } />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[820px]">
+              <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Colaborador</th>
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4">Meta</th>
                   <th className="pb-4 font-bold px-4 text-right">Valor</th>
                   <th className="pb-4 font-bold px-4 text-center">Período</th>
-                  <th className="pb-4 font-bold px-4 text-center">Status</th>
+                  <th className="pb-4 font-bold px-4 text-center">Situação</th>
+                  <th className="pb-4 font-bold px-4 text-center">Aprovação</th>
                   <th className="pb-4 font-bold px-4" />
                 </tr></thead>
                 <tbody>
@@ -902,7 +1046,10 @@ export const MetasView = ({ showToast, profile }: any) => {
                           <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(t.valor_bonificacao ?? 0))}</td>
                           <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{t.data_inicio} → {t.data_fim}</td>
                           <td className="py-3 px-4 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(t.status)}`}>{statusLabel(t.status)}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${situacaoCls(t.situacao ?? 'Em Produção')}`}>{t.situacao ?? 'Em Produção'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(t.status)}`}>{statusLabel(t.status)}</span>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex gap-1.5 justify-end items-center">
@@ -913,7 +1060,45 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   <FileDown size={13} />
                                 </button>
                               )}
-                              {t.status === 'Pendente' && sou_alvo && (
+                              {/* Botões de ciclo de vida (admin/CEO/gerente do setor) */}
+                              {(isAdmin || (isGerente && aprovavel)) && (
+                                <>
+                                  {(t.situacao === 'Rascunho' || t.situacao === 'Pausada') && (
+                                    <button onClick={(e) => { e.stopPropagation(); handlePublicarTarefa(t.id); }}
+                                      disabled={busyId === t.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                      title={t.situacao === 'Rascunho' ? 'Publicar (enviar para colaborador)' : 'Retomar'}>
+                                      <Play size={13} />
+                                    </button>
+                                  )}
+                                  {t.situacao === 'Em Produção' && t.status === 'Pendente' && (
+                                    <button onClick={(e) => { e.stopPropagation(); handlePausarTarefa(t.id); }}
+                                      disabled={busyId === t.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-yellow-400 transition-colors disabled:opacity-50"
+                                      title="Pausar">
+                                      <Pause size={13} />
+                                    </button>
+                                  )}
+                                  {t.situacao !== 'Encerrada' && t.status === 'Pendente' && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleEncerrarTarefa(t.id); }}
+                                      disabled={busyId === t.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                      title="Encerrar tarefa">
+                                      <StopCircle size={13} />
+                                    </button>
+                                  )}
+                                  {t.situacao === 'Encerrada' && t.status === 'Pendente' && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleReabrirTarefa(t.id); }}
+                                      disabled={busyId === t.id}
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                      title="Reabrir tarefa">
+                                      <RefreshCw size={13} />
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              {/* Fluxo de aprovação */}
+                              {t.situacao === 'Em Produção' && t.status === 'Pendente' && sou_alvo && (
                                 <button onClick={(e) => { e.stopPropagation(); handleConcluirTarefa(t.id); }}
                                   disabled={busyId === t.id}
                                   className="text-[10px] text-blue-400 hover:underline transition-colors font-bold disabled:opacity-50">
@@ -968,7 +1153,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <Target size={16} className="text-accent shrink-0" />
                   <h3 className="text-base font-bold text-gray-200">Meta Estratégica</h3>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
               </div>
               <div className="mb-5">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
@@ -1017,7 +1202,10 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <ClipboardList size={16} className="text-accent shrink-0" />
                   <h3 className="text-base font-bold text-gray-200">Tarefa Tática</h3>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${statusCls(detailTarefa.status)}`}>{statusLabel(detailTarefa.status)}</span>
+                <div className="flex gap-1.5 shrink-0">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${situacaoCls(detailTarefa.situacao ?? 'Em Produção')}`}>{detailTarefa.situacao ?? 'Em Produção'}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(detailTarefa.status)}`}>{statusLabel(detailTarefa.status)}</span>
+                </div>
               </div>
               <div className="mb-5">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Descrição</p>
