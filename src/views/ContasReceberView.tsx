@@ -21,8 +21,9 @@ export const ContasReceberView = ({ showToast }: any) => {
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
 
   // Realtime: vendas Fiado de outros caixas geram contas a receber — esta view actualiza-se sozinha (#21).
+  const extraFilter = filialFiltro ? { filial: filialFiltro } : undefined;
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
-    '/api/contasreceberview', undefined, true,
+    '/api/contasreceberview', extraFilter, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview');
@@ -70,11 +71,9 @@ export const ContasReceberView = ({ showToast }: any) => {
     juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
 
-  const filtered = enriched.filter((c: any) => {
-    const matchSearch = [c.descricao, c.status, c.cliente?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()));
-    const matchFilial = !filialFiltro || c.filial === filialFiltro;
-    return matchSearch && matchFilial;
-  });
+  const filtered = enriched.filter((c: any) =>
+    [c.descricao, c.status, c.cliente?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const exportCols = ['Empresa', 'Descrição', 'Cliente', 'Valor (R$)', 'Vencimento', 'Status'];
   const exportRows = () => filtered.map((c: any) => [
@@ -419,20 +418,14 @@ export const ContasReceberView = ({ showToast }: any) => {
               </tbody>
             </table>
           </div>
-          {filialFiltro ? (
-            <p className="text-[10px] text-gray-500 mt-3 text-center">
-              {filtered.length} conta(s) da {filialFiltro} nesta página · remova o filtro para ver paginação completa
-            </p>
-          ) : (
-            <Pagination
-              page={page}
-              totalCount={totalCount}
-              isLoading={isLoading}
-              onPrev={() => setPage(p => Math.max(0, p - 1))}
-              onNext={() => setPage(p => p + 1)}
-              onReload={reload}
-            />
-          )}
+          <Pagination
+            page={page}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => p + 1)}
+            onReload={reload}
+          />
         </div>
       )}
     </motion.div>
