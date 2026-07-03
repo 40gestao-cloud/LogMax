@@ -263,11 +263,15 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
     if (!validate()) return;
     // Validação de campos obrigatórios extras (não gerenciados por useFormValidation)
     const ee: Record<string, string> = {};
-    if (!extras.marca.trim())  ee.marca = 'Obrigatório';
-    if (!extras.peso.trim())   ee.peso  = 'Obrigatório';
+    if (!extras.marca.trim())        ee.marca         = 'Obrigatório';
+    if (!extras.peso.trim())         ee.peso          = 'Obrigatório';
+    if (!extras.categoria_id)        ee.categoria_id  = 'Selecione uma categoria';
+    if (!extras.fornecedor)          ee.fornecedor    = 'Selecione um fornecedor';
+    if (!extras.preco_custo.trim())  ee.preco_custo   = 'Obrigatório';
+    if (extras.estoque_minimo === '') ee.estoque_minimo = 'Obrigatório';
     if (Object.keys(ee).length) {
       setExtrasErrors(ee);
-      showToast('Preencha os campos obrigatórios.', 'error', true);
+      showToast('Preencha todos os campos obrigatórios.', 'error', true);
       return;
     }
     setExtrasErrors({});
@@ -483,15 +487,16 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                       value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
                       placeholder="Ex: Parafuso M6" />
                   </FormField>
-                  <FormField label="Categoria">
+                  <FormField label="Categoria *" error={extrasErrors.categoria_id}>
                     {categoriasProduto.length > 0 ? (
-                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
                         value={extras.categoria_id}
                         onChange={e => {
                           const cat = categoriasProduto.find((c: any) => c.id === e.target.value);
                           setExtras(x => ({ ...x, categoria_id: e.target.value, categoria: cat?.nome ?? '', subcategoria_id: '' }));
+                          setExtrasErrors(ev => ({ ...ev, categoria_id: '' }));
                         }}>
-                        <option value="">— Sem categoria —</option>
+                        <option value="">— Selecione —</option>
                         {categoriasProduto.filter((c: any) => c.ativo).map((c: any) => (
                           <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
                         ))}
@@ -522,11 +527,11 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                       value={extras.ean} onChange={e => setExtras(x => ({ ...x, ean: e.target.value }))}
                       placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
                   </FormField>
-                  <FormField label="Fornecedor">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  <FormField label="Fornecedor *" error={extrasErrors.fornecedor}>
+                    <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.fornecedor ? 'border border-red-500/40' : ''}`}
                       value={extras.fornecedor}
-                      onChange={e => setExtras(x => ({ ...x, fornecedor: e.target.value }))}>
-                      <option value="">— Sem fornecedor —</option>
+                      onChange={e => { setExtras(x => ({ ...x, fornecedor: e.target.value })); setExtrasErrors(ev => ({ ...ev, fornecedor: '' })); }}>
+                      <option value="">— Selecione —</option>
                       {fornecedoresOrdenados.map((f: any) => (
                         <option key={f.id} value={f.nome}>{f.nome}</option>
                       ))}
@@ -685,9 +690,11 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Preços</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Preço de Custo (R$)">
-                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                      value={extras.preco_custo} onChange={e => setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) }))}
+                  <FormField label="Preço de Custo (R$) *" error={extrasErrors.preco_custo}>
+                    <input type="text" inputMode="numeric"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.preco_custo ? 'border border-red-500/40' : ''}`}
+                      value={extras.preco_custo}
+                      onChange={e => { setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) })); setExtrasErrors(ev => ({ ...ev, preco_custo: '' })); }}
                       onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
                   </FormField>
                   <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
@@ -762,9 +769,11 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                       <p className="text-[10px] text-gray-500 mt-1">Compra que está sendo registrada junto ao cadastro.</p>
                     )}
                   </FormField>
-                  <FormField label={`Estoque Mínimo (${extras.unidade})`}>
-                    <input type="number" min="0" step="1" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.estoque_minimo} onChange={e => setExtras(x => ({ ...x, estoque_minimo: e.target.value }))}
+                  <FormField label={`Estoque Mínimo (${extras.unidade}) *`} error={extrasErrors.estoque_minimo}>
+                    <input type="number" min="0" step="1"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.estoque_minimo ? 'border border-red-500/40' : ''}`}
+                      value={extras.estoque_minimo}
+                      onChange={e => { setExtras(x => ({ ...x, estoque_minimo: e.target.value })); setExtrasErrors(ev => ({ ...ev, estoque_minimo: '' })); }}
                       placeholder="0" />
                   </FormField>
                 </div>
