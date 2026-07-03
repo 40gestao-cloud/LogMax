@@ -602,6 +602,77 @@ table,
 /* Colaborador: fundo preto + borda branca + texto branco */
 .role-badge--colaborador { background: #000; color: #fff; border-color: #fff !important; }
 
+/* ── Meta status badges — pílulas com shimmer ── */
+.meta-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  background-size: 200% auto;
+}
+
+/* Rascunho: cinza vidro (sem shimmer) */
+.meta-status--rascunho {
+  background: linear-gradient(100deg, rgba(75,85,99,0.4) 0%, rgba(107,114,128,0.35) 50%, rgba(75,85,99,0.4) 100%);
+  color: #d1d5db;
+  border-color: rgba(156,163,175,0.4) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Em Produção: dourado com shimmer */
+.meta-status--producao {
+  background: linear-gradient(100deg, #B8860B 0%, #D4AF37 35%, #f0d878 50%, #D4AF37 65%, #B8860B 100%);
+  color: #000;
+  border-color: #D4AF37 !important;
+  animation: badge-shimmer 2.4s linear infinite;
+}
+
+/* Não alcançada: vermelho com shimmer */
+.meta-status--nao-alcancada {
+  background: linear-gradient(100deg, #7f1d1d 0%, #dc2626 35%, #f87171 50%, #dc2626 65%, #7f1d1d 100%);
+  color: #fff;
+  border-color: #ef4444 !important;
+  animation: badge-shimmer 2.4s linear infinite;
+}
+
+/* Pausada: roxo com shimmer */
+.meta-status--pausada {
+  background: linear-gradient(100deg, #4c1d95 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #4c1d95 100%);
+  color: #fff;
+  border-color: #8b5cf6 !important;
+  animation: badge-shimmer 2.4s linear infinite;
+}
+
+/* Alcançada / Concluída: verde com shimmer */
+.meta-status--alcancada {
+  background: linear-gradient(100deg, #14532d 0%, #16a34a 35%, #4ade80 50%, #16a34a 65%, #14532d 100%);
+  color: #fff;
+  border-color: #22c55e !important;
+  animation: badge-shimmer 2.4s linear infinite;
+}
+
+/* Encerrada: preto vidro com shimmer sutil */
+.meta-status--encerrada {
+  background: linear-gradient(100deg,
+    rgba(0,0,0,0.85) 0%,
+    rgba(30,30,30,0.75) 35%,
+    rgba(60,60,60,0.65) 50%,
+    rgba(30,30,30,0.75) 65%,
+    rgba(0,0,0,0.85) 100%);
+  color: #e5e7eb;
+  border-color: rgba(255,255,255,0.25) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: badge-shimmer 3.2s linear infinite;
+}
+
 [data-theme="light"] .role-badge--admin       { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
 [data-theme="light"] .role-badge--ceo         { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
 [data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #D4AF37 !important; }

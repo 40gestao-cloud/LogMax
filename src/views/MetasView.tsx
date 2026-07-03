@@ -8,16 +8,16 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const statusCls = (s: string) => {
-  if (s === 'Em Produção') return 'bg-emerald-900/30 text-emerald-400';
-  if (s === 'Rascunho')    return 'bg-gray-700/40 text-gray-400';
-  if (s === 'Pausada')     return 'bg-yellow-900/30 text-yellow-400';
-  if (s === 'Encerrada')   return 'bg-blue-900/30 text-blue-400';
-  return 'bg-yellow-900/30 text-yellow-400';
+  if (s === 'Em Produção') return 'meta-status meta-status--producao';
+  if (s === 'Rascunho')    return 'meta-status meta-status--rascunho';
+  if (s === 'Pausada')     return 'meta-status meta-status--pausada';
+  if (s === 'Encerrada')   return 'meta-status meta-status--encerrada';
+  return 'meta-status meta-status--rascunho';
 };
 
 const metaResultCls   = (m: any) => m.pool_distribuido
-  ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-700/30'
-  : 'bg-red-950/30 text-red-400 border border-red-800/30';
+  ? 'meta-status meta-status--alcancada'
+  : 'meta-status meta-status--nao-alcancada';
 const metaResultLabel = (m: any) => m.pool_distribuido ? '✓ Alcançada' : '✗ Não alcançada';
 
 const SETORES = ['vendas', 'logistica', 'financeiro', 'rh', 'marketing', 'ti', 'all'] as const;
@@ -441,8 +441,8 @@ export const MetasView = ({ showToast, profile }: any) => {
                       <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{m.data_inicio} → {m.data_fim}</td>
                       <td className="py-3 px-4 text-center">
                         {m.status === 'Encerrada'
-                          ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${metaResultCls(m)}`}>{metaResultLabel(m)}</span>
-                          : <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(m.status)}`}>{m.status}</span>
+                          ? <span className={metaResultCls(m)}>{metaResultLabel(m)}</span>
+                          : <span className={statusCls(m.status)}>{m.status}</span>
                         }
                       </td>
                       <td className="py-3 px-4">
@@ -538,8 +538,8 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <h3 className="text-base font-bold text-gray-200">Meta Estratégica</h3>
                 </div>
                 {detailMeta.status === 'Encerrada'
-                  ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${metaResultCls(detailMeta)}`}>{metaResultLabel(detailMeta)}</span>
-                  : <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
+                  ? <span className={`shrink-0 ${metaResultCls(detailMeta)}`}>{metaResultLabel(detailMeta)}</span>
+                  : <span className={`shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
                 }
               </div>
               <div className="mb-3">
