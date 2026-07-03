@@ -112,7 +112,7 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Categorias', 'Filiais', 'Projetos', 'Condições de pagamento', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Formas de pagamento', 'Tarefas']
+    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Tarefas']
   },
   {
     // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
@@ -129,26 +129,26 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Minhas Aprovações', 'Requisições', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos',
+    submenus: ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
       'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Centros de custo', 'Previsões', 'Duplicatas', 'Caixa / Bancos', 'Patrimônio', 'Integração bancária',
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Centros de custo', 'Patrimônio', 'Previsões', 'Duplicatas',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
-      'Gerenciamento', 'Relatórios', 'Tarefas']
+      'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Folha de Pagamento', 'Férias', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Afastamentos', 'Totem QR', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Totem QR', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
-    submenus: ['PDV', 'Clientes', 'Histórico de Vendas', 'Orçamentos', 'Pedidos de Venda',
+    submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas',
       { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] },
       'Tarefas'],
   },
