@@ -163,7 +163,6 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   {
     id: 'ti', label: 'TI & Suporte', icon: Monitor,
     submenus: ['Chamados', 'Desenvolvimento com IA'],
-    isNew: true,
   },
 ];
 
