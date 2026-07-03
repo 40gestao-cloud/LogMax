@@ -629,6 +629,7 @@ table,
 /* Em Produção: dourado com shimmer */
 .meta-status--producao {
   background: linear-gradient(100deg, #B8860B 0%, #D4AF37 35%, #f0d878 50%, #D4AF37 65%, #B8860B 100%);
+  background-size: 200% auto;
   color: #000;
   border-color: #D4AF37 !important;
   animation: badge-shimmer 2.4s linear infinite;
@@ -637,6 +638,7 @@ table,
 /* Não alcançada: vermelho com shimmer */
 .meta-status--nao-alcancada {
   background: linear-gradient(100deg, #7f1d1d 0%, #dc2626 35%, #f87171 50%, #dc2626 65%, #7f1d1d 100%);
+  background-size: 200% auto;
   color: #fff;
   border-color: #ef4444 !important;
   animation: badge-shimmer 2.4s linear infinite;
@@ -645,6 +647,7 @@ table,
 /* Pausada: roxo com shimmer */
 .meta-status--pausada {
   background: linear-gradient(100deg, #4c1d95 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #4c1d95 100%);
+  background-size: 200% auto;
   color: #fff;
   border-color: #8b5cf6 !important;
   animation: badge-shimmer 2.4s linear infinite;
@@ -653,6 +656,7 @@ table,
 /* Alcançada / Concluída: verde com shimmer */
 .meta-status--alcancada {
   background: linear-gradient(100deg, #14532d 0%, #16a34a 35%, #4ade80 50%, #16a34a 65%, #14532d 100%);
+  background-size: 200% auto;
   color: #fff;
   border-color: #22c55e !important;
   animation: badge-shimmer 2.4s linear infinite;
@@ -666,6 +670,7 @@ table,
     rgba(60,60,60,0.65) 50%,
     rgba(30,30,30,0.75) 65%,
     rgba(0,0,0,0.85) 100%);
+  background-size: 200% auto;
   color: #e5e7eb;
   border-color: rgba(255,255,255,0.25) !important;
   backdrop-filter: blur(8px);
