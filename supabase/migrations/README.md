@@ -1,8 +1,8 @@
 # Migrations do LogMax
 
-> **Subindo um Supabase do zero (nova turma)?** Use [`SETUP_NOVA_TURMA.md`](../../SETUP_NOVA_TURMA.md) na raiz — lá a ordem está numerada 001 → 091, sem os arquivos de emergência/produção que não fazem parte do setup normal.
+> **Subindo um Supabase do zero (nova turma)?** Use o **baseline consolidado** — ver [`docs/setup-nova-turma.md`](../../docs/setup-nova-turma.md). Você roda 3 arquivos (baseline + buckets + seed admin) em vez de 130+ migrations em ordem.
 >
-> Este README aqui é a referência completa (inclui rollback, truncate, seed_admin etc.) e segue numerada 1 → 67 apenas para os arquivos cobertos historicamente.
+> Os documentos abaixo (`SETUP_NOVA_TURMA.md` da raiz e o resto deste README) descrevem o processo antigo passo-a-passo — servem como **referência histórica** e pra debug quando alguma migration não aplicou.
 
 Este projeto tem **duas eras** de scripts SQL:
 

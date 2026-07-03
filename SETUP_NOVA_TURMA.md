@@ -1,5 +1,15 @@
 # LogMax — Setup do zero numa nova turma (Supabase novo)
 
+> ⚠️ **Documento desatualizado — usar apenas como referência histórica.**
+>
+> A partir de 2026-07 o fluxo recomendado é o **baseline consolidado**: em vez de rodar 130+ arquivos em ordem, gera-se um `baseline_YYYYMMDD.sql` via `pg_dump` do logmax-erp e roda-se ele + buckets + seed admin (3 arquivos, ~10 min).
+>
+> **Novo doc:** [`docs/setup-nova-turma.md`](docs/setup-nova-turma.md)
+>
+> Este arquivo aqui só serve pra referenciar o que cada migration antiga fez, ou pra debug quando o baseline diverge do esperado. Foi congelado no seu último estado — não reflete migrations posteriores a `20260530`.
+
+---
+
 Este documento lista a **ordem exata** de aplicação dos SQLs para subir um Supabase do zero e ter o LogMax funcionando como está hoje em produção.
 
 > **Como usar:** abra o SQL Editor do Supabase do novo projeto e rode na ordem 001 → 091. Cada arquivo é idempotente (pode reaplicar sem quebrar).
