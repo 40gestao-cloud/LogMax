@@ -44,22 +44,20 @@ export const ContasPagarView = ({ showToast }: any) => {
   const [jurosCfg, setJurosCfg] = useState<JurosConfig | null>(null);
   useEffect(() => { fetchJurosConfig().then(setJurosCfg); }, []);
 
-  // Total agregado server-side: soma valor atualizado (com juros/multa pra vencidas).
+  // Total agregado server-side via RPC (com juros/multa pra vencidas). RPC evita
+  // o teto implícito de ~1000 linhas do PostgREST que subestimava o total silenciosamente.
   const [totalPendente, setTotalPendente] = useState(0);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('contas_pagar').select('valor, vencimento, status').eq('status', 'Pendente').eq('ativo', true)
-      .then(({ data: rows }) => {
+    supabase.rpc('total_pendente_contas_pagar', { p_filial: filialFiltro || null })
+      .then(({ data: total, error }) => {
         if (cancelled) return;
-        const total = (rows ?? []).reduce((s: number, c: any) => {
-          const b = calcularJuros(c.valor, c.vencimento, c.status, jurosCfg);
-          return s + b.total;
-        }, 0);
-        setTotalPendente(total);
+        if (error) { console.warn('[ContasPagar] total_pendente_contas_pagar:', error.message); return; }
+        setTotalPendente(Number(total ?? 0));
       });
     return () => { cancelled = true; };
-  }, [data, jurosCfg]);
+  }, [data, filialFiltro]);
 
   const enriched = data.map((c: any) => ({
     ...c,

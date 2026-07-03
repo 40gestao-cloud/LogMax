@@ -26,7 +26,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     new Promise(resolve => {
       const options = typeof opts === 'string' ? { message: opts } : opts;
       const danger = options.danger ?? VERBO_DESTRUTIVO.test(options.message);
-      setState({ ...options, danger, resolve });
+      // Nova chamada com modal ainda aberto: cancela a anterior antes de sobrescrever,
+      // senão o await do primeiro resolve nunca é chamado (Promise leak + handler pendurado).
+      setState(prev => {
+        prev?.resolve(false);
+        return { ...options, danger, resolve };
+      });
     });
 
   const answer = (v: boolean) => {
