@@ -249,8 +249,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           {visibleModules.map((mod: any) => {
             // Cabeçalhos de bloco inseridos antes de módulos âncora
             const blockLabel =
-              mod.id === 'empresa'   ? 'Geral' :
-              mod.id === 'cadastros' ? 'Logística' :
+              mod.id === 'empresa'    ? 'Geral' :
+              mod.id === 'cadastros'  ? 'Logística' :
+              mod.id === 'financeiro' ? 'Finanças' :
+              mod.id === 'rh'         ? 'Gestão de Pessoas' :
+              mod.id === 'vendas'     ? 'Vendas e Atendimento' :
+              mod.id === 'marketing'  ? 'Marketing e Brand' :
+              mod.id === 'ti'         ? 'Tecnologia e IA' :
               null;
             const isOpen = openModules[mod.id];
             const Icon = mod.icon;
