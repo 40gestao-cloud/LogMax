@@ -59,6 +59,9 @@ export const FiliaisView = ({ showToast }: any) => {
   };
 
   const closeForm = () => {
+    // Se subiu logo mas cancelou sem salvar, remove o órfão do bucket
+    if (imagemUrl && imagemUrl !== imagemUrlAnterior)
+      removerLogoFilial(imagemUrl).catch(() => {});
     setShowForm(false);
     setEditItem(null);
     setForm({ nome: '', cnpj: '', cidade: '' });
