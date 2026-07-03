@@ -261,9 +261,12 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             return (
               <div key={mod.id} className="flex flex-col">
                 {blockLabel && (
-                  <p className="text-[10px] font-black uppercase tracking-widest px-2 pt-3 pb-1.5" style={{ color: '#D4AF37' }}>
-                    {blockLabel}
-                  </p>
+                  <div className="mt-4 mb-1.5 px-1">
+                    <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
+                      style={{ color: '#D4AF37', background: '#D4AF3718', border: '1px solid #D4AF3730' }}>
+                      {blockLabel}
+                    </span>
+                  </div>
                 )}
                 <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
                   <div className="flex items-center gap-3">
