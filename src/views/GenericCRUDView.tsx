@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast }: {
+export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast, filialLocked, onTrocarFilial }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
+  filialLocked?: string; onTrocarFilial?: () => void;
 }) => {
   const confirm = useConfirm();
-  const { data, setData, isLoading } = useFetchData<any>(endpoint);
+  const { data: rawData, setData, isLoading } = useFetchData<any>(endpoint);
+  const data = filialLocked ? rawData.filter((item: any) => item.filial === filialLocked) : rawData;
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -62,7 +64,8 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
           return [k, v];
         })
       );
-      const payload = editItem ? parsed : { ...parsed, status: (parsed.status as string) || defaultStatus };
+      const withFilial = filialLocked ? { ...parsed, filial: filialLocked } : parsed;
+      const payload = editItem ? withFilial : { ...withFilial, status: (withFilial.status as string) || defaultStatus };
       if (editItem) {
         const updated = await dbUpdate(endpoint, editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
@@ -102,12 +105,18 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
           <p className="text-sm text-gray-400 mt-1">{subtitle}</p>
         </div>
-        <div className="flex gap-3 items-center w-full sm:w-auto">
+        <div className="flex gap-3 items-center w-full sm:w-auto flex-wrap">
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          {onTrocarFilial && (
+            <button onClick={onTrocarFilial}
+              className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
+              <ArrowLeft size={14} /> Trocar unidade
+            </button>
+          )}
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X } from 'lucide-react';
+import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
@@ -9,6 +9,7 @@ import {
   validarImagemCategoria, CATEGORIA_IMAGEM_ACCEPT,
 } from '../lib/categoriaImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, FilialOp } from '../components/FilialSelector';
 
 const COR_PRESETS = [
   '#D4AF37','#22c55e','#3b82f6','#f59e0b','#ef4444',
@@ -187,11 +188,11 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
 }
 
 // ── Painel de Categorias (wrapper com seleção + nome) ─────────────────────────
-function PainelCategorias({ canEdit, selectedId, onSelect }: {
+function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
   canEdit: boolean; selectedId: string | null;
-  onSelect: (id: string, nome: string) => void;
+  onSelect: (id: string, nome: string) => void; filial: FilialOp;
 }) {
-  const { data, isLoading, reload } = useFetchData<any>('categorias_produto');
+  const { data, isLoading, reload } = useFetchData<any>('categorias_produto', { filial });
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [saving,   setSaving]   = useState(false);
@@ -200,7 +201,7 @@ function PainelCategorias({ canEdit, selectedId, onSelect }: {
     setSaving(true);
     try {
       if (editItem) await dbUpdate('categorias_produto', editItem.id, { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null });
-      else          await dbInsert('categorias_produto', { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null });
+      else          await dbInsert('categorias_produto', { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, filial });
       reload(); setEditItem(null); setShowForm(false);
     } finally { setSaving(false); }
   };
@@ -391,7 +392,9 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
 }
 
 // ── View principal ────────────────────────────────────────────────────────────
-export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
+const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial }: {
+  profile: any; showToast: any; filial: FilialOp; onTrocarFilial: () => void;
+}) => {
   const [selectedCatId,   setSelectedCatId]   = useState<string | null>(null);
   const confirm = useConfirm();
   const [selectedCatNome, setSelectedCatNome] = useState('');
@@ -400,17 +403,23 @@ export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; sh
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-black text-gray-100">Categorias e Subcategorias</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Estrutura de categorias usada em Produtos, Orçamento e Marketing.
-          {canEdit ? ' Restrito a Logística / Admin / CEO.' : ''}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black text-gray-100">Categorias — {filial}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Estrutura de categorias usada em Produtos, Orçamento e Marketing.
+            {canEdit ? ' Restrito a Logística / Admin / CEO.' : ''}
+          </p>
+        </div>
+        <button onClick={onTrocarFilial}
+          className="neu-button py-2 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
+          <ArrowLeft size={14} /> Trocar unidade
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="neu-flat border border-white/5 rounded-xl p-4">
-          <PainelCategorias canEdit={canEdit} selectedId={selectedCatId}
+          <PainelCategorias canEdit={canEdit} selectedId={selectedCatId} filial={filial}
             onSelect={(id, nome) => { setSelectedCatId(id); setSelectedCatNome(nome); }} />
         </div>
 
@@ -427,4 +436,16 @@ export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; sh
       </div>
     </motion.div>
   );
+};
+
+export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return (
+    <FilialSelector
+      title="Categorias"
+      subtitle="Selecione a unidade para gerenciar categorias de produtos."
+      onSelect={setFilial}
+    />
+  );
+  return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

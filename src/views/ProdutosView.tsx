@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
@@ -8,6 +8,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
+import { FilialSelector, FilialOp } from '../components/FilialSelector';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -30,6 +31,8 @@ const EMPTY_EXTRAS = {
   unidade:                'UN' as string,
   ean:                    '',
   fornecedor:             '',
+  marca:                  '',
+  peso:                   '',
   filial:                 FILIAL_DEFAULT as string,
   tipo:                   'estoque_venda' as 'estoque_venda' | 'patrimonio',
   patrimonio_numero:      '',
@@ -57,20 +60,25 @@ const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string |
   return <span className={`font-bold tabular-nums ${cls}`}>{m.toFixed(1)}%</span>;
 };
 
-export const ProdutosView = ({ showToast }: any) => {
+const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
-  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const { data: categoriasProduto }  = useFetchData<any>('categorias_produto');
   const { data: subcategoriasProduto } = useFetchData<any>('subcategorias_produto');
+  const { data: fornecedoresList } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+
+  const fornecedoresOrdenados = useMemo(
+    () => [...fornecedoresList].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')),
+    [fornecedoresList]
+  );
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/produtosview',
-    filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
+    { filial },
     false,
     {
       page,
@@ -86,6 +94,7 @@ export const ProdutosView = ({ showToast }: any) => {
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+  const [extrasErrors, setExtrasErrors] = useState<Record<string, string>>({});
 
   // Imagem do produto — `imagemUrl` é a URL já persistida no bucket;
   // `imagemUrlAnterior` guarda a referência original para apagarmos do
@@ -194,7 +203,9 @@ export const ProdutosView = ({ showToast }: any) => {
       unidade:                item.unidade ?? 'UN',
       ean:                    item.ean            ?? '',
       fornecedor:             item.fornecedor     ?? '',
-      filial:                 item.filial         ?? FILIAL_DEFAULT,
+      marca:                  item.marca          ?? '',
+      peso:                   item.peso != null   ? String(item.peso) : '',
+      filial:                 filial,
       tipo:                   (item.tipo === 'patrimonio' ? 'patrimonio' : 'estoque_venda'),
       patrimonio_numero:      item.patrimonio_numero      ?? '',
       patrimonio_responsavel: item.patrimonio_responsavel ?? '',
@@ -211,10 +222,11 @@ export const ProdutosView = ({ showToast }: any) => {
     setShowForm(false);
     setEditItem(null);
     setForm({ codigo: '', nome: '', preco: '' });
-    setExtras({ ...EMPTY_EXTRAS });
+    setExtras({ ...EMPTY_EXTRAS, filial });
     setImagemUrl('');
     setImagemUrlAnterior('');
     setErrors({});
+    setExtrasErrors({});
     if (imagemInputRef.current) imagemInputRef.current.value = '';
   };
 
@@ -249,9 +261,19 @@ export const ProdutosView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!validate()) return;
+    // Validação de campos obrigatórios extras (não gerenciados por useFormValidation)
+    const ee: Record<string, string> = {};
+    if (!extras.marca.trim())  ee.marca = 'Obrigatório';
+    if (!extras.peso.trim())   ee.peso  = 'Obrigatório';
+    if (Object.keys(ee).length) {
+      setExtrasErrors(ee);
+      showToast('Preencha os campos obrigatórios.', 'error', true);
+      return;
+    }
+    setExtrasErrors({});
     // Regra de SKU por unidade: bloqueia código sem o prefixo esperado da filial.
     // Matriz não tem prefixo (não opera produtos de venda) — passa direto.
-    const prefixoExigido = PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL];
+    const prefixoExigido = PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL];
     if (prefixoExigido && !form.codigo.toUpperCase().startsWith(prefixoExigido)) {
       const msg = 'O código do produto não está em conformidade com a empresa selecionada';
       setErrors({ codigo: msg });
@@ -275,7 +297,9 @@ export const ProdutosView = ({ showToast }: any) => {
         unidade:                extras.unidade || 'UN',
         ean:                    extras.ean,
         fornecedor:             extras.fornecedor,
-        filial:                 extras.filial || FILIAL_DEFAULT,
+        marca:                  extras.marca || null,
+        peso:                   extras.peso !== '' ? parseFloat(extras.peso.replace(',', '.')) : null,
+        filial:                 filial,
         categoria_id:           extras.categoria_id || null,
         subcategoria_id:        extras.subcategoria_id || null,
         imagem_url:             imagemUrl || null,
@@ -410,7 +434,7 @@ export const ProdutosView = ({ showToast }: any) => {
       {/* Header */}
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Catálogo de Produtos</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Produtos — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie o portfólio de itens do estoque e suas informações.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
@@ -420,16 +444,15 @@ export const ProdutosView = ({ showToast }: any) => {
               <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
             </>
           )}
+          <button onClick={onTrocarFilial}
+            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
+            <ArrowLeft size={14} /> Trocar unidade
+          </button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
-            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
-            <option value="todas">Todas filiais</option>
-            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>
@@ -448,10 +471,10 @@ export const ProdutosView = ({ showToast }: any) => {
                   <FormField label="Código *" error={errors.codigo}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
                       value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
-                      placeholder={`Ex: ${PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL] ?? 'PRD-'}001`} />
-                    {PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL] && (
+                      placeholder={`Ex: ${PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL] ?? 'PRD-'}001`} />
+                    {PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL] && (
                       <p className="text-[10px] text-gray-500 mt-1">
-                        Use o prefixo <span className="font-mono text-accent">{PRODUTO_PREFIX_FILIAL[extras.filial as keyof typeof PRODUTO_PREFIX_FILIAL]}</span> para produtos da {extras.filial}.
+                        Use o prefixo <span className="font-mono text-accent">{PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL]}</span> para produtos da {filial}.
                       </p>
                     )}
                   </FormField>
@@ -500,26 +523,26 @@ export const ProdutosView = ({ showToast }: any) => {
                       placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
                   </FormField>
                   <FormField label="Fornecedor">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.fornecedor} onChange={e => setExtras(x => ({ ...x, fornecedor: e.target.value }))}
-                      placeholder="Ex: Distribuidora ABC" />
-                  </FormField>
-                  <FormField label="Filial / Unidade *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.filial} onChange={e => {
-                        const novaFilial = e.target.value;
-                        setExtras(x => ({ ...x, filial: novaFilial }));
-                        // Auto-fill do prefixo SÓ quando o código está vazio — conveniência
-                        // sem risco. Se o usuário já digitou algo (com ou sem prefixo),
-                        // não mexemos: a validação no save sinaliza o descasamento.
-                        const novoPrefixo = PRODUTO_PREFIX_FILIAL[novaFilial as keyof typeof PRODUTO_PREFIX_FILIAL];
-                        if (novoPrefixo) {
-                          setForm(f => (!f.codigo ? { ...f, codigo: novoPrefixo } : f));
-                          clearError('codigo');
-                        }
-                      }}>
-                      {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                      value={extras.fornecedor}
+                      onChange={e => setExtras(x => ({ ...x, fornecedor: e.target.value }))}>
+                      <option value="">— Sem fornecedor —</option>
+                      {fornecedoresOrdenados.map((f: any) => (
+                        <option key={f.id} value={f.nome}>{f.nome}</option>
+                      ))}
                     </select>
+                  </FormField>
+                  <FormField label="Marca *" error={extrasErrors.marca}>
+                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.marca ? 'border border-red-500/40' : ''}`}
+                      value={extras.marca}
+                      onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
+                      placeholder="Ex: Samsung, Nestlé, 3M" />
+                  </FormField>
+                  <FormField label="Peso / Volume *" error={extrasErrors.peso}>
+                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}
+                      value={extras.peso} inputMode="decimal"
+                      onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
+                      placeholder="Ex: 1.5 (em kg/l/m…)" />
                   </FormField>
                 </div>
               </div>
@@ -882,4 +905,16 @@ export const ProdutosView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const ProdutosView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return (
+    <FilialSelector
+      title="Produtos"
+      subtitle="Selecione a unidade para gerenciar produtos."
+      onSelect={setFilial}
+    />
+  );
+  return <ProdutosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

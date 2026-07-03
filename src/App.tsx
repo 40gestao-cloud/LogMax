@@ -42,6 +42,7 @@ const ContasPagarView         = lazy(() => import('./views/ContasPagarView').the
 const ContasReceberView       = lazy(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
 const CaixaBancosView         = lazy(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
 const GenericCRUDView         = lazy(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
+const ServicosView            = lazy(() => import('./views/ServicosView').then(m => ({ default: m.ServicosView })));
 const MovimentacoesEstoqueView = lazy(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
 const SaldosEstoqueView       = lazy(() => import('./views/SaldosEstoqueView').then(m => ({ default: m.SaldosEstoqueView })));
 const RequisicoesEstoqueView  = lazy(() => import('./views/RequisicoesEstoqueView').then(m => ({ default: m.RequisicoesEstoqueView })));
@@ -519,8 +520,7 @@ function LogMaxAppInner() {
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
-      case 'cadastros-serviços':              return <GenericCRUDView showToast={st} title="Serviços" subtitle="Gerencie os serviços prestados." endpoint="/api/servicosview"
-        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: SRV-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Instalação' }, { key: 'tipo', label: 'Tipo', placeholder: 'Ex: Manutenção' }, { key: 'filial', label: 'Empresa', type: 'select', options: ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
+      case 'cadastros-serviços':              return <ServicosView showToast={st} />;
       case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Gerencie centros de custo e orçamentos." endpoint="/api/centroscustoview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
+import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
@@ -8,32 +8,34 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, FilialOp } from '../components/FilialSelector';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
 
-const EMPTY_EXTRAS = {
+const makeEmptyExtras = (filial: string) => ({
   pessoa_tipo: 'Empresa' as PessoaTipo,
   telefone: '',
   email: '',
   endereco: '',
   cpf_cnpj: '',
   categoria: '',
-  filial: FILIAL_DEFAULT as string,
-};
+  filial,
+});
 
-export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
+const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
+  type: 'clientes' | 'fornecedores'; showToast: any; filial: FilialOp; onTrocarFilial: () => void;
+}) => {
   const isClientes = type === 'clientes';
   const confirm = useConfirm();
   const endpoint = isClientes ? '/api/crmview' : '/api/crmview-fornecedores';
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
-  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     endpoint,
-    filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
+    { filial },
     false,
     { page, searchTerm: debouncedSearch, searchColumns: ['nome', 'email', 'telefone', 'cpf_cnpj', 'pessoa_tipo'] }
   );
@@ -41,10 +43,10 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [form, setForm] = useState({ nome: '' });
-  const [extras, setExtras] = useState(EMPTY_EXTRAS);
+  const [extras, setExtras] = useState(() => makeEmptyExtras(filial));
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  const title = isClientes ? 'Gestão de Clientes' : 'Gestão de Fornecedores';
+  const title = isClientes ? `Clientes — ${filial}` : `Fornecedores — ${filial}`;
   const desc  = isClientes ? 'Visualize e gerencie a carteira de clientes ativos.' : 'Controle seus parceiros comerciais e rede de suprimentos.';
 
   // Pesquisa agora é server-side.
@@ -80,7 +82,7 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
     setShowForm(false);
     setEditItem(null);
     setForm({ nome: '' });
-    setExtras(EMPTY_EXTRAS);
+    setExtras(makeEmptyExtras(filial));
     setErrors({});
   };
 
@@ -160,11 +162,10 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
-            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
-            <option value="todas">Todas filiais</option>
-            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          <button onClick={onTrocarFilial}
+            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
+            <ArrowLeft size={14} /> Trocar unidade
+          </button>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>
@@ -342,4 +343,17 @@ export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'
       )}
     </motion.div>
   );
+};
+
+export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  const label = type === 'clientes' ? 'Clientes' : 'Fornecedores';
+  if (!filial) return (
+    <FilialSelector
+      title={label}
+      subtitle={`Selecione a unidade para gerenciar ${label.toLowerCase()}.`}
+      onSelect={setFilial}
+    />
+  );
+  return <CRMViewInner type={type} showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
