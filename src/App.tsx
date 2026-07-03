@@ -262,7 +262,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             return (
               <div key={mod.id} className="flex flex-col">
                 {blockLabel && (
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2 pt-3 pb-1.5">
+                  <p className="text-[10px] font-black uppercase tracking-widest px-2 pt-3 pb-1.5" style={{ color: '#D4AF37' }}>
                     {blockLabel}
                   </p>
                 )}
