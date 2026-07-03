@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2 } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -59,6 +59,55 @@ const EMPTY_FORM = {
   campanha_id: '',
 };
 
+function SearchableSelect({ value, onChange, items, placeholder }: {
+  value: string;
+  onChange: (id: string) => void;
+  items: { id: string; nome: string; filial: string }[];
+  placeholder: string;
+}) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const selected = items.find(i => i.id === value);
+  const filtered = q
+    ? items.filter(i =>
+        i.nome.toLowerCase().includes(q.toLowerCase()) ||
+        i.filial.toLowerCase().includes(q.toLowerCase()))
+    : items;
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={open ? q : (selected?.nome ?? '')}
+        onChange={e => setQ(e.target.value)}
+        onFocus={() => { setOpen(true); setQ(''); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className="neu-input rounded-xl px-3 py-2.5 text-sm w-full"
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-[var(--color-bg,#0f0f0f)] rounded-xl border border-white/10 max-h-52 overflow-y-auto main-scrollbar shadow-2xl">
+          <button type="button" onMouseDown={() => { onChange(''); setOpen(false); }}
+            className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-white/5 border-b border-white/5">
+            Nenhum
+          </button>
+          {filtered.length === 0
+            ? <p className="px-3 py-2 text-xs text-gray-600 italic">Nenhum resultado</p>
+            : filtered.map(i => (
+              <button key={i.id} type="button"
+                onMouseDown={() => { onChange(i.id); setQ(''); setOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 hover:bg-white/5 ${value === i.id ? 'text-accent' : 'text-gray-300'}`}>
+                <span className="truncate">{i.nome}</span>
+                <span className="text-[10px] text-gray-600 shrink-0">{i.filial}</span>
+              </button>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
   const confirm = useConfirm();
@@ -71,6 +120,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [obsAberta, setObsAberta] = useState<any | null>(null);
+  const [searchPromo, setSearchPromo] = useState('');
 
   // Modais de arte
   const [arteModal, setArteModal] = useState<{ promocao: any; arte: any | null } | null>(null);
@@ -170,6 +220,15 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   };
   const produtosAgrupados = useMemo(() => agruparPorFilial(itens, 'produto'), [itens]);
   const servicosAgrupados = useMemo(() => agruparPorFilial(itens, 'servico'), [itens]);
+  const itensProduto = useMemo(() =>
+    itens.filter(i => i.tipo_origem === 'produto').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
+    [itens]);
+  const itensServico = useMemo(() =>
+    itens.filter(i => i.tipo_origem === 'servico').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
+    [itens]);
+  const promocoesFiltradas = searchPromo
+    ? (promocoes ?? []).filter((p: any) => (p.nome_produto ?? '').toLowerCase().includes(searchPromo.toLowerCase()))
+    : (promocoes ?? []);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -418,13 +477,23 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       </div>
 
       <div className="flex items-center justify-between gap-3 shrink-0">
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           {promocoes.length > 0 && (
             <>
               <ExportButton label="PDF"   onClick={() => exportToPDF('Promoções', exportCols, exportRows(), 'logmax-promocoes')} icon={FileDown} />
               <ExportButton label="Excel" onClick={() => exportToExcel('Promoções', exportCols, exportRows(), 'logmax-promocoes')} icon={Sheet} />
             </>
           )}
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchPromo}
+              onChange={e => setSearchPromo(e.target.value)}
+              placeholder="Buscar promoção…"
+              className="neu-input rounded-xl pl-8 pr-3 py-2 text-sm w-[200px]"
+            />
+          </div>
         </div>
         <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}>
           <Plus size={14} />Nova Proposta
@@ -441,32 +510,22 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-produto" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
-                <select id="promo-produto"
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
+                <SearchableSelect
                   value={form.tipo_origem === 'produto' ? form.produto_id : ''}
-                  onChange={e => handleProductChange(e.target.value)}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecione um produto...</option>
-                  {produtosAgrupados.map(g => (
-                    <optgroup key={g.filial} label={g.filial}>
-                      {g.items.map(it => <option key={it.id} value={it.id}>{it.nome}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={handleProductChange}
+                  items={itensProduto}
+                  placeholder="Digite para buscar produto…"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-servico" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
-                <select id="promo-servico"
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
+                <SearchableSelect
                   value={form.tipo_origem === 'servico' ? form.produto_id : ''}
-                  onChange={e => handleProductChange(e.target.value)}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecione um serviço...</option>
-                  {servicosAgrupados.map(g => (
-                    <optgroup key={g.filial} label={g.filial}>
-                      {g.items.map(it => <option key={it.id} value={it.id}>{it.nome}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={handleProductChange}
+                  items={itensServico}
+                  placeholder="Digite para buscar serviço…"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
@@ -551,7 +610,9 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {promocoes.map((p: any) => {
+                  {promocoesFiltradas.length === 0
+                    ? <tr><td colSpan={9} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma promoção encontrada para "{searchPromo}"</td></tr>
+                    : promocoesFiltradas.map((p: any) => {
                     const style = STATUS_STYLE[p.status];
                     return (
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}

@@ -61,6 +61,12 @@ export type LLMRequest = {
   // Tools só são honradas pelo Gemini (ex: { google_search: {} }).
   // OpenRouter ignora — fallback perde grounding mas mantém resposta.
   geminiTools?: any[];
+  // Gemini 2.5+ é "thinking" por padrão e os tokens de raciocínio consomem
+  // o mesmo budget de maxOutputTokens. Em saídas estruturadas/curtas (JSON)
+  // isso pode queimar o budget inteiro e devolver texto vazio com
+  // finishReason=MAX_TOKENS. Passe 0 pra desativar o thinking nesses casos.
+  // Só afeta o provedor Gemini; Groq/OpenRouter ignoram.
+  geminiThinkingBudget?: number;
 };
 
 // Tipo único achatado (em vez de union discriminada) — o tsconfig do
@@ -149,6 +155,9 @@ async function callGeminiOnce(
       maxOutputTokens: req.maxOutputTokens ?? 4000,
       topP:            req.topP            ?? 0.95,
       ...(req.jsonMode ? { responseMimeType: 'application/json' } : {}),
+      ...(req.geminiThinkingBudget !== undefined
+        ? { thinkingConfig: { thinkingBudget: req.geminiThinkingBudget } }
+        : {}),
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
@@ -245,6 +254,11 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   // ─── 1. Gemini com retry em 503/429 ──────────────────────────
   let lastGeminiStatus = 0;
   let lastGeminiMsg: string | undefined;
+  // Resposta parcial do Gemini truncada por MAX_TOKENS em modo JSON:
+  // guardada como último recurso. Preferimos tentar Groq/OpenRouter (que
+  // têm budget/contabilidade próprios e sem overhead de "thinking") e só
+  // caímos nela se todos os fallbacks falharem.
+  let stashedGemini: LLMResult | null = null;
   if (geminiKey) {
     for (let i = 0; i <= RETRY_DELAYS_MS.length; i++) {
       try {
@@ -272,6 +286,15 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
           // Texto vazio sem motivo claro → tenta fallback.
           if (!text.trim()) {
             log.warn('gemini.empty_no_finish', { finish, model: geminiModel });
+            break;
+          }
+
+          // Truncado por MAX_TOKENS em modo JSON: o JSON quase certamente
+          // está cortado e não parseia. Guarda como último recurso e vai
+          // pros fallbacks, que podem entregar o JSON completo.
+          if (finish === 'MAX_TOKENS' && req.jsonMode) {
+            log.warn('gemini.truncated_json', { model: geminiModel });
+            stashedGemini = okResult(text, 'gemini', geminiModel, finish, data);
             break;
           }
 
@@ -374,6 +397,14 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   }
 
   // ─── 4. Todos os provedores falharam ─────────────────────────
+  // Último recurso: se o Gemini truncou em JSON e nenhum fallback entregou,
+  // devolve o parcial. O endpoint tenta parsear (extractJsonBlock recupera
+  // blocos parciais) e, se falhar, mostra a mensagem de MAX_TOKENS.
+  if (stashedGemini) {
+    log.warn('llm.fallback_to_truncated_gemini', { model: geminiModel });
+    return stashedGemini;
+  }
+
   const noKeys = !geminiKey && !groqKey && !openrouterKey;
   if (noKeys) {
     return failResult(500, 'Nenhum provedor de IA configurado no servidor.');

@@ -17,10 +17,32 @@ export const ContasPagarView = ({ showToast }: any) => {
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState('');
+  const [periodoFiltro, setPeriodoFiltro] = useState<'' | 'hoje' | 'semana' | 'mes'>('');
+  const [isExporting, setIsExporting] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, periodoFiltro]);
 
   // Realtime: pedidos aprovados / folhas processadas geram contas a pagar — actualiza-se sozinha (#21).
+  const periodoRange = (() => {
+    const hoje = new Date();
+    const hojeStr = hoje.toISOString().slice(0, 10);
+    if (periodoFiltro === 'hoje') return { inicio: hojeStr, fim: hojeStr };
+    if (periodoFiltro === 'semana') {
+      const day = hoje.getDay();
+      const monday = new Date(hoje);
+      monday.setDate(hoje.getDate() - (day === 0 ? 6 : day - 1));
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return { inicio: monday.toISOString().slice(0, 10), fim: sunday.toISOString().slice(0, 10) };
+    }
+    if (periodoFiltro === 'mes') {
+      const first = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const last = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      return { inicio: first.toISOString().slice(0, 10), fim: last.toISOString().slice(0, 10) };
+    }
+    return null;
+  })();
+
   const extraFilter = filialFiltro ? { filial: filialFiltro } : undefined;
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/contaspagarview', extraFilter, true,
@@ -65,12 +87,16 @@ export const ContasPagarView = ({ showToast }: any) => {
     juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
 
-  const filtered = enriched.filter((c: any) =>
-    [c.descricao, c.status, c.forn?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = enriched.filter((c: any) => {
+    if (periodoRange) {
+      if (!c.vencimento) return false;
+      if (c.vencimento < periodoRange.inicio || c.vencimento > periodoRange.fim) return false;
+    }
+    return [c.descricao, c.status, c.forn?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()));
+  });
 
   const exportCols = ['Empresa', 'Descrição', 'Fornecedor', 'Valor (R$)', 'Vencimento', 'Status'];
-  const exportRows = () => filtered.map((c: any) => [
+  const buildExportRows = (rows: any[]) => rows.map((c: any) => [
     c.filial ?? '—',
     c.descricao ?? '—',
     c.forn?.nome ?? '—',
@@ -79,14 +105,33 @@ export const ContasPagarView = ({ showToast }: any) => {
     c.status ?? '—',
   ]);
 
+  const fetchAllForExport = async (): Promise<any[]> => {
+    if (!supabase) return [];
+    let q = supabase.from('contas_pagar').select('*').eq('ativo', true).order('vencimento', { ascending: true });
+    if (filialFiltro) q = (q as any).eq('filial', filialFiltro);
+    if (periodoRange) q = (q as any).gte('vencimento', periodoRange.inicio).lte('vencimento', periodoRange.fim);
+    const { data: rows, error: err } = await q;
+    if (err) throw new Error(err.message);
+    return (rows ?? []).map((c: any) => ({
+      ...c,
+      forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
+      juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
+    }));
+  };
+
+  const periodoLabel = periodoFiltro === 'hoje' ? ' — Hoje' : periodoFiltro === 'semana' ? ' — Esta Semana' : periodoFiltro === 'mes' ? ' — Este Mês' : '';
+  const exportSlug = [filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral', periodoFiltro || null].filter(Boolean).join('-');
+
   const handleExportPDF = async () => {
+    setIsExporting(true);
     try {
+      const allData = await fetchAllForExport();
       const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
       ]);
       const doc = new jsPDF();
-      const titulo = filialFiltro ? `Contas a Pagar — ${filialFiltro}` : 'Contas a Pagar — Geral';
+      const titulo = `Contas a Pagar — ${filialFiltro || 'Geral'}${periodoLabel}`;
 
       doc.setFillColor(10, 10, 10);
       doc.rect(0, 0, 210, 32, 'F');
@@ -102,31 +147,35 @@ export const ContasPagarView = ({ showToast }: any) => {
       doc.text(titulo, 14, 29);
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
-      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} · ${allData.length} registros`, 210 - 14, 29, { align: 'right' });
 
       autoTable(doc, {
         startY: 38,
         head: [exportCols],
-        body: exportRows(),
+        body: buildExportRows(allData),
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
         alternateRowStyles: { fillColor: [245, 247, 245] },
       });
 
-      const slug = filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral';
-      doc.save(`logmax-contas-pagar-${slug}.pdf`);
+      doc.save(`logmax-contas-pagar-${exportSlug}.pdf`);
     } catch (err: any) {
       showToast(err?.message || 'Falha ao gerar PDF.', 'error', true);
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const handleExportExcel = async () => {
-    const slug = filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral';
+    setIsExporting(true);
     try {
-      await exportToExcel('Contas a Pagar', exportCols, exportRows(), `logmax-contas-pagar-${slug}`);
+      const allData = await fetchAllForExport();
+      await exportToExcel('Contas a Pagar', exportCols, buildExportRows(allData), `logmax-contas-pagar-${exportSlug}`);
     } catch (err: any) {
       showToast(err?.message || 'Falha ao gerar Excel.', 'error', true);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -261,13 +310,21 @@ export const ContasPagarView = ({ showToast }: any) => {
             <option value="">Todas as empresas</option>
             {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
+          <div className="flex gap-1">
+            {(['', 'hoje', 'semana', 'mes'] as const).map(p => (
+              <button key={p || 'todos'} onClick={() => setPeriodoFiltro(p)}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-colors ${periodoFiltro === p ? 'bg-accent/20 text-accent border border-accent/30' : 'neu-button text-gray-500 hover:text-gray-300'}`}>
+                {p === '' ? 'Todos' : p === 'hoje' ? 'Hoje' : p === 'semana' ? 'Semana' : 'Mês'}
+              </button>
+            ))}
+          </div>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar conta..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <button onClick={handleExportPDF} title="Exportar PDF" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300"><FileDown size={15} /> PDF</button>
-          <button onClick={handleExportExcel} title="Exportar Excel" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300"><Sheet size={15} /> Excel</button>
+          <button onClick={handleExportPDF} disabled={isExporting} title="Exportar PDF — todas as contas" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300 disabled:opacity-50"><FileDown size={15} /> {isExporting ? '…' : 'PDF'}</button>
+          <button onClick={handleExportExcel} disabled={isExporting} title="Exportar Excel — todas as contas" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300 disabled:opacity-50"><Sheet size={15} /> {isExporting ? '…' : 'Excel'}</button>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova</NeuButtonAccent>
         </div>
       </div>

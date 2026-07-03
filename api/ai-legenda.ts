@@ -158,6 +158,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       maxOutputTokens: 1500,
       topP:            0.95,
       jsonMode:        true,
+      // gemini-2.5-flash gasta tokens de "thinking" do mesmo budget de
+      // maxOutputTokens. Com 1500 tokens e JSON curto, o raciocínio pode
+      // consumir tudo e devolver vazio (MAX_TOKENS). Legenda não precisa
+      // pensar — desativa o thinking pra sobrar budget pro texto.
+      geminiThinkingBudget: 0,
     }, log);
 
     if (!llm.ok) {

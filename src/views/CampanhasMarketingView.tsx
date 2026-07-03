@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -273,6 +273,7 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
   const [form,      setForm]      = useState<typeof EMPTY_FORM>(EMPTY_FORM);
   const [saving,    setSaving]    = useState(false);
   const [modalCamp, setModalCamp] = useState<Campanha | null>(null);
+  const [searchCamp, setSearchCamp] = useState('');
 
   const canCRUD        = hasSetor(profile, 'marketing');
   const canEditarGasto = canCRUD || hasSetor(profile, 'financeiro');
@@ -282,6 +283,11 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
     for (const r of roi ?? []) m[r.id] = r;
     return m;
   }, [roi]);
+  const campanhasFiltradas = searchCamp
+    ? (campanhas ?? []).filter((c: any) =>
+        (c.nome ?? '').toLowerCase().includes(searchCamp.toLowerCase()) ||
+        (c.objetivo ?? '').toLowerCase().includes(searchCamp.toLowerCase()))
+    : (campanhas ?? []);
 
   const resetForm = () => { setForm(EMPTY_FORM); setEditing(null); setShowForm(false); };
 
@@ -388,7 +394,17 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
           ))}
         </div>
 
-        <div className="flex justify-end shrink-0">
+        <div className="flex items-center justify-between shrink-0">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchCamp}
+              onChange={e => setSearchCamp(e.target.value)}
+              placeholder="Buscar campanha…"
+              className="neu-input rounded-xl pl-8 pr-3 py-2 text-sm w-[200px]"
+            />
+          </div>
           {canCRUD && (
             <NeuButtonAccent variant="" onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus size={14} />Nova Campanha
@@ -484,7 +500,9 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
                 </thead>
                 <tbody>
                   <AnimatePresence>
-                    {campanhas.map((c: any) => {
+                    {campanhasFiltradas.length === 0
+                      ? <tr><td colSpan={10} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma campanha encontrada para "{searchCamp}"</td></tr>
+                      : campanhasFiltradas.map((c: any) => {
                       const r = roiMap[c.id];
                       const receita = Number(r?.receita ?? 0);
                       const vendas  = Number(r?.vendas_count ?? 0);

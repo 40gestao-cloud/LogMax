@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -61,6 +61,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const [saving, setSaving] = useState(false);
   const [recalcBreakdown, setRecalcBreakdown] = useState<{ folhaNome: string; data: RecalcBreakdown } | null>(null);
   const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
+  const [recreditandoId, setRecreditandoId] = useState<string | null>(null);
   const confirm = useConfirm();
 
   // Modal admin: carteira MaxBank do colaborador (saldos + extrato + excluir).
@@ -87,9 +88,48 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const totalDesc = folhasFiltradas.reduce((acc: number, f: any) => acc + Number(f.descontos || 0), 0);
   const totalLiq = folhasFiltradas.reduce((acc: number, f: any) => acc + Number(f.salario_liquido || 0), 0);
   const pendentes = folhasFiltradas.filter((f: any) => f.status === 'Pendente').length;
+  const funcsAtivos = funcionarios.filter((fn: any) => fn.status === 'Ativo').length;
+  const funcsComFolha = new Set(folhasFiltradas.map((f: any) => f.funcionario_id)).size;
+
+  const parseCreditError = (msg: string): string => {
+    if (msg.includes('sem conta de colaborador') || msg.includes('user_profile_id')) {
+      return 'Funcionário sem vínculo no MaxBank. Verifique se o e-mail cadastrado em RH é idêntico ao do usuário no sistema.';
+    }
+    if (msg.includes('líquido inválido') || msg.includes('salario_liquido')) {
+      return 'Salário líquido zerado ou inválido. Edite a folha e confira os valores.';
+    }
+    return msg;
+  };
+
+  const handleRecreditar = async (f: any) => {
+    if (!supabase) return;
+    setRecreditandoId(f.id);
+    try {
+      const { data, error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
+      if (error) {
+        showToast(`Falha ao re-creditar: ${parseCreditError(error.message)}`, 'error');
+      } else {
+        const benef = Number((data as any)?.valor_beneficios ?? f.valor_beneficios ?? 0);
+        showToast(
+          benef > 0
+            ? `Salário e R$ ${benef.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em benefícios creditados no MaxBank.`
+            : 'Saldo já estava creditado (nenhuma alteração) ou foi creditado agora com sucesso.',
+          'success',
+        );
+      }
+    } catch (err: any) {
+      showToast(`Erro ao re-creditar: ${err?.message ?? err}`, 'error');
+    } finally {
+      setRecreditandoId(null);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
+    if (!editId) {
+      const dup = folhas.some((x: any) => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
+      if (dup) { showToast('Já existe folha para este funcionário neste mês. Edite o registro existente.', 'error'); return; }
+    }
     const base = Number(form.salario_base || 0);
     const desc = Number(form.descontos || 0);
     const benef = Number(form.valor_beneficios || 0);
@@ -333,7 +373,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
         const { data, error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
         if (error) {
           console.error('[FolhaPagamento] erro ao creditar MaxBank:', error);
-          showToast(`Folha marcada como Paga, mas falhou ao creditar MaxBank: ${error.message}`, 'error');
+          showToast(`Folha marcada como Paga, mas MaxBank não creditado: ${parseCreditError(error.message)}. Use o botão ↺ na linha para tentar novamente.`, 'error');
         } else {
           const benef = Number((data as any)?.valor_beneficios ?? f.valor_beneficios ?? 0);
           if (benef > 0) {
@@ -389,12 +429,13 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
         <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
         {[
           { label: 'Total Bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { label: 'Total Descontos', value: `R$ ${totalDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { label: 'Total Líquido', value: `R$ ${totalLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { label: 'Folhas Pendentes', value: pendentes, warn: pendentes > 0 },
+          { label: 'Func. com folha', value: `${funcsComFolha} / ${funcsAtivos}`, warn: funcsComFolha < funcsAtivos },
         ].map((k) => (
           <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
@@ -506,6 +547,16 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                               className="action-btn-edit disabled:opacity-50"
                             >
                               <Calculator size={12} />
+                            </button>
+                          )}
+                          {f.status === 'Paga' && (
+                            <button
+                              onClick={() => handleRecreditar(f)}
+                              disabled={recreditandoId === f.id}
+                              title="Re-creditar MaxBank (seguro repetir — idempotente)"
+                              className="action-btn-edit disabled:opacity-50"
+                            >
+                              <RefreshCw size={12} />
                             </button>
                           )}
                           <button

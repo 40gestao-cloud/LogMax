@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -61,6 +61,7 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [searchCup, setSearchCup] = useState('');
 
   const canCRUD = hasSetor(profile, 'marketing');
 
@@ -69,6 +70,11 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
     for (const c of campanhas ?? []) m[c.id] = c.nome;
     return m;
   }, [campanhas]);
+  const cuponsFiltrados = searchCup
+    ? (cupons ?? []).filter((c: any) =>
+        (c.codigo ?? '').toLowerCase().includes(searchCup.toLowerCase()) ||
+        (c.descricao ?? '').toLowerCase().includes(searchCup.toLowerCase()))
+    : (cupons ?? []);
 
   const resetForm = () => { setForm(EMPTY_FORM); setEditing(null); setShowForm(false); };
 
@@ -201,7 +207,17 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
         ))}
       </div>
 
-      <div className="flex justify-end shrink-0">
+      <div className="flex items-center justify-between shrink-0">
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <input
+            type="text"
+            value={searchCup}
+            onChange={e => setSearchCup(e.target.value)}
+            placeholder="Buscar cupom…"
+            className="neu-input rounded-xl pl-8 pr-3 py-2 text-sm w-[200px]"
+          />
+        </div>
         {canCRUD && (
           <NeuButtonAccent variant="" onClick={() => { resetForm(); setShowForm(true); }}>
             <Plus size={14} />Novo Cupom
@@ -343,7 +359,9 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {cupons.map((c: any) => {
+                  {cuponsFiltrados.length === 0
+                    ? <tr><td colSpan={9} className="py-8 text-center text-sm text-gray-600 italic">Nenhum cupom encontrado para "{searchCup}"</td></tr>
+                    : cuponsFiltrados.map((c: any) => {
                     const expirado = c.validade_fim < today;
                     const esgotado = c.limite_uso != null && c.usos >= c.limite_uso;
                     return (
