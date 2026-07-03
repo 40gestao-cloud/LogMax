@@ -245,13 +245,22 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
       </div>
 
       <div>
-        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">Módulos</h3>
         <div className="flex flex-col gap-1.5">
           {visibleModules.map((mod: any) => {
+            // Cabeçalhos de bloco inseridos antes de módulos âncora
+            const blockLabel =
+              mod.id === 'empresa'   ? 'Geral' :
+              mod.id === 'cadastros' ? 'Logística' :
+              null;
             const isOpen = openModules[mod.id];
             const Icon = mod.icon;
             return (
               <div key={mod.id} className="flex flex-col">
+                {blockLabel && (
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2 pt-3 pb-1.5">
+                    {blockLabel}
+                  </p>
+                )}
                 <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
                   <div className="flex items-center gap-3">
                     <Icon size={16}
