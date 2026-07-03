@@ -263,7 +263,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 {blockLabel && (
                   <div className="mt-4 mb-1.5 px-1">
                     <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
-                      style={{ color: '#D4AF37', background: '#D4AF3718', border: '1px solid #D4AF3730' }}>
+                      style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
                       {blockLabel}
                     </span>
                   </div>
