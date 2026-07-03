@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Target, MessageSquare, Award, Settings, Users, ClipboardList, Pencil, Trash2, FileDown, Play, Pause, RefreshCw, StopCircle } from 'lucide-react';
+import { Plus, Check, X as XIcon, Target, MessageSquare, Users, ClipboardList, Pencil, Trash2, FileDown, Play, Pause, RefreshCw, StopCircle } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
@@ -22,6 +22,12 @@ const statusCls = (s: string) => {
   if (s === 'Concluida')   return 'bg-purple-900/30 text-purple-400';
   return 'bg-yellow-900/30 text-yellow-400'; // Pendente
 };
+
+// Badge de resultado para metas encerradas (usa pool_distribuido como proxy)
+const metaResultCls   = (m: any) => m.pool_distribuido
+  ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-700/30'
+  : 'bg-red-950/30 text-red-400 border border-red-800/30';
+const metaResultLabel = (m: any) => m.pool_distribuido ? '✓ Alcançada' : '✗ Não alcançada';
 
 // "Concluida" no status de tarefa = aguardando aprovação
 const statusLabel = (s: string) => s === 'Concluida' ? 'Aguardando' : s;
@@ -57,8 +63,6 @@ const EMPTY_META = {
   titulo: '',
   descricao: '',
   setor: '',
-  bonificacao_equipe: '',
-  limite_bonificacao_individual: '',
   data_inicio: '',
   hora_inicio: '',
   data_fim: '',
@@ -70,7 +74,6 @@ const EMPTY_TAREFA = {
   titulo: '',
   descricao: '',
   colaborador_id: '',
-  valor_bonificacao: '',
   data_inicio: '',
   hora_inicio: '',
   data_fim: '',
@@ -114,23 +117,15 @@ export const MetasView = ({ showToast, profile }: any) => {
   const [detailMeta, setDetailMeta] = useState<any | null>(null);
   const [detailTarefa, setDetailTarefa] = useState<any | null>(null);
 
-  // Threshold da folga conquistada (mantém modelo MaxBank existente).
-  const [threshold, setThreshold] = useState<number>(2500);
-  const [showThresholdEdit, setShowThresholdEdit] = useState(false);
-  const [thresholdDraft, setThresholdDraft] = useState('');
-  const [savingThreshold, setSavingThreshold] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
     (async () => {
-      const [{ data: profs }, { data: cfg }] = await Promise.all([
-        supabase.from('user_profiles')
-          .select('id, nome, email, role, setor, setores_extras, ativo')
-          .order('nome', { ascending: true }),
-        supabase.from('maxbank_config').select('meta_folga_threshold').eq('id', 1).maybeSingle(),
-      ]);
+      const { data: profs } = await supabase
+        .from('user_profiles')
+        .select('id, nome, email, role, setor, setores_extras, ativo')
+        .order('nome', { ascending: true });
       if (profs) setProfiles(profs as Profile[]);
-      if (cfg?.meta_folga_threshold != null) setThreshold(Number(cfg.meta_folga_threshold));
       setLoadingProfiles(false);
     })();
   }, []);
@@ -144,20 +139,14 @@ export const MetasView = ({ showToast, profile }: any) => {
       showToast('Preencha título e período.', 'error');
       return;
     }
-    const bonusEquipe = formMeta.bonificacao_equipe ? parseBRL(formMeta.bonificacao_equipe) : 0;
-    const limite      = formMeta.limite_bonificacao_individual ? parseBRL(formMeta.limite_bonificacao_individual) : 0;
-    if (bonusEquipe < 0 || limite < 0) {
-      showToast('Valores não podem ser negativos.', 'error');
-      return;
-    }
     setSavingMeta(true);
     try {
       const { data: id, error } = await supabase.rpc('criar_meta_estrategica', {
         p_titulo:                        formMeta.titulo.trim(),
         p_descricao:                     formMeta.descricao.trim(),
         p_setor:                         formMeta.setor || null,
-        p_bonificacao_equipe:            bonusEquipe,
-        p_limite_bonificacao_individual: limite,
+        p_bonificacao_equipe:            0,
+        p_limite_bonificacao_individual: 0,
         p_data_inicio:                   formMeta.data_inicio,
         p_data_fim:                      formMeta.data_fim,
         p_hora_inicio:                   formMeta.hora_inicio || null,
@@ -177,36 +166,28 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   const handleConcluirMeta = async (id: string) => {
     if (!supabase) return;
-    if (!await confirm('Concluir esta meta vai dividir a bonificação de equipe entre os colaboradores do setor. Continuar?')) return;
+    if (!await confirm('Concluir esta meta? Esta ação não pode ser desfeita.')) return;
     setBusyId(id);
     try {
-      const { data, error } = await supabase.rpc('concluir_meta_estrategica', { p_meta_id: id });
+      const { error } = await supabase.rpc('concluir_meta_estrategica', { p_meta_id: id });
       if (error) throw error;
-      const r = data as { colaboradores_beneficiados?: number; valor_por_colaborador?: number; folgas_total?: number } | null;
       setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada', pool_distribuido: true, concluida_em: new Date().toISOString() } : m));
-      const colabs = Number(r?.colaboradores_beneficiados ?? 0);
-      const valor  = Number(r?.valor_por_colaborador ?? 0);
-      const folgas = Number(r?.folgas_total ?? 0);
-      if (colabs > 0 && valor > 0) {
-        showToast(`Meta concluída — ${fmtBRL(valor)} para cada um dos ${colabs} colaboradores${folgas > 0 ? ` + ${folgas} folga(s) conquistada(s)` : ''}.`, 'success');
-      } else {
-        showToast('Meta concluída.', 'success');
-      }
+      showToast('Meta concluída.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
     setBusyId(null);
   };
 
-  const handleCancelarMeta = async (id: string) => {
+  const handleNaoAlcancadaMeta = async (id: string) => {
     if (!supabase) return;
-    if (!await confirm('Cancelar esta meta? Nenhuma bonificação de equipe será paga.')) return;
+    if (!await confirm('Marcar esta meta como não alcançada?')) return;
     setBusyId(id);
     try {
       const { error } = await supabase.rpc('cancelar_meta_estrategica', { p_meta_id: id });
       if (error) throw error;
-      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada' } : m));
-      showToast('Meta encerrada.', 'success');
+      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada', pool_distribuido: false } : m));
+      showToast('Meta marcada como não alcançada.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
@@ -216,15 +197,13 @@ export const MetasView = ({ showToast, profile }: any) => {
   const abrirEdicaoMeta = (m: any) => {
     setEditMetaId(m.id);
     setFormMeta({
-      titulo:                          m.titulo ?? '',
-      descricao:                       m.descricao ?? '',
-      setor:                           m.setor ?? '',
-      bonificacao_equipe:              formatBRL(String(Number(m.bonificacao_equipe ?? 0).toFixed(2))),
-      limite_bonificacao_individual:   formatBRL(String(Number(m.limite_bonificacao_individual ?? 0).toFixed(2))),
-      data_inicio:                     m.data_inicio ?? '',
-      hora_inicio:                     m.hora_inicio ?? '',
-      data_fim:                        m.data_fim ?? '',
-      hora_fim:                        m.hora_fim ?? '',
+      titulo:      m.titulo ?? '',
+      descricao:   m.descricao ?? '',
+      setor:       m.setor ?? '',
+      data_inicio: m.data_inicio ?? '',
+      hora_inicio: m.hora_inicio ?? '',
+      data_fim:    m.data_fim ?? '',
+      hora_fim:    m.hora_fim ?? '',
     });
     setShowFormMeta(true);
     requestAnimationFrame(() => formMetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -242,12 +221,6 @@ export const MetasView = ({ showToast, profile }: any) => {
       showToast('Preencha título e período.', 'error');
       return;
     }
-    const bonusEquipe = formMeta.bonificacao_equipe ? parseBRL(formMeta.bonificacao_equipe) : 0;
-    const limite      = formMeta.limite_bonificacao_individual ? parseBRL(formMeta.limite_bonificacao_individual) : 0;
-    if (bonusEquipe < 0 || limite < 0) {
-      showToast('Valores não podem ser negativos.', 'error');
-      return;
-    }
     setSavingMeta(true);
     try {
       const { error } = await supabase.rpc('editar_meta_estrategica', {
@@ -255,8 +228,8 @@ export const MetasView = ({ showToast, profile }: any) => {
         p_titulo:                        formMeta.titulo.trim(),
         p_descricao:                     formMeta.descricao.trim(),
         p_setor:                         formMeta.setor || null,
-        p_bonificacao_equipe:            bonusEquipe,
-        p_limite_bonificacao_individual: limite,
+        p_bonificacao_equipe:            0,
+        p_limite_bonificacao_individual: 0,
         p_data_inicio:                   formMeta.data_inicio,
         p_data_fim:                      formMeta.data_fim,
         p_hora_inicio:                   formMeta.hora_inicio || null,
@@ -265,15 +238,13 @@ export const MetasView = ({ showToast, profile }: any) => {
       if (error) throw error;
       setMetas((prev: any[]) => prev.map(m => m.id === editMetaId ? {
         ...m,
-        titulo:                        formMeta.titulo.trim(),
-        descricao:                     formMeta.descricao.trim(),
-        setor:                         formMeta.setor || null,
-        hora_inicio:                   formMeta.hora_inicio || null,
-        hora_fim:                      formMeta.hora_fim || null,
-        bonificacao_equipe:            bonusEquipe,
-        limite_bonificacao_individual: limite,
-        data_inicio:                   formMeta.data_inicio,
-        data_fim:                      formMeta.data_fim,
+        titulo:      formMeta.titulo.trim(),
+        descricao:   formMeta.descricao.trim(),
+        setor:       formMeta.setor || null,
+        hora_inicio: formMeta.hora_inicio || null,
+        hora_fim:    formMeta.hora_fim || null,
+        data_inicio: formMeta.data_inicio,
+        data_fim:    formMeta.data_fim,
       } : m));
       showToast('Meta atualizada.', 'success');
       fecharFormMeta();
@@ -344,19 +315,11 @@ export const MetasView = ({ showToast, profile }: any) => {
       });
   }, [profiles, profile, metaSelecionada, podeCriarTarefa, isAdmin, isGerente]);
 
-  const limiteMetaSelecionada = Number(metaSelecionada?.limite_bonificacao_individual ?? 0);
-
   const handleCriarTarefa = async () => {
     if (!supabase) return;
     if (!formTarefa.meta_estrategica_id || !formTarefa.titulo.trim() ||
         !formTarefa.data_inicio || !formTarefa.data_fim) {
       showToast('Preencha meta, título e período.', 'error');
-      return;
-    }
-    const valor = formTarefa.valor_bonificacao ? parseBRL(formTarefa.valor_bonificacao) : 0;
-    if (valor < 0) { showToast('Valor não pode ser negativo.', 'error'); return; }
-    if (limiteMetaSelecionada > 0 && valor > limiteMetaSelecionada) {
-      showToast(`Valor excede o limite da meta (${fmtBRL(limiteMetaSelecionada)}).`, 'error');
       return;
     }
     setSavingTarefa(true);
@@ -366,7 +329,7 @@ export const MetasView = ({ showToast, profile }: any) => {
         p_titulo:              formTarefa.titulo.trim(),
         p_descricao:           formTarefa.descricao.trim(),
         p_colaborador_id:      formTarefa.colaborador_id || null,
-        p_valor_bonificacao:   valor,
+        p_valor_bonificacao:   0,
         p_data_inicio:         formTarefa.data_inicio,
         p_data_fim:            formTarefa.data_fim,
         p_hora_inicio:         formTarefa.hora_inicio || null,
@@ -404,18 +367,12 @@ export const MetasView = ({ showToast, profile }: any) => {
     if (!supabase) return;
     setBusyId(id);
     try {
-      const { data, error } = await supabase.rpc('aprovar_tarefa_tatica', { p_tarefa_id: id });
+      const { error } = await supabase.rpc('aprovar_tarefa_tatica', { p_tarefa_id: id });
       if (error) throw error;
-      const r = data as { folgas_geradas?: number } | null;
       setTarefas((prev: any[]) => prev.map(t => t.id === id
         ? { ...t, status: 'Aprovada', aprovada_em: new Date().toISOString(), aprovada_por: profile?.id }
         : t));
-      const folgas = Number(r?.folgas_geradas ?? 0);
-      if (folgas > 0) {
-        showToast(`Tarefa aprovada — bonificação creditada e ${folgas} folga(s) conquistada(s)!`, 'success');
-      } else {
-        showToast('Tarefa aprovada — bonificação creditada na carteira.', 'success');
-      }
+      showToast('Tarefa aprovada.', 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? err}`, 'error');
     }
@@ -443,22 +400,6 @@ export const MetasView = ({ showToast, profile }: any) => {
     setBusyId(null);
   };
 
-  const handleSaveThreshold = async () => {
-    if (!supabase) return;
-    const v = parseBRL(thresholdDraft);
-    if (v <= 0) { showToast('Valor deve ser positivo.', 'error'); return; }
-    setSavingThreshold(true);
-    try {
-      const { error } = await supabase.rpc('set_maxbank_threshold', { p_valor: v });
-      if (error) throw error;
-      setThreshold(v);
-      setShowThresholdEdit(false);
-      showToast('Limite da folga atualizado.', 'success');
-    } catch (err: any) {
-      showToast(`Erro: ${err?.message ?? err}`, 'error');
-    }
-    setSavingThreshold(false);
-  };
 
   // ── Ciclo de vida — Metas ─────────────────────────────────────────
   const handlePublicarMeta = async (id: string) => {
@@ -485,18 +426,6 @@ export const MetasView = ({ showToast, profile }: any) => {
     setBusyId(null);
   };
 
-  const handleEncerrarMeta = async (id: string) => {
-    if (!supabase) return;
-    if (!await confirm('Encerrar esta meta sem distribuir o pool? Esta ação pode ser revertida.')) return;
-    setBusyId(id);
-    try {
-      const { error } = await supabase.rpc('encerrar_meta_estrategica', { p_meta_id: id });
-      if (error) throw error;
-      setMetas((prev: any[]) => prev.map(m => m.id === id ? { ...m, status: 'Encerrada' } : m));
-      showToast('Meta encerrada.', 'success');
-    } catch (err: any) { showToast(`Erro: ${err?.message ?? err}`, 'error'); }
-    setBusyId(null);
-  };
 
   const handleReabrirMeta = async (id: string) => {
     if (!supabase) return;
@@ -560,11 +489,11 @@ export const MetasView = ({ showToast, profile }: any) => {
     setBusyId(null);
   };
 
-  const gerarPdfMeta = (m: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { jsPDF } = require('jspdf');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('jspdf-autotable');
+  const gerarPdfMeta = async (m: any) => {
+    if (!await confirm({ message: `Baixar PDF da meta "${m.titulo || m.descricao}"?`, confirmLabel: 'Baixar', danger: false })) return;
+    const { jsPDF } = await import('jspdf');
+    const { applyPlugin } = await import('jspdf-autotable');
+    applyPlugin(jsPDF);
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const accent = [34, 197, 94] as [number, number, number]; // verde
 
@@ -597,8 +526,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       body: [
         ['Setor alvo', m.setor ? labelSetorOpcao(m.setor) : 'Todos os setores'],
         ['Período', `${m.data_inicio} → ${m.data_fim}`],
-        ['Pool da equipe', fmtBRL(Number(m.bonificacao_equipe ?? 0))],
-        ['Limite individual por tarefa', fmtBRL(Number(m.limite_bonificacao_individual ?? 0))],
+        ...(m.status === 'Encerrada' ? [['Resultado', m.pool_distribuido ? 'Alcançada' : 'Não alcançada']] : []),
       ],
       headStyles: { fillColor: accent, fontSize: 9, fontStyle: 'bold' },
       bodyStyles: { fontSize: 10 },
@@ -609,11 +537,11 @@ export const MetasView = ({ showToast, profile }: any) => {
     doc.save(`meta-estrategica-${m.id?.slice(0, 8) ?? 'doc'}.pdf`);
   };
 
-  const gerarPdfTarefa = (t: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { jsPDF } = require('jspdf');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('jspdf-autotable');
+  const gerarPdfTarefa = async (t: any) => {
+    if (!await confirm({ message: `Baixar PDF da tarefa "${t.titulo || t.descricao}"?`, confirmLabel: 'Baixar', danger: false })) return;
+    const { jsPDF } = await import('jspdf');
+    const { applyPlugin } = await import('jspdf-autotable');
+    applyPlugin(jsPDF);
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const accent = [34, 197, 94] as [number, number, number];
     const colabNome = t.colaborador?.nome ?? t.colaborador?.email ?? '—';
@@ -655,7 +583,6 @@ export const MetasView = ({ showToast, profile }: any) => {
       body: [
         ['Colaborador', colabNome],
         ['Setor', t.setor ? labelSetorOpcao(t.setor) : '—'],
-        ['Bonificação', fmtBRL(Number(t.valor_bonificacao ?? 0))],
         ['Período', `${t.data_inicio} → ${t.data_fim}`],
       ],
       headStyles: { fillColor: accent, fontSize: 9, fontStyle: 'bold' },
@@ -697,16 +624,15 @@ export const MetasView = ({ showToast, profile }: any) => {
 
   // KPIs por tab
   const kpisMetas = [
-    { label: 'Em Produção', value: metas.filter((m: any) => m.status === 'Em Produção').length },
-    { label: 'Concluídas', value: metas.filter((m: any) => m.status === 'Encerrada' && m.pool_distribuido).length },
-    { label: 'Bonificação acumulada', value: fmtBRL(metas.reduce((acc: number, m: any) => acc + Number(m.bonificacao_equipe ?? 0), 0)), isText: true },
+    { label: 'Em Produção',   value: metas.filter((m: any) => m.status === 'Em Produção').length },
+    { label: 'Alcançadas',    value: metas.filter((m: any) => m.status === 'Encerrada' && m.pool_distribuido).length },
+    { label: 'Não alcançadas', value: metas.filter((m: any) => m.status === 'Encerrada' && !m.pool_distribuido).length },
   ];
 
   const kpisTarefas = [
-    { label: 'Pendentes',  value: tarefas.filter((t: any) => t.status === 'Pendente').length },
+    { label: 'Pendentes',            value: tarefas.filter((t: any) => t.status === 'Pendente').length },
     { label: 'Aguardando aprovação', value: tarefas.filter((t: any) => t.status === 'Concluida').length, warn: tarefas.some((t: any) => t.status === 'Concluida') },
-    { label: 'Aprovadas',  value: tarefas.filter((t: any) => t.status === 'Aprovada').length },
-    { label: 'Total bonificado', value: fmtBRL(tarefas.filter((t: any) => t.status === 'Aprovada').reduce((acc: number, t: any) => acc + Number(t.valor_bonificacao ?? 0), 0)), isText: true },
+    { label: 'Aprovadas',            value: tarefas.filter((t: any) => t.status === 'Aprovada').length },
   ];
 
   return (
@@ -718,16 +644,9 @@ export const MetasView = ({ showToast, profile }: any) => {
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Metas</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Estratégicas (admin/CEO → gerente) e Tarefas (gerente → colaborador). A cada {' '}
-            <span className="text-accent font-bold">{fmtBRL(threshold)}</span> em bonificações o colaborador conquista uma folga.
+            Estratégicas (admin/CEO) e Tarefas Táticas (gerente → colaborador).
           </p>
         </div>
-        {isAdmin && (
-          <button onClick={() => { setThresholdDraft(formatBRL(threshold)); setShowThresholdEdit(true); }}
-            className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-gray-500 hover:text-accent transition-colors px-3 py-2 neu-button rounded-xl">
-            <Settings size={12} />Ajustar limite
-          </button>
-        )}
       </div>
 
       {/* Tabs */}
@@ -813,24 +732,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Bonificação de equipe (pool R$)</label>
-                <input type="text" inputMode="numeric" value={formMeta.bonificacao_equipe}
-                  onChange={e => setFormMeta(p => ({ ...p, bonificacao_equipe: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  placeholder="0,00"
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                <span className="text-[10px] text-gray-500">Dividido igualmente ao concluir a meta.</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Limite individual (R$)</label>
-                <input type="text" inputMode="numeric" value={formMeta.limite_bonificacao_individual}
-                  onChange={e => setFormMeta(p => ({ ...p, limite_bonificacao_individual: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  placeholder="0,00"
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                <span className="text-[10px] text-gray-500">Teto por tarefa que o gerente atribui.</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
                 <input type="date" value={formMeta.data_inicio}
                   onChange={e => setFormMeta(p => ({ ...p, data_inicio: e.target.value }))}
@@ -879,12 +780,12 @@ export const MetasView = ({ showToast, profile }: any) => {
               <div className="flex flex-col gap-1.5 lg:col-span-2">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Meta Estratégica *</label>
                 <select value={formTarefa.meta_estrategica_id}
-                  onChange={e => setFormTarefa(p => ({ ...p, meta_estrategica_id: e.target.value, colaborador_id: '', valor_bonificacao: '' }))}
+                  onChange={e => setFormTarefa(p => ({ ...p, meta_estrategica_id: e.target.value, colaborador_id: '' }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
                   {metasElegiveis.map((m: any) => (
                     <option key={m.id} value={m.id}>
-                      {m.titulo || m.descricao} — {m.setor ? labelSetorOpcao(m.setor) : 'Todos'} (limite {fmtBRL(Number(m.limite_bonificacao_individual ?? 0))})
+                      {m.titulo || m.descricao} — {m.setor ? labelSetorOpcao(m.setor) : 'Todos'}
                     </option>
                   ))}
                 </select>
@@ -915,17 +816,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                   placeholder="Detalhes, critérios, contexto..."
                   rows={3}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  Bonificação individual (R$) {limiteMetaSelecionada > 0 && <span className="text-gray-400">— máx {fmtBRL(limiteMetaSelecionada)}</span>}
-                </label>
-                <input type="text" inputMode="numeric" value={formTarefa.valor_bonificacao}
-                  onChange={e => setFormTarefa(p => ({ ...p, valor_bonificacao: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  disabled={!metaSelecionada}
-                  placeholder="0,00"
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-40" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
@@ -972,8 +862,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                 <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4">Setor</th>
-                  <th className="pb-4 font-bold px-4 text-right">Pool Equipe</th>
-                  <th className="pb-4 font-bold px-4 text-right">Limite Indiv.</th>
                   <th className="pb-4 font-bold px-4 text-center">Período</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
                   <th className="pb-4 font-bold px-4" />
@@ -991,17 +879,18 @@ export const MetasView = ({ showToast, profile }: any) => {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-300">{m.setor ? labelSetorOpcao(m.setor) : <span className="text-gray-500 italic">Todos</span>}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(m.bonificacao_equipe ?? 0))}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-right text-gray-400">{fmtBRL(Number(m.limite_bonificacao_individual ?? 0))}</td>
                         <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{m.data_inicio} → {m.data_fim}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(m.status)}`}>{m.status}</span>
+                          {m.status === 'Encerrada'
+                            ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${metaResultCls(m)}`}>{metaResultLabel(m)}</span>
+                            : <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCls(m.status)}`}>{m.status}</span>
+                          }
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex gap-1.5 justify-end items-center">
                             {(isAdmin || isGerente) && (
                               <button onClick={(e) => { e.stopPropagation(); gerarPdfMeta(m); }}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"
+                                className="action-btn-pdf"
                                 title="Baixar PDF">
                                 <FileDown size={13} />
                               </button>
@@ -1011,7 +900,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                                 {(m.status === 'Rascunho' || m.status === 'Pausada') && (
                                   <button onClick={(e) => { e.stopPropagation(); handlePublicarMeta(m.id); }}
                                     disabled={busyId === m.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                    className="action-btn-success"
                                     title={m.status === 'Rascunho' ? 'Publicar (enviar para gerentes)' : 'Retomar'}>
                                     <Play size={13} />
                                   </button>
@@ -1020,13 +909,19 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   <>
                                     <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
                                       disabled={busyId === m.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
-                                      title="Concluir e distribuir pool">
+                                      className="action-btn-success"
+                                      title="Marcar como Alcançada">
                                       <Check size={13} />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleNaoAlcancadaMeta(m.id); }}
+                                      disabled={busyId === m.id}
+                                      className="action-btn-delete"
+                                      title="Marcar como Não alcançada">
+                                      <XIcon size={13} />
                                     </button>
                                     <button onClick={(e) => { e.stopPropagation(); handlePausarMeta(m.id); }}
                                       disabled={busyId === m.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-yellow-400 transition-colors disabled:opacity-50"
+                                      className="action-btn-purple"
                                       title="Pausar">
                                       <Pause size={13} />
                                     </button>
@@ -1035,23 +930,15 @@ export const MetasView = ({ showToast, profile }: any) => {
                                 {(m.status === 'Rascunho' || m.status === 'Em Produção') && (
                                   <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMeta(m); }}
                                     disabled={busyId === m.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                    className="action-btn-blue"
                                     title="Editar meta">
                                     <Pencil size={13} />
                                   </button>
                                 )}
-                                {m.status !== 'Encerrada' && (
-                                  <button onClick={(e) => { e.stopPropagation(); handleEncerrarMeta(m.id); }}
-                                    disabled={busyId === m.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
-                                    title="Encerrar (sem distribuir pool)">
-                                    <StopCircle size={13} />
-                                  </button>
-                                )}
-                                {m.status === 'Encerrada' && !m.pool_distribuido && (
+                                {m.status === 'Encerrada' && (
                                   <button onClick={(e) => { e.stopPropagation(); handleReabrirMeta(m.id); }}
                                     disabled={busyId === m.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                    className="action-btn-neutral"
                                     title="Reabrir meta">
                                     <RefreshCw size={13} />
                                   </button>
@@ -1059,15 +946,10 @@ export const MetasView = ({ showToast, profile }: any) => {
                                 {m.status !== 'Encerrada' && (
                                   <button onClick={(e) => { e.stopPropagation(); handleApagarMeta(m.id); }}
                                     disabled={busyId === m.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                    className="action-btn-delete"
                                     title="Apagar meta e tarefas vinculadas">
                                     <Trash2 size={13} />
                                   </button>
-                                )}
-                                {m.status === 'Encerrada' && m.pool_distribuido && (
-                                  <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
-                                    <Award size={11} />Distribuída
-                                  </span>
                                 )}
                               </>
                             )}
@@ -1101,7 +983,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <th className="pb-4 font-bold px-4">Colaborador</th>
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4">Meta</th>
-                  <th className="pb-4 font-bold px-4 text-right">Valor</th>
                   <th className="pb-4 font-bold px-4 text-center">Período</th>
                   <th className="pb-4 font-bold px-4 text-center">Situação</th>
                   <th className="pb-4 font-bold px-4 text-center">Aprovação</th>
@@ -1134,7 +1015,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                           <td className="py-3 px-4 text-[11px] text-gray-400 max-w-[180px]">
                             <span className="truncate block" title="Clique para ler">{t.meta?.titulo || t.meta?.descricao || '—'}</span>
                           </td>
-                          <td className="py-3 px-4 text-xs font-mono text-right text-gray-200">{fmtBRL(Number(t.valor_bonificacao ?? 0))}</td>
                           <td className="py-3 px-4 text-[10px] font-mono text-center text-gray-400">{t.data_inicio} → {t.data_fim}</td>
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${situacaoCls(t.situacao ?? 'Em Produção')}`}>{t.situacao ?? 'Em Produção'}</span>
@@ -1146,7 +1026,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                             <div className="flex gap-1.5 justify-end items-center">
                               {(isAdmin || isGerente || sou_alvo) && (
                                 <button onClick={(e) => { e.stopPropagation(); gerarPdfTarefa(t); }}
-                                  className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors"
+                                  className="action-btn-pdf"
                                   title="Baixar PDF">
                                   <FileDown size={13} />
                                 </button>
@@ -1157,7 +1037,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   {(t.situacao === 'Rascunho' || t.situacao === 'Pausada') && (
                                     <button onClick={(e) => { e.stopPropagation(); handlePublicarTarefa(t.id); }}
                                       disabled={busyId === t.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                      className="action-btn-success"
                                       title={t.situacao === 'Rascunho' ? 'Publicar (enviar para colaborador)' : 'Retomar'}>
                                       <Play size={13} />
                                     </button>
@@ -1165,7 +1045,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   {t.situacao === 'Em Produção' && t.status === 'Pendente' && (
                                     <button onClick={(e) => { e.stopPropagation(); handlePausarTarefa(t.id); }}
                                       disabled={busyId === t.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-yellow-400 transition-colors disabled:opacity-50"
+                                      className="action-btn-purple"
                                       title="Pausar">
                                       <Pause size={13} />
                                     </button>
@@ -1173,7 +1053,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   {t.situacao !== 'Encerrada' && t.status === 'Pendente' && (
                                     <button onClick={(e) => { e.stopPropagation(); handleEncerrarTarefa(t.id); }}
                                       disabled={busyId === t.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                      className="action-btn-gray"
                                       title="Encerrar tarefa">
                                       <StopCircle size={13} />
                                     </button>
@@ -1181,7 +1061,7 @@ export const MetasView = ({ showToast, profile }: any) => {
                                   {t.situacao === 'Encerrada' && t.status === 'Pendente' && (
                                     <button onClick={(e) => { e.stopPropagation(); handleReabrirTarefa(t.id); }}
                                       disabled={busyId === t.id}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                      className="action-btn-neutral"
                                       title="Reabrir tarefa">
                                       <RefreshCw size={13} />
                                     </button>
@@ -1192,30 +1072,26 @@ export const MetasView = ({ showToast, profile }: any) => {
                               {t.situacao === 'Em Produção' && t.status === 'Pendente' && sou_alvo && (
                                 <button onClick={(e) => { e.stopPropagation(); handleConcluirTarefa(t.id); }}
                                   disabled={busyId === t.id}
-                                  className="text-[10px] text-blue-400 hover:underline transition-colors font-bold disabled:opacity-50">
-                                  Concluir
+                                  className="action-btn-blue"
+                                  title="Concluir tarefa">
+                                  <Check size={13} />
                                 </button>
                               )}
                               {t.status === 'Concluida' && aprovavel && (
                                 <>
                                   <button onClick={(e) => { e.stopPropagation(); handleAprovarTarefa(t.id); }}
                                     disabled={busyId === t.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors disabled:opacity-50"
+                                    className="action-btn-success"
                                     title="Aprovar e creditar">
                                     <Check size={13} />
                                   </button>
                                   <button onClick={(e) => { e.stopPropagation(); setRejectId(t.id); setRejectFeedback(''); }}
                                     disabled={busyId === t.id}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                                    className="action-btn-delete"
                                     title="Rejeitar">
                                     <XIcon size={13} />
                                   </button>
                                 </>
-                              )}
-                              {t.status === 'Aprovada' && (
-                                <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
-                                  <Award size={11} />Creditado
-                                </span>
                               )}
                             </div>
                           </td>
@@ -1244,7 +1120,10 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <Target size={16} className="text-accent shrink-0" />
                   <h3 className="text-base font-bold text-gray-200">Meta Estratégica</h3>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
+                {detailMeta.status === 'Encerrada'
+                  ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${metaResultCls(detailMeta)}`}>{metaResultLabel(detailMeta)}</span>
+                  : <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${statusCls(detailMeta.status)}`}>{detailMeta.status}</span>
+                }
               </div>
               <div className="mb-3">
                 <p className="text-lg font-bold text-gray-100 leading-snug">{detailMeta.titulo || detailMeta.descricao}</p>
@@ -1264,19 +1143,11 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Período</p>
                   <p className="text-sm font-mono text-gray-200">{detailMeta.data_inicio}{detailMeta.hora_inicio ? ` ${detailMeta.hora_inicio}` : ''} → {detailMeta.data_fim}{detailMeta.hora_fim ? ` ${detailMeta.hora_fim}` : ''}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Pool da equipe</p>
-                  <p className="text-sm font-mono text-accent font-bold">{fmtBRL(Number(detailMeta.bonificacao_equipe ?? 0))}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Limite individual</p>
-                  <p className="text-sm font-mono text-gray-200">{fmtBRL(Number(detailMeta.limite_bonificacao_individual ?? 0))}</p>
-                </div>
               </div>
               <div className="flex justify-between items-center">
                 {(isAdmin || isGerente) && (
                   <button onClick={() => gerarPdfMeta(detailMeta)}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-accent px-3 py-2 transition-colors neu-button rounded-xl">
+                    className="action-btn-pdf-lg">
                     <FileDown size={13} />PDF
                   </button>
                 )}
@@ -1328,10 +1199,6 @@ export const MetasView = ({ showToast, profile }: any) => {
                   <p className="text-sm font-mono text-gray-200">{detailTarefa.data_inicio}{detailTarefa.hora_inicio ? ` ${detailTarefa.hora_inicio}` : ''} → {detailTarefa.data_fim}{detailTarefa.hora_fim ? ` ${detailTarefa.hora_fim}` : ''}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Bonificação</p>
-                  <p className="text-sm font-mono text-accent font-bold">{fmtBRL(Number(detailTarefa.valor_bonificacao ?? 0))}</p>
-                </div>
-                <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Setor</p>
                   <p className="text-sm text-gray-200">{detailTarefa.setor ? labelSetorOpcao(detailTarefa.setor) : '—'}</p>
                 </div>
@@ -1347,39 +1214,12 @@ export const MetasView = ({ showToast, profile }: any) => {
               <div className="flex justify-between items-center">
                 {(isAdmin || isGerente || detailTarefa.colaborador_id === profile?.id) && (
                   <button onClick={() => gerarPdfTarefa(detailTarefa)}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-accent px-3 py-2 transition-colors neu-button rounded-xl">
+                    className="action-btn-pdf-lg">
                     <FileDown size={13} />PDF
                   </button>
                 )}
                 <button onClick={() => setDetailTarefa(null)}
                   className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors ml-auto">Fechar</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-        {showThresholdEdit && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-            onClick={() => setShowThresholdEdit(false)}>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/5 max-w-md w-full">
-              <h3 className="text-base font-bold text-gray-200 mb-2">Limite para folga conquistada</h3>
-              <p className="text-xs text-gray-400 mb-4">
-                Quando o colaborador acumula este valor em bonificações aprovadas (estratégicas ou táticas), ganha uma folga automática.
-              </p>
-              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Valor (R$)</label>
-              <input type="text" inputMode="numeric" value={thresholdDraft}
-                onChange={e => setThresholdDraft(formatBRL(e.target.value))}
-                onKeyDown={handleMoneyKeyDown}
-                placeholder="2.500,00"
-                className="neu-input rounded-xl px-3 py-2.5 text-sm w-full mt-1 mb-4" />
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowThresholdEdit(false)}
-                  className="text-xs text-gray-400 hover:text-gray-200 px-3 py-2 transition-colors">Cancelar</button>
-                <NeuButtonAccent variant="" onClick={handleSaveThreshold} disabled={savingThreshold}>
-                  {savingThreshold ? 'Salvando...' : 'Salvar'}
-                </NeuButtonAccent>
               </div>
             </motion.div>
           </motion.div>

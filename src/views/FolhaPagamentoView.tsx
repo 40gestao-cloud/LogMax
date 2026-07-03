@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -56,6 +56,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
   const hoje = new Date().toISOString().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
   const [showForm, setShowForm] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -170,6 +171,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       status:           f.status        ?? 'Pendente',
     });
     setShowForm(true);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const handleDelete = async (folha: any) => {
@@ -455,8 +457,8 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Folha' : 'Registrar Folha'}</h3>
               <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
@@ -544,7 +546,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                               onClick={() => handleRecalcular(f)}
                               disabled={recalcLoading === f.id}
                               title="Recalcular do Ponto"
-                              className="action-btn-edit disabled:opacity-50"
+                              className="action-btn-purple disabled:opacity-50"
                             >
                               <Calculator size={12} />
                             </button>
@@ -563,7 +565,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                             onClick={() => abrirCarteira(f)}
                             disabled={carteiraLoading}
                             title="Ver carteira MaxBank do colaborador"
-                            className="action-btn-edit disabled:opacity-50"
+                            className="action-btn-success disabled:opacity-50"
                           >
                             <Wallet size={12} />
                           </button>

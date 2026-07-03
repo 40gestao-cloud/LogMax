@@ -1082,6 +1082,201 @@ html.theme-switching *::after {
   );
 }
 
+/* ── Action button "Concluir" — glass verde + shimmer ── */
+.action-btn-success {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  color: rgb(74, 222, 128);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-success:hover { background: rgba(34, 197, 94, 0.26); border-color: rgba(34, 197, 94, 0.5); color: rgb(134, 239, 172); }
+.action-btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-success::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(134, 239, 172, 0.22) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-success:disabled::before { animation-play-state: paused; }
+
+/* ── Action button "Pausar" — glass roxo + shimmer ── */
+.action-btn-purple {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  color: rgb(167, 139, 250);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-purple:hover { background: rgba(139, 92, 246, 0.26); border-color: rgba(139, 92, 246, 0.5); color: rgb(196, 181, 253); }
+.action-btn-purple:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-purple::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(196, 181, 253, 0.22) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-purple:disabled::before { animation-play-state: paused; }
+
+/* ── Action button "Editar" (metas) — glass azul + shimmer ── */
+.action-btn-blue {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.32);
+  color: rgb(96, 165, 250);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-blue:hover { background: rgba(59, 130, 246, 0.26); border-color: rgba(59, 130, 246, 0.5); color: rgb(147, 197, 253); }
+.action-btn-blue:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-blue::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(147, 197, 253, 0.22) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-blue:disabled::before { animation-play-state: paused; }
+
+/* ── Action button "Encerrar" — glass cinza + shimmer ── */
+.action-btn-gray {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: rgba(107, 114, 128, 0.18);
+  border: 1px solid rgba(107, 114, 128, 0.35);
+  color: rgb(156, 163, 175);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-gray:hover { background: rgba(107, 114, 128, 0.30); border-color: rgba(107, 114, 128, 0.55); color: rgb(209, 213, 219); }
+.action-btn-gray:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-gray::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(209, 213, 219, 0.18) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-gray:disabled::before { animation-play-state: paused; }
+
+/* ── Action button "PDF" — glass preto + shimmer dourado ── */
+.action-btn-pdf {
+  position: relative;
+  overflow: hidden;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.30);
+  color: rgb(212, 175, 55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.action-btn-pdf:hover {
+  background: rgba(0, 0, 0, 0.72);
+  border-color: rgba(212, 175, 55, 0.55);
+  color: rgb(234, 201, 83);
+}
+
+.action-btn-pdf:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-pdf::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(212, 175, 55, 0.22) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.action-btn-pdf:disabled::before {
+  animation-play-state: paused;
+}
+
+/* Variante maior para uso dentro de modais (com label de texto) */
+.action-btn-pdf-lg {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.30);
+  color: rgb(212, 175, 55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.action-btn-pdf-lg:hover {
+  background: rgba(0, 0, 0, 0.72);
+  border-color: rgba(212, 175, 55, 0.55);
+  color: rgb(234, 201, 83);
+}
+
+.action-btn-pdf-lg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(212, 175, 55, 0.22) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+[data-theme="light"] .action-btn-pdf {
+  background: rgba(0, 0, 0, 0.72);
+  border-color: rgba(212, 175, 55, 0.45);
+  color: rgb(212, 175, 55);
+}
+[data-theme="light"] .action-btn-pdf:hover {
+  background: rgba(0, 0, 0, 0.88);
+  border-color: rgba(212, 175, 55, 0.65);
+}
+[data-theme="light"] .action-btn-pdf-lg {
+  background: rgba(0, 0, 0, 0.72);
+  border-color: rgba(212, 175, 55, 0.45);
+  color: rgb(212, 175, 55);
+}
+[data-theme="light"] .action-btn-pdf-lg:hover {
+  background: rgba(0, 0, 0, 0.88);
+  border-color: rgba(212, 175, 55, 0.65);
+}
+
 /* ── Hover destacado dos itens da sidebar ──
    Botão top-level e botões de módulo. No hover: salta 2px, ganha cor
    do accent, borda accent e glow sutil — usa a variável --color-accent
