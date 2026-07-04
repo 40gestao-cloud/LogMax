@@ -110,8 +110,8 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
                 (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.05)';
               }}
             >
-              {/* Logo — sem blur externo, fundo neutro escuro */}
-              <div className="w-24 h-24 rounded-2xl flex items-center justify-center overflow-hidden bg-white/5 ring-1 ring-white/8">
+              {/* Logo */}
+              <div className={`w-24 h-24 rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/8 ${f === 'SuperMax' ? 'bg-white' : 'bg-white/5'}`}>
                 <img src={m.logo} alt={f} className="w-[88px] h-[88px] object-contain" />
               </div>
 
