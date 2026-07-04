@@ -343,6 +343,7 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
               origem:     'Saldo Inicial de Implantação',
               destino:    'Almoxarifado',
               data:       hoje,
+              filial:     basePayload.filial,
             });
             saldoFinal += estoqueInicial;
           } catch (movErr: any) {
@@ -363,6 +364,7 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
               origem:     'Compra inicial',
               destino:    'Almoxarifado',
               data:       hoje,
+              filial:     basePayload.filial,
             });
             saldoFinal += qtdComprada;
           } catch (movErr: any) {

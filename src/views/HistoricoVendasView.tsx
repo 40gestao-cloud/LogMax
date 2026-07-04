@@ -132,6 +132,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
             origem: `Estorno — Venda #${venda.id.slice(-6).toUpperCase()} cancelada`,
             destino: 'Almoxarifado',
             data: today,
+            filial: venda.filial ?? 'SuperMax',
           });
           estornados++;
         } catch (estornoErr: any) {

@@ -109,6 +109,7 @@ const RecebimentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
             destino:        'Almoxarifado',
             data:           today,
             recebimento_id: item.id,
+            filial,
           });
         } catch (movErr: any) {
           // 23505 = violação de UNIQUE: este recebimento já gerou movimento

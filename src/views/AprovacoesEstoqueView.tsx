@@ -57,6 +57,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
             destino:               ap.req.destino || 'Solicitado',
             data:                  today,
             requisicao_estoque_id: ap.requisicao_estoque_id,
+            filial,
           });
         } catch (movErr: any) {
           // 23505 = UNIQUE: já existe movimento pra essa requisição
