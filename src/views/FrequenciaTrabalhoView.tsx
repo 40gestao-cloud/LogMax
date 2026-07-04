@@ -379,14 +379,16 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                               const sc = STATUS_CONFIG[s];
                               const Ic = sc.icon;
                               const active = currentStatus === s;
+                              const colorCls = s === 'Presente' ? 'freq-status-btn--presente' : s === 'Falta' ? 'freq-status-btn--falta' : 'freq-status-btn--atraso';
                               return (
                                 <button
                                   key={s}
                                   onClick={() => setEdit(func.id, { status: s, justificativa: currentJust })}
                                   title={s}
-                                  className={`w-9 h-9 rounded-xl flex items-center justify-center border transition ${active ? `${sc.bg} ${sc.border} ${sc.color}` : 'border-white/5 text-gray-600 hover:text-gray-400'}`}
+                                  className={`freq-status-btn ${colorCls}${active ? ' freq-status-btn--active' : ''}`}
                                 >
-                                  <Ic size={16} />
+                                  <Ic size={14} />
+                                  <span className="hidden sm:inline">{s === 'Presente com Atraso' ? 'Atraso' : s}</span>
                                 </button>
                               );
                             })}
