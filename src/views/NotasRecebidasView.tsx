@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -124,7 +124,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 
 
 export const NotasRecebidasView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Notas Recebidas" onSelect={setFilial} />;
-  return <NotasRecebidasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <NotasRecebidasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

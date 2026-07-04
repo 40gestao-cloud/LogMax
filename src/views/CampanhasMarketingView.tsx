@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -7,7 +9,6 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const STATUS_STYLE: Record<string, string> = {
   'Rascunho':                 'bg-gray-500/10  text-gray-400  border-gray-500/20',
@@ -574,7 +575,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial, onTrocarFilia
 };
 
 export const CampanhasMarketingView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Campanhas" onSelect={setFilial} />;
-  return <CampanhasMarketingViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CampanhasMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '../lib/log.js';
 
-const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador'];
+const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
 const VALID_SETORES = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
 // Extras não aceitam 'all' (faz parte só do escopo CEO).
 const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque'];
@@ -40,11 +40,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor, pode_acessar_usuarios')
+      .select('role, setor, pode_acessar_usuarios, is_conselheiro')
       .eq('id', caller.id)
       .single();
 
-    if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo' && callerProfile.role !== 'gerente')) {
+    const isConselheiroCaller = callerProfile?.role === 'conselheiro' || (callerProfile?.role === 'gerente' && callerProfile?.is_conselheiro === true);
+    if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo' && callerProfile.role !== 'gerente' && !isConselheiroCaller)) {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile?.role });
       return res.status(403).json({ error: 'Sem permissão para editar usuários.' });
     }
@@ -55,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
     }
 
-    const { userId, nome, email, role, setor, filial, password, setores_extras, pode_acessar_usuarios } = req.body ?? {};
+    const { userId, nome, email, role, setor, filial, password, setores_extras, pode_acessar_usuarios, is_conselheiro } = req.body ?? {};
 
     if (!userId || typeof userId !== 'string') {
       log.warn('request.validation_failed', { missing: 'userId' });
@@ -99,8 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (typeof email === 'string' && email.trim()) updates.email = email.trim();
 
-    // Apenas admin/CEO podem alterar role/setor/filial-Matriz.
-    const isGlobalCaller = callerProfile.role === 'admin' || callerProfile.role === 'ceo';
+    // Apenas admin/CEO/Conselheiro podem alterar role/setor/filial-Matriz.
+    const isGlobalCaller = callerProfile.role === 'admin' || callerProfile.role === 'ceo' || isConselheiroCaller;
 
     if (role !== undefined) {
       if (!isGlobalCaller) {
@@ -114,9 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (role === 'admin' && callerProfile.role !== 'admin') {
         return res.status(403).json({ error: 'Apenas administradores podem atribuir cargo de administrador.' });
       }
-      // Apenas admin pode atribuir CEO.
-      if (role === 'ceo' && callerProfile.role !== 'admin') {
-        return res.status(403).json({ error: 'Apenas administradores podem atribuir cargo de CEO.' });
+      // Apenas admin pode atribuir CEO ou Conselheiro.
+      if ((role === 'ceo' || role === 'conselheiro') && callerProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Apenas administradores podem atribuir cargo de CEO ou Conselheiro.' });
       }
       updates.role = role;
     }
@@ -133,14 +134,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updates.setor = setor;
     }
 
-    // CEO é sempre global ('all') — independente do que vier no payload.
-    if (updates.role === 'ceo') {
+    // CEO e Conselheiro são sempre globais ('all').
+    if (updates.role === 'ceo' || updates.role === 'conselheiro') {
       updates.setor = 'all';
-      updates.setores_extras = []; // CEO já é global; zera extras.
+      updates.setores_extras = [];
     }
 
-    // Setores extras: só admin/CEO podem alterar; CEO ignora (já é global).
-    if (setores_extras !== undefined && updates.role !== 'ceo') {
+    // Setores extras: só admin/CEO podem alterar; CEO/Conselheiro ignoram (já são globais).
+    if (setores_extras !== undefined && updates.role !== 'ceo' && updates.role !== 'conselheiro') {
       if (!isGlobalCaller) {
         log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_setores_extras' });
         return res.status(403).json({ error: 'Gerentes não podem alterar setores extras.' });
@@ -164,6 +165,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
       }
       updates.filial = filial;
+    }
+
+    // Toggle Conselheiro: só admin pode ativar; só faz sentido em gerentes.
+    if (is_conselheiro !== undefined) {
+      if (callerProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Apenas administradores podem ativar o modo Conselheiro.' });
+      }
+      const targetRoleAfter = updates.role ?? targetProfile.role;
+      if (targetRoleAfter !== 'gerente') {
+        return res.status(400).json({ error: 'O modo Conselheiro só se aplica a gerentes.' });
+      }
+      if (typeof is_conselheiro !== 'boolean') {
+        return res.status(400).json({ error: 'is_conselheiro deve ser booleano.' });
+      }
+      updates.is_conselheiro = is_conselheiro;
     }
 
     // Toggle de acesso ao módulo Usuários: só admin/CEO podem alterar e só faz sentido em gerentes.

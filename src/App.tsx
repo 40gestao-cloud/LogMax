@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
-import { hasSetor, allSetores } from './lib/rbac';
+import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -11,6 +11,8 @@ import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { FilialProvider, useFilial } from './contexts/FilialContext';
+import { FilialSelector, type FilialOp } from './components/FilialSelector';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
@@ -202,7 +204,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
         </button>
-        {(profile?.role === 'admin' || profile?.role === 'ceo'
+        {(profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
           || (profile?.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))) && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
@@ -213,7 +215,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <Brain size={18} /><span>Painel de BI</span>
           </button>
         )}
-        {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+        {(profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)) && (
           <button onClick={() => { navigate('briefing-diario'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'briefing-diario' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <ListTodo size={18} /><span>Briefing Diário</span>
           </button>
@@ -442,6 +444,19 @@ function LogMaxAppInner() {
   // Não re-fetcha ao navegar — realtime já cobre as mudanças.
   const badges = useSidebarBadges(profile);
 
+  // ── Filial de sessão ── deve ficar ANTES dos early returns para respeitar Rules of Hooks ──
+  const { filialAtiva, setFilialAtiva, clearFilial } = useFilial();
+  useEffect(() => {
+    if (!profile) return;
+    const isGlobal = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+    if (isGlobal) return;
+    const f = profile.filial as FilialOp | undefined;
+    if (f === 'SuperMax' || f === 'MaxLook' || f === 'TechMax') {
+      setFilialAtiva(f);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
   const toggleModule = (id: string) => setOpenModules(prev => ({ ...prev, [id]: !prev[id] }));
 
   const showToast = useCallback((message: string, type = 'info', autoHide = true) => {
@@ -509,15 +524,6 @@ function LogMaxAppInner() {
     );
   }
 
-  // Módulos visíveis pelo setor do usuário
-  // Multi-setor: união dos módulos de todos os setores do usuário (primário + extras).
-  // Admin/CEO (setor='all') passam direto. Sem isso, gerente Vendas com extra=ti
-  // não veria o módulo TI no menu (RLS já permitiria, só a UX que falhava).
-  const allowedModuleIds = Array.from(new Set(
-    allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
-  ));
-  const visibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
-
   const handleSignOut = async () => {
     showToast("Saindo...", 'info', true);
     try {
@@ -526,6 +532,47 @@ function LogMaxAppInner() {
     } catch {}
     await signOut();
   };
+
+  const podeEscolherFilial = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+
+  // Admin/CEO veem o seletor de filial antes de entrar no app.
+  if (podeEscolherFilial && !filialAtiva) {
+    return (
+      <div className="min-h-screen flex flex-col bg-base">
+        <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
+          <button onClick={handleSignOut} className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">Sair</button>
+        </div>
+        <FilialSelector
+          title="Selecione a Unidade"
+          subtitle="Escolha a filial que deseja gerenciar nesta sessão."
+          onSelect={setFilialAtiva}
+        />
+      </div>
+    );
+  }
+
+  // Colaborador/gerente sem filial configurada no perfil — erro de cadastro.
+  if (!filialAtiva) {
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
+        <Building2 size={40} className="text-gray-600" />
+        <h2 className="text-lg font-bold text-gray-300">Filial não configurada</h2>
+        <p className="text-sm text-gray-500 max-w-sm text-center">
+          Seu perfil não possui filial atribuída. Solicite ao administrador.
+        </p>
+        <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
+      </div>
+    );
+  }
+
+  // Módulos visíveis pelo setor do usuário
+  // Multi-setor: união dos módulos de todos os setores do usuário (primário + extras).
+  // Admin/CEO (setor='all') passam direto. Sem isso, gerente Vendas com extra=ti
+  // não veria o módulo TI no menu (RLS já permitiria, só a UX que falhava).
+  const allowedModuleIds = Array.from(new Set(
+    allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
+  ));
+  const visibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
 
   const renderContent = () => {
     const st = showToast;
@@ -728,6 +775,16 @@ function LogMaxAppInner() {
           <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell setor={profile.setor} onNavigate={navigate} />
             {canUseMaxAI && <AIAssistantFAB />}
+            {podeEscolherFilial && (
+              <button
+                onClick={clearFilial}
+                title="Trocar filial"
+                className="neu-button h-9 px-3 rounded-xl flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-accent border border-accent/20 hover:bg-accent/10 transition-colors shrink-0"
+              >
+                <Building2 size={13} />
+                <span className="hidden sm:inline">{filialAtiva}</span>
+              </button>
+            )}
             <ThemeToggle />
             <AccentPicker />
 
@@ -809,10 +866,12 @@ export default function LogMaxApp() {
   }
   return (
     <ThemeProvider>
-      <ConfirmProvider>
-        <PwaUpdatePrompt />
-        <LogMaxAppInner />
-      </ConfirmProvider>
+      <FilialProvider>
+        <ConfirmProvider>
+          <PwaUpdatePrompt />
+          <LogMaxAppInner />
+        </ConfirmProvider>
+      </FilialProvider>
     </ThemeProvider>
   );
 }

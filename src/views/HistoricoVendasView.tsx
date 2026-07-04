@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -9,7 +11,6 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import { useAIContext } from '../contexts/AIAssistantContext';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
@@ -316,7 +317,7 @@ const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showT
 };
 
 export const HistoricoVendasView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Histórico de Vendas" onSelect={setFilial} />;
-  return <HistoricoVendasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <HistoricoVendasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

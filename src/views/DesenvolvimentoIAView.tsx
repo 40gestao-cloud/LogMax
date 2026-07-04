@@ -8,7 +8,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -92,10 +92,10 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
   // Treinamento". Backend casa em supabase/migrations/20260612d_dev_ia_ti_only_*.sql.
   const canManage =
     profile?.role === 'admin' ||
-    profile?.role === 'ceo' ||
+    profile?.role === 'ceo' || isConselheiro(profile) ||
     hasSetor(profile, 'ti');
 
-  const canAvaliar = profile?.role === 'admin' || profile?.role === 'ceo' || hasSetor(profile, 'ti');
+  const canAvaliar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || hasSetor(profile, 'ti');
 
   // Carrega TODOS os usuários (admin/CEO/gerente/colaborador, qualquer
   // setor): usados tanto como auxiliares possíveis no form quanto como

@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 import {
   uploadImagemCategoria, removerImagemCategoria,
   validarImagemCategoria, CATEGORIA_IMAGEM_ACCEPT,
 } from '../lib/categoriaImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 
 const COR_PRESETS = [
   '#D4AF37','#22c55e','#3b82f6','#f59e0b','#ef4444',
@@ -399,7 +400,7 @@ const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial
   const confirm = useConfirm();
   const [selectedCatNome, setSelectedCatNome] = useState('');
 
-  const canEdit = profile?.role === 'admin' || profile?.role === 'ceo' || hasSetor(profile, 'logistica');
+  const canEdit = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || hasSetor(profile, 'logistica');
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
@@ -439,13 +440,7 @@ const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial
 };
 
 export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return (
-    <FilialSelector
-      title="Categorias"
-      subtitle="Selecione a unidade para gerenciar categorias de produtos."
-      onSelect={setFilial}
-    />
-  );
-  return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

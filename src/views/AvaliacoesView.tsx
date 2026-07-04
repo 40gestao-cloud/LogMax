@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft } from 'lucide-react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { PDISection } from '../components/PDISection';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { allSetores, hasSetor } from '../lib/rbac';
+import { allSetores, hasSetor, isConselheiro } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
 import { CRITERIOS, Categoria, ESCALA_MAX, CATEGORIA_LABEL } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
@@ -420,7 +421,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     avaliacaoExistente: { id: string; observacao: string | null; criterios: Criterio[] };
   } | null>(null);
 
-  const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo';
+  const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   const isGerente   = profile.role === 'gerente';
   // RH (qualquer role com 'rh' em setor primário ou setores_extras) tem
   // visão cross-setor: vê consolidado de TUDO e propõe PDI em qualquer
@@ -1254,7 +1255,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 };
 
 export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Avaliações de Desempenho" onSelect={setFilial} />;
-  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

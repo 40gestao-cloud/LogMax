@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -6,7 +8,6 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/vencimentosestoqueview', { filial });
@@ -120,7 +121,7 @@ const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sh
 };
 
 export const VencimentosEstoqueView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Previsão de Vencimentos" onSelect={setFilial} />;
-  return <VencimentosEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <VencimentosEstoqueViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

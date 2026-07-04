@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus,
@@ -9,7 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState } from '../components/ui';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 
 type StatusFreq = 'Presente' | 'Falta' | 'Presente com Atraso';
 
@@ -98,7 +99,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
   // Modal de histórico
   const [modalFunc, setModalFunc] = useState<Funcionario | null>(null);
 
-  const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo';
+  const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? [])
@@ -542,7 +543,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 
 
 export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Frequência de Trabalho" onSelect={setFilial} />;
-  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy, ArrowLeft,
 } from 'lucide-react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -604,7 +605,7 @@ function SetorChamadosModal({ setorId, setorColor, chamados, updatingId, onClose
 }
 
 export const TIView = ({ showToast, profile }: TIViewProps) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="TI & Suporte" onSelect={setFilial} />;
-  return <TIViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <TIViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

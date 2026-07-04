@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -6,7 +8,6 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -344,7 +345,6 @@ const FuncionariosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
 };
 
 export const FuncionariosView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Funcionários" onSelect={setFilial} />;
-  return <FuncionariosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva: filial } = useFilial();
+  return <FuncionariosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => {}} />;
 };

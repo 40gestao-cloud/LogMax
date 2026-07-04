@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent, FilialBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasAnySetor } from '../lib/rbac';
+import { hasAnySetor, isConselheiro } from '../lib/rbac';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -29,7 +29,7 @@ const fmtData = (str: string) => {
 // Quem opera caixa de QUALQUER filial: admin, CEO e gerente cobrem cross-filial.
 // Colaborador fica travado na própria filial pra evitar abertura indevida em outra unidade.
 const podeOperarTodasFiliais = (profile: UserProfile | null | undefined): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
+  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
 
 // Cada filial tem seu próprio card de status + abertura/fechamento.
 // Extraído porque o ControleCaixaView pode renderizar 1, 2 ou 3 deles dependendo

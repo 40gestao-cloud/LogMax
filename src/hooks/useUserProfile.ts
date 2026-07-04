@@ -8,7 +8,7 @@ export interface UserProfile {
   id: string;
   nome: string;
   email: string;
-  role: 'admin' | 'ceo' | 'gerente' | 'colaborador';
+  role: 'admin' | 'ceo' | 'gerente' | 'colaborador' | 'conselheiro';
   setor: Setor;
   /** Setores adicionais — concedem acesso de leitura/escrita sem elevar role. */
   setores_extras?: Setor[];
@@ -19,6 +19,8 @@ export interface UserProfile {
   foto_url?: string | null;
   /** Aplica-se só a role='gerente': quando false, perde acesso ao módulo Usuários. */
   pode_acessar_usuarios?: boolean;
+  /** Gerente com acesso de conselheiro (visão global). */
+  is_conselheiro?: boolean;
 }
 
 export function useUserProfile() {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ShoppingCart, AlertTriangle, X, Save } from 'lucide-react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
@@ -261,7 +261,7 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
 
 
 export const SugestoesComprasView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Sugestões de Compras" onSelect={setFilial} />;
-  return <SugestoesComprasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <SugestoesComprasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

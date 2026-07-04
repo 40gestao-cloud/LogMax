@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ArrowLeft } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
 import { useAIContext } from '../contexts/AIAssistantContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const SaldosEstoqueViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onTrocarFilial: () => void }) => {
   const { data, isLoading } = useFetchData<any>('/api/saldosestoqueview', { filial });
@@ -99,7 +100,7 @@ const SaldosEstoqueViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; 
 };
 
 export const SaldosEstoqueView = () => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Saldos de Estoque" onSelect={setFilial} />;
-  return <SaldosEstoqueViewInner filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <SaldosEstoqueViewInner filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

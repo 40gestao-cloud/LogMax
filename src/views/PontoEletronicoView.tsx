@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet, MessageSquarePlus, FileText, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -10,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import { buildPontoQrUrl, extractPontoToken } from '../lib/pontoQrUrl';
@@ -154,7 +155,7 @@ const QRGenerator = () => {
 // ─── Histórico de Ponto QR ────────────────────────────────────────────────────
 const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
   const { user } = useAuth();
-  const canSeeAll = profile.role === 'admin' || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
+  const canSeeAll = profile.role === 'admin' || isConselheiro(profile) || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
   // Hard-delete restrito a admin (RH/CEO continuam vendo, mas só admin corrige).
   const canDelete = profile.role === 'admin';
 
@@ -438,7 +439,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }
     return m;
   }, [justificativas]);
 
-  const canJustify = profile?.role === 'colaborador' || profile?.role === 'gerente' || profile?.role === 'ceo';
+  const canJustify = profile?.role === 'colaborador' || profile?.role === 'gerente' || profile?.role === 'ceo' || isConselheiro(profile);
 
   const handleJustificar = async () => {
     if (!justModal || !justMotivo.trim()) { showToast('Descreva o motivo da falta.', 'error'); return; }
@@ -964,7 +965,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }
 
 
 export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Ponto Eletrônico" onSelect={setFilial} />;
-  return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

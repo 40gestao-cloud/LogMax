@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, MessageSquare, EyeOff, Filter, Calendar, Lock, Trash2, Heart, Users } from 'lucide-react';
@@ -182,7 +183,7 @@ const FormularioEnvio = ({ showToast }: { showToast: any }) => {
 
 // ─── Inbox ────────────────────────────────────────────────────────────────────
 const InboxFeedbacks = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
-  const isDiretoria = profile.role === 'admin' || profile.role === 'ceo';
+  const isDiretoria = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   const [page, setPage] = useState(0);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const extraFilter = filtroCategoria ? { categoria: filtroCategoria } : undefined;
@@ -326,7 +327,7 @@ const InboxFeedbacks = ({ profile, showToast }: { profile: UserProfile; showToas
 
 // ─── View principal ───────────────────────────────────────────────────────────
 export const FeedbackOrganizacionalView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const isDiretoria = profile.role === 'admin' || profile.role === 'ceo';
+  const isDiretoria = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

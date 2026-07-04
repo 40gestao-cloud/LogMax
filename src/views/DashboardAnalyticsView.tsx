@@ -16,7 +16,7 @@ import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 
 type Period = '7d' | '30d' | 'year';
 type KpiKey = 'receita' | 'despesa' | 'ordens' | 'estoque';
@@ -40,7 +40,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
   // os cards mas eles não respondem a clique. RLS continua sendo a defesa
   // real — gerentes só veem os registros do próprio escopo.
   const canExpandKpis = !!profile && (
-    profile.role === 'admin' ||
+    profile.role === 'admin' || isConselheiro(profile) ||
     profile.role === 'ceo' ||
     (profile.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))
   );

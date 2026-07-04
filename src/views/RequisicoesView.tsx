@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -8,7 +10,6 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Ur
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -276,7 +277,7 @@ const RequisicoesViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
 };
 
 export const RequisicoesView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Requisições de Compra" onSelect={setFilial} />;
-  return <RequisicoesViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <RequisicoesViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

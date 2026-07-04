@@ -601,6 +601,8 @@ table,
 }
 /* Colaborador: fundo preto + borda branca + texto branco */
 .role-badge--colaborador { background: #000; color: #fff; border-color: #fff !important; }
+/* Conselheiro: roxo profundo + borda lavanda */
+.role-badge--conselheiro { background: #4B2D8C; color: #E9D5FF; border-color: #A78BFA !important; }
 
 /* ── Meta status badges — pílulas com shimmer ── */
 .meta-status {
@@ -682,6 +684,7 @@ table,
 [data-theme="light"] .role-badge--ceo         { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
 [data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #D4AF37 !important; }
 [data-theme="light"] .role-badge--colaborador { background: #111; color: #fff; border-color: #fff !important; }
+[data-theme="light"] .role-badge--conselheiro { background: #6D28D9; color: #fff; border-color: #7C3AED !important; }
 
 /* Setor global (principal): dourado igual admin */
 .setor-badge--global { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }

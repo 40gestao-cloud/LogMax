@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, Package, MapPin, User as UserIcon, Tag, ArrowLeft } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, FilialBadge, StatusBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportToPDF, exportToExcel, formatBRL } from '../lib/viewUtils';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
@@ -163,7 +164,7 @@ const PatrimonioViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onT
 };
 
 export const PatrimonioView = ({ showToast: _showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Controle de Patrimônio" onSelect={setFilial} />;
-  return <PatrimonioViewInner filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <PatrimonioViewInner filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

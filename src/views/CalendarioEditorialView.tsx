@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2, ArrowLeft } from 'lucide-react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
@@ -584,7 +584,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial, onTrocarFili
 };
 
 export const CalendarioEditorialView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Calendário Editorial" onSelect={setFilial} />;
-  return <CalendarioEditorialViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CalendarioEditorialViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

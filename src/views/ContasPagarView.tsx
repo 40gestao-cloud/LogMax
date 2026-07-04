@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -7,7 +9,6 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Fi
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAL_DEFAULT } from '../lib/filiais';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
@@ -474,7 +475,6 @@ const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
 };
 
 export const ContasPagarView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Contas a Pagar" onSelect={setFilial} />;
-  return <ContasPagarViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva: filial } = useFilial();
+  return <ContasPagarViewInner showToast={showToast} filial={filial} onTrocarFilial={() => {}} />;
 };

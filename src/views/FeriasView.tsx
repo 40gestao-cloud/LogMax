@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const statusCls = (s: string) => {
   if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
@@ -240,7 +241,7 @@ const FeriasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any
 };
 
 export const FeriasView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Férias" onSelect={setFilial} />;
-  return <FeriasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <FeriasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

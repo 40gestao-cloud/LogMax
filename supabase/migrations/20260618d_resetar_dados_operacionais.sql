@@ -88,8 +88,8 @@ BEGIN
     marketing_arte_feedback, marketing_artes, marketing_tarefas,
     marketing_promocoes, marketing_calendario, marketing_cupons,
     marketing_campanhas,
-    -- vendas B2B
-    orcamentos, pedidos_venda, clientes_especiais,
+    -- vendas B2B (clientes_especiais removido — tabela não existe)
+    orcamentos, pedidos_venda,
     -- maxbank — histórico zerado; maxbank_contas NÃO entra (saldo preservado).
     -- As FKs de transacoes/transferencias/etc. apontam pra maxbank_contas,
     -- não o contrário, então TRUNCATE delas não cascateia em contas.

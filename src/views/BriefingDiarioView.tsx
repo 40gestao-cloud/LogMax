@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Loader2, Lock, Calendar, CheckCircle2, X, Edit3, History, ListTodo, AlertTriangle, Send, Trash2, RefreshCw } from 'lucide-react';
@@ -87,7 +88,7 @@ const dataMaisDias = (iso: string, dias: number): string => {
 export const BriefingDiarioView = ({ showToast, profile }: any) => {
   const { session } = useAuth();
   const confirm = useConfirm();
-  const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo';
+  const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
   const [dataRef, setDataRef]     = useState(todayAcre());
   const [janelaDias, setJanelaDias] = useState<JanelaDias>(7);

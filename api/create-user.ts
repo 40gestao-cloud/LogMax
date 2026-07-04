@@ -68,20 +68,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Campos obrigatórios: email, password, nome, role, setor.' });
     }
 
-    const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador'];
+    const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
     if (!VALID_ROLES.includes(role)) {
       log.warn('request.invalid_role', { role });
       return res.status(400).json({ error: 'Cargo inválido.' });
     }
 
-    // CEO é global por definição: só admin cria CEO e setor é forçado para 'all'.
-    if (role === 'ceo') {
+    // CEO e Conselheiro são globais: só admin os cria; setor forçado para 'all'.
+    if (role === 'ceo' || role === 'conselheiro') {
       if (callerProfile.role !== 'admin') {
-        log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile.role, target_role: role, reason: 'non_admin_creating_ceo' });
-        return res.status(403).json({ error: 'Apenas administradores podem criar CEO.' });
+        log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile.role, target_role: role, reason: 'non_admin_creating_global' });
+        return res.status(403).json({ error: 'Apenas administradores podem criar CEO ou Conselheiro.' });
       }
       setor = 'all';
-      extras = []; // CEO já é global; extras não fazem sentido.
+      extras = [];
     }
 
     // Só admin/CEO podem atribuir setores extras (gerente não cria multi-setor).

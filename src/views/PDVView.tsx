@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store } from 'lucide-react';
@@ -39,7 +40,7 @@ const formatQtd = (qtd: number, unidade: string): string => {
 };
 
 const podeAlternarFilial = (profile: any): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
+  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
 
 interface CartItem {
   produto_id: string;

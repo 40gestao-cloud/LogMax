@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, X, Loader2, UserCircle2, ShieldCheck, FileText, MessageSquare, ArrowLeft } from 'lucide-react';
@@ -36,7 +37,7 @@ async function notificarSetor(args: {
 }
 
 export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo';
+  const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
   // Realtime: quando o vendedor envia uma nova proposta ao cliente, ela aparece
   // aqui sem precisar de F5. Idem decisão registrada em outra aba/setor.

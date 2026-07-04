@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Target, FileDown, Play, Pause, RefreshCw } from 'lucide-react';
@@ -41,7 +42,7 @@ export const MetasView = ({ showToast, profile }: any) => {
   const { data: metas, setData: setMetas, isLoading: loadingMetas } =
     useFetchData<any>('/api/metasestrategicasview');
 
-  const isAdmin   = profile?.role === 'admin' || profile?.role === 'ceo';
+  const isAdmin   = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
   const isGerente = profile?.role === 'gerente';
 
   const [showFormMeta, setShowFormMeta] = useState(false);

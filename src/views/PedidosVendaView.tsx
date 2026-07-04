@@ -5,10 +5,11 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
-import { hasAnySetor, hasSetor } from '../lib/rbac';
+import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 
 const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
@@ -22,7 +23,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
   const isLogistica  = hasSetor(profile, 'logistica');
   const isFinanceiro = hasSetor(profile, 'financeiro');
   const isVendas     = hasSetor(profile, 'vendas');
-  const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo';
+  const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
   const enriched = data.map((p: any) => ({
     ...p,
@@ -207,7 +208,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
 };
 
 export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Pedidos de Venda" onSelect={setFilial} />;
-  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

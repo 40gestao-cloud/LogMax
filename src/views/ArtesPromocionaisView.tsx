@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
+import { isConselheiro } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
@@ -74,7 +76,7 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial
   const [draft, setDraft] = useState<Record<string, { estrelas: number; comentario: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
-  const canGiveFeedback = profile?.role === 'gerente' || profile?.role === 'admin' || profile?.role === 'ceo';
+  const canGiveFeedback = profile?.role === 'gerente' || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
   const myFeedbackByArte = useMemo(() => {
     const m: Record<string, Feedback> = {};
@@ -319,7 +321,7 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial
 };
 
 export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Artes Promocionais" onSelect={setFilial} />;
-  return <ArtesPromocionaisViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <ArtesPromocionaisViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
 
@@ -519,7 +519,7 @@ function ResultadosModal({ pesquisa, onClose }: { pesquisa: any; onClose: () => 
 };
 
 export const PesquisasView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
+  const { filialAtiva } = useFilial();
   if (!hasSetor(profile, 'rh')) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
@@ -528,6 +528,6 @@ export const PesquisasView = ({ showToast, profile }: any) => {
       </div>
     );
   }
-  if (!filial) return <FilialSelector title="Pesquisas de RH" onSelect={setFilial} />;
-  return <PesquisasViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  if (!filialAtiva) return null;
+  return <PesquisasViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -8,7 +10,6 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
-import { FilialSelector, FilialOp } from '../components/FilialSelector';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -919,13 +920,7 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
 };
 
 export const ProdutosView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return (
-    <FilialSelector
-      title="Produtos"
-      subtitle="Selecione a unidade para gerenciar produtos."
-      onSelect={setFilial}
-    />
-  );
-  return <ProdutosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -8,7 +10,6 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, FilialOp } from '../components/FilialSelector';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
 
@@ -346,14 +347,7 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
 };
 
 export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  const label = type === 'clientes' ? 'Clientes' : 'Fornecedores';
-  if (!filial) return (
-    <FilialSelector
-      title={label}
-      subtitle={`Selecione a unidade para gerenciar ${label.toLowerCase()}.`}
-      onSelect={setFilial}
-    />
-  );
-  return <CRMViewInner type={type} showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CRMViewInner type={type} showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

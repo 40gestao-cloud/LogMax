@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -167,7 +167,7 @@ const PlanejamentoOrcamentarioViewInner = ({ showToast: _showToast, filial }: an
 
 
 export const PlanejamentoOrcamentarioView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Planejamento Orçamentário" onSelect={setFilial} />;
-  return <PlanejamentoOrcamentarioViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <PlanejamentoOrcamentarioViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

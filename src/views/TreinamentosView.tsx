@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
@@ -500,7 +501,7 @@ const TreinamentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
 };
 
 export const TreinamentosView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Treinamentos" onSelect={setFilial} />;
-  return <TreinamentosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <TreinamentosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

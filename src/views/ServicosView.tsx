@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FilialSelector, FilialOp } from '../components/FilialSelector';
+import React from 'react';
+import { useFilial } from '../contexts/FilialContext';
 import { GenericCRUDView } from './GenericCRUDView';
 
 const FIELDS = [
@@ -11,25 +11,19 @@ const FIELDS = [
 ];
 
 export const ServicosView = ({ showToast }: { showToast: any }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
+  const { filialAtiva } = useFilial();
 
-  if (!filial) return (
-    <FilialSelector
-      title="Serviços"
-      subtitle="Selecione a unidade para gerenciar serviços prestados."
-      onSelect={setFilial}
-    />
-  );
+  if (!filialAtiva) return null;
 
   return (
     <GenericCRUDView
       showToast={showToast}
-      title={`Serviços — ${filial}`}
+      title={`Serviços — ${filialAtiva}`}
       subtitle="Gerencie os serviços prestados."
       endpoint="/api/servicosview"
       fields={FIELDS}
-      filialLocked={filial}
-      onTrocarFilial={() => setFilial(null)}
+      filialLocked={filialAtiva}
+      onTrocarFilial={() => {}}
     />
   );
 };

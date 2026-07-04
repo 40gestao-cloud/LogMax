@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
@@ -6,7 +8,6 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const TIPOS = [
   'Atestado médico',
@@ -359,7 +360,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
 };
 
 export const AfastamentosView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Afastamentos" onSelect={setFilial} />;
-  return <AfastamentosViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <AfastamentosViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

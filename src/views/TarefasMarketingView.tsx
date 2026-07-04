@@ -1,3 +1,4 @@
+import { isConselheiro } from '../lib/rbac';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, ChevronRight, AlertCircle, ExternalLink, Send, Link2 } from 'lucide-react';
@@ -42,7 +43,7 @@ export const TarefasMarketingView = ({ showToast, profile }: any) => {
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const canCreate = profile?.role === 'admin' || profile?.role === 'gerente';
+  const canCreate = profile?.role === 'admin' || profile?.role === 'gerente' || isConselheiro(profile);
 
   const pendentes   = tarefas.filter((t: any) => t.status === 'Pendente').length;
   const emProd      = tarefas.filter((t: any) => t.status === 'Em Produção').length;

@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -6,7 +8,6 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 type Tipo = 'percentual' | 'fixo';
 
@@ -430,7 +431,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }
 };
 
 export const CuponsMarketingView = ({ showToast, profile }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Cupons" onSelect={setFilial} />;
-  return <CuponsMarketingViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CuponsMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

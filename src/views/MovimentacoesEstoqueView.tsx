@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -6,7 +8,6 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview', { filial });
@@ -174,7 +175,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { 
 };
 
 export const MovimentacoesEstoqueView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Movimentações de Estoque" onSelect={setFilial} />;
-  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

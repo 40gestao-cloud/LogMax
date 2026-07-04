@@ -24,6 +24,7 @@ const ROLE_LABEL: Record<string, string> = {
   ceo:         'CEO',
   gerente:     'Gerente',
   colaborador: 'Colaborador',
+  conselheiro: 'Conselheiro',
 };
 
 // Classes CSS dedicadas (.role-badge--* / .setor-badge--* em index.css).
@@ -31,7 +32,7 @@ const ROLE_LABEL: Record<string, string> = {
 // ("marketing rosa com rosa", eye blend). Agora texto bem mais claro
 // (-200/-300) em dark, e tom escuro saturado em fundo claro pra modo claro.
 const roleCls = (r: string) => {
-  const known = ['admin', 'ceo', 'gerente', 'colaborador'];
+  const known = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
   return `role-badge--${known.includes(r) ? r : 'colaborador'}`;
 };
 
@@ -54,7 +55,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const isCEO = callerProfile.role === 'ceo';
   const isGerente = callerProfile.role === 'gerente';
   // Admin e CEO têm visão/escopo global; CEO não pode promover admin/CEO.
-  const isGlobal = isAdmin || isCEO;
+  const isConselheiroCaller = callerProfile.role === 'conselheiro' || (callerProfile.role === 'gerente' && callerProfile.is_conselheiro === true);
+  const isGlobal = isAdmin || isCEO || isConselheiroCaller;
 
   // Form vazio depende do papel: gerente herda seu próprio setor (não pode trocar)
   // e tem default de filial fora da Matriz.
@@ -271,7 +273,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // Gerente não envia setores_extras (backend bloqueia).
       const cleanExtras = (form.setores_extras ?? []).filter((s: string) => s !== form.setor);
       const basePayload = isGlobal ? { ...form, setores_extras: cleanExtras } : form;
-      const payload = basePayload.role === 'ceo'
+      const payload = (basePayload.role === 'ceo' || basePayload.role === 'conselheiro')
         ? { ...basePayload, setor: 'all', setores_extras: [] }
         : basePayload;
       const res = await fetch('/api/create-user', {
@@ -332,6 +334,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       password: '',
       // Default true preserva comportamento atual quando coluna ainda é nula em registros antigos.
       pode_acessar_usuarios: u.pode_acessar_usuarios !== false,
+      is_conselheiro: u.is_conselheiro === true,
     });
     setEditShowPass(false);
   };
@@ -364,7 +367,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       if (isGlobal) {
         payload.role = editForm.role;
         // CEO sempre setor 'all' — servidor força, mas mandamos coerente.
-        payload.setor = editForm.role === 'ceo' ? 'all' : editForm.setor;
+        payload.setor = (editForm.role === 'ceo' || editForm.role === 'conselheiro') ? 'all' : editForm.setor;
         // CEO já é global; extras zeradas.
         payload.setores_extras = editForm.role === 'ceo'
           ? []
@@ -373,6 +376,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         // Toggle de acesso ao módulo Usuários — só faz sentido em gerentes.
         if (editForm.role === 'gerente') {
           payload.pode_acessar_usuarios = !!editForm.pode_acessar_usuarios;
+          payload.is_conselheiro = !!editForm.is_conselheiro;
         }
       } else if (isGerente) {
         // Gerente: nome/email/senha + setor + filial (sem Matriz). Não toca em role.
@@ -400,6 +404,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           setores_extras: payload.setores_extras ?? u.setores_extras,
           filial: payload.filial ?? u.filial,
           pode_acessar_usuarios: payload.pode_acessar_usuarios ?? u.pode_acessar_usuarios,
+          is_conselheiro: payload.is_conselheiro ?? u.is_conselheiro,
         };
       }));
       closeEdit();
@@ -418,9 +423,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // Admin pode criar CEO/gerente/colaborador. CEO pode criar gerente/colaborador.
   // Gerente só cria colaborador.
   const roleOptions = isAdmin
-    ? ['ceo', 'gerente', 'colaborador']
+    ? ['ceo', 'conselheiro', 'gerente', 'colaborador']
     : isCEO
-      ? ['gerente', 'colaborador']
+      ? ['conselheiro', 'gerente', 'colaborador']
       : ['colaborador'];
 
   const isCeoRole = form.role === 'ceo';
@@ -566,7 +571,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             </div>
 
             {/* Setores extras — só admin/CEO, escondido para CEO target (global). */}
-            {isGlobal && form.role !== 'ceo' && (
+            {isGlobal && form.role !== 'ceo' && form.role !== 'conselheiro' && (
               <div className="mt-4 flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>
@@ -864,12 +869,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <label htmlFor="user-edit-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
                   <select id="user-edit-setor" value={editForm.setor}
                     onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
-                    disabled={editForm.role === 'ceo'}
+                    disabled={editForm.role === 'ceo' || editForm.role === 'conselheiro'}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
                     {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'].map(s => (
                       <option key={s} value={s}>{SETOR_LABEL[s]}</option>
                     ))}
-                    {editForm.role === 'ceo' && <option value="all">{SETOR_LABEL.all}</option>}
+                    {(editForm.role === 'ceo' || editForm.role === 'conselheiro') && <option value="all">{SETOR_LABEL.all}</option>}
                   </select>
                 </div>
 
@@ -881,16 +886,16 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     disabled={!isGlobal}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
                     {(isAdmin
-                      ? ['ceo', 'gerente', 'colaborador']
+                      ? ['ceo', 'conselheiro', 'gerente', 'colaborador']
                       : isCEO
-                        ? ['gerente', 'colaborador']
+                        ? ['conselheiro', 'gerente', 'colaborador']
                         : ['colaborador']
                     ).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                     {/* Se o cargo atual não estiver no conjunto editável, mantém visível como leitura */}
                     {!(isAdmin
-                      ? ['ceo', 'gerente', 'colaborador']
+                      ? ['ceo', 'conselheiro', 'gerente', 'colaborador']
                       : isCEO
-                        ? ['gerente', 'colaborador']
+                        ? ['conselheiro', 'gerente', 'colaborador']
                         : ['colaborador']
                     ).includes(editForm.role) && (
                       <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
@@ -911,6 +916,28 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 </div>
               </div>
 
+              {/* Toggle Conselheiro — acesso global para gerentes. Só admin/CEO podem alterar. */}
+              {isGlobal && editForm.role === 'gerente' && (
+                <div className="mt-4 neu-flat rounded-2xl p-4 border border-white/5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
+                        Acesso de Conselheiro
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Quando ativado, este gerente tem visão global (igual a Admin/CEO) sem mudar de cargo.
+                      </p>
+                    </div>
+                    <button type="button"
+                      onClick={() => setEditForm((p: any) => ({ ...p, is_conselheiro: !p.is_conselheiro }))}
+                      className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${editForm.is_conselheiro ? 'bg-accent' : 'bg-gray-700'}`}
+                      title={editForm.is_conselheiro ? 'Conselheiro ativado' : 'Conselheiro desativado'}
+                      aria-pressed={editForm.is_conselheiro}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.is_conselheiro ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Toggle de acesso ao módulo Usuários — só admin/CEO, só em gerentes. */}
               {isGlobal && editForm.role === 'gerente' && (
                 <div className="mt-4 neu-flat rounded-2xl p-4 border border-white/5">
@@ -935,7 +962,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               )}
 
               {/* Setores extras — admin/CEO, exceto quando target é CEO (global). */}
-              {isGlobal && editForm.role !== 'ceo' && (
+              {isGlobal && editForm.role !== 'ceo' && editForm.role !== 'conselheiro' && (
                 <div className="mt-4 flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                     Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>

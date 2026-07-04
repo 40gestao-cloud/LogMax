@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -9,7 +11,6 @@ import { hasSetor } from '../lib/rbac';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import type { FolhaPagamento, Funcionario } from '../types/domain';
 
 type RecalcBreakdown = {
@@ -710,7 +711,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
 };
 
 export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
+  const { filialAtiva } = useFilial();
   if (!hasSetor(profile, 'rh')) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
@@ -719,8 +720,8 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       </div>
     );
   }
-  if (!filial) return <FilialSelector title="Folha de Pagamento" onSelect={setFilial} />;
-  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  if (!filialAtiva) return null;
+  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };
 
 function Row({ label, value, colorClass, muted, bold }: {

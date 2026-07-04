@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -6,7 +8,6 @@ import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
@@ -193,7 +194,7 @@ const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: an
 };
 
 export const PedidosView = ({ showToast }: any) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Pedidos de Compra" onSelect={setFilial} />;
-  return <PedidosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <PedidosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

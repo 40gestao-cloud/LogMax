@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import type { AprovacaoCompras, Requisicao } from '../types/domain';
 
 type ShowToast = (msg: string, type: string, persist?: boolean) => void;
@@ -181,7 +182,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
 };
 
 export const AprovacoesComprasView = ({ showToast }: { showToast: ShowToast }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Aprovações de Compra" onSelect={setFilial} />;
-  return <AprovacoesComprasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <AprovacoesComprasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

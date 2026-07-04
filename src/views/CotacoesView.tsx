@@ -8,10 +8,11 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
-import { hasAnySetor, hasSetor } from '../lib/rbac';
+import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 
 // notificar_setor: RPC já existente em 20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -78,7 +79,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { sho
   const isFinanceiro = hasSetor(profile, 'financeiro');
   // Aprovação restrita ao GERENTE do Financeiro (escolha do usuário); admin/CEO sempre podem.
   const podeDecidir  =
-    profile.role === 'admin' || profile.role === 'ceo' ||
+    profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile) ||
     (profile.role === 'gerente' && hasSetor(profile, 'financeiro'));
 
   // IDs de cotações que já têm pedido gerado.
@@ -600,7 +601,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { sho
 };
 
 export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title="Cotações" onSelect={setFilial} />;
-  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

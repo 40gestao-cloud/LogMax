@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
+import { isConselheiro } from '../lib/rbac';
 
 const STATUS_FLOW = ['Pendente', 'Ciente', 'Em Andamento', 'Concluído'] as const;
 type TarefaStatus = typeof STATUS_FLOW[number];
@@ -51,7 +53,7 @@ const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const canCreate = profile?.role === 'admin' || profile?.role === 'ceo';
+  const canCreate = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
   const moduloLabel = MODULE_LABEL[modulo] ?? modulo;
 
   const pendentes   = tarefas.filter((t: any) => t.status === 'Pendente').length;
@@ -289,7 +291,7 @@ const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }
 };
 
 export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  if (!filial) return <FilialSelector title={`Tarefas — ${modulo}`} onSelect={setFilial} />;
-  return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -7,10 +7,11 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FilialOp } from '../components/FilialSelector';
+import { useFilial } from '../contexts/FilialContext';
 
 // notificar_setor existe em 20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
 async function notificarSetor(args: {
@@ -83,7 +84,7 @@ const OrcamentosViewInner = ({
 
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');
-  const isAdminOuCeo   = profile.role === 'admin' || profile.role === 'ceo';
+  const isAdminOuCeo   = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   const podeDecidirFin = isFinanceiro || isAdminOuCeo;
   const podeCriarVenda = isVendas || isAdminOuCeo;
 
@@ -904,9 +905,8 @@ export const OrcamentosView = ({
   profile: UserProfile;
   mode?: 'vendas' | 'financeiro';
 }) => {
-  const [filial, setFilial] = useState<FilialOp | null>(null);
-  const title = mode === 'financeiro' ? 'Aprovações de Orçamento' : 'Orçamentos & Propostas';
-  if (!filial) return <FilialSelector title={title} onSelect={setFilial} />;
-  return <OrcamentosViewInner showToast={showToast} profile={profile} mode={mode} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <OrcamentosViewInner showToast={showToast} profile={profile} mode={mode} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };
 

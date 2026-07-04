@@ -12,7 +12,7 @@ import {
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { formatBRL } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const calcMargem = (venda: number, custo: number): number | null => {
@@ -46,7 +46,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   );
 
   const podeVerCusto =
-    profile.role === 'admin' || profile.role === 'ceo'
+    profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile)
     || hasSetor(profile, 'financeiro') || hasSetor(profile, 'marketing');
 
   // Catálogo = só itens vendáveis ativos. Patrimônio (tipo='patrimonio') é gestão
