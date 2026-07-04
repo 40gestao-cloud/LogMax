@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -8,12 +8,13 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Ur
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
 const ITEM_OUTRO = '__outro__';
 
-export const RequisicoesView = ({ showToast }: any) => {
+const RequisicoesViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -21,10 +22,10 @@ export const RequisicoesView = ({ showToast }: any) => {
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/requisicoesview', undefined, true,
+    '/api/requisicoesview', { filial }, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['item', 'solicitante', 'urgencia', 'centro_custo', 'status'] }
   );
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const produtosOrdenados = useMemo(
     () => [...produtos]
       .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo')
@@ -102,6 +103,7 @@ export const RequisicoesView = ({ showToast }: any) => {
           p_qtd:          payload.qtd,
           p_urgencia:     payload.urgencia,
           p_centro_custo: payload.centro_custo,
+          p_filial:       filial,
         });
         if (rpcErr) throw new Error(rpcErr.message);
         if (saved) setData((prev: any[]) => [saved, ...prev]);
@@ -134,10 +136,11 @@ export const RequisicoesView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Compra</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Solicite itens para compra. Requisições aprovadas seguem para cotação.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -270,4 +273,10 @@ export const RequisicoesView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const RequisicoesView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Requisições de Compra" onSelect={setFilial} />;
+  return <RequisicoesViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

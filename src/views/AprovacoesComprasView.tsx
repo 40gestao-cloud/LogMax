@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react';
+import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const AprovacoesComprasView = ({ showToast }: any) => {
-  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente' }, true);
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', undefined, true);
+const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', { filial }, true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
@@ -77,9 +78,12 @@ export const AprovacoesComprasView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Minhas Aprovações</h2>
-        <p className="text-sm text-gray-400 mt-1">Requisições de compra aguardando sua decisão.</p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Requisições de compra aguardando sua decisão.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
@@ -169,4 +173,10 @@ export const AprovacoesComprasView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const AprovacoesComprasView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Aprovações de Compra" onSelect={setFilial} />;
+  return <AprovacoesComprasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

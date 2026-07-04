@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const RecebimentosView = ({ showToast }: any) => {
+const RecebimentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -16,12 +17,12 @@ export const RecebimentosView = ({ showToast }: any) => {
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/recebimentosview', undefined, false,
+    '/api/recebimentosview', { filial }, false,
     { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao', 'pedido_id'] }
   );
-  // pedidos/produtos: sem paginação — usados em dropdowns globais (todos os ativos).
-  const { data: pedidos } = useFetchData<any>('/api/pedidosview');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  // pedidos filtrados pela filial; produtos da mesma filial para atualizar estoque.
+  const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial });
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pedido_id: '' });
@@ -151,8 +152,12 @@ export const RecebimentosView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recebimentos</h2><p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p></div>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recebimentos — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p>
+        </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Registrar</NeuButtonAccent>
         </div>
@@ -264,4 +269,10 @@ export const RecebimentosView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const RecebimentosView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Recebimentos" onSelect={setFilial} />;
+  return <RecebimentosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

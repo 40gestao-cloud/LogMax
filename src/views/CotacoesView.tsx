@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 // notificar_setor: RPC já existente em 20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -41,7 +41,7 @@ async function notificarSetor(args: {
   }
 }
 
-export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -51,11 +51,11 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
   // que é tabela diferente). useFetchData só sabe fazer ilike em colunas da própria
   // tabela, então qualquer searchColumns aqui filtra a coisa errada.
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/cotacoesview', undefined, false,
+    '/api/cotacoesview', { filial }, false,
     { page }
   );
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: requisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -101,23 +101,11 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
 
   const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
 
-  // Agrupa requisições aprovadas pela empresa do produto correspondente
-  // (match do `item` da requisição com o `nome` do produto cadastrado).
-  // Requisições cujo item não bate com nenhum produto vão para "Outros".
-  const requisicoesAgrupadas = useMemo(() => {
-    const norm = (s: string) => s.trim().toLowerCase();
-    const buckets = new Map<string, any[]>();
-    for (const r of requisicoesAprovadas) {
-      const prod = produtos.find((p: any) => norm(p.nome ?? '') === norm(r.item ?? ''));
-      const filial = prod?.filial && (FILIAIS_HOLDING as readonly string[]).includes(prod.filial) ? prod.filial : 'Outros';
-      (buckets.get(filial) ?? buckets.set(filial, []).get(filial)!).push(r);
-    }
-    for (const [, arr] of buckets) {
-      arr.sort((a, b) => String(a.item ?? '').localeCompare(String(b.item ?? ''), 'pt-BR', { sensitivity: 'base' }));
-    }
-    const ordem = [...FILIAIS_HOLDING, 'Outros'];
-    return ordem.filter(f => buckets.has(f)).map(f => ({ filial: f, items: buckets.get(f)! }));
-  }, [requisicoesAprovadas, produtos]);
+  // Requisições aprovadas da filial selecionada, ordenadas por item.
+  const requisicoesAprovadaOrdenadas = useMemo(() =>
+    [...requisicoesAprovadas].sort((a, b) => String(a.item ?? '').localeCompare(String(b.item ?? ''), 'pt-BR', { sensitivity: 'base' })),
+    [requisicoesAprovadas]
+  );
 
   // Fornecedores divididos em PJ / PF, cada lista agrupada por filial.
   // CRMView grava pessoa_tipo como 'Empresa' / 'Pessoa Física' (não 'PJ'/'PF') —
@@ -175,6 +163,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
         prazo_entrega: extras.prazo_entrega,
         validade: extras.validade || null,
         status: 'Aguardando Financeiro',
+        filial,
       });
       setData((prev: any[]) => [saved ?? { id: Date.now(), ...form, ...extras, status: 'Aguardando Financeiro' }, ...prev]);
       closeForm();
@@ -275,6 +264,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
       valor_total: cotacao.valor_total,
       prazo_entrega: cotacao.prazo_entrega || null,
       status: 'Pendente',
+      filial: cotacao.filial ?? filial,
     };
     const snapshotPayload = {
       ...basePayload,
@@ -344,7 +334,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cotações</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cotações — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
             {isFinanceiro && !isCompras
               ? 'Aprove ou reprove cotações enviadas pelo setor de Compras.'
@@ -352,6 +342,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
@@ -378,7 +369,7 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
               <p className="text-[11px] text-gray-500 -mt-2">
                 Ao salvar, a cotação será enviada ao <span className="text-cyan-400 font-bold">Financeiro</span> para aprovação.
               </p>
-              {requisicoesAprovadas.length === 0 ? (
+              {requisicoesAprovadaOrdenadas.length === 0 ? (
                 <p className="text-sm text-yellow-400/80 text-center py-4">Nenhuma requisição aprovada disponível. Aprove uma requisição primeiro.</p>
               ) : (
                 <>
@@ -387,12 +378,8 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.requisicao_id ? 'border border-red-500/40' : ''}`}
                         value={form.requisicao_id} onChange={e => { setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
                         <option value="">Selecione...</option>
-                        {requisicoesAgrupadas.map(g => (
-                          <optgroup key={g.filial} label={g.filial}>
-                            {g.items.map((r: any) => (
-                              <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
-                            ))}
-                          </optgroup>
+                        {requisicoesAprovadaOrdenadas.map((r: any) => (
+                          <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
                         ))}
                       </select>
                     </FormField>
@@ -610,4 +597,10 @@ export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: 
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Cotações" onSelect={setFilial} />;
+  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

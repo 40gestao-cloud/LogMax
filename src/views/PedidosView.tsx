@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
+import { ArrowRight, Loader2, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const PedidosView = ({ showToast }: any) => {
+const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
-  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', undefined, undefined, { page });
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
-  const { data: cotacoes } = useFetchData<any>('/api/cotacoesview');
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesview');
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', { filial }, undefined, { page });
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  const { data: cotacoes } = useFetchData<any>('/api/cotacoesview', { filial });
+  const { data: requisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
   const [processing, setProcessing] = useState<string | null>(null);
 
   const enriched = data.map((p: any) => {
@@ -67,7 +68,7 @@ export const PedidosView = ({ showToast }: any) => {
           vencimento,
           status: 'Pendente',
           pedido_id: pedido.id,
-          filial: pedido.forn?.filial ?? 'Matriz',
+          filial: pedido.filial ?? filial,
         });
         showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
       } else {
@@ -115,9 +116,12 @@ export const PedidosView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Compra</h2>
-        <p className="text-sm text-gray-400 mt-1">Pedidos gerados automaticamente a partir de cotações aprovadas.</p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Compra — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Pedidos gerados automaticamente a partir de cotações aprovadas.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhum pedido. Aprove uma cotação para gerar o primeiro pedido." /> : (
@@ -186,4 +190,10 @@ export const PedidosView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const PedidosView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Pedidos de Compra" onSelect={setFilial} />;
+  return <PedidosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
