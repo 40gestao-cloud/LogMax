@@ -136,6 +136,7 @@ export function useFetchData<T = any>(
 
   useEffect(() => {
     if (!realtime || !supabase || !table) return;
+    const sb = supabase;
     // crypto.randomUUID() em vez de Math.random — qualidade criptográfica,
     // sem chance teórica de colisão entre instâncias paralelas do hook.
     const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -144,7 +145,7 @@ export function useFetchData<T = any>(
     // Debounce: durante imports em massa ou bursts de UPDATE, agrupa
     // eventos em janelas de 250ms para evitar fan-out de fetches.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase
+    const channel = sb
       .channel(`rt-${table}-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
         if (debounceTimer !== null) clearTimeout(debounceTimer);
@@ -160,7 +161,7 @@ export function useFetchData<T = any>(
       });
     return () => {
       if (debounceTimer !== null) clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [table, realtime]);
 

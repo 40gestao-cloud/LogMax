@@ -48,13 +48,14 @@ export function useCaixaAberto(filial: FilialOperacional | null) {
   useEffect(() => {
     refresh();
     if (!supabase || !filial) return;
-    const channel = supabase
+    const sb = supabase;
+    const channel = sb
       .channel(`caixa-aberto-${filial}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'controle_caixa', filter: `filial=eq.${filial}` },
         () => refresh())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { sb.removeChannel(channel); };
   }, [refresh, filial]);
 
   return { caixa, isLoading, refresh };
@@ -93,11 +94,12 @@ export function useCaixasDoDia() {
   useEffect(() => {
     refresh();
     if (!supabase) return;
-    const channel = supabase
+    const sb = supabase;
+    const channel = sb
       .channel('caixas-do-dia-watch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'controle_caixa' }, () => refresh())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { sb.removeChannel(channel); };
   }, [refresh]);
 
   return { caixas, isLoading, refresh };

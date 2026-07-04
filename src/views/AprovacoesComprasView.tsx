@@ -5,28 +5,33 @@ import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { AprovacaoCompras, Requisicao } from '../types/domain';
 
-const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
-  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<any>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', { filial }, true);
+type ShowToast = (msg: string, type: string, persist?: boolean) => void;
+
+type EnrichedAp = AprovacaoCompras & { req: Requisicao };
+
+const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: ShowToast; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
 
   const isLoading = loadingAp || loadingReq;
 
-  const enriched = aprovacoes
-    .map((ap: any) => ({ ...ap, req: requisicoes.find((r: any) => r.id === ap.requisicao_id) }))
-    .filter((ap: any) => ap.req);
+  const enriched: EnrichedAp[] = aprovacoes
+    .map(ap => ({ ...ap, req: requisicoes.find(r => r.id === ap.requisicao_id) }))
+    .filter((ap): ap is EnrichedAp => ap.req !== undefined);
 
-  const handleAprovar = async (ap: any) => {
+  const handleAprovar = async (ap: EnrichedAp) => {
     setProcessing(ap.id);
     let aprovUpdated = false;
     try {
       await dbUpdate('/api/minhasaprovacoesview', ap.id, { status: 'Aprovado', observacao: obs[ap.id] ?? '' });
       aprovUpdated = true;
       await dbUpdate('/api/requisicoesview', ap.requisicao_id, { status: 'Aprovado' });
-      setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
+      setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada!", 'success', true);
     } catch {
       // Rollback best-effort: se a aprovação foi marcada mas a requisição falhou,
@@ -40,7 +45,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
     }
   };
 
-  const handleNegar = async (ap: any) => {
+  const handleNegar = async (ap: EnrichedAp) => {
     if (!(obs[ap.id] ?? '').trim()) {
       showToast("Informe a justificativa para negar.", 'error', true);
       return;
@@ -64,7 +69,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
         }
       }
 
-      setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
+      setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição negada (cotações pendentes canceladas).", 'info', true);
     } catch {
       if (aprovUpdated) {
@@ -90,7 +95,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
         <EmptyState message="Nenhuma aprovação pendente" />
       ) : (
         <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 pb-6">
-          {enriched.map((ap: any) => {
+          {enriched.map(ap => {
             const req = ap.req;
             const isExpanded = expanded === ap.id;
             const isProcessing = processing === ap.id;
@@ -125,7 +130,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
                             { label: 'Centro de Custo', val: req.centro_custo || '—' },
                             { label: 'Urgência', val: req.urgencia ?? 'Normal' },
                             { label: 'Quantidade', val: String(req.qtd) },
-                            { label: 'Data Criação', val: req.data },
+                            { label: 'Data Criação', val: req.data ?? '—' },
                           ].map(({ label, val }) => (
                             <div key={label} className="neu-pressed p-3 rounded-xl">
                               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{label}</span>
@@ -175,7 +180,7 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
   );
 };
 
-export const AprovacoesComprasView = ({ showToast }: any) => {
+export const AprovacoesComprasView = ({ showToast }: { showToast: ShowToast }) => {
   const [filial, setFilial] = useState<FilialOp | null>(null);
   if (!filial) return <FilialSelector title="Aprovações de Compra" onSelect={setFilial} />;
   return <AprovacoesComprasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;

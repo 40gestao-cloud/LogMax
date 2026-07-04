@@ -10,6 +10,7 @@ import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { FolhaPagamento, Funcionario } from '../types/domain';
 
 type RecalcBreakdown = {
   valor_hora: number;
@@ -42,8 +43,8 @@ const statusNextTitle = (s: string): string =>
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
 const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
-  const { data: folhas, setData, isLoading: loadingF } = useFetchData<any>('/api/folhapagamentoview', { filial });
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
+  const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
   const hoje = new Date().toISOString().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
@@ -71,18 +72,18 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
 
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const folhasFiltradas = folhas.filter((f: any) => f.mes_ref === mesFiltro);
-  const enriched = folhasFiltradas.map((f: any) => ({
+  const folhasFiltradas = folhas.filter(f => f.mes_ref === mesFiltro);
+  const enriched = folhasFiltradas.map(f => ({
     ...f,
-    func: funcionarios.find((fn: any) => fn.id === f.funcionario_id),
+    func: funcionarios.find(fn => fn.id === f.funcionario_id),
   }));
 
-  const totalBruto = folhasFiltradas.reduce((acc: number, f: any) => acc + Number(f.salario_bruto || 0), 0);
-  const totalDesc = folhasFiltradas.reduce((acc: number, f: any) => acc + Number(f.descontos || 0), 0);
-  const totalLiq = folhasFiltradas.reduce((acc: number, f: any) => acc + Number(f.salario_liquido || 0), 0);
-  const pendentes = folhasFiltradas.filter((f: any) => f.status === 'Pendente').length;
-  const funcsAtivos = funcionarios.filter((fn: any) => fn.status === 'Ativo').length;
-  const funcsComFolha = new Set(folhasFiltradas.map((f: any) => f.funcionario_id)).size;
+  const totalBruto = folhasFiltradas.reduce((acc, f) => acc + Number(f.salario_bruto || 0), 0);
+  const totalDesc = folhasFiltradas.reduce((acc, f) => acc + Number(f.descontos || 0), 0);
+  const totalLiq = folhasFiltradas.reduce((acc, f) => acc + Number(f.salario_liquido || 0), 0);
+  const pendentes = folhasFiltradas.filter(f => f.status === 'Pendente').length;
+  const funcsAtivos = funcionarios.filter(fn => fn.status === 'Ativo').length;
+  const funcsComFolha = new Set(folhasFiltradas.map(f => f.funcionario_id)).size;
 
   const parseCreditError = (msg: string): string => {
     if (msg.includes('sem conta de colaborador') || msg.includes('user_profile_id')) {
@@ -120,7 +121,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
   const handleSave = async () => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
     if (!editId) {
-      const dup = folhas.some((x: any) => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
+      const dup = folhas.some(x => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
       if (dup) { showToast('Já existe folha para este funcionário neste mês. Edite o registro existente.', 'error'); return; }
     }
     const base = Number(form.salario_base || 0);
@@ -133,11 +134,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
     try {
       if (editId) {
         const updated = await dbUpdate('/api/folhapagamentoview', editId, payload);
-        setData((prev: any[]) => prev.map((f: any) => f.id === editId ? { ...f, ...(updated ?? payload) } : f));
+        setData(prev => prev.map(f => f.id === editId ? { ...f, ...(updated ?? payload) } : f));
         showToast('Folha atualizada.', 'success');
       } else {
         const rec = await dbInsert('/api/folhapagamentoview', payload);
-        setData((prev: any[]) => [rec, ...prev]);
+          setData(prev => [rec as FolhaPagamento, ...prev]);
         showToast('Folha registrada.', 'success');
       }
       setForm(EMPTY);
@@ -193,7 +194,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
         }
       }
       await dbDelete('/api/folhapagamentoview', folha.id);
-      setData((prev: any[]) => prev.filter((f: any) => f.id !== folha.id));
+      setData(prev => prev.filter(f => f.id !== folha.id));
       showToast('Folha inativada e MaxBank revertido.', 'success');
     } catch (err: any) {
       const msg = err?.message ?? 'verifique o console';
@@ -208,7 +209,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
   // recente. Admin/CEO/RH consegue ler todos via RLS.
   const abrirCarteira = async (f: any) => {
     if (!supabase) return;
-    const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+    const func = funcionarios.find(fn => fn.id === f.funcionario_id);
     const nome = func?.nome ?? 'Colaborador';
     setCarteiraLoading(true);
     try {
@@ -332,7 +333,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
       if (error) throw error;
       const breakdown = result as RecalcBreakdown;
       // Atualiza tabela local com os novos valores.
-      setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? {
+      setData(prev => prev.map(x => x.id === f.id ? {
         ...x,
         salario_base:    breakdown.salario_base,
         salario_bruto:   breakdown.salario_bruto,
@@ -342,7 +343,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
         horas_falta:     breakdown.horas_falta,
         horas_extras:    breakdown.horas_extras,
       } : x));
-      const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+      const func = funcionarios.find(fn => fn.id === f.funcionario_id);
       setRecalcBreakdown({ folhaNome: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`, data: breakdown });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
@@ -358,7 +359,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
     if (!next) return; // 'Paga' é estado terminal — sem reversão
     try {
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
-      setData((prev: any[]) => prev.map((x: any) => x.id === f.id ? { ...x, status: next } : x));
+      setData(prev => prev.map(x => x.id === f.id ? { ...x, status: next } : x));
 
       // Processada → Paga: credita salário líquido na carteira MaxBank
       // do colaborador. Idempotência via UNIQUE parcial em maxbank_transacoes
@@ -390,7 +391,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
             .like('descricao', `%${marker}%`)
             .limit(1);
           if (!existentes || existentes.length === 0) {
-            const func = funcionarios.find((fn: any) => fn.id === f.funcionario_id);
+            const func = funcionarios.find(fn => fn.id === f.funcionario_id);
             // Vencimento: dia 5 do mês seguinte ao de referência.
             let vencimento: string | null = null;
             if (f.mes_ref) {

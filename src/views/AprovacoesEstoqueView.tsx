@@ -5,11 +5,17 @@ import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge } from '../components/ui';
 import { FilialSelector, type FilialOp } from '../components/FilialSelector';
+import type { AprovacaoEstoque, RequisicaoEstoque, Produto } from '../types/domain';
 
-const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
-  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial });
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+type EnrichedAp = AprovacaoEstoque & {
+  req: RequisicaoEstoque | undefined;
+  prod: Produto | undefined;
+};
+
+const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: (msg: string, type: string, persist?: boolean) => void; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial });
+  const { data: requisicoes } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial });
+  const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
@@ -18,12 +24,12 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
   // O ref tranca instantaneamente.
   const processingRef = useRef<string | null>(null);
 
-  const enriched = aprovacoes.map((ap: any) => {
-    const req = requisicoes.find((r: any) => r.id === ap.requisicao_estoque_id);
-    return { ...ap, req, prod: req ? produtos.find((p: any) => p.id === req.produto_id) : null };
+  const enriched: EnrichedAp[] = aprovacoes.map(ap => {
+    const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
+    return { ...ap, req, prod: req ? produtos.find(p => p.id === req.produto_id) : undefined };
   });
 
-  const handleAprovar = async (ap: any) => {
+  const handleAprovar = async (ap: EnrichedAp) => {
     if (processingRef.current === ap.id) return;
     processingRef.current = ap.id;
     setProcessing(ap.id);
@@ -59,18 +65,18 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
             requisicao_estoque_id: ap.requisicao_estoque_id,
             filial,
           });
-        } catch (movErr: any) {
+        } catch (movErr: unknown) {
           // 23505 = UNIQUE: já existe movimento pra essa requisição
           // (double-click, ou aprovação concorrente em outra aba).
           // Idempotência: trata como sucesso silencioso.
-          const msg = String(movErr?.message ?? '');
+          const msg = String((movErr as { message?: string })?.message ?? '');
           const isDuplicate = msg.includes('uq_mov_estoque_por_requisicao_estoque')
                             || msg.includes('23505')
                             || /duplicate key value/i.test(msg);
           if (!isDuplicate) throw movErr;
         }
       }
-      setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
+      setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
     } catch {
       if (aprovUpdated) {
@@ -83,7 +89,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
     }
   };
 
-  const handleNegar = async (ap: any) => {
+  const handleNegar = async (ap: EnrichedAp) => {
     if (processingRef.current === ap.id) return;
     if (!obs[ap.id]?.trim()) { showToast("Informe uma observação para negar.", 'error', true); return; }
     processingRef.current = ap.id;
@@ -93,7 +99,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
       await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Negado', observacao: obs[ap.id] });
       aprovUpdated = true;
       await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Negado' });
-      setAprovacoes((prev: any[]) => prev.filter(a => a.id !== ap.id));
+      setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição negada.", 'success', true);
     } catch {
       if (aprovUpdated) {
@@ -114,7 +120,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
       </div>
       {enriched.length === 0 ? <EmptyState message="Nenhuma aprovação pendente" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
-          {enriched.map((ap: any) => (
+          {enriched.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
               <div className="flex justify-between items-start">
                 <div>
@@ -145,7 +151,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
   );
 };
 
-export const AprovacoesEstoqueView = ({ showToast }: any) => {
+export const AprovacoesEstoqueView = ({ showToast }: { showToast: (msg: string, type: string, persist?: boolean) => void }) => {
   const [filial, setFilial] = useState<FilialOp | null>(null);
   if (!filial) return <FilialSelector title="Aprovações de Estoque" onSelect={setFilial} />;
   return <AprovacoesEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;

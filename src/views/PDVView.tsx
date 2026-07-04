@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
+import type { Produto, Cliente } from '../types/domain';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -144,8 +145,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [filialFiltro] = useState<FilialPDV>(filialInicial);
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto(filialFiltro);
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
-  const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
-  const { data: clientes } = useFetchData<any>('/api/crmview');
+  const { data: produtos, isLoading: loadingProd } = useFetchData<Produto>('/api/produtosview', undefined, true);
+  const { data: clientes } = useFetchData<Cliente>('/api/crmview');
 
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);

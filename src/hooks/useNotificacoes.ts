@@ -49,6 +49,7 @@ export function useNotificacoes(setor: string | undefined | null) {
   useEffect(() => {
     load();
     if (!supabase || !setor) return;
+    const sb = supabase;
     // crypto.randomUUID() pra ID único forte entre instâncias paralelas.
     const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -56,7 +57,7 @@ export function useNotificacoes(setor: string | undefined | null) {
     // Debounce 250ms: bursts (vários setores notificados em sequência)
     // viram um único fetch da lista — evita flicker no sino.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const ch = supabase
+    const ch = sb
       .channel(`notificacoes-${setor}-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notificacoes' }, () => {
         if (debounceTimer !== null) clearTimeout(debounceTimer);
@@ -68,7 +69,7 @@ export function useNotificacoes(setor: string | undefined | null) {
       .subscribe();
     return () => {
       if (debounceTimer !== null) clearTimeout(debounceTimer);
-      supabase.removeChannel(ch);
+      sb.removeChannel(ch);
     };
   }, [load, setor]);
 
