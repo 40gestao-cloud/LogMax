@@ -25,3 +25,5 @@ bundle-stats.html
 # Claude Code — preferências pessoais por projeto
 .claude/settings.local.json
 C\:*
+C*Users*scratchpad*
+C?Users*
