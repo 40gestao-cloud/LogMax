@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
+import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
 
@@ -25,8 +26,8 @@ const EMPTY_FORM = {
 
 const EMPTY_PERGUNTA = { tipo: 'escala' as 'escala' | 'texto', enunciado: '', obrigatoria: true };
 
-export const PesquisasView = ({ showToast, profile }: any) => {
-  const { data: pesquisas, setData, isLoading, reload } = useFetchData<any>('/api/pesquisasview');
+const PesquisasViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+  const { data: pesquisas, setData, isLoading, reload } = useFetchData<any>('/api/pesquisasview', { filial });
 
   const [showForm, setShowForm]         = useState(false);
   const [form, setForm]                 = useState<any>(EMPTY_FORM);
@@ -35,16 +36,6 @@ export const PesquisasView = ({ showToast, profile }: any) => {
   const [resultadosId, setResultadosId] = useState<string | null>(null);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
-
-  const canManage = hasSetor(profile, 'rh');
-  if (!canManage) {
-    return (
-      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
-        <Lock size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem gerenciar pesquisas.</p>
-      </div>
-    );
-  }
 
   const rascunho  = pesquisas.filter((p: any) => p.status === 'Rascunho').length;
   const ativas    = pesquisas.filter((p: any) => p.status === 'Ativa').length;
@@ -74,6 +65,7 @@ export const PesquisasView = ({ showToast, profile }: any) => {
         data_fim:     form.data_fim    || null,
         status:       'Rascunho',
         nome_criador: profile?.nome ?? '',
+        filial,
       };
       const created = await dbInsert<any>('/api/pesquisasview', payload);
       setData((prev: any[]) => [created, ...prev]);
@@ -126,9 +118,12 @@ export const PesquisasView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pesquisas</h2>
-        <p className="text-sm text-gray-400 mt-1">Crie pesquisas de clima, satisfação ou feedback e acompanhe os resultados.</p>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pesquisas — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Crie pesquisas de clima, satisfação ou feedback e acompanhe os resultados.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -521,4 +516,18 @@ function ResultadosModal({ pesquisa, onClose }: { pesquisa: any; onClose: () => 
       </motion.div>
     </motion.div>
   );
-}
+};
+
+export const PesquisasView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!hasSetor(profile, 'rh')) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+        <Lock size={36} className="text-gray-600" />
+        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem gerenciar pesquisas.</p>
+      </div>
+    );
+  }
+  if (!filial) return <FilialSelector title="Pesquisas de RH" onSelect={setFilial} />;
+  return <PesquisasViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+};

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles } from 'lucide-react';
+import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const STATUS_FLOW = ['Pendente', 'Ciente', 'Em Andamento', 'Concluído'] as const;
 type TarefaStatus = typeof STATUS_FLOW[number];
@@ -37,9 +38,9 @@ type TarefasViewProps = {
   modulo: 'empresa' | 'compras' | 'estoque' | 'financeiro' | 'rh' | 'vendas';
 };
 
-export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) => {
-  // Filtra por módulo no servidor — a tabela `tarefas` é compartilhada.
-  const filter = useMemo(() => ({ modulo }), [modulo]);
+const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }: TarefasViewProps & { filial: FilialOp; onTrocarFilial: () => void }) => {
+  // Filtra por módulo E filial no servidor — a tabela `tarefas` é compartilhada.
+  const filter = useMemo(() => ({ modulo, filial }), [modulo, filial]);
   const { data: tarefas, setData, isLoading } = useFetchData<any>('/api/tarefasview', filter);
 
   const [showForm, setShowForm]     = useState(false);
@@ -76,6 +77,7 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
       const created = await dbInsert('/api/tarefasview', {
         ...form,
         modulo,
+        filial,
         prazo:        form.prazo || null,
         status:       'Pendente',
         nome_criador: profile?.nome ?? '',
@@ -122,13 +124,16 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
-          Tarefas de {moduloLabel}
-        </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Demandas para a equipe — fluxo: Pendente → Ciente → Em Andamento → Concluído.
-        </p>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
+            Tarefas de {moduloLabel} — {filial}
+          </h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Demandas para a equipe — fluxo: Pendente → Ciente → Em Andamento → Concluído.
+          </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -281,4 +286,10 @@ export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) =>
       </div>
     </motion.div>
   );
+};
+
+export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title={`Tarefas — ${modulo}`} onSelect={setFilial} />;
+  return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

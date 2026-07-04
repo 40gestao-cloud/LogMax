@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE tarefas
+  ADD COLUMN IF NOT EXISTS filial text NOT NULL DEFAULT 'SuperMax';
+
+ALTER TABLE pesquisas
+  ADD COLUMN IF NOT EXISTS filial text NOT NULL DEFAULT 'SuperMax';
+
+COMMIT;
