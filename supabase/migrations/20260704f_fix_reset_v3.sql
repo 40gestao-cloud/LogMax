@@ -82,9 +82,9 @@ BEGIN
     caixa_bancos, configuracoes,
     -- Catálogo de categorias/orçamento
     categorias_produto, subcategorias_produto, orcamento_mensal_categoria
+    -- funcionários (FK de user_profiles.funcionario_id já foi zerada acima)
+    funcionarios
   RESTART IDENTITY CASCADE;
-
-  DELETE FROM funcionarios;
 
   SELECT count(*) INTO v_usuarios_preservados FROM user_profiles;
 
