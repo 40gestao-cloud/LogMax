@@ -534,12 +534,12 @@ table,
   animation: filial-shimmer-blue 2.8s linear infinite;
 }
 
-/* MaxLook: roxo com shimmer */
+/* MaxLook: nude com shimmer */
 .filial-badge--maxlook {
-  background: linear-gradient(100deg, #5b21b6 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #5b21b6 100%);
+  background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%);
   background-size: 200% auto;
-  color: #fff;
-  border-color: #7c3aed;
+  color: #3b1f0a;
+  border-color: #c9a882;
   animation: filial-shimmer-violet 2.8s linear infinite;
 }
 
@@ -556,7 +556,7 @@ table,
 .filial-badge--unknown  { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
 
 [data-theme="light"] .filial-badge--supermax { background: linear-gradient(100deg, #1d4ed8 0%, #3b82f6 35%, #60a5fa 50%, #3b82f6 65%, #1d4ed8 100%); background-size: 200% auto; color: #fff; border-color: #3b82f6; animation: filial-shimmer-blue 2.8s linear infinite; }
-[data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #5b21b6 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #5b21b6 100%); background-size: 200% auto; color: #fff; border-color: #7c3aed; animation: filial-shimmer-violet 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%); background-size: 200% auto; color: #3b1f0a; border-color: #c9a882; animation: filial-shimmer-violet 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--techmax  { background: linear-gradient(100deg, #c2410c 0%, #f97316 35%, #fb923c 50%, #f97316 65%, #c2410c 100%); background-size: 200% auto; color: #fff; border-color: #f97316; animation: filial-shimmer-gold 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 [data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
