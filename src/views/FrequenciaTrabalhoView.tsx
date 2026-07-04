@@ -42,6 +42,9 @@ const fmtData = (s: string) => {
   return `${d}/${m}/${y}`;
 };
 
+const fmtHorario = (iso: string) =>
+  new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
+
 const fmtDiaSemana = (s: string) => {
   const d = new Date(s + 'T12:00:00');
   return d.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'America/Rio_Branco' });
@@ -348,6 +351,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                     <th className="pb-3 font-bold px-3">Funcionário</th>
                     <th className="pb-3 font-bold px-3">Cargo</th>
                     <th className="pb-3 font-bold px-3 text-center">Status</th>
+                    <th className="pb-3 font-bold px-3 text-center">Registro</th>
                     <th className="pb-3 font-bold px-3">Justificativa</th>
                     <th className="pb-3 font-bold px-3 text-center w-20">Ação</th>
                   </tr>
@@ -393,6 +397,21 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                               );
                             })}
                           </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {freq ? (() => {
+                            const cfg = STATUS_CONFIG[freq.status];
+                            const Ic = cfg.icon;
+                            return (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className={`flex items-center gap-1 ${cfg.color}`}>
+                                  <Ic size={13} />
+                                  <span className="text-[11px] font-semibold">{freq.status === 'Presente com Atraso' ? 'Atraso' : freq.status}</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-gray-500 tabular-nums">{fmtHorario(freq.created_at)}</span>
+                              </div>
+                            );
+                          })() : <span className="text-gray-700 text-xs">—</span>}
                         </td>
                         <td className="py-3 px-3">
                           <input
