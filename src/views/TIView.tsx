@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy,
+  Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy, ArrowLeft,
 } from 'lucide-react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -22,6 +23,7 @@ type TIChamado = {
   criado_por?: string | null;
   created_at: string;
   resolvido_em?: string | null;
+  filial?: string | null;
 };
 
 const TIPO_PROBLEMA = ['Hardware', 'Software', 'Rede', 'Inteligência Artificial', 'Outro'];
@@ -67,12 +69,12 @@ type TIViewProps = {
   profile: UserProfile;
 };
 
-export const TIView = ({ showToast, profile }: TIViewProps) => {
+const TIViewInner = ({ showToast, profile, filial, onTrocarFilial }: TIViewProps & { filial: FilialOp; onTrocarFilial: () => void }) => {
   const { accentColor } = useTheme();
 
   // RLS já restringe: TI/admin vê tudo, demais setores só veem os próprios.
   const { data: chamados, setData, isLoading } =
-    useFetchData<TIChamado>('/api/tichamadosview', undefined, true);
+    useFetchData<TIChamado>('/api/tichamadosview', { filial }, true);
 
   const [showForm, setShowForm]   = useState(false);
   const [form, setForm]           = useState<typeof EMPTY_FORM>(EMPTY_FORM);
@@ -102,6 +104,7 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
         status: 'Aberto',
         nome_criador: profile.nome,
         criado_por: profile.id,
+        filial,
       });
       if (created) setData(prev => [created, ...prev]);
 
@@ -185,14 +188,17 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
 
-        <div className="shrink-0 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
-            <Monitor size={20} />
+        <div className="shrink-0 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
+              <Monitor size={20} />
+            </div>
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">TI & Suporte — {filial}</h2>
+              <p className="text-sm text-gray-400 mt-0.5">Painel da equipe de TI — chamados de todos os setores.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">TI & Suporte</h2>
-            <p className="text-sm text-gray-400 mt-0.5">Painel da equipe de TI — chamados de todos os setores.</p>
-          </div>
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
@@ -274,14 +280,17 @@ export const TIView = ({ showToast, profile }: TIViewProps) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
 
-      <div className="shrink-0 flex items-center gap-3">
+      <div className="shrink-0 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
         <div className="w-11 h-11 rounded-2xl neu-pressed flex items-center justify-center text-accent">
           <LifeBuoy size={20} />
         </div>
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Suporte de TI</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Suporte de TI — {filial}</h2>
           <p className="text-sm text-gray-400 mt-0.5">Abra um chamado para a equipe de TI resolver o seu problema.</p>
         </div>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {/* CTA principal */}
@@ -593,3 +602,9 @@ function SetorChamadosModal({ setorId, setorColor, chamados, updatingId, onClose
     </AnimatePresence>
   );
 }
+
+export const TIView = ({ showToast, profile }: TIViewProps) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="TI & Suporte" onSelect={setFilial} />;
+  return <TIViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
+};

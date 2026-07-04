@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown } from 'lucide-react';
+import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
@@ -66,8 +67,8 @@ const StarRow: React.FC<{ value: number; onChange?: (v: number) => void; size?: 
   </div>
 );
 
-export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
-  const { data: artes, isLoading, error: artesError } = useFetchData<Arte>('/api/marketingartesview', undefined, true);
+const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+  const { data: artes, isLoading, error: artesError } = useFetchData<Arte>('/api/marketingartesview', { filial }, true);
   const { data: feedbacks, setData: setFeedbacks } = useFetchData<Feedback>('/api/marketingartefeedbackview', undefined, true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<Record<string, { estrelas: number; comentario: string }>>({});
@@ -139,14 +140,17 @@ export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Artes Promocionais</h2>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Artes Promocionais — {filial}</h2>
         <p className="text-sm text-gray-400 mt-1">
           Artes publicadas pelo Marketing para as promoções aprovadas.{' '}
           {canGiveFeedback
             ? 'Você pode dar feedback (1-5 estrelas + comentário opcional).'
             : 'Apenas gerentes, admin e CEO podem dar feedback.'}
         </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {artesError || artes.length === 0 ? (
@@ -312,4 +316,10 @@ export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Artes Promocionais" onSelect={setFilial} />;
+  return <ArtesPromocionaisViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft } from 'lucide-react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { PDISection } from '../components/PDISection';
@@ -403,7 +404,7 @@ const CardAvaliacao: React.FC<{
 // View principal
 // ----------------------------------------------------------------------
 
-export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -592,20 +593,21 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       .map(a => `${a.avaliado_id}::${a.tipo}`);
 
     let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
+    const usersFilial = users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin');
     if (isAdminOuCEO) {
-      alvos = users
+      alvos = usersFilial
         .filter(u => u.role === 'gerente' && u.id !== profile.id)
         .map(user => ({ user, tipo: 'ceo_gerente' as const }));
     } else if (isGerente) {
       // Gerente avalia colaboradores de TODOS seus setores (primário + extras).
       const setoresGerente = allSetores(profile);
-      alvos = users
+      alvos = usersFilial
         .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
         .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
     } else {
       // colaborador: feedback reverso para gerentes de qualquer um dos seus setores + CEO
       const setoresColaborador = allSetores(profile);
-      const gerentesSetor = users.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
+      const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
       const ceos = users.filter(u => u.role === 'ceo');
       alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
     }
@@ -671,7 +673,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
 
   const consolidado = useMemo(() => {
     if (!podeVerConsolidado || !cicloConsolidadoId) return null;
-    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId);
+    const usersFilialSet = new Set(users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin').map(u => u.id));
+    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId && usersFilialSet.has(a.avaliado_id));
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
     // Agrupa um conjunto de avaliações por avaliado e enriquece cada linha.
@@ -822,8 +825,9 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
 
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho</h2>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho — {filial}</h2>
         <p className="text-sm text-gray-400 mt-1">
           {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
           {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
@@ -831,6 +835,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
           {!isRH && profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
           Veja o histórico do que você avaliou e o que recebeu.
         </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {/* ── A. CICLOS (admin/CEO) ── */}
@@ -1244,4 +1250,10 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Avaliações de Desempenho" onSelect={setFilial} />;
+  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
@@ -94,11 +95,11 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
   };
 };
 
-export const CalendarioEditorialView = ({ showToast, profile }: any) => {
+const CalendarioEditorialViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
   const { session } = useAuth();
   const confirm = useConfirm();
-  const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview');
-  const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview');
+  const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview', { filial });
+  const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview', { filial });
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Post | null>(null);
@@ -170,6 +171,7 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
         // Se o nome do responsável não foi informado, assume o criador.
         if (!payload.nome_responsavel) payload.nome_responsavel = profile?.nome ?? null;
         payload.responsavel_id   = profile?.id ?? null;
+        payload.filial           = filial;
         const created = await dbInsert('/api/marketingcalendarioview', payload);
         setData((prev: any[]) => [created, ...prev]);
         showToast('Post agendado.', 'success');
@@ -291,11 +293,14 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Calendário Editorial</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Agenda de posts por canal × data × responsável × status. Planeje a semana antes de produzir as artes.
-        </p>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Calendário Editorial — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Agenda de posts por canal × data × responsável × status. Planeje a semana antes de produzir as artes.
+          </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -576,4 +581,10 @@ export const CalendarioEditorialView = ({ showToast, profile }: any) => {
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const CalendarioEditorialView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Calendário Editorial" onSelect={setFilial} />;
+  return <CalendarioEditorialViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

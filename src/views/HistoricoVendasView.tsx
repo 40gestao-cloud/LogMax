@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronDown, X, FileDown, Sheet, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, X, FileDown, Sheet, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -9,8 +9,9 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import { useAIContext } from '../contexts/AIAssistantContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const HistoricoVendasView = ({ showToast }: any) => {
+const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -19,7 +20,7 @@ export const HistoricoVendasView = ({ showToast }: any) => {
 
   // Realtime activo: vendas concluídas por outros caixas refrescam esta lista (#21).
   const { data: vendas, setData: setVendas, isLoading: loadingV, totalCount, reload: reloadVendas } = useFetchData<any>(
-    '/api/vendasview', undefined, true,
+    '/api/vendasview', { filial }, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['forma_pagamento', 'status'] }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview');
@@ -184,13 +185,14 @@ export const HistoricoVendasView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex justify-between items-start shrink-0 flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Histórico de Vendas</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Histórico de Vendas — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
             {filtro === 'hoje' ? 'Vendas de hoje' : filtro === 'semana' ? 'Últimos 7 dias' : 'Todas as vendas'} —
             Total: <span className="text-accent font-bold">{totalFiltrado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </p>
         </div>
         <div className="flex gap-3 items-center flex-wrap w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           {/* Filtro período */}
           <div className="flex gap-1 neu-flat rounded-xl p-1">
             {(['todos', 'hoje', 'semana'] as const).map(f => (
@@ -311,4 +313,10 @@ export const HistoricoVendasView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const HistoricoVendasView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Histórico de Vendas" onSelect={setFilial} />;
+  return <HistoricoVendasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-react';
+import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
@@ -96,8 +97,8 @@ const FuncPicker: React.FC<{
   );
 };
 
-export const TreinamentosView = ({ showToast }: any) => {
-  const { data: treinamentos, setData, isLoading } = useFetchData<any>('/api/treinamentosview');
+const TreinamentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: treinamentos, setData, isLoading } = useFetchData<any>('/api/treinamentosview', { filial });
   const confirm = useConfirm();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -111,7 +112,7 @@ export const TreinamentosView = ({ showToast }: any) => {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.from('funcionarios').select('id, nome, cargo, status').order('nome')
+    supabase.from('funcionarios').select('id, nome, cargo, status').eq('filial', filial).order('nome')
       .then(({ data }) => setFuncionarios((data ?? []).filter(f => (f.status ?? 'Ativo') === 'Ativo')));
   }, []);
 
@@ -180,6 +181,7 @@ export const TreinamentosView = ({ showToast }: any) => {
       instrutor:   idsToNomes(form.instrutores)[0] ?? null,
       inscritos:   form.inscritos.length,
       status:      form.status,
+      filial,
     };
     setSaving(true);
     try {
@@ -313,9 +315,12 @@ export const TreinamentosView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Treinamentos</h2>
-        <p className="text-sm text-gray-400 mt-1">Gerencie treinamentos internos e externos.</p>
+      <div className="shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Treinamentos — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Gerencie treinamentos internos e externos.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -492,4 +497,10 @@ export const TreinamentosView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const TreinamentosView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Treinamentos" onSelect={setFilial} />;
+  return <TreinamentosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
