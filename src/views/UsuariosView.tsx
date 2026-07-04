@@ -772,13 +772,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <li>RH: ponto, folha, férias, afastamentos, treinamentos</li>
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
-                  <li>MaxBank: transações, transferências, metas, folgas, créditos de folha (carteiras preservadas)</li>
+                  <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
                   <li>Cadastros: produtos, serviços, clientes, fornecedores, funcionários</li>
-                  <li>Filiais, configurações, formas de pagamento</li>
+                  <li>Configurações, formas de pagamento, categorias de produto</li>
                 </ul>
                 <p className="text-emerald-400 text-xs pt-2">
-                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial) e as carteiras MaxBank
-                  (saldo de salário, benefícios e bonificações).
+                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial), as carteiras MaxBank
+                  (saldo de salário, benefícios e bonificações) e as <strong>filiais</strong>.
                 </p>
               </div>
               <div className="flex flex-col gap-2 mb-4">
