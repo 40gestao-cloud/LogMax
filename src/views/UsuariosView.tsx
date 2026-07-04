@@ -44,6 +44,12 @@ const setorCls = (s: string) => {
 // Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
 const FILIAIS_GERENTE = FILIAIS_HOLDING.filter(f => f !== 'Matriz');
 
+// Só admin/CEO/conselheiro podem ficar em Matriz. Colaborador e gerente
+// precisam de unidade operacional, senão travam no gate "Filial não
+// configurada" (FilialContext rejeita Matriz como filialAtiva).
+const filiaisParaRole = (role: string): readonly string[] =>
+  role === 'colaborador' || role === 'gerente' ? FILIAIS_GERENTE : (FILIAIS_HOLDING as readonly string[]);
+
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
   const { data: funcionarios } = useFetchData<any>('/api/funcionariosview');
@@ -60,6 +66,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
   // Form vazio depende do papel: gerente herda seu próprio setor (não pode trocar)
   // e tem default de filial fora da Matriz.
+  // Colaborador (role default) SEMPRE começa em unidade operacional — nunca
+  // Matriz, senão o FilialContext trava o login com "Filial não configurada".
   const emptyForm = useMemo(() => ({
     nome: '',
     email: '',
@@ -67,7 +75,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     role: 'colaborador',
     setor: isGerente ? callerProfile.setor : 'logistica',
     setores_extras: [] as string[],
-    filial: isGerente ? FILIAIS_GERENTE[0] : (FILIAL_DEFAULT as string),
+    filial: FILIAIS_GERENTE[0] as string,
   }), [isGerente, callerProfile.setor]);
 
   // Setores válidos para extras (mesma lista do backend; sem 'all').
@@ -76,6 +84,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   ];
 
   const [form, setForm] = useState<any>(emptyForm);
+  // Corrige filial quando role muda para não-global: Matriz deixa de ser
+  // válida e o select some com a opção, mas o value permaneceria 'Matriz'
+  // e travaria o novo usuário no gate de login.
+  useEffect(() => {
+    if ((form.role === 'colaborador' || form.role === 'gerente') && form.filial === 'Matriz') {
+      setForm((p: any) => ({ ...p, filial: FILIAIS_GERENTE[0] }));
+    }
+  }, [form.role, form.filial]);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -198,6 +214,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [editForm, setEditForm] = useState<any>(null);
   const [editShowPass, setEditShowPass] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  // Mesma correção do form de criar: se troca de role global para colaborador/gerente
+  // com filial Matriz, força unidade operacional (senão o usuário editado não
+  // consegue mais entrar no app).
+  useEffect(() => {
+    if (!editForm) return;
+    if ((editForm.role === 'colaborador' || editForm.role === 'gerente') && editForm.filial === 'Matriz') {
+      setEditForm((p: any) => (p ? { ...p, filial: FILIAIS_GERENTE[0] } : p));
+    }
+  }, [editForm?.role, editForm?.filial]);
 
   useEffect(() => {
     if (!supabase) { setIsLoading(false); return; }
@@ -560,12 +585,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 </select>
               </div>
 
-              {/* Filial / Unidade — gerentes não podem atribuir Matriz */}
+              {/* Filial / Unidade — colaborador/gerente não podem atribuir Matriz
+                  (FilialContext bloqueia login com Matriz para não-globais). */}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="user-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
                 <select id="user-filial" value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {(isGerente ? FILIAIS_GERENTE : FILIAIS_HOLDING).map(f => <option key={f} value={f}>{f}</option>)}
+                  {filiaisParaRole(form.role).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
             </div>
@@ -903,13 +929,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   </select>
                 </div>
 
-                {/* Filial — gerente não pode atribuir Matriz */}
+                {/* Filial — colaborador/gerente não podem ser Matriz
+                    (FilialContext bloqueia login com Matriz para não-globais). */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="user-edit-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
                   <select id="user-edit-filial" value={editForm.filial}
                     onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    {(isGerente ? FILIAIS_GERENTE : FILIAIS_HOLDING).map(f => (
+                    {filiaisParaRole(editForm.role).map(f => (
                       <option key={f} value={f}>{f}</option>
                     ))}
                   </select>

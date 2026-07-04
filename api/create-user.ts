@@ -55,7 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let { setor } = req.body ?? {};
 
     // Setores válidos (mesma lista do CHECK no banco).
-    const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque'];
+    // Primários: mapeiam para SETOR_MODULES em src/lib/sectorAccess.ts.
+    // Extras: aceitam compras/estoque como acesso adicional (UI de badges).
+    const VALID_SETORES         = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+    const VALID_SETORES_EXTRAS  = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras', 'estoque'];
     let extras: string[] = [];
     if (Array.isArray(setores_extras)) {
       // Dedup + filtra inválidos + remove o primário.
@@ -72,6 +75,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!VALID_ROLES.includes(role)) {
       log.warn('request.invalid_role', { role });
       return res.status(400).json({ error: 'Cargo inválido.' });
+    }
+
+    if (!VALID_SETORES.includes(setor)) {
+      log.warn('request.invalid_setor', { setor });
+      return res.status(400).json({ error: 'Setor inválido.' });
     }
 
     // CEO e Conselheiro são globais: só admin os cria; setor forçado para 'all'.
@@ -110,6 +118,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (targetFilial === 'Matriz') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_filial: targetFilial, reason: 'gerente_matriz_forbidden' });
         return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
+      }
+    }
+
+    // Colaborador/gerente com filial Matriz = travam no gate "Filial não
+    // configurada" (FilialContext só aceita SuperMax/MaxLook/TechMax como
+    // filialAtiva). Barrar server-side além do bloqueio da UI, senão
+    // admin/CEO pode criar acidentalmente um usuário órfão. Aplica-se depois
+    // do bloco de CEO/Conselheiro, que já forçou setor='all' e é global.
+    if ((role === 'colaborador' || role === 'gerente')) {
+      const targetFilial = (typeof filial === 'string' ? filial.trim() : '') || 'Matriz';
+      if (targetFilial === 'Matriz') {
+        log.warn('user.validation_failed', { caller_id: caller.id, target_role: role, target_filial: targetFilial, reason: 'operational_role_needs_unit' });
+        return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax).' });
       }
     }
 

@@ -34,16 +34,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor, pode_acessar_usuarios')
+      .select('role, setor, pode_acessar_usuarios, is_conselheiro')
       .eq('id', caller.id)
       .single();
 
-    if (!callerProfile || callerProfile.role === 'colaborador') {
+    // Papéis autorizados a excluir: admin, CEO, gerente (com filtros abaixo)
+    // e conselheiro (role puro OU gerente com is_conselheiro=true).
+    const isConselheiroCaller = callerProfile?.role === 'conselheiro'
+      || (callerProfile?.role === 'gerente' && callerProfile?.is_conselheiro === true);
+    const AUTHORIZED_ROLES = ['admin', 'ceo', 'gerente'];
+    if (!callerProfile || (!AUTHORIZED_ROLES.includes(callerProfile.role) && !isConselheiroCaller)) {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile?.role });
       return res.status(403).json({ error: 'Sem permissão para excluir usuários.' });
     }
 
     // Gerente com acesso revogado pelo admin/CEO: barrar antes de qualquer mutação.
+    // Aplica-se ao gerente puro E ao gerente+conselheiro (o toggle é o mesmo).
     if (callerProfile.role === 'gerente' && callerProfile.pode_acessar_usuarios === false) {
       log.warn('user.permission_denied', { caller_id: caller.id, reason: 'gerente_access_revoked' });
       return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
@@ -81,10 +87,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Apenas administradores podem excluir CEO.' });
     }
 
-    if (callerProfile.role === 'gerente') {
+    // Gerente e Conselheiro (roles de gestão intermediária, sem elevação plena)
+    // só excluem colaboradores. Admin e CEO podem excluir gerente/colaborador
+    // (CEO já foi barrado acima se target=ceo, mantendo a hierarquia).
+    if (callerProfile.role === 'gerente' || isConselheiroCaller) {
       if (targetProfile.role !== 'colaborador') {
-        log.warn('user.permission_denied', { caller_id: caller.id, target_role: targetProfile.role, reason: 'gerente_role_mismatch' });
-        return res.status(403).json({ error: 'Gerentes só podem excluir colaboradores.' });
+        log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile.role, target_role: targetProfile.role, reason: 'intermediate_role_mismatch' });
+        return res.status(403).json({ error: 'Gerentes e conselheiros só podem excluir colaboradores.' });
       }
     }
 

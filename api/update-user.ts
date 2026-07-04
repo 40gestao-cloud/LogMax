@@ -164,6 +164,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         log.warn('user.permission_denied', { caller_id: caller.id, target_filial: filial, reason: 'gerente_matriz_forbidden' });
         return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
       }
+      // Colaborador/gerente com Matriz travam no FilialContext (só aceita
+      // SuperMax/MaxLook/TechMax). Barrar mesmo com admin/CEO chamando.
+      const targetRoleAfter = updates.role ?? targetProfile.role;
+      if ((targetRoleAfter === 'colaborador' || targetRoleAfter === 'gerente') && filial === 'Matriz') {
+        log.warn('user.validation_failed', { caller_id: caller.id, target_role: targetRoleAfter, target_filial: filial, reason: 'operational_role_needs_unit' });
+        return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax).' });
+      }
       updates.filial = filial;
     }
 
