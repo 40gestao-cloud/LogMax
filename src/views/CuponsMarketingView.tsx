@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
-import { FILIAIS_HOLDING } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 type Tipo = 'percentual' | 'fixo';
 
@@ -30,7 +30,7 @@ type Cupom = {
 
 type Campanha = { id: string; nome: string };
 
-const EMPTY_FORM = {
+const makeEmptyForm = (filial: string) => ({
   codigo: '',
   tipo: 'percentual' as Tipo,
   valor: '',
@@ -39,10 +39,10 @@ const EMPTY_FORM = {
   validade_inicio: '',
   validade_fim: '',
   limite_uso: '',
-  filial: '',
+  filial,
   campanha_id: '',
   descricao: '',
-};
+});
 
 const fmtBRL = (n: number) =>
   Number(n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -51,14 +51,17 @@ const fmtBRL = (n: number) =>
 const sanitizeCodigo = (s: string) =>
   s.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
 
-export const CuponsMarketingView = ({ showToast, profile }: any) => {
-  const { data: cupons, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview');
+const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: cuponsAll, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview');
   const confirm = useConfirm();
-  const { data: campanhas } = useFetchData<Campanha>('/api/marketingcampanhasview');
+  const { data: campanhasAll } = useFetchData<Campanha>('/api/marketingcampanhasview');
+
+  const cupons = useMemo(() => cuponsAll.filter((c: any) => c.filial === filial), [cuponsAll, filial]);
+  const campanhas = useMemo(() => campanhasAll.filter((c: any) => c.filial === filial || !c.filial), [campanhasAll, filial]);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Cupom | null>(null);
-  const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
+  const [form, setForm] = useState(makeEmptyForm(filial));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [searchCup, setSearchCup] = useState('');
@@ -76,7 +79,7 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
         (c.descricao ?? '').toLowerCase().includes(searchCup.toLowerCase()))
     : (cupons ?? []);
 
-  const resetForm = () => { setForm(EMPTY_FORM); setEditing(null); setShowForm(false); };
+  const resetForm = () => { setForm(makeEmptyForm(filial)); setEditing(null); setShowForm(false); };
 
   const openEdit = (c: Cupom) => {
     setEditing(c);
@@ -191,11 +194,17 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cupons</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Códigos promocionais aplicáveis no PDV. Use cupom percentual ou valor fixo, com limite de usos e validade.
-        </p>
+      <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cupons — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Códigos promocionais aplicáveis no PDV. Use cupom percentual ou valor fixo, com limite de usos e validade.
+          </p>
+        </div>
+        <button onClick={onTrocarFilial}
+          className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
+          <ArrowLeft size={14} /> Trocar unidade
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -303,13 +312,8 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial</label>
-                <select id="cup-filial" value={form.filial}
-                  onChange={e => setForm(f => ({ ...f, filial: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Todas</option>
-                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cup-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha</label>
@@ -352,7 +356,6 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
                   <th className="pb-4 font-bold px-4 text-right">Mín. compra</th>
                   <th className="pb-4 font-bold px-4">Validade</th>
                   <th className="pb-4 font-bold px-4 text-right">Usos / Limite</th>
-                  <th className="pb-4 font-bold px-4">Filial</th>
                   <th className="pb-4 font-bold px-4">Campanha</th>
                   <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
@@ -360,7 +363,7 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
               <tbody>
                 <AnimatePresence>
                   {cuponsFiltrados.length === 0
-                    ? <tr><td colSpan={9} className="py-8 text-center text-sm text-gray-600 italic">Nenhum cupom encontrado para "{searchCup}"</td></tr>
+                    ? <tr><td colSpan={8} className="py-8 text-center text-sm text-gray-600 italic">Nenhum cupom encontrado para "{searchCup}"</td></tr>
                     : cuponsFiltrados.map((c: any) => {
                     const expirado = c.validade_fim < today;
                     const esgotado = c.limite_uso != null && c.usos >= c.limite_uso;
@@ -399,7 +402,6 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
                             {c.usos}{c.limite_uso != null ? ` / ${c.limite_uso}` : ''}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-400">{c.filial ?? 'Todas'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400 max-w-[160px] truncate">
                           {c.campanha_id ? (campanhasAtivasMap[c.campanha_id] ?? '—') : '—'}
                         </td>
@@ -428,4 +430,10 @@ export const CuponsMarketingView = ({ showToast, profile }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const CuponsMarketingView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Cupons" onSelect={setFilial} />;
+  return <CuponsMarketingViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

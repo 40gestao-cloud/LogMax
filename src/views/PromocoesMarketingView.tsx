@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
-import { FILIAIS_HOLDING } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'CEO/Admin',
@@ -108,8 +108,8 @@ function SearchableSelect({ value, onChange, items, placeholder }: {
   );
 }
 
-export const PromocoesMarketingView = ({ showToast, profile }: any) => {
-  const { data: promocoes, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
+const PromocoesMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: promocoesAll, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const { data: servicos } = useFetchData<any>('/api/servicosview');
@@ -176,15 +176,14 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const promocoes = useMemo(() => promocoesAll.filter((p: any) => p.filial === filial), [promocoesAll, filial]);
+
   // Unifica produtos + serviços marcando cada um com o tipo de origem.
-  // Preço unificado: produto usa `preco`, serviço usa `valor`. Custo: ambos
-  // tentam `custo` e `preco_custo` como fallback.
-  // IMPORTANTE: os useMemo precisam vir ANTES de qualquer early return
-  // (Rules of Hooks). Não mover abaixo do `if (isLoading)`.
+  // Filtrado pela filial selecionada.
   type ItemPromo = { id: string; nome: string; preco: number; custo: number | null; filial: string; tipo_origem: 'produto' | 'servico' };
   const itens = useMemo<ItemPromo[]>(() => {
-    const produtosAtivos = produtos.filter((p: any) => p.status === 'Ativo' || !p.status);
-    const servicosAtivos = servicos.filter((s: any) => s.status === 'Ativo' || !s.status);
+    const produtosAtivos = produtos.filter((p: any) => (p.status === 'Ativo' || !p.status) && p.filial === filial);
+    const servicosAtivos = servicos.filter((s: any) => (s.status === 'Ativo' || !s.status) && s.filial === filial);
     const normalizar = (raw: any, tipo: 'produto' | 'servico'): ItemPromo => {
       const precoRaw = tipo === 'produto' ? raw.preco : raw.valor;
       const custoRaw = raw.custo ?? raw.preco_custo;
@@ -213,7 +212,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       (buckets.get(it.filial) ?? buckets.set(it.filial, []).get(it.filial)!).push(it);
     }
     for (const [, arr] of buckets) arr.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
-    const filialOrder = [...FILIAIS_HOLDING, 'Sem empresa'];
+    const filialOrder = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz', 'Sem empresa'];
     return Array.from(buckets.entries())
       .map(([filial, items]) => ({ filial, items }))
       .sort((a, b) => filialOrder.indexOf(a.filial) - filialOrder.indexOf(b.filial));
@@ -227,13 +226,13 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
     itens.filter(i => i.tipo_origem === 'servico').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
     [itens]);
   const promocoesFiltradas = searchPromo
-    ? (promocoes ?? []).filter((p: any) => (p.nome_produto ?? '').toLowerCase().includes(searchPromo.toLowerCase()))
-    : (promocoes ?? []);
+    ? promocoes.filter((p: any) => (p.nome_produto ?? '').toLowerCase().includes(searchPromo.toLowerCase()))
+    : promocoes;
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const aguardando = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
-  const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado').length;
+  const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado' || p.status === 'Ativa').length;
   const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada').length;
 
   const kpis = [
@@ -275,6 +274,7 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
         data_fim:          form.data_fim     || null,
         descricao:         form.descricao    || null,
         campanha_id:       form.campanha_id  || null,
+        filial,
         status:            'Aguardando Aprovação',
         nome_criador:      profile?.nome ?? '',
       };
@@ -462,9 +462,15 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções</h2>
-        <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a aprovação pelo Financeiro.</p>
+      <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a aprovação pelo Financeiro.</p>
+        </div>
+        <button onClick={onTrocarFilial}
+          className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
+          <ArrowLeft size={14} /> Trocar unidade
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -975,4 +981,10 @@ export const PromocoesMarketingView = ({ showToast, profile }: any) => {
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const PromocoesMarketingView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Promoções" onSelect={setFilial} />;
+  return <PromocoesMarketingViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

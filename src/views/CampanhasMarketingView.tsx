@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
-import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const STATUS_STYLE: Record<string, string> = {
   'Rascunho':                 'bg-gray-500/10  text-gray-400  border-gray-500/20',
@@ -21,13 +21,12 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = ['Rascunho', 'Ativa', 'Concluída', 'Cancelada'] as const;
-const FILIAL_OPCOES  = ['Todas', ...FILIAIS_HOLDING];
 
-const EMPTY_FORM = {
-  nome: '', descricao: '', objetivo: '', filial: '',
+const makeEmptyForm = (filial: string) => ({
+  nome: '', descricao: '', objetivo: '', filial,
   data_inicio: '', data_fim: '', orcamento: '',
   status: 'Rascunho' as string,
-};
+});
 
 type Campanha = {
   id: string; nome: string; descricao: string | null; objetivo: string | null;
@@ -43,7 +42,6 @@ const fmtBRL = (n: number) => Number(n ?? 0).toLocaleString('pt-BR', { style: 'c
 function ModalProdutos({ campanha, onClose, showToast, profile }: {
   campanha: Campanha; onClose: () => void; showToast: any; profile: any;
 }) {
-  const [filtroLoja,      setFiltroLoja]      = useState('Todas');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroSubcat,    setFiltroSubcat]    = useState('');
   const [search,          setSearch]          = useState('');
@@ -65,16 +63,16 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
     [subcategorias, filtroCategoria]
   );
 
-  // Produtos filtrados
+  // Produtos filtrados — já restritos à filial da campanha
   const produtosFiltrados = useMemo(() => {
     return produtos.filter((p: any) => {
-      if (filtroLoja !== 'Todas' && p.filial !== filtroLoja) return false;
+      if (campanha.filial && p.filial !== campanha.filial) return false;
       if (filtroCategoria && p.categoria_id !== filtroCategoria) return false;
       if (filtroSubcat && p.subcategoria_id !== filtroSubcat) return false;
       if (search && !p.nome.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [produtos, filtroLoja, filtroCategoria, filtroSubcat, search]);
+  }, [produtos, campanha.filial, filtroCategoria, filtroSubcat, search]);
 
   // Preços editáveis por produto
   const [precos, setPrecos] = useState<Record<string, { preco_atual: string; preco_promocional: string }>>({});
@@ -151,18 +149,11 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 
         <div className="p-5 space-y-4">
           {/* Filtros */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Buscar</p>
               <input className="neu-input text-sm px-3 py-2 rounded-xl w-full" placeholder="Nome do produto…"
                 value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Loja</p>
-              <select className="neu-input text-sm px-3 py-2 rounded-xl w-full"
-                value={filtroLoja} onChange={e => setFiltroLoja(e.target.value)}>
-                {FILIAL_OPCOES.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
             </div>
             <div>
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Categoria</p>
@@ -263,14 +254,16 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 }
 
 // ── View Principal ────────────────────────────────────────────────────────────
-export const CampanhasMarketingView = ({ showToast, profile }: any) => {
-  const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview');
+const CampanhasMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: campanhasAll, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview');
   const confirm = useConfirm();
   const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview');
 
+  const campanhas = useMemo(() => campanhasAll.filter((c: any) => c.filial === filial), [campanhasAll, filial]);
+
   const [showForm,  setShowForm]  = useState(false);
   const [editing,   setEditing]   = useState<Campanha | null>(null);
-  const [form,      setForm]      = useState<typeof EMPTY_FORM>(EMPTY_FORM);
+  const [form,      setForm]      = useState(makeEmptyForm(filial));
   const [saving,    setSaving]    = useState(false);
   const [modalCamp, setModalCamp] = useState<Campanha | null>(null);
   const [searchCamp, setSearchCamp] = useState('');
@@ -289,12 +282,12 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
         (c.objetivo ?? '').toLowerCase().includes(searchCamp.toLowerCase()))
     : (campanhas ?? []);
 
-  const resetForm = () => { setForm(EMPTY_FORM); setEditing(null); setShowForm(false); };
+  const resetForm = () => { setForm(makeEmptyForm(filial)); setEditing(null); setShowForm(false); };
 
   const openEdit = (c: Campanha) => {
     setEditing(c);
     setForm({
-      nome: c.nome, descricao: c.descricao ?? '', objetivo: c.objetivo ?? '', filial: c.filial ?? '',
+      nome: c.nome, descricao: c.descricao ?? '', objetivo: c.objetivo ?? '', filial: c.filial ?? filial,
       data_inicio: c.data_inicio, data_fim: c.data_fim,
       orcamento: c.orcamento ? formatBRL(c.orcamento) : '', status: c.status,
     });
@@ -317,7 +310,7 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
       };
       if (editing) {
         const updated = await dbUpdate('/api/marketingcampanhasview', editing.id, payload);
-        setData((prev: any[]) => prev.map((c: any) => c.id === editing.id ? { ...c, ...updated } : c));
+        setData((prev: any[]) => prev.map((c: any) => c.id === editing!.id ? { ...c, ...updated } : c));
         showToast('Campanha atualizada.', 'success');
       } else {
         payload.nome_criador = profile?.nome ?? '';
@@ -378,11 +371,17 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-        <div className="shrink-0">
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Campanhas</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Planeje campanhas com orçamento e período, acompanhe ROI cruzando vendas no período e cupons usados.
-          </p>
+        <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Campanhas — {filial}</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Planeje campanhas com orçamento e período, acompanhe ROI cruzando vendas no período e cupons usados.
+            </p>
+          </div>
+          <button onClick={onTrocarFilial}
+            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
+            <ArrowLeft size={14} /> Trocar unidade
+          </button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -444,12 +443,8 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial-alvo</label>
-                  <select value={form.filial} onChange={e => setForm(f => ({ ...f, filial: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    <option value="">Todas (holding)</option>
-                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Orçamento (R$)</label>
@@ -487,7 +482,6 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-4 font-bold px-4">Nome</th>
-                    <th className="pb-4 font-bold px-4">Filial</th>
                     <th className="pb-4 font-bold px-4">Período</th>
                     <th className="pb-4 font-bold px-4 text-right">Orçamento</th>
                     <th className="pb-4 font-bold px-4 text-right">Gasto Real</th>
@@ -501,7 +495,7 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
                 <tbody>
                   <AnimatePresence>
                     {campanhasFiltradas.length === 0
-                      ? <tr><td colSpan={10} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma campanha encontrada para "{searchCamp}"</td></tr>
+                      ? <tr><td colSpan={9} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma campanha encontrada para "{searchCamp}"</td></tr>
                       : campanhasFiltradas.map((c: any) => {
                       const r = roiMap[c.id];
                       const receita = Number(r?.receita ?? 0);
@@ -516,7 +510,6 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
                             <p className="text-sm font-semibold text-gray-200 max-w-[220px] truncate" title={c.nome}>{c.nome}</p>
                             {c.objetivo && <p className="text-[10px] text-gray-500 max-w-[220px] truncate"><Target size={9} className="inline mr-1" />{c.objetivo}</p>}
                           </td>
-                          <td className="py-3 px-4 text-xs text-gray-400">{c.filial ?? 'Holding'}</td>
                           <td className="py-3 px-4 text-xs text-gray-400 whitespace-nowrap">
                             <Calendar size={9} className="inline mr-1" />{c.data_inicio} → {c.data_fim}
                           </td>
@@ -580,4 +573,10 @@ export const CampanhasMarketingView = ({ showToast, profile }: any) => {
       </motion.div>
     </>
   );
+};
+
+export const CampanhasMarketingView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Campanhas" onSelect={setFilial} />;
+  return <CampanhasMarketingViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

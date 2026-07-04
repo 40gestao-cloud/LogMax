@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAL_DEFAULT } from '../lib/filiais';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-export const ContasPagarView = ({ showToast }: any) => {
+const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
-  const [filialFiltro, setFilialFiltro] = useState('');
   const [periodoFiltro, setPeriodoFiltro] = useState<'' | 'hoje' | 'semana' | 'mes'>('');
   const [isExporting, setIsExporting] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, periodoFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, periodoFiltro]);
 
   // Realtime: pedidos aprovados / folhas processadas geram contas a pagar — actualiza-se sozinha (#21).
   const periodoRange = (() => {
@@ -43,7 +43,7 @@ export const ContasPagarView = ({ showToast }: any) => {
     return null;
   })();
 
-  const extraFilter = filialFiltro ? { filial: filialFiltro } : undefined;
+  const extraFilter = { filial };
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/contaspagarview', extraFilter, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
@@ -54,7 +54,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [form, setForm] = useState({ descricao: '' });
-  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: FILIAL_DEFAULT as string });
+  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: filial as string });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   // Diálogo inline de pagamento: pede o banco de débito antes de confirmar.
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -72,14 +72,14 @@ export const ContasPagarView = ({ showToast }: any) => {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.rpc('total_pendente_contas_pagar', { p_filial: filialFiltro || null })
+    supabase.rpc('total_pendente_contas_pagar', { p_filial: filial })
       .then(({ data: total, error }) => {
         if (cancelled) return;
         if (error) { console.warn('[ContasPagar] total_pendente_contas_pagar:', error.message); return; }
         setTotalPendente(Number(total ?? 0));
       });
     return () => { cancelled = true; };
-  }, [data, filialFiltro]);
+  }, [data, filial]);
 
   const enriched = data.map((c: any) => ({
     ...c,
@@ -95,9 +95,8 @@ export const ContasPagarView = ({ showToast }: any) => {
     return [c.descricao, c.status, c.forn?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()));
   });
 
-  const exportCols = ['Empresa', 'Descrição', 'Fornecedor', 'Valor (R$)', 'Vencimento', 'Status'];
+  const exportCols = ['Descrição', 'Fornecedor', 'Valor (R$)', 'Vencimento', 'Status'];
   const buildExportRows = (rows: any[]) => rows.map((c: any) => [
-    c.filial ?? '—',
     c.descricao ?? '—',
     c.forn?.nome ?? '—',
     c.juros.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
@@ -107,8 +106,7 @@ export const ContasPagarView = ({ showToast }: any) => {
 
   const fetchAllForExport = async (): Promise<any[]> => {
     if (!supabase) return [];
-    let q = supabase.from('contas_pagar').select('*').eq('ativo', true).order('vencimento', { ascending: true });
-    if (filialFiltro) q = (q as any).eq('filial', filialFiltro);
+    let q = supabase.from('contas_pagar').select('*').eq('ativo', true).eq('filial', filial).order('vencimento', { ascending: true });
     if (periodoRange) q = (q as any).gte('vencimento', periodoRange.inicio).lte('vencimento', periodoRange.fim);
     const { data: rows, error: err } = await q;
     if (err) throw new Error(err.message);
@@ -120,7 +118,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   };
 
   const periodoLabel = periodoFiltro === 'hoje' ? ' — Hoje' : periodoFiltro === 'semana' ? ' — Esta Semana' : periodoFiltro === 'mes' ? ' — Este Mês' : '';
-  const exportSlug = [filialFiltro ? filialFiltro.toLowerCase().replace(/\s/g, '-') : 'geral', periodoFiltro || null].filter(Boolean).join('-');
+  const exportSlug = [filial.toLowerCase().replace(/\s/g, '-'), periodoFiltro || null].filter(Boolean).join('-');
 
   const handleExportPDF = async () => {
     setIsExporting(true);
@@ -131,7 +129,7 @@ export const ContasPagarView = ({ showToast }: any) => {
         import('jspdf-autotable'),
       ]);
       const doc = new jsPDF();
-      const titulo = `Contas a Pagar — ${filialFiltro || 'Geral'}${periodoLabel}`;
+      const titulo = `Contas a Pagar — ${filial}${periodoLabel}`;
 
       doc.setFillColor(10, 10, 10);
       doc.rect(0, 0, 210, 32, 'F');
@@ -182,7 +180,7 @@ export const ContasPagarView = ({ showToast }: any) => {
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ descricao: item.descricao ?? '' });
-    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial: item.filial ?? FILIAL_DEFAULT });
+    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial });
     setErrors({});
     setShowForm(false);
   };
@@ -191,7 +189,7 @@ export const ContasPagarView = ({ showToast }: any) => {
     setShowForm(false);
     setEditItem(null);
     setForm({ descricao: '' });
-    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial: FILIAL_DEFAULT });
+    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial });
     setErrors({});
   };
 
@@ -300,16 +298,16 @@ export const ContasPagarView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Contas a Pagar</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Contas a Pagar — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
             Total pendente: <span className="text-accent font-bold">R$ {totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
-          <select className="neu-input py-2.5 px-3 rounded-xl text-sm" value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}>
-            <option value="">Todas as empresas</option>
-            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          <button onClick={onTrocarFilial}
+            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
+            <ArrowLeft size={14} /> Trocar unidade
+          </button>
           <div className="flex gap-1">
             {(['', 'hoje', 'semana', 'mes'] as const).map(p => (
               <button key={p || 'todos'} onClick={() => setPeriodoFiltro(p)}
@@ -335,12 +333,6 @@ export const ContasPagarView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Pagar'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <FormField label="Empresa *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.filial} onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
-                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </FormField>
                 <FormField label="Descrição *" error={errors.descricao}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
                     value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
@@ -383,7 +375,6 @@ export const ContasPagarView = ({ showToast }: any) => {
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4 hidden md:table-cell">Fornecedor</th>
-                  <th className="pb-4 font-bold px-4 text-center hidden sm:table-cell">Empresa</th>
                   <th className="pb-4 font-bold px-4 text-right">Valor</th>
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Vencimento</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
@@ -400,7 +391,6 @@ export const ContasPagarView = ({ showToast }: any) => {
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.forn?.nome ?? '—'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>
-                        <td className="py-3 px-4 text-center hidden sm:table-cell"><FilialBadge filial={item.filial} /></td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
                           <div>R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                           {item.juros.vencido && (item.juros.juros + item.juros.multa) > 0 && (
@@ -435,7 +425,7 @@ export const ContasPagarView = ({ showToast }: any) => {
                       <AnimatePresence>
                         {payingId === item.id && (
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <td colSpan={7} className="pb-3 px-4">
+                            <td colSpan={6} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[220px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Landmark size={11} /> Conta bancária de débito *</label>
@@ -481,4 +471,10 @@ export const ContasPagarView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const ContasPagarView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Contas a Pagar" onSelect={setFilial} />;
+  return <ContasPagarViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

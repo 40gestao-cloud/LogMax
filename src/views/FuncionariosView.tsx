@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -13,18 +14,18 @@ const MASK_FOR: Record<string, (v: string) => string> = {
   salario:  formatBRL,
 };
 
-const EMPTY: any = { nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '' };
+const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '', filial });
 
 // Remove diacríticos e converte para minúsculas para sort consistente
 const normSort = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export const FuncionariosView = ({ showToast }: any) => {
-  const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', undefined, false, { orderBy: 'nome', ascending: true });
+const FuncionariosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', { filial }, false, { orderBy: 'nome', ascending: true });
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>(EMPTY);
+  const [form, setForm] = useState<any>(makeEmpty(filial));
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export const FuncionariosView = ({ showToast }: any) => {
       return an < bn ? -1 : an > bn ? 1 : 0;
     });
 
-  const openNew = () => { setForm(EMPTY); setEditing(null); setShowForm(true); };
+  const openNew = () => { setForm(makeEmpty(filial)); setEditing(null); setShowForm(true); };
   const openEdit = (f: any) => {
     setForm({
       ...f,
@@ -79,7 +80,7 @@ export const FuncionariosView = ({ showToast }: any) => {
     setEditing(f);
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditing(null); setForm(EMPTY); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(makeEmpty(filial)); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
@@ -151,9 +152,15 @@ export const FuncionariosView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Funcionários</h2>
-        <p className="text-sm text-gray-400 mt-1">Gerencie o quadro de funcionários da empresa.</p>
+      <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Funcionários — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Gerencie o quadro de funcionários da unidade.</p>
+        </div>
+        <button onClick={onTrocarFilial}
+          className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
+          <ArrowLeft size={14} /> Trocar unidade
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -223,6 +230,10 @@ export const FuncionariosView = ({ showToast }: any) => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
+              </div>
               {[
                 { label: 'Nome *', k: 'nome', type: 'text' },
                 { label: 'CPF', k: 'cpf', type: 'text' },
@@ -330,4 +341,10 @@ export const FuncionariosView = ({ showToast }: any) => {
       <input ref={photoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden" onChange={handlePhotoUpload} />
     </motion.div>
   );
+};
+
+export const FuncionariosView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Funcionários" onSelect={setFilial} />;
+  return <FuncionariosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
