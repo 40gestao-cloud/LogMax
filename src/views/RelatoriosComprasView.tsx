@@ -7,9 +7,12 @@ import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type TabId = 'requisicoes' | 'pedidos' | 'recebimentos' | 'notas';
 
+const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
 export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
   const [activeTab, setActiveTab] = useState<TabId>('requisicoes');
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState('');
 
   const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview');
   const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
@@ -17,18 +20,25 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
   const { data: notas, isLoading: loadingNot } = useFetchData<any>('/api/notasrecebidasview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
 
-  const pedidosEnriched = pedidos.map((p: any) => ({ ...p, forn: fornecedores.find((f: any) => f.id === p.fornecedor_id) }));
-  const notasEnriched = notas.map((n: any) => ({ ...n, forn: fornecedores.find((f: any) => f.id === n.fornecedor_id) }));
+  const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
 
-  const totalReq = requisicoes.length;
-  const pendentesReq = requisicoes.filter((r: any) => r.status === 'Pendente').length;
-  const pedidosAbertos = pedidos.filter((p: any) => !['Recebido', 'Cancelado'].includes(p.status)).length;
-  const valorTotalPedidos = pedidos.reduce((acc: number, p: any) => acc + (Number(p.valor_total) || 0), 0);
+  const requisicoesF  = requisicoes.filter(byFilial);
+  const pedidosF      = pedidos.filter(byFilial);
+  const recebimentosF = recebimentos.filter(byFilial);
+  const notasF        = notas.filter(byFilial);
+
+  const pedidosEnriched = pedidosF.map((p: any) => ({ ...p, forn: fornecedores.find((f: any) => f.id === p.fornecedor_id) }));
+  const notasEnriched = notasF.map((n: any) => ({ ...n, forn: fornecedores.find((f: any) => f.id === n.fornecedor_id) }));
+
+  const totalReq = requisicoesF.length;
+  const pendentesReq = requisicoesF.filter((r: any) => r.status === 'Pendente').length;
+  const pedidosAbertos = pedidosF.filter((p: any) => !['Recebido', 'Cancelado'].includes(p.status)).length;
+  const valorTotalPedidos = pedidosF.reduce((acc: number, p: any) => acc + (Number(p.valor_total) || 0), 0);
 
   const s = search.toLowerCase();
-  const filteredReq = requisicoes.filter((r: any) => [r.item, r.solicitante, r.status, r.urgencia].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredReq = requisicoesF.filter((r: any) => [r.item, r.solicitante, r.status, r.urgencia].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredPed = pedidosEnriched.filter((p: any) => [p.forn?.nome, p.status].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredRec = recebimentos.filter((r: any) => [r.status, r.observacao].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredRec = recebimentosF.filter((r: any) => [r.status, r.observacao].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredNot = notasEnriched.filter((n: any) => [n.numero_nf, n.forn?.nome, n.status].some((v: any) => v?.toLowerCase().includes(s)));
 
   const tabs: { id: TabId; label: string; icon: any }[] = [
@@ -122,7 +132,12 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
             );
           })}
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input rounded-xl px-3 py-2 text-sm">
+            <option value="">Todas as filiais</option>
+            {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           {activeData.length > 0 && (
             <>
               <ExportButton label="PDF" onClick={handleExportPDF} icon={FileDown} />

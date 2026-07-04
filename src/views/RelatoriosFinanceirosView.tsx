@@ -7,9 +7,12 @@ import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type TabId = 'receber' | 'pagar' | 'previsoes' | 'duplicatas' | 'caixa';
 
+const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
 export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const [activeTab, setActiveTab] = useState<TabId>('receber');
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState('');
 
   const { data: receber,    isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview');
   const { data: pagar,      isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview');
@@ -19,12 +22,20 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const { data: clientes }    = useFetchData<any>('/api/crmview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
 
-  const receberEnriched = receber.map((r: any) => ({ ...r, cli: clientes.find((c: any) => c.id === r.cliente_id) }));
-  const pagarEnriched   = pagar.map((p: any) => ({ ...p, forn: fornecedores.find((f: any) => f.id === p.fornecedor_id) }));
+  const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
 
-  const totalReceber  = receber.filter((r: any) => r.status !== 'Pago').reduce((a: number, r: any) => a + Number(r.valor || 0), 0);
-  const totalPagar    = pagar.filter((p: any) => p.status !== 'Pago').reduce((a: number, p: any) => a + Number(p.valor || 0), 0);
-  const saldoBancos   = caixa.filter((c: any) => c.status === 'Ativo').reduce((a: number, c: any) => a + Number(c.saldo || 0), 0);
+  const receberF    = receber.filter(byFilial);
+  const pagarF      = pagar.filter(byFilial);
+  const previsoesF  = previsoes.filter(byFilial);
+  const duplicatasF = duplicatas.filter(byFilial);
+  const caixaF      = caixa.filter(byFilial);
+
+  const receberEnriched = receberF.map((r: any) => ({ ...r, cli: clientes.find((c: any) => c.id === r.cliente_id) }));
+  const pagarEnriched   = pagarF.map((p: any) => ({ ...p, forn: fornecedores.find((f: any) => f.id === p.fornecedor_id) }));
+
+  const totalReceber  = receberF.filter((r: any) => r.status !== 'Pago').reduce((a: number, r: any) => a + Number(r.valor || 0), 0);
+  const totalPagar    = pagarF.filter((p: any) => p.status !== 'Pago').reduce((a: number, p: any) => a + Number(p.valor || 0), 0);
+  const saldoBancos   = caixaF.filter((c: any) => c.status === 'Ativo').reduce((a: number, c: any) => a + Number(c.saldo || 0), 0);
   const resultado     = totalReceber - totalPagar;
 
   const kpis = [
@@ -37,9 +48,9 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const s = search.toLowerCase();
   const filteredRec  = receberEnriched.filter((r: any) => [r.descricao, r.cli?.nome, r.status].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredPag  = pagarEnriched.filter((p: any) => [p.descricao, p.forn?.nome, p.status].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredPrev = previsoes.filter((p: any) => [p.descricao, p.tipo, p.status].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredDup  = duplicatas.filter((d: any) => [d.numero, d.sacado, d.tipo, d.status].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredCx   = caixa.filter((c: any) => [c.conta, c.banco, c.tipo].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredPrev = previsoesF.filter((p: any) => [p.descricao, p.tipo, p.status].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredDup  = duplicatasF.filter((d: any) => [d.numero, d.sacado, d.tipo, d.status].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredCx   = caixaF.filter((c: any) => [c.conta, c.banco, c.tipo].some((v: any) => v?.toLowerCase().includes(s)));
 
   const isLoading = activeTab === 'receber' ? loadingRec : activeTab === 'pagar' ? loadingPag
     : activeTab === 'previsoes' ? loadingPrev : activeTab === 'duplicatas' ? loadingDup : loadingCx;
@@ -132,7 +143,12 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
             );
           })}
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input rounded-xl px-3 py-2 text-sm">
+            <option value="">Todas as filiais</option>
+            {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           {activeData.length > 0 && (
             <>
               <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />

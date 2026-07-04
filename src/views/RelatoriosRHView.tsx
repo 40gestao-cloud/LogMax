@@ -16,6 +16,8 @@ const statusCls = (s: string) => {
   return 'bg-gray-700/40 text-gray-400';
 };
 
+const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
 export const RelatoriosRHView = ({ showToast: _st }: any) => {
   const { data: funcionarios, isLoading: lFun } = useFetchData<any>('/api/funcionariosview');
   const { data: folhas, isLoading: lFol } = useFetchData<any>('/api/folhapagamentoview');
@@ -24,22 +26,25 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
   const [mesFiltro, setMesFiltro] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState('');
 
   const isLoading = lFun || lFol || lFer || lTre;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
+  const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
+
   // Folhas enriquecidas
-  const folhasEnriched = folhas.map((f: any) => ({
+  const folhasEnriched = folhas.filter(byFilial).map((f: any) => ({
     ...f,
     func: funcionarios.find((fn: any) => fn.id === f.funcionario_id),
   }));
-  const feriasEnriched = ferias.map((f: any) => ({
+  const feriasEnriched = ferias.filter(byFilial).map((f: any) => ({
     ...f,
     func: funcionarios.find((fn: any) => fn.id === f.funcionario_id),
   }));
 
   // Filtros por aba
-  const filteredFun = funcionarios.filter((f: any) =>
+  const filteredFun = funcionarios.filter(byFilial).filter((f: any) =>
     [f.nome, f.cargo, f.departamento, f.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
   const filteredFol = folhasEnriched
@@ -48,7 +53,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
   const filteredFer = feriasEnriched.filter((f: any) =>
     [f.func?.nome, f.status, f.data_inicio].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
-  const filteredTre = treinamentos.filter((t: any) =>
+  const filteredTre = treinamentos.filter(byFilial).filter((t: any) =>
     [t.nome, t.instrutor, t.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -98,6 +103,11 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex gap-3 items-center flex-wrap">
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input rounded-xl px-3 py-2 text-sm">
+            <option value="">Todas as filiais</option>
+            {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           <ExportButton label="PDF" onClick={() => exportToPDF(TABS[tab], currentConfig.cols, currentConfig.rows(), filenameMap[tab])} icon={FileDown} />
           <ExportButton label="Excel" onClick={() => exportToExcel(TABS[tab], currentConfig.cols, currentConfig.rows(), filenameMap[tab])} icon={Sheet} />
           {tab === 1 && (

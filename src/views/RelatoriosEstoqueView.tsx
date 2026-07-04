@@ -7,9 +7,12 @@ import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type TabId = 'movimentacoes' | 'saldos' | 'vencimentos' | 'inventarios';
 
+const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
 export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   const [activeTab, setActiveTab] = useState<TabId>('movimentacoes');
   const [search, setSearch] = useState('');
+  const [filialFiltro, setFilialFiltro] = useState('');
 
   const { data: movimentacoes, isLoading: loadingMov } = useFetchData<any>('/api/movimentacoesestoqueview');
   const { data: saldos, isLoading: loadingSal } = useFetchData<any>('/api/saldosestoqueview');
@@ -17,19 +20,26 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   const { data: inventarios, isLoading: loadingInv } = useFetchData<any>('/api/inventariosestoqueview');
   const { data: produtos } = useFetchData<any>('/api/produtosview');
 
-  const enrich = (list: any[]) => list.map((i: any) => ({ ...i, prod: produtos.find((p: any) => p.id === i.produto_id) }));
-  const movEnriched = enrich(movimentacoes);
-  const venEnriched = enrich(vencimentos);
-  const invEnriched = enrich(inventarios);
+  const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
 
-  const totalMov = movimentacoes.length;
-  const entradas = movimentacoes.filter((m: any) => m.tipo === 'Entrada').length;
-  const saidas = movimentacoes.filter((m: any) => m.tipo === 'Saída').length;
-  const vencimentosCriticos = vencimentos.filter((v: any) => v.status === 'Vencido' || v.status === 'Próximo').length;
+  const movF = movimentacoes.filter(byFilial);
+  const salF = saldos.filter(byFilial);
+  const venF = vencimentos.filter(byFilial);
+  const invF = inventarios.filter(byFilial);
+
+  const enrich = (list: any[]) => list.map((i: any) => ({ ...i, prod: produtos.find((p: any) => p.id === i.produto_id) }));
+  const movEnriched = enrich(movF);
+  const venEnriched = enrich(venF);
+  const invEnriched = enrich(invF);
+
+  const totalMov = movF.length;
+  const entradas = movF.filter((m: any) => m.tipo === 'Entrada').length;
+  const saidas = movF.filter((m: any) => m.tipo === 'Saída').length;
+  const vencimentosCriticos = venF.filter((v: any) => v.status === 'Vencido' || v.status === 'Próximo').length;
 
   const s = search.toLowerCase();
   const filteredMov = movEnriched.filter((m: any) => [m.prod?.nome, m.tipo, m.origem, m.destino].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredSal = saldos.filter((p: any) => [p.codigo, p.nome, p.status].some((v: any) => v?.toLowerCase().includes(s)));
+  const filteredSal = salF.filter((p: any) => [p.codigo, p.nome, p.status].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredVen = venEnriched.filter((v: any) => [v.prod?.nome, v.lote, v.status].some((x: any) => x?.toLowerCase().includes(s)));
   const filteredInv = invEnriched.filter((i: any) => [i.prod?.nome, i.status].some((v: any) => v?.toLowerCase().includes(s)));
 
@@ -140,7 +150,12 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
             );
           })}
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
+          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input rounded-xl px-3 py-2 text-sm">
+            <option value="">Todas as filiais</option>
+            {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
           {activeData.length > 0 && (
             <>
               <ExportButton label="PDF" onClick={handleExportPDF} icon={FileDown} />
