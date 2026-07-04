@@ -16,26 +16,31 @@ import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import { buildPontoQrUrl, extractPontoToken } from '../lib/pontoQrUrl';
 
+const PILL = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border backdrop-blur-sm';
+
 const statusCls = (s: string) => {
-  if (s === 'Falta') return 'bg-red-950/50 text-red-500';
-  if (s === 'Hora Extra') return 'bg-blue-900/30 text-blue-400';
-  if (s === 'Justificado') return 'bg-yellow-900/30 text-yellow-400';
-  return 'bg-green-900/30 text-green-400';
+  if (s === 'Falta')      return `${PILL} bg-red-500/12 border-red-500/30 text-red-400`;
+  if (s === 'Hora Extra') return `${PILL} bg-blue-500/12 border-blue-500/30 text-blue-400`;
+  if (s === 'Justificado') return `${PILL} bg-yellow-500/12 border-yellow-500/30 text-yellow-400`;
+  return `${PILL} bg-emerald-500/12 border-emerald-500/30 text-emerald-400`;
 };
 
 const tipoCls = (t: string) => {
-  if (t === 'entrada') return 'bg-emerald-900/30 text-emerald-400';
-  if (t === 'retorno') return 'bg-yellow-900/30 text-yellow-400';
-  if (t === 'saida')   return 'bg-blue-900/30 text-blue-400';
-  return 'bg-gray-800 text-gray-400';
+  if (t === 'entrada') return `${PILL} bg-emerald-500/12 border-emerald-500/30 text-emerald-400`;
+  if (t === 'retorno') return `${PILL} bg-yellow-500/12 border-yellow-500/30 text-yellow-400`;
+  if (t === 'saida')   return `${PILL} bg-blue-500/12 border-blue-500/30 text-blue-400`;
+  return `${PILL} bg-gray-500/12 border-gray-500/30 text-gray-400`;
 };
 
 const EMPTY: any = { funcionario_id: '', data: '', entrada: '', saida: '', horas_trabalhadas: '', status: 'Normal' };
 
 const CHECKPOINT_OPTIONS = [
-  { key: 'entrada', label: 'Entrada',  time: PONTO_HORARIOS.entrada, color: 'text-emerald-400', activeCls: 'neu-pressed border-emerald-500/30 text-emerald-300' },
-  { key: 'retorno', label: 'Retorno',  time: PONTO_HORARIOS.retorno, color: 'text-yellow-400',  activeCls: 'neu-pressed border-yellow-500/30 text-yellow-300'  },
-  { key: 'saida',   label: 'Saída',    time: PONTO_HORARIOS.saida,   color: 'text-blue-400',    activeCls: 'neu-pressed border-blue-500/30 text-blue-300'    },
+  { key: 'entrada', label: 'Entrada', time: PONTO_HORARIOS.entrada, color: 'text-emerald-400',
+    activeCls: 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_0_2px_rgba(34,197,94,0.30),0_0_12px_rgba(34,197,94,0.20)]' },
+  { key: 'retorno', label: 'Retorno', time: PONTO_HORARIOS.retorno, color: 'text-yellow-400',
+    activeCls: 'bg-yellow-500/20 border-yellow-500 text-yellow-300 shadow-[0_0_0_2px_rgba(234,179,8,0.30),0_0_12px_rgba(234,179,8,0.20)]' },
+  { key: 'saida',   label: 'Saída',   time: PONTO_HORARIOS.saida,   color: 'text-blue-400',
+    activeCls: 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_0_2px_rgba(59,130,246,0.30),0_0_12px_rgba(59,130,246,0.20)]' },
 ];
 
 // ─── Gerador de QR Code (admin) ──────────────────────────────────────────────
@@ -373,7 +378,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${r.status === 'Atrasado' ? 'bg-red-950/50 text-red-500' : 'bg-emerald-900/30 text-emerald-400'}`}>
+                          <span className={r.status === 'Atrasado' ? statusCls('Falta') : statusCls('Normal')}>
                             {r.status}
                           </span>
                         </td>
@@ -649,14 +654,14 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
             {[
-              { label: 'Total de Registros', value: ponto.length, warn: false },
-              { label: 'Faltas',             value: faltas,       warn: faltas > 0 },
-              { label: 'Horas Extras',       value: extras,       warn: false },
-              { label: 'Justificados',       value: justificados, warn: false },
+              { label: 'Total de Registros', value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
+              { label: 'Faltas',             value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
+              { label: 'Horas Extras',       value: extras,        valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
+              { label: 'Justificados',       value: justificados,  valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },
             ].map((k) => (
-              <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
+              <div key={k.label} className={`neu-flat rounded-2xl p-5 border ${k.borderCls}`}>
                 <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-                <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
+                <p className={`text-2xl font-black ${k.valueCls}`}>{k.value}</p>
               </div>
             ))}
           </div>
@@ -703,7 +708,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }
                             <p className="text-xs text-emerald-500">
                               {scanResult.label} às {scanResult.hora}
                               {scanResult.status && (
-                                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${scanResult.status === 'Atrasado' ? 'bg-red-950/60 text-red-500' : 'bg-emerald-900/40 text-emerald-400'}`}>
+                                <span className={`ml-2 ${scanResult.status === 'Atrasado' ? statusCls('Falta') : statusCls('Normal')}`}>
                                   {scanResult.status}
                                 </span>
                               )}
