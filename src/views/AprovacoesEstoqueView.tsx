@@ -1,14 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { X, Check, Loader2 } from 'lucide-react';
+import { X, Check, Loader2, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge } from '../components/ui';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const AprovacoesEstoqueView = ({ showToast }: any) => {
-  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente' });
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<any>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial });
+  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
@@ -106,7 +107,10 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações de Estoque</h2><p className="text-sm text-gray-400 mt-1">Analise e aprove ou negue requisições de estoque pendentes.</p></div>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações de Estoque — {filial}</h2><p className="text-sm text-gray-400 mt-1">Analise e aprove ou negue requisições de estoque pendentes.</p></div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
+      </div>
       {enriched.length === 0 ? <EmptyState message="Nenhuma aprovação pendente" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
           {enriched.map((ap: any) => (
@@ -138,4 +142,10 @@ export const AprovacoesEstoqueView = ({ showToast }: any) => {
       )}
     </motion.div>
   );
+};
+
+export const AprovacoesEstoqueView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Aprovações de Estoque" onSelect={setFilial} />;
+  return <AprovacoesEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

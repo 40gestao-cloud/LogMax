@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink } from 'lucide-react';
+import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -8,14 +8,15 @@ import { formatBRL } from '../lib/viewUtils';
 import { hasAnySetor, hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/pedidosvendaview', undefined, true, { page }
+    '/api/pedidosvendaview', { filial }, true, { page }
   );
-  const { data: clientes } = useFetchData<any>('/api/crmview');
+  const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
   const [processando, setProcessando] = useState<string | null>(null);
 
   const isLogistica  = hasSetor(profile, 'logistica');
@@ -92,11 +93,14 @@ export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profi
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Venda</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.
-        </p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Venda — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.
+          </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
@@ -200,4 +204,10 @@ export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profi
       )}
     </motion.div>
   );
+};
+
+export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Pedidos de Venda" onSelect={setFilial} />;
+  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

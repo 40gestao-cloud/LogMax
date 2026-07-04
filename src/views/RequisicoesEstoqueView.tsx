@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const RequisicoesEstoqueView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview');
+const RequisicoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -48,6 +49,7 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
           p_solicitante: form.solicitante,
           p_qtd:         Number(extras.qtd) || 1,
           p_destino:     extras.destino,
+          p_filial:      filial,
         });
         if (rpcErr) throw new Error(rpcErr.message);
         setData([saved ?? { id: Date.now(), ...form, status: 'Pendente' }, ...data]);
@@ -79,8 +81,12 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Estoque</h2><p className="text-sm text-gray-400 mt-1">Solicitações de retirada e movimentação de produtos.</p></div>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Estoque — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Solicitações de retirada e movimentação de produtos.</p>
+        </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Requisição</NeuButtonAccent>
         </div>
@@ -148,4 +154,10 @@ export const RequisicoesEstoqueView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const RequisicoesEstoqueView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Requisições de Estoque" onSelect={setFilial} />;
+  return <RequisicoesEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

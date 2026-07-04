@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { FILIAIS_HOLDING } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 // notificar_setor existe em 20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
 async function notificarSetor(args: {
@@ -61,26 +61,25 @@ const STATUS_LIST = [
   'Cancelado',
 ] as const;
 
-export const OrcamentosView = ({
-  showToast, profile, mode,
+const OrcamentosViewInner = ({
+  showToast, profile, mode, filial, onTrocarFilial,
 }: {
   showToast: any;
   profile: UserProfile;
-  /** 'vendas' (criar/gerenciar) | 'financeiro' (aprovar) | undefined (auto). */
   mode?: 'vendas' | 'financeiro';
+  filial: FilialOp;
+  onTrocarFilial: () => void;
 }) => {
   const confirm = useConfirm();
   const [page, setPage] = useState(0);
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
-  // Reset paginação ao mudar filtro client-side — senão o usuário pode estar
-  // na página 3 e o filtro mostra "nada", parecendo bug.
   useEffect(() => { setPage(0); }, [statusFiltro]);
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/orcamentosview', undefined, true,
+    '/api/orcamentosview', { filial }, true,
     { page }
   );
-  const { data: clientes } = useFetchData<any>('/api/crmview');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
 
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');
@@ -117,52 +116,27 @@ export const OrcamentosView = ({
     [produtos]
   );
 
-  // Agrupa produtos ativos por filial (empresa). Filiais sem produtos não
-  // aparecem; produtos sem filial vão para um bucket "Sem empresa".
-  const produtosPorFilial = useMemo(() => {
-    const buckets = new Map<string, any[]>();
-    for (const p of produtosAtivos) {
-      const key = p.filial && (FILIAIS_HOLDING as readonly string[]).includes(p.filial) ? p.filial : 'Sem empresa';
-      const arr = buckets.get(key) ?? buckets.set(key, []).get(key)!;
-      arr.push(p);
-    }
-    for (const [, arr] of buckets) {
-      arr.sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' }));
-    }
-    const ordem = [...FILIAIS_HOLDING, 'Sem empresa'];
-    return ordem
-      .filter(f => buckets.has(f))
-      .map(f => ({ filial: f, items: buckets.get(f)! }));
-  }, [produtosAtivos]);
+  // Produtos da filial, ordenados alfabeticamente.
+  const produtosOrdenados = useMemo(() =>
+    [...produtosAtivos].sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', { sensitivity: 'base' })),
+    [produtosAtivos]
+  );
 
-  // Mesma estrutura de produtosPorFilial, mas filtrada pelo termo de busca
-  // digitado acima da lista de itens. Match em nome OU código (case-insensitive).
-  const produtosPorFilialFiltrado = useMemo(() => {
+  // Filtro de busca sobre produtosOrdenados.
+  const produtosFiltrados = useMemo(() => {
     const termo = produtoBusca.trim().toLowerCase();
-    if (!termo) return produtosPorFilial;
-    return produtosPorFilial
-      .map(g => ({
-        filial: g.filial,
-        items: g.items.filter((p: any) =>
-          (p.nome ?? '').toLowerCase().includes(termo) ||
-          (p.codigo ?? '').toLowerCase().includes(termo)
-        ),
-      }))
-      .filter(g => g.items.length > 0);
-  }, [produtosPorFilial, produtoBusca]);
+    if (!termo) return produtosOrdenados;
+    return produtosOrdenados.filter((p: any) =>
+      (p.nome ?? '').toLowerCase().includes(termo) ||
+      (p.codigo ?? '').toLowerCase().includes(termo)
+    );
+  }, [produtosOrdenados, produtoBusca]);
 
   const exportarProdutosPDF = async () => {
     await exportToPDFAgrupado(
-      'Catálogo de Produtos',
+      `Catálogo de Produtos — ${filial}`,
       ['Código', 'Nome', 'Preço (R$)'],
-      produtosPorFilial.map(g => ({
-        titulo: g.filial,
-        rows: g.items.map(p => [
-          p.codigo ?? '—',
-          p.nome ?? '',
-          Number(p.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-        ]),
-      })),
+      [{ titulo: filial, rows: produtosOrdenados.map((p: any) => [p.codigo ?? '—', p.nome ?? '', Number(p.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })]) }],
       'logmax-catalogo-produtos',
     );
   };
@@ -170,10 +144,7 @@ export const OrcamentosView = ({
   const exportarProdutosExcel = async () => {
     await exportToExcelAgrupado(
       ['Código', 'Nome', 'Preço'],
-      produtosPorFilial.map(g => ({
-        titulo: g.filial,
-        rows: g.items.map(p => [p.codigo ?? '', p.nome ?? '', Number(p.preco || 0)]),
-      })),
+      [{ titulo: filial, rows: produtosOrdenados.map((p: any) => [p.codigo ?? '', p.nome ?? '', Number(p.preco || 0)]) }],
       'logmax-catalogo-produtos',
     );
   };
@@ -263,9 +234,6 @@ export const OrcamentosView = ({
     try {
       const payload: any = {
         cliente_id:    form.cliente_id || null,
-        // Vendedor é setado apenas na criação. Em edição (admin/CEO editando
-        // o rascunho de outro vendedor, por ex.) preservamos o autor original
-        // para não "roubar" a proposta.
         vendedor_id:   editItem ? editItem.vendedor_id : profile.id,
         vendedor_nome: editItem ? editItem.vendedor_nome : profile.nome,
         validade_dias: Math.max(1, parseInt(form.validade_dias) || 3),
@@ -275,6 +243,7 @@ export const OrcamentosView = ({
         valor_total:   valorTotal,
         observacoes:   extras.observacoes || null,
         status:        enviarAoFinanceiro ? 'Aguardando Financeiro' : 'Rascunho',
+        filial,
       };
 
       let saved: any;
@@ -432,7 +401,7 @@ export const OrcamentosView = ({
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
-            {modoFinanceiro ? 'Aprovações de Orçamento' : 'Orçamentos & Propostas'}
+            {modoFinanceiro ? `Aprovações de Orçamento — ${filial}` : `Orçamentos & Propostas — ${filial}`}
           </h2>
           <p className="text-sm text-gray-400 mt-1">
             {modoFinanceiro
@@ -440,15 +409,18 @@ export const OrcamentosView = ({
               : 'Crie propostas com validade, descontos e acompanhe a aprovação até virar pedido.'}
           </p>
         </div>
-        {!modoFinanceiro && podeCriarVenda && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <ExportButton label="PDF" onClick={exportarProdutosPDF} icon={FileDown} />
-            <ExportButton label="Excel" onClick={exportarProdutosExcel} icon={Sheet} />
-            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-              <Plus size={16} /> Nova Proposta
-            </NeuButtonAccent>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
+          {!modoFinanceiro && podeCriarVenda && (
+            <>
+              <ExportButton label="PDF" onClick={exportarProdutosPDF} icon={FileDown} />
+              <ExportButton label="Excel" onClick={exportarProdutosExcel} icon={Sheet} />
+              <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+                <Plus size={16} /> Nova Proposta
+              </NeuButtonAccent>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filtro de status */}
@@ -538,12 +510,8 @@ export const OrcamentosView = ({
                           onChange={e => escolherProduto(idx, e.target.value)}
                         >
                           <option value="">Produto...</option>
-                          {produtosPorFilialFiltrado.map(g => (
-                            <optgroup key={g.filial} label={g.filial}>
-                              {g.items.map((p: any) => (
-                                <option key={p.id} value={p.id}>{p.nome}{p.codigo ? ` (${p.codigo})` : ''}</option>
-                              ))}
-                            </optgroup>
+                          {produtosFiltrados.map((p: any) => (
+                            <option key={p.id} value={p.id}>{p.nome}{p.codigo ? ` (${p.codigo})` : ''}</option>
                           ))}
                         </select>
                         <div className="col-span-2">
@@ -927,5 +895,18 @@ export const OrcamentosView = ({
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const OrcamentosView = ({
+  showToast, profile, mode,
+}: {
+  showToast: any;
+  profile: UserProfile;
+  mode?: 'vendas' | 'financeiro';
+}) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  const title = mode === 'financeiro' ? 'Aprovações de Orçamento' : 'Orçamentos & Propostas';
+  if (!filial) return <FilialSelector title={title} onSelect={setFilial} />;
+  return <OrcamentosViewInner showToast={showToast} profile={profile} mode={mode} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
 
