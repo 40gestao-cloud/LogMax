@@ -543,12 +543,12 @@ table,
   animation: filial-shimmer-violet 2.8s linear infinite;
 }
 
-/* TechMax: preto com texto dourado e shimmer dourado */
+/* TechMax: laranja com shimmer */
 .filial-badge--techmax {
-  background: linear-gradient(100deg, #000 0%, #1a1400 35%, #2a2200 50%, #1a1400 65%, #000 100%);
+  background: linear-gradient(100deg, #c2410c 0%, #f97316 35%, #fb923c 50%, #f97316 65%, #c2410c 100%);
   background-size: 200% auto;
-  color: #D4AF37;
-  border-color: #D4AF37;
+  color: #fff;
+  border-color: #f97316;
   animation: filial-shimmer-gold 2.8s linear infinite;
 }
 
@@ -557,7 +557,7 @@ table,
 
 [data-theme="light"] .filial-badge--supermax { background: linear-gradient(100deg, #1d4ed8 0%, #3b82f6 35%, #60a5fa 50%, #3b82f6 65%, #1d4ed8 100%); background-size: 200% auto; color: #fff; border-color: #3b82f6; animation: filial-shimmer-blue 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #5b21b6 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #5b21b6 100%); background-size: 200% auto; color: #fff; border-color: #7c3aed; animation: filial-shimmer-violet 2.8s linear infinite; }
-[data-theme="light"] .filial-badge--techmax  { background: linear-gradient(100deg, #000 0%, #1a1400 35%, #2a2200 50%, #1a1400 65%, #000 100%); background-size: 200% auto; color: #D4AF37; border-color: #D4AF37; animation: filial-shimmer-gold 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--techmax  { background: linear-gradient(100deg, #c2410c 0%, #f97316 35%, #fb923c 50%, #f97316 65%, #c2410c 100%); background-size: 200% auto; color: #fff; border-color: #f97316; animation: filial-shimmer-gold 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 [data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 
