@@ -499,11 +499,11 @@ table,
 /* ── FilialBadge: cores dedicadas por unidade ──
    Tons mais escuros no modo claro para garantir contraste WCAG.
    Classes próprias evitam que overrides globais quebrem outros componentes. */
-@keyframes filial-shimmer-green {
+@keyframes filial-shimmer-blue {
   0%   { background-position: -200% center; }
   100% { background-position:  200% center; }
 }
-@keyframes filial-shimmer-nude {
+@keyframes filial-shimmer-violet {
   0%   { background-position: -200% center; }
   100% { background-position:  200% center; }
 }
@@ -525,22 +525,22 @@ table,
   background-size: 200% auto;
 }
 
-/* SuperMax: verde sólido com shimmer */
+/* SuperMax: azul com shimmer */
 .filial-badge--supermax {
-  background: linear-gradient(100deg, #15803d 0%, #22c55e 35%, #4ade80 50%, #22c55e 65%, #15803d 100%);
+  background: linear-gradient(100deg, #1d4ed8 0%, #3b82f6 35%, #60a5fa 50%, #3b82f6 65%, #1d4ed8 100%);
   background-size: 200% auto;
   color: #fff;
-  border-color: #22c55e;
-  animation: filial-shimmer-green 2.8s linear infinite;
+  border-color: #3b82f6;
+  animation: filial-shimmer-blue 2.8s linear infinite;
 }
 
-/* MaxLook: nude sólido com shimmer */
+/* MaxLook: roxo com shimmer */
 .filial-badge--maxlook {
-  background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%);
+  background: linear-gradient(100deg, #5b21b6 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #5b21b6 100%);
   background-size: 200% auto;
-  color: #3b1f0a;
-  border-color: #c9a882;
-  animation: filial-shimmer-nude 2.8s linear infinite;
+  color: #fff;
+  border-color: #7c3aed;
+  animation: filial-shimmer-violet 2.8s linear infinite;
 }
 
 /* TechMax: preto com texto dourado e shimmer dourado */
@@ -555,8 +555,8 @@ table,
 .filial-badge--matriz   { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
 .filial-badge--unknown  { background: rgba(107,114,128,0.10); color: #9ca3af; border-color: rgba(107,114,128,0.22); }
 
-[data-theme="light"] .filial-badge--supermax { background: linear-gradient(100deg, #15803d 0%, #22c55e 35%, #4ade80 50%, #22c55e 65%, #15803d 100%); background-size: 200% auto; color: #fff; border-color: #22c55e; animation: filial-shimmer-green 2.8s linear infinite; }
-[data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #b08060 0%, #c9a882 35%, #d8b896 50%, #c9a882 65%, #b08060 100%); background-size: 200% auto; color: #3b1f0a; border-color: #c9a882; animation: filial-shimmer-nude 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--supermax { background: linear-gradient(100deg, #1d4ed8 0%, #3b82f6 35%, #60a5fa 50%, #3b82f6 65%, #1d4ed8 100%); background-size: 200% auto; color: #fff; border-color: #3b82f6; animation: filial-shimmer-blue 2.8s linear infinite; }
+[data-theme="light"] .filial-badge--maxlook  { background: linear-gradient(100deg, #5b21b6 0%, #7c3aed 35%, #a78bfa 50%, #7c3aed 65%, #5b21b6 100%); background-size: 200% auto; color: #fff; border-color: #7c3aed; animation: filial-shimmer-violet 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--techmax  { background: linear-gradient(100deg, #000 0%, #1a1400 35%, #2a2200 50%, #1a1400 65%, #000 100%); background-size: 200% auto; color: #D4AF37; border-color: #D4AF37; animation: filial-shimmer-gold 2.8s linear infinite; }
 [data-theme="light"] .filial-badge--matriz   { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
 [data-theme="light"] .filial-badge--unknown  { background: rgba(107,114,128,0.18); color: #374151; border-color: rgba(107,114,128,0.50); }
