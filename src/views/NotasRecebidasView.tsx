@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -8,10 +9,10 @@ import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../l
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-export const NotasRecebidasView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/notasrecebidasview');
+const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
+  const { data, setData, isLoading } = useFetchData<any>('/api/notasrecebidasview', { filial });
   const confirm = useConfirm();
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -30,7 +31,7 @@ export const NotasRecebidasView = ({ showToast }: any) => {
     if (!validate()) return;
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
-      const payload = { ...form, ...extras, valor_total: parseBRL(extras.valor_total) };
+      const payload = { ...form, ...extras, valor_total: parseBRL(extras.valor_total), filial };
       if (editItem) {
         const u = await dbUpdate('/api/notasrecebidasview', editItem.id, payload);
         setData((p: any[]) => p.map(d => d.id === editItem.id ? (u ?? { ...d, ...payload }) : d));
@@ -119,4 +120,11 @@ export const NotasRecebidasView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+
+export const NotasRecebidasView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Notas Recebidas" onSelect={setFilial} />;
+  return <NotasRecebidasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

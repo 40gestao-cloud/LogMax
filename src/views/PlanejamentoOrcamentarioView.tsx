@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
-export const PlanejamentoOrcamentarioView = ({ showToast: _showToast }: any) => {
+const PlanejamentoOrcamentarioViewInner = ({ showToast: _showToast, filial }: any) => {
   const { data: centros, isLoading: loadingCC } = useFetchData<any>('/api/centroscustoview');
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview');
-  const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview');
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', { filial });
   const [search, setSearch] = useState('');
 
   const isLoading = loadingCC || loadingReq || loadingCP;
@@ -162,4 +163,11 @@ export const PlanejamentoOrcamentarioView = ({ showToast: _showToast }: any) => 
       )}
     </motion.div>
   );
+};
+
+
+export const PlanejamentoOrcamentarioView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Planejamento Orçamentário" onSelect={setFilial} />;
+  return <PlanejamentoOrcamentarioViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

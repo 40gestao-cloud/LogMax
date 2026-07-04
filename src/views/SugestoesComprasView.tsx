@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ShoppingCart, AlertTriangle, X, Save } from 'lucide-react';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
-export const SugestoesComprasView = ({ showToast }: any) => {
-  const { data: produtos, isLoading } = useFetchData<any>('/api/produtosview');
+const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
+  const { data: produtos, isLoading } = useFetchData<any>('/api/produtosview', { filial });
   const [search, setSearch] = useState('');
   const [filtroMode, setFiltroMode] = useState<'todos' | 'zerados'>('todos');
   const [requestingItem, setRequestingItem] = useState<any | null>(null);
@@ -256,4 +257,11 @@ export const SugestoesComprasView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+
+export const SugestoesComprasView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Sugestões de Compras" onSelect={setFilial} />;
+  return <SugestoesComprasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
