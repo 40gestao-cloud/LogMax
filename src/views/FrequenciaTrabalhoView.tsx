@@ -242,12 +242,62 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
               {p === 'dia' ? 'Dia' : p === 'semana' ? 'Semana' : 'Mês'}
             </button>
           ))}
-          <input
-            type="date"
-            value={dataSelecionada}
-            onChange={e => setDataSelecionada(e.target.value || today)}
-            className="neu-input px-3 py-1.5 rounded-xl text-xs tabular-nums"
-          />
+
+          {/* Navegador contextual por modo */}
+          {filtro === 'dia' && (
+            <input
+              type="date"
+              value={dataSelecionada}
+              onChange={e => setDataSelecionada(e.target.value || today)}
+              className="neu-input px-3 py-1.5 rounded-xl text-xs tabular-nums"
+            />
+          )}
+          {filtro === 'semana' && (
+            <div className="flex items-center gap-1 neu-flat rounded-xl border border-white/10 px-1 py-1">
+              <button
+                onClick={() => {
+                  const d = new Date(dataSelecionada + 'T12:00:00');
+                  d.setDate(d.getDate() - 7);
+                  setDataSelecionada(d.toISOString().slice(0, 10));
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-gray-200 transition text-sm"
+              >‹</button>
+              <span className="text-xs tabular-nums text-gray-300 px-1 select-none min-w-[130px] text-center">
+                {fmtData(startOfWeek(dataSelecionada))} – {fmtData(endOfWeek(dataSelecionada))}
+              </span>
+              <button
+                onClick={() => {
+                  const d = new Date(dataSelecionada + 'T12:00:00');
+                  d.setDate(d.getDate() + 7);
+                  setDataSelecionada(d.toISOString().slice(0, 10));
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-gray-200 transition text-sm"
+              >›</button>
+            </div>
+          )}
+          {filtro === 'mes' && (
+            <div className="flex items-center gap-1 neu-flat rounded-xl border border-white/10 px-1 py-1">
+              <button
+                onClick={() => {
+                  const [y, m] = dataSelecionada.split('-').map(Number);
+                  const d = new Date(y, m - 2, 1);
+                  setDataSelecionada(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-gray-200 transition text-sm"
+              >‹</button>
+              <span className="text-xs text-gray-300 px-1 select-none min-w-[100px] text-center capitalize">
+                {new Date(dataSelecionada + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Rio_Branco' })}
+              </span>
+              <button
+                onClick={() => {
+                  const [y, m] = dataSelecionada.split('-').map(Number);
+                  const d = new Date(y, m, 1);
+                  setDataSelecionada(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-gray-200 transition text-sm"
+              >›</button>
+            </div>
+          )}
         </div>
       </div>
 
