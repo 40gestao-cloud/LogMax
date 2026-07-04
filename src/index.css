@@ -1435,53 +1435,56 @@ html.theme-switching *::after {
 
 /* Verde — Presente */
 .freq-status-btn--presente {
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.25);
-  color: rgb(74, 222, 128);
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  color: rgba(74, 222, 128, 0.45);
 }
-.freq-status-btn--presente:hover { background: rgba(34, 197, 94, 0.22); border-color: rgba(34, 197, 94, 0.45); }
+.freq-status-btn--presente:hover { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.35); color: rgb(74, 222, 128); }
 .freq-status-btn--presente.freq-status-btn--active {
-  background: rgba(34, 197, 94, 0.28);
-  border-color: rgba(34, 197, 94, 0.60);
+  background: rgba(34, 197, 94, 0.30);
+  border-color: rgb(34, 197, 94);
   color: rgb(134, 239, 172);
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.25);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35), 0 0 14px rgba(34, 197, 94, 0.30);
+  transform: scale(1.04);
 }
 
 /* Vermelho — Falta */
 .freq-status-btn--falta {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: rgb(248, 113, 113);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  color: rgba(248, 113, 113, 0.45);
 }
-.freq-status-btn--falta:hover { background: rgba(239, 68, 68, 0.22); border-color: rgba(239, 68, 68, 0.45); }
+.freq-status-btn--falta:hover { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.35); color: rgb(248, 113, 113); }
 .freq-status-btn--falta.freq-status-btn--active {
-  background: rgba(239, 68, 68, 0.28);
-  border-color: rgba(239, 68, 68, 0.60);
+  background: rgba(239, 68, 68, 0.30);
+  border-color: rgb(239, 68, 68);
   color: rgb(252, 165, 165);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 0 14px rgba(239, 68, 68, 0.30);
+  transform: scale(1.04);
 }
 
 /* Amarelo — Presente com Atraso */
 .freq-status-btn--atraso {
-  background: rgba(234, 179, 8, 0.12);
-  border: 1px solid rgba(234, 179, 8, 0.25);
-  color: rgb(250, 204, 21);
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.15);
+  color: rgba(250, 204, 21, 0.45);
 }
-.freq-status-btn--atraso:hover { background: rgba(234, 179, 8, 0.22); border-color: rgba(234, 179, 8, 0.45); }
+.freq-status-btn--atraso:hover { background: rgba(234, 179, 8, 0.14); border-color: rgba(234, 179, 8, 0.35); color: rgb(250, 204, 21); }
 .freq-status-btn--atraso.freq-status-btn--active {
-  background: rgba(234, 179, 8, 0.28);
-  border-color: rgba(234, 179, 8, 0.60);
+  background: rgba(234, 179, 8, 0.30);
+  border-color: rgb(234, 179, 8);
   color: rgb(253, 224, 71);
-  box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.35), 0 0 14px rgba(234, 179, 8, 0.30);
+  transform: scale(1.04);
 }
 
-/* Light mode: fundo levemente mais saturado */
-[data-theme="light"] .freq-status-btn--presente { background: rgba(34,197,94,0.10); color: rgb(22,163,74); }
-[data-theme="light"] .freq-status-btn--presente.freq-status-btn--active { background: rgba(34,197,94,0.22); color: rgb(21,128,61); }
-[data-theme="light"] .freq-status-btn--falta { background: rgba(239,68,68,0.10); color: rgb(220,38,38); }
-[data-theme="light"] .freq-status-btn--falta.freq-status-btn--active { background: rgba(239,68,68,0.22); color: rgb(185,28,28); }
-[data-theme="light"] .freq-status-btn--atraso { background: rgba(234,179,8,0.10); color: rgb(161,98,7); }
-[data-theme="light"] .freq-status-btn--atraso.freq-status-btn--active { background: rgba(234,179,8,0.22); color: rgb(133,77,14); }
+/* Light mode */
+[data-theme="light"] .freq-status-btn--presente { background: rgba(34,197,94,0.05); border-color: rgba(34,197,94,0.18); color: rgba(22,163,74,0.5); }
+[data-theme="light"] .freq-status-btn--presente.freq-status-btn--active { background: rgba(34,197,94,0.20); border-color: rgb(22,163,74); color: rgb(21,128,61); box-shadow: 0 0 0 2px rgba(34,197,94,0.30), 0 0 10px rgba(34,197,94,0.20); }
+[data-theme="light"] .freq-status-btn--falta { background: rgba(239,68,68,0.05); border-color: rgba(239,68,68,0.18); color: rgba(220,38,38,0.5); }
+[data-theme="light"] .freq-status-btn--falta.freq-status-btn--active { background: rgba(239,68,68,0.20); border-color: rgb(220,38,38); color: rgb(185,28,28); box-shadow: 0 0 0 2px rgba(239,68,68,0.30), 0 0 10px rgba(239,68,68,0.20); }
+[data-theme="light"] .freq-status-btn--atraso { background: rgba(234,179,8,0.05); border-color: rgba(234,179,8,0.18); color: rgba(161,98,7,0.5); }
+[data-theme="light"] .freq-status-btn--atraso.freq-status-btn--active { background: rgba(234,179,8,0.20); border-color: rgb(161,98,7); color: rgb(133,77,14); box-shadow: 0 0 0 2px rgba(234,179,8,0.30), 0 0 10px rgba(234,179,8,0.20); }
 
 /* ── BI Panel: Markdown ──
    Estilo dedicado pro relatório executivo renderizado por react-markdown
