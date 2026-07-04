@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const statusCls = (s: string) => {
   if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
@@ -15,10 +16,10 @@ const statusCls = (s: string) => {
 
 const EMPTY: any = { funcionario_id: '', data_inicio: '', data_fim: '', dias: '30', status: 'Solicitada' };
 
-export const FeriasView = ({ showToast }: any) => {
-  const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview');
+const FeriasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview', { filial });
   const confirm = useConfirm();
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
@@ -44,7 +45,7 @@ export const FeriasView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!form.funcionario_id || !form.data_inicio) { showToast('Funcionário e data de início são obrigatórios.', 'error'); return; }
-    const payload = { ...form, dias: Number(form.dias || 30) };
+    const payload = { ...form, dias: Number(form.dias || 30), filial };
     setSaving(true);
     try {
       if (editId) {
@@ -104,9 +105,12 @@ export const FeriasView = ({ showToast }: any) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Férias</h2>
-        <p className="text-sm text-gray-400 mt-1">Gerencie solicitações e períodos de férias dos funcionários.</p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Férias — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Gerencie solicitações e períodos de férias dos funcionários.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -233,4 +237,10 @@ export const FeriasView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const FeriasView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Férias" onSelect={setFilial} />;
+  return <FeriasViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

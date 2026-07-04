@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -9,6 +9,7 @@ import { hasSetor } from '../lib/rbac';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 type RecalcBreakdown = {
   valor_hora: number;
@@ -40,18 +41,9 @@ const statusNextTitle = (s: string): string =>
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
-export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  // Guard: dados sensíveis (salário). RLS já bloqueia, mas evita UX confusa.
-  if (!hasSetor(profile, 'rh')) {
-    return (
-      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
-        <Lock size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem acessar a Folha de Pagamento.</p>
-      </div>
-    );
-  }
-  const { data: folhas, setData, isLoading: loadingF } = useFetchData<any>('/api/folhapagamentoview');
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
+const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: folhas, setData, isLoading: loadingF } = useFetchData<any>('/api/folhapagamentoview', { filial });
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
 
   const hoje = new Date().toISOString().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
@@ -136,7 +128,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     const benef = Number(form.valor_beneficios || 0);
     // salario_bruto inicial = base; recalc do ponto pode aumentar via hora extra.
     // valor_beneficios é separado — não entra em descontos nem no líquido.
-    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc };
+    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc, filial };
     setSaving(true);
     try {
       if (editId) {
@@ -412,7 +404,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
                 valor: liquido,
                 vencimento,
                 status: 'Pendente',
-                filial: profile?.filial ?? 'Matriz',
+                filial,
               });
               showToast('Folha processada — Conta a Pagar gerada.', 'success');
             } catch {
@@ -426,9 +418,12 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Folha de Pagamento</h2>
-        <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Folha de Pagamento — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
@@ -711,6 +706,20 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       </AnimatePresence>
     </motion.div>
   );
+};
+
+export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!hasSetor(profile, 'rh')) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+        <Lock size={36} className="text-gray-600" />
+        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem acessar a Folha de Pagamento.</p>
+      </div>
+    );
+  }
+  if (!filial) return <FilialSelector title="Folha de Pagamento" onSelect={setFilial} />;
+  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
 
 function Row({ label, value, colorClass, muted, bold }: {

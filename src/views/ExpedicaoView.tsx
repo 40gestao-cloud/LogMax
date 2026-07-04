@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const ExpedicaoView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/expedicao');
+const ExpedicaoViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data, setData, isLoading } = useFetchData<any>('/api/expedicao', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
@@ -30,12 +31,10 @@ export const ExpedicaoView = ({ showToast }: any) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const qtd = Number(extras.qtd_expedida) || 0;
-      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: extras.status };
+      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: extras.status, filial };
       const s = await dbInsert('/api/expedicao', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-      // Baixa de estoque: só ocorre quando o status é 'Expedido' e há quantidade
       if (extras.status === 'Expedido' && qtd > 0) {
-        const prod = produtos.find((p: any) => p.id === form.produto_id);
         await dbInsert('/api/movimentacoesestoqueview', {
           produto_id: form.produto_id,
           tipo: 'Saída',
@@ -45,6 +44,7 @@ export const ExpedicaoView = ({ showToast }: any) => {
             ? requisicoes.find((r: any) => r.id === extras.requisicao_id)?.destino || 'Expedido'
             : 'Expedido',
           data: today,
+          filial,
         });
         showToast("Expedição registrada e estoque baixado!", 'success', true);
       } else {
@@ -70,8 +70,9 @@ export const ExpedicaoView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Expedição</h2><p className="text-sm text-gray-400 mt-1">Gerencie a saída e expedição de produtos do estoque.</p></div>
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Expedição — {filial}</h2><p className="text-sm text-gray-400 mt-1">Gerencie a saída e expedição de produtos do estoque.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Expedição</NeuButtonAccent>
         </div>
@@ -127,4 +128,10 @@ export const ExpedicaoView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const ExpedicaoView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Expedição" onSelect={setFilial} />;
+  return <ExpedicaoViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

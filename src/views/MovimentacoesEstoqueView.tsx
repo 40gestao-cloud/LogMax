@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, Trash2, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const MovimentacoesEstoqueView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview');
+const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ produto_id: '', tipo: '' });
@@ -30,7 +31,6 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
     const qtd = Number(extras.qtd) || 0;
     if (qtd <= 0) { showToast('Informe uma quantidade > 0.', 'error', true); return; }
 
-    // Bloqueia saída que tornaria o saldo negativo (#9).
     if (form.tipo === 'Saída') {
       const prod = produtos.find((p: any) => p.id === form.produto_id);
       const saldo = Number(prod?.estoque ?? 0);
@@ -44,7 +44,7 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
     showToast("Registrando...", 'info', false);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const payload = { ...form, qtd, origem: extras.origem, destino: extras.destino, data: today };
+      const payload = { ...form, qtd, origem: extras.origem, destino: extras.destino, data: today, filial };
       const saved = await dbInsert('/api/movimentacoesestoqueview', payload);
       setData([saved ?? { id: Date.now(), ...payload }, ...data]);
       showToast("Movimentação registrada!", 'success', true);
@@ -70,10 +70,11 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Movimentações de Estoque</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Movimentações de Estoque — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Entradas, saídas e ajustes de estoque.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -170,4 +171,10 @@ export const MovimentacoesEstoqueView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const MovimentacoesEstoqueView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Movimentações de Estoque" onSelect={setFilial} />;
+  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

@@ -1,19 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search } from 'lucide-react';
+import { Search, ArrowLeft } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../components/ui';
 import { useAIContext } from '../contexts/AIAssistantContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const SaldosEstoqueView = () => {
-  const { data, isLoading } = useFetchData<any>('/api/saldosestoqueview');
+const SaldosEstoqueViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data, isLoading } = useFetchData<any>('/api/saldosestoqueview', { filial });
   const [search, setSearch] = useState('');
 
   const filtered = data.filter((p: any) =>
     [p.nome, p.codigo, p.categoria].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  // Injeção de contexto pro MaxAI — saldos consolidados + produtos críticos.
   const aiSnapshot = useMemo(() => {
     const itens = filtered.map((p: any) => ({
       codigo:    p.codigo,
@@ -24,12 +24,12 @@ export const SaldosEstoqueView = () => {
       preco:     p.preco,
     }));
     return {
-      label: 'Saldos de Estoque',
+      label: `Saldos de Estoque — ${filial}`,
       data: {
         total_produtos:   itens.length,
         sem_estoque:      itens.filter(i => i.saldo === 0).length,
         valor_inventario: Number(itens.reduce((s, i) => s + i.saldo * (Number(i.preco) || 0), 0).toFixed(2)),
-        produtos: itens.slice(0, 60), // cap pra caber no orçamento do MaxAI
+        produtos: itens.slice(0, 60),
       },
     };
   }, [filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -39,13 +39,16 @@ export const SaldosEstoqueView = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Saldos de Estoque</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Saldos de Estoque — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Posição atual de estoque por produto.</p>
         </div>
-        <div className="relative w-full sm:w-auto">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
-            value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
         </div>
       </div>
 
@@ -93,4 +96,10 @@ export const SaldosEstoqueView = () => {
       </div>
     </motion.div>
   );
+};
+
+export const SaldosEstoqueView = () => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Saldos de Estoque" onSelect={setFilial} />;
+  return <SaldosEstoqueViewInner filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

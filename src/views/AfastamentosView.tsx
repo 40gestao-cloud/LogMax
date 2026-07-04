@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
 const TIPOS = [
   'Atestado médico',
@@ -59,7 +60,6 @@ const EMPTY_FORM = {
   link_documento: '',
 };
 
-// Conta dias inclusivos no período (5/jun → 7/jun = 3 dias).
 const diasNoPeriodo = (ini: string, fim: string): number => {
   if (!ini || !fim) return 0;
   const a = new Date(ini), b = new Date(fim);
@@ -67,10 +67,10 @@ const diasNoPeriodo = (ini: string, fim: string): number => {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 };
 
-export const AfastamentosView = ({ showToast, profile }: any) => {
-  const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview');
+const AfastamentosViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview', { filial });
   const confirm = useConfirm();
-  const { data: funcionarios } = useFetchData<Funcionario>('/api/funcionariosview');
+  const { data: funcionarios } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
@@ -104,10 +104,10 @@ export const AfastamentosView = ({ showToast, profile }: any) => {
         link_documento:   form.link_documento.trim() || null,
         nome_criador:     profile?.nome ?? '',
         criado_por:       profile?.id ?? null,
+        filial,
       };
       const created = await dbInsert('/api/afastamentosview', payload);
       setData((prev: any[]) => [created, ...prev]);
-      // Aplica no ponto imediatamente — fluxo natural do RH.
       await aplicarNoPonto(created.id, { silencioso: true });
       showToast('Afastamento registrado e aplicado no ponto.', 'success');
       resetForm();
@@ -126,7 +126,6 @@ export const AfastamentosView = ({ showToast, profile }: any) => {
       if (error) throw error;
       const aplicados = Number(data?.aplicados ?? 0);
       const pulados   = Number(data?.pulados   ?? 0);
-      // O reload é leve aqui — recarrega os flags aplicado_no_ponto/aplicado_em.
       await reload();
       if (!opts?.silencioso) {
         if (pulados > 0) {
@@ -171,11 +170,14 @@ export const AfastamentosView = ({ showToast, profile }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Afastamentos</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Registre atestados, licenças e faltas justificadas. O ponto eletrônico recebe automaticamente o status <strong className="text-gray-300">Justificado</strong> nos dias do período.
-        </p>
+      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Afastamentos — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Registre atestados, licenças e faltas justificadas. O ponto eletrônico recebe automaticamente o status <strong className="text-gray-300">Justificado</strong> nos dias do período.
+          </p>
+        </div>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -347,13 +349,17 @@ export const AfastamentosView = ({ showToast, profile }: any) => {
       </div>
 
       <div className="neu-flat rounded-2xl p-4 border border-white/5 shrink-0">
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
-          Como integra com a folha
-        </p>
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Como integra com a folha</p>
         <p className="text-xs text-gray-400 leading-relaxed">
           O RPC <strong className="text-gray-300">recalcular_folha_do_ponto</strong> trata dias com status <strong className="text-gray-300">Justificado</strong> como zero desconto — então afastamentos preservam o salário do colaborador sem cálculo manual. Faltas comuns (não justificadas) continuam descontando 8h por dia.
         </p>
       </div>
     </motion.div>
   );
+};
+
+export const AfastamentosView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Afastamentos" onSelect={setFilial} />;
+  return <AfastamentosViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

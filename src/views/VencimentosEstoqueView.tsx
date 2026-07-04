@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 
-export const VencimentosEstoqueView = ({ showToast }: any) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/vencimentosestoqueview');
+const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+  const { data, setData, isLoading } = useFetchData<any>('/api/vencimentosestoqueview', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -29,7 +30,7 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
     if (!validate()) return;
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
-      const payload = { ...form, lote: extras.lote, qtd: Number(extras.qtd) || 0, status: extras.status };
+      const payload = { ...form, lote: extras.lote, qtd: Number(extras.qtd) || 0, status: extras.status, filial };
       if (editItem) {
         const u = await dbUpdate('/api/vencimentosestoqueview', editItem.id, payload);
         setData((p: any[]) => p.map(d => d.id === editItem.id ? (u ?? { ...d, ...payload }) : d));
@@ -62,8 +63,9 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Previsão de Vencimentos</h2><p className="text-sm text-gray-400 mt-1">Controle de lotes com vencimento próximo ou vencidos.</p></div>
+        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Previsão de Vencimentos — {filial}</h2><p className="text-sm text-gray-400 mt-1">Controle de lotes com vencimento próximo ou vencidos.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
+          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
@@ -115,4 +117,10 @@ export const VencimentosEstoqueView = ({ showToast }: any) => {
       </div>
     </motion.div>
   );
+};
+
+export const VencimentosEstoqueView = ({ showToast }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Previsão de Vencimentos" onSelect={setFilial} />;
+  return <VencimentosEstoqueViewInner showToast={showToast} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };
