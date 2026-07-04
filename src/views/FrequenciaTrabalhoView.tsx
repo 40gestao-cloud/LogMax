@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus,
@@ -79,11 +80,11 @@ const getDaysInRange = (start: string, end: string): string[] => {
   return days;
 };
 
-export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
+const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
   const { user } = useAuth();
-  const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview');
-  const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>('/api/funcionariosview');
-  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview');
+  const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview', { filial });
+  const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
+  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview', { filial });
 
   const today = todayBR();
   const [dataSelecionada, setDataSelecionada] = useState(today);
@@ -537,4 +538,11 @@ export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
 
     </motion.div>
   );
+};
+
+
+export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Frequência de Trabalho" onSelect={setFilial} />;
+  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

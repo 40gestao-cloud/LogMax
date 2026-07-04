@@ -1,0 +1,8 @@
+Claude, há algumas alterações necessárias:
+1. Os funcionários em todas as views, devem ver e poder usar somente referente a filial que está cadastrado (exemplo: João - MaxLook - ele só pode usar MaxLook, as demais filiais não). Ou seja, em Módulo e Submódulo (Gerente do setor enxerga tudo e acesso a tudo), em cada Módulo e Submódulo (funcionário só acessa a filial que está cadastrado).
+2. Outro ponto importante, ações como Folha de Pagamento (ao realizar o procedimento de Folha de Pagamento da SuperMax, deve aparecer somente os funcionários que são da SuperMax; Na MaxLook, somente deve aparecer funcionários da MaxLook e o mesmo para TechMax). Você deve se atentar a isso, pois é preciso ter essa separação em tudo, para que de fato haja efetividade da mudança de separação por filial.
+3. Outro problema, ainda lugares em que uma venda, pedido, não aparece a descrição do que foi vendido. 
+4. Em Logística - Compras - Ainda há views sem separação por filial como Notas recebidas, Sugestões de Compras, Planejamento orçamentário, Orçamento por categoria.
+
+##IMPORTANTE:
+Deve garantir a separação total por filial, maneira que cada filial tenha seus próprios dados, funcionários, e como se cada uma tivesse seu próprio setor (Logística, Financeiro, Recursos Humanos, Vendas, Marketing e TI & Suporte). Porque você até colocou um tela que mostra separação entre filiais, mas na prática, dados, funcionários, folha de pagamento, estoque e tudo mais, ainda se misturam como se fosse uma única empresa, e isso não é o comportamento correto de uma Holding (Matriz) que controla 03 filiais (afinal, cada filial tem seus próprios setores, funcionários, folha de pagamento, e assim por diante).

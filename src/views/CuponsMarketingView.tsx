@@ -52,12 +52,9 @@ const sanitizeCodigo = (s: string) =>
   s.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
 
 const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
-  const { data: cuponsAll, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview');
+  const { data: cupons, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview', { filial });
   const confirm = useConfirm();
-  const { data: campanhasAll } = useFetchData<Campanha>('/api/marketingcampanhasview');
-
-  const cupons = useMemo(() => cuponsAll.filter((c: any) => c.filial === filial), [cuponsAll, filial]);
-  const campanhas = useMemo(() => campanhasAll.filter((c: any) => c.filial === filial || !c.filial), [campanhasAll, filial]);
+  const { data: campanhas } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial });
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Cupom | null>(null);

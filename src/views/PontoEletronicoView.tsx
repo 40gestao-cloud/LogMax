@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { FilialSelector, type FilialOp } from '../components/FilialSelector';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet, MessageSquarePlus, FileText, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -413,11 +414,11 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
 // ─── View principal ───────────────────────────────────────────────────────────
 type ScanResult = { ok: true; label: string; hora: string; status: string } | { ok: false; msg: string };
 
-export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
   const { session } = useAuth();
-  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview');
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview');
-  const { data: justificativas, reload: reloadJust } = useFetchData<any>('/api/justificativasfaltaview');
+  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial });
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
+  const { data: justificativas, reload: reloadJust } = useFetchData<any>('/api/justificativasfaltaview', { filial });
   const [filtroData, setFiltroData] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY);
@@ -959,4 +960,11 @@ export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; pr
       </AnimatePresence>
     </motion.div>
   );
+};
+
+
+export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const [filial, setFilial] = useState<FilialOp | null>(null);
+  if (!filial) return <FilialSelector title="Ponto Eletrônico" onSelect={setFilial} />;
+  return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filial} onTrocarFilial={() => setFilial(null)} />;
 };

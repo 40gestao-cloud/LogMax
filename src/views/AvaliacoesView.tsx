@@ -159,7 +159,7 @@ function ModalAvaliacao({
 // Modal: novo ciclo
 // ----------------------------------------------------------------------
 
-function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; onSaved: () => void; showToast: any }) {
+function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string }) {
   const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true });
   const [saving, setSaving] = useState(false);
 
@@ -170,7 +170,7 @@ function ModalNovoCiclo({ onClose, onSaved, showToast }: { onClose: () => void; 
     }
     setSaving(true);
     try {
-      const { error } = await supabase.from('ciclos_avaliacao').insert(form);
+      const { error } = await supabase.from('ciclos_avaliacao').insert({ ...form, filial });
       if (error) throw error;
       showToast?.('Ciclo criado!', 'success');
       onSaved();
@@ -503,9 +503,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     if (!hasLoadedOnce.current) setIsLoading(true);
     try {
       const [resC, resU, resA, resCr] = await Promise.all([
-        supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false }),
+        supabase.from('ciclos_avaliacao').select('*').eq('filial', filial).order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('*'),
-        supabase.from('avaliacoes').select('*'),
+        supabase.from('avaliacoes').select('*').eq('filial', filial),
         supabase.from('criterios_avaliacao').select('*'),
       ]);
       // Erros silenciosos do PostgREST (RLS, schema drift) vêm em `error`, não
@@ -527,7 +527,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filial]);
 
   const fecharCiclo = async (id: string) => {
     if (!supabase) return;
@@ -1224,6 +1224,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             onClose={() => setShowNovoCiclo(false)}
             onSaved={reload}
             showToast={showToast}
+            filial={filial}
           />
         )}
         {avaliando && (
