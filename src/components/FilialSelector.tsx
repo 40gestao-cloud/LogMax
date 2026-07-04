@@ -82,7 +82,7 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
       )}
 
       {/* Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-3xl z-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-4xl z-10">
         {FILIAIS.map((f, i) => {
           const m = FILIAL_META[f];
           return (
@@ -94,7 +94,7 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
               transition={{ delay: 0.08 + i * 0.07, type: 'spring', stiffness: 280, damping: 24 }}
               whileHover={{ scale: 1.03, y: -3 }}
               whileTap={{ scale: 0.97 }}
-              className="group relative flex flex-col items-center gap-5 rounded-3xl p-7 text-center transition-all duration-250 overflow-hidden"
+              className="group relative flex flex-col items-center gap-6 rounded-3xl p-10 text-center transition-all duration-250 overflow-hidden"
               style={{
                 background: 'rgba(255,255,255,0.03)',
                 border: `1px solid ${m.borderIdle}`,
@@ -111,13 +111,13 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
               }}
             >
               {/* Logo */}
-              <div className={`w-24 h-24 rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/8 ${f === 'SuperMax' ? 'bg-white' : 'bg-white/5'}`}>
-                <img src={m.logo} alt={f} className="w-[88px] h-[88px] object-contain" />
+              <div className={`w-32 h-32 rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/8 ${f === 'SuperMax' ? 'bg-white' : 'bg-white/5'}`}>
+                <img src={m.logo} alt={f} className="w-[120px] h-[120px] object-contain" />
               </div>
 
               {/* Nome + descrição simples */}
               <div className="flex flex-col items-center gap-1.5">
-                <p className={`text-xl font-black tracking-tight ${m.textCls}`}>{f}</p>
+                <p className={`text-2xl font-black tracking-tight ${m.textCls}`}>{f}</p>
                 <p className="text-[11px] text-gray-500 leading-snug">{m.desc}</p>
               </div>
 
