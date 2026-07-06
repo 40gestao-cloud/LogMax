@@ -877,6 +877,15 @@ html.theme-switching *::after {
   animation-play-state: paused;
 }
 
+.btn-shimmer-gold::before {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 220, 100, 0.40) 50%,
+    transparent 100%
+  );
+}
+
 /* ── Logo shimmer — desativado ──
    Efeito removido: mask-image não recortava corretamente pelo alpha
    do PNG, causando shimmer em formato quadrado sobre a logo. */

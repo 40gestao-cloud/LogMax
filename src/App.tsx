@@ -589,7 +589,20 @@ function LogMaxAppInner() {
     return (
       <div className="min-h-screen flex flex-col bg-base">
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
-          <button onClick={handleSignOut} className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">Sair</button>
+          <button
+            onClick={handleSignOut}
+            className="btn-shimmer btn-shimmer-gold relative flex items-center gap-2.5 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(212,175,55,0.18) 0%, rgba(255,220,100,0.08) 50%, rgba(212,175,55,0.14) 100%)',
+              border: '1px solid rgba(212,175,55,0.45)',
+              boxShadow: 'inset 0 1px 0 rgba(255,220,100,0.20), inset 0 0 12px 4px rgba(212,175,55,0.08), 0 2px 12px rgba(212,175,55,0.15)',
+              color: 'rgba(212,175,55,0.90)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <LogOut size={15} />
+            <span>Sair</span>
+          </button>
         </div>
         <FilialSelector
           title="Selecione a Unidade"

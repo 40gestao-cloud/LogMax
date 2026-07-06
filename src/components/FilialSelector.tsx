@@ -23,7 +23,7 @@ const FILIAL_META: Record<FilialOp, {
     borderIdle:  'rgba(29,78,216,0.22)',
     borderHover: 'rgba(29,78,216,0.70)',
     bgCls:       'bg-white',
-    shimmer:     'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.72) 100%)',
+    shimmer:     'inset 0 0 22px 10px rgba(0,0,0,0.65)',
   },
   MaxLook: {
     logo:        '/icon-maxlook.png',
@@ -31,7 +31,7 @@ const FILIAL_META: Record<FilialOp, {
     borderIdle:  'rgba(201,168,130,0.22)',
     borderHover: 'rgba(201,168,130,0.70)',
     bgCls:       'bg-white/5',
-    shimmer:     'radial-gradient(ellipse at center, transparent 48%, rgba(210,185,150,0.65) 100%)',
+    shimmer:     'inset 0 0 22px 10px rgba(210,185,150,0.55)',
   },
   TechMax: {
     logo:        '/icon-techmax.png',
@@ -39,7 +39,7 @@ const FILIAL_META: Record<FilialOp, {
     borderIdle:  'rgba(249,115,22,0.18)',
     borderHover: 'rgba(249,115,22,0.60)',
     bgCls:       'bg-white/5',
-    shimmer:     'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.72) 100%)',
+    shimmer:     'inset 0 0 22px 10px rgba(0,0,0,0.65)',
   },
 };
 
@@ -83,17 +83,30 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
         </motion.button>
       )}
 
-      {/* Matriz — logo clicável */}
+      {/* Matriz — card igual aos demais */}
       <motion.button
         onClick={() => onSelect('Matriz')}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05, type: 'spring', stiffness: 280, damping: 24 }}
-        whileHover={{ scale: 1.06, y: -3 }}
+        whileHover={{ scale: 1.03, y: -3 }}
         whileTap={{ scale: 0.97 }}
-        className="z-10"
+        className="relative flex flex-col items-center rounded-3xl py-10 px-20 text-center transition-all duration-250 overflow-hidden z-10"
+        style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(212,175,55,0.25)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.border = '1px solid rgba(212,175,55,0.70)';
+          (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(212,175,55,0.25), inset 0 1px 0 rgba(255,255,255,0.08)';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.border = '1px solid rgba(212,175,55,0.25)';
+          (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.05)';
+        }}
       >
-        <img src="/icon.matriz.png" alt="Matriz" className="w-52 h-52 object-contain" />
+        <img src="/icon.matriz.png" alt="Matriz" className="w-72 h-44 object-contain" />
       </motion.button>
 
       {/* Cards das 3 unidades */}
@@ -126,12 +139,11 @@ export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
               }}
             >
               {/* Logo com shimmer nas bordas */}
-              <div className={`relative w-44 h-44 rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/8 ${m.bgCls}`}>
+              <div
+                className={`w-44 h-44 rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/8 ${m.bgCls}`}
+                style={{ boxShadow: m.shimmer }}
+              >
                 <img src={m.logo} alt={f} className="w-full h-full object-contain" />
-                <div
-                  className="absolute inset-0 rounded-2xl pointer-events-none"
-                  style={{ background: m.shimmer }}
-                />
               </div>
             </motion.button>
           );
