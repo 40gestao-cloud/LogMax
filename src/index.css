@@ -3,9 +3,9 @@
 @theme {
   --color-bg-base: #000000;
   --color-bg-dark: #1A1305;
-  --color-bg-light: rgba(212, 175, 55, 0.05);
-  --color-accent: #D4AF37;
-  --color-accent-hover: #B8941F;
+  --color-bg-light: rgba(240, 185, 40, 0.06);
+  --color-accent: #F0B429;
+  --color-accent-hover: #D49A10;
   --animate-spin-slow: spin 6s linear infinite;
 }
 
@@ -13,9 +13,9 @@
 :root {
   --color-bg-base:    #000000;
   --color-bg-dark:    #1A1305;
-  --color-bg-light:   rgba(212, 175, 55, 0.05);
-  --color-accent:      #D4AF37;
-  --color-accent-hover: #B8941F;
+  --color-bg-light:   rgba(240, 180, 41, 0.06);
+  --color-accent:      #F0B429;
+  --color-accent-hover: #D49A10;
   --color-accent-text:  #000000;
 
   /* text */
@@ -27,10 +27,10 @@
   --color-text-ghost:     #374151;
 
   /* borders & surfaces */
-  --color-border:         rgba(212, 175, 55, 0.18);
-  --color-border-md:      rgba(212, 175, 55, 0.28);
-  --color-surface:        rgba(212, 175, 55, 0.04);
-  --color-surface-md:     rgba(212, 175, 55, 0.08);
+  --color-border:         rgba(240, 180, 41, 0.22);
+  --color-border-md:      rgba(240, 180, 41, 0.32);
+  --color-surface:        rgba(240, 180, 41, 0.05);
+  --color-surface-md:     rgba(240, 180, 41, 0.10);
 
   /* card / login — flat: sombra mínima + borda fina (feedback 2026-06-03) */
   --color-card-bg:       #0d0d0d;
@@ -45,7 +45,7 @@
   /* icon-circle — flat */
   --color-icon-bg:       #0f0f0f;
   --color-icon-shadow:   0 1px 2px rgba(0, 0, 0, 0.4),
-                         inset 0 0 0 1px rgba(212, 175, 55, 0.22);
+                         inset 0 0 0 1px rgba(240, 180, 41, 0.26);
 
   /* scrollbar */
   --color-scrollbar:       #1a1a1a;
@@ -69,8 +69,8 @@
 
 /* ── Accent color palettes ── */
 [data-accent="green"] {
-  --color-accent:      #D4AF37;
-  --color-accent-hover: #B8941F;
+  --color-accent:      #F0B429;
+  --color-accent-hover: #D49A10;
   --color-accent-text:  #000000;
 }
 
@@ -573,10 +573,10 @@ table,
 /* Admin/CEO: pílula dourada com shimmer */
 .role-badge--admin,
 .role-badge--ceo {
-  background: linear-gradient(100deg, #B8860B 0%, #D4AF37 35%, #dfc060 50%, #D4AF37 65%, #B8860B 100%);
+  background: linear-gradient(100deg, #B8860B 0%, #F0B429 35%, #dfc060 50%, #F0B429 65%, #B8860B 100%);
   background-size: 200% auto;
   color: #000;
-  border-color: #D4AF37 !important;
+  border-color: #F0B429 !important;
   animation: badge-shimmer 2.4s linear infinite;
 }
 @keyframes badge-shimmer-glass {
@@ -596,7 +596,7 @@ table,
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: #fff;
-  border-color: #D4AF37 !important;
+  border-color: #F0B429 !important;
   animation: badge-shimmer-glass 2.8s linear infinite;
 }
 /* Colaborador: fundo preto + borda branca + texto branco */
@@ -630,10 +630,10 @@ table,
 
 /* Em Produção: dourado com shimmer */
 .meta-status--producao {
-  background: linear-gradient(100deg, #B8860B 0%, #D4AF37 35%, #f0d878 50%, #D4AF37 65%, #B8860B 100%);
+  background: linear-gradient(100deg, #B8860B 0%, #F0B429 35%, #f0d878 50%, #F0B429 65%, #B8860B 100%);
   background-size: 200% auto;
   color: #000;
-  border-color: #D4AF37 !important;
+  border-color: #F0B429 !important;
   animation: badge-shimmer 2.4s linear infinite;
 }
 
@@ -680,15 +680,15 @@ table,
   animation: badge-shimmer 3.2s linear infinite;
 }
 
-[data-theme="light"] .role-badge--admin       { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
-[data-theme="light"] .role-badge--ceo         { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
-[data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #D4AF37 !important; }
+[data-theme="light"] .role-badge--admin       { background: #F0B429; color: #000; border-color: #F0B429 !important; }
+[data-theme="light"] .role-badge--ceo         { background: #F0B429; color: #000; border-color: #F0B429 !important; }
+[data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #F0B429 !important; }
 [data-theme="light"] .role-badge--colaborador { background: #111; color: #fff; border-color: #fff !important; }
 [data-theme="light"] .role-badge--conselheiro { background: #6D28D9; color: #fff; border-color: #7C3AED !important; }
 
 /* Setor global (principal): dourado igual admin */
-.setor-badge--global { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
-[data-theme="light"] .setor-badge--global { background: #D4AF37; color: #000; border-color: #D4AF37 !important; }
+.setor-badge--global { background: #F0B429; color: #000; border-color: #F0B429 !important; }
+[data-theme="light"] .setor-badge--global { background: #F0B429; color: #000; border-color: #F0B429 !important; }
 
 /* Setores extras: cinza neutro */
 .setor-badge--logistica,
@@ -739,7 +739,7 @@ table,
 }
 
 /* Reverte accent ao tom do dark mode dentro do sidebar (light mode redefine accent). */
-[data-theme="light"][data-accent="green"]     .sidebar-dark { --color-accent: #D4AF37; --color-accent-hover: #B8941F; --color-accent-text: #000000; }
+[data-theme="light"][data-accent="green"]     .sidebar-dark { --color-accent: #F0B429; --color-accent-hover: #B8941F; --color-accent-text: #000000; }
 [data-theme="light"][data-accent="acessivel"] .sidebar-dark { --color-accent: #F97316; --color-accent-hover: #EA580C; --color-accent-text: #0A0A0A; --color-accent-icon: #7DD3FC; }
 
 /* Reverte utilities Tailwind dentro do sidebar (specificity 0,3,0 vence
@@ -908,13 +908,13 @@ html.theme-switching *::after {
   padding: 1.5px;
   background: conic-gradient(
     from var(--vitrine-angle),
-    rgba(212, 175, 55, 0.2) 0deg,
-    rgba(212, 175, 55, 0.2) 70deg,
+    rgba(240, 180, 41, 0.2) 0deg,
+    rgba(240, 180, 41, 0.2) 70deg,
     rgba(244, 208, 112, 0.9) 95deg,
     #fff 105deg,
     rgba(244, 208, 112, 0.9) 115deg,
-    rgba(212, 175, 55, 0.2) 140deg,
-    rgba(212, 175, 55, 0.2) 360deg
+    rgba(240, 180, 41, 0.2) 140deg,
+    rgba(240, 180, 41, 0.2) 360deg
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -934,13 +934,13 @@ html.theme-switching *::after {
 }
 
 
-/* LoginScreen — botão Entrar dourado fixo (#D4AF37). Sem box-shadow:
+/* LoginScreen — botão Entrar dourado fixo (#F0B429). Sem box-shadow:
    preferência explícita por design flat. Hover só clareia o tom. */
 .login-submit:not(:disabled):hover {
   filter: brightness(1.08);
 }
 .login-submit:focus-visible {
-  outline: 2px solid rgba(212, 175, 55, 0.65);
+  outline: 2px solid rgba(240, 180, 41, 0.70);
   outline-offset: 2px;
 }
 
@@ -1257,8 +1257,8 @@ html.theme-switching *::after {
   justify-content: center;
   flex-shrink: 0;
   background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(212, 175, 55, 0.30);
-  color: rgb(212, 175, 55);
+  border: 1px solid rgba(240, 180, 41, 0.35);
+  color: rgb(240, 180, 41);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
@@ -1267,7 +1267,7 @@ html.theme-switching *::after {
 
 .action-btn-pdf:hover {
   background: rgba(0, 0, 0, 0.72);
-  border-color: rgba(212, 175, 55, 0.55);
+  border-color: rgba(240, 180, 41, 0.60);
   color: rgb(234, 201, 83);
 }
 
@@ -1284,7 +1284,7 @@ html.theme-switching *::after {
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(212, 175, 55, 0.22) 50%,
+    rgba(240, 180, 41, 0.26) 50%,
     transparent 100%
   );
   transform: translateX(-150%) skewX(-18deg);
@@ -1307,8 +1307,8 @@ html.theme-switching *::after {
   border-radius: 0.75rem;
   font-size: 0.75rem;
   background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(212, 175, 55, 0.30);
-  color: rgb(212, 175, 55);
+  border: 1px solid rgba(240, 180, 41, 0.35);
+  color: rgb(240, 180, 41);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
@@ -1317,7 +1317,7 @@ html.theme-switching *::after {
 
 .action-btn-pdf-lg:hover {
   background: rgba(0, 0, 0, 0.72);
-  border-color: rgba(212, 175, 55, 0.55);
+  border-color: rgba(240, 180, 41, 0.60);
   color: rgb(234, 201, 83);
 }
 
@@ -1329,7 +1329,7 @@ html.theme-switching *::after {
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(212, 175, 55, 0.22) 50%,
+    rgba(240, 180, 41, 0.26) 50%,
     transparent 100%
   );
   transform: translateX(-150%) skewX(-18deg);
@@ -1339,21 +1339,21 @@ html.theme-switching *::after {
 
 [data-theme="light"] .action-btn-pdf {
   background: rgba(0, 0, 0, 0.72);
-  border-color: rgba(212, 175, 55, 0.45);
-  color: rgb(212, 175, 55);
+  border-color: rgba(240, 180, 41, 0.50);
+  color: rgb(240, 180, 41);
 }
 [data-theme="light"] .action-btn-pdf:hover {
   background: rgba(0, 0, 0, 0.88);
-  border-color: rgba(212, 175, 55, 0.65);
+  border-color: rgba(240, 180, 41, 0.70);
 }
 [data-theme="light"] .action-btn-pdf-lg {
   background: rgba(0, 0, 0, 0.72);
-  border-color: rgba(212, 175, 55, 0.45);
-  color: rgb(212, 175, 55);
+  border-color: rgba(240, 180, 41, 0.50);
+  color: rgb(240, 180, 41);
 }
 [data-theme="light"] .action-btn-pdf-lg:hover {
   background: rgba(0, 0, 0, 0.88);
-  border-color: rgba(212, 175, 55, 0.65);
+  border-color: rgba(240, 180, 41, 0.70);
 }
 
 /* ── Hover destacado dos itens da sidebar ──
