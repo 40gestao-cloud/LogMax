@@ -1,25 +1,25 @@
 import React from 'react';
-import { CRITERIOS, CategoriaCriterio, NOTAS, NOTA_DEFAULT, CATEGORIA_LABEL } from '../lib/avaliacaoCriterios';
+import { CRITERIOS, CATEGORIA_LABEL, NOTAS, NOTA_DEFAULT, type CriteriosSet } from '../lib/avaliacaoCriterios';
 
-// Grade de notas por critério (0-10), usada tanto no módulo Avaliações
-// (ciclo) quanto na avaliação pontual de participantes de treinamento
-// (TI & Desenvolvimento com IA). Compartilhado para os dois fluxos não
-// divergirem visualmente.
 export function CriteriosAvaliacaoForm({
-  notas, setNotas,
+  notas, setNotas, criteriosSet, categoriaLabel,
 }: {
   notas: Record<string, number>;
   setNotas: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  criteriosSet?: CriteriosSet;
+  categoriaLabel?: Record<string, string>;
 }) {
+  const cs = criteriosSet ?? CRITERIOS;
+  const cl = categoriaLabel ?? CATEGORIA_LABEL;
   return (
     <>
-      {(Object.keys(CRITERIOS) as CategoriaCriterio[]).map(cat => (
+      {(Object.keys(cs)).map(cat => (
         <div key={cat}>
           <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-            {CATEGORIA_LABEL[cat]}
+            {cl[cat] ?? cat}
           </h4>
           <div className="flex flex-col gap-3">
-            {CRITERIOS[cat].map(c => {
+            {cs[cat].map(c => {
               const key = `${cat}::${c}`;
               const nota = notas[key];
               return (
@@ -51,10 +51,11 @@ export function CriteriosAvaliacaoForm({
   );
 }
 
-export function notasIniciais(): Record<string, number> {
+export function notasIniciais(criteriosSet?: CriteriosSet): Record<string, number> {
+  const cs = criteriosSet ?? CRITERIOS;
   const init: Record<string, number> = {};
-  (Object.keys(CRITERIOS) as CategoriaCriterio[]).forEach(cat => {
-    CRITERIOS[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
+  Object.keys(cs).forEach(cat => {
+    cs[cat].forEach(c => { init[`${cat}::${c}`] = NOTA_DEFAULT; });
   });
   return init;
 }

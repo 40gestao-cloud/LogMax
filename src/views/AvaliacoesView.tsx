@@ -10,7 +10,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor, isConselheiro } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
-import { CRITERIOS, Categoria, ESCALA_MAX, CATEGORIA_LABEL } from '../lib/avaliacaoCriterios';
+import { CRITERIOS, CRITERIOS_MATRIZ, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -36,22 +36,23 @@ const fmtData = (s: string) => {
 // ----------------------------------------------------------------------
 
 function ModalAvaliacao({
-  ciclo, avaliado, tipo, avaliacaoExistente, onClose, onSaved, showToast,
+  ciclo, avaliado, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel,
 }: {
   ciclo: Ciclo;
   avaliado: UserProfile;
   tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
-  // Quando presente: modo edição → prefill + RPC atualizar_avaliacao.
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => Promise<void> | void;
   showToast: any;
+  criteriosSet?: CriteriosSet;
+  categoriaLabel?: Record<string, string>;
 }) {
   const isEdicao = !!avaliacaoExistente;
+  const cs = criteriosSet ?? CRITERIOS;
 
-  // Notas por categoria/critério (default = neutro, ou valores existentes em edição)
   const [notas, setNotas] = useState<Record<string, number>>(() => {
-    const init = notasIniciais();
+    const init = notasIniciais(cs);
     if (avaliacaoExistente) {
       avaliacaoExistente.criterios.forEach(c => {
         init[`${c.categoria}::${c.criterio}`] = c.nota;
@@ -66,8 +67,8 @@ function ModalAvaliacao({
     if (!supabase) return;
     setSaving(true);
     try {
-      const p_criterios = (Object.keys(CRITERIOS) as Categoria[]).flatMap(cat =>
-        CRITERIOS[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
+      const p_criterios = Object.keys(cs).flatMap(cat =>
+        cs[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
       );
       const { error } = isEdicao
         ? await supabase.rpc('atualizar_avaliacao', {
@@ -123,7 +124,7 @@ function ModalAvaliacao({
         </div>
 
         <div className="flex flex-col gap-6">
-          <CriteriosAvaliacaoForm notas={notas} setNotas={setNotas} />
+          <CriteriosAvaliacaoForm notas={notas} setNotas={setNotas} criteriosSet={cs} categoriaLabel={categoriaLabel} />
 
           <div>
             <label htmlFor="avaliacao-observacao" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
@@ -160,8 +161,10 @@ function ModalAvaliacao({
 // Modal: novo ciclo
 // ----------------------------------------------------------------------
 
-function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string }) {
-  const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true });
+const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
+function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string | null }) {
+  const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true, filial_sel: filial ?? 'SuperMax' });
   const [saving, setSaving] = useState(false);
 
   const handleSalvar = async () => {
@@ -170,8 +173,9 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
       showToast?.('Preencha nome e período.', 'error'); return;
     }
     setSaving(true);
+    const filialAlvo = filial ?? form.filial_sel;
     try {
-      const { error } = await supabase.from('ciclos_avaliacao').insert({ ...form, filial });
+      const { error } = await supabase.from('ciclos_avaliacao').insert({ nome: form.nome, data_inicio: form.data_inicio, data_fim: form.data_fim, feedback_anonimo: form.feedback_anonimo, filial: filialAlvo });
       if (error) throw error;
       showToast?.('Ciclo criado!', 'success');
       onSaved();
@@ -203,6 +207,19 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
         </div>
 
         <div className="flex flex-col gap-4">
+          {filial === null && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="avaliacao-ciclo-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+              <select
+                id="avaliacao-ciclo-filial"
+                value={form.filial_sel}
+                onChange={e => setForm(p => ({ ...p, filial_sel: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm"
+              >
+                {FILIAIS_OP.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="avaliacao-ciclo-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome</label>
             <input
@@ -405,7 +422,7 @@ const CardAvaliacao: React.FC<{
 // View principal
 // ----------------------------------------------------------------------
 
-const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp | null; onTrocarFilial: () => void }) => {
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -422,6 +439,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
   } | null>(null);
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+  const csAtivo    = filial === null ? CRITERIOS_MATRIZ : CRITERIOS;
+  const clAtivo    = filial === null ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
   const isGerente   = profile.role === 'gerente';
   // RH (qualquer role com 'rh' em setor primário ou setores_extras) tem
   // visão cross-setor: vê consolidado de TUDO e propõe PDI em qualquer
@@ -503,10 +522,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     if (!supabase) { setIsLoading(false); return; }
     if (!hasLoadedOnce.current) setIsLoading(true);
     try {
+      const ciclosQ = supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false });
+      const avalsQ  = supabase.from('avaliacoes').select('*');
+      if (filial) { ciclosQ.eq('filial', filial); avalsQ.eq('filial', filial); }
       const [resC, resU, resA, resCr] = await Promise.all([
-        supabase.from('ciclos_avaliacao').select('*').eq('filial', filial).order('created_at', { ascending: false }),
+        ciclosQ,
         supabase.from('user_profiles').select('*'),
-        supabase.from('avaliacoes').select('*').eq('filial', filial),
+        avalsQ,
         supabase.from('criterios_avaliacao').select('*'),
       ]);
       // Erros silenciosos do PostgREST (RLS, schema drift) vêm em `error`, não
@@ -594,7 +616,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       .map(a => `${a.avaliado_id}::${a.tipo}`);
 
     let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
-    const usersFilial = users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin');
+    const usersFilial = filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users;
     if (isAdminOuCEO) {
       alvos = usersFilial
         .filter(u => u.role === 'gerente' && u.id !== profile.id)
@@ -674,7 +696,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
   const consolidado = useMemo(() => {
     if (!podeVerConsolidado || !cicloConsolidadoId) return null;
-    const usersFilialSet = new Set(users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin').map(u => u.id));
+    const usersFilialSet = new Set((filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users).map(u => u.id));
     const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId && usersFilialSet.has(a.avaliado_id));
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
@@ -828,7 +850,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho — {filial}</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho{filial ? ` — ${filial}` : ' — Todas as Unidades'}</h2>
         <p className="text-sm text-gray-400 mt-1">
           {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
           {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
@@ -1236,6 +1258,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             onClose={() => setAvaliando(null)}
             onSaved={reload}
             showToast={showToast}
+            criteriosSet={csAtivo}
+            categoriaLabel={clAtivo}
           />
         )}
         {editando && (
@@ -1247,6 +1271,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             onClose={() => setEditando(null)}
             onSaved={reload}
             showToast={showToast}
+            criteriosSet={csAtivo}
+            categoriaLabel={clAtivo}
           />
         )}
       </AnimatePresence>
@@ -1256,6 +1282,5 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
 export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
   return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };

@@ -3,7 +3,24 @@
 // com IA). Mantidos num só lugar para os dois fluxos ficarem em sincronia
 // e evitar duplicação entre AvaliacoesView e DesenvolvimentoIAView.
 
+// ── Modo Filial: 3 categorias de competência ─────────────────────────────────
 export const CRITERIOS = {
+  tecnica:        ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
+  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
+  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
+} as const;
+
+export type CategoriaCriterio = keyof typeof CRITERIOS;
+export type Categoria = CategoriaCriterio;
+
+export const CATEGORIA_LABEL: Record<string, string> = {
+  tecnica:        'Técnicas',
+  comportamental: 'Comportamentais',
+  socioemocional: 'Socioemocionais',
+};
+
+// ── Modo Matriz: 7 eixos da competição de filiais ────────────────────────────
+export const CRITERIOS_MATRIZ = {
   criterios: [
     'Frequência de Trabalho',
     'Financeiro',
@@ -15,26 +32,15 @@ export const CRITERIOS = {
   ],
 } as const;
 
-export type CategoriaCriterio = keyof typeof CRITERIOS;
-export type Categoria = CategoriaCriterio;
-
-// Descrições exibidas como subtítulo no form (mesma ordem dos critérios).
-export const CRITERIO_DESC: Record<string, string> = {
-  'Frequência de Trabalho':     'Não faltar às aulas nem chegar atrasado; a frequência será monitorada.',
-  'Financeiro':                 'Financeiro organizado e realista, com relatórios no LogMax, Excel, Word e slides.',
-  'Planejamento e Organização': 'Pesquisas, discussões em equipe, plano de ação com ferramentas de produtividade e entregas com qualidade.',
-  'Recursos Humanos':           'Controle da folha de pagamento, frequência, treinamentos e ações para a equipe.',
-  'Redes Sociais e Marketing':  'Gerar engajamento, mais seguidores e curtidas, artes de qualidade e vídeos virais.',
-  'Logística':                  'Cadastro realista de produtos e fornecedores, compras de mercado e controle rigoroso do estoque.',
-  'Vendas e Atendimento':       'Vendas simuladas online e por telefone/WhatsApp com pessoas reais, além de atendimento presencial simulado.',
+export const CATEGORIA_LABEL_MATRIZ: Record<string, string> = {
+  criterios: 'Critérios de Avaliação',
 };
 
-// Escala 0-10. Default 5 = neutro (centro da escala).
+// Tipo genérico usado pelo form (aceita qualquer um dos dois sets).
+export type CriteriosSet = Record<string, readonly string[]>;
+
+// ── Escala 0-10. Default 5 = neutro ─────────────────────────────────────────
 export const ESCALA_MIN = 0;
 export const ESCALA_MAX = 10;
 export const NOTA_DEFAULT = 5;
 export const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => i + ESCALA_MIN);
-
-export const CATEGORIA_LABEL: Record<string, string> = {
-  criterios: 'Critérios de Avaliação',
-};
