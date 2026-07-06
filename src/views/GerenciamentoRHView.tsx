@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Users, DollarSign, Palmtree, BookOpen, Clock, CalendarCheck } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner } from '../components/ui';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
@@ -25,11 +26,13 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
 );
 
 export const GerenciamentoRHView = () => {
-  const { data: funcionarios, isLoading: lFun } = useFetchData<any>('/api/funcionariosview');
-  const { data: folhas, isLoading: lFol } = useFetchData<any>('/api/folhapagamentoview');
-  const { data: ferias, isLoading: lFer } = useFetchData<any>('/api/feriasview');
-  const { data: ponto, isLoading: lPon } = useFetchData<any>('/api/pontoeletronicoview');
-  const { data: treinamentos, isLoading: lTre } = useFetchData<any>('/api/treinamentosview');
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: funcionarios, isLoading: lFun } = useFetchData<any>('/api/funcionariosview', ff);
+  const { data: folhas, isLoading: lFol } = useFetchData<any>('/api/folhapagamentoview', ff);
+  const { data: ferias, isLoading: lFer } = useFetchData<any>('/api/feriasview', ff);
+  const { data: ponto, isLoading: lPon } = useFetchData<any>('/api/pontoeletronicoview', ff);
+  const { data: treinamentos, isLoading: lTre } = useFetchData<any>('/api/treinamentosview', ff);
 
   const isLoading = lFun || lFol || lFer || lPon || lTre;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;

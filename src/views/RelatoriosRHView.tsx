@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -19,10 +20,12 @@ const statusCls = (s: string) => {
 const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
 export const RelatoriosRHView = ({ showToast: _st }: any) => {
-  const { data: funcionarios, isLoading: lFun } = useFetchData<any>('/api/funcionariosview');
-  const { data: folhas, isLoading: lFol } = useFetchData<any>('/api/folhapagamentoview');
-  const { data: ferias, isLoading: lFer } = useFetchData<any>('/api/feriasview');
-  const { data: treinamentos, isLoading: lTre } = useFetchData<any>('/api/treinamentosview');
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: funcionarios, isLoading: lFun } = useFetchData<any>('/api/funcionariosview', ff);
+  const { data: folhas, isLoading: lFol } = useFetchData<any>('/api/folhapagamentoview', ff);
+  const { data: ferias, isLoading: lFer } = useFetchData<any>('/api/feriasview', ff);
+  const { data: treinamentos, isLoading: lTre } = useFetchData<any>('/api/treinamentosview', ff);
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
   const [mesFiltro, setMesFiltro] = useState('');

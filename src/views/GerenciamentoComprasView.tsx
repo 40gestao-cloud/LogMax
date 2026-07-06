@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ClipboardList, BarChart2, ShoppingCart, Package, DollarSign, AlertTriangle, Clock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, UrgenciaBadge } from '../components/ui';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
@@ -25,12 +26,15 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
 );
 
 export const GerenciamentoComprasView = () => {
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview');
-  const { data: cotacoes, isLoading: loadingCot } = useFetchData<any>('/api/cotacoesview');
-  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
-  const { data: recebimentos, isLoading: loadingRec } = useFetchData<any>('/api/recebimentosview');
-  const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview');
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  // Escopo por filial ativa. Admin/CEO em Matriz (filialAtiva=null) mantém consolidado.
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', ff);
+  const { data: cotacoes, isLoading: loadingCot } = useFetchData<any>('/api/cotacoesview', ff);
+  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview', ff);
+  const { data: recebimentos, isLoading: loadingRec } = useFetchData<any>('/api/recebimentosview', ff);
+  const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', ff);
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 
   const isLoading = loadingReq || loadingCot || loadingPed || loadingRec || loadingCP;
 

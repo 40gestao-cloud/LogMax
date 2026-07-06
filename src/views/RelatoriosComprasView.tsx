@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ClipboardList, ShoppingCart, Package, FileText } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, UrgenciaBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -14,11 +15,13 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState('');
 
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview');
-  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
-  const { data: recebimentos, isLoading: loadingRec } = useFetchData<any>('/api/recebimentosview');
-  const { data: notas, isLoading: loadingNot } = useFetchData<any>('/api/notasrecebidasview');
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesview', ff);
+  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview', ff);
+  const { data: recebimentos, isLoading: loadingRec } = useFetchData<any>('/api/recebimentosview', ff);
+  const { data: notas, isLoading: loadingNot } = useFetchData<any>('/api/notasrecebidasview', ff);
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 
   const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
 

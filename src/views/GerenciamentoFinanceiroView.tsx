@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { TrendingUp, TrendingDown, Landmark, FileText, CreditCard, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, BancoThumb } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -37,13 +38,16 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
       </div>
     );
   }
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  // previsoes, duplicatas e caixa_bancos não têm coluna filial — permanecem globais.
   const { data: previsoes, isLoading: loadingPrev } = useFetchData<any>('/api/previsoesview');
-  const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview');
-  const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview');
+  const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview', ff);
+  const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview', ff);
   const { data: duplicatas, isLoading: loadingDup } = useFetchData<any>('/api/duplicatasview');
   const { data: bancos, isLoading: loadingBan } = useFetchData<any>('/api/caixabancosview');
-  const { data: clientes } = useFetchData<any>('/api/crmview-clientes');
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: clientes } = useFetchData<any>('/api/crmview-clientes', ff);
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 
   const isLoading = loadingPrev || loadingRec || loadingPag || loadingDup || loadingBan;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;

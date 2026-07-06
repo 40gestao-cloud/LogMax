@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, TrendingUp, Package, Clock, ClipboardCheck } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -14,11 +15,13 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState('');
 
-  const { data: movimentacoes, isLoading: loadingMov } = useFetchData<any>('/api/movimentacoesestoqueview');
-  const { data: saldos, isLoading: loadingSal } = useFetchData<any>('/api/saldosestoqueview');
-  const { data: vencimentos, isLoading: loadingVen } = useFetchData<any>('/api/vencimentosestoqueview');
-  const { data: inventarios, isLoading: loadingInv } = useFetchData<any>('/api/inventariosestoqueview');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: movimentacoes, isLoading: loadingMov } = useFetchData<any>('/api/movimentacoesestoqueview', ff);
+  const { data: saldos, isLoading: loadingSal } = useFetchData<any>('/api/saldosestoqueview', ff);
+  const { data: vencimentos, isLoading: loadingVen } = useFetchData<any>('/api/vencimentosestoqueview', ff);
+  const { data: inventarios, isLoading: loadingInv } = useFetchData<any>('/api/inventariosestoqueview', ff);
+  const { data: produtos } = useFetchData<any>('/api/produtosview', ff);
 
   const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
 

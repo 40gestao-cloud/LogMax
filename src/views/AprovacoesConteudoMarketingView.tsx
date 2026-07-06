@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, X, Loader2, ExternalLink, Link2 } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { EmptyState } from '../components/ui';
 
 const PRIO_STYLE: Record<string, string> = {
@@ -11,7 +12,11 @@ const PRIO_STYLE: Record<string, string> = {
 };
 
 export const AprovacoesConteudoMarketingView = ({ showToast }: any) => {
-  const { data: tarefas, setData } = useFetchData<any>('/api/marketingtarefasview', { status_link: 'Aguardando Aprovação' });
+  const { filialAtiva } = useFilial();
+  const filter = filialAtiva
+    ? { status_link: 'Aguardando Aprovação', filial: filialAtiva }
+    : { status_link: 'Aguardando Aprovação' };
+  const { data: tarefas, setData } = useFetchData<any>('/api/marketingtarefasview', filter);
   const [obs, setObs]             = useState<Record<string, string>>({});
   const [expanded, setExpanded]   = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);

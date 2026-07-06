@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ClipboardCheck, CheckSquare, Truck, TrendingUp, Clock, Package } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, StatusBadge } from '../components/ui';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
@@ -25,13 +26,15 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
 );
 
 export const GerenciamentoEstoqueView = () => {
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesestoqueview');
-  const { data: aprovacoes, isLoading: loadingApr } = useFetchData<any>('/api/minhasaprovacoesestoqueview');
-  const { data: expedicao, isLoading: loadingExp } = useFetchData<any>('/api/expedicao');
-  const { data: movimentacoes, isLoading: loadingMov } = useFetchData<any>('/api/movimentacoesestoqueview');
-  const { data: inventarios, isLoading: loadingInv } = useFetchData<any>('/api/inventariosestoqueview');
-  const { data: vencimentos, isLoading: loadingVen } = useFetchData<any>('/api/vencimentosestoqueview');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: requisicoes, isLoading: loadingReq } = useFetchData<any>('/api/requisicoesestoqueview', ff);
+  const { data: aprovacoes, isLoading: loadingApr } = useFetchData<any>('/api/minhasaprovacoesestoqueview', ff);
+  const { data: expedicao, isLoading: loadingExp } = useFetchData<any>('/api/expedicao', ff);
+  const { data: movimentacoes, isLoading: loadingMov } = useFetchData<any>('/api/movimentacoesestoqueview', ff);
+  const { data: inventarios, isLoading: loadingInv } = useFetchData<any>('/api/inventariosestoqueview', ff);
+  const { data: vencimentos, isLoading: loadingVen } = useFetchData<any>('/api/vencimentosestoqueview', ff);
+  const { data: produtos } = useFetchData<any>('/api/produtosview', ff);
 
   const isLoading = loadingReq || loadingApr || loadingExp || loadingMov || loadingInv || loadingVen;
 
