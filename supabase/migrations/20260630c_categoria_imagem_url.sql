@@ -1,6 +1,6 @@
 -- Adiciona imagem_url em categorias e subcategorias de produto.
--- ATENÇÃO: crie o bucket 'categoria-imagens' manualmente no Supabase Dashboard
--- (Storage → New bucket → nome: categoria-imagens, Public: true) ANTES de rodar este script.
+-- O bucket 'categoria-imagens' é criado idempotentemente mais abaixo via
+-- INSERT INTO storage.buckets — não é preciso criar manualmente no Dashboard.
 
 ALTER TABLE public.categorias_produto
   ADD COLUMN IF NOT EXISTS imagem_url text;
