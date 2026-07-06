@@ -15,16 +15,22 @@ import {
   Legend,
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner } from '../components/ui';
 import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
 export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string) => void; profile?: UserProfile }) => {
-  const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
-  const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview');
-  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
-  const { data: artes } = useFetchData<any>('/api/marketingartesview');
+  // Escopo por filial ativa: se colaborador/gerente está numa unidade, KPIs
+  // do início refletem só a filial dele. Admin/CEO/Matriz (filialAtiva=null)
+  // seguem vendo o consolidado das 3 unidades.
+  const { filialAtiva } = useFilial();
+  const filialFilter = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
+  const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview', filialFilter);
+  const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview', filialFilter);
+  const { data: artes } = useFetchData<any>('/api/marketingartesview', filialFilter);
   const isLoading = loadingCR || loadingNR || loadingPed;
 
   // Card de Artes Promocionais: aparece pra qualquer usuário logado se houver

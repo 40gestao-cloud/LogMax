@@ -52,7 +52,12 @@ const filiaisParaRole = (role: string): readonly string[] =>
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
-  const { data: funcionarios } = useFetchData<any>('/api/funcionariosview');
+  // Gerente-RH / gerente com acesso a Usuários só enxerga funcionários da própria
+  // filial. Admin/CEO/Conselheiro (globais) veem tudo — a UI já filtra client-side
+  // por filialFiltro para navegar entre unidades.
+  const isGlobalCaller = callerProfile.role === 'admin' || callerProfile.role === 'ceo' || callerProfile.role === 'conselheiro' || (callerProfile.role === 'gerente' && callerProfile.is_conselheiro === true);
+  const funcionariosFilter = isGlobalCaller ? undefined : { filial: callerProfile.filial };
+  const { data: funcionarios } = useFetchData<any>('/api/funcionariosview', funcionariosFilter);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

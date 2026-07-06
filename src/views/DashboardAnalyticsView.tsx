@@ -12,6 +12,7 @@ import {
   Legend,
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
@@ -28,11 +29,16 @@ const sum = (arr: any[], key: string) =>
   arr.reduce((s: number, r: any) => s + (parseFloat(r[key]) || 0), 0);
 
 export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | null }) => {
-  const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview');
-  const { data: contasPagar,   isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview');
-  const { data: pedidos,       isLoading: loadingPed } = useFetchData<any>('/api/pedidosview');
-  const { data: produtos,      isLoading: loadingProd } = useFetchData<any>('/api/produtosview');
-  const { data: vendas,        isLoading: loadingVendas } = useFetchData<any>('/api/vendasview');
+  // Escopo: colaborador/gerente scoped só vê KPIs da própria unidade.
+  // Admin/CEO em Matriz (filialAtiva=null) mantêm consolidado das 3 unidades
+  // — o card "Faturamento por Filial" continua fazendo sentido só nesse modo.
+  const { filialAtiva } = useFilial();
+  const filialFilter = filialAtiva ? { filial: filialAtiva } : undefined;
+  const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
+  const { data: contasPagar,   isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', filialFilter);
+  const { data: pedidos,       isLoading: loadingPed } = useFetchData<any>('/api/pedidosview', filialFilter);
+  const { data: produtos,      isLoading: loadingProd } = useFetchData<any>('/api/produtosview', filialFilter);
+  const { data: vendas,        isLoading: loadingVendas } = useFetchData<any>('/api/vendasview', filialFilter);
   const isLoading = loadingCR || loadingCP || loadingPed || loadingProd || loadingVendas;
 
   // Drill-down dos KPIs liberado para: Admin, CEO, Gerente Financeiro,

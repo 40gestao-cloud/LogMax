@@ -3,12 +3,13 @@ import { motion } from 'motion/react';
 import { Check, X, Loader2, Tag, TrendingDown, Info, Megaphone, Package } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { useFilial } from '../contexts/FilialContext';
 import { EmptyState, LoadingSpinner } from '../components/ui';
 import { playPlim } from '../utils/audioUtils';
 
 // ── Aba Promoções (código original) ──────────────────────────────────────────
-function AbaPromocoes({ showToast }: any) {
-  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação' });
+function AbaPromocoes({ showToast, filial }: any) {
+  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação', filial });
   const [obs,       setObs]       = useState<Record<string, string>>({});
   const [expanded,  setExpanded]  = useState<string | null>(null);
   const [processing,setProcessing]= useState<string | null>(null);
@@ -142,11 +143,13 @@ function AbaPromocoes({ showToast }: any) {
 }
 
 // ── Aba Campanhas ─────────────────────────────────────────────────────────────
-function AbaCampanhas({ showToast }: any) {
+function AbaCampanhas({ showToast, filial }: any) {
   const { data: campanhas, setData: setCampanhas, isLoading: loadingCamp } =
-    useFetchData<any>('/api/marketingcampanhasview', { status: 'Aguardando Financeiro' });
+    useFetchData<any>('/api/marketingcampanhasview', { status: 'Aguardando Financeiro', filial });
+  // itens_campanha não tem coluna filial própria — escopo é derivado
+  // via campanha_id (só carregamos itens das campanhas já filtradas).
   const { data: todosItens, setData: setItens } = useFetchData<any>('itens_campanha');
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
 
   const [motivos,    setMotivos]    = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
@@ -359,7 +362,9 @@ function AbaCampanhas({ showToast }: any) {
 
 // ── View Principal ────────────────────────────────────────────────────────────
 export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
+  const { filialAtiva } = useFilial();
   const [aba, setAba] = useState<'promocoes' | 'campanhas'>('promocoes');
+  if (!filialAtiva) return null;
 
   const tabs = [
     { id: 'promocoes' as const, label: 'Promoções', icon: Tag },
@@ -388,7 +393,7 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
       </div>
 
       <div className="flex-1 overflow-y-auto main-scrollbar pb-6 space-y-4">
-        {aba === 'promocoes' ? <AbaPromocoes showToast={showToast} /> : <AbaCampanhas showToast={showToast} />}
+        {aba === 'promocoes' ? <AbaPromocoes showToast={showToast} filial={filialAtiva} /> : <AbaCampanhas showToast={showToast} filial={filialAtiva} />}
       </div>
     </motion.div>
   );

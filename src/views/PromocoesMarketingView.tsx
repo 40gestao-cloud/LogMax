@@ -110,12 +110,14 @@ function SearchableSelect({ value, onChange, items, placeholder }: {
 }
 
 const PromocoesMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
-  const { data: promocoesAll, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview');
+  const { data: promocoesAll, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
-  const { data: servicos } = useFetchData<any>('/api/servicosview');
-  const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview');
-  const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', undefined, true);
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: servicos } = useFetchData<any>('/api/servicosview', { filial });
+  const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview', { filial });
+  const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', { filial }, true);
+  // marketing_arte_feedback é escopado via arte_id ∈ artes da filial (join
+  // client-side). A tabela não tem coluna filial própria.
   const { data: feedbacks } = useFetchData<any>('/api/marketingartefeedbackview', undefined, true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY_FORM);
