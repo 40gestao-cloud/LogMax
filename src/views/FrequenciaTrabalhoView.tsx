@@ -86,9 +86,12 @@ const getDaysInRange = (start: string, end: string): string[] => {
 
 const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
   const { user } = useAuth();
-  const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview', { filial });
+  // frequencia_trabalho e justificativas_falta não têm coluna `filial` (o
+  // escopo por filial vem do funcionário via join client-side). Passar
+  // { filial } aqui gerava 400 silencioso do PostgREST.
+  const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview');
   const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
-  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview', { filial });
+  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview');
 
   const today = todayBR();
   const [dataSelecionada, setDataSelecionada] = useState(today);
@@ -104,13 +107,24 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
+  // Safety net: filtra client-side pela filial ativa. Se RLS/migration
+  // do funcionarios.filial não estiver aplicada, isso evita vazamento
+  // cross-filial (SuperMax vendo MaxLook/TechMax e vice-versa).
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? [])
       .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
+      .filter((f: any) => (f.filial ?? null) === filial)
       .sort((a: any, b: any) =>
         (a.nome ?? '').trim().localeCompare((b.nome ?? '').trim(), 'pt-BR', { sensitivity: 'base' })
       ),
-    [funcionarios],
+    [funcionarios, filial],
+  );
+
+  // IDs de funcionários que pertencem à filial ativa — usado para escopar
+  // frequencias e justificativas (tabelas sem coluna `filial` própria).
+  const funcIdsFilial = useMemo(
+    () => new Set((funcionarios ?? []).filter((f: any) => (f.filial ?? null) === filial).map((f: any) => f.id)),
+    [funcionarios, filial],
   );
 
   const filteredFuncs = useMemo(() => {
@@ -121,9 +135,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 
   const freqMap = useMemo(() => {
     const m = new Map<string, Frequencia>();
-    (frequencias ?? []).forEach(f => m.set(`${f.funcionario_id}|${f.data}`, f));
+    (frequencias ?? [])
+      .filter(f => funcIdsFilial.has(f.funcionario_id))
+      .forEach(f => m.set(`${f.funcionario_id}|${f.data}`, f));
     return m;
-  }, [frequencias]);
+  }, [frequencias, funcIdsFilial]);
 
   const getFreq = (funcId: string, data: string) => freqMap.get(`${funcId}|${data}`);
 
@@ -497,13 +513,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
       )}
 
       {/* Justificativas de falta recebidas */}
-      {(justificativas ?? []).length > 0 && (
+      {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).length > 0 && (
         <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
           <div className="flex items-center gap-2 mb-4">
             <MessageSquarePlus size={14} className="text-yellow-400" />
             <h3 className="text-sm font-bold text-gray-300">Justificativas de Falta Recebidas</h3>
             <span className="ml-auto text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
-              {(justificativas ?? []).length}
+              {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).length}
             </span>
           </div>
           <div className="overflow-x-auto main-scrollbar">
@@ -518,7 +534,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                 </tr>
               </thead>
               <tbody>
-                {(justificativas ?? []).map((j: any) => (
+                {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).map((j: any) => (
                   <tr key={j.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="py-2.5 px-3 text-sm font-semibold text-gray-200">{j.nome_funcionario ?? '—'}</td>
                     <td className="py-2.5 px-3 text-xs font-mono text-gray-400">{j.data ? fmtData(j.data) : '—'}</td>
