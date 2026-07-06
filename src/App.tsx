@@ -4,6 +4,7 @@ import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { SETOR_MODULES } from './lib/sectorAccess';
+import { MATRIZ_ALLOWED_SUBMENUS, MATRIZ_MODULES } from './lib/matrizMenu';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
@@ -18,6 +19,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Accessibility,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
+  Layers,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -104,6 +106,12 @@ const CatalogoProdutosView                 = lazy(() => import('./views/Catalogo
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
 const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
 const ClienteEspecialView                  = lazy(() => import('./views/ClienteEspecialView').then(m => ({ default: m.ClienteEspecialView })));
+const MetricasRedesSociaisView             = lazy(() => import('./views/MetricasRedesSociaisView').then(m => ({ default: m.MetricasRedesSociaisView })));
+const MatrizRHView                         = lazy(() => import('./views/MatrizRHView').then(m => ({ default: m.MatrizRHView })));
+const MatrizFinanceiroView                 = lazy(() => import('./views/MatrizFinanceiroView').then(m => ({ default: m.MatrizFinanceiroView })));
+const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLogisticaView').then(m => ({ default: m.MatrizLogisticaView })));
+const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
+const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -157,6 +165,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
     submenus: [
+      'Redes Sociais',
       'Campanhas', 'Promoções', 'Cupons', 'Calendário',
       { label: 'Vitrine Pública', requireSetor: ['marketing'] },
       'Tarefas',
@@ -182,7 +191,41 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   return true;
 };
 
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges }: any) => (
+// ── Seção de comparativos Matriz na sidebar ───────────────────────────────
+// Aparece SOMENTE quando o usuário está em modo Matriz (filialAtiva=null).
+const MATRIZ_NAV_ITEMS = [
+  { id: 'matriz-rh',         label: 'RH Comparativo',         icon: Users },
+  { id: 'matriz-financeiro', label: 'Financeiro Comparativo', icon: DollarSign },
+  { id: 'matriz-logistica',  label: 'Logística Comparativo',  icon: Package },
+  { id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone },
+  { id: 'matriz-operacoes',  label: 'Operações Comparativo',  icon: Monitor },
+] as const;
+
+function MatrizSidebarSection({ activeView, navigate, onClose }: { activeView: string; navigate: (v: string) => void; onClose?: () => void }) {
+  return (
+    <>
+      <div className="mt-4 mb-1.5 px-1">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
+          style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
+          <Layers size={10} />
+          Comparativos Matriz
+        </span>
+      </div>
+      {MATRIZ_NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+        const isActive = activeView === id;
+        return (
+          <button key={id} onClick={() => { navigate(id); onClose?.(); }}
+            className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${isActive ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Icon size={16} className={isActive ? 'text-accent' : ''} />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -247,6 +290,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
 
       <div>
         <div className="flex flex-col gap-1.5">
+          {/* ── Comparativos Matriz — injetado via prop; componente pai resolve filialAtiva ── */}
+          {matrizMode && (
+            <MatrizSidebarSection activeView={activeView} navigate={navigate} onClose={onClose} />
+          )}
+
           {visibleModules.map((mod: any) => {
             // Cabeçalhos de bloco inseridos antes de módulos âncora
             const blockLabel =
@@ -445,7 +493,7 @@ function LogMaxAppInner() {
   const badges = useSidebarBadges(profile);
 
   // ── Filial de sessão ── deve ficar ANTES dos early returns para respeitar Rules of Hooks ──
-  const { filialAtiva, setFilialAtiva, clearFilial } = useFilial();
+  const { filialAtiva, escolheu, setFilialAtiva, escolherMatriz, clearFilial } = useFilial();
   useEffect(() => {
     if (!profile) return;
     const isGlobal = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
@@ -536,7 +584,8 @@ function LogMaxAppInner() {
   const podeEscolherFilial = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
   // Admin/CEO veem o seletor de filial antes de entrar no app.
-  if (podeEscolherFilial && !filialAtiva) {
+  // 'escolheu' distingue "ainda não escolhi" de "escolhi Matriz (consolidado)".
+  if (podeEscolherFilial && !escolheu) {
     return (
       <div className="min-h-screen flex flex-col bg-base">
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
@@ -545,14 +594,16 @@ function LogMaxAppInner() {
         <FilialSelector
           title="Selecione a Unidade"
           subtitle="Escolha a filial que deseja gerenciar nesta sessão."
-          onSelect={setFilialAtiva}
+          onSelect={(v) => v === 'Matriz' ? escolherMatriz() : setFilialAtiva(v)}
         />
       </div>
     );
   }
 
   // Colaborador/gerente sem filial configurada no perfil — erro de cadastro.
-  if (!filialAtiva) {
+  // (podeEscolherFilial=false + filialAtiva=null; nunca cai em Matriz porque
+  // esses perfis não têm o botão Matriz no seletor.)
+  if (!filialAtiva && !podeEscolherFilial) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
         <Building2 size={40} className="text-gray-600" />
@@ -572,7 +623,25 @@ function LogMaxAppInner() {
   const allowedModuleIds = Array.from(new Set(
     allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
   ));
-  const visibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
+  const allVisibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
+
+  // Em modo Matriz (filialAtiva===null + podeEscolherFilial) a sidebar mostra
+  // apenas gerenciamentos/relatórios — operações unit-scoped ficam ocultas.
+  const matrizMode = podeEscolherFilial && filialAtiva === null;
+  const visibleModules = matrizMode
+    ? allVisibleModules
+        .filter(m => m.id in MATRIZ_ALLOWED_SUBMENUS)
+        .map(m => {
+          const allowed = MATRIZ_ALLOWED_SUBMENUS[m.id];
+          if (allowed === true) return m;
+          if (!Array.isArray(allowed) || allowed.length === 0) return null;
+          return { ...m, submenus: m.submenus.filter((s: any) => {
+            const lbl = typeof s === 'string' ? s : s.label;
+            return (allowed as string[]).includes(lbl);
+          })};
+        })
+        .filter(Boolean)
+    : allVisibleModules;
 
   const renderContent = () => {
     const st = showToast;
@@ -659,6 +728,7 @@ function LogMaxAppInner() {
       case 'estoque-pedidosdevenda':       return <PedidosVendaView showToast={st} profile={profile} />;
       case 'financeiro-pedidosdevenda':    return <PedidosVendaView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdeorçamento': return <OrcamentosView showToast={st} profile={profile} mode="financeiro" />;
+      case 'marketing-redessociais':        return <MetricasRedesSociaisView showToast={st} profile={profile} />;
       case 'marketing-campanhas':          return <CampanhasMarketingView showToast={st} profile={profile} />;
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-cupons':             return <CuponsMarketingView showToast={st} profile={profile} />;
@@ -683,6 +753,11 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
+      case 'matriz-rh':                    return <MatrizRHView />;
+      case 'matriz-financeiro':            return <MatrizFinanceiroView />;
+      case 'matriz-logistica':             return <MatrizLogisticaView />;
+      case 'matriz-marketing':             return <MatrizMarketingView />;
+      case 'matriz-operacoes':             return <MatrizOperacoesView />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
@@ -733,6 +808,7 @@ function LogMaxAppInner() {
                 openModules={openModules} toggleModule={toggleModule}
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
                 visibleModules={visibleModules} profile={profile} badges={badges}
+                matrizMode={matrizMode}
               />
             </motion.aside>
           </>
@@ -746,6 +822,7 @@ function LogMaxAppInner() {
           openModules={openModules} toggleModule={toggleModule}
           handleSignOut={handleSignOut}
           visibleModules={visibleModules} profile={profile} badges={badges}
+          matrizMode={matrizMode}
         />
       </aside>
 
@@ -782,7 +859,7 @@ function LogMaxAppInner() {
                 className="neu-button h-9 px-3 rounded-xl flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-accent border border-accent/20 hover:bg-accent/10 transition-colors shrink-0"
               >
                 <Building2 size={13} />
-                <span className="hidden sm:inline">{filialAtiva}</span>
+                <span className="hidden sm:inline">{filialAtiva ?? 'Matriz'}</span>
               </button>
             )}
             <ThemeToggle />

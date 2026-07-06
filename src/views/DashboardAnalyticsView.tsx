@@ -107,6 +107,31 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
     return bucket;
   }, [filteredVendas]);
 
+  // Comparativo Matriz — só renderizado quando filialAtiva=null (visão
+  // consolidada da holding). Agrega receita/despesa/vendas/pedidos por
+  // unidade operacional (Matriz não vende, fica fora).
+  const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+  const comparativoUnidades = useMemo(() => {
+    const bucket: Record<string, {
+      receita: number; despesa: number; saldo: number;
+      vendasCount: number; vendasTotal: number; pedidos: number;
+    }> = {};
+    for (const f of OP_FILIAIS) bucket[f] = {
+      receita: 0, despesa: 0, saldo: 0, vendasCount: 0, vendasTotal: 0, pedidos: 0,
+    };
+    for (const r of filteredCR) if (bucket[r.filial]) bucket[r.filial].receita += Number(r.valor) || 0;
+    for (const r of filteredCP) if (bucket[r.filial]) bucket[r.filial].despesa += Number(r.valor) || 0;
+    for (const p of filteredPed) if (bucket[p.filial]) bucket[p.filial].pedidos += 1;
+    for (const v of filteredVendas) {
+      if (bucket[v.filial]) {
+        bucket[v.filial].vendasCount += 1;
+        bucket[v.filial].vendasTotal += Number(v.total_final) || 0;
+      }
+    }
+    for (const f of OP_FILIAIS) bucket[f].saldo = bucket[f].receita - bucket[f].despesa;
+    return bucket;
+  }, [filteredCR, filteredCP, filteredPed, filteredVendas]);
+
   // Classes Tailwind devem ser literais para o JIT detectar — não usar
   // template strings como `text-${color}-400`.
   const filialTextClass: Record<string, string> = {
@@ -322,7 +347,63 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
         )}
       </AnimatePresence>
 
-      {/* Faturamento por Filial (Holding) */}
+      {/* Comparativo entre Unidades — só no modo Matriz (filialAtiva=null).
+          Em modo unidade específica os dados já estão filtrados àquela filial,
+          então comparação não faz sentido. */}
+      {filialAtiva === null && (
+        <div className="neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col gap-4 shrink-0">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h3 className="text-sm font-bold text-gray-200 tracking-wide flex items-center gap-2">
+              <Building2 size={14} className="text-accent" /> Comparativo entre Unidades
+            </h3>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+              Consolidado da holding — {OP_FILIAIS.length} unidades
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {OP_FILIAIS.map(filial => {
+              const agg = comparativoUnidades[filial];
+              const colorCls = filialTextClass[filial] ?? 'text-gray-400';
+              const saldoPositivo = agg.saldo >= 0;
+              return (
+                <div key={filial} className="neu-pressed p-4 rounded-2xl border border-accent/20 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-black uppercase tracking-widest ${colorCls}`}>{filial}</span>
+                    <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                      {agg.vendasCount} venda(s) · {agg.pedidos} pedido(s)
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Receita</span>
+                      <span className="text-sm font-mono font-bold text-accent">{BRL(agg.receita)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Despesa</span>
+                      <span className="text-sm font-mono font-bold text-red-400">{BRL(agg.despesa)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Saldo</span>
+                      <span className={`text-base font-mono font-black ${saldoPositivo ? 'text-emerald-400' : 'text-red-500'}`}>
+                        {BRL(agg.saldo)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Vendido</span>
+                      <span className="text-sm font-mono font-bold text-gray-200">{BRL(agg.vendasTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Faturamento por Filial (Holding) — só no modo Matriz. Em modo unidade
+          específica esse card sempre mostraria zeros nas outras filiais (RLS
+          já filtrou), o que não ajuda ninguém. */}
+      {filialAtiva === null && (
       <div className="neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col gap-4 shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h3 className="text-sm font-bold text-gray-200 tracking-wide flex items-center gap-2">
@@ -350,6 +431,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
           })}
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 neu-flat p-6 rounded-3xl border border-accent/20 flex flex-col">

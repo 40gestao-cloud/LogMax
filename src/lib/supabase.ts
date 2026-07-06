@@ -92,6 +92,8 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/metasestrategicasview':        'metas_estrategicas',
   '/api/tarefastaticasview':           'tarefas_taticas',
   '/api/justificativasfaltaview':     'justificativas_falta',
+  '/api/ciclosavaliacaoview':         'ciclos_avaliacao',
+  '/api/metricasredessociaisview':    'metricas_redes_sociais',
   // Orçamento por categoria + subcategorias + itens de campanha
   'categorias_produto':               'categorias_produto',
   'subcategorias_produto':            'subcategorias_produto',
@@ -125,4 +127,5 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'maxbank_metas',
   'metas_estrategicas', 'tarefas_taticas',
   'justificativas_falta',
+  'metricas_redes_sociais',
 ]);
