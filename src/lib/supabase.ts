@@ -101,6 +101,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   'votacoes':                         'votacoes',
   'votacoes_votos':                   'votacoes_votos',
   'capital_filial':                   'capital_filial',
+  'requerimentos':                    'requerimentos',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra

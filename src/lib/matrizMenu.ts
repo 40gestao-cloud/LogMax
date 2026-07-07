@@ -28,7 +28,8 @@ export const MATRIZ_MODULES = [
   { id: 'matriz-marketing',  label: 'Marketing Comparativo',  group: null },
   { id: 'matriz-operacoes',  label: 'Operações Comparativo',  group: null },
   { id: 'matriz-votacoes',   label: 'Votações',               group: null },
-  { id: 'matriz-capital',    label: 'Capital',                group: null },
+  { id: 'matriz-capital',        label: 'Capital',        group: null },
+  { id: 'matriz-requerimentos', label: 'Requerimentos',  group: null },
 ] as const;
 
 export type MatrizModuleId = typeof MATRIZ_MODULES[number]['id'];
