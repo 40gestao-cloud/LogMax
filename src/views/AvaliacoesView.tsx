@@ -1411,8 +1411,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                               )}
                               {metrica != null && (
                                 <div className="text-[10px] text-gray-500 font-mono">
-                                  {label?.startsWith('R$')
+                                  {label?.startsWith('R$') || label?.includes('(R$)')
                                     ? `R$ ${Number(metrica).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : label?.includes('(%)')
+                                    ? `${Number(metrica).toFixed(1)}%`
                                     : Number(metrica).toLocaleString('pt-BR')}
                                 </div>
                               )}
