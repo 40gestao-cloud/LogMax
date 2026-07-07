@@ -473,6 +473,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
   const [showNovoCiclo, setShowNovoCiclo] = useState(false);
   const [uploadingEv, setUploadingEv] = useState(false);
   const evidFileRef = useRef<HTMLInputElement>(null);
+  const [painel, setPainel] = useState<Array<{ filial: string; eixo: string; nota_subjetiva: number | null; metrica_valor: number | null; metrica_label: string | null }> | null>(null);
+  const [carregandoPainel, setCarregandoPainel] = useState(false);
 
   // Modo Matriz: filial === null (escolha explícita de consolidado)
   const isMatriz = filial === null;
@@ -645,40 +647,55 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // Ciclo aberto de filial (para avaliações de colaboradores/gerentes)
-  const cicloAberto = ciclos.find(c => c.status === 'Aberto' && (filial ? c.filial === filial : c.filial !== 'Matriz')) ?? null;
+  // Ciclos operacionais (de filial) abertos.
+  // Em modo Matriz: todos os ciclos de filial abertos (SuperMax, MaxLook, TechMax).
+  // Em modo filial: só o ciclo da filial ativa.
+  const ciclosOperacionaisAbertos = useMemo(() =>
+    ciclos.filter(c => c.status === 'Aberto' && c.filial !== 'Matriz' && (filial ? c.filial === filial : true)),
+  [ciclos, filial]);
+
+  // Alias mantido para compatibilidade com JSX que exibe "Ciclo: nome" e para modo filial.
+  const cicloAberto = ciclosOperacionaisAbertos[0] ?? null;
 
   // Em modo Matriz: ciclo Matriz aberto (para avaliações de filiais como entidade)
   const cicloMatrizAberto = isMatriz ? (ciclos.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
 
-  // Pendentes: quem o usuário deve avaliar no ciclo aberto
+  // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos.
   const pendentes = useMemo(() => {
-    if (!cicloAberto) return [];
-    const minhasFeitas = avaliacoes
-      .filter(a => a.ciclo_id === cicloAberto.id && a.avaliador_id === profile.id)
-      .map(a => `${a.avaliado_id}::${a.tipo}`);
+    if (ciclosOperacionaisAbertos.length === 0) return [];
+    const minhasFeitasPorCiclo = new Map<string, Set<string>>();
+    avaliacoes.forEach(a => {
+      if (a.avaliador_id !== profile.id) return;
+      if (!minhasFeitasPorCiclo.has(a.ciclo_id)) minhasFeitasPorCiclo.set(a.ciclo_id, new Set());
+      minhasFeitasPorCiclo.get(a.ciclo_id)!.add(`${a.avaliado_id}::${a.tipo}`);
+    });
 
-    let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
-    const usersFilial = filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users;
-
-    if (isAdminOuCEO) {
-      alvos = usersFilial
-        .filter(u => u.role === 'gerente' && u.id !== profile.id)
-        .map(user => ({ user, tipo: 'ceo_gerente' as const }));
-    } else if (isGerente) {
-      const setoresGerente = allSetores(profile);
-      alvos = usersFilial
-        .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
-        .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
-    } else {
-      const setoresColaborador = allSetores(profile);
-      const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
-      const ceos = users.filter(u => u.role === 'ceo');
-      alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
-    }
-
-    return alvos.filter(({ user, tipo }) => !minhasFeitas.includes(`${user.id}::${tipo}`));
-  }, [cicloAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente, filial]);
+    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
+    ciclosOperacionaisAbertos.forEach(ciclo => {
+      const feitas = minhasFeitasPorCiclo.get(ciclo.id) ?? new Set();
+      const usersFilial = users.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
+      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
+      if (isAdminOuCEO) {
+        alvos = usersFilial
+          .filter(u => u.role === 'gerente' && u.id !== profile.id)
+          .map(user => ({ user, tipo: 'ceo_gerente' as const }));
+      } else if (isGerente) {
+        const setoresGerente = allSetores(profile);
+        alvos = usersFilial
+          .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
+          .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
+      } else {
+        const setoresColaborador = allSetores(profile);
+        const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
+        const ceos = users.filter(u => u.role === 'ceo');
+        alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
+      }
+      alvos.forEach(a => {
+        if (!feitas.has(`${a.user.id}::${a.tipo}`)) out.push({ ...a, ciclo });
+      });
+    });
+    return out;
+  }, [ciclosOperacionaisAbertos, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente]);
 
   // Filiais ainda não avaliadas no ciclo Matriz aberto
   const filiaisJaAvaliadas = useMemo((): Set<string> => {
@@ -730,6 +747,38 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
+  const carregarPainelMatriz = async () => {
+    if (!supabase || !cicloMatrizAberto) return;
+    setCarregandoPainel(true);
+    try {
+      const { data, error } = await supabase.rpc('painel_matriz_metricas', {
+        p_ciclo_matriz_id: cicloMatrizAberto.id,
+      });
+      if (error) throw error;
+      setPainel(data ?? []);
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao carregar painel.', 'error');
+    } finally {
+      setCarregandoPainel(false);
+    }
+  };
+
+  useEffect(() => { if (cicloMatrizAberto) carregarPainelMatriz(); else setPainel(null);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [cicloMatrizAberto?.id]);
+
+  // Ranking por eixo: melhor filial em cada critério (com base em nota_subjetiva, fallback em metrica_valor)
+  const rankingPorEixo = useMemo(() => {
+    if (!painel) return {};
+    const porEixo: Record<string, { filial: string; score: number }[]> = {};
+    painel.forEach(p => {
+      if (!porEixo[p.eixo]) porEixo[p.eixo] = [];
+      const score = p.nota_subjetiva != null ? Number(p.nota_subjetiva) : (p.metrica_valor ?? 0);
+      porEixo[p.eixo].push({ filial: p.filial, score });
+    });
+    Object.values(porEixo).forEach(arr => arr.sort((a, b) => b.score - a.score));
+    return porEixo;
+  }, [painel]);
+
   const excluirEvidencia = async (ev: Evidencia) => {
     if (!supabase) return;
     try {
@@ -746,12 +795,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // Agrupa pendentes de colaboradores/gerentes por filial (modo Matriz)
+  // Agrupa pendentes por ciclo/filial (modo Matriz)
   const pendentesAgrupadosPorFilial = useMemo(() => {
     if (!isMatriz) return null;
     const grupos: Record<string, typeof pendentes> = {};
     pendentes.forEach(p => {
-      const f = p.user.filial ?? 'Sem filial';
+      const f = p.ciclo.filial;
       if (!grupos[f]) grupos[f] = [];
       grupos[f].push(p);
     });
@@ -1298,6 +1347,97 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         </div>
       )}
 
+      {/* ── B2. PAINEL COMPARATIVO DOS 7 EIXOS (Matriz, admin/CEO/RH) ── */}
+      {isMatriz && podeVerConsolidado && cicloMatrizAberto && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Painel Comparativo dos 7 Eixos</h3>
+              <span className="text-[10px] text-gray-500 font-bold">Ciclo: {cicloMatrizAberto.nome}</span>
+            </div>
+            <button
+              onClick={carregarPainelMatriz}
+              disabled={carregandoPainel}
+              className="text-[10px] text-gray-500 hover:text-accent font-bold uppercase tracking-widest flex items-center gap-1"
+            >
+              {carregandoPainel ? <Loader2 size={11} className="animate-spin" /> : <BarChart3 size={11} />}
+              Recarregar
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Notas subjetivas do avaliador (0-10) + métricas objetivas coletadas do sistema no período do ciclo.
+            Ranking por eixo destaca a filial líder em cada critério.
+          </p>
+
+          {carregandoPainel && !painel ? (
+            <LoadingSpinner />
+          ) : !painel || painel.length === 0 ? (
+            <EmptyState message="Sem dados do painel. Avalie ao menos uma filial ou aguarde geração de vendas/contas no período." />
+          ) : (
+            <div className="overflow-x-auto main-scrollbar">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                    <th className="pb-3 font-bold px-3">Eixo</th>
+                    {FILIAIS_OP.map(f => (
+                      <th key={f} className="pb-3 font-bold px-3 text-center">{f}</th>
+                    ))}
+                    <th className="pb-3 font-bold px-3 text-center">Líder</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CRITERIOS_MATRIZ.criterios.map(eixo => {
+                    const linhaPorFilial: Record<string, typeof painel[number] | undefined> = {};
+                    painel.filter(p => p.eixo === eixo).forEach(p => { linhaPorFilial[p.filial] = p; });
+                    const rank = rankingPorEixo[eixo] ?? [];
+                    const lider = rank[0];
+                    const label = linhaPorFilial[FILIAIS_OP[0]]?.metrica_label ?? null;
+                    return (
+                      <tr key={eixo} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="py-3 px-3 font-semibold text-gray-200">
+                          {eixo}
+                          {label && <span className="block text-[9px] text-gray-500 font-normal mt-0.5">{label}</span>}
+                        </td>
+                        {FILIAIS_OP.map(f => {
+                          const cell = linhaPorFilial[f];
+                          const isLider = lider && lider.filial === f && lider.score > 0;
+                          const nota = cell?.nota_subjetiva;
+                          const metrica = cell?.metrica_valor;
+                          return (
+                            <td key={f} className={`py-3 px-3 text-center tabular-nums ${isLider ? 'text-accent font-black' : 'text-gray-300'}`}>
+                              {nota != null && (
+                                <div>{Number(nota).toFixed(1)}<span className="text-[9px] text-gray-500">/10</span></div>
+                              )}
+                              {metrica != null && (
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                  {label?.startsWith('R$')
+                                    ? `R$ ${Number(metrica).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : Number(metrica).toLocaleString('pt-BR')}
+                                </div>
+                              )}
+                              {nota == null && metrica == null && <span className="text-gray-600">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className="py-3 px-3 text-center">
+                          {lider && lider.score > 0 ? (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest"
+                              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                              {lider.filial}
+                            </span>
+                          ) : <span className="text-gray-600">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── C. A FAZER (avaliações de pessoas) ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center justify-between mb-5">
@@ -1318,25 +1458,26 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
           )}
         </div>
 
-        {!cicloAberto ? (
+        {ciclosOperacionaisAbertos.length === 0 ? (
           <EmptyState message="Nenhum ciclo de filial aberto no momento." />
         ) : pendentes.length === 0 ? (
-          <EmptyState message="Você concluiu todas as suas avaliações deste ciclo. 🎉" />
+          <EmptyState message="Você concluiu todas as suas avaliações. 🎉" />
         ) : isMatriz && pendentesAgrupadosPorFilial ? (
-          // Modo Matriz: agrupa por filial
           <div className="flex flex-col gap-6">
             {Object.entries(pendentesAgrupadosPorFilial).map(([filialGrupo, grupo]) => (
               <div key={filialGrupo}>
                 <div className="flex items-center gap-2 mb-3">
                   <Building2 size={12} className="text-accent" />
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{filialGrupo}</span>
-                  <span className="text-[10px] text-gray-600">{grupo.length} pendente(s)</span>
+                  <span className="text-[10px] text-gray-600">
+                    Ciclo: {grupo[0].ciclo.nome} · {grupo.length} pendente(s)
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {grupo.map(({ user, tipo }) => (
+                  {grupo.map(({ user, tipo, ciclo }) => (
                     <button
-                      key={`${user.id}::${tipo}`}
-                      onClick={() => cicloAberto && setAvaliando({ ciclo: cicloAberto, alvo: { kind: 'user', user }, tipo })}
+                      key={`${ciclo.id}::${user.id}::${tipo}`}
+                      onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
                       className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
                       style={{ border: '1px solid rgba(255,255,255,0.05)' }}
                     >
@@ -1354,12 +1495,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             ))}
           </div>
         ) : (
-          // Modo filial: lista simples
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pendentes.map(({ user, tipo }) => (
+            {pendentes.map(({ user, tipo, ciclo }) => (
               <button
-                key={`${user.id}::${tipo}`}
-                onClick={() => cicloAberto && setAvaliando({ ciclo: cicloAberto, alvo: { kind: 'user', user }, tipo })}
+                key={`${ciclo.id}::${user.id}::${tipo}`}
+                onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
                 className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
                 style={{ border: '1px solid rgba(255,255,255,0.05)' }}
               >
