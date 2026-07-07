@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator } from 'lucide-react';
+import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
@@ -342,6 +342,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   }
   const { caixas, isLoading: caixaLoading, refresh } = useCaixasDoDia();
   const { data: historico, isLoading: histLoading, reload } = useFetchData<any>('/api/controlecaixaview');
+  const { data: capitalRows = [] } = useFetchData<any>('capital_filial');
 
   const today = todayBR();
 
@@ -404,6 +405,32 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
             : `Abertura e fechamento do caixa da unidade ${profile?.filial ?? '—'}.`}
         </p>
       </div>
+
+      {/* Capital por filial — leitura; só aparece se há dados e usuário tem acesso (RLS) */}
+      {capitalRows.length > 0 && (() => {
+        // Pega o registro mais recente por filial (hook já ordena DESC)
+        const capitalMap: Record<string, number> = {};
+        for (const r of capitalRows) {
+          if (!(r.filial in capitalMap)) capitalMap[r.filial] = r.valor;
+        }
+        const filiaisComCapital = filiaisVisiveis.filter(f => f in capitalMap);
+        if (filiaisComCapital.length === 0) return null;
+        return (
+          <div className={`shrink-0 grid gap-3 ${filiaisComCapital.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-1 sm:grid-cols-3'}`}>
+            {filiaisComCapital.map(f => (
+              <div key={f} className="neu-flat rounded-2xl p-4 border border-accent/10 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                  <Landmark size={15} className="text-accent" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-gray-500">{f} — Capital</div>
+                  <div className="text-base font-black text-accent tabular-nums truncate">{fmtBRL(capitalMap[f])}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Cards por filial */}
       {filiaisVisiveis.length === 0 ? (
