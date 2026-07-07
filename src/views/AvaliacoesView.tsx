@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft, Building2 } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft, Building2, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -26,6 +26,7 @@ type Avaliacao = {
   created_at: string;
 };
 type Criterio = { id: string; avaliacao_id: string; categoria: string; criterio: string; nota: number };
+type Evidencia = { id: string; ciclo_id: string; colaborador_id: string; imagem_url: string; created_at: string };
 
 // Alvo de uma avaliação: usuário ou filial como entidade
 type AvaliadoTarget =
@@ -44,7 +45,7 @@ const fmtData = (s: string) => {
 // ----------------------------------------------------------------------
 
 function ModalAvaliacao({
-  ciclo, alvo, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel,
+  ciclo, alvo, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel, evidenciasAvaliado,
 }: {
   ciclo: Ciclo;
   alvo: AvaliadoTarget;
@@ -55,6 +56,7 @@ function ModalAvaliacao({
   showToast: any;
   criteriosSet?: CriteriosSet;
   categoriaLabel?: Record<string, string>;
+  evidenciasAvaliado?: Evidencia[];
 }) {
   const isEdicao = !!avaliacaoExistente;
   const cs = criteriosSet ?? CRITERIOS;
@@ -148,6 +150,23 @@ function ModalAvaliacao({
         </div>
 
         <div className="flex flex-col gap-6">
+          {evidenciasAvaliado && evidenciasAvaliado.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <ImageIcon size={11} /> Comprovantes de Vendas Online ({evidenciasAvaliado.length})
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {evidenciasAvaliado.map(ev => (
+                  <a key={ev.id} href={ev.imagem_url} target="_blank" rel="noopener noreferrer"
+                    className="rounded-xl overflow-hidden border border-white/10 hover:border-accent/50 transition-colors"
+                    style={{ aspectRatio: '1' }}>
+                    <img src={ev.imagem_url} alt="Comprovante" className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <CriteriosAvaliacaoForm notas={notas} setNotas={setNotas} criteriosSet={cs} categoriaLabel={categoriaLabel} />
 
           <div>
@@ -449,8 +468,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [criterios, setCriterios] = useState<Criterio[]>([]);
+  const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNovoCiclo, setShowNovoCiclo] = useState(false);
+  const [uploadingEv, setUploadingEv] = useState(false);
+  const evidFileRef = useRef<HTMLInputElement>(null);
 
   // Modo Matriz: filial === null (escolha explícita de consolidado)
   const isMatriz = filial === null;
@@ -550,11 +572,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       const ciclosQ = supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false });
       const avalsQ  = supabase.from('avaliacoes').select('*');
       if (filial) { ciclosQ.eq('filial', filial); avalsQ.eq('filial', filial); }
-      const [resC, resU, resA, resCr] = await Promise.all([
+      const [resC, resU, resA, resCr, resEv] = await Promise.all([
         ciclosQ,
         supabase.from('user_profiles').select('*'),
         avalsQ,
         supabase.from('criterios_avaliacao').select('*'),
+        supabase.from('evidencias_avaliacao').select('*').order('created_at', { ascending: false }),
       ]);
       const firstErr = resC.error || resU.error || resA.error || resCr.error;
       if (firstErr) {
@@ -564,6 +587,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       setUsers(resU.data ?? []);
       setAvaliacoes(resA.data ?? []);
       setCriterios(resCr.data ?? []);
+      setEvidencias(resEv.data ?? []);
     } catch (err: any) {
       showToast?.(`Erro ao carregar avaliações: ${err?.message ?? 'desconhecido'}`, 'error');
     } finally {
@@ -664,6 +688,63 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     );
     return new Set(feitas.map(a => a.avaliada_filial).filter(Boolean) as string[]);
   }, [cicloMatrizAberto, avaliacoes, profile.id]);
+
+  // Evidências do próprio usuário no ciclo aberto atual
+  const minhasEvidencias = useMemo(() =>
+    cicloAberto ? evidencias.filter(e => e.colaborador_id === profile.id && e.ciclo_id === cicloAberto.id) : [],
+  [evidencias, cicloAberto, profile.id]);
+
+  const uploadEvidencia = async (file: File) => {
+    if (!supabase || !cicloAberto) return;
+    const MAX = 120 * 1024;
+    if (file.size > MAX) {
+      showToast?.(`Arquivo com ${(file.size / 1024).toFixed(1)} KB — limite é 120 KB.`, 'error');
+      return;
+    }
+    const ALLOWED = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (!ALLOWED.has(file.type)) {
+      showToast?.('Formato inválido. Use JPG, PNG ou WEBP.', 'error');
+      return;
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const path = `${cicloAberto.id}/${profile.id}/${Date.now()}.${ext}`;
+    setUploadingEv(true);
+    try {
+      const { error: upErr } = await supabase.storage
+        .from('evidencias-avaliacao')
+        .upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('evidencias-avaliacao').getPublicUrl(path);
+      const { error: insErr } = await supabase.from('evidencias_avaliacao').insert({
+        ciclo_id: cicloAberto.id,
+        colaborador_id: profile.id,
+        imagem_url: pub.publicUrl,
+      });
+      if (insErr) throw insErr;
+      showToast?.('Comprovante enviado!', 'success');
+      reload();
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao enviar imagem.', 'error');
+    } finally {
+      setUploadingEv(false);
+    }
+  };
+
+  const excluirEvidencia = async (ev: Evidencia) => {
+    if (!supabase) return;
+    try {
+      const marker = `/object/public/evidencias-avaliacao/`;
+      const idx = ev.imagem_url.indexOf(marker);
+      if (idx !== -1) {
+        await supabase.storage.from('evidencias-avaliacao').remove([ev.imagem_url.slice(idx + marker.length)]);
+      }
+      const { error } = await supabase.from('evidencias_avaliacao').delete().eq('id', ev.id);
+      if (error) throw error;
+      reload();
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao remover comprovante.', 'error');
+    }
+  };
 
   // Agrupa pendentes de colaboradores/gerentes por filial (modo Matriz)
   const pendentesAgrupadosPorFilial = useMemo(() => {
@@ -1295,7 +1376,59 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         )}
       </div>
 
-      {/* ── D. AVALIAÇÕES RECEBIDAS ── */}
+      {/* ── D. COMPROVANTES DE VENDAS ONLINE ── */}
+      {cicloAberto && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ImageIcon size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Comprovantes de Vendas Online</h3>
+              <span className="text-[10px] text-gray-500 font-bold">{cicloAberto.nome}</span>
+            </div>
+            <div>
+              <input
+                ref={evidFileRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadEvidencia(f); e.target.value = ''; }}
+              />
+              <NeuButtonAccent onClick={() => evidFileRef.current?.click()} disabled={uploadingEv}>
+                {uploadingEv
+                  ? <Loader2 size={13} className="animate-spin" />
+                  : <Upload size={13} />}
+                {uploadingEv ? 'Enviando...' : 'Enviar Comprovante'}
+              </NeuButtonAccent>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Envie prints ou fotos comprovando vendas online (JPG/PNG/WEBP · máx 120 KB).
+            Seus avaliadores visualizam estes comprovantes ao pontuar o critério{' '}
+            <strong className="text-gray-400">Vendas e Atendimento</strong>.
+          </p>
+          {minhasEvidencias.length === 0 ? (
+            <EmptyState message="Nenhum comprovante enviado para este ciclo." />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+              {minhasEvidencias.map(ev => (
+                <div key={ev.id} className="relative group rounded-xl overflow-hidden border border-white/10" style={{ aspectRatio: '1' }}>
+                  <a href={ev.imagem_url} target="_blank" rel="noopener noreferrer">
+                    <img src={ev.imagem_url} alt="Comprovante" className="w-full h-full object-cover" />
+                  </a>
+                  <button
+                    onClick={() => excluirEvidencia(ev)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── E. AVALIAÇÕES RECEBIDAS ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center gap-2 mb-5">
           <Eye size={16} className="text-accent" />
@@ -1389,6 +1522,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             showToast={showToast}
             criteriosSet={avaliando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : csAtivo}
             categoriaLabel={avaliando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : clAtivo}
+            evidenciasAvaliado={avaliando.alvo.kind === 'user'
+              ? evidencias.filter(e =>
+                  e.colaborador_id === (avaliando.alvo as Extract<AvaliadoTarget, { kind: 'user' }>).user.id &&
+                  e.ciclo_id === avaliando.ciclo.id)
+              : undefined}
           />
         )}
         {editando && (
