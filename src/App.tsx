@@ -19,7 +19,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers, Vote,
+  Layers, Vote, Landmark,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -113,6 +113,7 @@ const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLo
 const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
 const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
 const MatrizVotacoesView                   = lazy(() => import('./views/MatrizVotacoesView').then(m => ({ default: m.MatrizVotacoesView })));
+const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -201,6 +202,7 @@ const MATRIZ_NAV_ITEMS = [
   { id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone },
   { id: 'matriz-operacoes',  label: 'Operações Comparativo',  icon: Monitor },
   { id: 'matriz-votacoes',   label: 'Votações',               icon: Vote },
+  { id: 'matriz-capital',    label: 'Capital',                icon: Landmark },
 ] as const;
 
 function MatrizSidebarSection({ activeView, navigate, onClose }: { activeView: string; navigate: (v: string) => void; onClose?: () => void }) {
@@ -779,6 +781,7 @@ function LogMaxAppInner() {
       case 'matriz-marketing':             return <MatrizMarketingView />;
       case 'matriz-operacoes':             return <MatrizOperacoesView />;
       case 'matriz-votacoes':              return <MatrizVotacoesView showToast={st} profile={profile} />;
+      case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

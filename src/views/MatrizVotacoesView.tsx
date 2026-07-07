@@ -381,22 +381,23 @@ function VotacaoCard({
                 <ChevronRight size={12} /> Abrir Votação
               </button>
             )}
-            {v.status === 'Em Votação' && (
-              <>
+            {v.status === 'Em Votação' && (() => {
+              const resultadoCalculado = v.votos_favor > v.votos_contra ? 'Aceito' : 'Rejeitado';
+              const isAceito = resultadoCalculado === 'Aceito';
+              return (
                 <button
-                  onClick={() => onStatus(v.id, 'Decidido', v.votos_favor >= v.votos_contra ? 'Aceito' : 'Rejeitado')}
-                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors"
+                  onClick={() => onStatus(v.id, 'Decidido', resultadoCalculado)}
+                  className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl border transition-colors ${
+                    isAceito
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30'
+                      : 'bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30'
+                  }`}
                 >
-                  <CheckCircle2 size={12} /> Encerrar — Aceito
+                  {isAceito ? <CheckCircle2 size={12} /> : <X size={12} />}
+                  Encerrar — {resultadoCalculado}
                 </button>
-                <button
-                  onClick={() => onStatus(v.id, 'Decidido', 'Rejeitado')}
-                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-colors"
-                >
-                  <X size={12} /> Encerrar — Rejeitado
-                </button>
-              </>
-            )}
+              );
+            })()}
           </div>
         )}
       </div>
@@ -421,8 +422,10 @@ function PainelVotacoes({
     'votacoes', { tipo }, false,
   );
 
+  // Só busca votos quando profile já carregou — evita query sem filtro
+  // que devolveria todos os votos do banco e popularia meuVotoMap errado.
   const { data: meusVotos = [], reload: reloadVotos } = useFetchData<VotoRow>(
-    'votacoes_votos', profile?.id ? { user_id: profile.id } : undefined, false,
+    'votacoes_votos', profile?.id ? { user_id: profile.id } : { user_id: 'noop' }, false,
   );
 
   const refetch = useCallback(() => { reloadVotacoes(); reloadVotos(); }, [reloadVotacoes, reloadVotos]);
