@@ -10,7 +10,7 @@
 export const MATRIZ_ALLOWED_SUBMENUS: Record<string, string[] | true> = {
   empresa:     ['Filiais'],
   financeiro:  ['Gerenciamento', 'Relatórios'],
-  rh:          ['Gerenciamento', 'Relatórios'],
+  rh:          ['Frequência de Trabalho', 'Gerenciamento', 'Relatórios'],
   compras:     ['Gerenciamento', 'Relatórios'],
   estoque:     ['Gerenciamento', 'Relatórios'],
   marketing:   [],                       // ocultado — vive em Comparativo

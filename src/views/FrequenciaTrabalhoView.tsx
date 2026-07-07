@@ -84,14 +84,23 @@ const getDaysInRange = (start: string, end: string): string[] => {
   return days;
 };
 
+const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+
 const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
   const { user } = useAuth();
   // frequencia_trabalho e justificativas_falta não têm coluna `filial` (o
   // escopo por filial vem do funcionário via join client-side). Passar
   // { filial } aqui gerava 400 silencioso do PostgREST.
   const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview');
-  const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
+  // No modo Matriz (filial===null) carrega todos sem filtro
+  const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>(
+    '/api/funcionariosview',
+    filial ? { filial } : undefined,
+  );
   const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview');
+
+  // Filtro de filial dentro do modo Matriz (null = todas)
+  const [filialFiltro, setFilialFiltro] = useState<string | null>(null);
 
   const today = todayBR();
   const [dataSelecionada, setDataSelecionada] = useState(today);
@@ -107,24 +116,27 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
-  // Safety net: filtra client-side pela filial ativa. Se RLS/migration
-  // do funcionarios.filial não estiver aplicada, isso evita vazamento
-  // cross-filial (SuperMax vendo MaxLook/TechMax e vice-versa).
+  // No modo filial: filtra pela filial ativa.
+  // No modo Matriz (filial===null): filtra pelo filialFiltro local (null = todas).
+  const filialEfetiva = filial ?? filialFiltro;
+
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? [])
       .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
-      .filter((f: any) => (f.filial ?? null) === filial)
+      .filter((f: any) => filialEfetiva === null || (f.filial ?? null) === filialEfetiva)
       .sort((a: any, b: any) =>
         (a.nome ?? '').trim().localeCompare((b.nome ?? '').trim(), 'pt-BR', { sensitivity: 'base' })
       ),
-    [funcionarios, filial],
+    [funcionarios, filialEfetiva],
   );
 
-  // IDs de funcionários que pertencem à filial ativa — usado para escopar
-  // frequencias e justificativas (tabelas sem coluna `filial` própria).
   const funcIdsFilial = useMemo(
-    () => new Set((funcionarios ?? []).filter((f: any) => (f.filial ?? null) === filial).map((f: any) => f.id)),
-    [funcionarios, filial],
+    () => new Set(
+      (funcionarios ?? [])
+        .filter((f: any) => filialEfetiva === null || (f.filial ?? null) === filialEfetiva)
+        .map((f: any) => f.id)
+    ),
+    [funcionarios, filialEfetiva],
   );
 
   const filteredFuncs = useMemo(() => {
@@ -251,6 +263,20 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
           <p className="text-sm text-gray-400 mt-1">Registre presença, falta ou atraso dos funcionários. Período: {periodoLabel}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Filtro de filial — só no modo Matriz */}
+          {filial === null && (
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 p-1 neu-flat">
+              {([null, ...FILIAIS_OP] as (string | null)[]).map(f => (
+                <button
+                  key={f ?? 'todas'}
+                  onClick={() => setFilialFiltro(f)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition ${filialFiltro === f ? 'bg-accent/20 text-accent border border-accent/30' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                  {f ?? 'Todas'}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Filtro período */}
           {(['dia', 'semana', 'mes'] as FilterPeriod[]).map(p => (
             <button
@@ -365,6 +391,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-3">Funcionário</th>
+                    {filial === null && <th className="pb-3 font-bold px-3">Filial</th>}
                     <th className="pb-3 font-bold px-3">Cargo</th>
                     <th className="pb-3 font-bold px-3 text-center">Status</th>
                     <th className="pb-3 font-bold px-3 text-center">Registro</th>
@@ -392,6 +419,9 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
                             {func.nome}
                           </button>
                         </td>
+                        {filial === null && (
+                          <td className="py-3 px-3 text-xs text-gray-400">{func.filial ?? '—'}</td>
+                        )}
                         <td className="py-3 px-3 text-xs text-gray-500">{func.cargo ?? '—'}</td>
                         <td className="py-3 px-3">
                           <div className="flex items-center justify-center gap-1">
@@ -631,6 +661,6 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 
 export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  // filialAtiva===null = modo Matriz → passa null para mostrar todas as filiais
   return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
 };
