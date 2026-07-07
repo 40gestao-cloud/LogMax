@@ -19,7 +19,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers,
+  Layers, Vote,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -112,6 +112,7 @@ const MatrizFinanceiroView                 = lazy(() => import('./views/MatrizFi
 const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLogisticaView').then(m => ({ default: m.MatrizLogisticaView })));
 const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
 const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
+const MatrizVotacoesView                   = lazy(() => import('./views/MatrizVotacoesView').then(m => ({ default: m.MatrizVotacoesView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -199,6 +200,7 @@ const MATRIZ_NAV_ITEMS = [
   { id: 'matriz-logistica',  label: 'Logística Comparativo',  icon: Package },
   { id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone },
   { id: 'matriz-operacoes',  label: 'Operações Comparativo',  icon: Monitor },
+  { id: 'matriz-votacoes',   label: 'Votações',               icon: Vote },
 ] as const;
 
 function MatrizSidebarSection({ activeView, navigate, onClose }: { activeView: string; navigate: (v: string) => void; onClose?: () => void }) {
@@ -281,6 +283,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
         <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <MessageSquare size={18} /><span>Feedback</span>
+        </button>
+        {/* Votações: conselho vê Votações do Conselho; todos veem Votações Totais */}
+        <button onClick={() => { navigate('votacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <Vote size={18} /><span>Votações</span>
         </button>
         {/* Metas (Fase 4): colaborador vê próprias; gerente/admin/CEO/RH criam e aprovam — credita bonificação no MaxBank, R$ X dispara folga */}
         <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -760,6 +766,7 @@ function LogMaxAppInner() {
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
       case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
+      case 'votacoes':                     return <MatrizVotacoesView showToast={st} profile={profile} />;
       case 'metas':                        return <MetasView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
@@ -771,6 +778,7 @@ function LogMaxAppInner() {
       case 'matriz-logistica':             return <MatrizLogisticaView />;
       case 'matriz-marketing':             return <MatrizMarketingView />;
       case 'matriz-operacoes':             return <MatrizOperacoesView />;
+      case 'matriz-votacoes':              return <MatrizVotacoesView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
