@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft, Building2 } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -14,17 +14,25 @@ import { CRITERIOS, CRITERIOS_MATRIZ, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, E
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean };
+type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean; filial: string };
 type Avaliacao = {
   id: string;
   ciclo_id: string;
   avaliador_id: string;
-  avaliado_id: string;
+  avaliado_id: string | null;
+  avaliada_filial: string | null;
   tipo: string;
   observacao: string | null;
   created_at: string;
 };
 type Criterio = { id: string; avaliacao_id: string; categoria: string; criterio: string; nota: number };
+
+// Alvo de uma avaliação: usuário ou filial como entidade
+type AvaliadoTarget =
+  | { kind: 'user'; user: UserProfile }
+  | { kind: 'filial'; filial: string };
+
+const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
 const fmtData = (s: string) => {
   const [y, m, d] = s.split('-');
@@ -36,11 +44,11 @@ const fmtData = (s: string) => {
 // ----------------------------------------------------------------------
 
 function ModalAvaliacao({
-  ciclo, avaliado, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel,
+  ciclo, alvo, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel,
 }: {
   ciclo: Ciclo;
-  avaliado: UserProfile;
-  tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+  alvo: AvaliadoTarget;
+  tipo?: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => Promise<void> | void;
@@ -50,6 +58,7 @@ function ModalAvaliacao({
 }) {
   const isEdicao = !!avaliacaoExistente;
   const cs = criteriosSet ?? CRITERIOS;
+  const nomeAlvo = alvo.kind === 'user' ? alvo.user.nome : alvo.filial;
 
   const [notas, setNotas] = useState<Record<string, number>>(() => {
     const init = notasIniciais(cs);
@@ -70,28 +79,41 @@ function ModalAvaliacao({
       const p_criterios = Object.keys(cs).flatMap(cat =>
         cs[cat].map(c => ({ categoria: cat, criterio: c, nota: notas[`${cat}::${c}`] }))
       );
-      const { error } = isEdicao
-        ? await supabase.rpc('atualizar_avaliacao', {
-            p_avaliacao_id: avaliacaoExistente!.id,
-            p_observacao: observacao || null,
-            p_criterios,
-          })
-        : await supabase.rpc('criar_avaliacao', {
-            p_ciclo_id: ciclo.id,
-            p_avaliado_id: avaliado.id,
-            p_tipo: tipo,
-            p_observacao: observacao || null,
-            p_criterios,
-          });
-      if (error) throw error;
+
+      if (isEdicao) {
+        const { error } = await supabase.rpc('atualizar_avaliacao', {
+          p_avaliacao_id: avaliacaoExistente!.id,
+          p_observacao: observacao || null,
+          p_criterios,
+        });
+        if (error) throw error;
+      } else if (alvo.kind === 'filial') {
+        const { error } = await supabase.rpc('criar_avaliacao_filial', {
+          p_ciclo_id: ciclo.id,
+          p_avaliada_filial: alvo.filial,
+          p_observacao: observacao || null,
+          p_criterios,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('criar_avaliacao', {
+          p_ciclo_id: ciclo.id,
+          p_avaliado_id: alvo.user.id,
+          p_tipo: tipo!,
+          p_observacao: observacao || null,
+          p_criterios,
+        });
+        if (error) throw error;
+      }
+
       showToast?.(isEdicao ? 'Avaliação atualizada.' : 'Avaliação registrada com sucesso.', 'success');
-      // Aguarda o reload terminar antes de fechar o modal — sem isso, fechar dispara
-      // re-render e o usuário pode ver a tela velha antes da nova lista chegar.
       await onSaved();
       onClose();
     } catch (err: any) {
       const msg = err?.message?.includes('unq_avaliacao')
         ? 'Você já avaliou esta pessoa neste ciclo.'
+        : err?.message?.includes('unq_avaliacao_filial')
+        ? 'Você já avaliou esta filial neste ciclo.'
         : err?.message ?? (isEdicao ? 'Erro ao atualizar avaliação.' : 'Erro ao salvar avaliação.');
       showToast?.(msg, 'error');
     } finally {
@@ -115,7 +137,9 @@ function ModalAvaliacao({
           <div>
             <h3 className="text-lg font-bold text-accent">{isEdicao ? 'Editar Avaliação' : 'Avaliação de Desempenho'}</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              <span className="font-bold text-gray-300">{avaliado.nome}</span> · Ciclo {ciclo.nome}
+              <span className="font-bold text-gray-300">{nomeAlvo}</span>
+              {alvo.kind === 'filial' && <span className="ml-1 text-accent text-[10px] font-bold uppercase tracking-widest">· Filial</span>}
+              {' '}· Ciclo {ciclo.nome}
             </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
@@ -161,10 +185,9 @@ function ModalAvaliacao({
 // Modal: novo ciclo
 // ----------------------------------------------------------------------
 
-const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
-
 function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string | null }) {
-  const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true, filial_sel: filial ?? 'SuperMax' });
+  // Modo Matriz: default é 'Matriz' (ciclo consolidado)
+  const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true, filial_sel: filial ?? 'Matriz' });
   const [saving, setSaving] = useState(false);
 
   const handleSalvar = async () => {
@@ -216,6 +239,7 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
                 onChange={e => setForm(p => ({ ...p, filial_sel: e.target.value }))}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm"
               >
+                <option value="Matriz">Matriz (todas as filiais)</option>
                 {FILIAIS_OP.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
@@ -280,29 +304,33 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
 }
 
 // ----------------------------------------------------------------------
-// Card de detalhe de avaliação (recebida OU feita — direção parametrizada).
+// Card de detalhe de avaliação
 // ----------------------------------------------------------------------
 
 const CardAvaliacao: React.FC<{
   avaliacao: Avaliacao;
   criterios: Criterio[];
-  direcaoLabel: string;     // "de" (recebida) | "para" (feita)
-  nomeContraparte: string;  // nome do avaliador (recebida) ou avaliado (feita) + ciclo
+  direcaoLabel: string;
+  nomeContraparte: string;
   canEditar?: boolean;
   onEditar?: () => void;
   canExcluir?: boolean;
   onExcluir?: () => void;
-  // Export PDF individual — opcional. Hoje só ativo em "Recebidas",
-  // mas o card serve as duas seções (recebidas/feitas) e o callback
-  // resolve o conteúdo do PDF (rótulo da contraparte muda).
   onExportPDF?: () => void;
-  // PDI: avaliador OU admin/CEO pode adicionar/editar metas; resto só lê.
   canEditarPDI?: boolean;
+  showPDI?: boolean;
   profile: UserProfile;
   treinamentos: { id: string; nome: string; status: string }[];
   showToast?: any;
-}> = ({ avaliacao, criterios, direcaoLabel, nomeContraparte, canEditar, onEditar, canExcluir, onExcluir, onExportPDF, canEditarPDI, profile, treinamentos, showToast }) => {
+  categoriaLabel?: Record<string, string>;
+}> = ({
+  avaliacao, criterios, direcaoLabel, nomeContraparte,
+  canEditar, onEditar, canExcluir, onExcluir, onExportPDF,
+  canEditarPDI, showPDI = true, profile, treinamentos, showToast, categoriaLabel,
+}) => {
   const [expanded, setExpanded] = useState(false);
+  const catLabel = categoriaLabel ?? CATEGORIA_LABEL;
+
   const mediaTotal = useMemo(() => {
     if (criterios.length === 0) return 0;
     return criterios.reduce((s, c) => s + c.nota, 0) / criterios.length;
@@ -339,20 +367,12 @@ const CardAvaliacao: React.FC<{
             </button>
           )}
           {canEditar && (
-            <button
-              onClick={onEditar}
-              title="Editar avaliação"
-              className="action-btn-edit"
-            >
+            <button onClick={onEditar} title="Editar avaliação" className="action-btn-edit">
               <Pencil size={12} />
             </button>
           )}
           {canExcluir && (
-            <button
-              onClick={onExcluir}
-              title="Excluir avaliação"
-              className="action-btn-delete"
-            >
+            <button onClick={onExcluir} title="Excluir avaliação" className="action-btn-delete">
               <Trash2 size={12} />
             </button>
           )}
@@ -366,13 +386,12 @@ const CardAvaliacao: React.FC<{
       <div className="grid grid-cols-3 gap-2 mb-3">
         {mediaPorCat.map(m => (
           <div key={m.categoria} className="text-center p-2 rounded-lg neu-pressed">
-            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">{CATEGORIA_LABEL[m.categoria]}</p>
+            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">{catLabel[m.categoria] ?? m.categoria}</p>
             <p className="text-base font-black text-gray-200 mt-0.5">{m.media.toFixed(1)}</p>
           </div>
         ))}
       </div>
 
-      {/* Observação sempre visível quando houver — não fica escondida no drill-down. */}
       {avaliacao.observacao && (
         <div className="mb-3 p-3 rounded-xl bg-white/[0.02] border-l-2 border-accent/40">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Observação</p>
@@ -407,13 +426,15 @@ const CardAvaliacao: React.FC<{
         )}
       </AnimatePresence>
 
-      <PDISection
-        avaliacaoId={avaliacao.id}
-        canEditar={!!canEditarPDI}
-        profile={profile}
-        treinamentos={treinamentos}
-        showToast={showToast}
-      />
+      {showPDI && (
+        <PDISection
+          avaliacaoId={avaliacao.id}
+          canEditar={!!canEditarPDI}
+          profile={profile}
+          treinamentos={treinamentos}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };
@@ -430,52 +451,50 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
   const [criterios, setCriterios] = useState<Criterio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNovoCiclo, setShowNovoCiclo] = useState(false);
-  const [avaliando, setAvaliando] = useState<{ ciclo: Ciclo; avaliado: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' } | null>(null);
+
+  // Modo Matriz: filial === null (escolha explícita de consolidado)
+  const isMatriz = filial === null;
+
+  const [avaliando, setAvaliando] = useState<{
+    ciclo: Ciclo;
+    alvo: AvaliadoTarget;
+    tipo?: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+  } | null>(null);
+
   const [editando, setEditando] = useState<{
     ciclo: Ciclo;
-    avaliado: UserProfile;
-    tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+    alvo: AvaliadoTarget;
+    tipo: string;
     avaliacaoExistente: { id: string; observacao: string | null; criterios: Criterio[] };
   } | null>(null);
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
-  const csAtivo    = filial === null ? CRITERIOS_MATRIZ : CRITERIOS;
-  const clAtivo    = filial === null ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
+  // Critérios e rótulos conforme o contexto ativo
+  const csAtivo    = isMatriz ? CRITERIOS_MATRIZ : CRITERIOS;
+  const clAtivo    = isMatriz ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
   const isGerente   = profile.role === 'gerente';
-  // RH (qualquer role com 'rh' em setor primário ou setores_extras) tem
-  // visão cross-setor: vê consolidado de TUDO e propõe PDI em qualquer
-  // avaliação. Não pode editar/excluir avaliação alheia — só admin/CEO.
   const isRH        = hasSetor(profile, 'rh');
   const podeVerConsolidado = isAdminOuCEO || isRH;
 
-  // Catálogo de treinamentos pra vincular nos itens de PDI. useFetchData
-  // já bate na `treinamentos` (RLS pública nessa tabela legada). Não passa
-  // pelo reload() centralizado porque o PDI é lazy e local ao card.
   const { data: treinamentos } = useFetchData<any>('/api/treinamentosview');
 
-  // Helper: pode editar uma avaliação? RPC `atualizar_avaliacao` faz o
-  // check autoritativo no banco; aqui é só pra esconder UI quando não
-  // adianta tentar (ciclo fechado, ou usuário sem autoria/sem role).
   const podeEditarAvaliacao = (av: Avaliacao): boolean => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);
     if (!ciclo || ciclo.status !== 'Aberto') return false;
     return isAdminOuCEO || av.avaliador_id === profile.id;
   };
 
-  // DELETE de avaliação individual. RLS `avaliacoes_delete USING auth_is_admin()`
-  // já restringe a admin/CEO; critérios são apagados em cascata via FK.
-  // `.select()` no DELETE detecta silent-fail de RLS (devolve [] em vez de erro).
   const excluirAvaliacao = async (av: Avaliacao) => {
     if (!supabase) return;
-    if (!isAdminOuCEO) return;  // defesa em profundidade
+    if (!isAdminOuCEO) return;
     const critsCount = criterios.filter(c => c.avaliacao_id === av.id).length;
-    const avaliado  = users.find(u => u.id === av.avaliado_id);
+    const avaliadoNome = av.avaliada_filial ?? users.find(u => u.id === av.avaliado_id)?.nome ?? '—';
     const avaliador = users.find(u => u.id === av.avaliador_id);
     const ciclo     = ciclos.find(c => c.id === av.ciclo_id);
     const msg =
       `Excluir esta avaliação?\n\n` +
       `  • De: ${avaliador?.nome ?? '—'}\n` +
-      `  • Para: ${avaliado?.nome ?? '—'}\n` +
+      `  • Para: ${avaliadoNome}\n` +
       `  • Ciclo: ${ciclo?.nome ?? '—'}\n` +
       `  • ${critsCount} critério(s) com notas\n\n` +
       `Esta ação é irreversível.`;
@@ -497,16 +516,23 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // Abre o modal de edição com prefill. Resolve ciclo/avaliado/criterios
-  // do estado já carregado — não precisa re-fetch.
   const abrirEdicao = (av: Avaliacao) => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);
-    const avaliado = users.find(u => u.id === av.avaliado_id);
-    if (!ciclo || !avaliado) return;
+    if (!ciclo) return;
+
+    let alvo: AvaliadoTarget;
+    if (av.avaliada_filial) {
+      alvo = { kind: 'filial', filial: av.avaliada_filial };
+    } else {
+      const avaliado = users.find(u => u.id === av.avaliado_id);
+      if (!avaliado) return;
+      alvo = { kind: 'user', user: avaliado };
+    }
+
     setEditando({
       ciclo,
-      avaliado,
-      tipo: av.tipo as 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador',
+      alvo,
+      tipo: av.tipo,
       avaliacaoExistente: {
         id: av.id,
         observacao: av.observacao,
@@ -515,13 +541,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     });
   };
 
-  // Primeira carga bloqueia a UI com spinner; re-fetches (após salvar) são
-  // silenciosos pra não piscar a tela inteira e perder o scroll do usuário.
   const hasLoadedOnce = useRef(false);
   const reload = async () => {
     if (!supabase) { setIsLoading(false); return; }
     if (!hasLoadedOnce.current) setIsLoading(true);
     try {
+      // Em modo Matriz carrega tudo (sem filtro de filial)
       const ciclosQ = supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false });
       const avalsQ  = supabase.from('avaliacoes').select('*');
       if (filial) { ciclosQ.eq('filial', filial); avalsQ.eq('filial', filial); }
@@ -531,9 +556,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         avalsQ,
         supabase.from('criterios_avaliacao').select('*'),
       ]);
-      // Erros silenciosos do PostgREST (RLS, schema drift) vêm em `error`, não
-      // como exceção. Sem isto, `a ?? []` mascarava o problema e a UI ficava
-      // "vazia" sem feedback. Mostra o primeiro erro real ao usuário.
       const firstErr = resC.error || resU.error || resA.error || resCr.error;
       if (firstErr) {
         showToast?.(`Erro ao carregar avaliações: ${firstErr.message}`, 'error');
@@ -564,10 +586,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // DELETE destrutivo: ON DELETE CASCADE em avaliacoes.ciclo_id e
-  // criterios_avaliacao.avaliacao_id apaga tudo em cascata. RLS ciclos_write
-  // (FOR ALL USING auth_is_admin()) cobre admin+CEO. `.select()` no DELETE
-  // detecta silent-fail de RLS (devolve [] em vez de erro).
   const excluirCiclo = async (ciclo: Ciclo) => {
     if (!supabase) return;
     const avaliacoesCiclo = avaliacoes.filter(a => a.ciclo_id === ciclo.id);
@@ -594,8 +612,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       if (!data || data.length === 0) {
         throw new Error('Nenhum ciclo removido (RLS pode ter bloqueado).');
       }
-      // Reset do consolidado se o ciclo selecionado foi o apagado — o
-      // useEffect de default re-elege ciclo aberto/mais recente.
       if (cicloConsolidadoId === ciclo.id) setCicloConsolidadoId(null);
       setLinhaExpandida(null);
       showToast?.('Ciclo excluído.', 'success');
@@ -605,10 +621,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // Ciclo aberto atual (assumimos no máximo 1)
-  const cicloAberto = ciclos.find(c => c.status === 'Aberto') ?? null;
+  // Ciclo aberto de filial (para avaliações de colaboradores/gerentes)
+  const cicloAberto = ciclos.find(c => c.status === 'Aberto' && (filial ? c.filial === filial : c.filial !== 'Matriz')) ?? null;
 
-  // Quem o usuário logado deve avaliar no ciclo aberto?
+  // Em modo Matriz: ciclo Matriz aberto (para avaliações de filiais como entidade)
+  const cicloMatrizAberto = isMatriz ? (ciclos.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
+
+  // Pendentes: quem o usuário deve avaliar no ciclo aberto
   const pendentes = useMemo(() => {
     if (!cicloAberto) return [];
     const minhasFeitas = avaliacoes
@@ -617,18 +636,17 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
     let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
     const usersFilial = filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users;
+
     if (isAdminOuCEO) {
       alvos = usersFilial
         .filter(u => u.role === 'gerente' && u.id !== profile.id)
         .map(user => ({ user, tipo: 'ceo_gerente' as const }));
     } else if (isGerente) {
-      // Gerente avalia colaboradores de TODOS seus setores (primário + extras).
       const setoresGerente = allSetores(profile);
       alvos = usersFilial
         .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
         .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
     } else {
-      // colaborador: feedback reverso para gerentes de qualquer um dos seus setores + CEO
       const setoresColaborador = allSetores(profile);
       const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
       const ceos = users.filter(u => u.role === 'ceo');
@@ -636,12 +654,29 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
 
     return alvos.filter(({ user, tipo }) => !minhasFeitas.includes(`${user.id}::${tipo}`));
-  }, [cicloAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente]);
+  }, [cicloAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente, filial]);
 
-  // Avaliações recebidas pelo usuário logado (seção C). Cobre os 3 tipos:
-  // ceo_gerente (gerente vê nota do CEO), gerente_colaborador (colaborador vê
-  // nota do gerente) e feedback_colaborador (gerente/CEO vê feedback reverso).
-  // Anonimato do ciclo só esconde o autor em feedback_colaborador.
+  // Filiais ainda não avaliadas no ciclo Matriz aberto
+  const filiaisJaAvaliadas = useMemo((): Set<string> => {
+    if (!cicloMatrizAberto) return new Set();
+    const feitas = avaliacoes.filter(
+      a => a.ciclo_id === cicloMatrizAberto.id && a.avaliador_id === profile.id && a.tipo === 'matriz_filial'
+    );
+    return new Set(feitas.map(a => a.avaliada_filial).filter(Boolean) as string[]);
+  }, [cicloMatrizAberto, avaliacoes, profile.id]);
+
+  // Agrupa pendentes de colaboradores/gerentes por filial (modo Matriz)
+  const pendentesAgrupadosPorFilial = useMemo(() => {
+    if (!isMatriz) return null;
+    const grupos: Record<string, typeof pendentes> = {};
+    pendentes.forEach(p => {
+      const f = p.user.filial ?? 'Sem filial';
+      if (!grupos[f]) grupos[f] = [];
+      grupos[f].push(p);
+    });
+    return grupos;
+  }, [isMatriz, pendentes]);
+
   const recebidas = useMemo(() => {
     return avaliacoes
       .filter(a => a.avaliado_id === profile.id)
@@ -659,35 +694,32 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
   }, [avaliacoes, criterios, users, ciclos, profile.id]);
 
-  // Avaliações feitas pelo usuário (para a seção D — fecha o gap "pra onde foi
-  // o que eu avaliei?"). Mostra avaliado, não avaliador. Anonimato não aplica
-  // aqui — o avaliador sabe quem ele mesmo avaliou.
   const feitas = useMemo(() => {
     return avaliacoes
       .filter(a => a.avaliador_id === profile.id)
       .map(av => {
         const ciclo = ciclos.find(c => c.id === av.ciclo_id);
-        const avaliado = users.find(u => u.id === av.avaliado_id);
+        // Pode ser avaliação de filial (avaliado_id=null) ou de pessoa
+        const avaliadoNome = av.avaliada_filial
+          ? av.avaliada_filial
+          : (users.find(u => u.id === av.avaliado_id)?.nome ?? '—');
         return {
           avaliacao: av,
           criterios: criterios.filter(c => c.avaliacao_id === av.id),
-          avaliadoNome: avaliado?.nome ?? '—',
+          avaliadoNome,
           cicloNome: ciclo?.nome ?? '—',
+          isFilialEval: av.tipo === 'matriz_filial',
         };
       })
       .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
   }, [avaliacoes, criterios, users, ciclos, profile.id]);
 
-  // ── Consolidado do ciclo (admin/CEO + RH) — seção E ────────────────────────
+  // ── Consolidado do ciclo ──────────────────────────────────────────────────
   const [cicloConsolidadoId, setCicloConsolidadoId] = useState<string | null>(null);
   const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
   const [exportandoPDF, setExportandoPDF] = useState(false);
-  // PDI inline no consolidado: guarda qual avaliacaoId está com painel
-  // aberto. Pra RH/admin propor PDI sem precisar voltar pra própria
-  // seção de avaliações recebidas/feitas (que mostra só as do user).
   const [pdiAvaliacaoAberta, setPdiAvaliacaoAberta] = useState<string | null>(null);
 
-  // Default: ciclo aberto; senão o mais recente. Só dispara se ainda não escolhido.
   useEffect(() => {
     if (cicloConsolidadoId || ciclos.length === 0) return;
     const aberto = ciclos.find(c => c.status === 'Aberto');
@@ -696,14 +728,18 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
   const consolidado = useMemo(() => {
     if (!podeVerConsolidado || !cicloConsolidadoId) return null;
-    const usersFilialSet = new Set((filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users).map(u => u.id));
-    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId && usersFilialSet.has(a.avaliado_id));
+    const usersFilialSet = new Set(
+      (filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users).map(u => u.id)
+    );
+    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId &&
+      (a.avaliado_id ? usersFilialSet.has(a.avaliado_id) : !!a.avaliada_filial)
+    );
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
-    // Agrupa um conjunto de avaliações por avaliado e enriquece cada linha.
     const buildLinhas = (avals: Avaliacao[]) => {
       const porAvaliado = new Map<string, Avaliacao[]>();
       avals.forEach(a => {
+        if (!a.avaliado_id) return;
         const list = porAvaliado.get(a.avaliado_id) ?? [];
         list.push(a);
         porAvaliado.set(a.avaliado_id, list);
@@ -714,25 +750,19 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         const mediaGeral = critsDestaPessoa.length === 0
           ? 0
           : critsDestaPessoa.reduce((s, c) => s + c.nota, 0) / critsDestaPessoa.length;
-        // Por avaliador: nome + média + observação. Feedback de colaborador respeita anonimato do ciclo.
         const porAvaliador = avs.map(av => {
           const crits = criterios.filter(c => c.avaliacao_id === av.id);
           const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
           const avaliador = users.find(u => u.id === av.avaliador_id);
           const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo?.feedback_anonimo ?? true);
-          return {
-            avaliacaoId: av.id,
-            nome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
-            tipo: av.tipo,
-            media,
-            observacao: av.observacao,
-          };
+          return { avaliacaoId: av.id, nome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'), tipo: av.tipo, media, observacao: av.observacao };
         });
         return {
           avaliadoId,
           nome: user?.nome ?? '—',
           role: user?.role ?? '—',
           setor: user?.setor ?? '—',
+          filial: user?.filial ?? '—',
           qtdAvaliacoes: avs.length,
           mediaGeral,
           porAvaliador,
@@ -740,25 +770,56 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
     };
 
-    // Separa por tipo. Ordem fixa pra render previsível.
-    // Cada grupo guarda tanto o # de avaliados (linhas distintas) quanto o
-    // total de avaliações — ambos exibidos no header pra evitar a confusão
-    // de "Avaliados=4 mas Avaliações=7" quando alguém recebe múltiplas.
+    // Grupo especial para avaliações de filial como entidade
+    const buildLinhasFilial = (avals: Avaliacao[]) => {
+      const porFilial = new Map<string, Avaliacao[]>();
+      avals.forEach(a => {
+        if (!a.avaliada_filial) return;
+        const list = porFilial.get(a.avaliada_filial) ?? [];
+        list.push(a);
+        porFilial.set(a.avaliada_filial, list);
+      });
+      return Array.from(porFilial.entries()).map(([filialNome, avs]) => {
+        const critsFilial = criterios.filter(c => avs.some(a => a.id === c.avaliacao_id));
+        const mediaGeral = critsFilial.length === 0
+          ? 0
+          : critsFilial.reduce((s, c) => s + c.nota, 0) / critsFilial.length;
+        const porAvaliador = avs.map(av => {
+          const crits = criterios.filter(c => c.avaliacao_id === av.id);
+          const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+          const avaliador = users.find(u => u.id === av.avaliador_id);
+          return { avaliacaoId: av.id, nome: avaliador?.nome ?? '—', tipo: av.tipo, media, observacao: av.observacao };
+        });
+        return {
+          avaliadoId: filialNome,
+          nome: filialNome,
+          role: 'filial',
+          setor: '—',
+          filial: filialNome,
+          qtdAvaliacoes: avs.length,
+          mediaGeral,
+          porAvaliador,
+        };
+      }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
+    };
+
     const mkGrupo = (
-      tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador',
+      tipo: string,
       label: string,
       descricao: string,
     ) => {
       const avs = avalCiclo.filter(a => a.tipo === tipo);
-      return { tipo, label, descricao, linhas: buildLinhas(avs), totalAvaliacoes: avs.length };
+      const linhas = tipo === 'matriz_filial' ? buildLinhasFilial(avs) : buildLinhas(avs);
+      return { tipo, label, descricao, linhas, totalAvaliacoes: avs.length };
     };
+
     const grupos = [
       mkGrupo('ceo_gerente', 'CEO → Gerentes', 'Avaliações que o CEO/admin entregou aos gerentes.'),
       mkGrupo('gerente_colaborador', 'Gerentes → Colaboradores', 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.'),
       mkGrupo('feedback_colaborador', 'Feedback Reverso', 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.'),
+      mkGrupo('matriz_filial', 'Avaliação das Filiais', 'Notas atribuídas às filiais como unidade nos 7 eixos da competição.'),
     ];
 
-    // KPIs do ciclo (total, avaliados distintos, média geral).
     const todosCrits = criterios.filter(c => avalCiclo.some(a => a.id === c.avaliacao_id));
     const mediaCiclo = todosCrits.length === 0
       ? 0
@@ -766,15 +827,16 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
     return {
       totalAvaliacoes: avalCiclo.length,
-      totalAvaliados: new Set(avalCiclo.map(a => a.avaliado_id)).size,
+      totalAvaliados: new Set([
+        ...avalCiclo.filter(a => a.avaliado_id).map(a => a.avaliado_id!),
+        ...avalCiclo.filter(a => a.avaliada_filial).map(a => a.avaliada_filial!),
+      ]).size,
       mediaCiclo,
       cicloStatus: ciclo?.status ?? 'Aberto',
       grupos,
     };
   }, [podeVerConsolidado, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
 
-  // Export do ciclo inteiro (admin/CEO + RH). Usa o `consolidado` já
-  // calculado em memória — sem nova query — e os critérios já carregados.
   const handleExportarCicloPDF = async () => {
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
     if (!ciclo || !consolidado) return;
@@ -782,26 +844,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     try {
       const slug = ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
       await exportAvaliacoesCicloPDF(
-        {
-          id: ciclo.id,
-          nome: ciclo.nome,
-          data_inicio: ciclo.data_inicio,
-          data_fim: ciclo.data_fim,
-          status: ciclo.status,
-          feedback_anonimo: ciclo.feedback_anonimo,
-        },
-        {
-          totalAvaliacoes: consolidado.totalAvaliacoes,
-          totalAvaliados: consolidado.totalAvaliados,
-          mediaCiclo: consolidado.mediaCiclo,
-          grupos: consolidado.grupos,
-        },
-        criterios.map(c => ({
-          avaliacao_id: c.avaliacao_id,
-          categoria: c.categoria,
-          criterio: c.criterio,
-          nota: c.nota,
-        })),
+        { id: ciclo.id, nome: ciclo.nome, data_inicio: ciclo.data_inicio, data_fim: ciclo.data_fim, status: ciclo.status, feedback_anonimo: ciclo.feedback_anonimo },
+        { totalAvaliacoes: consolidado.totalAvaliacoes, totalAvaliados: consolidado.totalAvaliados, mediaCiclo: consolidado.mediaCiclo, grupos: consolidado.grupos },
+        criterios.map(c => ({ avaliacao_id: c.avaliacao_id, categoria: c.categoria, criterio: c.criterio, nota: c.nota })),
         `avaliacoes-${slug}`,
       );
       showToast?.('PDF do ciclo gerado.', 'success');
@@ -812,20 +857,18 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
     }
   };
 
-  // Export individual de uma avaliação recebida (perspectiva do avaliado).
-  // Respeita anonimato do ciclo em feedback_colaborador.
   const handleExportarAvaliacaoIndividualPDF = async (av: Avaliacao) => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);
     const avaliador = users.find(u => u.id === av.avaliador_id);
-    const avaliado = users.find(u => u.id === av.avaliado_id);
-    if (!ciclo || !avaliado) return;
+    const avaliadoNome = av.avaliada_filial ?? users.find(u => u.id === av.avaliado_id)?.nome ?? '—';
+    if (!ciclo) return;
     const isAnonimo = av.tipo === 'feedback_colaborador' && (ciclo.feedback_anonimo ?? true);
     try {
-      const slug = `${(avaliado.nome ?? 'avaliado').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}-${ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
+      const slug = `${avaliadoNome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}-${ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
       await exportAvaliacaoIndividualPDF(
         {
           avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
-          avaliadoNome: avaliado.nome,
+          avaliadoNome,
           cicloNome: ciclo.nome,
           cicloPeriodo: { inicio: ciclo.data_inicio, fim: ciclo.data_fim },
           tipo: av.tipo,
@@ -850,16 +893,20 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avaliações de Desempenho{filial ? ` — ${filial}` : ' — Todas as Unidades'}</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e acompanhe o consolidado. '}
-          {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
-          {!isRH && isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
-          {!isRH && profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
-          Veja o histórico do que você avaliou e o que recebeu.
-        </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
+            Avaliações de Desempenho{filial ? ` — ${filial}` : ' — Matriz'}
+          </h2>
+          <p className="text-sm text-gray-400 mt-1">
+            {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e filiais, acompanhe o consolidado. '}
+            {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
+            {!isRH && isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
+            {!isRH && profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
+            Veja o histórico do que você avaliou e o que recebeu.
+          </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
+        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0">
+          <ArrowLeft size={13} /> Trocar unidade
+        </button>
       </div>
 
       {/* ── A. CICLOS (admin/CEO) ── */}
@@ -883,6 +930,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-4">Nome</th>
+                    <th className="pb-3 font-bold px-4">Unidade</th>
                     <th className="pb-3 font-bold px-4">Início</th>
                     <th className="pb-3 font-bold px-4">Fim</th>
                     <th className="pb-3 font-bold px-4 text-center">Status</th>
@@ -894,6 +942,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                   {ciclos.map(c => (
                     <tr key={c.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{c.nome}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400">{c.filial}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{fmtData(c.data_inicio)}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{fmtData(c.data_fim)}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={c.status} /></td>
@@ -929,8 +978,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
       {/* ── E. CONSOLIDADO DO CICLO (admin/CEO + RH) ── */}
       {podeVerConsolidado && ciclos.length > 0 && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-          {/* Header com seletor de ciclo + badge de status, bem destacado pra
-              deixar claro que cada ciclo é independente e selecionável. */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <BarChart3 size={16} className="text-accent" />
@@ -950,7 +997,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                 className="neu-input rounded-xl px-3 py-2 text-sm"
               >
                 {ciclos.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
+                  <option key={c.id} value={c.id}>{c.nome} · {c.filial} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
                 ))}
               </select>
               <NeuButtonAccent
@@ -963,7 +1010,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             </div>
           </div>
 
-          {/* Banner explicativo quando o ciclo selecionado está fechado. */}
           {consolidado?.cicloStatus === 'Fechado' && (
             <div className="mb-4 p-3 rounded-xl bg-gray-800/30 border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
               <Lock size={12} className="shrink-0" /> Este ciclo está fechado — nenhuma nova avaliação pode ser registrada nem editada.
@@ -974,7 +1020,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             <EmptyState message="Nenhuma avaliação registrada neste ciclo ainda." />
           ) : (
             <>
-              {/* KPIs do ciclo inteiro (somando todos os tipos). */}
               <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="text-center p-3 rounded-xl neu-pressed">
                   <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliações</p>
@@ -990,8 +1035,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                 </div>
               </div>
 
-              {/* Cada tipo de avaliação ganha sua própria sub-seção. Tipo sem
-                  linhas é omitido pra reduzir ruído visual. */}
               <div className="flex flex-col gap-6">
                 {consolidado.grupos.map(grupo => grupo.linhas.length === 0 ? null : (
                   <div key={grupo.tipo}>
@@ -1011,16 +1054,18 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                         <thead>
                           <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                             <th className="pb-3 font-bold px-2 w-6"></th>
-                            <th className="pb-3 font-bold px-4">Avaliado</th>
-                            <th className="pb-3 font-bold px-4">Role · Setor</th>
+                            <th className="pb-3 font-bold px-4">
+                              {grupo.tipo === 'matriz_filial' ? 'Filial' : 'Avaliado'}
+                            </th>
+                            <th className="pb-3 font-bold px-4">
+                              {grupo.tipo === 'matriz_filial' ? 'Unidade' : 'Role · Setor'}
+                            </th>
                             <th className="pb-3 font-bold px-4 text-center">Avaliações</th>
                             <th className="pb-3 font-bold px-4 text-center">Média</th>
                           </tr>
                         </thead>
                         <tbody>
                           {grupo.linhas.map(l => {
-                            // Linha expandida é única globalmente: prefixa com tipo pra
-                            // evitar colisão quando o mesmo avaliado aparece em > 1 grupo.
                             const linhaKey = `${grupo.tipo}::${l.avaliadoId}`;
                             const aberto = linhaExpandida === linhaKey;
                             return (
@@ -1032,8 +1077,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                                   <td className="py-3 px-2 text-gray-500">
                                     {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                   </td>
-                                  <td className="py-3 px-4 text-sm font-semibold text-gray-200">{l.nome}</td>
-                                  <td className="py-3 px-4 text-xs text-gray-500">{l.role} · {l.setor}</td>
+                                  <td className="py-3 px-4 text-sm font-semibold text-gray-200 flex items-center gap-1.5">
+                                    {grupo.tipo === 'matriz_filial' && <Building2 size={12} className="text-accent shrink-0" />}
+                                    {l.nome}
+                                  </td>
+                                  <td className="py-3 px-4 text-xs text-gray-500">
+                                    {grupo.tipo === 'matriz_filial' ? l.filial : `${l.role} · ${l.setor}`}
+                                  </td>
                                   <td className="py-3 px-4 text-xs font-mono text-center text-gray-300 tabular-nums">{l.qtdAvaliacoes}</td>
                                   <td className="py-3 px-4 text-center">
                                     <span className="text-base font-black text-accent tabular-nums">{l.mediaGeral.toFixed(1)}</span>
@@ -1048,24 +1098,23 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                                           const avObj = avaliacoes.find(a => a.id === pa.avaliacaoId);
                                           const podeEdit = avObj ? podeEditarAvaliacao(avObj) : false;
                                           const pdiAberto = pdiAvaliacaoAberta === pa.avaliacaoId;
-                                          // RH e admin/CEO podem propor PDI sem ter avaliado. Avaliador
-                                          // sempre pode no contexto da avaliação dele (RLS permite).
                                           const podeEditarPDIAqui = isAdminOuCEO || isRH || (avObj?.avaliador_id === profile.id);
+                                          const isFilialEval = grupo.tipo === 'matriz_filial';
                                           return (
                                             <div key={pa.avaliacaoId} className="flex flex-col gap-1 pb-2 border-b border-white/5 last:border-0 last:pb-0">
                                               <div className="flex items-center justify-between text-xs gap-2">
                                                 <span className="text-gray-300">{pa.nome}</span>
                                                 <div className="flex items-center gap-2">
                                                   <span className="font-bold text-gray-200 tabular-nums">{pa.media.toFixed(1)}</span>
-                                                  <button
-                                                    onClick={() => setPdiAvaliacaoAberta(pdiAberto ? null : pa.avaliacaoId)}
-                                                    title={pdiAberto ? 'Fechar PDI' : 'Ver / propor PDI'}
-                                                    className={`h-6 px-2 neu-button rounded-md flex items-center justify-center text-[9px] font-bold uppercase tracking-widest transition-colors ${
-                                                      pdiAberto ? 'text-accent border border-accent/30' : 'text-gray-500 hover:text-accent'
-                                                    }`}
-                                                  >
-                                                    PDI
-                                                  </button>
+                                                  {!isFilialEval && (
+                                                    <button
+                                                      onClick={() => setPdiAvaliacaoAberta(pdiAberto ? null : pa.avaliacaoId)}
+                                                      title={pdiAberto ? 'Fechar PDI' : 'Ver / propor PDI'}
+                                                      className={`h-6 px-2 neu-button rounded-md flex items-center justify-center text-[9px] font-bold uppercase tracking-widest transition-colors ${pdiAberto ? 'text-accent border border-accent/30' : 'text-gray-500 hover:text-accent'}`}
+                                                    >
+                                                      PDI
+                                                    </button>
+                                                  )}
                                                   {podeEdit && avObj && (
                                                     <button
                                                       onClick={() => abrirEdicao(avObj)}
@@ -1075,7 +1124,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                                                       <Pencil size={10} />
                                                     </button>
                                                   )}
-                                                  {avObj && (
+                                                  {avObj && isAdminOuCEO && (
                                                     <button
                                                       onClick={() => excluirAvaliacao(avObj)}
                                                       title="Excluir avaliação"
@@ -1091,7 +1140,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                                                   "{pa.observacao}"
                                                 </p>
                                               )}
-                                              {pdiAberto && (
+                                              {!isFilialEval && pdiAberto && (
                                                 <div className="mt-2 neu-pressed rounded-xl p-3 border border-white/5">
                                                   <PDISection
                                                     avaliacaoId={pa.avaliacaoId}
@@ -1123,7 +1172,52 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         </div>
       )}
 
-      {/* ── B. A FAZER ── */}
+      {/* ── B. AVALIAR FILIAIS (apenas modo Matriz, admin/CEO) ── */}
+      {isMatriz && isAdminOuCEO && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <Building2 size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Avaliar Filiais</h3>
+              <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
+            </div>
+            {cicloMatrizAberto && (
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Ciclo: {cicloMatrizAberto.nome}
+              </span>
+            )}
+          </div>
+
+          {!cicloMatrizAberto ? (
+            <EmptyState message="Nenhum ciclo Matriz aberto. Crie um ciclo com unidade = Matriz para avaliar as filiais." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {FILIAIS_OP.map(f => {
+                const jaAvaliou = filiaisJaAvaliadas.has(f);
+                return (
+                  <button
+                    key={f}
+                    onClick={() => !jaAvaliou && setAvaliando({ ciclo: cicloMatrizAberto, alvo: { kind: 'filial', filial: f } })}
+                    disabled={jaAvaliou}
+                    className={`neu-button rounded-2xl p-5 flex flex-col gap-2 text-left transition-all ${jaAvaliou ? 'opacity-50 cursor-not-allowed' : 'hover:border-accent'}`}
+                    style={{ border: `1px solid ${jaAvaliou ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.05)'}` }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building2 size={16} className={jaAvaliou ? 'text-emerald-500' : 'text-accent'} />
+                      <span className="text-sm font-bold text-gray-200">{f}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${jaAvaliou ? 'text-emerald-500' : 'text-accent'}`}>
+                      {jaAvaliou ? <><CheckCircle2 size={10} /> Avaliada</> : <><Star size={10} /> Avaliar agora</>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── C. A FAZER (avaliações de pessoas) ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
@@ -1144,15 +1238,47 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         </div>
 
         {!cicloAberto ? (
-          <EmptyState message="Nenhum ciclo aberto no momento." />
+          <EmptyState message="Nenhum ciclo de filial aberto no momento." />
         ) : pendentes.length === 0 ? (
           <EmptyState message="Você concluiu todas as suas avaliações deste ciclo. 🎉" />
+        ) : isMatriz && pendentesAgrupadosPorFilial ? (
+          // Modo Matriz: agrupa por filial
+          <div className="flex flex-col gap-6">
+            {Object.entries(pendentesAgrupadosPorFilial).map(([filialGrupo, grupo]) => (
+              <div key={filialGrupo}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 size={12} className="text-accent" />
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{filialGrupo}</span>
+                  <span className="text-[10px] text-gray-600">{grupo.length} pendente(s)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {grupo.map(({ user, tipo }) => (
+                    <button
+                      key={`${user.id}::${tipo}`}
+                      onClick={() => cicloAberto && setAvaliando({ ciclo: cicloAberto, alvo: { kind: 'user', user }, tipo })}
+                      className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
+                      style={{ border: '1px solid rgba(255,255,255,0.05)' }}
+                    >
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                        {user.role} · {user.setor}
+                      </span>
+                      <span className="text-sm font-bold text-gray-200">{user.nome}</span>
+                      <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
+                        <Star size={10} /> Avaliar agora
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          // Modo filial: lista simples
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendentes.map(({ user, tipo }) => (
               <button
                 key={`${user.id}::${tipo}`}
-                onClick={() => setAvaliando({ ciclo: cicloAberto, avaliado: user, tipo })}
+                onClick={() => cicloAberto && setAvaliando({ ciclo: cicloAberto, alvo: { kind: 'user', user }, tipo })}
                 className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
                 style={{ border: '1px solid rgba(255,255,255,0.05)' }}
               >
@@ -1169,7 +1295,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         )}
       </div>
 
-      {/* ── C. AVALIAÇÕES RECEBIDAS ── */}
+      {/* ── D. AVALIAÇÕES RECEBIDAS ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center gap-2 mb-5">
           <Eye size={16} className="text-accent" />
@@ -1194,6 +1320,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                 nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
                 onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
                 canEditarPDI={isAdminOuCEO || isRH}
+                categoriaLabel={clAtivo}
                 profile={profile}
                 treinamentos={treinamentos}
                 showToast={showToast}
@@ -1203,7 +1330,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         )}
       </div>
 
-      {/* ── D. AVALIAÇÕES FEITAS ── */}
+      {/* ── E. AVALIAÇÕES FEITAS ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center gap-2 mb-5">
           <Send size={16} className="text-accent" />
@@ -1230,7 +1357,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
                 onEditar={() => abrirEdicao(f.avaliacao)}
                 canExcluir={isAdminOuCEO}
                 onExcluir={() => excluirAvaliacao(f.avaliacao)}
-                canEditarPDI={isAdminOuCEO || isRH || f.avaliacao.avaliador_id === profile.id}
+                canEditarPDI={!f.isFilialEval && (isAdminOuCEO || isRH || f.avaliacao.avaliador_id === profile.id)}
+                showPDI={!f.isFilialEval}
+                categoriaLabel={f.isFilialEval ? CATEGORIA_LABEL_MATRIZ : clAtivo}
                 profile={profile}
                 treinamentos={treinamentos}
                 showToast={showToast}
@@ -1253,26 +1382,26 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
         {avaliando && (
           <ModalAvaliacao
             ciclo={avaliando.ciclo}
-            avaliado={avaliando.avaliado}
+            alvo={avaliando.alvo}
             tipo={avaliando.tipo}
             onClose={() => setAvaliando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={csAtivo}
-            categoriaLabel={clAtivo}
+            criteriosSet={avaliando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : csAtivo}
+            categoriaLabel={avaliando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : clAtivo}
           />
         )}
         {editando && (
           <ModalAvaliacao
             ciclo={editando.ciclo}
-            avaliado={editando.avaliado}
-            tipo={editando.tipo}
+            alvo={editando.alvo}
+            tipo={editando.tipo as 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador'}
             avaliacaoExistente={editando.avaliacaoExistente}
             onClose={() => setEditando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={csAtivo}
-            categoriaLabel={clAtivo}
+            criteriosSet={editando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : csAtivo}
+            categoriaLabel={editando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : clAtivo}
           />
         )}
       </AnimatePresence>
@@ -1281,6 +1410,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 };
 
 export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const { filialAtiva } = useFilial();
-  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  const { filialAtiva, clearFilial } = useFilial();
+  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={clearFilial} />;
 };
