@@ -17,7 +17,7 @@ import { FilialSelector, type FilialOp } from './components/FilialSelector';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
-  Sun, Moon, Megaphone, ArrowLeft, Monitor, Accessibility,
+  Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers,
 } from 'lucide-react';
@@ -418,7 +418,7 @@ function AccentPicker() {
       onClick={() => setAccentColor(isActive ? 'green' : 'acessivel')}
       className={`neu-button w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${isActive ? 'text-accent' : 'text-gray-400 hover:text-accent'}`}
     >
-      <Accessibility size={16} />
+      <Eye size={16} />
     </button>
   );
 }

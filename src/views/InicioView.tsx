@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { LoadingSpinner } from '../components/ui';
 import { PontoFAB } from '../components/PontoFAB';
 
@@ -26,6 +27,10 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
   // do início refletem só a filial dele. Admin/CEO/Matriz (filialAtiva=null)
   // seguem vendo o consolidado das 3 unidades.
   const { filialAtiva } = useFilial();
+  const { theme } = useTheme();
+  const relogioIcon = theme === 'light'
+    ? '/icon-relogio-central-modoclaro.png'
+    : '/icon-relogio-central.png';
   const filialFilter = filialAtiva ? { filial: filialAtiva } : undefined;
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
   const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview', filialFilter);
@@ -200,7 +205,7 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
           className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden border border-accent/20"
         >
           <div className="flex flex-col items-center justify-center text-center w-full py-4">
-            <img src="/icon-relogio-central.png" alt="Relógio" className="w-40 h-40 object-contain mb-5" />
+            <img src={relogioIcon} alt="Relógio" className="w-40 h-40 object-contain mb-5" />
             <h3 className="text-4xl font-bold text-accent mb-5">Central de Tempo</h3>
 
             <h2 className="text-xl font-semibold text-white leading-snug mb-6">
