@@ -3,7 +3,11 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
+import { useFavorites } from './hooks/useFavorites';
 import { SETOR_MODULES } from './lib/sectorAccess';
+import {
+  SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS, COMPARATIVOS_MATRIZ_MACROS,
+} from './views/SessoesGeraisView';
 import { MATRIZ_ALLOWED_SUBMENUS, MATRIZ_MODULES } from './lib/matrizMenu';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
@@ -57,7 +61,6 @@ const VencimentosEstoqueView  = lazy(() => import('./views/VencimentosEstoqueVie
 const RelatoriosComprasView        = lazy(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
 const RelatoriosEstoqueView        = lazy(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
 const SugestoesComprasView         = lazy(() => import('./views/SugestoesComprasView').then(m => ({ default: m.SugestoesComprasView })));
-const PlanejamentoOrcamentarioView = lazy(() => import('./views/PlanejamentoOrcamentarioView').then(m => ({ default: m.PlanejamentoOrcamentarioView })));
 const GerenciamentoComprasView     = lazy(() => import('./views/GerenciamentoComprasView').then(m => ({ default: m.GerenciamentoComprasView })));
 const GerenciamentoEstoqueView     = lazy(() => import('./views/GerenciamentoEstoqueView').then(m => ({ default: m.GerenciamentoEstoqueView })));
 const RelatoriosFinanceirosView    = lazy(() => import('./views/RelatoriosFinanceirosView').then(m => ({ default: m.RelatoriosFinanceirosView })));
@@ -80,7 +83,6 @@ const FeedbackOrganizacionalView   = lazy(() => import('./views/FeedbackOrganiza
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
-const QRTotemView                  = lazy(() => import('./views/QRTotemView').then(m => ({ default: m.QRTotemView })));
 const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
 const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
@@ -100,7 +102,6 @@ const RegistroPontoExpressView             = lazy(() => import('./views/Registro
 const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
-const OrcamentoCategoriaView               = lazy(() => import('./views/OrcamentoCategoriaView').then(m => ({ default: m.OrcamentoCategoriaView })));
 const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
@@ -114,6 +115,8 @@ const MatrizMarketingView                  = lazy(() => import('./views/MatrizMa
 const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
 const MatrizVotacoesView                   = lazy(() => import('./views/MatrizVotacoesView').then(m => ({ default: m.MatrizVotacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
+const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
+const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
 const RequerimentosView                    = lazy(() => import('./views/RequerimentosView').then(m => ({ default: m.RequerimentosView })));
 const MatrizRequerimentosView              = lazy(() => import('./views/MatrizRequerimentosView').then(m => ({ default: m.MatrizRequerimentosView })));
 
@@ -126,7 +129,7 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Classificações auxiliares', 'Mapeamentos de rateio', 'Tarefas']
+    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Mapeamentos de rateio', 'Tarefas']
   },
   {
     // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
@@ -139,7 +142,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Planejamento orçamentário', 'Orçamento por Categoria', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
@@ -149,16 +152,16 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Centros de custo', 'Patrimônio', 'Previsões', 'Duplicatas',
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Duplicatas',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
-      'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
+      'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Totem QR', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -195,44 +198,7 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   return true;
 };
 
-// ── Seção de comparativos Matriz na sidebar ───────────────────────────────
-// Aparece SOMENTE quando o usuário está em modo Matriz (filialAtiva=null).
-const MATRIZ_NAV_ITEMS = [
-  { id: 'matriz-rh',         label: 'RH Comparativo',         icon: Users },
-  { id: 'matriz-financeiro', label: 'Financeiro Comparativo', icon: DollarSign },
-  { id: 'matriz-logistica',  label: 'Logística Comparativo',  icon: Package },
-  { id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone },
-  { id: 'matriz-operacoes',  label: 'Operações Comparativo',  icon: Monitor },
-  { id: 'matriz-votacoes',   label: 'Votações',               icon: Vote },
-  { id: 'matriz-capital',        label: 'Capital',        icon: Landmark },
-  { id: 'matriz-requerimentos', label: 'Requerimentos',  icon: FileText },
-] as const;
-
-function MatrizSidebarSection({ activeView, navigate, onClose }: { activeView: string; navigate: (v: string) => void; onClose?: () => void }) {
-  return (
-    <>
-      <div className="mt-4 mb-1.5 px-1">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
-          style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
-          <Layers size={10} />
-          Comparativos Matriz
-        </span>
-      </div>
-      {MATRIZ_NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-        const isActive = activeView === id;
-        return (
-          <button key={id} onClick={() => { navigate(id); onClose?.(); }}
-            className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${isActive ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Icon size={16} className={isActive ? 'text-accent' : ''} />
-            <span>{label}</span>
-          </button>
-        );
-      })}
-    </>
-  );
-}
-
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, favorites, isFavorite, toggleFavorite }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -260,16 +226,8 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
-        {(profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') && (
-          <button onClick={() => { navigate('painel-bi'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'painel-bi' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Brain size={18} /><span>Painel de BI</span>
-          </button>
-        )}
-        {(profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)) && (
-          <button onClick={() => { navigate('briefing-diario'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'briefing-diario' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <ListTodo size={18} /><span>Briefing Diário</span>
-          </button>
-        )}
+        {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
+        {/* Em modo filial estão ocultos por design. */}
         {(profile?.role === 'admin' || profile?.role === 'ceo'
           || (profile?.role === 'gerente' && profile?.pode_acessar_usuarios !== false)
           || hasSetor(profile, 'rh')) && (
@@ -281,23 +239,32 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <BookOpen size={18} /><span>Catálogo</span>
         </button>
-        {/* Avaliações: visível para todos os roles — CEO avalia gerentes, gerente avalia equipe, colaborador dá feedback reverso */}
-        <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <Star size={18} /><span>Avaliações</span>
-        </button>
+        {/* Avaliações: só no modo Matriz */}
+        {matrizMode && (
+          <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Star size={18} /><span>Avaliações</span>
+          </button>
+        )}
+        {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
+            No modo filial já foi renderizado acima. */}
         {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
         <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <MessageSquare size={18} /><span>Feedback</span>
         </button>
-        {/* Votações: conselho vê Votações do Conselho; todos veem Votações Totais */}
-        <button onClick={() => { navigate('votacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <Vote size={18} /><span>Votações</span>
-        </button>
-        {/* Requerimentos: todos criam; gerente vê da filial; Matriz analisa */}
-        <button onClick={() => { navigate('requerimentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <FileText size={18} /><span>Requerimentos</span>
-        </button>
-        {/* Metas (Fase 4): colaborador vê próprias; gerente/admin/CEO/RH criam e aprovam — credita bonificação no MaxBank, R$ X dispara folga */}
+        {/* Votações (filial): em Matriz, o hub abaixo usa 'matriz-votacoes'. */}
+        {!matrizMode && (
+          <button onClick={() => { navigate('votacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Vote size={18} /><span>Votações</span>
+          </button>
+        )}
+        {/* Requerimentos (filial): todos criam; gerente vê da filial.
+            Em modo Matriz, o hub abaixo usa 'matriz-requerimentos' — não duplicamos. */}
+        {!matrizMode && (
+          <button onClick={() => { navigate('requerimentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <FileText size={18} /><span>Requerimentos</span>
+          </button>
+        )}
+        {/* Metas — em ambos os modos. No filial, também replica no Acesso Rápido da Início. */}
         <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Target size={18} /><span>Metas</span>
         </button>
@@ -305,9 +272,41 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
 
       <div>
         <div className="flex flex-col gap-1.5">
-          {/* ── Comparativos Matriz — injetado via prop; componente pai resolve filialAtiva ── */}
+          {/* Modo Matriz: 3 hubs top-level (Sessões Gerais, Análise com IA, Comparativos)
+              + Votações/Capital/Requerimentos que continuam na sidebar. */}
           {matrizMode && (
-            <MatrizSidebarSection activeView={activeView} navigate={navigate} onClose={onClose} />
+            <>
+              <div className="mt-4 mb-1.5 px-1">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
+                  style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
+                  <Layers size={10} /> Matriz
+                </span>
+              </div>
+              <button onClick={() => { navigate('sessoes-gerais'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'sessoes-gerais' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <Layers size={16} /><span>Sessões Gerais</span>
+              </button>
+              <button onClick={() => { navigate('analise-ia'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'analise-ia' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <Brain size={16} /><span>Análise com IA</span>
+              </button>
+              <button onClick={() => { navigate('comparativos-matriz'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'comparativos-matriz' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <BarChart3 size={16} /><span>Comparativos Matriz</span>
+              </button>
+              <button onClick={() => { navigate('matriz-votacoes'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <Vote size={16} /><span>Votações</span>
+              </button>
+              <button onClick={() => { navigate('matriz-capital'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <Landmark size={16} /><span>Capital</span>
+              </button>
+              <button onClick={() => { navigate('matriz-requerimentos'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <FileText size={16} /><span>Requerimentos</span>
+              </button>
+            </>
           )}
 
           {visibleModules.map((mod: any) => {
@@ -359,17 +358,29 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             const label = subLabel(sub);
                             const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
                             const isActive = activeView === viewId;
+                            const fav = isFavorite?.(viewId);
                             return (
-                              <button key={label} onClick={() => { navigate(viewId); onClose?.(); }}
-                                className={`nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
-                                style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
-                                <span>{label}</span>
-                                {(badges?.[viewId] ?? 0) > 0 && (
-                                  <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
-                                    {badges[viewId] > 9 ? '9+' : badges[viewId]}
-                                  </span>
+                              <div key={label} className="group relative">
+                                <button onClick={() => { navigate(viewId); onClose?.(); }}
+                                  className={`w-full nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 pr-7 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
+                                  style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
+                                  <span>{label}</span>
+                                  {(badges?.[viewId] ?? 0) > 0 && (
+                                    <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
+                                      {badges[viewId] > 9 ? '9+' : badges[viewId]}
+                                    </span>
+                                  )}
+                                </button>
+                                {toggleFavorite && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleFavorite({ viewId, label }); }}
+                                    className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center transition-opacity ${fav ? 'text-amber-400 opacity-100' : 'text-gray-600 opacity-0 group-hover:opacity-100 hover:text-amber-400'}`}
+                                    title={fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                                  >
+                                    <Star size={11} className={fav ? 'fill-amber-400' : ''} />
+                                  </button>
                                 )}
-                              </button>
+                              </div>
                             );
                           })}
                       </div>
@@ -462,8 +473,7 @@ function LogMaxAppInner() {
         .replace(/^empresa-colaboradores$/,    'rh-funcionários')
         .replace(/^rh-colaboradores$/,         'rh-funcionários')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
-        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
-        .replace(/^empresa-centrosdecusto$/,   'financeiro-centrosdecusto');
+        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores');
       return migrado;
     } catch { return 'inicio'; }
   });
@@ -502,13 +512,14 @@ function LogMaxAppInner() {
   const [perfilFotoOpen, setPerfilFotoOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
-  // Atualiza via realtime (granular por tabela) + fallback no foco da janela.
-  // Não re-fetcha ao navegar — realtime já cobre as mudanças.
-  const badges = useSidebarBadges(profile);
-
   // ── Filial de sessão ── deve ficar ANTES dos early returns para respeitar Rules of Hooks ──
   const { filialAtiva, escolheu, setFilialAtiva, escolherMatriz, clearFilial } = useFilial();
+
+  // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
+  // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
+  // de outras filiais). Modo Matriz (null) vê tudo.
+  const badges = useSidebarBadges(profile, filialAtiva);
+  const { favorites, isFavorite, toggle: toggleFavorite } = useFavorites(profile?.id);
   useEffect(() => {
     if (!profile) return;
     const isGlobal = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
@@ -657,38 +668,32 @@ function LogMaxAppInner() {
   // apenas gerenciamentos/relatórios — operações unit-scoped ficam ocultas.
   const matrizMode = podeEscolherFilial && filialAtiva === null;
   const visibleModules = matrizMode
-    ? allVisibleModules
-        .filter(m => m.id in MATRIZ_ALLOWED_SUBMENUS)
-        .map(m => {
-          const allowed = MATRIZ_ALLOWED_SUBMENUS[m.id];
-          if (allowed === true) return m;
-          if (!Array.isArray(allowed) || allowed.length === 0) return null;
-          return { ...m, submenus: m.submenus.filter((s: any) => {
-            const lbl = typeof s === 'string' ? s : s.label;
-            return (allowed as string[]).includes(lbl);
-          })};
-        })
-        .filter(Boolean)
-    : allVisibleModules;
+    // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,
+    // Análise com IA, Comparativos Matriz). Sidebar top-level fica só com os
+    // hubs + Votações/Capital/Requerimentos (injetados manualmente no SidebarNav).
+    ? []
+    // Em filial: sidebar tradicional com todos os módulos operacionais
+    // (velocidade importa mais que hub aqui). Esconde Empresa e TI —
+    // esses só aparecem em Matriz.
+    : allVisibleModules.filter(m => m.id !== 'empresa' && m.id !== 'ti');
 
   const renderContent = () => {
     const st = showToast;
     switch (activeView) {
-      case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} />;
+      case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} favorites={favorites} toggleFavorite={toggleFavorite} badges={badges} matrizMode={matrizMode} />;
+      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
+      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
+      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-categorias':              return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
-      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Gerencie centros de custo e orçamentos." endpoint="/api/centroscustoview"
-        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-classificaçõesauxiliares': return <GenericCRUDView showToast={st} title="Classificações Auxiliares" subtitle="Gerencie classificações e categorias auxiliares." endpoint="/api/classificacoesauxiliaresview"
-        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CLA-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Categoria A' }, { key: 'tipo', label: 'Tipo', placeholder: 'Ex: Despesa' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-mapeamentosderateio':     return <GenericCRUDView showToast={st} title="Mapeamentos de Rateio" subtitle="Gerencie como custos são rateados entre centros." endpoint="/api/mapeamentosrateioview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Rateio TI' }, { key: 'centros_custo', label: 'Centros de Custo', placeholder: 'Ex: CC-001, CC-002' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
@@ -700,8 +705,6 @@ function LogMaxAppInner() {
       case 'compras-minhasaprovações':        return <AprovacoesComprasView showToast={st} />;
       case 'compras-recebimentos':            return <RecebimentosView showToast={st} />;
       case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} />;
-      case 'compras-planejamentoorçamentário': return <PlanejamentoOrcamentarioView showToast={st} />;
-      case 'compras-orçamentoporcategoria':   return <OrcamentoCategoriaView showToast={st} profile={profile} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
       case 'compras-relatórios':              return <RelatoriosComprasView showToast={st} />;
       case 'estoque-minhasaprovações':        return <AprovacoesEstoqueView showToast={st} />;
@@ -716,12 +719,11 @@ function LogMaxAppInner() {
       case 'financeiro-controledecaixa':      return <ControleCaixaView showToast={st} profile={profile} />;
       case 'financeiro-contasareceber':       return <ContasReceberView showToast={st} />;
       case 'financeiro-contasapagar':         return <ContasPagarView showToast={st} />;
-      case 'financeiro-previsões':            return <GenericCRUDView showToast={st} title="Previsões Financeiras" subtitle="Gerencie previsões de receitas e despesas." endpoint="/api/previsoesview"
-        fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Aluguel Janeiro' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Receita', 'Despesa'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'data', label: 'Data', type: 'date' }, { key: 'status', label: 'Status', type: 'select', options: ['Previsto', 'Realizado', 'Cancelado'] }]} />;
       case 'financeiro-duplicatas':           return <GenericCRUDView showToast={st} title="Duplicatas" subtitle="Gerencie duplicatas a receber e a pagar." endpoint="/api/duplicatasview"
         fields={[{ key: 'numero', label: 'Número', required: true, placeholder: 'Ex: DUP-001' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['A Receber', 'A Pagar'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'vencimento', label: 'Vencimento', type: 'date' }, { key: 'sacado', label: 'Sacado', placeholder: 'Ex: Empresa XYZ' }, { key: 'status', label: 'Status', type: 'select', options: ['Emitida', 'Paga', 'Vencida', 'Cancelada'] }]} />;
       case 'financeiro-patrimônio':           return <PatrimonioView showToast={st} />;
-      case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} />;
+      case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} profile={profile} />;
+      case 'financeiro-capital':               return <FilialCapitalView showToast={st} profile={profile} />;
       case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
@@ -740,7 +742,6 @@ function LogMaxAppInner() {
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-frequênciadetrabalho': return <FrequenciaTrabalhoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
-      case 'rh-totemqr':          return <QRTotemView />;
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
@@ -842,6 +843,7 @@ function LogMaxAppInner() {
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
                 visibleModules={visibleModules} profile={profile} badges={badges}
                 matrizMode={matrizMode}
+                favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
               />
             </motion.aside>
           </>
@@ -856,6 +858,7 @@ function LogMaxAppInner() {
           handleSignOut={handleSignOut}
           visibleModules={visibleModules} profile={profile} badges={badges}
           matrizMode={matrizMode}
+          favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
         />
       </aside>
 

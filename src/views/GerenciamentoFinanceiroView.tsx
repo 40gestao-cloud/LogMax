@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { TrendingUp, TrendingDown, Landmark, FileText, CreditCard, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
+import { Landmark, FileText, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, BancoThumb } from '../components/ui';
@@ -40,8 +40,7 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   }
   const { filialAtiva } = useFilial();
   const ff = filialAtiva ? { filial: filialAtiva } : undefined;
-  // previsoes, duplicatas e caixa_bancos não têm coluna filial — permanecem globais.
-  const { data: previsoes, isLoading: loadingPrev } = useFetchData<any>('/api/previsoesview');
+  // duplicatas e caixa_bancos não têm coluna filial — permanecem globais.
   const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview', ff);
   const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview', ff);
   const { data: duplicatas, isLoading: loadingDup } = useFetchData<any>('/api/duplicatasview');
@@ -49,15 +48,8 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   const { data: clientes } = useFetchData<any>('/api/crmview-clientes', ff);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 
-  const isLoading = loadingPrev || loadingRec || loadingPag || loadingDup || loadingBan;
+  const isLoading = loadingRec || loadingPag || loadingDup || loadingBan;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
-
-  // Previsões
-  const prevReceitas = previsoes.filter((p: any) => p.tipo === 'Receita' && p.status !== 'Cancelado');
-  const prevDespesas = previsoes.filter((p: any) => p.tipo === 'Despesa' && p.status !== 'Cancelado');
-  const prevPrevisto = previsoes.filter((p: any) => p.status === 'Previsto').length;
-  const prevRealizado = previsoes.filter((p: any) => p.status === 'Realizado').length;
-  const prevCancelado = previsoes.filter((p: any) => p.status === 'Cancelado').length;
 
   // Contas a receber
   const recAberto = receber.filter((r: any) => r.status === 'Aberto').length;
@@ -83,20 +75,8 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   // KPIs financeiros
   const totalReceber = receber.filter((r: any) => r.status !== 'Pago').reduce((acc: number, r: any) => acc + Number(r.valor || 0), 0);
   const totalPagar = pagar.filter((p: any) => p.status !== 'Pago').reduce((acc: number, p: any) => acc + Number(p.valor || 0), 0);
-  const totalPrevReceita = prevReceitas.reduce((acc: number, p: any) => acc + Number(p.valor || 0), 0);
-  const totalPrevDespesa = prevDespesas.reduce((acc: number, p: any) => acc + Number(p.valor || 0), 0);
-  const resultadoPrevisto = totalPrevReceita - totalPrevDespesa;
 
   const pipeline = [
-    {
-      icon: TrendingUp, label: 'Previsões', total: previsoes.length,
-      color: 'bg-blue-900/40 text-blue-400',
-      breakdown: [
-        { label: 'Previstas', value: prevPrevisto, cls: prevPrevisto > 0 ? 'text-yellow-400' : 'text-gray-500' },
-        { label: 'Realizadas', value: prevRealizado, cls: 'text-green-400' },
-        { label: 'Canceladas', value: prevCancelado, cls: prevCancelado > 0 ? 'text-red-500' : 'text-gray-500' },
-      ],
-    },
     {
       icon: ArrowUpRight, label: 'A Receber', total: receber.length,
       color: 'bg-green-900/40 text-green-400',
@@ -153,18 +133,11 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gerenciamento Financeiro</h2>
-        <p className="text-sm text-gray-400 mt-1">Visão consolidada do fluxo financeiro — previsões, recebimentos, pagamentos e saldos.</p>
+        <p className="text-sm text-gray-400 mt-1">Visão consolidada do fluxo financeiro — recebimentos, pagamentos e saldos.</p>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Resultado Previsto</p>
-          <p className={`text-xl font-black leading-tight ${resultadoPrevisto >= 0 ? 'text-green-400' : 'text-red-500'}`}>
-            {resultadoPrevisto >= 0 ? '+' : ''}R$ {Math.abs(resultadoPrevisto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-xs text-gray-600 mt-1">receitas − despesas previstas</p>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 shrink-0">
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Total a Receber</p>
           <p className="text-xl font-black text-green-400 leading-tight">

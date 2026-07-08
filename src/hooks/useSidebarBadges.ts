@@ -27,25 +27,21 @@ type BadgeDef = {
   modulo: string;
   table: string;
   filters: Record<string, string>;
-  // Quando informado, usa esse `select` no PostgREST (ex.: `*,pai!inner(col)`)
-  // pra excluir órfãs de tabelas filhas. O count continua exato por causa
-  // do INNER embed: linhas sem match no pai não entram na contagem.
   select?: string;
-  // Tabelas a ouvir via realtime. Default = [table]. Use quando o `select`
-  // depende de outra tabela (ex.: requisições) cujas mudanças também invalidam
-  // a contagem.
   listenTables?: string[];
+  // Coluna de filial na `table` (ou embedded via inner-join no `select`).
+  // Quando o usuário está em modo filial (filialAtiva !== null), aplicamos
+  // .eq(filialColumn, filialAtiva) para não contar pendências de outras filiais.
+  // Em modo Matriz (filialAtiva === null), o filtro é ignorado — vê tudo.
+  filialColumn?: string;
 };
 
 const BADGE_DEFS: BadgeDef[] = [
   // ─── Compras ──────────────────────────────────────────────────────────────
-  { viewId: 'compras-requisições',      modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' } },
-  { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' } },
-  { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' } },
+  { viewId: 'compras-requisições',      modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-recebimentos',     modulo: 'compras',    table: 'recebimentos',         filters: { status: 'Pendente' } },
-  // INNER join com requisicoes pra excluir aprovações Pendente cuja requisição
-  // foi soft-deletada/cancelada (ficavam órfãs e inflavam o badge sem aparecer
-  // na tela — ver feedback_soft_delete_cascade).
   {
     viewId: 'compras-minhasaprovações',
     modulo: 'compras',
@@ -53,11 +49,11 @@ const BADGE_DEFS: BadgeDef[] = [
     filters: { status: 'Pendente', 'requisicoes.ativo': 'true', 'requisicoes.status': 'Pendente' },
     select: '*,requisicoes!inner(id)',
     listenTables: ['aprovacoes_compras', 'requisicoes'],
+    filialColumn: 'filial',
   },
   { viewId: 'compras-tarefas',          modulo: 'compras',    table: 'tarefas',              filters: { modulo: 'compras', status: 'Pendente' } },
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
-  // Mesmo padrão do compras: descarta órfãs de requisições_estoque inativas.
   {
     viewId: 'estoque-minhasaprovações',
     modulo: 'estoque',
@@ -65,21 +61,27 @@ const BADGE_DEFS: BadgeDef[] = [
     filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
     select: '*,requisicoes_estoque!inner(id)',
     listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
+    filialColumn: 'filial',
   },
-  { viewId: 'estoque-requisições',      modulo: 'estoque',    table: 'requisicoes_estoque',  filters: { status: 'Pendente' } },
+  { viewId: 'estoque-requisições',      modulo: 'estoque',    table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' } },
   { viewId: 'estoque-tarefas',          modulo: 'estoque',    table: 'tarefas',              filters: { modulo: 'estoque', status: 'Pendente' } },
 
   // ─── Financeiro ───────────────────────────────────────────────────────────
-  { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' } },
-  { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' } },
+  { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
+  { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
   { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' } },
   // Pedidos de Venda chega no Financeiro pra registrar pagamento. Conta
   // 'Aguardando Separação' como proxy de "pedido aberto" (visível também antes
   // da logística separar, porque cliente pode pagar primeiro).
-  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: { status: 'Aguardando Separação' } },
+  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: { status: 'Aguardando Separação' }, filialColumn: 'filial' },
   { viewId: 'financeiro-tarefas',                modulo: 'financeiro', table: 'tarefas',             filters: { modulo: 'financeiro', status: 'Pendente' } },
+
+  // ─── Metas (top-level, não faz parte de módulo — usa 'all' para passar no gate) ─
+  // Badge = metas estratégicas ativas visíveis (RLS já limita ao setor).
+  // Serve como "avisos" quando a Matriz lança meta nova.
+  { viewId: 'metas',      modulo: 'all', table: 'metas_estrategicas', filters: { status: 'Em Produção' } },
 
   // ─── RH ───────────────────────────────────────────────────────────────────
   { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' } },
@@ -87,16 +89,11 @@ const BADGE_DEFS: BadgeDef[] = [
 
   // ─── Estoque (extra) ──────────────────────────────────────────────────────
   // Pedidos de Venda recém-chegados aguardando logística separar.
-  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: { status: 'Aguardando Separação' } },
+  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: { status: 'Aguardando Separação' }, filialColumn: 'filial' },
 
   // ─── Vendas ───────────────────────────────────────────────────────────────
-  // Orçamento aprovado pelo financeiro: vendas precisa enviar ao cliente.
-  { viewId: 'vendas-orçamentos',     modulo: 'vendas', table: 'orcamentos', filters: { status: 'Aprovado Financeiro' } },
-  // Cliente Especial (admin/CEO simula): badge conta orçamentos aguardando
-  // decisão do cliente. Como o submenu já é gated por requireRole, só admin/CEO
-  // verão o badge — mesmo que o def passe no gate por SETOR_MODULES (que é
-  // por módulo, não por submenu).
-  { viewId: 'vendas-clienteespecial', modulo: 'vendas', table: 'orcamentos', filters: { status: 'Enviado ao Cliente' } },
+  { viewId: 'vendas-orçamentos',     modulo: 'vendas', table: 'orcamentos', filters: { status: 'Aprovado Financeiro' }, filialColumn: 'filial' },
+  { viewId: 'vendas-clienteespecial', modulo: 'vendas', table: 'orcamentos', filters: { status: 'Enviado ao Cliente' }, filialColumn: 'filial' },
   { viewId: 'vendas-tarefas',         modulo: 'vendas', table: 'tarefas',    filters: { modulo: 'vendas', status: 'Pendente' } },
 
   // ─── Marketing ────────────────────────────────────────────────────────────
@@ -137,6 +134,7 @@ const BADGE_DEFS: BadgeDef[] = [
  */
 export function useSidebarBadges(
   profile: UserProfile | null,
+  filialAtiva: string | null = null,
 ): Record<string, number> {
   const [badges, setBadges] = useState<Record<string, number>>({});
 
@@ -148,6 +146,9 @@ export function useSidebarBadges(
   // o valor atual sem precisar re-subscribe a cada mudança de profile.
   const profileRef = useRef(profile);
   useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  const filialAtivaRef = useRef(filialAtiva);
+  useEffect(() => { filialAtivaRef.current = filialAtiva; }, [filialAtiva]);
 
   // ReqId monotônico: descarta respostas obsoletas (ex.: profile mudou no meio
   // do Promise.all). Sem isto, fetchBadges antigo poderia sobrescrever o novo.
@@ -169,7 +170,7 @@ export function useSidebarBadges(
     const allowedModulos = new Set(
       allSetores(p).flatMap(s => SETOR_MODULES[String(s)] ?? []),
     );
-    let eligible = BADGE_DEFS.filter(def => allowedModulos.has(def.modulo));
+    let eligible = BADGE_DEFS.filter(def => def.modulo === 'all' || allowedModulos.has(def.modulo));
     if (onlyTables) {
       // Considera listenTables (default = [table]) — assim mudanças na tabela
       // pai (via inner-join) também disparam re-fetch do badge filho.
@@ -189,6 +190,12 @@ export function useSidebarBadges(
         }
         for (const [col, val] of Object.entries(def.filters)) {
           q = q.eq(col, val);
+        }
+        // Filial-aware: em modo filial, só conta pendências da filial ativa.
+        // Em modo Matriz (filialAtiva=null), vê tudo.
+        const fAtiva = filialAtivaRef.current;
+        if (def.filialColumn && fAtiva) {
+          q = q.eq(def.filialColumn, fAtiva);
         }
         const { count, error } = await q;
         if (error) {
@@ -224,7 +231,7 @@ export function useSidebarBadges(
   // — navegação não dispara queries (realtime cuida das mudanças).
   useEffect(() => {
     fetchBadges();
-  }, [profile?.id, setoresKey, fetchBadges]);
+  }, [profile?.id, setoresKey, filialAtiva, fetchBadges]);
 
   // Effect 2: subscriptions Realtime. Cada evento conhece sua tabela e
   // dispara fetch SÓ dos badges dessa tabela (granularidade fina). Debounce
@@ -237,7 +244,7 @@ export function useSidebarBadges(
     );
     const tables = Array.from(new Set(
       BADGE_DEFS
-        .filter(def => allowedModulos.has(def.modulo))
+        .filter(def => def.modulo === 'all' || allowedModulos.has(def.modulo))
         .flatMap(d => d.listenTables ?? [d.table]),
     ));
 

@@ -197,14 +197,24 @@ const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
   const handleSave = async () => {
     if (!validate()) return;
     setIsSaving(true);
+    const filialTarget = extras.filial || FILIAL_DEFAULT;
     const payload = {
       descricao: form.descricao,
       valor: parseBRL(extras.valor),
       vencimento: extras.vencimento || null,
       fornecedor_id: extras.fornecedor_id || null,
-      filial: extras.filial || FILIAL_DEFAULT,
+      filial: filialTarget,
     };
     try {
+      // Verificar saldo de capital antes de criar nova despesa
+      if (!editItem && filialTarget !== 'Matriz' && supabase) {
+        const { data: saldoData } = await supabase.rpc('calcular_saldo_capital', { p_filial: filialTarget });
+        if (saldoData?.[0]?.bloqueado) {
+          showToast(`Capital de ${filialTarget} esgotado. Solicite empréstimo ou aporte antes de lançar novas despesas.`, 'error', true);
+          setIsSaving(false);
+          return;
+        }
+      }
       if (editItem) {
         const updated = await dbUpdate('/api/contaspagarview', editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));

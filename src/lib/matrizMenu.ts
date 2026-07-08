@@ -15,7 +15,7 @@ export const MATRIZ_ALLOWED_SUBMENUS: Record<string, string[] | true> = {
   estoque:     ['Gerenciamento', 'Relatórios'],
   marketing:   [],                       // ocultado — vive em Comparativo
   vendas:      [],                       // sem PDV em Matriz
-  ti:          [],                       // vive em Comparativo
+  ti:          true,                     // Tecnologia e IA aparece só em Matriz
   cadastros:   ['Produtos', 'Serviços'], // catálogo global
 };
 

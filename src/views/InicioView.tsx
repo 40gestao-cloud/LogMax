@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Star, Target, X } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import {
@@ -22,7 +22,16 @@ import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
-export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string) => void; profile?: UserProfile }) => {
+export const InicioView = ({
+  onNavigate, profile, favorites, toggleFavorite, badges, matrizMode,
+}: {
+  onNavigate?: (view: string) => void;
+  profile?: UserProfile;
+  favorites?: { viewId: string; label: string }[];
+  toggleFavorite?: (fav: { viewId: string; label: string }) => void;
+  badges?: Record<string, number>;
+  matrizMode?: boolean;
+}) => {
   // Escopo por filial ativa: se colaborador/gerente está numa unidade, KPIs
   // do início refletem só a filial dele. Admin/CEO/Matriz (filialAtiva=null)
   // seguem vendo o consolidado das 3 unidades.
@@ -183,21 +192,67 @@ export const InicioView = ({ onNavigate, profile }: { onNavigate?: (view: string
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
         <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5 border border-accent/20">
-          <h3 className="text-lg font-bold text-gray-200 shrink-0">Acesso Rápido</h3>
-          <div className="grid grid-cols-2 gap-3 flex-1">
-            {shortcuts.map(({ label, desc, icon: Icon, view }) => (
+          <h3 className="text-lg font-bold text-gray-200 shrink-0 flex items-center gap-2">
+            <Star size={16} className="text-amber-400 fill-amber-400" /> Acesso Rápido
+          </h3>
+
+          {/* Filial: Metas fixo (aviso quando Matriz lança meta). Matriz: só favoritos. */}
+          <div className="grid grid-cols-2 gap-3 flex-1 auto-rows-min">
+            {!matrizMode && (
               <button
-                key={view}
-                onClick={() => onNavigate?.(view)}
-                className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left hover:border-accent/20 border border-transparent transition-all group"
+                onClick={() => onNavigate?.('metas')}
+                className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left border border-accent/20 hover:border-accent/40 transition-all group relative"
               >
-                <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent/20 transition-colors">
-                  <Icon size={16} />
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent/20 transition-colors">
+                    <Target size={16} />
+                  </div>
+                  {(badges?.['metas'] ?? 0) > 0 && (
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-accent text-black">
+                      {badges['metas']} nova{badges['metas'] > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs font-bold text-gray-200 group-hover:text-white transition-colors leading-tight">{label}</span>
-                <span className="text-[10px] text-gray-600 leading-tight">{desc}</span>
+                <span className="text-xs font-bold text-gray-200 group-hover:text-white transition-colors leading-tight">Metas</span>
+                <span className="text-[10px] text-gray-600 leading-tight">
+                  {(badges?.['metas'] ?? 0) > 0
+                    ? 'Meta lançada pela Matriz — clique para ver'
+                    : 'Suas metas ativas e histórico'}
+                </span>
               </button>
-            ))}
+            )}
+
+            {(favorites ?? []).map(fav => {
+              const b = badges?.[fav.viewId] ?? 0;
+              return (
+                <button
+                  key={fav.viewId}
+                  onClick={() => onNavigate?.(fav.viewId)}
+                  className="neu-button rounded-2xl p-4 flex flex-col gap-2 text-left border border-transparent hover:border-accent/20 transition-all group relative"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-amber-400/10 flex items-center justify-center text-amber-400">
+                      <Star size={14} className="fill-amber-400" />
+                    </div>
+                    {b > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black">
+                        {b > 9 ? '9+' : b}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-gray-200 truncate">{fav.label}</span>
+                  {toggleFavorite && (
+                    <span
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(fav); }}
+                      className="absolute top-2 right-2 w-5 h-5 rounded-md flex items-center justify-center text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      title="Remover dos favoritos"
+                    >
+                      <X size={11} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
