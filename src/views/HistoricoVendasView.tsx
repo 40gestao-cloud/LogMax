@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronDown, X, FileDown, Sheet, Trash2, ArrowLeft } from 'lucide-react';
+import { Search, ChevronDown, X, FileDown, Sheet, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
 import { useAIContext } from '../contexts/AIAssistantContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -193,7 +193,6 @@ const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showT
           </p>
         </div>
         <div className="flex gap-3 items-center flex-wrap w-full sm:w-auto">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           {/* Filtro período */}
           <div className="flex gap-1 neu-flat rounded-xl p-1">
             {(['todos', 'hoje', 'semana'] as const).map(f => (
@@ -319,5 +318,5 @@ const HistoricoVendasViewInner = ({ showToast, filial, onTrocarFilial }: { showT
 export const HistoricoVendasView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <HistoricoVendasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <HistoricoVendasViewInner showToast={showToast} filial={filialAtiva} />;
 };

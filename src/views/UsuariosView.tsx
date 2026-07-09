@@ -8,6 +8,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../com
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { useFilial } from '../contexts/FilialContext';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'Global',
@@ -17,6 +18,7 @@ const SETOR_LABEL: Record<string, string> = {
   rh:         'RH',
   marketing:  'Marketing',
   ti:         'TI',
+  gerencia:   'Gerência',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -37,7 +39,7 @@ const roleCls = (r: string) => {
 };
 
 const setorCls = (s: string) => {
-  const known = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras'];
+  const known = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras', 'gerencia'];
   return `setor-badge--${known.includes(s) ? s : 'default'}`;
 };
 
@@ -52,11 +54,17 @@ const filiaisParaRole = (role: string): readonly string[] =>
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   const { session } = useAuth();
-  // Gerente-RH / gerente com acesso a Usuários só enxerga funcionários da própria
-  // filial. Admin/CEO/Conselheiro (globais) veem tudo — a UI já filtra client-side
-  // por filialFiltro para navegar entre unidades.
+  // Modo filial (filialAtiva setado — inclui gerente/colaborador, sempre
+  // travados na própria unidade) só mostra Admin/CEO/Conselheiro (globais)
+  // + gerente/colaborador da filial ativa. Modo Matriz (filialAtiva null,
+  // só admin/CEO/Conselheiro chegam lá) mostra todos.
+  const { filialAtiva } = useFilial();
+  // Em modo filial (filialAtiva setado) só busca funcionários da unidade
+  // ativa — vale pra gerente/colaborador (sempre travados) e também pra
+  // admin/CEO/Conselheiro operando dentro de uma filial específica. Só em
+  // modo Matriz (filialAtiva null, exclusivo dos globais) busca todos.
   const isGlobalCaller = callerProfile.role === 'admin' || callerProfile.role === 'ceo' || callerProfile.role === 'conselheiro' || (callerProfile.role === 'gerente' && callerProfile.is_conselheiro === true);
-  const funcionariosFilter = isGlobalCaller ? undefined : { filial: callerProfile.filial };
+  const funcionariosFilter = filialAtiva ? { filial: filialAtiva } : (isGlobalCaller ? undefined : { filial: callerProfile.filial });
   const { data: funcionarios } = useFetchData<any>('/api/funcionariosview', funcionariosFilter);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,12 +88,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     role: 'colaborador',
     setor: isGerente ? callerProfile.setor : 'logistica',
     setores_extras: [] as string[],
-    filial: FILIAIS_GERENTE[0] as string,
-  }), [isGerente, callerProfile.setor]);
+    // Gerente não-global só cria colaborador da própria filial — trava aqui
+    // em vez de deixar SuperMax como default e depender do select.
+    filial: (isGerente && !isGlobal ? callerProfile.filial : FILIAIS_GERENTE[0]) as string,
+  }), [isGerente, isGlobal, callerProfile.setor, callerProfile.filial]);
 
   // Setores válidos para extras (mesma lista do backend; sem 'all').
   const SETORES_EXTRAS_DISPONIVEIS: string[] = [
-    'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti',
+    'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia',
   ];
 
   const [form, setForm] = useState<any>(emptyForm);
@@ -244,9 +254,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isGlobalRole = (u: UserProfile) =>
+    u.role === 'admin' || u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true);
+
   // Filtragem por filial e setor (lista do banco já filtrada por setor para gerente).
   // Setor casa primário OU extras — `all` (CEO/admin) sempre passa em qualquer filtro.
   const filteredUsers = users.filter(u => {
+    // Modo filial: só globais (admin/CEO/conselheiro) + gerente/colaborador
+    // da própria filial ativa — nada de outra unidade aparece.
+    if (filialAtiva && !isGlobalRole(u) && (u.filial ?? FILIAL_DEFAULT) !== filialAtiva) return false;
     if (filialFiltro !== 'todas' && (u.filial ?? FILIAL_DEFAULT) !== filialFiltro) return false;
     if (setorFiltro !== 'todos') {
       const setores = [u.setor, ...(u.setores_extras ?? [])];
@@ -448,7 +464,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const setorOptions = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+  const setorOptions = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
 
   // Admin pode criar CEO/gerente/colaborador. CEO pode criar gerente/colaborador.
   // Gerente só cria colaborador.
@@ -482,15 +498,23 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex flex-wrap gap-2">
-          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
-            className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
-            <option value="todas">Todas filiais</option>
-            {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          {/* Em modo filial o escopo já é travado pela unidade ativa — o
+              seletor manual só faz sentido em modo Matriz (consolidado). */}
+          {filialAtiva ? (
+            <div className="neu-pressed py-2.5 px-3 rounded-xl text-sm text-gray-400 flex items-center gap-1.5" title="Filial ativa">
+              <FilialBadge filial={filialAtiva} />
+            </div>
+          ) : (
+            <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+              className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
+              <option value="todas">Todas filiais</option>
+              {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          )}
           <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
             className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por setor">
             <option value="todos">Todos setores</option>
-            {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'].map(s => (
+            {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'].map(s => (
               <option key={s} value={s}>{SETOR_LABEL[s]}</option>
             ))}
           </select>
@@ -591,12 +615,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               </div>
 
               {/* Filial / Unidade — colaborador/gerente não podem atribuir Matriz
-                  (FilialContext bloqueia login com Matriz para não-globais). */}
+                  (FilialContext bloqueia login com Matriz para não-globais).
+                  Gerente não-global fica travado na própria filial — não cobre
+                  outras unidades (regra de negócio). */}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="user-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
                 <select id="user-filial" value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {filiaisParaRole(form.role).map(f => <option key={f} value={f}>{f}</option>)}
+                  disabled={isGerente && !isGlobal}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
             </div>
@@ -701,7 +728,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                           className="neu-input rounded-lg px-2 py-1.5 text-xs w-full max-w-[160px]"
                         >
                           <option value="">Sem vínculo</option>
-                          {funcionarios.map((f: any) => (
+                          {funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => (
                             <option key={f.id} value={f.id}>{f.nome}</option>
                           ))}
                         </select>
@@ -902,7 +929,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
                     disabled={editForm.role === 'ceo' || editForm.role === 'conselheiro'}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'].map(s => (
+                    {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'].map(s => (
                       <option key={s} value={s}>{SETOR_LABEL[s]}</option>
                     ))}
                     {(editForm.role === 'ceo' || editForm.role === 'conselheiro') && <option value="all">{SETOR_LABEL.all}</option>}
@@ -935,13 +962,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 </div>
 
                 {/* Filial — colaborador/gerente não podem ser Matriz
-                    (FilialContext bloqueia login com Matriz para não-globais). */}
+                    (FilialContext bloqueia login com Matriz para não-globais).
+                    Gerente não-global só edita/mantém a própria filial. */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="user-edit-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
                   <select id="user-edit-filial" value={editForm.filial}
                     onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    {filiaisParaRole(editForm.role).map(f => (
+                    disabled={isGerente && !isGlobal}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                    {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
                       <option key={f} value={f}>{f}</option>
                     ))}
                   </select>

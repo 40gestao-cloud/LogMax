@@ -126,5 +126,5 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 export const NotasRecebidasView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <NotasRecebidasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <NotasRecebidasViewInner showToast={showToast} filial={filialAtiva} />;
 };

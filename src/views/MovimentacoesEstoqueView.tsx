@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2, ArrowLeft } from 'lucide-react';
+import { Search, Plus, Save, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview', { filial });
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
@@ -75,7 +75,6 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { 
           <p className="text-sm text-gray-400 mt-1">Entradas, saídas e ajustes de estoque.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -177,5 +176,5 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { 
 export const MovimentacoesEstoqueView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
 };

@@ -698,6 +698,7 @@ table,
 .setor-badge--marketing,
 .setor-badge--ti,
 .setor-badge--compras,
+.setor-badge--gerencia,
 .setor-badge--default { background: rgba(148,163,184,0.18); color: #cbd5e1; border-color: rgba(148,163,184,0.35) !important; }
 
 [data-theme="light"] .setor-badge--logistica,
@@ -707,6 +708,7 @@ table,
 [data-theme="light"] .setor-badge--marketing,
 [data-theme="light"] .setor-badge--ti,
 [data-theme="light"] .setor-badge--compras,
+[data-theme="light"] .setor-badge--gerencia,
 [data-theme="light"] .setor-badge--default { background: #e2e8f0; color: #334155; border-color: #94a3b8 !important; }
 
 /* ── Sidebar (menu esquerdo) sempre em dark mode ──
@@ -1552,3 +1554,95 @@ html.theme-switching *::after {
   border-top: 1px solid rgba(255,255,255,0.08);
   margin: 1.5rem 0;
 }
+
+/* ── PDV MaxLook / TechMax em fundo claro ─────────────────────────────
+   O PDV foi escrito assumindo dark bg (text-gray-100/200 pra texto principal,
+   bg-black/xx em superfícies, border-white/5 em bordas). Quando ativamos o
+   tema claro escopado por filial (Boutique / Loja & Assistência), invertemos
+   esses valores só dentro do wrapper .pdv-filial-light — sem tocar em cada
+   JSX. As variáveis --color-bg-base / --color-accent seguem sendo definidas
+   inline no wrapper conforme a paleta da unidade.                        */
+.pdv-filial-light {
+  color: #171717;
+}
+.pdv-filial-light .text-white,
+.pdv-filial-light .text-gray-100,
+.pdv-filial-light .text-gray-200,
+.pdv-filial-light .text-gray-300 { color: #0A0A0A !important; }
+.pdv-filial-light .text-gray-400 { color: #171717 !important; }
+.pdv-filial-light .text-gray-500 { color: #404040 !important; }
+.pdv-filial-light .text-gray-600 { color: #525252 !important; }
+.pdv-filial-light .text-gray-700 { color: #a3a3a3 !important; }
+
+.pdv-filial-light .bg-black\/30,
+.pdv-filial-light .bg-black\/40 { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+.pdv-filial-light .border-white\/5  { border-color: rgba(0, 0, 0, 0.18) !important; }
+.pdv-filial-light .border-white\/10 { border-color: rgba(0, 0, 0, 0.24) !important; }
+
+/* neu-* escopado — no tema claro do PDV, superfícies são branco com sombra
+   sutil e borda fina cinza, mantendo o design flat que o app já usa. */
+.pdv-filial-light .neu-flat,
+.pdv-filial-light .neu-button,
+.pdv-filial-light .neu-pressed,
+.pdv-filial-light .neu-input {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.14) !important;
+}
+/* neu-flat = card do carrinho / painel de totais → elevação de "papel" pra
+   separar do fundo. Sombra pronunciada abaixo + halo topo pra bater luz. */
+.pdv-filial-light .neu-flat    {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06),
+              0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+.pdv-filial-light .neu-button  { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important; }
+.pdv-filial-light .neu-pressed { box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08) !important; }
+.pdv-filial-light .neu-input   { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06) !important; }
+.pdv-filial-light .neu-button:hover   { background: #f5f5f5 !important; border-color: rgba(0, 0, 0, 0.22) !important; }
+.pdv-filial-light .neu-button:active  { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08) !important; }
+
+/* Input do PDV em tema claro: texto preto legível + placeholder cinza médio.
+   A regra base .neu-input tem `color: var(--color-text-primary)` que herda o
+   valor DARK (#e0e0e0) porque não trocamos o data-theme do wrapper. Força
+   #0a0a0a aqui e placeholder legível em ambos os inputs de PDV. */
+.pdv-filial-light .neu-input,
+.pdv-filial-light input,
+.pdv-filial-light textarea,
+.pdv-filial-light select {
+  color: #0a0a0a !important;
+  --tw-placeholder-opacity: 1;
+}
+.pdv-filial-light .neu-input::placeholder,
+.pdv-filial-light input::placeholder,
+.pdv-filial-light textarea::placeholder { color: #737373 !important; opacity: 1; }
+
+.pdv-filial-light .neu-input:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.06),
+              0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+}
+
+/* Preserva o texto legível no header preto — ele já tem override próprio,
+   mas inputs raros dentro do header (nenhum hoje, mas robustez) precisam
+   voltar pra cor clara. */
+.pdv-filial-header input,
+.pdv-filial-header select { color: #f5f5f5 !important; }
+
+/* Header do PDV mantém identidade preta (contraste com corpo branco):
+   .pdv-filial-header sobrescreve o wrapper .pdv-filial-light e força
+   texto claro sobre fundo preto. Necessário porque o texto default no
+   .pdv-filial-light é #171717.                                              */
+.pdv-filial-header { color: #f5f5f5 !important; }
+.pdv-filial-header .text-white,
+.pdv-filial-header .text-gray-100,
+.pdv-filial-header .text-gray-200,
+.pdv-filial-header .text-gray-300 { color: #f5f5f5 !important; }
+.pdv-filial-header .text-gray-400 { color: #d4d4d4 !important; }
+.pdv-filial-header .text-gray-500 { color: #a3a3a3 !important; }
+.pdv-filial-header .neu-button {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: none !important;
+}
+.pdv-filial-header .neu-button:hover { background: rgba(255, 255, 255, 0.10) !important; }
+

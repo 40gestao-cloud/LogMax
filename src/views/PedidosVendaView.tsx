@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -11,7 +11,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
-const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
@@ -101,7 +101,6 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
             Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.
           </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
@@ -210,5 +209,5 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
 export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

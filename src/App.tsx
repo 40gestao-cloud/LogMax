@@ -748,7 +748,7 @@ function LogMaxAppInner() {
       case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;
       case 'rh-gerenciamento':    return <GerenciamentoRHView />;
       case 'rh-relatórios':       return <RelatoriosRHView showToast={st} />;
-      case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} />;
+      case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} filialAtiva={filialAtiva} />;
       case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;

@@ -79,8 +79,12 @@ export const PDVViewSupermax = ({
 }: PDVViewSupermaxProps) => {
   const { user } = useAuth();
   const filial = 'SuperMax' as const;
-  const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', undefined, true);
-  const { data: clientes } = useFetchData<any>('/api/crmview');
+  // Filtrado por filial (+ Matriz, pra cadastros legados sem prefixo SM-) na
+  // própria query — não deixa produto de MaxLook/TechMax trafegar pro browser
+  // do operador SuperMax. Filtro client-side abaixo (produtosDisponiveis)
+  // continua como rede de segurança pro caso raro de filial nula.
+  const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', { filial: [filial, 'Matriz'] }, true);
+  const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
 
   const [code, setCode]                 = useState('');
   const [cart, setCart]                 = useState<CartItem[]>([]);

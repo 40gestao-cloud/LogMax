@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
+import { Plus, X, ChevronRight, ChevronDown, AlertCircle, Sparkles } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { FilialOp } from '../components/FilialSelector';
@@ -40,7 +40,7 @@ type TarefasViewProps = {
   modulo: 'empresa' | 'compras' | 'estoque' | 'financeiro' | 'rh' | 'vendas';
 };
 
-const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }: TarefasViewProps & { filial: FilialOp; onTrocarFilial: () => void }) => {
+const TarefasViewInner = ({ showToast, profile, modulo, filial }: TarefasViewProps & { filial: FilialOp }) => {
   // Filtra por módulo E filial no servidor — a tabela `tarefas` é compartilhada.
   const filter = useMemo(() => ({ modulo, filial }), [modulo, filial]);
   const { data: tarefas, setData, isLoading } = useFetchData<any>('/api/tarefasview', filter);
@@ -135,7 +135,6 @@ const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }
             Demandas para a equipe — fluxo: Pendente → Ciente → Em Andamento → Concluído.
           </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -293,5 +292,5 @@ const TarefasViewInner = ({ showToast, profile, modulo, filial, onTrocarFilial }
 export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filialAtiva} />;
 };

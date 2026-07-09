@@ -3,7 +3,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy, ArrowLeft,
+  Monitor, X, Plus, Loader2, Check, ChevronRight, LifeBuoy,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -70,7 +70,7 @@ type TIViewProps = {
   profile: UserProfile;
 };
 
-const TIViewInner = ({ showToast, profile, filial, onTrocarFilial }: TIViewProps & { filial: FilialOp; onTrocarFilial: () => void }) => {
+const TIViewInner = ({ showToast, profile, filial }: TIViewProps & { filial: FilialOp }) => {
   const { accentColor } = useTheme();
 
   // RLS já restringe: TI/admin vê tudo, demais setores só veem os próprios.
@@ -199,7 +199,6 @@ const TIViewInner = ({ showToast, profile, filial, onTrocarFilial }: TIViewProps
               <p className="text-sm text-gray-400 mt-0.5">Painel da equipe de TI — chamados de todos os setores.</p>
             </div>
           </div>
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
@@ -291,7 +290,6 @@ const TIViewInner = ({ showToast, profile, filial, onTrocarFilial }: TIViewProps
           <p className="text-sm text-gray-400 mt-0.5">Abra um chamado para a equipe de TI resolver o seu problema.</p>
         </div>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {/* CTA principal */}
@@ -607,5 +605,5 @@ function SetorChamadosModal({ setorId, setorColor, chamados, updatingId, onClose
 export const TIView = ({ showToast, profile }: TIViewProps) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <TIViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <TIViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, ArrowLeft, Building2, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -462,7 +462,7 @@ const CardAvaliacao: React.FC<{
 // View principal
 // ----------------------------------------------------------------------
 
-const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp | null; onTrocarFilial: () => void }) => {
+const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp | null }) => {
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -1034,9 +1034,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
             Veja o histórico do que você avaliou e o que recebeu.
           </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0">
-          <ArrowLeft size={13} /> Trocar unidade
-        </button>
       </div>
 
       {/* ── A. CICLOS (admin/CEO) ── */}
@@ -1690,6 +1687,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { s
 };
 
 export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  const { filialAtiva, clearFilial } = useFilial();
-  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={clearFilial} />;
+  const { filialAtiva } = useFilial();
+  return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

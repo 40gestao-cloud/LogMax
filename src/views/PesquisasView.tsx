@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText, ArrowLeft } from 'lucide-react';
+import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -26,7 +26,7 @@ const EMPTY_FORM = {
 
 const EMPTY_PERGUNTA = { tipo: 'escala' as 'escala' | 'texto', enunciado: '', obrigatoria: true };
 
-const PesquisasViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
   const { data: pesquisas, setData, isLoading, reload } = useFetchData<any>('/api/pesquisasview', { filial });
 
   const [showForm, setShowForm]         = useState(false);
@@ -123,7 +123,6 @@ const PesquisasViewInner = ({ showToast, profile, filial, onTrocarFilial }: any)
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pesquisas — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Crie pesquisas de clima, satisfação ou feedback e acompanhe os resultados.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -529,5 +528,5 @@ export const PesquisasView = ({ showToast, profile }: any) => {
     );
   }
   if (!filialAtiva) return null;
-  return <PesquisasViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <PesquisasViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

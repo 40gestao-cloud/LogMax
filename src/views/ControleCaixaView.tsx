@@ -26,10 +26,11 @@ const fmtData = (str: string) => {
   return `${d}/${m}/${y}`;
 };
 
-// Quem opera caixa de QUALQUER filial: admin, CEO e gerente cobrem cross-filial.
-// Colaborador fica travado na própria filial pra evitar abertura indevida em outra unidade.
+// Quem opera caixa de QUALQUER filial: só admin, CEO e Conselheiro (modo Matriz).
+// Gerente e colaborador ficam travados na própria filial — gerente não cobre
+// outras unidades (regra de negócio).
 const podeOperarTodasFiliais = (profile: UserProfile | null | undefined): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
+  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
 // Cada filial tem seu próprio card de status + abertura/fechamento.
 // Extraído porque o ControleCaixaView pode renderizar 1, 2 ou 3 deles dependendo

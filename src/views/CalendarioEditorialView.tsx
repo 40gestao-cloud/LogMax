@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
@@ -95,7 +95,7 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
   };
 };
 
-const CalendarioEditorialViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   const { session } = useAuth();
   const confirm = useConfirm();
   const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview', { filial });
@@ -300,7 +300,6 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial, onTrocarFili
             Agenda de posts por canal × data × responsável × status. Planeje a semana antes de produzir as artes.
           </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -586,5 +585,5 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial, onTrocarFili
 export const CalendarioEditorialView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CalendarioEditorialViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CalendarioEditorialViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

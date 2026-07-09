@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -52,7 +52,7 @@ const fmtBRL = (n: number) =>
 const sanitizeCodigo = (s: string) =>
   s.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
 
-const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: cupons, setData, isLoading } = useFetchData<Cupom>('/api/marketingcuponsview', { filial });
   const confirm = useConfirm();
   const { data: campanhas } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial });
@@ -199,10 +199,6 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }
             Códigos promocionais aplicáveis no PDV. Use cupom percentual ou valor fixo, com limite de usos e validade.
           </p>
         </div>
-        <button onClick={onTrocarFilial}
-          className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
-          <ArrowLeft size={14} /> Trocar unidade
-        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -433,5 +429,5 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }
 export const CuponsMarketingView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CuponsMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CuponsMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

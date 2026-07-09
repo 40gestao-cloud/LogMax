@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, ArrowLeft } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -21,7 +21,7 @@ const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone:
 const normSort = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-const FuncionariosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', { filial }, false, { orderBy: 'nome', ascending: true });
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -158,10 +158,6 @@ const FuncionariosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Funcionários — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie o quadro de funcionários da unidade.</p>
         </div>
-        <button onClick={onTrocarFilial}
-          className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
-          <ArrowLeft size={14} /> Trocar unidade
-        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -346,5 +342,5 @@ const FuncionariosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
 
 export const FuncionariosView = ({ showToast }: any) => {
   const { filialAtiva: filial } = useFilial();
-  return <FuncionariosViewInner showToast={showToast} filial={filial} onTrocarFilial={() => {}} />;
+  return <FuncionariosViewInner showToast={showToast} filial={filial} />;
 };

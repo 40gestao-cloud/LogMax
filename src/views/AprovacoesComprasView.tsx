@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, ArrowLeft } from 'lucide-react';
+import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -12,7 +12,7 @@ type ShowToast = (msg: string, type: string, persist?: boolean) => void;
 
 type EnrichedAp = AprovacaoCompras & { req: Requisicao };
 
-const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: ShowToast; filial: FilialOp; onTrocarFilial: () => void }) => {
+const AprovacoesComprasViewInner = ({ showToast, filial }: { showToast: ShowToast; filial: FilialOp }) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
   const { data: requisicoes, isLoading: loadingReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -89,7 +89,6 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Requisições de compra aguardando sua decisão.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
@@ -184,5 +183,5 @@ const AprovacoesComprasViewInner = ({ showToast, filial, onTrocarFilial }: { sho
 export const AprovacoesComprasView = ({ showToast }: { showToast: ShowToast }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <AprovacoesComprasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <AprovacoesComprasViewInner showToast={showToast} filial={filialAtiva} />;
 };

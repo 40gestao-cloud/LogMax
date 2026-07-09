@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Buscar perfil do chamador
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor, pode_acessar_usuarios')
+      .select('role, setor, filial, pode_acessar_usuarios')
       .eq('id', caller.id)
       .single();
 
@@ -57,8 +57,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Setores válidos (mesma lista do CHECK no banco).
     // Primários: mapeiam para SETOR_MODULES em src/lib/sectorAccess.ts.
     // Extras: aceitam compras/estoque como acesso adicional (UI de badges).
-    const VALID_SETORES         = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
-    const VALID_SETORES_EXTRAS  = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras', 'estoque'];
+    const VALID_SETORES         = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
+    const VALID_SETORES_EXTRAS  = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras', 'estoque', 'gerencia'];
     let extras: string[] = [];
     if (Array.isArray(setores_extras)) {
       // Dedup + filtra inválidos + remove o primário.
@@ -100,14 +100,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Remove o primário da lista de extras (defesa contra UI desalinhada).
     extras = extras.filter(s => s !== setor);
 
+    // Setor 'gerencia' não existe nas tabelas de dados (RLS não conhece esse
+    // valor) — é só o rótulo do cargo gerente, que antes não tinha setor
+    // próprio. O acesso real "vê tudo da filial" vem de setores_extras com
+    // os 6 setores operacionais, preenchido aqui automaticamente (não passa
+    // pelo gate de permissão de extras acima — é derivado, não escolhido).
+    if (setor === 'gerencia') {
+      extras = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+    }
+
     // Apenas admin pode criar outro admin (defesa em profundidade).
     if (role === 'admin' && callerProfile.role !== 'admin') {
       log.warn('user.permission_denied', { caller_id: caller.id, caller_role: callerProfile.role, target_role: role, reason: 'non_admin_creating_admin' });
       return res.status(403).json({ error: 'Apenas administradores podem criar administradores.' });
     }
 
-    // Gerente só pode criar colaboradores (qualquer setor).
-    // Filial: pode atribuir SuperMax/MaxLook/TechMax, mas não Matriz (reservada a admin/CEO).
+    // Gerente só pode criar colaboradores (qualquer setor), presos à própria
+    // filial — gerente não cobre outras unidades (regra de negócio: cada
+    // filial gerencia seus próprios colaboradores).
     if (callerProfile.role === 'gerente') {
       if (role !== 'colaborador') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_role: role, reason: 'gerente_role_mismatch' });
@@ -115,9 +125,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       // Sem filial explícita cairia no default do schema ('Matriz'), por isso checamos ambos os casos.
       const targetFilial = (typeof filial === 'string' ? filial.trim() : '') || 'Matriz';
-      if (targetFilial === 'Matriz') {
-        log.warn('user.permission_denied', { caller_id: caller.id, target_filial: targetFilial, reason: 'gerente_matriz_forbidden' });
-        return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
+      if (targetFilial !== callerProfile.filial) {
+        log.warn('user.permission_denied', { caller_id: caller.id, target_filial: targetFilial, caller_filial: callerProfile.filial, reason: 'gerente_outra_filial' });
+        return res.status(403).json({ error: 'Gerentes só podem criar colaboradores da própria filial.' });
       }
     }
 

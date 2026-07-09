@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { hasSetor, isConselheiro } from '../lib/rbac';
@@ -393,8 +393,8 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
 }
 
 // ── View principal ────────────────────────────────────────────────────────────
-const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial }: {
-  profile: any; showToast: any; filial: FilialOp; onTrocarFilial: () => void;
+const CategoriasProdutoViewInner = ({ profile, showToast, filial }: {
+  profile: any; showToast: any; filial: FilialOp;
 }) => {
   const [selectedCatId,   setSelectedCatId]   = useState<string | null>(null);
   const confirm = useConfirm();
@@ -412,10 +412,6 @@ const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial
             {canEdit ? ' Restrito a Logística / Admin / CEO.' : ''}
           </p>
         </div>
-        <button onClick={onTrocarFilial}
-          className="neu-button py-2 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
-          <ArrowLeft size={14} /> Trocar unidade
-        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -442,5 +438,5 @@ const CategoriasProdutoViewInner = ({ profile, showToast, filial, onTrocarFilial
 export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filialAtiva} />;
 };

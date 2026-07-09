@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -68,7 +68,7 @@ const diasNoPeriodo = (ini: string, fim: string): number => {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 };
 
-const AfastamentosViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview', { filial });
   const confirm = useConfirm();
   const { data: funcionarios } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
@@ -178,7 +178,6 @@ const AfastamentosViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
             Registre atestados, licenças e faltas justificadas. O ponto eletrônico recebe automaticamente o status <strong className="text-gray-300">Justificado</strong> nos dias do período.
           </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -362,5 +361,5 @@ const AfastamentosViewInner = ({ showToast, profile, filial, onTrocarFilial }: {
 export const AfastamentosView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <AfastamentosViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <AfastamentosViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -69,7 +69,7 @@ const StarRow: React.FC<{ value: number; onChange?: (v: number) => void; size?: 
   </div>
 );
 
-const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+const ArtesPromocionaisViewInner = ({ showToast, profile, filial }: any) => {
   const { data: artes, isLoading, error: artesError } = useFetchData<Arte>('/api/marketingartesview', { filial }, true);
   const { data: feedbacks, setData: setFeedbacks } = useFetchData<Feedback>('/api/marketingartefeedbackview', undefined, true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -152,7 +152,6 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial
             : 'Apenas gerentes, admin e CEO podem dar feedback.'}
         </p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {artesError || artes.length === 0 ? (
@@ -323,5 +322,5 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial, onTrocarFilial
 export const ArtesPromocionaisView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <ArtesPromocionaisViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <ArtesPromocionaisViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

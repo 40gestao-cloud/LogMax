@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Loader2, Trash2, ArrowLeft } from 'lucide-react';
+import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', { filial }, undefined, { page });
@@ -122,7 +122,6 @@ const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: an
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Compra — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Pedidos gerados automaticamente a partir de cotações aprovadas.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhum pedido. Aprove uma cotação para gerar o primeiro pedido." /> : (
@@ -196,5 +195,5 @@ const PedidosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: an
 export const PedidosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <PedidosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <PedidosViewInner showToast={showToast} filial={filialAtiva} />;
 };

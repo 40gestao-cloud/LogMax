@@ -17,4 +17,10 @@ export const SETOR_MODULES: Record<string, string[]> = {
   rh:         ['empresa', 'rh', 'ti'],
   marketing:  ['empresa', 'marketing', 'ti'],
   ti:         ['empresa', 'ti'],
+  // Gerência: setor do cargo gerente (antes só existia o role, sem setor
+  // próprio). Vê tudo da própria filial — mesma abrangência de 'all', mas
+  // sem ser role global. O acesso real (RLS) vem de setores_extras com os
+  // 6 setores operacionais, preenchido automaticamente pelo backend
+  // (api/create-user.ts, api/update-user.ts) sempre que setor='gerencia'.
+  gerencia:   ['empresa', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
 };

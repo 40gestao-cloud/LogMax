@@ -86,7 +86,7 @@ const getDaysInRange = (start: string, end: string): string[] => {
 
 const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
-const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilial }: any) => {
+const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   const { user } = useAuth();
   // frequencia_trabalho e justificativas_falta não têm coluna `filial` (o
   // escopo por filial vem do funcionário via join client-side). Passar
@@ -662,5 +662,5 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, onTrocarFilia
 export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   // filialAtiva===null = modo Matriz → passa null para mostrar todas as filiais
-  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

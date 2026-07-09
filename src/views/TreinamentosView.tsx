@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check, ArrowLeft } from 'lucide-react';
+import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -98,7 +98,7 @@ const FuncPicker: React.FC<{
   );
 };
 
-const TreinamentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data: treinamentos, setData, isLoading } = useFetchData<any>('/api/treinamentosview', { filial });
   const confirm = useConfirm();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
@@ -321,7 +321,6 @@ const TreinamentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Treinamentos — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie treinamentos internos e externos.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2 shrink-0"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -503,5 +502,5 @@ const TreinamentosViewInner = ({ showToast, filial, onTrocarFilial }: { showToas
 export const TreinamentosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <TreinamentosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <TreinamentosViewInner showToast={showToast} filial={filialAtiva} />;
 };

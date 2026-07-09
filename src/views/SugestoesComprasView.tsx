@@ -263,5 +263,5 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
 export const SugestoesComprasView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <SugestoesComprasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <SugestoesComprasViewInner showToast={showToast} filial={filialAtiva} />;
 };

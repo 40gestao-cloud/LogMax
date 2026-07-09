@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -255,7 +255,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 }
 
 // ── View Principal ────────────────────────────────────────────────────────────
-const CampanhasMarketingViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial });
   const confirm = useConfirm();
   const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview', { orderBy: 'data_inicio', ascending: false });
@@ -377,10 +377,6 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial, onTrocarFilia
               Planeje campanhas com orçamento e período, acompanhe ROI cruzando vendas no período e cupons usados.
             </p>
           </div>
-          <button onClick={onTrocarFilial}
-            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5 shrink-0">
-            <ArrowLeft size={14} /> Trocar unidade
-          </button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -577,5 +573,5 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial, onTrocarFilia
 export const CampanhasMarketingView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CampanhasMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CampanhasMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

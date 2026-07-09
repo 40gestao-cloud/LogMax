@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, FileDown, Sheet, Package, MapPin, User as UserIcon, Tag, ArrowLeft } from 'lucide-react';
+import { Search, FileDown, Sheet, Package, MapPin, User as UserIcon, Tag } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, FilialBadge, StatusBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -19,7 +19,7 @@ const fmtData = (s: string | null | undefined) => {
 const parseNum = (v: string | number | undefined | null): number =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;
 
-const PatrimonioViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onTrocarFilial: () => void }) => {
+const PatrimonioViewInner = ({ filial }: { filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -68,7 +68,6 @@ const PatrimonioViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onT
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           {data.length > 0 && (
             <>
               <ExportButton label="PDF" onClick={handleExportPDF} icon={FileDown} />
@@ -166,5 +165,5 @@ const PatrimonioViewInner = ({ filial, onTrocarFilial }: { filial: FilialOp; onT
 export const PatrimonioView = ({ showToast: _showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <PatrimonioViewInner filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <PatrimonioViewInner filial={filialAtiva} />;
 };

@@ -77,7 +77,7 @@ export function useFetchData<T = any>(
       }
       if (extraFilter) {
         for (const [col, val] of Object.entries(extraFilter)) {
-          q = q.eq(col, val);
+          q = Array.isArray(val) ? q.in(col, val) : q.eq(col, val);
         }
       }
       if (hasSearch) {

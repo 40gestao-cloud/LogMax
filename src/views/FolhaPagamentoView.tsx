@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -43,7 +43,7 @@ const statusNextTitle = (s: string): string =>
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
-const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
@@ -425,7 +425,6 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial, onTrocarFilial }:
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Folha de Pagamento — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
@@ -721,7 +720,7 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
     );
   }
   if (!filialAtiva) return null;
-  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };
 
 function Row({ label, value, colorClass, muted, bold }: {

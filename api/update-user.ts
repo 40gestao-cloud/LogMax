@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '../lib/log.js';
 
 const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
-const VALID_SETORES = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+const VALID_SETORES = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
 // Extras não aceitam 'all' (faz parte só do escopo CEO).
-const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque'];
+const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing','ti','compras','estoque','gerencia'];
 const VALID_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor, pode_acessar_usuarios, is_conselheiro')
+      .select('role, setor, filial, pode_acessar_usuarios, is_conselheiro')
       .eq('id', caller.id)
       .single();
 
@@ -86,11 +86,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Apenas administradores podem editar CEO.' });
     }
 
-    // Gerente: só edita colaboradores (independente de setor).
+    // Gerente: só edita colaboradores (independente de setor) da própria
+    // filial — gerente não cobre outras unidades.
     if (callerProfile.role === 'gerente') {
       if (targetProfile.role !== 'colaborador') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_role: targetProfile.role, reason: 'gerente_role_mismatch' });
         return res.status(403).json({ error: 'Gerentes só podem editar colaboradores.' });
+      }
+      if (targetProfile.filial !== callerProfile.filial) {
+        log.warn('user.permission_denied', { caller_id: caller.id, target_filial: targetProfile.filial, caller_filial: callerProfile.filial, reason: 'gerente_outra_filial' });
+        return res.status(403).json({ error: 'Gerentes só podem editar colaboradores da própria filial.' });
       }
     }
 
@@ -140,6 +145,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updates.setores_extras = [];
     }
 
+    // Setor 'gerencia' não existe nas tabelas de dados (RLS não conhece esse
+    // valor) — é só o rótulo do cargo gerente, que antes não tinha setor
+    // próprio. O acesso real "vê tudo da filial" vem de setores_extras com
+    // os 6 setores operacionais, preenchido aqui automaticamente sempre que
+    // o setor primário passa a ser 'gerencia' (independe do que veio em
+    // setores_extras no corpo da requisição).
+    if (updates.setor === 'gerencia') {
+      updates.setores_extras = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
+    }
+
     // Setores extras: só admin/CEO podem alterar; CEO/Conselheiro ignoram (já são globais).
     if (setores_extras !== undefined && updates.role !== 'ceo' && updates.role !== 'conselheiro') {
       if (!isGlobalCaller) {
@@ -163,6 +178,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isGlobalCaller && filial === 'Matriz') {
         log.warn('user.permission_denied', { caller_id: caller.id, target_filial: filial, reason: 'gerente_matriz_forbidden' });
         return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
+      }
+      if (callerProfile.role === 'gerente' && filial !== callerProfile.filial) {
+        log.warn('user.permission_denied', { caller_id: caller.id, target_filial: filial, caller_filial: callerProfile.filial, reason: 'gerente_reatribuir_outra_filial' });
+        return res.status(403).json({ error: 'Gerentes só podem atribuir a própria filial.' });
       }
       // Colaborador/gerente com Matriz travam no FilialContext (só aceita
       // SuperMax/MaxLook/TechMax). Barrar mesmo com admin/CEO chamando.

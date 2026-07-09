@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -15,7 +15,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 // não existe no catálogo (compra eventual, serviço, item novo).
 const ITEM_OUTRO = '__outro__';
 
-const RequisicoesViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -141,7 +141,6 @@ const RequisicoesViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
           <p className="text-sm text-gray-400 mt-1">Solicite itens para compra. Requisições aprovadas seguem para cotação.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -279,5 +278,5 @@ const RequisicoesViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
 export const RequisicoesView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <RequisicoesViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <RequisicoesViewInner showToast={showToast} filial={filialAtiva} />;
 };

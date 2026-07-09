@@ -420,7 +420,7 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
 // ─── View principal ───────────────────────────────────────────────────────────
 type ScanResult = { ok: true; label: string; hora: string; status: string } | { ok: false; msg: string };
 
-const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   const { session } = useAuth();
   const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
@@ -972,5 +972,5 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial, onTrocarFilial }
 export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

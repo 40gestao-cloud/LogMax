@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
@@ -40,6 +40,47 @@ const EMPTY_EXTRAS = {
   patrimonio_responsavel: '',
   patrimonio_localizacao: '',
   elegivel_beneficios:    false,
+  // Atributos por nicho (JSONB em produtos.atributos). Cada filial preenche
+  // um subconjunto: MaxLook usa tamanho/cor/genero/colecao/material; TechMax
+  // usa modelo/cor/memoria/tela/bateria/camera/garantia_dias/requer_imei.
+  // SuperMax fica com objeto vazio (usa as colunas físicas que já tem).
+  atributos:              {} as Record<string, any>,
+};
+
+// Metadados de campos por nicho — dirige o form e a validação.
+// `key` é a propriedade em `produtos.atributos`. Se `req=true`, campo
+// obrigatório. `type='select'` requer `options`. `type='bool'` renderiza
+// como checkbox. Padrão é input texto.
+type AtributoDef = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  req?: boolean;
+  type?: 'text' | 'select' | 'bool';
+  options?: readonly string[];
+  wide?: boolean; // ocupa linha inteira no grid
+};
+
+const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
+  MaxLook: [
+    { key: 'tamanho',  label: 'Tamanho *',   placeholder: 'Ex: P, M, G, 38, 40', req: true },
+    { key: 'cor',      label: 'Cor *',       placeholder: 'Ex: Preto, Azul Marinho', req: true },
+    { key: 'genero',   label: 'Gênero *',    type: 'select', req: true,
+      options: ['Feminino', 'Masculino', 'Unissex', 'Infantil'] as const },
+    { key: 'colecao',  label: 'Coleção',     placeholder: 'Ex: Verão 2026' },
+    { key: 'material', label: 'Composição / Material', placeholder: 'Ex: 100% Algodão' },
+  ],
+  TechMax: [
+    { key: 'modelo',        label: 'Modelo *',        placeholder: 'Ex: iPhone 13, Galaxy S23', req: true },
+    { key: 'cor',           label: 'Cor',             placeholder: 'Ex: Meia-noite, Titânio' },
+    { key: 'memoria',       label: 'Memória',         placeholder: 'Ex: 128 GB, 256 GB' },
+    { key: 'tela',          label: 'Tela',            placeholder: 'Ex: 6.1"' },
+    { key: 'bateria',       label: 'Bateria',         placeholder: 'Ex: 3240 mAh' },
+    { key: 'camera',        label: 'Câmera',          placeholder: 'Ex: 12 MP + 12 MP' },
+    { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365', type: 'text' },
+    { key: 'requer_imei',   label: 'Requer IMEI/Serial no fechamento', type: 'bool', wide: true },
+  ],
+  SuperMax: [],
 };
 
 const parseNum = (v: string | number | undefined | null): number =>
@@ -61,7 +102,7 @@ const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string |
   return <span className={`font-bold tabular-nums ${cls}`}>{m.toFixed(1)}%</span>;
 };
 
-const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -212,6 +253,7 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
       patrimonio_responsavel: item.patrimonio_responsavel ?? '',
       patrimonio_localizacao: item.patrimonio_localizacao ?? '',
       elegivel_beneficios:    !!item.elegivel_beneficios,
+      atributos:              (item.atributos && typeof item.atributos === 'object') ? item.atributos : {},
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -265,11 +307,21 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
     // Validação de campos obrigatórios extras (não gerenciados por useFormValidation)
     const ee: Record<string, string> = {};
     if (!extras.marca.trim())        ee.marca         = 'Obrigatório';
-    if (!extras.peso.trim())         ee.peso          = 'Obrigatório';
+    // Peso só faz sentido em supermercado (KG/L); em roupa e eletrônico é dispensável.
+    if (filial === 'SuperMax' && !extras.peso.trim()) ee.peso = 'Obrigatório';
     if (!extras.categoria_id)        ee.categoria_id  = 'Selecione uma categoria';
     if (!extras.fornecedor)          ee.fornecedor    = 'Selecione um fornecedor';
     if (!extras.preco_custo.trim())  ee.preco_custo   = 'Obrigatório';
     if (extras.estoque_minimo === '') ee.estoque_minimo = 'Obrigatório';
+    // Valida campos nicho-específicos declarados como req=true.
+    const atrDefs = ATRIBUTOS_PRODUTO[filial] ?? [];
+    for (const d of atrDefs) {
+      if (!d.req) continue;
+      const v = extras.atributos?.[d.key];
+      if (v === undefined || v === null || String(v).trim() === '') {
+        ee[`atr_${d.key}`] = 'Obrigatório';
+      }
+    }
     if (Object.keys(ee).length) {
       setExtrasErrors(ee);
       showToast('Preencha todos os campos obrigatórios.', 'error', true);
@@ -315,7 +367,22 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
         patrimonio_responsavel: isPatrimonio ? (extras.patrimonio_responsavel || null) : null,
         patrimonio_localizacao: isPatrimonio ? (extras.patrimonio_localizacao || null) : null,
         // Patrimônio não vai pro PDV, então força elegivel_beneficios=false.
-        elegivel_beneficios:    isPatrimonio ? false : !!extras.elegivel_beneficios,
+        // Elegível benefícios só se aplica ao SuperMax (supermercado) — MaxLook
+        // e TechMax não têm itens elegíveis por natureza (roupa, eletrônico).
+        elegivel_beneficios:    isPatrimonio || filial !== 'SuperMax' ? false : !!extras.elegivel_beneficios,
+        // Atributos JSONB por nicho (só campos declarados em ATRIBUTOS_PRODUTO
+        // pra filial atual — evita salvar lixo se o operador trocou de filial
+        // no meio do fluxo).
+        atributos: (() => {
+          const defs = ATRIBUTOS_PRODUTO[filial] ?? [];
+          const out: Record<string, any> = {};
+          for (const d of defs) {
+            const v = extras.atributos?.[d.key];
+            if (v === undefined || v === null || v === '') continue;
+            out[d.key] = d.type === 'bool' ? !!v : v;
+          }
+          return out;
+        })(),
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
@@ -451,10 +518,6 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
               <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
             </>
           )}
-          <button onClick={onTrocarFilial}
-            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
-            <ArrowLeft size={14} /> Trocar unidade
-          </button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -546,13 +609,71 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                       onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
                       placeholder="Ex: Samsung, Nestlé, 3M" />
                   </FormField>
-                  <FormField label="Peso / Volume *" error={extrasErrors.peso}>
-                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}
-                      value={extras.peso} inputMode="decimal"
-                      onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
-                      placeholder="Ex: 1.5 (em kg/l/m…)" />
-                  </FormField>
+                  {/* Peso/Volume só faz sentido em supermercado (KG/L/M vendável).
+                      Em roupa e eletrônico é informação irrelevante pro cadastro. */}
+                  {filial === 'SuperMax' && (
+                    <FormField label="Peso / Volume *" error={extrasErrors.peso}>
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}
+                        value={extras.peso} inputMode="decimal"
+                        onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
+                        placeholder="Ex: 1.5 (em kg/l/m…)" />
+                    </FormField>
+                  )}
                 </div>
+
+                {/* ── Atributos por nicho (JSONB em produtos.atributos) ──────
+                    Só aparece em MaxLook (moda) e TechMax (eletrônico). Cada
+                    filial mostra os campos definidos em ATRIBUTOS_PRODUTO. */}
+                {(ATRIBUTOS_PRODUTO[filial] ?? []).length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-white/5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Tag size={12} className="text-accent" />
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                        {filial === 'MaxLook' ? 'Detalhes da peça (Boutique)' : 'Ficha técnica (Loja & Assistência)'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
+                        const errKey = `atr_${d.key}`;
+                        const err = extrasErrors[errKey];
+                        const val = extras.atributos?.[d.key] ?? '';
+                        const setAtr = (v: any) => {
+                          setExtras(x => ({ ...x, atributos: { ...(x.atributos ?? {}), [d.key]: v } }));
+                          setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
+                        };
+                        if (d.type === 'bool') {
+                          return (
+                            <label key={d.key}
+                              className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
+                              <input type="checkbox" checked={!!val}
+                                onChange={e => setAtr(e.target.checked)}
+                                className="accent-accent w-4 h-4" />
+                              <span className="text-xs font-bold text-gray-200">{d.label}</span>
+                            </label>
+                          );
+                        }
+                        if (d.type === 'select' && d.options) {
+                          return (
+                            <FormField key={d.key} label={d.label} error={err}>
+                              <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                                value={String(val)} onChange={e => setAtr(e.target.value)}>
+                                <option value="">— Selecione —</option>
+                                {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </FormField>
+                          );
+                        }
+                        return (
+                          <FormField key={d.key} label={d.label} error={err}>
+                            <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                              value={String(val)} onChange={e => setAtr(e.target.value)}
+                              placeholder={d.placeholder} />
+                          </FormField>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Imagem do produto */}
@@ -739,7 +860,10 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.unidade}
                       onChange={e => setExtras(x => ({ ...x, unidade: e.target.value }))}>
-                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                      {/* MaxLook/TechMax só listam unidades discretas: peça, caixa etc.
+                          KG/L/M não fazem sentido em roupa ou celular. */}
+                      {(filial === 'SuperMax' ? UNIDADES : UNIDADES.filter(u => ['UN','CX','PC','PCT'].includes(u)))
+                        .map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </FormField>
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Estoque Inicial (${extras.unidade})`}>
@@ -781,7 +905,9 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
                   </FormField>
                 </div>
 
-                {extras.tipo !== 'patrimonio' && (
+                {/* MaxBank Benefícios só faz sentido no SuperMax (só supermercado
+                    tem itens elegíveis a vale-alimentação). Fora dele, escondido. */}
+                {extras.tipo !== 'patrimonio' && filial === 'SuperMax' && (
                   <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 mt-4">
                     <input type="checkbox" checked={extras.elegivel_beneficios}
                       onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
@@ -922,5 +1048,5 @@ const ProdutosViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: a
 export const ProdutosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} />;
 };

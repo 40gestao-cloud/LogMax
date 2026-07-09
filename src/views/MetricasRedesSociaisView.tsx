@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Instagram, Youtube, Facebook, Plus, Trash2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 type Plataforma = 'Instagram' | 'TikTok' | 'Facebook' | 'YouTube';
@@ -60,9 +61,56 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
   const [filtroPlat, setFiltroPlat] = useState<Plataforma | 'Todas'>('Todas');
+  // Só usado no modo Matriz consolidado (filialAtiva null) — sem isso o
+  // registro caía em profile.filial ('Matriz', que não é unidade operacional
+  // real) e sumia de qualquer tela filtrada por uma filial específica.
+  const [filialForm, setFilialForm] = useState('');
 
   const isAdminCeo = profile.role === 'admin' || profile.role === 'ceo';
   const podeRegistrar = isAdminCeo || hasSetor(profile, 'marketing');
+
+  // Links das redes sociais — configuração por filial (1 link por
+  // plataforma, no máximo 4), não por registro de métrica. Editado uma
+  // vez em "Links das Redes Sociais" e reaproveitado em toda a tela.
+  // Só carrega em modo filial (filialAtiva setado) — em modo Matriz
+  // consolidado não há uma única filial pra resolver os links.
+  const [links, setLinks] = useState<Partial<Record<Plataforma, string>>>({});
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [linkDrafts, setLinkDrafts] = useState<Partial<Record<Plataforma, string>>>({});
+  const [savingLink, setSavingLink] = useState<Plataforma | null>(null);
+
+  useEffect(() => {
+    if (!supabase || !filialAtiva) { setLinks({}); setLinkDrafts({}); return; }
+    let cancelled = false;
+    setLinksLoading(true);
+    supabase.from('redes_sociais_links').select('plataforma, link').eq('filial', filialAtiva)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const map: Partial<Record<Plataforma, string>> = {};
+        for (const row of data ?? []) map[row.plataforma as Plataforma] = row.link ?? '';
+        setLinks(map);
+        setLinkDrafts(map);
+        setLinksLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [filialAtiva]);
+
+  async function salvarLink(plat: Plataforma) {
+    if (!supabase || !filialAtiva) return;
+    const link = (linkDrafts[plat] ?? '').trim();
+    setSavingLink(plat);
+    try {
+      const { error } = await supabase.from('redes_sociais_links')
+        .upsert({ filial: filialAtiva, plataforma: plat, link: link || null, atualizado_por: profile.id }, { onConflict: 'filial,plataforma' });
+      if (error) throw error;
+      setLinks(l => ({ ...l, [plat]: link }));
+      showToast?.('Link salvo!', 'success');
+    } catch (e: any) {
+      showToast?.(e.message ?? 'Erro ao salvar link.', 'error');
+    } finally {
+      setSavingLink(null);
+    }
+  }
 
   // Filtra por filial ativa (admin/CEO veem tudo em Matriz; em filial veem só a própria)
   const registros = useMemo(() => {
@@ -72,8 +120,8 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
 
   async function salvar() {
     if (!supabase || !profile) return;
-    const filial = filialAtiva ?? profile.filial;
-    if (!filial) { showToast?.('Filial não identificada.', 'error'); return; }
+    const filial = filialAtiva ?? filialForm;
+    if (!filial) { showToast?.('Selecione a filial deste registro.', 'error'); return; }
     setSaving(true);
     try {
       const { error } = await supabase.from('metricas_redes_sociais').insert({
@@ -90,6 +138,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
       if (error) throw error;
       showToast?.('Métricas registradas!', 'success');
       setForm({ ...EMPTY_FORM });
+      setFilialForm('');
       setShowForm(false);
       reload();
     } catch (e: any) {
@@ -107,16 +156,6 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
     reload();
   }
 
-  // Último registro por plataforma — usado para variação
-  const ultimoPorPlat = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const r of registros) {
-      if (!map[r.plataforma]) map[r.plataforma] = [];
-      map[r.plataforma].push(r);
-    }
-    return map;
-  }, [registros]);
-
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
 
@@ -133,11 +172,60 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
         )}
       </div>
 
+      {/* Links das redes sociais — 1 por plataforma, configurado uma vez por
+          filial (não redigitado a cada registro de métrica). Só em modo filial. */}
+      {podeRegistrar && filialAtiva && (
+        <div className="neu-flat rounded-3xl border border-white/5 p-5 flex flex-col gap-3">
+          <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2"><Link2 size={14} className="text-accent"/> Links das Redes Sociais — {filialAtiva}</h3>
+          {linksLoading ? (
+            <div className="py-4"><LoadingSpinner /></div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PLATAFORMAS.map(plat => {
+                const draft = linkDrafts[plat] ?? '';
+                const dirty = draft !== (links[plat] ?? '');
+                return (
+                  <div key={plat} className="flex items-center gap-2">
+                    <span className={`shrink-0 w-6 flex justify-center ${PLAT_COLOR[plat]}`}>{PLAT_ICON[plat]}</span>
+                    <input
+                      type="url"
+                      value={draft}
+                      onChange={e => setLinkDrafts(d => ({ ...d, [plat]: e.target.value }))}
+                      placeholder={`Link do ${plat}...`}
+                      className="neu-input rounded-lg px-3 py-1.5 text-xs flex-1"
+                    />
+                    <button
+                      onClick={() => salvarLink(plat)}
+                      disabled={!dirty || savingLink === plat}
+                      className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                      title="Salvar link"
+                    >
+                      {savingLink === plat ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Formulário */}
       {showForm && (
         <div className="neu-flat rounded-3xl border border-accent/20 p-5 flex flex-col gap-4">
           <h3 className="text-sm font-bold text-gray-200">Novo Registro</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Filial — só aparece no modo Matriz consolidado, onde não há
+                uma unidade ativa implícita pra gravar o registro. */}
+            {!filialAtiva && (
+              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial *</label>
+                <select value={filialForm} onChange={e => setFilialForm(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm">
+                  <option value="">— Selecione —</option>
+                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            )}
             {/* Plataforma */}
             <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Plataforma</label>
@@ -177,7 +265,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
             </div>
           </div>
           <div className="flex justify-end">
-            <button onClick={salvar} disabled={saving} className="neu-button px-5 py-2 rounded-xl text-sm font-bold text-accent disabled:opacity-50">
+            <button onClick={salvar} disabled={saving || (!filialAtiva && !filialForm)} className="neu-button px-5 py-2 rounded-xl text-sm font-bold text-accent disabled:opacity-50">
               {saving ? <Loader2 size={14} className="animate-spin"/> : 'Salvar'}
             </button>
           </div>
@@ -207,13 +295,20 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
           {PLATAFORMAS.filter(p => filtroPlat === 'Todas' || filtroPlat === p).map(plat => {
             const regs = registros.filter((r: any) => r.plataforma === plat);
             if (regs.length === 0) return null;
+            const platLink = links[plat];
             return (
               <div key={plat} className="neu-flat rounded-3xl border border-accent/10 overflow-hidden">
-                {/* Header plataforma */}
+                {/* Header plataforma — link vem de "Links das Redes Sociais" (só em modo filial) */}
                 <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5">
                   <span className={PLAT_COLOR[plat]}>{PLAT_ICON[plat]}</span>
                   <span className={`text-sm font-black ${PLAT_COLOR[plat]}`}>{plat}</span>
                   <span className="text-xs text-gray-500 ml-1">{regs.length} registros</span>
+                  {platLink && (
+                    <a href={platLink} target="_blank" rel="noopener noreferrer"
+                      className="ml-auto flex items-center gap-1 text-[10px] font-bold text-gray-500 hover:text-accent transition-colors">
+                      <ExternalLink size={11}/> Abrir perfil
+                    </a>
+                  )}
                 </div>
                 {/* Linhas */}
                 <div className="overflow-x-auto">
@@ -265,4 +360,3 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
     </motion.div>
   );
 }
-

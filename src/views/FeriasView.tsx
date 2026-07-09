@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -17,7 +17,7 @@ const statusCls = (s: string) => {
 
 const EMPTY: any = { funcionario_id: '', data_inicio: '', data_fim: '', dias: '30', status: 'Solicitada' };
 
-const FeriasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const FeriasViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview', { filial });
   const confirm = useConfirm();
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
@@ -111,7 +111,6 @@ const FeriasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Férias — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Gerencie solicitações e períodos de férias dos funcionários.</p>
         </div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -243,5 +242,5 @@ const FeriasViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any
 export const FeriasView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <FeriasViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <FeriasViewInner showToast={showToast} filial={filialAtiva} />;
 };

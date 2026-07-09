@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
@@ -63,13 +63,12 @@ const STATUS_LIST = [
 ] as const;
 
 const OrcamentosViewInner = ({
-  showToast, profile, mode, filial, onTrocarFilial,
+  showToast, profile, mode, filial,
 }: {
   showToast: any;
   profile: UserProfile;
   mode?: 'vendas' | 'financeiro';
   filial: FilialOp;
-  onTrocarFilial: () => void;
 }) => {
   const confirm = useConfirm();
   const [page, setPage] = useState(0);
@@ -411,7 +410,6 @@ const OrcamentosViewInner = ({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           {!modoFinanceiro && podeCriarVenda && (
             <>
               <ExportButton label="PDF" onClick={exportarProdutosPDF} icon={FileDown} />
@@ -907,6 +905,6 @@ export const OrcamentosView = ({
 }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <OrcamentosViewInner showToast={showToast} profile={profile} mode={mode} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <OrcamentosViewInner showToast={showToast} profile={profile} mode={mode} filial={filialAtiva} />;
 };
 

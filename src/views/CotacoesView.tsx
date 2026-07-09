@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
@@ -42,7 +42,7 @@ async function notificarSetor(args: {
   }
 }
 
-const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { showToast: any; profile: UserProfile; filial: FilialOp; onTrocarFilial: () => void }) => {
+const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -343,7 +343,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { sho
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
@@ -603,5 +602,5 @@ const CotacoesViewInner = ({ showToast, profile, filial, onTrocarFilial }: { sho
 export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

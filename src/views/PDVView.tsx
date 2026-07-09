@@ -1,7 +1,7 @@
 import { isConselheiro } from '../lib/rbac';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store, Undo2, Wrench } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
@@ -39,8 +39,11 @@ const formatQtd = (qtd: number, unidade: string): string => {
   return String(Math.round(qtd));
 };
 
+// Só admin, CEO e Conselheiro alternam entre filiais (modo Matriz). Gerente
+// fica travado na própria unidade, igual colaborador — gerente não cobre
+// outras filiais (regra de negócio).
 const podeAlternarFilial = (profile: any): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
+  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
 interface CartItem {
   produto_id: string;
@@ -52,26 +55,72 @@ interface CartItem {
   unidade: string;
 }
 
-const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado', 'MaxBank Benefícios'];
-// Formas elegíveis pra cobrir o resto quando "MaxBank Benefícios" não cobre tudo.
-// Fiado fora — mistura crédito a prazo com débito imediato fica confuso pra v1.
-const FORMA_RESTO_OPTIONS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX'] as const;
+// MaxLook/TechMax não aceitam MaxBank Benefícios — só faz sentido no
+// SuperMax (supermercado tem itens elegíveis, roupa e eletrônico não).
+const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
 
-const FILIAL_META: Record<FilialPDV, { logo: string; desc: string; logoBg?: string }> = {
+// `subtitulo` aparece no header do PDV aberto (personalidade da unidade);
+// `chips` são filtros rápidos por categoria (compara case-insensitive contra
+// `produtos.categoria`); `layout` define o estilo do card na grade;
+// `accentBar` é a cor decorativa da barra sob a logo — mantém accent dourado
+// no texto pra coesão com o resto do app.
+const FILIAL_META: Record<FilialPDV, {
+  logo: string;
+  desc: string;
+  logoBg?: string;
+  subtitulo?: string;
+  chips?: readonly string[];
+  layout?: 'fashion' | 'tech';
+  accentBar?: string;
+}> = {
   SuperMax: { logo: '/icon-supermax.png', desc: 'Supermercado', logoBg: '#ffffff' },
-  MaxLook:  { logo: '/icon-maxlook.png',  desc: 'Roupas, Calçados e Acessórios Femininos e Masculinos' },
-  TechMax:  { logo: '/icon-techmax.png',  desc: 'Eletrônicos e Assistência Técnica' },
+  MaxLook:  {
+    logo: '/icon-maxlook.png',
+    desc: 'Roupas, Calçados e Acessórios Femininos e Masculinos',
+    subtitulo: 'Boutique',
+    chips: ['Roupas', 'Calçados', 'Acessórios', 'Feminino', 'Masculino'],
+    layout: 'fashion',
+    accentBar: '#D4AF37',
+  },
+  TechMax:  {
+    logo: '/icon-techmax.png',
+    desc: 'Eletrônicos e Assistência Técnica',
+    subtitulo: 'Loja & Assistência',
+    chips: ['Smartphones', 'Notebooks', 'Acessórios', 'Peças', 'Serviços'],
+    layout: 'tech',
+    accentBar: '#F97316',
+  },
 };
 
-export const PDVView = ({ showToast, profile }: any) => {
+export const PDVView = ({ showToast, profile, filialAtiva }: any) => {
   const podeAlternar = podeAlternarFilial(profile);
   const filialDoOperador: FilialPDV | null =
     (FILIAIS_PDV as readonly string[]).includes(profile?.filial)
       ? (profile.filial as FilialPDV)
       : null;
+
+  // Se há um hub de filial ativo na sessão (admin/CEO/gerente operando em modo filial),
+  // usa essa filial diretamente — sem mostrar o seletor das 3.
+  const filialDeSessao: FilialPDV | null =
+    (FILIAIS_PDV as readonly string[]).includes(filialAtiva)
+      ? (filialAtiva as FilialPDV)
+      : null;
+
+  const filialResolvida = filialDeSessao ?? filialDoOperador;
+
   const [filialEscolhida, setFilialEscolhida] = useState<FilialPDV | null>(
-    podeAlternar ? null : (filialDoOperador ?? null)
+    filialResolvida ?? (podeAlternar ? null : null)
   );
+
+  // Sincroniza quando o hub muda fora do PDV (ex.: usuário troca filial pela topbar).
+  const filialAtivaRef = React.useRef(filialAtiva);
+  if (filialAtivaRef.current !== filialAtiva) {
+    filialAtivaRef.current = filialAtiva;
+    const nova = (FILIAIS_PDV as readonly string[]).includes(filialAtiva)
+      ? (filialAtiva as FilialPDV)
+      : null;
+    if (nova !== filialEscolhida) setFilialEscolhida(nova);
+  }
 
   if (!podeAlternar && !filialDoOperador) {
     return (
@@ -90,12 +139,14 @@ export const PDVView = ({ showToast, profile }: any) => {
   }
 
   if (filialEscolhida) {
+    // Só mostra botão Voltar se pode alternar E não está preso por hub de sessão.
+    const podVoltar = podeAlternar && !filialDeSessao;
     return (
       <PDVViewInner
         showToast={showToast}
         profile={profile}
         filialInicial={filialEscolhida}
-        onVoltar={podeAlternar ? () => setFilialEscolhida(null) : undefined}
+        onVoltar={podVoltar ? () => setFilialEscolhida(null) : undefined}
       />
     );
   }
@@ -124,7 +175,7 @@ export const PDVView = ({ showToast, profile }: any) => {
                 <img src={meta.logo} alt={f} className={meta.logoBg ? 'w-[88px] h-[88px] object-contain' : 'w-20 h-20 object-contain rounded-2xl'} />
               </div>
               <div>
-                <p className={`text-lg font-black ${cor.text}`}>{f}</p>
+                <p className="text-lg font-black text-accent">{f}</p>
                 <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{meta.desc}</p>
               </div>
             </motion.button>
@@ -145,12 +196,62 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const podeAlternar = podeAlternarFilial(profile);
   const [filialFiltro] = useState<FilialPDV>(filialInicial);
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto(filialFiltro);
-  // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger
-  const { data: produtos, isLoading: loadingProd } = useFetchData<Produto>('/api/produtosview', undefined, true);
-  const { data: clientes } = useFetchData<Cliente>('/api/crmview');
+  // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger.
+  // Filtrado por filial na própria query — não só no client — pra não trafegar
+  // produtos de outras unidades pro browser do operador.
+  const { data: produtos, isLoading: loadingProd } = useFetchData<Produto>('/api/produtosview', { filial: filialFiltro }, true);
+  const { data: clientes } = useFetchData<Cliente>('/api/crmview', { filial: filialFiltro });
 
   const [search, setSearch] = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Nicho-específico (Fase 2, sem migração — grava em vendas.observacao pós-RPC).
+  // MaxLook: vendedor associado à venda (comissão de moda). TechMax: IMEI/Serial
+  // do aparelho vendido (celular/notebook — garantia).
+  const [vendedorId, setVendedorId] = useState<string>('');
+  const [imeiSerial, setImeiSerial] = useState<string>('');
+  // TechMax: alterna entre venda de balcão e abertura de OS (assistência
+  // técnica). Sem tabela nova — grava tag "OS" + defeito relatado em
+  // vendas.observacao junto do IMEI/Serial já existente.
+  const [tipoAtendimento, setTipoAtendimento] = useState<'Venda' | 'OS'>('Venda');
+  const [defeitoRelatado, setDefeitoRelatado] = useState<string>('');
+  // MaxLook: modal de Troca/Devolução — busca uma venda concluída da
+  // filial pelos 6 últimos caracteres do id (mesmo formato do recibo),
+  // deixa escolher item(ns) + quantidade e chama a RPC estornar_venda_pdv.
+  const [devolucao, setDevolucao] = useState<{
+    busca: string;
+    buscando: boolean;
+    erro: string | null;
+    venda: {
+      id: string;
+      shortId: string;
+      formaPagamento: string;
+      itens: Array<{ produto_id: string; nome_produto: string; qtd: number; preco_unitario: number; jaDevolvido: number }>;
+    } | null;
+    qtds: Record<string, string>;
+    motivo: string;
+    processando: boolean;
+  } | null>(null);
+  // Lista de vendedores da filial (só carrega quando MaxLook — moda usa comissão).
+  const [vendedores, setVendedores] = useState<Array<{ id: string; nome: string }>>([]);
+  useEffect(() => {
+    if (filialFiltro !== 'MaxLook' || !supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('id, nome, setor, setores_extras, filial')
+        .eq('filial', 'MaxLook');
+      if (cancelled || !data) return;
+      // Considera vendedor quem tem setor='vendas' OU está em setores_extras.
+      const filtrados = data
+        .filter((u: any) => u.setor === 'vendas' || (Array.isArray(u.setores_extras) && u.setores_extras.includes('vendas')))
+        .map((u: any) => ({ id: u.id, nome: u.nome ?? 'Sem nome' }))
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      setVendedores(filtrados);
+    })();
+    return () => { cancelled = true; };
+  }, [filialFiltro]);
   const [desconto, setDesconto] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
   const [parcelas, setParcelas] = useState(1);
@@ -160,16 +261,18 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
   // Pix em aguardo: payload na DB + snapshot do carrinho para chamar o RPC após confirmação
   const [pixPendente, setPixPendente] = useState<{ id: string; valor: number } | null>(null);
-  // Benefícios em aguardo (Fase 5): pendente em MaxPOS com código curto pro colaborador
-  const [beneficiosPendente, setBeneficiosPendente] = useState<{
+  // Cartão (maquininha MaxPay) em aguardo: pendente em cartao_pendentes; PDV
+  // finaliza venda via realtime/polling quando MaxBank autoriza. Mesmo padrão
+  // usado no SuperMax, adaptado pra MaxLook/TechMax.
+  const [cartaoModal, setCartaoModal] = useState<{
     id: string;
-    codigo: string;
-    valor_beneficios: number;
-    valor_resto: number;
-    forma_resto: string;
+    valor: number;
+    metodo: 'debito' | 'credito';
+    parcelas: number;
   } | null>(null);
-  // Forma usada pra cobrir o restante quando benefícios não dão conta de tudo.
-  const [formaResto, setFormaResto] = useState<string>('Dinheiro');
+  // Dinheiro: valor recebido do cliente pra cálculo do troco. Só client-side
+  // (não persiste — troco é operacional, não fiscal). Aceita R$ formatado.
+  const [dinheiroRecebido, setDinheiroRecebido] = useState<string>('');
   // Cupom: código digitado + resultado da última validação no servidor. O
   // valor de `desconto` no aplicado é authoritativo (servidor recalcula no
   // RPC `criar_venda_pdv`); aqui só usamos pra UI e pra mandar pro RPC.
@@ -238,28 +341,25 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // fora — PDV opera só nas 3 unidades operacionais.
   const produtosPorFilial = produtosAtivos.filter((p: any) => p.filial === filialFiltro);
   const searchLower = search.toLowerCase();
-  const filtered = produtosPorFilial.filter((p: any) =>
-    [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower))
-  );
+  const filtered = produtosPorFilial.filter((p: any) => {
+    if (categoriaFiltro) {
+      const cat = String(p.categoria ?? '').toLowerCase();
+      if (!cat.includes(categoriaFiltro.toLowerCase())) return false;
+    }
+    return [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower));
+  });
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
   const descontoNum = parseBRL(desconto);
   // Cupom só vale se o subtotal ainda comporta o desconto (clamp por segurança).
   const cupomDesconto = Math.min(cupomAplicado?.desconto ?? 0, Math.max(0, subtotal - descontoNum));
   const totalFinal = Math.max(0, subtotal - descontoNum - cupomDesconto);
-  // Desconto total enviado ao RPC = manual + cupom (o servidor valida cada
-  // parte; manual continua livre, cupom é re-checado contra o código).
-  const descontoTotal = descontoNum + cupomDesconto;
 
-  // Quanto do carrinho aceita benefícios? Soma subtotais dos itens elegíveis.
-  // Desconto é aplicado proporcionalmente: clampamos pelo totalFinal pra
-  // não permitir benefícios > total efetivo a pagar.
-  const subtotalElegivelBenef = cart.reduce((s, i) => {
-    const p = produtos.find((p: any) => p.id === i.produto_id);
-    return s + (p?.elegivel_beneficios ? i.subtotal : 0);
-  }, 0);
-  const valorBeneficios = Math.min(subtotalElegivelBenef, totalFinal);
-  const valorResto = Math.max(0, totalFinal - valorBeneficios);
+  // Dinheiro: cálculo local de troco. Zero quando cliente ainda não digitou
+  // ou digitou menos que o total (nesse caso o UI mostra "Falta R$ X").
+  const dinheiroRecebidoNum = parseBRL(dinheiroRecebido);
+  const troco = Math.max(0, dinheiroRecebidoNum - totalFinal);
+  const faltaDinheiro = Math.max(0, totalFinal - dinheiroRecebidoNum);
 
   const addToCart = useCallback((produto: any) => {
     // Produto fracionário (KG/L/...) abre modal de peso. O bloqueio de
@@ -585,6 +685,24 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
+    // Info nicho grava em vendas.observacao (a RPC não recebe observação hoje).
+    // MaxLook: nome do vendedor associado. TechMax: tag OS + defeito relatado
+    // (quando aberto como OS) + IMEI/Serial do aparelho.
+    // Falha aqui não desfaz a venda — a operação principal já persistiu.
+    const partes: string[] = [];
+    if (filialFiltro === 'MaxLook' && vendedorId) {
+      const v = vendedores.find(x => x.id === vendedorId);
+      if (v) partes.push(`Vendedor: ${v.nome}`);
+    }
+    if (filialFiltro === 'TechMax') {
+      if (tipoAtendimento === 'OS') partes.push('OS');
+      if (imeiSerial.trim()) partes.push(`IMEI/Serial: ${imeiSerial.trim()}`);
+      if (tipoAtendimento === 'OS' && defeitoRelatado.trim()) partes.push(`Defeito: ${defeitoRelatado.trim()}`);
+    }
+    if (partes.length > 0) {
+      await supabase.from('vendas').update({ observacao: partes.join(' · ') }).eq('id', vendaId);
+    }
+
     // Pix já tocou o "Plim" no callback do realtime (confirmação do cliente);
     // demais formas tocam "ka-ching" agora que a venda foi efetivamente persistida.
     if (forma !== 'PIX') playKaching();
@@ -596,6 +714,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     setFormaPagamento('Dinheiro');
     setParcelas(1);
     setClienteId('');
+    setImeiSerial('');
+    setDefeitoRelatado('');
+    setDinheiroRecebido('');
+    // Vendedor e tipo de atendimento não são limpos — sessão persiste entre vendas.
     setIsClosing(false);
     searchRef.current?.focus();
   };
@@ -604,6 +726,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     if (networkError) return;
     if (cart.length === 0) { showToast?.('Carrinho vazio.', 'error', true); return; }
     if (formaPagamento === 'Fiado' && !clienteId) { showToast?.('Selecione o cliente para venda Fiado.', 'error', true); return; }
+    if (filialFiltro === 'TechMax' && tipoAtendimento === 'OS' && !defeitoRelatado.trim()) {
+      showToast?.('Descreva o defeito relatado para abrir a OS.', 'error', true);
+      return;
+    }
     setIsClosing(true);
     try {
       // Revalida o caixa antes de fechar a venda — outro operador pode tê-lo fechado
@@ -653,38 +779,44 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
       if (!supabase) throw new Error('Supabase indisponível.');
 
-      // Fluxo MaxBank Benefícios (Fase 5): cria pendente em beneficios_pendentes
-      // com código curto. Colaborador digita no MaxBank stand-alone, autoriza →
-      // RPC debita saldo dele e marca pendente como pago. PDV via realtime
-      // chama criar_venda_pdv. Suporta pagamento misto: se valor_resto > 0,
-      // resto cobre na formaResto escolhida.
-      if (formaPagamento === 'MaxBank Benefícios') {
-        if (valorBeneficios <= 0) {
-          showToast?.('Nenhum item do carrinho aceita benefícios.', 'error', true);
+      // Dinheiro: exige valor recebido >= total. Troco é operacional (não
+      // persiste). Se cliente ainda não digitou, avisa e volta.
+      if (formaPagamento === 'Dinheiro') {
+        if (dinheiroRecebidoNum < totalFinal - 0.001) {
+          showToast?.(`Valor recebido insuficiente. Falta ${faltaDinheiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`, 'error', true);
           setIsClosing(false);
           return;
         }
-        const itensElegiveisSnap = cart
-          .filter(i => {
-            const p = produtos.find((p: any) => p.id === i.produto_id);
-            return !!p?.elegivel_beneficios;
-          })
-          .map(i => ({ nome: i.nome_produto, qtd: i.qtd, subtotal: i.subtotal }));
+      }
 
+      // Fluxo Cartão Débito/Crédito: cria pendente em cartao_pendentes e abre
+      // overlay tipo maquininha. Cliente escaneia QR no MaxBank e autoriza —
+      // realtime finaliza venda. Mesmo padrão do SuperMax (Fase 6 MaxBank).
+      if (formaPagamento === 'Cartão Débito' || formaPagamento === 'Cartão Crédito') {
+        const metodo: 'debito' | 'credito' = formaPagamento === 'Cartão Débito' ? 'debito' : 'credito';
+        const parcelasEfetivas = metodo === 'credito' ? parcelas : 1;
+        // Cancela pendentes antigos do mesmo operador (>30s) — evita QR fantasma
+        if (user?.id) {
+          const cutoff = new Date(Date.now() - 30_000).toISOString();
+          await supabase
+            .from('cartao_pendentes')
+            .update({ status: 'cancelado' })
+            .eq('operador_id', user.id)
+            .eq('status', 'aguardando')
+            .lt('created_at', cutoff);
+        }
         const { data: pendente, error: insErr } = await supabase
-          .from('beneficios_pendentes')
+          .from('cartao_pendentes')
           .insert({
-            valor_beneficios: valorBeneficios,
-            valor_resto:      valorResto,
-            forma_resto:      valorResto > 0 ? formaResto : null,
-            filial_pdv:       filialFiltro,
-            produtos:         itensElegiveisSnap,
-            cliente_id:       clienteId || null,
-            operador_id:      user?.id ?? null,
+            valor:       totalFinal,
+            metodo,
+            parcelas:    parcelasEfetivas,
+            status:      'aguardando',
+            operador_id: user?.id ?? null,
           })
-          .select('id, codigo_curto, valor_beneficios, valor_resto, forma_resto')
+          .select('id, valor, metodo, parcelas')
           .single();
-        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar pendente de benefícios.');
+        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao criar cobrança de cartão.');
 
         vendaSnapshotRef.current = {
           cart: [...cart],
@@ -695,12 +827,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
           cupomCodigo:   cupomAplicado?.codigo ?? null,
           cupomDesconto: cupomDesconto,
         };
-        setBeneficiosPendente({
-          id:               pendente.id,
-          codigo:           pendente.codigo_curto,
-          valor_beneficios: Number(pendente.valor_beneficios),
-          valor_resto:      Number(pendente.valor_resto),
-          forma_resto:      pendente.forma_resto ?? '',
+        setCartaoModal({
+          id:       pendente.id,
+          valor:    Number(pendente.valor),
+          metodo:   pendente.metodo,
+          parcelas: pendente.parcelas,
         });
         return;
       }
@@ -838,48 +969,171 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     setIsClosing(false);
   };
 
-  // Realtime: pendente de benefícios. Quando colaborador confirma no MaxBank,
-  // RPC dele debita o saldo + faz UPDATE pago aqui. Recebemos via realtime e
-  // chamamos criar_venda_pdv com forma combinada (Benefícios + resto).
+  // Realtime + polling 2s: pendente de cartão. Quando MaxBank autoriza,
+  // finaliza venda via criar_venda_pdv com o snapshot capturado. Mesmo
+  // padrão do PDVViewSupermax (redundância realtime+polling porque WS às
+  // vezes atrasa em plans free do Supabase).
   useEffect(() => {
-    if (!beneficiosPendente || !supabase) return;
+    if (!cartaoModal || !supabase) return;
+    let handled = false;
+
+    const onAutorizado = async () => {
+      if (handled) return;
+      handled = true;
+      const snap = vendaSnapshotRef.current;
+      if (!snap) return;
+      try {
+        playPlim();
+        const formaCanon = cartaoModal.metodo === 'debito' ? 'Cartão Débito' : 'Cartão Crédito';
+        await finalizarVenda(snap, formaCanon, cartaoModal.parcelas);
+        vendaSnapshotRef.current = null;
+        setCartaoModal(null);
+      } catch (err: any) {
+        showToast?.(`Cartão autorizado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+        setCartaoModal(null);
+        setIsClosing(false);
+      }
+    };
+
     const channel = supabase
-      .channel(`beneficios_pendente_${beneficiosPendente.id}`)
+      .channel(`cartao_pendente_${cartaoModal.id}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'beneficios_pendentes', filter: `id=eq.${beneficiosPendente.id}` },
-        async (payload: any) => {
-          const novoStatus = payload?.new?.status;
-          if (novoStatus !== 'pago') return;
-          const snap = vendaSnapshotRef.current;
-          if (!snap) return;
-          try {
-            playPlim();
-            const formaCombinada = beneficiosPendente.valor_resto > 0
-              ? `MaxBank Benefícios + ${beneficiosPendente.forma_resto}`
-              : 'MaxBank Benefícios';
-            await finalizarVenda(snap, formaCombinada, 1);
-            vendaSnapshotRef.current = null;
-            setBeneficiosPendente(null);
-          } catch (err: any) {
-            showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
-            setBeneficiosPendente(null);
-            setIsClosing(false);
-          }
-        },
+        { event: 'UPDATE', schema: 'public', table: 'cartao_pendentes', filter: `id=eq.${cartaoModal.id}` },
+        (payload: any) => { if (payload?.new?.status === 'autorizado') onAutorizado(); },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [beneficiosPendente, showToast]);
 
-  const cancelarBeneficios = async () => {
-    if (!beneficiosPendente || !supabase) return;
-    await supabase.from('beneficios_pendentes')
+    const timer = setInterval(async () => {
+      if (handled) return;
+      const { data } = await supabase
+        .from('cartao_pendentes')
+        .select('status')
+        .eq('id', cartaoModal.id)
+        .maybeSingle();
+      if (data?.status === 'autorizado') onAutorizado();
+    }, 2000);
+
+    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartaoModal]);
+
+  const cancelarCartao = async () => {
+    if (!cartaoModal || !supabase) return;
+    await supabase.from('cartao_pendentes')
       .update({ status: 'cancelado' })
-      .eq('id', beneficiosPendente.id);
+      .eq('id', cartaoModal.id);
     vendaSnapshotRef.current = null;
-    setBeneficiosPendente(null);
+    setCartaoModal(null);
     setIsClosing(false);
+  };
+
+  // Troca/Devolução (MaxLook): busca a venda concluída da filial pelos 6
+  // últimos caracteres do id (mesmo formato exibido no recibo/toast de
+  // sucesso) e traz os itens vendidos + quanto já foi devolvido de cada um.
+  const buscarVendaParaDevolucao = async () => {
+    if (!devolucao || !supabase) return;
+    const termo = devolucao.busca.trim().toUpperCase();
+    if (!termo) return;
+    setDevolucao(d => d ? { ...d, buscando: true, erro: null, venda: null, qtds: {} } : d);
+    try {
+      const { data: recentes, error } = await supabase
+        .from('vendas')
+        .select('id, forma_pagamento, filial, status')
+        .eq('filial', filialFiltro)
+        .eq('status', 'Concluída')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      const match = (recentes ?? []).find((v: any) => String(v.id).slice(-6).toUpperCase() === termo);
+      if (!match) {
+        setDevolucao(d => d ? { ...d, buscando: false, erro: 'Venda não encontrada. Confira os 6 últimos caracteres do id (no recibo).' } : d);
+        return;
+      }
+
+      const [{ data: itens, error: itensErr }, { data: devolucoesExistentes, error: devErr }] = await Promise.all([
+        supabase.from('itens_venda').select('produto_id, nome_produto, qtd, preco_unitario').eq('venda_id', match.id),
+        supabase.from('devolucoes_pdv').select('itens').eq('venda_id', match.id),
+      ]);
+      if (itensErr) throw itensErr;
+      if (devErr) throw devErr;
+
+      const jaDevolvidoPorProduto = new Map<string, number>();
+      for (const dv of devolucoesExistentes ?? []) {
+        for (const it of (dv.itens as any[]) ?? []) {
+          const pid = it.produto_id as string;
+          jaDevolvidoPorProduto.set(pid, (jaDevolvidoPorProduto.get(pid) ?? 0) + Number(it.qtd ?? 0));
+        }
+      }
+
+      const itensAgrupados = new Map<string, { produto_id: string; nome_produto: string; qtd: number; preco_unitario: number }>();
+      for (const it of itens ?? []) {
+        const pid = it.produto_id as string;
+        const existente = itensAgrupados.get(pid);
+        if (existente) existente.qtd += Number(it.qtd ?? 0);
+        else itensAgrupados.set(pid, { produto_id: pid, nome_produto: it.nome_produto, qtd: Number(it.qtd ?? 0), preco_unitario: Number(it.preco_unitario ?? 0) });
+      }
+
+      setDevolucao(d => d ? {
+        ...d,
+        buscando: false,
+        erro: null,
+        venda: {
+          id: match.id,
+          shortId: termo,
+          formaPagamento: match.forma_pagamento,
+          itens: Array.from(itensAgrupados.values()).map(it => ({
+            ...it,
+            jaDevolvido: jaDevolvidoPorProduto.get(it.produto_id) ?? 0,
+          })),
+        },
+      } : d);
+    } catch (err: any) {
+      setDevolucao(d => d ? { ...d, buscando: false, erro: err?.message ?? 'Erro ao buscar venda.' } : d);
+    }
+  };
+
+  const confirmarDevolucao = async () => {
+    if (!devolucao?.venda || !supabase) return;
+    const itensSelecionados = devolucao.venda.itens
+      .map(it => ({ ...it, qtdDevolver: parseFloat((devolucao.qtds[it.produto_id] ?? '').replace(',', '.')) || 0 }))
+      .filter(it => it.qtdDevolver > 0);
+    if (itensSelecionados.length === 0) {
+      showToast?.('Selecione a quantidade de ao menos um item.', 'error', true);
+      return;
+    }
+    for (const it of itensSelecionados) {
+      const disponivel = it.qtd - it.jaDevolvido;
+      if (it.qtdDevolver > disponivel + 0.001) {
+        showToast?.(`"${it.nome_produto}": só é possível devolver até ${disponivel}.`, 'error', true);
+        return;
+      }
+    }
+    setDevolucao(d => d ? { ...d, processando: true } : d);
+    try {
+      const payload = itensSelecionados.map(it => ({
+        produto_id: it.produto_id,
+        nome_produto: it.nome_produto,
+        qtd: it.qtdDevolver,
+        preco_unitario: it.preco_unitario,
+        subtotal: Math.round(it.qtdDevolver * it.preco_unitario * 100) / 100,
+      }));
+      const { data, error } = await supabase.rpc('estornar_venda_pdv', {
+        p_venda_id: devolucao.venda.id,
+        p_itens: payload,
+        p_motivo: devolucao.motivo.trim() || null,
+      });
+      if (error) throw error;
+      const valorTotal = Number(data?.valor_total ?? 0);
+      showToast?.(`Devolução registrada — ${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de volta ao estoque.`, 'success', true);
+      if (data?.requer_ajuste_financeiro) {
+        showToast?.('Venda era Fiado/Cartão Crédito — ajuste o valor manualmente em Financeiro → Contas a Receber.', 'error', true);
+      }
+      setDevolucao(null);
+    } catch (err: any) {
+      showToast?.(`Erro ao registrar devolução: ${err?.message ?? '—'}`, 'error', true);
+      setDevolucao(d => d ? { ...d, processando: false } : d);
+    }
   };
 
   // Troca de filial sempre limpa o carrinho — itens são por unidade, não dá
@@ -947,15 +1201,68 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     );
   }
 
-  const filialCor = FILIAL_COLOR[filialFiltro];
+  const filialMeta = FILIAL_META[filialFiltro];
   const rootClass = fullscreen ? 'fixed inset-0 z-[100] bg-[var(--color-bg-base)] overflow-hidden' : 'h-full';
 
+  // Paleta do PDV por filial (Fase 1). MaxLook e TechMax rodam em tema claro
+  // escopado — variáveis CSS injetadas no wrapper controlam accent + bg base,
+  // e a classe `pdv-filial-light` (em index.css) faz o remap de text-gray/bg-black
+  // pra funcionar sobre branco sem tocar em cada JSX.
+  const paletaFilial: Record<FilialPDV, {
+    bg: string;
+    accent: string;
+    accentHover: string;
+    accentText: string;
+    lightMode: boolean;
+  } | null> = {
+    SuperMax: null, // não passa por aqui (vai pro PDVViewSupermax)
+    // MaxLook: boutique warm — bege claro tipo showroom + preto + dourado.
+    MaxLook: {
+      bg: '#F7F3EC',
+      accent: '#B8941F',
+      accentHover: '#9C7C15',
+      accentText: '#FFFFFF',
+      lightMode: true,
+    },
+    // TechMax: tech clean — branco puro + preto + laranja (Apple Store).
+    TechMax: {
+      bg: '#FFFFFF',
+      accent: '#EA580C',
+      accentHover: '#C2410C',
+      accentText: '#FFFFFF',
+      lightMode: true,
+    },
+  };
+  const paleta = paletaFilial[filialFiltro];
+  const rootStyle: React.CSSProperties = paleta?.lightMode
+    ? {
+        overscrollBehavior: 'none',
+        touchAction: 'pan-y',
+        // Sobrescreve o accent do app só dentro do PDV. Não afeta sidebar/topbar
+        // porque esses ficam fora do wrapper.
+        ['--color-bg-base' as any]: paleta.bg,
+        ['--color-accent' as any]: paleta.accent,
+        ['--color-accent-hover' as any]: paleta.accentHover,
+        ['--color-accent-text' as any]: paleta.accentText,
+        background: paleta.bg,
+      }
+    : { overscrollBehavior: 'none', touchAction: 'pan-y' };
+  const rootExtraClass = paleta?.lightMode ? 'pdv-filial-light' : '';
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`flex flex-col ${rootClass}`}
-      style={{ overscrollBehavior: 'none', touchAction: 'pan-y' }}>
-      {/* Header com identidade da filial */}
-      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 shrink-0 border-b border-white/5"
-        style={{ background: 'color-mix(in srgb, var(--color-bg-base) 95%, transparent)' }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      className={`flex flex-col ${rootClass} ${rootExtraClass}`}
+      style={rootStyle}>
+      {/* Header com identidade da filial — sempre em fundo preto, pra manter
+          contraste marca (logo) e servir de âncora visual no topo do PDV. */}
+      <div className={`flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 shrink-0 relative ${paleta?.lightMode ? 'pdv-filial-header' : 'border-b border-white/5'}`}
+        style={paleta?.lightMode
+          ? { background: '#0A0A0A', borderBottom: `1px solid ${filialMeta.accentBar ?? '#333'}30` }
+          : { background: 'color-mix(in srgb, var(--color-bg-base) 95%, transparent)' }}>
+        {filialMeta.accentBar && (
+          <span className="absolute bottom-0 left-0 h-0.5 w-24"
+            style={{ background: filialMeta.accentBar, boxShadow: `0 0 12px ${filialMeta.accentBar}80` }} />
+        )}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onVoltar && (
             <button onClick={onVoltar}
@@ -964,10 +1271,65 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               <ArrowLeft size={16} />
             </button>
           )}
-          <h2 className={`text-lg sm:text-2xl font-black tracking-tight ${filialCor.text}`}>{filialFiltro}</h2>
-          <span className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">Ponto de Venda</span>
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${filialMeta.accentBar ?? '#ffffff20'}40` }}>
+            <img src={filialMeta.logo} alt={filialFiltro} className="w-full h-full object-contain" />
+          </div>
+          <div className="flex flex-col leading-tight min-w-0">
+            <h2 className="text-base sm:text-xl font-black tracking-tight text-accent truncate">{filialFiltro}</h2>
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 truncate">
+              {filialMeta.subtitulo ?? 'Ponto de Venda'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* MaxLook: seletor de vendedor associado à venda (comissão). Grava
+              em vendas.observacao como "Vendedor: {nome}". Sessão persiste. */}
+          {filialFiltro === 'MaxLook' && vendedores.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 py-1 pl-2 pr-1 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${filialMeta.accentBar ?? '#ffffff20'}40` }}>
+              <User size={12} style={{ color: filialMeta.accentBar }} />
+              <select
+                value={vendedorId}
+                onChange={e => setVendedorId(e.target.value)}
+                className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer"
+                style={{ color: '#f5f5f5' }}
+                title="Vendedor(a) associado(a) a esta venda">
+                <option value="" style={{ background: '#0a0a0a' }}>Sem vendedor</option>
+                {vendedores.map(v => (
+                  <option key={v.id} value={v.id} style={{ background: '#0a0a0a' }}>{v.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* MaxLook: abre o modal de Troca/Devolução — devolve item(ns) de uma
+              venda concluída anterior ao estoque via RPC estornar_venda_pdv. */}
+          {filialFiltro === 'MaxLook' && (
+            <button
+              onClick={() => setDevolucao({ busca: '', buscando: false, erro: null, venda: null, qtds: {}, motivo: '', processando: false })}
+              className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5"
+              title="Troca / Devolução">
+              <Undo2 size={12} /> Troca/Devolução
+            </button>
+          )}
+          {/* TechMax: alterna entre venda de balcão e abertura de OS — muda o
+              rótulo do botão de fechamento e passa a exigir defeito relatado. */}
+          {filialFiltro === 'TechMax' && (
+            <div className="hidden md:flex items-center rounded-lg overflow-hidden border"
+              style={{ borderColor: `${filialMeta.accentBar ?? '#ffffff20'}40` }}>
+              {(['Venda', 'OS'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTipoAtendimento(t)}
+                  className="py-1.5 px-3 text-[10px] font-bold transition-colors"
+                  style={tipoAtendimento === t
+                    ? { background: filialMeta.accentBar, color: '#0A0A0A' }
+                    : { background: 'transparent', color: '#a3a3a3' }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
           {onVoltar && (
             <button onClick={onVoltar}
               className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5"
@@ -1004,13 +1366,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       <div className="flex lg:hidden shrink-0 border-b border-white/5">
         <button
           onClick={() => setMobileTab('produtos')}
-          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${mobileTab === 'produtos' ? `${filialCor.text} border-b-2` : 'text-gray-500'}`}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${mobileTab === 'produtos' ? 'text-accent border-b-2' : 'text-gray-500'}`}
           style={mobileTab === 'produtos' ? { borderColor: 'var(--color-accent)' } : {}}>
           <Package size={13} /> Produtos ({filtered.length})
         </button>
         <button
           onClick={() => setMobileTab('carrinho')}
-          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors relative ${mobileTab === 'carrinho' ? `${filialCor.text} border-b-2` : 'text-gray-500'}`}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors relative ${mobileTab === 'carrinho' ? 'text-accent border-b-2' : 'text-gray-500'}`}
           style={mobileTab === 'carrinho' ? { borderColor: 'var(--color-accent)' } : {}}>
           <ShoppingCart size={13} /> Carrinho
           {cart.length > 0 && (
@@ -1029,13 +1391,61 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Buscar por nome, código ou bipar..."
+              placeholder={filialMeta.layout === 'tech' ? 'Buscar modelo, código ou bipar...' : 'Buscar por nome, código ou bipar...'}
               className="neu-input py-2.5 sm:py-3 pl-10 pr-4 rounded-2xl text-sm w-full"
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); } }}
             />
           </div>
+
+          {/* Chips de categoria — filtro rápido case-insensitive contra produtos.categoria.
+              Só aparece pra filiais que definiram chips em FILIAL_META. */}
+          {filialMeta.chips && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 shrink-0 -mx-1 px-1 main-scrollbar-h"
+              style={{ scrollbarWidth: 'thin' }}>
+              <button
+                onClick={() => setCategoriaFiltro(null)}
+                className="shrink-0 px-3.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all border-2"
+                style={categoriaFiltro === null
+                  ? {
+                      background: 'var(--color-accent)',
+                      color: 'var(--color-accent-text)',
+                      borderColor: 'var(--color-accent)',
+                      boxShadow: '0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent)',
+                    }
+                  : {
+                      background: '#ffffff',
+                      color: '#262626',
+                      borderColor: 'rgba(0,0,0,0.20)',
+                    }}>
+                Todos
+              </button>
+              {filialMeta.chips.map(chip => {
+                const ativo = categoriaFiltro === chip;
+                return (
+                  <button
+                    key={chip}
+                    onClick={() => setCategoriaFiltro(ativo ? null : chip)}
+                    className="shrink-0 px-3.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all border-2"
+                    style={ativo
+                      ? {
+                          background: 'var(--color-accent)',
+                          color: 'var(--color-accent-text)',
+                          borderColor: 'var(--color-accent)',
+                          boxShadow: '0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent)',
+                        }
+                      : {
+                          background: '#ffffff',
+                          color: '#262626',
+                          borderColor: 'rgba(0,0,0,0.20)',
+                        }}>
+                    {chip}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <AnimatePresence>
             {lastVenda && (
@@ -1054,13 +1464,30 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             )}
           </AnimatePresence>
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 flex-1 min-h-0"
+          <div className={`grid gap-2 sm:gap-3 overflow-y-auto main-scrollbar pr-1 pb-4 flex-1 min-h-0 ${
+              filialMeta.layout === 'tech'
+                ? 'grid-cols-1 xl:grid-cols-2'
+                : 'grid-cols-2 sm:grid-cols-2 xl:grid-cols-3'
+            }`}
             style={{ overscrollBehavior: 'contain' }}>
             {filtered.length === 0 ? (
-              <div className="col-span-3 flex items-center justify-center py-12 text-gray-500 text-sm text-center">
-                {search
-                  ? 'Nenhum produto encontrado.'
-                  : `Nenhum produto ativo cadastrado para ${filialFiltro}.`}
+              <div className={`${filialMeta.layout === 'tech' ? 'xl:col-span-2' : 'col-span-3'} flex flex-col items-center justify-center py-16 gap-3 text-center`}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(0,0,0,0.04)', border: '1px dashed rgba(0,0,0,0.18)' }}>
+                  <Package size={26} strokeWidth={1.5} style={{ color: '#a3a3a3' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: '#262626' }}>
+                    {search || categoriaFiltro ? 'Nenhum produto encontrado' : `Sem produtos em ${filialFiltro}`}
+                  </p>
+                  <p className="text-xs mt-1 max-w-[18rem]" style={{ color: '#737373' }}>
+                    {categoriaFiltro
+                      ? <>Nenhum item em <b>{categoriaFiltro}</b>. Tente outra categoria ou <button className="underline font-bold" onClick={() => setCategoriaFiltro(null)}>ver todos</button>.</>
+                      : search
+                        ? 'Ajuste o termo, bipe outro código ou limpe a busca.'
+                        : 'Cadastre produtos em Cadastros → Produtos pra começar a vender aqui.'}
+                  </p>
+                </div>
               </div>
             ) : (
               filtered.map((p: any) => {
@@ -1068,18 +1495,149 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 const semEstoque = (p.estoque ?? 999) <= 0;
                 const fracionario = isProdutoFracionario(p);
                 const unidade = String(p.unidade ?? 'UN').toUpperCase();
+                const onClick = () => {
+                  if (semEstoque) return;
+                  addToCart(p);
+                  if (window.innerWidth < 1024 && cart.length === 0) setMobileTab('carrinho');
+                };
+                const cardStyle = inCart
+                  ? { borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }
+                  : semEstoque ? { opacity: 0.4 } : {};
+
+                // TechMax: layout horizontal denso — thumb esquerda, specs à direita.
+                // Ficha técnica: badge de marca em destaque + categoria como subline.
+                if (filialMeta.layout === 'tech') {
+                  const ultimasUnidades = !semEstoque && typeof p.estoque === 'number' && p.estoque > 0 && p.estoque <= 2;
+                  return (
+                    <motion.button
+                      key={p.id}
+                      onClick={onClick}
+                      whileTap={!semEstoque ? { scale: 0.98 } : {}}
+                      disabled={semEstoque}
+                      className="neu-button rounded-xl p-2.5 sm:p-3 flex items-center gap-3 text-left transition-all border border-transparent relative"
+                      style={cardStyle}
+                    >
+                      {inCart && (
+                        <span className="absolute top-1.5 right-1.5 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
+                          style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                          {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
+                        </span>
+                      )}
+                      <ProdutoThumb url={p.imagem_url} size="md" alt={p.nome} />
+                      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {p.marca ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
+                              style={{ background: filialMeta.accentBar, color: '#ffffff' }}>
+                              {p.marca}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm"
+                              style={{ background: `${filialMeta.accentBar}22`, color: filialMeta.accentBar, border: `1px solid ${filialMeta.accentBar}80` }}>
+                              {p.codigo || 'SKU'}
+                            </span>
+                          )}
+                          {ultimasUnidades && (
+                            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm"
+                              style={{ background: '#DC262620', color: '#DC2626', border: '1px solid #DC262660' }}>
+                              Últimas {p.estoque}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm font-bold text-gray-100 leading-tight line-clamp-2">{p.nome}</span>
+                        <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500 truncate">
+                          {p.categoria && <span className="uppercase tracking-wider truncate">{p.categoria}</span>}
+                          {p.codigo && p.marca && (
+                            <span className="uppercase tracking-wider text-gray-600">· {p.codigo}</span>
+                          )}
+                        </div>
+                        <div className="flex items-end justify-between mt-0.5">
+                          <span className="text-base font-black text-accent tabular-nums">
+                            {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          <span className={`text-[10px] font-bold ${semEstoque ? 'text-red-500' : 'text-gray-500'}`}>
+                            {semEstoque ? 'Sem estoque' : `Estoque: ${p.estoque ?? '∞'}`}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                }
+
+                // MaxLook: card boutique portrait — imagem grande no topo, info abaixo.
+                // Fashion tags: marca em cima (grife), "Última peça" quando estoque=1.
+                if (filialMeta.layout === 'fashion') {
+                  const ultimaPeca = !semEstoque && p.estoque === 1;
+                  return (
+                    <motion.button
+                      key={p.id}
+                      onClick={onClick}
+                      whileTap={!semEstoque ? { scale: 0.97 } : {}}
+                      disabled={semEstoque}
+                      className="neu-button rounded-2xl overflow-hidden flex flex-col text-left transition-all border border-transparent relative"
+                      style={cardStyle}
+                    >
+                      {inCart && (
+                        <span className="absolute top-2 right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
+                          style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                          {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
+                        </span>
+                      )}
+                      {ultimaPeca && (
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider z-10"
+                          style={{ background: '#0A0A0A', color: filialMeta.accentBar, border: `1px solid ${filialMeta.accentBar}` }}>
+                          Última peça
+                        </span>
+                      )}
+                      <div className="w-full aspect-square bg-black/30 flex items-center justify-center overflow-hidden border-b border-white/5">
+                        {p.imagem_url ? (
+                          <img src={p.imagem_url} alt={p.nome} loading="lazy" decoding="async"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          <Package size={40} strokeWidth={1.25} className="text-gray-700" />
+                        )}
+                      </div>
+                      <div className="p-2.5 sm:p-3 flex flex-col gap-1 flex-1">
+                        {p.marca && (
+                          <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.25em] truncate"
+                            style={{ color: filialMeta.accentBar }}>
+                            {p.marca}
+                          </span>
+                        )}
+                        {p.categoria && (
+                          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 truncate">
+                            {p.categoria}
+                          </span>
+                        )}
+                        <span className="text-xs sm:text-sm font-bold text-gray-100 leading-tight line-clamp-2">{p.nome}</span>
+                        <div className="flex items-end justify-between mt-auto pt-1">
+                          <span className="text-sm sm:text-base font-black text-accent tabular-nums">
+                            {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          {!semEstoque && (
+                            <span className="text-[9px] font-bold text-gray-500 hidden sm:inline">
+                              {p.estoque ?? '∞'} peças
+                            </span>
+                          )}
+                          {semEstoque && (
+                            <span className="text-[9px] font-bold text-red-500">Esgotado</span>
+                          )}
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                }
+
+                // Fallback (não chega aqui hoje — SuperMax vai pro PDVViewSupermax).
                 return (
                   <motion.button
                     key={p.id}
-                    onClick={() => {
-                      if (semEstoque) return;
-                      addToCart(p);
-                      if (window.innerWidth < 1024 && cart.length === 0) setMobileTab('carrinho');
-                    }}
+                    onClick={onClick}
                     whileTap={!semEstoque ? { scale: 0.97 } : {}}
                     disabled={semEstoque}
                     className="neu-button rounded-xl sm:rounded-2xl p-2 sm:p-3 flex flex-col gap-1.5 sm:gap-2 text-left transition-all border border-transparent relative"
-                    style={inCart ? { borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 4%, transparent)' } : semEstoque ? { opacity: 0.4 } : {}}
+                    style={cardStyle}
                   >
                     {inCart && (
                       <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
@@ -1263,9 +1821,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   <p className="text-[10px] text-red-400 leading-tight">{cupomErro}</p>
                 )}
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-gray-200">Total</span>
-                <span className="text-xl font-black text-accent font-mono">
+              <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-white/10">
+                <span className="text-sm font-black uppercase tracking-widest text-gray-200">Total</span>
+                <span className="text-2xl font-black text-accent font-mono tabular-nums">
                   {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
@@ -1275,17 +1833,29 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             <div className="flex flex-col gap-2 pt-3 border-t border-white/5 shrink-0">
               <span id="pdv-forma-pagto-label" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Forma de pagamento</span>
               <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-labelledby="pdv-forma-pagto-label">
-                {FORMAS.map(f => (
-                  <button key={f} onClick={() => setFormaPagamento(f)}
-                    role="radio" aria-checked={formaPagamento === f}
-                    className="py-2 px-2 rounded-xl text-[10px] font-bold transition-all border"
-                    style={formaPagamento === f
-                      ? { background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', color: 'var(--color-accent)' }
-                      : { background: 'transparent', borderColor: 'rgba(255,255,255,0.05)', color: '#6b7280' }
-                    }>
-                    {f === 'MaxBank Benefícios' ? 'Benefícios' : f}
-                  </button>
-                ))}
+                {FORMAS.map(f => {
+                  const ativo = formaPagamento === f;
+                  return (
+                    <button key={f} onClick={() => setFormaPagamento(f)}
+                      role="radio" aria-checked={ativo}
+                      className="py-2.5 px-2 rounded-xl text-[11px] font-black transition-all border-2 uppercase tracking-wider"
+                      style={ativo
+                        ? {
+                            background: 'var(--color-accent)',
+                            borderColor: 'var(--color-accent)',
+                            color: 'var(--color-accent-text)',
+                            boxShadow: '0 2px 8px color-mix(in srgb, var(--color-accent) 30%, transparent)',
+                          }
+                        : {
+                            background: '#ffffff',
+                            borderColor: 'rgba(0,0,0,0.18)',
+                            color: '#404040',
+                          }
+                      }>
+                      {f}
+                    </button>
+                  );
+                })}
               </div>
 
               {formaPagamento === 'Fiado' && (
@@ -1309,43 +1879,58 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               )}
 
               <AnimatePresence>
-                {formaPagamento === 'MaxBank Benefícios' && (
+                {formaPagamento === 'Dinheiro' && cart.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden">
                     <div className="flex flex-col gap-2 p-3 rounded-xl mt-1"
                       style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-gray-400">Cobertura por benefícios</span>
-                        <span className="font-bold text-accent tabular-nums">
-                          {valorBeneficios.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="pdv-dinheiro-recebido" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Valor recebido</label>
+                        <input
+                          id="pdv-dinheiro-recebido"
+                          type="text"
+                          inputMode="numeric"
+                          value={dinheiroRecebido}
+                          onChange={e => setDinheiroRecebido(formatBRL(parseBRL(e.target.value)))}
+                          onKeyDown={handleMoneyKeyDown}
+                          placeholder={formatBRL(totalFinal)}
+                          className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 text-right tabular-nums font-bold outline-none"
+                        />
+                        <span className="text-[10px] font-bold text-gray-500">R$</span>
                       </div>
-                      {valorResto > 0 ? (
-                        <>
-                          <div className="flex justify-between text-[11px]">
-                            <span className="text-gray-400">Restante</span>
-                            <span className="font-bold text-gray-200 tabular-nums">
-                              {valorResto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 pt-1">
-                            <label htmlFor="pdv-forma-resto" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">Resto em</label>
-                            <select
-                              id="pdv-forma-resto"
-                              value={formaResto}
-                              onChange={e => setFormaResto(e.target.value)}
-                              className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none">
-                              {FORMA_RESTO_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-[10px] text-emerald-400 font-bold">Benefícios cobrem o carrinho inteiro.</p>
+                      {dinheiroRecebido && dinheiroRecebidoNum > 0 && (
+                        <div className="flex justify-between items-center pt-1 border-t border-white/5">
+                          {faltaDinheiro > 0.001 ? (
+                            <>
+                              <span className="text-[11px] font-bold text-red-400 uppercase tracking-widest">Falta</span>
+                              <span className="text-base font-black text-red-400 tabular-nums">
+                                {faltaDinheiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </>
+                          ) : troco > 0.001 ? (
+                            <>
+                              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">Troco</span>
+                              <span className="text-lg font-black text-emerald-400 tabular-nums">
+                                {troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[11px] font-bold text-accent uppercase tracking-widest w-full text-center">Valor exato</span>
+                          )}
+                        </div>
                       )}
-                      {valorBeneficios <= 0 && (
-                        <p className="text-[10px] text-red-400 font-bold">Nenhum item elegível a benefícios no carrinho.</p>
-                      )}
+                      <div className="flex gap-1 pt-1">
+                        {[totalFinal, 50, 100, 200].map((v, idx) => (
+                          <button key={idx}
+                            type="button"
+                            onClick={() => setDinheiroRecebido(formatBRL(v))}
+                            className="flex-1 py-1 px-1 rounded-md text-[10px] font-bold border transition-all"
+                            style={{ background: 'transparent', borderColor: 'rgba(0,0,0,0.14)', color: '#525252' }}>
+                            {idx === 0 ? 'Exato' : `R$ ${v}`}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1382,6 +1967,52 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               </AnimatePresence>
             </div>
 
+            {/* TechMax: IMEI/Serial do aparelho (opcional, vale pros dois modos).
+                Grava em vendas.observacao — usado pra garantia e assistência. */}
+            {filialFiltro === 'TechMax' && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 p-2 rounded-xl"
+                  style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
+                  <QrCode size={12} className="text-accent shrink-0" />
+                  <label htmlFor="pdv-imei" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
+                    IMEI/Serial
+                  </label>
+                  <input
+                    id="pdv-imei"
+                    type="text"
+                    inputMode="numeric"
+                    value={imeiSerial}
+                    onChange={e => setImeiSerial(e.target.value)}
+                    placeholder="Opcional — garantia"
+                    className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none tabular-nums"
+                    maxLength={40}
+                  />
+                </div>
+                {/* Modo OS: defeito relatado é obrigatório — vira parte do
+                    diagnóstico da assistência, grava junto na observação. */}
+                {tipoAtendimento === 'OS' && (
+                  <div className="flex items-start gap-2 p-2 rounded-xl"
+                    style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
+                    <Wrench size={12} className="text-accent shrink-0 mt-1.5" />
+                    <div className="flex-1">
+                      <label htmlFor="pdv-defeito" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">
+                        Defeito relatado
+                      </label>
+                      <textarea
+                        id="pdv-defeito"
+                        value={defeitoRelatado}
+                        onChange={e => setDefeitoRelatado(e.target.value)}
+                        placeholder="Ex.: tela trincada, não liga, bateria viciada..."
+                        rows={2}
+                        maxLength={200}
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full bg-transparent border-none outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Fechar venda / Aviso de erro de conexão */}
             <AnimatePresence mode="wait">
               {networkError ? (
@@ -1412,14 +2043,19 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   onClick={handleFecharVenda}
                   disabled={cart.length === 0 || isClosing}
                   whileTap={cart.length > 0 && !isClosing ? { scale: 0.98 } : {}}
-                  className="w-full py-3 sm:py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1"
+                  className="w-full py-4 sm:py-5 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center gap-2 transition-all shrink-0 mt-1 uppercase tracking-wider"
                   style={{
-                    background: cart.length === 0 || isClosing ? 'color-mix(in srgb, var(--color-accent) 20%, transparent)' : 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',
-                    color: cart.length === 0 || isClosing ? '#4b5563' : 'var(--color-accent-text)',
-                    boxShadow: cart.length > 0 && !isClosing ? '0 4px 20px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'none',
+                    background: cart.length === 0 || isClosing ? '#d4d4d4' : '#0A0A0A',
+                    color: cart.length === 0 || isClosing ? '#737373' : '#FFFFFF',
+                    boxShadow: cart.length > 0 && !isClosing
+                      ? '0 8px 24px rgba(0,0,0,0.20), 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent)'
+                      : 'none',
+                    border: cart.length > 0 && !isClosing ? '2px solid var(--color-accent)' : '2px solid transparent',
                     cursor: cart.length === 0 || isClosing ? 'not-allowed' : 'pointer',
                   }}>
-                  {isClosing ? <><Loader2 size={16} className="animate-spin" /> Processando...</> : <><CheckCircle2 size={16} /> Fechar Venda · {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</>}
+                  {isClosing
+                    ? <><Loader2 size={18} className="animate-spin" /> Processando...</>
+                    : <><CheckCircle2 size={18} style={{ color: cart.length === 0 ? '#737373' : 'var(--color-accent)' }} /> {filialFiltro === 'TechMax' && tipoAtendimento === 'OS' ? 'Abrir OS' : 'Fechar Venda'} · {totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</>}
                 </motion.button>
               )}
             </AnimatePresence>
@@ -1584,11 +2220,147 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         })()}
       </AnimatePresence>
 
-      {/* Overlay MaxBank Benefícios — código de 6 dígitos pro colaborador digitar */}
+      {/* Modal Troca/Devolução (MaxLook) — busca venda concluída pelos 6
+          últimos caracteres do id, escolhe item(ns)+qtd e chama a RPC
+          estornar_venda_pdv (repõe estoque, registra em devolucoes_pdv). */}
       <AnimatePresence>
-        {beneficiosPendente && (
+        {devolucao && (
           <motion.div
-            key="beneficios-overlay"
+            key="devolucao-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }}
+            onClick={() => !devolucao.processando && setDevolucao(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              className="neu-flat rounded-3xl w-full max-w-md p-6 flex flex-col gap-4 border border-white/5 max-h-[85vh] overflow-y-auto"
+              style={{ background: 'var(--color-bg-base)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Undo2 size={18} className="text-accent" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Troca / Devolução</span>
+                </div>
+                <button onClick={() => !devolucao.processando && setDevolucao(null)}
+                  className="neu-button p-1.5 rounded-lg text-gray-400 hover:text-accent">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="devolucao-busca" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  Código da venda (6 últimos caracteres — vide recibo)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="devolucao-busca"
+                    type="text"
+                    autoFocus
+                    value={devolucao.busca}
+                    onChange={e => setDevolucao(d => d ? { ...d, busca: e.target.value.toUpperCase() } : d)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarVendaParaDevolucao(); } }}
+                    placeholder="Ex.: A1B2C3"
+                    maxLength={6}
+                    className="neu-input py-2.5 px-3 rounded-xl text-sm font-bold tracking-widest uppercase flex-1"
+                  />
+                  <button
+                    onClick={buscarVendaParaDevolucao}
+                    disabled={!devolucao.busca.trim() || devolucao.buscando}
+                    className="neu-button px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                    {devolucao.buscando ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    Buscar
+                  </button>
+                </div>
+                {devolucao.erro && <p className="text-[11px] text-red-500 mt-1">{devolucao.erro}</p>}
+              </div>
+
+              {devolucao.venda && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                      Venda #{devolucao.venda.shortId} · {devolucao.venda.formaPagamento}
+                    </p>
+                    {devolucao.venda.itens.map(it => {
+                      const disponivel = it.qtd - it.jaDevolvido;
+                      return (
+                        <div key={it.produto_id} className="flex items-center gap-2 p-2 rounded-xl border border-white/5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-200 truncate">{it.nome_produto}</p>
+                            <p className="text-[10px] text-gray-500">
+                              vendido {it.qtd} · disponível p/ devolver {disponivel}
+                            </p>
+                          </div>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            disabled={disponivel <= 0}
+                            value={devolucao.qtds[it.produto_id] ?? ''}
+                            onChange={e => {
+                              const v = e.target.value.replace(/[^\d.,]/g, '');
+                              setDevolucao(d => d ? { ...d, qtds: { ...d.qtds, [it.produto_id]: v } } : d);
+                            }}
+                            placeholder="0"
+                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-16 text-right tabular-nums disabled:opacity-30"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="devolucao-motivo" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                      Motivo (opcional)
+                    </label>
+                    <textarea
+                      id="devolucao-motivo"
+                      value={devolucao.motivo}
+                      onChange={e => setDevolucao(d => d ? { ...d, motivo: e.target.value } : d)}
+                      placeholder="Ex.: tamanho errado, peça com defeito..."
+                      rows={2}
+                      maxLength={200}
+                      className="neu-input py-2 px-3 rounded-xl text-xs w-full resize-none"
+                    />
+                  </div>
+
+                  {devolucao.venda.formaPagamento === 'Fiado' || devolucao.venda.formaPagamento === 'Cartão Crédito' ? (
+                    <p className="text-[10px] text-amber-500 flex items-start gap-1.5">
+                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                      Venda {devolucao.venda.formaPagamento} — após confirmar, ajuste manualmente em Financeiro → Contas a Receber.
+                    </p>
+                  ) : null}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDevolucao(null)}
+                      disabled={devolucao.processando}
+                      className="flex-1 py-3 rounded-xl text-xs font-bold text-gray-400 neu-button transition-colors disabled:opacity-40">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={confirmarDevolucao}
+                      disabled={devolucao.processando}
+                      className="flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
+                      style={{ background: 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))', color: 'var(--color-accent-text)' }}>
+                      {devolucao.processando
+                        ? <><Loader2 size={14} className="animate-spin" /> Processando...</>
+                        : <><Undo2 size={14} /> Confirmar devolução</>}
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Overlay Cartão (maquininha MaxPay) — cliente escaneia QR no MaxBank */}
+      <AnimatePresence>
+        {cartaoModal && (
+          <motion.div
+            key="cartao-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }}
@@ -1596,56 +2368,57 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             <motion.div
               initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
               transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-              className="neu-flat rounded-3xl w-full max-w-sm p-6 flex flex-col items-center gap-4 border border-white/5 relative"
-              style={{ background: 'var(--color-bg-base)' }}
+              className="rounded-3xl w-full max-w-sm p-6 flex flex-col items-center gap-4 relative"
+              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', color: '#0a0a0a' }}
             >
               <div className="flex items-center gap-2">
                 <div className="relative">
-                  <Smartphone size={18} className="text-accent" />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent animate-ping" />
+                  <CreditCard size={18} style={{ color: 'var(--color-accent)' }} />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full animate-ping"
+                    style={{ background: 'var(--color-accent)' }} />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Aguardando colaborador</span>
-              </div>
-
-              <div className="text-center">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cobertura por benefícios</p>
-                <p className="text-3xl font-black text-gray-100 tabular-nums tracking-tight mt-1">
-                  {beneficiosPendente.valor_beneficios.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/5 px-6 py-5 flex flex-col items-center gap-1"
-                style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Código no MaxBank</span>
-                <span className="text-4xl font-black tracking-[0.4em] text-accent tabular-nums font-mono">
-                  {beneficiosPendente.codigo}
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-accent)' }}>
+                  Aguardando cartão
                 </span>
               </div>
 
-              {beneficiosPendente.valor_resto > 0 && (
-                <div className="text-center text-[11px] text-gray-400 leading-relaxed max-w-[18rem]">
-                  Após confirmar, receba o restante de{' '}
-                  <span className="font-bold text-gray-200 tabular-nums">
-                    {beneficiosPendente.valor_resto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>{' '}
-                  em <span className="font-bold text-gray-200">{beneficiosPendente.forma_resto}</span>.
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 text-[11px] text-gray-500 text-center max-w-[18rem]">
-                <Smartphone size={12} className="shrink-0 text-accent" />
-                <span>Peça ao colaborador para abrir o <span className="font-bold text-gray-300">MaxBank → Pagar no PDV</span> e digitar este código.</span>
+              <div className="text-center">
+                <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: '#737373' }}>
+                  Cartão {cartaoModal.metodo === 'debito' ? 'Débito' : 'Crédito'}
+                  {cartaoModal.parcelas > 1 && ` — ${cartaoModal.parcelas}x`}
+                </p>
+                <p className="text-3xl font-black tabular-nums tracking-tight mt-1" style={{ color: '#0a0a0a' }}>
+                  {cartaoModal.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] text-gray-600 font-mono">
+              <div className="rounded-2xl px-4 py-4 flex flex-col items-center gap-2"
+                style={{ background: '#ffffff', border: '2px solid #0a0a0a' }}>
+                <QRCodeSVG
+                  value={`LOGMAX-CARTAO-${cartaoModal.id}`}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#0a0a0a"
+                  level="M"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-center max-w-[18rem]" style={{ color: '#525252' }}>
+                <Smartphone size={12} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
+                <span>
+                  Cliente abre o <span className="font-bold" style={{ color: '#0a0a0a' }}>MaxBank → Escanear QR</span> e autoriza o pagamento.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[10px] font-mono" style={{ color: '#737373' }}>
                 <Loader2 size={10} className="animate-spin" />
-                <span>Escutando confirmação em tempo real…</span>
+                <span>Escutando autorização em tempo real…</span>
               </div>
 
               <button
-                onClick={cancelarBeneficios}
+                onClick={cancelarCartao}
                 className="mt-1 w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-                style={{ border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', background: 'rgba(239,68,68,0.05)' }}
+                style={{ border: '1px solid rgba(220,38,38,0.35)', color: '#dc2626', background: 'rgba(220,38,38,0.06)' }}
               >
                 <X size={12} /> Cancelar
               </button>

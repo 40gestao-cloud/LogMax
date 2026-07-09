@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const VencimentosEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/vencimentosestoqueview', { filial });
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
@@ -66,7 +66,6 @@ const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sh
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Previsão de Vencimentos — {filial}</h2><p className="text-sm text-gray-400 mt-1">Controle de lotes com vencimento próximo ou vencidos.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
-          <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
@@ -123,5 +122,5 @@ const VencimentosEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sh
 export const VencimentosEstoqueView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <VencimentosEstoqueViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <VencimentosEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
 };

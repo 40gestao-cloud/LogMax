@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
-import { X, Check, Loader2, ArrowLeft } from 'lucide-react';
+import { X, Check, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge } from '../components/ui';
@@ -13,7 +13,7 @@ type EnrichedAp = AprovacaoEstoque & {
   prod: Produto | undefined;
 };
 
-const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: (msg: string, type: string, persist?: boolean) => void; filial: FilialOp; onTrocarFilial: () => void }) => {
+const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: string, type: string, persist?: boolean) => void; filial: FilialOp }) => {
   const { data: aprovacoes, setData: setAprovacoes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial });
   const { data: requisicoes } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial });
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
@@ -117,7 +117,6 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações de Estoque — {filial}</h2><p className="text-sm text-gray-400 mt-1">Analise e aprove ou negue requisições de estoque pendentes.</p></div>
-        <button onClick={onTrocarFilial} className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400 flex items-center gap-2"><ArrowLeft size={13} /> Trocar unidade</button>
       </div>
       {enriched.length === 0 ? <EmptyState message="Nenhuma aprovação pendente" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
@@ -155,5 +154,5 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial, onTrocarFilial }: { sho
 export const AprovacoesEstoqueView = ({ showToast }: { showToast: (msg: string, type: string, persist?: boolean) => void }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <AprovacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <AprovacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
 };

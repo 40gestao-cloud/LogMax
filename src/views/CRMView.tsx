@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ArrowLeft } from 'lucide-react';
+import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
@@ -21,10 +20,39 @@ const makeEmptyExtras = (filial: string) => ({
   cpf_cnpj: '',
   categoria: '',
   filial,
+  atributos: {} as Record<string, any>,
 });
 
-const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
-  type: 'clientes' | 'fornecedores'; showToast: any; filial: FilialOp; onTrocarFilial: () => void;
+// Atributos JSONB de fornecedor por nicho. Só aplicam quando type='fornecedores'
+// e filial for MaxLook ou TechMax. Cliente segue genérico.
+type AtributoFornecedorDef = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: 'text' | 'number' | 'select';
+  options?: readonly string[];
+};
+
+const ATRIBUTOS_FORNECEDOR: Record<string, AtributoFornecedorDef[]> = {
+  MaxLook: [
+    { key: 'tipo_fornecedor', label: 'Tipo de fornecedor', type: 'select',
+      options: ['Grife', 'Confecção', 'Atacado moda', 'Acessórios', 'Calçados'] as const },
+    { key: 'marcas', label: 'Marcas representadas', placeholder: 'Ex: Nike, Adidas, Colcci' },
+    { key: 'prazo_entrega_dias', label: 'Prazo médio de entrega (dias)', type: 'number', placeholder: 'Ex: 15' },
+    { key: 'moq', label: 'MOQ (mín. por pedido, peças)', type: 'number', placeholder: 'Ex: 12' },
+  ],
+  TechMax: [
+    { key: 'tipo_fornecedor', label: 'Tipo de fornecedor', type: 'select',
+      options: ['Autorizada', 'Distribuidor', 'Peças', 'Acessórios'] as const },
+    { key: 'marcas_atendidas', label: 'Marcas atendidas', placeholder: 'Ex: Apple, Samsung, Motorola' },
+    { key: 'prazo_entrega_dias', label: 'Prazo médio de entrega (dias)', type: 'number', placeholder: 'Ex: 7' },
+    { key: 'garantia_reposicao_dias', label: 'Garantia da peça (dias)', type: 'number', placeholder: 'Ex: 90' },
+  ],
+  SuperMax: [],
+};
+
+const CRMViewInner = ({ type, showToast, filial }: {
+  type: 'clientes' | 'fornecedores'; showToast: any; filial: FilialOp;
 }) => {
   const isClientes = type === 'clientes';
   const confirm = useConfirm();
@@ -73,7 +101,8 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
       endereco:    item.endereco   ?? '',
       cpf_cnpj:    item.cpf_cnpj   ?? '',
       categoria:   item.categoria  ?? '',
-      filial:      item.filial     ?? FILIAL_DEFAULT,
+      filial,
+      atributos:   (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {},
     });
     setErrors({});
     setShowForm(false);
@@ -99,10 +128,24 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
         email:       extras.email,
         endereco:    extras.endereco,
         cpf_cnpj:    extras.cpf_cnpj,
-        filial:      extras.filial || FILIAL_DEFAULT,
+        filial,
+      };
+      // Atributos JSONB (fornecedor apenas). Filtra pra manter só campos
+      // válidos do nicho da filial atual — evita salvar lixo.
+      const buildAtributosFornecedor = () => {
+        const defs = ATRIBUTOS_FORNECEDOR[extras.filial] ?? [];
+        const out: Record<string, any> = {};
+        for (const d of defs) {
+          const v = extras.atributos?.[d.key];
+          if (v === undefined || v === null || v === '') continue;
+          out[d.key] = d.type === 'number' ? Number(v) : v;
+        }
+        return out;
       };
       if (editItem) {
-        const payload = isClientes ? base : { ...base, categoria: extras.categoria };
+        const payload = isClientes
+          ? base
+          : { ...base, categoria: extras.categoria, atributos: buildAtributosFornecedor() };
         const updated = await dbUpdate(endpoint, editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
         showToast('Registro atualizado!', 'success', true);
@@ -111,7 +154,7 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
         // não pelo cadastro inicial. Omitir aqui (NULL até primeira compra).
         const payload = isClientes
           ? { ...base, status: 'Ativo' }
-          : { ...base, categoria: extras.categoria, status: 'Homologado' };
+          : { ...base, categoria: extras.categoria, atributos: buildAtributosFornecedor(), status: 'Homologado' };
         const saved = await dbInsert(endpoint, payload);
         setData([saved ?? { id: Date.now(), ...payload }, ...data]);
         showToast('Registro criado com sucesso!', 'success', true);
@@ -163,10 +206,6 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <button onClick={onTrocarFilial}
-            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
-            <ArrowLeft size={14} /> Trocar unidade
-          </button>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
         </div>
       </div>
@@ -242,15 +281,45 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
                       placeholder="Ex: Materiais, Serviços" />
                   </FormField>
                 )}
-
-                <FormField label="Filial / Unidade *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.filial}
-                    onChange={e => setExtras(x => ({ ...x, filial: e.target.value }))}>
-                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </FormField>
               </div>
+
+              {/* Atributos JSONB — só fornecedor + MaxLook/TechMax. Cliente e
+                  SuperMax mantêm o form padrão sem seção extra. */}
+              {!isClientes && (ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).length > 0 && (
+                <div className="mt-2 pt-6 border-t border-white/5">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">
+                    {extras.filial === 'MaxLook' ? 'Perfil do parceiro (Moda)' : 'Perfil do parceiro (Assistência)'}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).map(d => {
+                      const val = extras.atributos?.[d.key] ?? '';
+                      const setAtr = (v: any) => setExtras(x => ({
+                        ...x, atributos: { ...(x.atributos ?? {}), [d.key]: v }
+                      }));
+                      if (d.type === 'select' && d.options) {
+                        return (
+                          <FormField key={d.key} label={d.label}>
+                            <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                              value={String(val)} onChange={e => setAtr(e.target.value)}>
+                              <option value="">— Selecione —</option>
+                              {d.options.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          </FormField>
+                        );
+                      }
+                      return (
+                        <FormField key={d.key} label={d.label}>
+                          <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                            type={d.type === 'number' ? 'number' : 'text'}
+                            inputMode={d.type === 'number' ? 'numeric' : undefined}
+                            value={String(val)} onChange={e => setAtr(e.target.value)}
+                            placeholder={d.placeholder} />
+                        </FormField>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -349,5 +418,5 @@ const CRMViewInner = ({ type, showToast, filial, onTrocarFilial }: {
 export const CRMView = ({ type, showToast }: { type: 'clientes' | 'fornecedores'; showToast: any }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CRMViewInner type={type} showToast={showToast} filial={filialAtiva} onTrocarFilial={() => {}} />;
+  return <CRMViewInner type={type} showToast={showToast} filial={filialAtiva} />;
 };

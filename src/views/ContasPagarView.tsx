@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, ArrowLeft } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
@@ -14,7 +14,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast: any; filial: FilialOp; onTrocarFilial: () => void }) => {
+const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -49,7 +49,7 @@ const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
     '/api/contaspagarview', extraFilter, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -315,10 +315,6 @@ const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
-          <button onClick={onTrocarFilial}
-            className="neu-button py-2.5 px-4 rounded-xl text-sm text-gray-400 hover:text-accent flex items-center gap-1.5">
-            <ArrowLeft size={14} /> Trocar unidade
-          </button>
           <div className="flex gap-1">
             {(['', 'hoje', 'semana', 'mes'] as const).map(p => (
               <button key={p || 'todos'} onClick={() => setPeriodoFiltro(p)}
@@ -486,5 +482,5 @@ const ContasPagarViewInner = ({ showToast, filial, onTrocarFilial }: { showToast
 
 export const ContasPagarView = ({ showToast }: any) => {
   const { filialAtiva: filial } = useFilial();
-  return <ContasPagarViewInner showToast={showToast} filial={filial} onTrocarFilial={() => {}} />;
+  return <ContasPagarViewInner showToast={showToast} filial={filial} />;
 };
