@@ -331,18 +331,18 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
 };
 
 export const ControleCaixaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  // Guard: caixa é financeiro+vendas (RLS já reflete isso).
+  // Guard: caixa é financeiro+vendas, ou gerente (cobre a própria filial
+  // mesmo fora desses setores — RLS acompanha em auth_in_setor(...)).
   const confirm = useConfirm();
-  if (!hasAnySetor(profile, 'financeiro', 'vendas')) {
+  if (!hasAnySetor(profile, 'financeiro', 'vendas') && profile?.role !== 'gerente') {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas Financeiro, Vendas, admin ou CEO podem acessar o Caixa.</p>
+        <p className="text-sm text-gray-400">Apenas Financeiro, Vendas, Gerente, admin ou CEO podem acessar o Caixa.</p>
       </div>
     );
   }
   const { caixas, isLoading: caixaLoading, refresh } = useCaixasDoDia();
-  const { data: historico, isLoading: histLoading, reload } = useFetchData<any>('/api/controlecaixaview');
   const { data: capitalRows = [] } = useFetchData<any>('capital_filial');
 
   const today = todayBR();
@@ -355,6 +355,14 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
     : (FILIAIS_OPERACIONAIS as readonly string[]).includes(profile?.filial)
       ? [profile.filial as FilialOperacional]
       : [];
+
+  // Histórico também trava por filial pra colaborador/gerente — sem isso a
+  // tabela mostrava sessões de outras unidades e o botão "Reabrir" permitia
+  // reabrir (na prática, "abrir") caixa de filial alheia.
+  const { data: historico, isLoading: histLoading, reload } = useFetchData<any>(
+    '/api/controlecaixaview',
+    cross ? undefined : (filiaisVisiveis[0] ? { filial: filiaisVisiveis[0] } : { filial: '__none__' }),
+  );
 
   const handleReabrir = async (h: any) => {
     if (!supabase) return;
