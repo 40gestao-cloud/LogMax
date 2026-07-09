@@ -673,9 +673,11 @@ function LogMaxAppInner() {
     // hubs + Votações/Capital/Requerimentos (injetados manualmente no SidebarNav).
     ? []
     // Em filial: sidebar tradicional com todos os módulos operacionais
-    // (velocidade importa mais que hub aqui). Esconde Empresa e TI —
-    // esses só aparecem em Matriz.
-    : allVisibleModules.filter(m => m.id !== 'empresa' && m.id !== 'ti');
+    // (velocidade importa mais que hub aqui). Esconde TI — só aparece em
+    // Matriz. Empresa aparece pra todo mundo (RBAC já filtra por setor
+    // via SETOR_MODULES); filial vê/edita os próprios dados em
+    // Categorias, os demais cadastros são globais da empresa toda.
+    : allVisibleModules.filter(m => m.id !== 'ti');
 
   const renderContent = () => {
     const st = showToast;
@@ -690,13 +692,13 @@ function LogMaxAppInner() {
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
-      case 'empresa-projetos':                return <GenericCRUDView showToast={st} title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
+      case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
-      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
+      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-mapeamentosderateio':     return <GenericCRUDView showToast={st} title="Mapeamentos de Rateio" subtitle="Gerencie como custos são rateados entre centros." endpoint="/api/mapeamentosrateioview"
+      case 'empresa-mapeamentosderateio':     return <GenericCRUDView showToast={st} filialScoped title="Mapeamentos de Rateio" subtitle="Gerencie como custos são rateados entre centros." endpoint="/api/mapeamentosrateioview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Rateio TI' }, { key: 'centros_custo', label: 'Centros de Custo', placeholder: 'Ex: CC-001, CC-002' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
+      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'compras-requisições':             return <RequisicoesView showToast={st} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} />;

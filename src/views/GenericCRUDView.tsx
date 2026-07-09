@@ -3,15 +3,21 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
 import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useFilial } from '../contexts/FilialContext';
 
-export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast }: {
+export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
+  /** Cada filial só vê/edita os próprios registros; Matriz vê o consolidado (só leitura). */
+  filialScoped?: boolean;
 }) => {
   const confirm = useConfirm();
-  const { data, setData, isLoading } = useFetchData<any>(endpoint);
+  const { filialAtiva } = useFilial();
+  // Fora de filialScoped, filialAtiva é ignorado — comportamento global de sempre.
+  const canWrite = !filialScoped || !!filialAtiva;
+  const { data, setData, isLoading } = useFetchData<any>(endpoint, filialScoped && filialAtiva ? { filial: filialAtiva } : undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -46,7 +52,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
   const closeForm = () => { setShowForm(false); setEditItem(null); setFormState(emptyState()); setValErrors({}); };
 
   const handleSave = async () => {
-    if (!validateForm()) return;
+    if (!canWrite || !validateForm()) return;
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
@@ -62,7 +68,9 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
           return [k, v];
         })
       );
-      const payload = editItem ? parsed : { ...parsed, status: (parsed.status as string) || defaultStatus };
+      const payload = editItem
+        ? parsed
+        : { ...parsed, status: (parsed.status as string) || defaultStatus, ...(filialScoped ? { filial: filialAtiva } : {}) };
       if (editItem) {
         const updated = await dbUpdate(endpoint, editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
@@ -81,7 +89,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
   };
 
   const handleDelete = async (id: string) => {
-    if (!await confirm('Excluir este registro?')) return;
+    if (!canWrite || !await confirm('Excluir este registro?')) return;
     try {
       await dbDelete(endpoint, id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
@@ -99,8 +107,11 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
-          <p className="text-sm text-gray-400 mt-1">{subtitle}</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}{filialScoped ? (filialAtiva ? ` — ${filialAtiva}` : ' — Consolidado') : ''}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            {subtitle}
+            {filialScoped && !filialAtiva && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
+          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto flex-wrap">
           <div className="relative flex-1 sm:flex-none">
@@ -108,7 +119,9 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
             <input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
+          {canWrite && (
+            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Novo</NeuButtonAccent>
+          )}
         </div>
       </div>
 
@@ -176,12 +189,13 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 {fields.map(f => <th key={f.key} className="pb-4 font-bold px-4">{f.label}</th>)}
+                {filialScoped && !filialAtiva && <th className="pb-4 font-bold px-4">Filial</th>}
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={fields.length + 1}><LoadingSpinner /></td></tr>)
-                : filtered.length === 0 ? (<tr><td colSpan={fields.length + 1}><EmptyState /></td></tr>)
+              {isLoading ? (<tr><td colSpan={fields.length + (filialScoped && !filialAtiva ? 2 : 1)}><LoadingSpinner /></td></tr>)
+                : filtered.length === 0 ? (<tr><td colSpan={fields.length + (filialScoped && !filialAtiva ? 2 : 1)}><EmptyState /></td></tr>)
                 : (
                   <AnimatePresence>
                     {filtered.map((item: any) => (
@@ -208,11 +222,18 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                             </td>
                           );
                         })}
+                        {filialScoped && !filialAtiva && (
+                          <td className="py-4 px-4"><FilialBadge filial={item.filial} /></td>
+                        )}
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                            <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
+                            {canWrite && (
+                              <>
+                                <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                                <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </motion.tr>

@@ -2,8 +2,7 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Edit2, Trash2, Check, ChevronRight, ImageIcon, X } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
-import { hasSetor, isConselheiro } from '../lib/rbac';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, FilialBadge } from '../components/ui';
 import {
   uploadImagemCategoria, removerImagemCategoria,
   validarImagemCategoria, CATEGORIA_IMAGEM_ACCEPT,
@@ -191,14 +190,16 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
 // ── Painel de Categorias (wrapper com seleção + nome) ─────────────────────────
 function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
   canEdit: boolean; selectedId: string | null;
-  onSelect: (id: string, nome: string) => void; filial: FilialOp;
+  onSelect: (id: string, nome: string) => void; filial: FilialOp | null;
 }) {
-  const { data, isLoading, reload } = useFetchData<any>('categorias_produto', { filial });
+  // Matriz (filial null) vê o consolidado de todas as unidades, só leitura.
+  const { data, isLoading, reload } = useFetchData<any>('categorias_produto', filial ? { filial } : undefined);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [saving,   setSaving]   = useState(false);
 
   const handleSave = async (f: FormData) => {
+    if (!filial) return;
     setSaving(true);
     try {
       if (editItem) await dbUpdate('categorias_produto', editItem.id, { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null });
@@ -261,9 +262,10 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
                   <CatThumb imagem_url={cat.imagem_url} icone={cat.icone} cor={cat.cor} size={8} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-200 truncate">{cat.nome}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <div className="w-2 h-2 rounded-full" style={{ background: cat.cor }} />
                       <span className="text-[10px] text-gray-500 font-mono">{cat.cor}</span>
+                      {!filial && <FilialBadge filial={cat.filial} />}
                     </div>
                   </div>
                   {selectedId === cat.id
@@ -394,22 +396,24 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
 
 // ── View principal ────────────────────────────────────────────────────────────
 const CategoriasProdutoViewInner = ({ profile, showToast, filial }: {
-  profile: any; showToast: any; filial: FilialOp;
+  profile: any; showToast: any; filial: FilialOp | null;
 }) => {
   const [selectedCatId,   setSelectedCatId]   = useState<string | null>(null);
   const confirm = useConfirm();
   const [selectedCatNome, setSelectedCatNome] = useState('');
 
-  const canEdit = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || hasSetor(profile, 'logistica');
+  // Qualquer colaborador com acesso ao módulo Empresa gerencia as categorias
+  // da própria filial. Matriz continua só-leitura (consolidado, sem filial).
+  const canEdit = !!filial;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-gray-100">Categorias — {filial}</h1>
+          <h1 className="text-2xl font-black text-gray-100">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
           <p className="text-sm text-gray-500 mt-1">
             Estrutura de categorias usada em Produtos, Orçamento e Marketing.
-            {canEdit ? ' Restrito a Logística / Admin / CEO.' : ''}
+            {!filial && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
           </p>
         </div>
       </div>
@@ -437,6 +441,5 @@ const CategoriasProdutoViewInner = ({ profile, showToast, filial }: {
 
 export const CategoriasProdutoView = ({ profile, showToast }: { profile: any; showToast: any }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
   return <CategoriasProdutoViewInner profile={profile} showToast={showToast} filial={filialAtiva} />;
 };
