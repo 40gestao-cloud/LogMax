@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, AlertTriangle, Camera } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -8,6 +8,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../com
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { exportToExcel } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 
 const SETOR_LABEL: Record<string, string> = {
@@ -120,8 +121,21 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null);
   const formPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  // Export PDF — admin only.
+  // Export PDF/Excel — admin only.
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const usuariosExportColumns = ['Nome', 'E-mail', 'Cargo', 'Setor (+extras)', 'Filial', 'Criado em'];
+  const buildUsuariosExportRows = () => filteredUsers.map(u => {
+    const extras = (u.setores_extras ?? []).map(s => SETOR_LABEL[s] ?? s).join(', ');
+    return [
+      u.nome ?? '—',
+      u.email ?? '—',
+      ROLE_LABEL[u.role] ?? u.role,
+      (SETOR_LABEL[u.setor] ?? u.setor) + (extras ? ` (+${extras})` : ''),
+      u.filial ?? FILIAL_DEFAULT,
+      u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—',
+    ];
+  });
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
@@ -147,21 +161,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         pageWidth - margin, 20, { align: 'right' }
       );
 
-      const rows = filteredUsers.map(u => {
-        const extras = (u.setores_extras ?? []).map(s => SETOR_LABEL[s] ?? s).join(', ');
-        return [
-          u.nome ?? '—',
-          u.email ?? '—',
-          ROLE_LABEL[u.role] ?? u.role,
-          (SETOR_LABEL[u.setor] ?? u.setor) + (extras ? ` (+${extras})` : ''),
-          u.filial ?? FILIAL_DEFAULT,
-          u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—',
-        ];
-      });
+      const rows = buildUsuariosExportRows();
 
       autoTable(doc, {
         startY: 34,
-        head: [['Nome', 'E-mail', 'Cargo', 'Setor (+extras)', 'Filial', 'Criado em']],
+        head: [usuariosExportColumns],
         body: rows,
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
@@ -175,6 +179,16 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       showToast(`Erro ao gerar PDF: ${err?.message ?? '—'}`, 'error');
     } finally {
       setExportingPdf(false);
+    }
+  };
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    try {
+      await exportToExcel('Usuários', usuariosExportColumns, buildUsuariosExportRows(), `logmax-usuarios-${new Date().toISOString().slice(0, 10)}`);
+    } catch (err: any) {
+      showToast(`Erro ao gerar Excel: ${err?.message ?? '—'}`, 'error');
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -525,6 +539,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
               title="Baixar lista em PDF">
               <FileDown size={14} />{exportingPdf ? 'Gerando...' : 'PDF'}
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={handleExportExcel} disabled={exportingExcel || filteredUsers.length === 0}
+              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
+              title="Baixar lista em Excel">
+              <FileSpreadsheet size={14} />{exportingExcel ? 'Gerando...' : 'Excel'}
             </button>
           )}
           <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
