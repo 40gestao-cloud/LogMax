@@ -9,6 +9,7 @@ import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { useFilial } from '../contexts/FilialContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 type SaldoFilial = {
@@ -174,7 +175,11 @@ export function FilialCapitalView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const filial = profile?.filial ?? '';
+  // Unidade ativa no topbar tem prioridade sobre a filial lotada do perfil —
+  // um admin com profile.filial=Matriz vendo dados da SuperMax no topbar
+  // deve puxar Capital da SuperMax, não da Matriz.
+  const { filialAtiva } = useFilial();
+  const filial = filialAtiva ?? profile?.filial ?? '';
   const [saldo, setSaldo] = useState<SaldoFilial | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
   const [modalSolicitar, setModalSolicitar] = useState(false);
