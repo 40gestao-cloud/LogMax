@@ -15,7 +15,11 @@ import { useFilial } from '../contexts/FilialContext';
 type SaldoFilial = {
   capital_total: number;
   despesas_pagas: number;
+  despesas_operacionais: number;
+  despesas_financeiras: number;
   receitas_pagas: number;
+  lucro_operacional: number;
+  lucro_liquido: number;
   reserva_valor: number;
   reserva_pct: number;
   saldo_livre: number;
@@ -181,6 +185,7 @@ export function FilialCapitalView({
   const { filialAtiva } = useFilial();
   const filial = filialAtiva ?? profile?.filial ?? '';
   const [saldo, setSaldo] = useState<SaldoFilial | null>(null);
+  const [saldoErr, setSaldoErr] = useState<string | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
   const [modalSolicitar, setModalSolicitar] = useState(false);
 
@@ -193,8 +198,20 @@ export function FilialCapitalView({
   const carregarSaldo = useCallback(async () => {
     if (!supabase || !filial) { setLoadingSaldo(false); return; }
     setLoadingSaldo(true);
+    setSaldoErr(null);
     const { data, error } = await supabase.rpc('calcular_saldo_capital', { p_filial: filial });
-    if (!error && data?.[0]) setSaldo(data[0]);
+    if (error) {
+      // Diagnóstico: erro real da RPC (RPC ausente, RLS, etc.) fica visível
+      // na UI + no console, sem obrigar o usuário a abrir DevTools.
+      console.error('[Capital] calcular_saldo_capital falhou:', error);
+      setSaldo(null);
+      setSaldoErr(error.message ?? String(error));
+    } else if (data?.[0]) {
+      setSaldo(data[0]);
+    } else {
+      setSaldo(null);
+      setSaldoErr('RPC executou mas não devolveu linha nenhuma.');
+    }
     setLoadingSaldo(false);
   }, [filial]);
 
@@ -229,6 +246,21 @@ export function FilialCapitalView({
       transition={{ duration: 0.3 }}
       className="flex flex-col gap-5 pb-16"
     >
+      {/* Diagnóstico visível quando a RPC falhou — evita "traços silenciosos". */}
+      {!loadingSaldo && !saldo && saldoErr && (
+        <div className="neu-flat rounded-2xl border border-red-500/30 bg-red-500/5 p-4 flex items-start gap-3">
+          <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-300">Não consegui calcular o Capital de {filial}.</p>
+            <p className="text-[11px] text-red-400/80 mt-1 font-mono break-words">{saldoErr}</p>
+            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+              Causas comuns: (a) a migração <span className="font-mono text-gray-400">20260710c_capital_efetivo.sql</span> ainda não foi aplicada no Supabase;
+              (b) o SQL Editor está apontando pra outro projeto; (c) a RLS de <span className="font-mono text-gray-400">capital_filial</span> não deixou a RPC ler o aporte.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Card principal de saldo */}
       {loadingSaldo ? (
         <LoadingSpinner />
@@ -317,28 +349,75 @@ export function FilialCapitalView({
         </div>
       )}
 
-      {/* DRE simplificado */}
+      {/* DRE contábil — leitura vertical de cima pra baixo:
+          Receita Bruta → (-) Despesas Operacionais = LUCRO OPERACIONAL,
+          depois (-) Despesas Financeiras e (-) Reserva = LUCRO LÍQUIDO.
+          Duas linhas de fecho ficam destacadas com fundo pra distinguir. */}
       {saldo && (
-        <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-1">
+          <div className="flex items-center gap-2 mb-3">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">DRE do Período</span>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Receita</p>
-              <p className="text-lg font-black text-green-400 tabular-nums">{BRL(saldo.receitas_pagas)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Despesa</p>
-              <p className="text-lg font-black text-red-400 tabular-nums">{BRL(saldo.despesas_pagas)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Resultado</p>
-              <p className={`text-lg font-black tabular-nums ${(saldo.receitas_pagas - saldo.despesas_pagas) >= 0 ? 'text-accent' : 'text-orange-400'}`}>
-                {BRL(saldo.receitas_pagas - saldo.despesas_pagas)}
-              </p>
-            </div>
+
+          {/* Acima da linha operacional */}
+          <div className="flex justify-between items-baseline py-2">
+            <span className="text-xs text-gray-300">Receita Bruta</span>
+            <span className="text-sm font-bold text-green-400 tabular-nums">{BRL(saldo.receitas_pagas)}</span>
           </div>
+          <div className="flex justify-between items-baseline py-2 border-b border-white/5">
+            <span className="text-xs text-gray-300">(−) Despesas Operacionais</span>
+            <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_operacionais)}</span>
+          </div>
+
+          {/* Lucro Operacional — subtotal em destaque */}
+          <div className={`flex justify-between items-baseline py-2.5 px-3 my-1 rounded-xl ${
+            saldo.lucro_operacional >= 0 ? 'bg-accent/5' : 'bg-orange-500/10'
+          }`}>
+            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
+              {saldo.lucro_operacional >= 0 ? 'Lucro Operacional' : 'Prejuízo Operacional'}
+            </span>
+            <span className={`text-base font-black tabular-nums ${
+              saldo.lucro_operacional >= 0 ? 'text-accent' : 'text-orange-400'
+            }`}>
+              {BRL(saldo.lucro_operacional)}
+            </span>
+          </div>
+
+          {/* Abaixo da linha operacional */}
+          <div className="flex justify-between items-baseline py-2">
+            <span className="text-xs text-gray-300">(−) Despesas Financeiras <span className="text-gray-500">(parcelas de empréstimo)</span></span>
+            <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_financeiras)}</span>
+          </div>
+          <div className="flex justify-between items-baseline py-2 border-b border-white/5">
+            <span className="text-xs text-gray-300">
+              (−) Reserva Obrigatória <span className="text-gray-500">({saldo.reserva_pct}%)</span>
+            </span>
+            <span className="text-sm font-bold text-yellow-300 tabular-nums">{BRL(saldo.reserva_valor)}</span>
+          </div>
+
+          {/* Lucro Líquido — total em destaque forte */}
+          <div className={`flex justify-between items-baseline py-3 px-3 mt-1 rounded-xl border ${
+            saldo.lucro_liquido >= 0
+              ? 'bg-green-500/10 border-green-500/30'
+              : 'bg-red-500/10 border-red-500/30'
+          }`}>
+            <span className={`text-sm font-black uppercase tracking-widest ${
+              saldo.lucro_liquido >= 0 ? 'text-green-300' : 'text-red-300'
+            }`}>
+              {saldo.lucro_liquido >= 0 ? 'Lucro Líquido' : 'Prejuízo Líquido'}
+            </span>
+            <span className={`text-xl font-black tabular-nums ${
+              saldo.lucro_liquido >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {BRL(saldo.lucro_liquido)}
+            </span>
+          </div>
+
+          <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
+            Lucro Operacional mede o resultado da operação em si.
+            Lucro Líquido desconta ainda o custo do capital emprestado e a reserva obrigatória —
+            é o que sobra de fato pra distribuir ou reinvestir.
+          </p>
         </div>
       )}
 

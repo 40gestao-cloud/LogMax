@@ -250,27 +250,15 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
     if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
     setRecSaving(true);
     try {
+      // O trigger sync_saldo_caixa_receber credita caixa_bancos.saldo
+      // automaticamente ao mudar o status pra Pago. Atualização otimista
+      // do state local só pra UI enquanto o próximo fetch valida.
       const updated = await dbUpdate('/api/contasreceberview', conta.id, { status: 'Pago', banco_id: recBankId });
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
-
-      if (supabase) {
-        // Why: o array `bancos` vem de useFetchData sem realtime; sem refrescar
-        // o estado local após cada baixa, o próximo recebimento lê o `saldo`
-        // antigo e a 2ª gravação sobrescreve a 1ª (só o último recebimento vinga).
-        const novoSaldo = Number(banco.saldo ?? 0) + valor;
-        const { data: updatedBanco, error } = await supabase
-          .from('caixa_bancos')
-          .update({ saldo: novoSaldo })
-          .eq('id', recBankId)
-          .select()
-          .single();
-        if (error || !updatedBanco) {
-          showToast(`Conta recebida, mas falhou ao atualizar o saldo de "${banco.banco ?? banco.conta}". Ajuste manualmente.`, 'error', false);
-          closeReceber();
-          return;
-        }
-        setBancos((prev: any[]) => prev.map((b: any) => b.id === recBankId ? updatedBanco : b));
-      }
+      setBancos((prev: any[]) => prev.map((b: any) => b.id === recBankId
+        ? { ...b, saldo: Number(b.saldo ?? 0) + valor }
+        : b,
+      ));
 
       const msgJuros = breakdown.vencido && (breakdown.juros + breakdown.multa) > 0
         ? ` (inclui R$ ${(breakdown.juros + breakdown.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
@@ -280,8 +268,8 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
         'success', true,
       );
       closeReceber();
-    } catch {
-      showToast('Erro ao registar recebimento.', 'error', true);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao registrar recebimento.', 'error', true);
     } finally {
       setRecSaving(false);
     }

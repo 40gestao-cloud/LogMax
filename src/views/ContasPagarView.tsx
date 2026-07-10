@@ -253,27 +253,15 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
     setPaySaving(true);
     try {
+      // O trigger sync_saldo_caixa_pagar debita caixa_bancos.saldo
+      // automaticamente ao mudar o status pra Pago. Atualização otimista
+      // do state local pra refletir na UI enquanto o próximo fetch valida.
       const updated = await dbUpdate('/api/contaspagarview', conta.id, { status: 'Pago', banco_id: payBankId });
       setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
-
-      if (supabase) {
-        // Why: o array `bancos` vem de useFetchData sem realtime; sem refrescar
-        // o estado local após cada baixa, a próxima conta paga lê o `saldo`
-        // antigo e a 2ª gravação sobrescreve a 1ª (só o último pagamento vinga).
-        const novoSaldo = Number(banco.saldo ?? 0) - valor;
-        const { data: updatedBanco, error } = await supabase
-          .from('caixa_bancos')
-          .update({ saldo: novoSaldo })
-          .eq('id', payBankId)
-          .select()
-          .single();
-        if (error || !updatedBanco) {
-          showToast(`Conta paga, mas falhou ao atualizar o saldo de "${banco.banco ?? banco.conta}". Ajuste manualmente.`, 'error', false);
-          closePay();
-          return;
-        }
-        setBancos((prev: any[]) => prev.map((b: any) => b.id === payBankId ? updatedBanco : b));
-      }
+      setBancos((prev: any[]) => prev.map((b: any) => b.id === payBankId
+        ? { ...b, saldo: Number(b.saldo ?? 0) - valor }
+        : b,
+      ));
 
       const msgJuros = breakdown.vencido && (breakdown.juros + breakdown.multa) > 0
         ? ` (inclui R$ ${(breakdown.juros + breakdown.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
@@ -283,8 +271,9 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
         'success', true,
       );
       closePay();
-    } catch {
-      showToast('Erro ao registar pagamento.', 'error', true);
+    } catch (err: any) {
+      // Capital estourado → trigger bloqueia_conta_pagar_estourado devolve msg amigável
+      showToast(err?.message ?? 'Erro ao registrar pagamento.', 'error', true);
     } finally {
       setPaySaving(false);
     }
