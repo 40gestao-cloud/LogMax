@@ -8,59 +8,71 @@ import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone,
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
 import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
+import { useFilial } from '../contexts/FilialContext';
 
-// Equipamentos comuns a qualquer unidade — energia, manutenção, reposição.
-const CAMPOS_COMUNS = [
-  ['arCondicionados',  'Ar-condicionados'],
-  ['ventiladores',     'Ventiladores'],
-  ['caixasAtendimento','Caixas de atendimento'],
-  ['computadores',     'Computadores'],
-  ['impressoras',      'Impressoras'],
-  ['mesas',            'Mesas'],
-  ['cadeiras',         'Cadeiras'],
-  ['camerasSeguranca', 'Câmeras de segurança'],
-  ['extintores',       'Extintores'],
-] as const;
-
-// Campos específicos por nicho — só aparecem quando o nome da filial
-// bate com o nicho detectado. Padrão herdado do PDV (atributos jsonb por nicho).
+// Equipamentos & mobiliário por nicho — cada unidade tem sua grade completa,
+// curada pra realidade do negócio. Padrão herdado do PDV (atributos jsonb).
 const CAMPOS_NICHO: Record<FilialHolding, ReadonlyArray<readonly [string, string]>> = {
   SuperMax: [
-    ['gondolas',        'Gôndolas'],
-    ['freezers',        'Freezers / Geladeiras'],
-    ['balancas',        'Balanças'],
-    ['esteirasCaixa',   'Esteiras de caixa'],
-    ['carrinhos',       'Carrinhos'],
-    ['cestas',          'Cestas'],
-    ['setoresEspeciais','Setores (açougue/padaria/etc)'],
+    ['gondolas',         'Gôndolas'],
+    ['freezers',         'Freezers / Geladeiras'],
+    ['camarasFrias',     'Câmaras frias'],
+    ['balancas',         'Balanças'],
+    ['esteirasCaixa',    'Esteiras de caixa'],
+    ['pdvs',             'PDVs (checkouts)'],
+    ['carrinhos',        'Carrinhos'],
+    ['cestas',           'Cestas'],
+    ['setoresEspeciais', 'Setores (açougue/padaria/hortifruti)'],
+    ['arCondicionados',  'Ar-condicionados'],
+    ['camerasSeguranca', 'Câmeras de segurança'],
+    ['extintores',       'Extintores'],
   ],
   MaxLook: [
     ['provadores',         'Provadores'],
+    ['araras',             'Araras (roupas)'],
+    ['manequins',          'Manequins'],
+    ['prateleirasCalcado', 'Prateleiras de calçados'],
+    ['espelhos',           'Espelhos'],
     ['expositoresPerfume', 'Expositores de perfume'],
     ['balcaoMaquiagem',    'Balcões de maquiagem'],
     ['testers',            'Testers em exposição'],
-    ['araras',             'Araras'],
     ['iluminacaoEspecial', 'Spots de iluminação'],
+    ['antifurtos',         'Sensores antifurto'],
+    ['pdvs',               'PDVs (caixas)'],
+    ['arCondicionados',    'Ar-condicionados'],
+    ['camerasSeguranca',   'Câmeras de segurança'],
   ],
   TechMax: [
     ['bancadasReparo',     'Bancadas de reparo'],
     ['estacoesSolda',      'Estações de solda'],
     ['multimetros',        'Multímetros'],
+    ['osciloscopios',      'Osciloscópios'],
     ['ferramentasSet',     'Kits de ferramentas'],
+    ['estacoesEsd',        'Estações antiestática (ESD)'],
+    ['vitrinesExposicao',  'Vitrines de exposição'],
     ['vitrinesAcessorios', 'Vitrines de acessórios'],
     ['estoquePecas',       'Compartimentos de peças'],
+    ['pdvs',               'PDVs (caixas)'],
+    ['arCondicionados',    'Ar-condicionados'],
+    ['camerasSeguranca',   'Câmeras de segurança'],
   ],
   Matriz: [
     ['salasReuniao',    'Salas de reunião'],
+    ['estacoesTrabalho','Estações de trabalho'],
     ['servidoresRack',  'Servidores / Racks'],
     ['telefones',       'Telefones'],
     ['quadrosBrancos',  'Quadros brancos'],
+    ['impressoras',     'Impressoras'],
+    ['arCondicionados', 'Ar-condicionados'],
+    ['camerasSeguranca','Câmeras de segurança'],
+    ['extintores',      'Extintores'],
   ],
 };
 
-// Nicho da unidade. Prioriza a escolha explícita salva em detalhes.nicho.
-// Fallback: tenta inferir do nome (SuperMax Rio Branco, MaxLook Centro etc.).
-// Aceita "" como "não escolhido" e devolve null.
+// Nicho da unidade. Inferido do nome (SuperMax Rio Branco, MaxLook Centro etc.).
+// Aceita `explicit` só como compatibilidade com registros antigos que
+// gravaram `detalhes.nicho` manualmente — se bater com uma holding, tem
+// prioridade; senão cai no nome.
 function detectarNicho(explicit: string | undefined | null, nome?: string): FilialHolding | null {
   const e = (explicit ?? '').trim();
   if (e && (FILIAIS_HOLDING as readonly string[]).includes(e)) return e as FilialHolding;
@@ -69,12 +81,11 @@ function detectarNicho(explicit: string | undefined | null, nome?: string): Fili
   return null;
 }
 
-// Todas as chaves de equipamento (comum + todos os nichos). Usado pra
+// Todas as chaves de equipamento (união de todos os nichos). Usado pra
 // inicializar/limpar/salvar em loop, evitando repetir chave por chave.
-const TODAS_CHAVES_EQUIP: string[] = [
-  ...CAMPOS_COMUNS.map(([k]) => k),
-  ...Object.values(CAMPOS_NICHO).flatMap(l => l.map(([k]) => k)),
-];
+const TODAS_CHAVES_EQUIP: string[] = Array.from(new Set(
+  Object.values(CAMPOS_NICHO).flatMap(l => l.map(([k]) => k))
+));
 
 const equipZeros = (): Record<string, string> =>
   Object.fromEntries(TODAS_CHAVES_EQUIP.map(k => [k, '']));
@@ -96,6 +107,10 @@ function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'x
 export const FiliaisView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/filiaisview');
   const confirm = useConfirm();
+  // Unidade ativa vinda do topbar (SUPERMAX/MAXLOOK/TECHMAX). null = Matriz.
+  // É essa que define a grade de equipamentos & mobiliário do formulário.
+  const { filialAtiva } = useFilial();
+  const nichoAtivo: FilialHolding = filialAtiva ?? 'Matriz';
   const [isSaving, setIsSaving]     = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [editItem, setEditItem]     = useState<any | null>(null);
@@ -196,18 +211,14 @@ export const FiliaisView = ({ showToast }: any) => {
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
       const num = (v: string) => v !== '' ? Number(v) : null;
-      const nicho = detectarNicho(detalhes.nicho, form.nome);
-      // Comuns: sempre persistem. Nicho: só o subset do nicho detectado
-      // — evita carregar campos de outros nichos que ficaram no state.
-      const chavesEquipParaSalvar = [
-        ...CAMPOS_COMUNS.map(([k]) => k),
-        ...(nicho ? CAMPOS_NICHO[nicho].map(([k]) => k) : []),
-      ];
+      // Nicho vem da unidade ativa no topbar — não do nome nem de seletor.
+      const nicho = nichoAtivo;
+      const chavesEquipParaSalvar = CAMPOS_NICHO[nicho].map(([k]) => k);
       const equipPayload = Object.fromEntries(
         chavesEquipParaSalvar.map(k => [k, num(detalhes[k])])
       );
       const detalhesPayload = {
-        nicho: nicho ?? null,
+        nicho,
         tamanhoM2: num(detalhes.tamanhoM2),
         tipoImovel: detalhes.tipoImovel || null,
         valorAluguel: detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : null,
@@ -285,26 +296,6 @@ export const FiliaisView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Filial' : 'Nova Filial'}</h3>
 
-              {/* Nicho — em destaque no topo, pois define quais campos específicos aparecem abaixo */}
-              <div className="neu-pressed rounded-2xl p-4 border border-accent/20 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-[10px] text-accent uppercase tracking-widest font-bold mb-1 flex items-center gap-2">
-                    <Package size={12} /> Nicho da Unidade
-                  </p>
-                  <p className="text-[11px] text-gray-500">
-                    Define os equipamentos/mobiliário específicos exibidos abaixo (gôndolas, provadores, bancadas etc.).
-                  </p>
-                </div>
-                <select
-                  className="neu-input py-2 px-3 rounded-xl text-sm w-full sm:w-64"
-                  value={detalhes.nicho}
-                  onChange={e => setDetalhes(d => ({ ...d, nicho: e.target.value }))}
-                >
-                  <option value="">Auto (pelo nome) / Nenhum</option>
-                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-
               {/* Logo */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
@@ -329,8 +320,8 @@ export const FiliaisView = ({ showToast }: any) => {
                       )}
                     </div>
                     <p className="text-[11px] text-gray-500">
-                      JPG, PNG, WEBP ou SVG — máx. <span className="font-bold text-gray-300">{FILIAL_LOGO_MAX_LABEL}</span>.
-                      Sem logo, exibe ícone padrão.
+                      JPG, PNG, WEBP ou SVG — até <span className="font-bold text-gray-300">{FILIAL_LOGO_MAX_LABEL}</span>.
+                      Raster é comprimido para WebP 512 px automaticamente; SVG sobe inalterado. Sem logo, exibe ícone padrão.
                     </p>
                   </div>
                 </div>
@@ -425,13 +416,14 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
               </div>
 
-              {/* Equipamentos & mobiliário comuns */}
+              {/* Equipamentos & mobiliário — grade definida pela unidade ativa
+                  do topbar. Não depende do nome digitado nem de seletor. */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <Package size={12} /> Equipamentos & Mobiliário
+                  <Package size={12} /> Equipamentos & Mobiliário <span className="text-accent">· {nichoAtivo}</span>
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {CAMPOS_COMUNS.map(([key, label]) => (
+                  {CAMPOS_NICHO[nichoAtivo].map(([key, label]) => (
                     <FormField key={key} label={label}>
                       <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0"
                         value={detalhes[key] ?? ''}
@@ -441,42 +433,6 @@ export const FiliaisView = ({ showToast }: any) => {
                   ))}
                 </div>
               </div>
-
-              {/* Específicos do nicho — usa a escolha explícita ou infere do nome.
-                  Se não tiver nicho, mostra placeholder explicativo em vez de sumir. */}
-              {(() => {
-                const nicho = detectarNicho(detalhes.nicho, form.nome);
-                if (!nicho) {
-                  return (
-                    <div>
-                      <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                        <Package size={12} /> Específicos do nicho
-                      </p>
-                      <div className="neu-pressed rounded-2xl p-4 border border-white/5 text-xs text-gray-500 flex items-center gap-2">
-                        <Package size={14} className="text-gray-600 shrink-0" />
-                        Escolha o <span className="text-accent font-bold">Nicho da Unidade</span> no topo do formulário para exibir campos específicos (gôndolas, provadores, bancadas etc.).
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div>
-                    <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                      <Package size={12} /> Específicos do nicho <span className="text-accent">· {nicho}</span>
-                    </p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {CAMPOS_NICHO[nicho].map(([key, label]) => (
-                        <FormField key={key} label={label}>
-                          <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0"
-                            value={detalhes[key] ?? ''}
-                            onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
-                            placeholder="0" />
-                        </FormField>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -560,10 +516,7 @@ export const FiliaisView = ({ showToast }: any) => {
                 {(() => {
                   const d = item.detalhes ?? {};
                   const nichoItem = detectarNicho(d.nicho, item.nome);
-                  const paresRelevantes = [
-                    ...CAMPOS_COMUNS,
-                    ...(nichoItem ? CAMPOS_NICHO[nichoItem] : []),
-                  ];
+                  const paresRelevantes = nichoItem ? CAMPOS_NICHO[nichoItem] : [];
                   const chips = paresRelevantes
                     .map(([k, l]) => [l, d[k]] as const)
                     .filter(([, v]) => typeof v === 'number' && v > 0);
