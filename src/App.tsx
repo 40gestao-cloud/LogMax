@@ -59,7 +59,6 @@ const RequisicoesEstoqueView  = lazy(() => import('./views/RequisicoesEstoqueVie
 const AprovacoesEstoqueView   = lazy(() => import('./views/AprovacoesEstoqueView').then(m => ({ default: m.AprovacoesEstoqueView })));
 const ExpedicaoView           = lazy(() => import('./views/ExpedicaoView').then(m => ({ default: m.ExpedicaoView })));
 const InventariosView         = lazy(() => import('./views/InventariosView').then(m => ({ default: m.InventariosView })));
-const VencimentosEstoqueView  = lazy(() => import('./views/VencimentosEstoqueView').then(m => ({ default: m.VencimentosEstoqueView })));
 const RelatoriosComprasView        = lazy(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
 const RelatoriosEstoqueView        = lazy(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
 const SugestoesComprasView         = lazy(() => import('./views/SugestoesComprasView').then(m => ({ default: m.SugestoesComprasView })));
@@ -149,7 +148,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Previsão de vencimentos',
+    submenus: ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
       'Gerenciamento', 'Relatórios', 'Tarefas']
   },
@@ -792,7 +791,6 @@ function LogMaxAppInner() {
       case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;
       case 'estoque-inventários':             return <InventariosView showToast={st} />;
-      case 'estoque-previsãodevencimentos':   return <VencimentosEstoqueView showToast={st} />;
       case 'estoque-gerenciamento':            return <GerenciamentoEstoqueView />;
       case 'estoque-relatórios':              return <RelatoriosEstoqueView showToast={st} />;
       case 'financeiro-controledecaixa':      return <ControleCaixaView showToast={st} profile={profile} />;
