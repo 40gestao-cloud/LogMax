@@ -39,7 +39,7 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'empresa-macro', label: 'Empresa', icon: Building2, color: 'from-slate-500/20 to-slate-500/5 border-slate-500/30 text-slate-300',
     modulos: [
       { id: 'empresa', label: 'Empresa', icon: Building2, color: 'text-slate-300',
-        submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Mapeamentos de rateio', 'Tarefas'] },
+        submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas'] },
     ],
   },
   {

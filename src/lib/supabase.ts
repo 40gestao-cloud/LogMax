@@ -30,7 +30,6 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/projetosview':                 'projetos',
   '/api/condicoespagamentoview':       'condicoes_pagamento',
   '/api/classificacoesauxiliaresview': 'classificacoes_auxiliares',
-  '/api/mapeamentosrateioview':        'mapeamentos_rateio',
   '/api/formaspagamentoview':          'formas_pagamento',
   '/api/requisicoesview':              'requisicoes',
   '/api/cotacoesview':                 'cotacoes',
@@ -111,7 +110,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
 export const TABLES_WITH_ATIVO = new Set<string>([
   'filiais', 'clientes', 'fornecedores', 'produtos', 'servicos',
   'centros_custo', 'projetos', 'condicoes_pagamento', 'classificacoes_auxiliares',
-  'mapeamentos_rateio', 'formas_pagamento', 'cargos', 'departamentos', 'beneficios',
+  'formas_pagamento', 'cargos', 'departamentos', 'beneficios',
   'caixa_bancos', 'funcionarios',
   'requisicoes', 'cotacoes', 'pedidos', 'recebimentos', 'notas_recebidas',
   'requisicoes_estoque', 'expedicao', 'movimentacoes_estoque', 'inventarios',

@@ -131,7 +131,7 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Mapeamentos de rateio', 'Tarefas']
+    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas']
   },
   {
     // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
@@ -772,8 +772,6 @@ function LogMaxAppInner() {
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-mapeamentosderateio':     return <GenericCRUDView showToast={st} filialScoped title="Mapeamentos de Rateio" subtitle="Gerencie como custos são rateados entre centros." endpoint="/api/mapeamentosrateioview"
-        fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Rateio TI' }, { key: 'centros_custo', label: 'Centros de Custo', placeholder: 'Ex: CC-001, CC-002' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'compras-requisições':             return <RequisicoesView showToast={st} />;
