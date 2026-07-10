@@ -10,6 +10,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useFilial } from '../contexts/FilialContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 type StatusReq = 'Pendente' | 'Em Análise' | 'Aprovado' | 'Negado';
@@ -106,6 +107,9 @@ function ModalNovoRequerimento({
   onSaved: () => void;
   showToast: (msg: string, t?: string) => void;
 }) {
+  // Filial ativa no topbar dita o "de onde" do requerimento — admin/CEO
+  // trabalhando em SuperMax registra na SuperMax, não na Matriz do perfil.
+  const { filialAtiva } = useFilial();
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [arquivo, setArquivo] = useState<{ url: string; tipo: 'imagem' | 'pdf' } | null>(null);
@@ -138,7 +142,7 @@ function ModalNovoRequerimento({
         arquivo_tipo: arquivo?.tipo ?? null,
         criado_por: profile?.id ?? null,
         criado_por_nome: profile?.nome ?? null,
-        filial: profile?.filial ?? null,
+        filial: filialAtiva ?? profile?.filial ?? null,
       });
       if (error) throw error;
       showToast('Requerimento enviado.', 'success');

@@ -12,6 +12,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { hasAnySetor, isConselheiro } from '../lib/rbac';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useFilial } from '../contexts/FilialContext';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -344,14 +345,23 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   }
   const { caixas, isLoading: caixaLoading, refresh } = useCaixasDoDia();
   const { data: capitalRows = [] } = useFetchData<any>('capital_filial');
+  const { filialAtiva } = useFilial();
 
   const today = todayBR();
 
   const cross = podeOperarTodasFiliais(profile);
-  // Colaborador trava na própria filial. Se não tem filial operacional definida
-  // (ex: 'Matriz'), não tem caixa pra abrir.
+  // Regras de visibilidade:
+  //  - Admin/CEO/Conselheiro em modo Matriz (filialAtiva=null) → vê as 3.
+  //  - Admin/CEO/Conselheiro com filial ativa → só essa (respeita o topbar).
+  //  - Gerente/colaborador → só a lotada (sem alternar).
+  //  - Sem filial operacional definida (ex: 'Matriz' no perfil de colaborador)
+  //    → array vazio (mostra mensagem "não opera PDV").
+  const filialAtivaOperacional: FilialOperacional | null =
+    (FILIAIS_OPERACIONAIS as readonly string[]).includes(filialAtiva ?? '')
+      ? (filialAtiva as FilialOperacional)
+      : null;
   const filiaisVisiveis: readonly FilialOperacional[] = cross
-    ? FILIAIS_OPERACIONAIS
+    ? (filialAtivaOperacional ? [filialAtivaOperacional] : FILIAIS_OPERACIONAIS)
     : (FILIAIS_OPERACIONAIS as readonly string[]).includes(profile?.filial)
       ? [profile.filial as FilialOperacional]
       : [];
@@ -409,9 +419,9 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Controle de Caixa</h2>
         <p className="text-sm text-gray-400 mt-1">
-          {cross
+          {cross && !filialAtivaOperacional
             ? 'Abertura e fechamento por unidade. O PDV de cada empresa só opera com o respectivo caixa aberto.'
-            : `Abertura e fechamento do caixa da unidade ${profile?.filial ?? '—'}.`}
+            : `Abertura e fechamento do caixa da unidade ${filiaisVisiveis[0] ?? profile?.filial ?? '—'}.`}
         </p>
       </div>
 
