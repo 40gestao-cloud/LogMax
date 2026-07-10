@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
+import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone } from '../lib/viewUtils';
+import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
 
@@ -31,6 +31,10 @@ export const FiliaisView = ({ showToast }: any) => {
   const [search, setSearch]         = useState('');
   const [form, setForm]             = useState({ nome: '', cnpj: '', cidade: '' });
   const [extras, setExtras]         = useState({ celular: '', endereco: '', representante: '' });
+  const [detalhes, setDetalhes]     = useState({
+    tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
+    capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
+  });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const [imagemUrl, setImagemUrl]             = useState('');
@@ -52,6 +56,17 @@ export const FiliaisView = ({ showToast }: any) => {
     setEditItem(item);
     setForm({ nome: item.nome ?? '', cnpj: item.cnpj ?? '', cidade: item.cidade ?? '' });
     setExtras({ celular: item.celular ?? '', endereco: item.endereco ?? '', representante: item.representante ?? '' });
+    const d = item.detalhes ?? {};
+    setDetalhes({
+      tamanhoM2: d.tamanhoM2 != null ? String(d.tamanhoM2) : '',
+      tipoImovel: d.tipoImovel ?? '',
+      valorAluguel: d.valorAluguel != null ? formatBRL(d.valorAluguel) : '',
+      vagas: d.vagas != null ? String(d.vagas) : '',
+      capacidade: d.capacidade != null ? String(d.capacidade) : '',
+      horarioFuncionamento: d.horarioFuncionamento ?? '',
+      dataInauguracao: d.dataInauguracao ?? '',
+      investimentoInicial: d.investimentoInicial != null ? formatBRL(d.investimentoInicial) : '',
+    });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
     setErrors({});
@@ -66,6 +81,7 @@ export const FiliaisView = ({ showToast }: any) => {
     setEditItem(null);
     setForm({ nome: '', cnpj: '', cidade: '' });
     setExtras({ celular: '', endereco: '', representante: '' });
+    setDetalhes({ tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '', capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '' });
     setImagemUrl('');
     setImagemUrlAnterior('');
     setErrors({});
@@ -95,7 +111,17 @@ export const FiliaisView = ({ showToast }: any) => {
     setIsSaving(true);
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
-      const payload = { ...form, ...extras, imagem_url: imagemUrl || null };
+      const detalhesPayload = {
+        tamanhoM2: detalhes.tamanhoM2 ? Number(detalhes.tamanhoM2) : null,
+        tipoImovel: detalhes.tipoImovel || null,
+        valorAluguel: detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : null,
+        vagas: detalhes.vagas ? Number(detalhes.vagas) : null,
+        capacidade: detalhes.capacidade ? Number(detalhes.capacidade) : null,
+        horarioFuncionamento: detalhes.horarioFuncionamento || null,
+        dataInauguracao: detalhes.dataInauguracao || null,
+        investimentoInicial: detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : null,
+      };
+      const payload = { ...form, ...extras, detalhes: detalhesPayload, imagem_url: imagemUrl || null };
       if (editItem) {
         const updated = await dbUpdate('/api/filiaisview', editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
@@ -227,6 +253,61 @@ export const FiliaisView = ({ showToast }: any) => {
                 </FormField>
               </div>
 
+              {/* Detalhes operacionais / plano de negócio */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                  <Ruler size={12} /> Detalhes Operacionais
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <FormField label="Tamanho do espaço (m²)">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
+                      onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
+                      placeholder="Ex: 180" />
+                  </FormField>
+                  <FormField label="Tipo de imóvel">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.tipoImovel}
+                      onChange={e => setDetalhes(d => ({ ...d, tipoImovel: e.target.value, valorAluguel: e.target.value === 'Alugado' ? d.valorAluguel : '' }))}>
+                      <option value="">Selecione...</option>
+                      <option value="Próprio">Próprio</option>
+                      <option value="Alugado">Alugado</option>
+                    </select>
+                  </FormField>
+                  {detalhes.tipoImovel === 'Alugado' && (
+                    <FormField label="Valor do aluguel">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.valorAluguel}
+                        onChange={e => setDetalhes(d => ({ ...d, valorAluguel: formatBRL(e.target.value) }))}
+                        onKeyDown={handleMoneyKeyDown}
+                        placeholder="R$ 0,00" />
+                    </FormField>
+                  )}
+                  <FormField label="Vagas de estacionamento">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
+                      onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
+                      placeholder="Ex: 10" />
+                  </FormField>
+                  <FormField label="Capacidade (pessoas/PDVs)">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.capacidade}
+                      onChange={e => setDetalhes(d => ({ ...d, capacidade: e.target.value }))}
+                      placeholder="Ex: 40" />
+                  </FormField>
+                  <FormField label="Horário de funcionamento">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.horarioFuncionamento}
+                      onChange={e => setDetalhes(d => ({ ...d, horarioFuncionamento: e.target.value }))}
+                      placeholder="Ex: 08h às 18h" />
+                  </FormField>
+                  <FormField label="Data de inauguração">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date" value={detalhes.dataInauguracao}
+                      onChange={e => setDetalhes(d => ({ ...d, dataInauguracao: e.target.value }))} />
+                  </FormField>
+                  <FormField label="Investimento inicial">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
+                      onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
+                      onKeyDown={handleMoneyKeyDown}
+                      placeholder="R$ 0,00" />
+                  </FormField>
+                </div>
+              </div>
+
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
                 <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
@@ -270,6 +351,40 @@ export const FiliaisView = ({ showToast }: any) => {
                 {item.representante && (
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <User size={11} className="text-gray-500 shrink-0" />{item.representante}
+                  </div>
+                )}
+                {item.detalhes?.tamanhoM2 != null && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Ruler size={11} className="text-gray-500 shrink-0" />{item.detalhes.tamanhoM2} m²
+                    {item.detalhes.tipoImovel ? ` · ${item.detalhes.tipoImovel}` : ''}
+                  </div>
+                )}
+                {item.detalhes?.horarioFuncionamento && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Clock size={11} className="text-gray-500 shrink-0" />{item.detalhes.horarioFuncionamento}
+                  </div>
+                )}
+                {item.detalhes?.vagas != null && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Car size={11} className="text-gray-500 shrink-0" />{item.detalhes.vagas} vagas
+                  </div>
+                )}
+                {item.detalhes?.capacidade != null && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Users2 size={11} className="text-gray-500 shrink-0" />Capacidade: {item.detalhes.capacidade}
+                  </div>
+                )}
+                {item.detalhes?.dataInauguracao && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Calendar size={11} className="text-gray-500 shrink-0" />Inaugurada em {new Date(item.detalhes.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null) && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Wallet size={11} className="text-gray-500 shrink-0" />
+                    {item.detalhes.valorAluguel != null && `Aluguel: R$ ${formatBRL(item.detalhes.valorAluguel)}`}
+                    {item.detalhes.valorAluguel != null && item.detalhes.investimentoInicial != null && ' · '}
+                    {item.detalhes.investimentoInicial != null && `Investimento: R$ ${formatBRL(item.detalhes.investimentoInicial)}`}
                   </div>
                 )}
               </div>
