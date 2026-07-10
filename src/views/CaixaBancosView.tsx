@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb } from '../components/ui';
@@ -30,6 +30,7 @@ interface FormState {
   tipo: string;
   status: string;
   filial: string;
+  is_reserva: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -40,6 +41,17 @@ const EMPTY_FORM: FormState = {
   tipo: TIPOS[0],
   status: STATUS_OPCOES[0],
   filial: '',
+  is_reserva: false,
+};
+
+const fmtBRL = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+type SaldoCapital = {
+  capital_total: number;
+  saldo_livre: number;
+  reserva_valor: number;
+  reserva_pct: number;
 };
 
 type FilialCaixaConfig = {
@@ -96,6 +108,32 @@ export const CaixaBancosView = ({
     ? dataAll
     : dataAll.filter((i: any) => i.filial === filialAtiva || i.filial == null);
 
+  // Saldo capital da filial ativa — só carrega em modo filial. Usa a mesma
+  // RPC que a FilialCapitalView pra evitar cálculo divergente.
+  const [saldoCapital, setSaldoCapital] = useState<SaldoCapital | null>(null);
+  useEffect(() => {
+    if (!supabase || matrizMode || !filialAtiva) { setSaldoCapital(null); return; }
+    let cancelled = false;
+    supabase.rpc('calcular_saldo_capital', { p_filial: filialAtiva }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (!error && data?.[0]) setSaldoCapital(data[0]);
+      else setSaldoCapital(null);
+    });
+    return () => { cancelled = true; };
+  }, [filialAtiva, matrizMode]);
+
+  // Só contas ativas contam pro resumo (soft-delete respeitado). Em modo filial
+  // usa `data` já filtrado; em modo Matriz não mostra o card.
+  const distribuidoTotal = matrizMode
+    ? 0
+    : data.filter((i: any) => i.ativo !== false && i.status !== 'Inativo').reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
+  const reservaTotal = matrizMode
+    ? 0
+    : data.filter((i: any) => i.is_reserva && i.ativo !== false && i.status !== 'Inativo').reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
+  const disponivelOperacao = distribuidoTotal - reservaTotal;
+  const capitalTotal = saldoCapital?.capital_total ?? 0;
+  const sobraDistribuir = capitalTotal - distribuidoTotal;
+
   const filtered = data.filter((item: any) =>
     [item.conta, item.banco, item.agencia, item.tipo, item.filial].some(v =>
       String(v ?? '').toLowerCase().includes(search.toLowerCase()),
@@ -122,6 +160,7 @@ export const CaixaBancosView = ({
       tipo: item.tipo ?? TIPOS[0],
       status: item.status ?? STATUS_OPCOES[0],
       filial: item.filial ?? '',
+      is_reserva: !!item.is_reserva,
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -174,6 +213,7 @@ export const CaixaBancosView = ({
       status: form.status || 'Ativo',
       imagem_url: imagemUrl || null,
       filial: filialRegistro,
+      is_reserva: form.is_reserva,
     };
     try {
       if (editItem) {
@@ -267,6 +307,61 @@ export const CaixaBancosView = ({
             })}
           </div>
           <p className="text-[10px] text-gray-600">Bloqueado = filial só visualiza. Desbloqueado = filial pode adicionar/editar.</p>
+        </div>
+      )}
+
+      {/* Card resumo — só em modo filial. Confronta o Capital Total aportado
+          pela Matriz com o que já foi distribuido nas contas e o que está
+          em reserva. Zerado se a Matriz ainda nao aportou nada. */}
+      {!matrizMode && saldoCapital && capitalTotal > 0 && (
+        <div className="neu-flat rounded-2xl border border-accent/20 p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Landmark size={14} className="text-accent" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Distribuição do Capital — {filialAtiva}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Capital Total</div>
+              <p className="text-lg font-black text-accent tabular-nums">{fmtBRL(capitalTotal)}</p>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1 flex items-center gap-1">
+                <Wallet size={10} /> Distribuído
+              </div>
+              <p className="text-lg font-black text-gray-200 tabular-nums">{fmtBRL(distribuidoTotal)}</p>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1 flex items-center gap-1">
+                <PiggyBank size={10} /> Em Reserva
+              </div>
+              <p className="text-lg font-black text-yellow-300 tabular-nums">{fmtBRL(reservaTotal)}</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">
+                Disponível pra operar: <span className="text-gray-300 font-semibold tabular-nums">{fmtBRL(disponivelOperacao)}</span>
+              </p>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                {sobraDistribuir >= 0 ? 'Sobra a distribuir' : 'Estouro'}
+              </div>
+              <p className={`text-lg font-black tabular-nums ${sobraDistribuir >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {fmtBRL(sobraDistribuir)}
+              </p>
+              {sobraDistribuir < 0 && (
+                <p className="text-[10px] text-red-400/70 mt-0.5">Contas somam mais que o capital aportado.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {!matrizMode && saldoCapital && capitalTotal === 0 && (
+        <div className="neu-flat rounded-2xl border border-white/5 p-4 flex items-start gap-3 text-xs text-gray-500">
+          <Landmark size={14} className="text-gray-600 shrink-0 mt-0.5" />
+          <span>
+            Nenhum capital aportado pela Matriz pra <span className="text-gray-300 font-semibold">{filialAtiva}</span> ainda —
+            peça ao admin/CEO pra registrar o capital inicial em <span className="text-accent font-semibold">Matriz → Capital</span> pra ver a distribuição aqui.
+          </span>
         </div>
       )}
 
@@ -371,6 +466,25 @@ export const CaixaBancosView = ({
                 )}
               </div>
 
+              {/* Flag reserva de emergencia — soma no card resumo do topo. */}
+              <label className="flex items-start gap-3 neu-pressed rounded-xl p-3 cursor-pointer hover:bg-white/5 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={form.is_reserva}
+                  onChange={e => setForm(s => ({ ...s, is_reserva: e.target.checked }))}
+                  className="mt-0.5 accent-yellow-400 w-4 h-4"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 text-sm font-bold text-gray-200">
+                    <PiggyBank size={14} className="text-yellow-300" />
+                    Reserva de emergência
+                  </div>
+                  <p className="text-[11px] text-gray-500 leading-snug mt-0.5">
+                    Marca esta conta/caixa como dinheiro guardado. O saldo entra no total "Em Reserva" do resumo e sai do "Disponível pra operar".
+                  </p>
+                </div>
+              </label>
+
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
                 <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
@@ -418,7 +532,17 @@ export const CaixaBancosView = ({
                             <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.banco ?? '—'}</td>
                             <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.conta ?? '—'}</td>
                             <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.agencia ?? '—'}</td>
-                            <td className="py-3 px-4 text-xs text-gray-400">{item.tipo ?? '—'}</td>
+                            <td className="py-3 px-4 text-xs text-gray-400">
+                              <div className="flex items-center gap-1.5">
+                                {item.tipo ?? '—'}
+                                {item.is_reserva && (
+                                  <span title="Conta em reserva de emergência"
+                                    className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded-full">
+                                    <PiggyBank size={9} /> Reserva
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             {matrizMode && (
                               <td className="py-3 px-4">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
