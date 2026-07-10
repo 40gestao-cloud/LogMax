@@ -1,8 +1,10 @@
 import { supabase } from './supabase';
+import { resizeImage, extFromMime, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './imageResize';
 
 export const PERFIL_FOTO_BUCKET = 'perfil-fotos';
-export const PERFIL_FOTO_MAX_BYTES = 150 * 1024; // 150 KB
-export const PERFIL_FOTO_MAX_LABEL = '150 KB';
+// Teto bruto de entrada. Depois do resize a foto vira ~20-40 KB WebP 512x512.
+export const PERFIL_FOTO_MAX_BYTES = MAX_INPUT_BYTES;
+export const PERFIL_FOTO_MAX_LABEL = MAX_INPUT_LABEL;
 export const PERFIL_FOTO_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -21,10 +23,10 @@ export function validarFotoPerfil(file: File): ValidacaoFoto {
     return { ok: false, motivo: 'Formato inválido. Use JPG, PNG ou WEBP.', ext: '' };
   }
   if (file.size > PERFIL_FOTO_MAX_BYTES) {
-    const kb = (file.size / 1024).toFixed(1);
+    const mb = (file.size / 1024 / 1024).toFixed(1);
     return {
       ok: false,
-      motivo: `Imagem com ${kb} KB — o limite é ${PERFIL_FOTO_MAX_LABEL}. Reduza/comprima e tente de novo.`,
+      motivo: `Imagem com ${mb} MB — máx. ${PERFIL_FOTO_MAX_LABEL}. Reduza antes de enviar.`,
       ext: '',
     };
   }
@@ -40,19 +42,23 @@ export function extrairPathDoBucket(url: string | null | undefined): string | nu
 }
 
 // Upload + retorno da URL pública. userId é o dono da foto — usado como
-// prefixo do path pra agrupar e facilitar limpeza futura.
+// prefixo do path pra agrupar e facilitar limpeza futura. A imagem passa
+// por resize+recompressão (WebP, máx 512x512) antes de subir.
 export async function uploadFotoPerfil(file: File, userId: string): Promise<string> {
   if (!supabase) throw new Error('Supabase não configurado.');
   const validacao = validarFotoPerfil(file);
   if (!validacao.ok) throw new Error(validacao.motivo);
 
-  const path = `${userId}/${Date.now()}.${validacao.ext}`;
+  const optimized = await resizeImage(file, { maxWidth: 512, maxHeight: 512 });
+  const ext = extFromMime(optimized.type) || validacao.ext;
+
+  const path = `${userId}/${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase
     .storage
     .from(PERFIL_FOTO_BUCKET)
-    .upload(path, file, {
-      contentType: file.type || `image/${validacao.ext}`,
+    .upload(path, optimized, {
+      contentType: optimized.type || `image/${ext}`,
       cacheControl: '3600',
       upsert: false,
     });

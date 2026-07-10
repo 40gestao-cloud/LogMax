@@ -1,8 +1,11 @@
 import { supabase } from './supabase';
+import { resizeImage, extFromMime, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './imageResize';
 
 export const PRODUTO_IMAGEM_BUCKET = 'produto-imagens';
-export const PRODUTO_IMAGEM_MAX_BYTES = 120 * 1024; // 120 KB
-export const PRODUTO_IMAGEM_MAX_LABEL = '120 KB';
+// Teto bruto de entrada (compatibilidade com imports antigos). Depois do
+// resize client-side o arquivo real gravado no bucket fica em ~30-80 KB.
+export const PRODUTO_IMAGEM_MAX_BYTES = MAX_INPUT_BYTES;
+export const PRODUTO_IMAGEM_MAX_LABEL = MAX_INPUT_LABEL;
 export const PRODUTO_IMAGEM_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -21,10 +24,10 @@ export function validarImagemProduto(file: File): ValidacaoImagem {
     return { ok: false, motivo: 'Formato inválido. Use JPG, PNG ou WEBP.', ext: '' };
   }
   if (file.size > PRODUTO_IMAGEM_MAX_BYTES) {
-    const kb = (file.size / 1024).toFixed(1);
+    const mb = (file.size / 1024 / 1024).toFixed(1);
     return {
       ok: false,
-      motivo: `Imagem com ${kb} KB — o limite é ${PRODUTO_IMAGEM_MAX_LABEL}. Reduza/comprima e tente de novo.`,
+      motivo: `Imagem com ${mb} MB — máx. ${PRODUTO_IMAGEM_MAX_LABEL}. Reduza antes de enviar.`,
       ext: '',
     };
   }
@@ -43,7 +46,8 @@ export function extrairPathDoBucket(url: string | null | undefined): string | nu
 }
 
 // Upload + retorno da URL pública. `produtoId` quando disponível dá um path
-// estável; cadastros novos usam um UUID temporário.
+// estável; cadastros novos usam um UUID temporário. A imagem passa por
+// resize+recompressão client-side antes de subir (WebP, máx 1024x1024).
 export async function uploadImagemProduto(
   file: File,
   produtoId?: string | null,
@@ -52,14 +56,17 @@ export async function uploadImagemProduto(
   const validacao = validarImagemProduto(file);
   if (!validacao.ok) throw new Error(validacao.motivo);
 
+  const optimized = await resizeImage(file, { maxWidth: 1024, maxHeight: 1024 });
+  const ext = extFromMime(optimized.type) || validacao.ext;
+
   const slug = produtoId ?? (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const path = `${slug}/${Date.now()}.${validacao.ext}`;
+  const path = `${slug}/${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase
     .storage
     .from(PRODUTO_IMAGEM_BUCKET)
-    .upload(path, file, {
-      contentType: file.type || `image/${validacao.ext}`,
+    .upload(path, optimized, {
+      contentType: optimized.type || `image/${ext}`,
       cacheControl: '3600',
       upsert: false,
     });

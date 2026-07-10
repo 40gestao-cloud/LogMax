@@ -1,8 +1,11 @@
 import { supabase } from './supabase';
+import { resizeImage, extFromMime, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './imageResize';
 
 export const BANCO_LOGO_BUCKET = 'banco-logos';
-export const BANCO_LOGO_MAX_BYTES = 120 * 1024; // 120 KB
-export const BANCO_LOGO_MAX_LABEL = '120 KB';
+// Teto bruto de entrada. Raster passa por resize (WebP 512x512).
+// SVG passa direto — canvas não faz sentido pra vetor.
+export const BANCO_LOGO_MAX_BYTES = MAX_INPUT_BYTES;
+export const BANCO_LOGO_MAX_LABEL = MAX_INPUT_LABEL;
 export const BANCO_LOGO_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp,image/svg+xml';
 
 const ALLOWED_MIME = new Set([
@@ -23,10 +26,10 @@ export function validarLogoBanco(file: File): ValidacaoLogo {
     return { ok: false, motivo: 'Formato inválido. Use JPG, PNG, WEBP ou SVG.', ext: '' };
   }
   if (file.size > BANCO_LOGO_MAX_BYTES) {
-    const kb = (file.size / 1024).toFixed(1);
+    const mb = (file.size / 1024 / 1024).toFixed(1);
     return {
       ok: false,
-      motivo: `Logo com ${kb} KB — o limite é ${BANCO_LOGO_MAX_LABEL}. Reduza/comprima e tente de novo.`,
+      motivo: `Logo com ${mb} MB — máx. ${BANCO_LOGO_MAX_LABEL}. Reduza antes de enviar.`,
       ext: '',
     };
   }
@@ -46,14 +49,17 @@ export async function uploadLogoBanco(file: File, bancoId?: string | null): Prom
   const validacao = validarLogoBanco(file);
   if (!validacao.ok) throw new Error(validacao.motivo);
 
+  const optimized = await resizeImage(file, { maxWidth: 512, maxHeight: 512 });
+  const ext = extFromMime(optimized.type) || validacao.ext;
+
   const slug = bancoId ?? (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const path = `${slug}/${Date.now()}.${validacao.ext}`;
+  const path = `${slug}/${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase
     .storage
     .from(BANCO_LOGO_BUCKET)
-    .upload(path, file, {
-      contentType: file.type || `image/${validacao.ext}`,
+    .upload(path, optimized, {
+      contentType: optimized.type || `image/${ext}`,
       cacheControl: '3600',
       upsert: false,
     });

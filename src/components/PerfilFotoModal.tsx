@@ -136,8 +136,8 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
               </div>
 
               <p className="text-[10px] text-gray-500 text-center leading-relaxed px-4">
-                JPG, PNG ou WEBP — máximo {PERFIL_FOTO_MAX_LABEL}.<br />
-                Comprima imagens grandes antes de enviar.
+                JPG, PNG ou WEBP — até {PERFIL_FOTO_MAX_LABEL}.<br />
+                Redimensionada automaticamente para WebP 512 px.
               </p>
 
               <input

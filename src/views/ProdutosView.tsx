@@ -713,9 +713,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       )}
                     </div>
                     <p className="text-[11px] text-gray-500 leading-snug">
-                      Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> com no máximo{' '}
-                      <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_MAX_LABEL}</span>. Use imagens leves para o
-                      catálogo carregar rápido no PDV. Sem imagem, o produto exibe um ícone padrão.
+                      Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> até{' '}
+                      <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_MAX_LABEL}</span> — a foto é comprimida
+                      automaticamente para WebP 1024 px, então pode enviar direto da câmera. Sem imagem, o produto exibe um ícone padrão.
                     </p>
                   </div>
                 </div>

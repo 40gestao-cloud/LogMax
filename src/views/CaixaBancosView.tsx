@@ -321,7 +321,7 @@ export const CaixaBancosView = ({
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] text-gray-600">JPG, PNG, WEBP ou SVG · até {BANCO_LOGO_MAX_LABEL}</p>
+                  <p className="text-[10px] text-gray-600">JPG, PNG, WEBP ou SVG · até {BANCO_LOGO_MAX_LABEL} · comprime auto para WebP 512 px (SVG sobe inalterado)</p>
                 </div>
               </div>
 
