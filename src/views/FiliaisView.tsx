@@ -285,6 +285,26 @@ export const FiliaisView = ({ showToast }: any) => {
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Filial' : 'Nova Filial'}</h3>
 
+              {/* Nicho — em destaque no topo, pois define quais campos específicos aparecem abaixo */}
+              <div className="neu-pressed rounded-2xl p-4 border border-accent/20 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-[10px] text-accent uppercase tracking-widest font-bold mb-1 flex items-center gap-2">
+                    <Package size={12} /> Nicho da Unidade
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Define os equipamentos/mobiliário específicos exibidos abaixo (gôndolas, provadores, bancadas etc.).
+                  </p>
+                </div>
+                <select
+                  className="neu-input py-2 px-3 rounded-xl text-sm w-full sm:w-64"
+                  value={detalhes.nicho}
+                  onChange={e => setDetalhes(d => ({ ...d, nicho: e.target.value }))}
+                >
+                  <option value="">Auto (pelo nome) / Nenhum</option>
+                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+
               {/* Logo */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
@@ -356,13 +376,6 @@ export const FiliaisView = ({ showToast }: any) => {
                   <Ruler size={12} /> Detalhes Operacionais
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Nicho da unidade">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.nicho}
-                      onChange={e => setDetalhes(d => ({ ...d, nicho: e.target.value }))}>
-                      <option value="">Auto (pelo nome) / Nenhum</option>
-                      {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </FormField>
                   <FormField label="Tamanho do espaço (m²)">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
                       onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
@@ -429,10 +442,23 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
               </div>
 
-              {/* Específicos do nicho — usa a escolha explícita ou infere do nome */}
+              {/* Específicos do nicho — usa a escolha explícita ou infere do nome.
+                  Se não tiver nicho, mostra placeholder explicativo em vez de sumir. */}
               {(() => {
                 const nicho = detectarNicho(detalhes.nicho, form.nome);
-                if (!nicho) return null;
+                if (!nicho) {
+                  return (
+                    <div>
+                      <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                        <Package size={12} /> Específicos do nicho
+                      </p>
+                      <div className="neu-pressed rounded-2xl p-4 border border-white/5 text-xs text-gray-500 flex items-center gap-2">
+                        <Package size={14} className="text-gray-600 shrink-0" />
+                        Escolha o <span className="text-accent font-bold">Nicho da Unidade</span> no topo do formulário para exibir campos específicos (gôndolas, provadores, bancadas etc.).
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div>
                     <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
