@@ -58,9 +58,12 @@ const CAMPOS_NICHO: Record<FilialHolding, ReadonlyArray<readonly [string, string
   ],
 };
 
-// Nome digitado → nicho conhecido. Match por `includes` case-insensitive
-// pra aceitar "SuperMax Rio Branco", "MaxLook Centro" etc.
-function detectarNicho(nome: string): FilialHolding | null {
+// Nicho da unidade. Prioriza a escolha explícita salva em detalhes.nicho.
+// Fallback: tenta inferir do nome (SuperMax Rio Branco, MaxLook Centro etc.).
+// Aceita "" como "não escolhido" e devolve null.
+function detectarNicho(explicit: string | undefined | null, nome?: string): FilialHolding | null {
+  const e = (explicit ?? '').trim();
+  if (e && (FILIAIS_HOLDING as readonly string[]).includes(e)) return e as FilialHolding;
   const n = (nome ?? '').toLowerCase();
   for (const f of FILIAIS_HOLDING) if (n.includes(f.toLowerCase())) return f;
   return null;
@@ -100,6 +103,7 @@ export const FiliaisView = ({ showToast }: any) => {
   const [form, setForm]             = useState({ nome: '', cnpj: '', cidade: '' });
   const [extras, setExtras]         = useState({ celular: '', endereco: '', representante: '' });
   const [detalhes, setDetalhes]     = useState<Record<string, string>>({
+    nicho: '',
     tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
     capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
     ...equipZeros(),
@@ -131,6 +135,7 @@ export const FiliaisView = ({ showToast }: any) => {
       TODAS_CHAVES_EQUIP.map(k => [k, nStr(d[k])])
     );
     setDetalhes({
+      nicho: d.nicho ?? '',
       tamanhoM2: nStr(d.tamanhoM2),
       tipoImovel: d.tipoImovel ?? '',
       valorAluguel: d.valorAluguel != null ? formatBRL(d.valorAluguel) : '',
@@ -156,6 +161,7 @@ export const FiliaisView = ({ showToast }: any) => {
     setForm({ nome: '', cnpj: '', cidade: '' });
     setExtras({ celular: '', endereco: '', representante: '' });
     setDetalhes({
+      nicho: '',
       tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
       capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
       ...equipZeros(),
@@ -190,7 +196,7 @@ export const FiliaisView = ({ showToast }: any) => {
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
       const num = (v: string) => v !== '' ? Number(v) : null;
-      const nicho = detectarNicho(form.nome);
+      const nicho = detectarNicho(detalhes.nicho, form.nome);
       // Comuns: sempre persistem. Nicho: só o subset do nicho detectado
       // — evita carregar campos de outros nichos que ficaram no state.
       const chavesEquipParaSalvar = [
@@ -201,6 +207,7 @@ export const FiliaisView = ({ showToast }: any) => {
         chavesEquipParaSalvar.map(k => [k, num(detalhes[k])])
       );
       const detalhesPayload = {
+        nicho: nicho ?? null,
         tamanhoM2: num(detalhes.tamanhoM2),
         tipoImovel: detalhes.tipoImovel || null,
         valorAluguel: detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : null,
@@ -349,6 +356,13 @@ export const FiliaisView = ({ showToast }: any) => {
                   <Ruler size={12} /> Detalhes Operacionais
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <FormField label="Nicho da unidade">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.nicho}
+                      onChange={e => setDetalhes(d => ({ ...d, nicho: e.target.value }))}>
+                      <option value="">Auto (pelo nome) / Nenhum</option>
+                      {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </FormField>
                   <FormField label="Tamanho do espaço (m²)">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
                       onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
@@ -415,9 +429,9 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
               </div>
 
-              {/* Específicos do nicho — só aparece quando o nome bate com uma das 4 unidades */}
+              {/* Específicos do nicho — usa a escolha explícita ou infere do nome */}
               {(() => {
-                const nicho = detectarNicho(form.nome);
+                const nicho = detectarNicho(detalhes.nicho, form.nome);
                 if (!nicho) return null;
                 return (
                   <div>
@@ -519,7 +533,7 @@ export const FiliaisView = ({ showToast }: any) => {
                 )}
                 {(() => {
                   const d = item.detalhes ?? {};
-                  const nichoItem = detectarNicho(item.nome);
+                  const nichoItem = detectarNicho(d.nicho, item.nome);
                   const paresRelevantes = [
                     ...CAMPOS_COMUNS,
                     ...(nichoItem ? CAMPOS_NICHO[nichoItem] : []),
