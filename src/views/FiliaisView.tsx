@@ -1,12 +1,80 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet } from 'lucide-react';
+import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
+import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
+
+// Equipamentos comuns a qualquer unidade — energia, manutenção, reposição.
+const CAMPOS_COMUNS = [
+  ['arCondicionados',  'Ar-condicionados'],
+  ['ventiladores',     'Ventiladores'],
+  ['caixasAtendimento','Caixas de atendimento'],
+  ['computadores',     'Computadores'],
+  ['impressoras',      'Impressoras'],
+  ['mesas',            'Mesas'],
+  ['cadeiras',         'Cadeiras'],
+  ['camerasSeguranca', 'Câmeras de segurança'],
+  ['extintores',       'Extintores'],
+] as const;
+
+// Campos específicos por nicho — só aparecem quando o nome da filial
+// bate com o nicho detectado. Padrão herdado do PDV (atributos jsonb por nicho).
+const CAMPOS_NICHO: Record<FilialHolding, ReadonlyArray<readonly [string, string]>> = {
+  SuperMax: [
+    ['gondolas',        'Gôndolas'],
+    ['freezers',        'Freezers / Geladeiras'],
+    ['balancas',        'Balanças'],
+    ['esteirasCaixa',   'Esteiras de caixa'],
+    ['carrinhos',       'Carrinhos'],
+    ['cestas',          'Cestas'],
+    ['setoresEspeciais','Setores (açougue/padaria/etc)'],
+  ],
+  MaxLook: [
+    ['provadores',         'Provadores'],
+    ['expositoresPerfume', 'Expositores de perfume'],
+    ['balcaoMaquiagem',    'Balcões de maquiagem'],
+    ['testers',            'Testers em exposição'],
+    ['araras',             'Araras'],
+    ['iluminacaoEspecial', 'Spots de iluminação'],
+  ],
+  TechMax: [
+    ['bancadasReparo',     'Bancadas de reparo'],
+    ['estacoesSolda',      'Estações de solda'],
+    ['multimetros',        'Multímetros'],
+    ['ferramentasSet',     'Kits de ferramentas'],
+    ['vitrinesAcessorios', 'Vitrines de acessórios'],
+    ['estoquePecas',       'Compartimentos de peças'],
+  ],
+  Matriz: [
+    ['salasReuniao',    'Salas de reunião'],
+    ['servidoresRack',  'Servidores / Racks'],
+    ['telefones',       'Telefones'],
+    ['quadrosBrancos',  'Quadros brancos'],
+  ],
+};
+
+// Nome digitado → nicho conhecido. Match por `includes` case-insensitive
+// pra aceitar "SuperMax Rio Branco", "MaxLook Centro" etc.
+function detectarNicho(nome: string): FilialHolding | null {
+  const n = (nome ?? '').toLowerCase();
+  for (const f of FILIAIS_HOLDING) if (n.includes(f.toLowerCase())) return f;
+  return null;
+}
+
+// Todas as chaves de equipamento (comum + todos os nichos). Usado pra
+// inicializar/limpar/salvar em loop, evitando repetir chave por chave.
+const TODAS_CHAVES_EQUIP: string[] = [
+  ...CAMPOS_COMUNS.map(([k]) => k),
+  ...Object.values(CAMPOS_NICHO).flatMap(l => l.map(([k]) => k)),
+];
+
+const equipZeros = (): Record<string, string> =>
+  Object.fromEntries(TODAS_CHAVES_EQUIP.map(k => [k, '']));
 
 function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'xs' | 'md' | 'lg'; alt?: string }) {
   const dim = size === 'xs' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-10 h-10';
@@ -31,9 +99,10 @@ export const FiliaisView = ({ showToast }: any) => {
   const [search, setSearch]         = useState('');
   const [form, setForm]             = useState({ nome: '', cnpj: '', cidade: '' });
   const [extras, setExtras]         = useState({ celular: '', endereco: '', representante: '' });
-  const [detalhes, setDetalhes]     = useState({
+  const [detalhes, setDetalhes]     = useState<Record<string, string>>({
     tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
     capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
+    ...equipZeros(),
   });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -57,15 +126,20 @@ export const FiliaisView = ({ showToast }: any) => {
     setForm({ nome: item.nome ?? '', cnpj: item.cnpj ?? '', cidade: item.cidade ?? '' });
     setExtras({ celular: item.celular ?? '', endereco: item.endereco ?? '', representante: item.representante ?? '' });
     const d = item.detalhes ?? {};
+    const nStr = (v: any) => v != null ? String(v) : '';
+    const equipCarregado = Object.fromEntries(
+      TODAS_CHAVES_EQUIP.map(k => [k, nStr(d[k])])
+    );
     setDetalhes({
-      tamanhoM2: d.tamanhoM2 != null ? String(d.tamanhoM2) : '',
+      tamanhoM2: nStr(d.tamanhoM2),
       tipoImovel: d.tipoImovel ?? '',
       valorAluguel: d.valorAluguel != null ? formatBRL(d.valorAluguel) : '',
-      vagas: d.vagas != null ? String(d.vagas) : '',
-      capacidade: d.capacidade != null ? String(d.capacidade) : '',
+      vagas: nStr(d.vagas),
+      capacidade: nStr(d.capacidade),
       horarioFuncionamento: d.horarioFuncionamento ?? '',
       dataInauguracao: d.dataInauguracao ?? '',
       investimentoInicial: d.investimentoInicial != null ? formatBRL(d.investimentoInicial) : '',
+      ...equipCarregado,
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -81,7 +155,11 @@ export const FiliaisView = ({ showToast }: any) => {
     setEditItem(null);
     setForm({ nome: '', cnpj: '', cidade: '' });
     setExtras({ celular: '', endereco: '', representante: '' });
-    setDetalhes({ tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '', capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '' });
+    setDetalhes({
+      tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
+      capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
+      ...equipZeros(),
+    });
     setImagemUrl('');
     setImagemUrlAnterior('');
     setErrors({});
@@ -111,15 +189,27 @@ export const FiliaisView = ({ showToast }: any) => {
     setIsSaving(true);
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
+      const num = (v: string) => v !== '' ? Number(v) : null;
+      const nicho = detectarNicho(form.nome);
+      // Comuns: sempre persistem. Nicho: só o subset do nicho detectado
+      // — evita carregar campos de outros nichos que ficaram no state.
+      const chavesEquipParaSalvar = [
+        ...CAMPOS_COMUNS.map(([k]) => k),
+        ...(nicho ? CAMPOS_NICHO[nicho].map(([k]) => k) : []),
+      ];
+      const equipPayload = Object.fromEntries(
+        chavesEquipParaSalvar.map(k => [k, num(detalhes[k])])
+      );
       const detalhesPayload = {
-        tamanhoM2: detalhes.tamanhoM2 ? Number(detalhes.tamanhoM2) : null,
+        tamanhoM2: num(detalhes.tamanhoM2),
         tipoImovel: detalhes.tipoImovel || null,
         valorAluguel: detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : null,
-        vagas: detalhes.vagas ? Number(detalhes.vagas) : null,
-        capacidade: detalhes.capacidade ? Number(detalhes.capacidade) : null,
+        vagas: num(detalhes.vagas),
+        capacidade: num(detalhes.capacidade),
         horarioFuncionamento: detalhes.horarioFuncionamento || null,
         dataInauguracao: detalhes.dataInauguracao || null,
         investimentoInicial: detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : null,
+        ...equipPayload,
       };
       const payload = { ...form, ...extras, detalhes: detalhesPayload, imagem_url: imagemUrl || null };
       if (editItem) {
@@ -308,6 +398,46 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
               </div>
 
+              {/* Equipamentos & mobiliário comuns */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                  <Package size={12} /> Equipamentos & Mobiliário
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {CAMPOS_COMUNS.map(([key, label]) => (
+                    <FormField key={key} label={label}>
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0"
+                        value={detalhes[key] ?? ''}
+                        onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
+                        placeholder="0" />
+                    </FormField>
+                  ))}
+                </div>
+              </div>
+
+              {/* Específicos do nicho — só aparece quando o nome bate com uma das 4 unidades */}
+              {(() => {
+                const nicho = detectarNicho(form.nome);
+                if (!nicho) return null;
+                return (
+                  <div>
+                    <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+                      <Package size={12} /> Específicos do nicho <span className="text-accent">· {nicho}</span>
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {CAMPOS_NICHO[nicho].map(([key, label]) => (
+                        <FormField key={key} label={label}>
+                          <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0"
+                            value={detalhes[key] ?? ''}
+                            onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
+                            placeholder="0" />
+                        </FormField>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
                 <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
@@ -387,6 +517,30 @@ export const FiliaisView = ({ showToast }: any) => {
                     {item.detalhes.investimentoInicial != null && `Investimento: R$ ${formatBRL(item.detalhes.investimentoInicial)}`}
                   </div>
                 )}
+                {(() => {
+                  const d = item.detalhes ?? {};
+                  const nichoItem = detectarNicho(item.nome);
+                  const paresRelevantes = [
+                    ...CAMPOS_COMUNS,
+                    ...(nichoItem ? CAMPOS_NICHO[nichoItem] : []),
+                  ];
+                  const chips = paresRelevantes
+                    .map(([k, l]) => [l, d[k]] as const)
+                    .filter(([, v]) => typeof v === 'number' && v > 0);
+                  if (chips.length === 0) return null;
+                  return (
+                    <div className="flex items-start gap-2 text-xs text-gray-400 pt-1 border-t border-white/5">
+                      <Package size={11} className="text-gray-500 shrink-0 mt-1" />
+                      <div className="flex flex-wrap gap-1">
+                        {chips.map(([label, v]) => (
+                          <span key={label} className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-mono">
+                            {v}× {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
