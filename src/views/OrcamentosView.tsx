@@ -13,7 +13,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
-// notificar_setor existe em 20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
+// notificar_setor existe em 022_20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
 async function notificarSetor(args: {
   setor: 'vendas' | 'financeiro';
   tipo: 'aprovacao_pendente' | 'aprovado' | 'reprovado';

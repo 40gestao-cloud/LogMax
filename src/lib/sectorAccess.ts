@@ -1,6 +1,6 @@
 // --- acesso por setor (UX only — NÃO é segurança) ---
 // Este mapa controla o que aparece no menu lateral por setor. NÃO é a fonte
-// de verdade pra autorização: a RLS no Supabase (20260516_rls_hardening.sql
+// de verdade pra autorização: a RLS no Supabase (010_20260516_rls_hardening.sql
 // e migrações posteriores) é quem realmente bloqueia leitura/escrita por
 // `auth_user_setor()` / `auth_is_admin()`. Esconder do menu evita UX confusa
 // ("o botão aparece e falha"), mas se alguém digitar o `activeView` direto

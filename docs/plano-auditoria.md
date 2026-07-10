@@ -43,7 +43,7 @@ END $$;
 ALTER TABLE <tab> ADD COLUMN IF NOT EXISTS criado_por     uuid REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE <tab> ADD COLUMN IF NOT EXISTS atualizado_por uuid REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE <tab> ADD COLUMN IF NOT EXISTS updated_at     timestamptz DEFAULT now();
--- (created_at já existe em todas — índices em 20260522b)
+-- (created_at já existe em todas — índices em 027_20260522b)
 DROP TRIGGER IF EXISTS trg_auditoria ON <tab>;
 CREATE TRIGGER trg_auditoria
   BEFORE INSERT OR UPDATE ON <tab>

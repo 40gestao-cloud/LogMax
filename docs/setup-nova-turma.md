@@ -88,7 +88,7 @@ SELECT id, public, file_size_limit FROM storage.buckets
    - Email: email real do admin da turma
    - Password: senha forte
    - **Auto-confirm user** ✅
-2. Abre `supabase/migrations/20260516_seed_admin_master.sql`, **troca** todas as ocorrências de `admin@example.com` pelo email real
+2. Abre `supabase/migrations/012_20260516_seed_admin_master.sql`, **troca** todas as ocorrências de `admin@example.com` pelo email real
 3. Cola no SQL Editor e roda — deve retornar 1 linha com `role=admin, setor=all`
 
 ---
@@ -138,13 +138,13 @@ Se tudo passar, a turma está de pé.
 ## Troubleshooting
 
 **"function `auth_in_setor` does not exist"** ao rodar `setup-buckets.sql`
-→ os helpers RLS não estão no baseline. Roda antes `supabase/migrations/20260516_rls_hardening.sql` e `20260516_rls_ceo_role.sql`.
+→ os helpers RLS não estão no baseline. Roda antes `supabase/migrations/010_20260516_rls_hardening.sql` e `009_20260516_rls_ceo_role.sql`.
 
 **"permission denied for schema storage"** ao rodar `setup-buckets.sql`
 → você está logado como um role sem privilégio de storage. Use o SQL Editor do Dashboard (roda como service_role automático).
 
 **Painel BI retorna 500 mesmo sem dados**
-→ RPC `gerar_painel_bi` está no baseline? `SELECT proname FROM pg_proc WHERE proname='gerar_painel_bi';` — se vazio, roda `20260614d_painel_bi.sql`.
+→ RPC `gerar_painel_bi` está no baseline? `SELECT proname FROM pg_proc WHERE proname='gerar_painel_bi';` — se vazio, roda `086_20260614d_painel_bi.sql`.
 
 **Foto de perfil sobe mas não aparece**
 → o bucket é público (`public=true` em `storage.buckets`)? Sem isso, a URL pública retorna 400.

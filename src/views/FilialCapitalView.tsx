@@ -254,7 +254,7 @@ export function FilialCapitalView({
             <p className="text-sm font-bold text-red-300">Não consegui calcular o Capital de {filial}.</p>
             <p className="text-[11px] text-red-400/80 mt-1 font-mono break-words">{saldoErr}</p>
             <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-              Causas comuns: (a) a migração <span className="font-mono text-gray-400">20260710c_capital_efetivo.sql</span> ainda não foi aplicada no Supabase;
+              Causas comuns: (a) a migração <span className="font-mono text-gray-400">177_20260710c_capital_efetivo.sql</span> ainda não foi aplicada no Supabase;
               (b) o SQL Editor está apontando pra outro projeto; (c) a RLS de <span className="font-mono text-gray-400">capital_filial</span> não deixou a RPC ler o aporte.
             </p>
           </div>

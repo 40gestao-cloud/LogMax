@@ -14,7 +14,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
-// notificar_setor: RPC já existente em 20260520_ti_e_notificacoes.sql.
+// notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
   setor: 'compras' | 'financeiro';
   tipo: 'aprovacao_pendente' | 'aprovado' | 'reprovado';

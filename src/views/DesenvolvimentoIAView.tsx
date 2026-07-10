@@ -89,7 +89,7 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
 
   // Apenas TI (gerente ou staff do setor) e admin/CEO criam treinamentos
   // de IA — gerente de outro setor não deve aparecer com o botão "Novo
-  // Treinamento". Backend casa em supabase/migrations/20260612d_dev_ia_ti_only_*.sql.
+  // Treinamento". Backend casa em supabase/migrations/082_20260612d_dev_ia_ti_only_*.sql.
   const canManage =
     profile?.role === 'admin' ||
     profile?.role === 'ceo' || isConselheiro(profile) ||
