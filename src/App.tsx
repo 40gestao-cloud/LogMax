@@ -4,6 +4,8 @@ import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useFavorites } from './hooks/useFavorites';
+import { useAulaConfig } from './hooks/useAulaConfig';
+import { aulaFiltraUsuario, aulaPermiteView } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import {
   SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS, COMPARATIVOS_MATRIZ_MACROS,
@@ -23,7 +25,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers, Vote, Landmark, FileText,
+  Layers, Vote, Landmark, FileText, GraduationCap, Lock,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -119,6 +121,7 @@ const FilialCapitalView                    = lazy(() => import('./views/FilialCa
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
 const RequerimentosView                    = lazy(() => import('./views/RequerimentosView').then(m => ({ default: m.RequerimentosView })));
 const MatrizRequerimentosView              = lazy(() => import('./views/MatrizRequerimentosView').then(m => ({ default: m.MatrizRequerimentosView })));
+const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -198,7 +201,7 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   return true;
 };
 
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, favorites, isFavorite, toggleFavorite }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, favorites, isFavorite, toggleFavorite, aulaAllow }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -220,7 +223,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
         </button>
-        {(profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
+        {aulaAllow('dashboard') && (profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
           || (profile?.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))) && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
@@ -228,19 +231,28 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
         {/* Em modo filial estão ocultos por design. */}
-        {(profile?.role === 'admin' || profile?.role === 'ceo'
+        {aulaAllow('usuarios') && (profile?.role === 'admin' || profile?.role === 'ceo'
           || (profile?.role === 'gerente' && profile?.pode_acessar_usuarios !== false)
           || hasSetor(profile, 'rh')) && (
           <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
+        {/* Modo Aula: config global (whitelist de módulos por turma). Só admin/CEO,
+            SEMPRE visível pra eles — jamais cai no filtro do próprio Modo Aula (evita lockout). */}
+        {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+          <button onClick={() => { navigate('aula-modo'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'aula-modo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <GraduationCap size={18} /><span>Modo Aula</span>
+          </button>
+        )}
         {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
-        <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <BookOpen size={18} /><span>Catálogo</span>
-        </button>
+        {aulaAllow('catalogo-produtos') && (
+          <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <BookOpen size={18} /><span>Catálogo</span>
+          </button>
+        )}
         {/* Avaliações: só no modo Matriz */}
-        {matrizMode && (
+        {matrizMode && aulaAllow('avaliacoes') && (
           <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Star size={18} /><span>Avaliações</span>
           </button>
@@ -248,26 +260,30 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
             No modo filial já foi renderizado acima. */}
         {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
-        <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <MessageSquare size={18} /><span>Feedback</span>
-        </button>
+        {aulaAllow('feedback-org') && (
+          <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <MessageSquare size={18} /><span>Feedback</span>
+          </button>
+        )}
         {/* Votações (filial): em Matriz, o hub abaixo usa 'matriz-votacoes'. */}
-        {!matrizMode && (
+        {!matrizMode && aulaAllow('votacoes') && (
           <button onClick={() => { navigate('votacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Vote size={18} /><span>Votações</span>
           </button>
         )}
         {/* Requerimentos (filial): todos criam; gerente vê da filial.
             Em modo Matriz, o hub abaixo usa 'matriz-requerimentos' — não duplicamos. */}
-        {!matrizMode && (
+        {!matrizMode && aulaAllow('requerimentos') && (
           <button onClick={() => { navigate('requerimentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <FileText size={18} /><span>Requerimentos</span>
           </button>
         )}
         {/* Metas — em ambos os modos. No filial, também replica no Acesso Rápido da Início. */}
-        <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <Target size={18} /><span>Metas</span>
-        </button>
+        {aulaAllow('metas') && (
+          <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Target size={18} /><span>Metas</span>
+          </button>
+        )}
       </div>
 
       <div>
@@ -353,7 +369,12 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-col overflow-hidden">
                       <div className="flex flex-col pt-2 pb-1">
                         {mod.submenus
-                          .filter((sub: any) => subPermitido(sub, profile))
+                          .filter((sub: any) => {
+                            if (!subPermitido(sub, profile)) return false;
+                            const label = subLabel(sub);
+                            const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
+                            return aulaAllow(viewId);
+                          })
                           .map((sub: any) => {
                             const label = subLabel(sub);
                             const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
@@ -491,7 +512,12 @@ function LogMaxAppInner() {
   useEffect(() => {
     try { sessionStorage.setItem('logmax:viewHistory', JSON.stringify(viewHistory)); } catch {}
   }, [viewHistory]);
+  // Ref usado pelo navigate/goBack pra bloquear views fora da whitelist do
+  // Modo Aula sem exigir aulaConfig como dep (evita recriar o callback e
+  // invalidar props memoizadas). O ref é atualizado logo abaixo.
+  const aulaGuardRef = useRef<(view: string) => boolean>(() => true);
   const navigate = useCallback((view: string) => {
+    if (!aulaGuardRef.current(view)) return;
     setActiveView(prev => {
       if (prev === view) return prev;
       setViewHistory(h => [...h, prev]);
@@ -501,9 +527,13 @@ function LogMaxAppInner() {
   const goBack = useCallback(() => {
     setViewHistory(h => {
       if (h.length === 0) return h;
-      const prev = h[h.length - 1];
-      setActiveView(prev);
-      return h.slice(0, -1);
+      // Pula pra trás enquanto encontrar views bloqueadas pelo Modo Aula
+      // (evita o botão Voltar "engolir" a pilha em loop).
+      let idx = h.length - 1;
+      while (idx >= 0 && !aulaGuardRef.current(h[idx])) idx--;
+      if (idx < 0) { setActiveView('inicio'); return []; }
+      setActiveView(h[idx]);
+      return h.slice(0, idx);
     });
   }, []);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
@@ -520,6 +550,25 @@ function LogMaxAppInner() {
   // de outras filiais). Modo Matriz (null) vê tudo.
   const badges = useSidebarBadges(profile, filialAtiva);
   const { favorites, isFavorite, toggle: toggleFavorite } = useFavorites(profile?.id);
+  const { config: aulaConfig } = useAulaConfig();
+
+  // Atualiza o guard que navigate/goBack consultam. Assim clique em card da
+  // Início, favorito ou botão Voltar que aponte pra view bloqueada é
+  // silenciosamente ignorado — não há flash da view tentando montar.
+  useEffect(() => {
+    aulaGuardRef.current = (view: string) => aulaPermiteView(aulaConfig, profile, view);
+  }, [aulaConfig, profile]);
+
+  // Bloqueio defensivo do Modo Aula: se a view atual deixou de ser permitida
+  // (config mudou em realtime ou veio de sessionStorage antigo), redireciona
+  // pra Início. Precisa vir antes dos early returns pra respeitar Rules of Hooks.
+  useEffect(() => {
+    if (!profile) return;
+    if (!aulaFiltraUsuario(aulaConfig, profile)) return;
+    if (!aulaPermiteView(aulaConfig, profile, activeView)) {
+      setActiveView('inicio');
+    }
+  }, [profile, aulaConfig, activeView]);
   useEffect(() => {
     if (!profile) return;
     const isGlobal = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
@@ -667,7 +716,7 @@ function LogMaxAppInner() {
   // Em modo Matriz (filialAtiva===null + podeEscolherFilial) a sidebar mostra
   // apenas gerenciamentos/relatórios — operações unit-scoped ficam ocultas.
   const matrizMode = podeEscolherFilial && filialAtiva === null;
-  const visibleModules = matrizMode
+  const visibleModulesBase = matrizMode
     // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,
     // Análise com IA, Comparativos Matriz). Sidebar top-level fica só com os
     // hubs + Votações/Capital/Requerimentos (injetados manualmente no SidebarNav).
@@ -679,8 +728,36 @@ function LogMaxAppInner() {
     // Categorias, os demais cadastros são globais da empresa toda.
     : allVisibleModules.filter(m => m.id !== 'ti');
 
+  // Modo Aula: whitelist temporária definida pelo admin/CEO. Aplica-se aos
+  // roles configurados (admin é sempre isento pra não travar quem administra).
+  const aulaFiltro = aulaFiltraUsuario(aulaConfig, profile);
+  const aulaAllow = (viewId: string) => !aulaFiltro || aulaPermiteView(aulaConfig, profile, viewId);
+  const visibleModules = aulaFiltro
+    ? visibleModulesBase.filter(m => aulaConfig.modulos_ativos.includes(m.id))
+    : visibleModulesBase;
+
   const renderContent = () => {
     const st = showToast;
+    // Terceira camada de defesa do Modo Aula: se por qualquer motivo a view
+    // atual está fora da whitelist (navigate/goBack já filtram; useEffect
+    // defensivo redireciona), mostra a tela dedicada em vez de tentar
+    // montar a view — evita flash e chamadas de rede desnecessárias.
+    if (aulaFiltro && !aulaPermiteView(aulaConfig, profile, activeView)) {
+      return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
+          <div className="neu-pressed w-20 h-20 rounded-full flex items-center justify-center shadow-inner">
+            <Lock size={28} className="text-accent" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-300">Módulo indisponível na aula</h2>
+            <p className="text-sm text-gray-500 mt-2 max-w-sm">
+              O Modo Aula está ativo e este módulo não faz parte da whitelist definida pela Matriz.
+              Use a barra lateral para acessar os módulos liberados.
+            </p>
+          </div>
+        </motion.div>
+      );
+    }
     switch (activeView) {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} favorites={favorites} toggleFavorite={toggleFavorite} badges={badges} matrizMode={matrizMode} />;
       case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
@@ -794,6 +871,7 @@ function LogMaxAppInner() {
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'requerimentos':                return <RequerimentosView showToast={st} profile={profile} />;
       case 'matriz-requerimentos':         return <MatrizRequerimentosView showToast={st} profile={profile} />;
+      case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
@@ -846,6 +924,7 @@ function LogMaxAppInner() {
                 visibleModules={visibleModules} profile={profile} badges={badges}
                 matrizMode={matrizMode}
                 favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
+                aulaAllow={aulaAllow}
               />
             </motion.aside>
           </>
@@ -861,6 +940,7 @@ function LogMaxAppInner() {
           visibleModules={visibleModules} profile={profile} badges={badges}
           matrizMode={matrizMode}
           favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
+          aulaAllow={aulaAllow}
         />
       </aside>
 
@@ -888,8 +968,12 @@ function LogMaxAppInner() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <NotificationBell setor={profile.setor} onNavigate={navigate} />
-            {canUseMaxAI && <AIAssistantFAB />}
+            {/* Modo Aula: sino de notificações e MaxAI ficam ocultos pra quem
+                está sob a whitelist — evita vazamento de contexto de módulos
+                fora da aula (notificação de outro setor, IA respondendo sobre
+                dados que o aluno não deveria ver naquela sessão). */}
+            {!aulaFiltro && <NotificationBell setor={profile.setor} onNavigate={navigate} />}
+            {canUseMaxAI && !aulaFiltro && <AIAssistantFAB />}
             {podeEscolherFilial && (
               <button
                 onClick={clearFilial}
@@ -930,6 +1014,15 @@ function LogMaxAppInner() {
           </div>
         </header>
 
+        {aulaFiltro && (
+          <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-accent/20 bg-accent/5">
+            <GraduationCap size={16} className="text-accent shrink-0" />
+            <span className="text-xs font-bold text-accent uppercase tracking-widest">Modo Aula ativo</span>
+            <span className="text-[11px] text-gray-400 truncate">
+              {aulaConfig.modulos_ativos.length} módulo{aulaConfig.modulos_ativos.length === 1 ? '' : 's'} liberado{aulaConfig.modulos_ativos.length === 1 ? '' : 's'} pela Matriz
+            </span>
+          </div>
+        )}
         <div className="flex-1 min-h-0">
           <ErrorBoundary key={activeView}>
             <Suspense fallback={<PageLoadingFallback />}>
