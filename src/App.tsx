@@ -25,7 +25,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers, Vote, Landmark, FileText, GraduationCap, Lock,
+  Layers, Landmark, GraduationCap, Lock,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -80,7 +80,7 @@ const PainelBIView                 = lazy(() => import('./views/PainelBIView').t
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
-const FeedbackOrganizacionalView   = lazy(() => import('./views/FeedbackOrganizacionalView').then(m => ({ default: m.FeedbackOrganizacionalView })));
+const FeedbackRequerimentosView    = lazy(() => import('./views/FeedbackRequerimentosView').then(m => ({ default: m.FeedbackRequerimentosView })));
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
@@ -114,12 +114,9 @@ const MatrizFinanceiroView                 = lazy(() => import('./views/MatrizFi
 const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLogisticaView').then(m => ({ default: m.MatrizLogisticaView })));
 const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
 const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
-const MatrizVotacoesView                   = lazy(() => import('./views/MatrizVotacoesView').then(m => ({ default: m.MatrizVotacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
-const RequerimentosView                    = lazy(() => import('./views/RequerimentosView').then(m => ({ default: m.RequerimentosView })));
-const MatrizRequerimentosView              = lazy(() => import('./views/MatrizRequerimentosView').then(m => ({ default: m.MatrizRequerimentosView })));
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
 
 // --- menu ---
@@ -238,8 +235,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           </button>
         )}
         {/* Modo Aula: config global (whitelist de módulos por turma). Só admin/CEO,
-            SEMPRE visível pra eles — jamais cai no filtro do próprio Modo Aula (evita lockout). */}
-        {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+            SEMPRE visível pra eles em modo Matriz — jamais cai no filtro do próprio
+            Modo Aula (evita lockout). Some no modo filial: não faz sentido configurar
+            turmas a partir de dentro de uma unidade. */}
+        {matrizMode && (profile?.role === 'admin' || profile?.role === 'ceo') && (
           <button onClick={() => { navigate('aula-modo'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'aula-modo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <GraduationCap size={18} /><span>Modo Aula</span>
           </button>
@@ -258,23 +257,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         )}
         {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
             No modo filial já foi renderizado acima. */}
-        {/* Feedback Organizacional: colaborador/gerente envia anonimamente; admin/CEO lê */}
+        {/* Feedback & Requerimentos: unificado numa tela com abas — canal anônimo
+            (colaborador/gerente envia, admin/CEO lê) + requerimentos formais
+            (todos criam, gerente/Matriz respondem). Funciona nos dois modos:
+            a view decide internamente Requerimentos vs MatrizRequerimentos
+            olhando filialAtiva. */}
         {aulaAllow('feedback-org') && (
-          <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <MessageSquare size={18} /><span>Feedback</span>
-          </button>
-        )}
-        {/* Votações (filial): em Matriz, o hub abaixo usa 'matriz-votacoes'. */}
-        {!matrizMode && aulaAllow('votacoes') && (
-          <button onClick={() => { navigate('votacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Vote size={18} /><span>Votações</span>
-          </button>
-        )}
-        {/* Requerimentos (filial): todos criam; gerente vê da filial.
-            Em modo Matriz, o hub abaixo usa 'matriz-requerimentos' — não duplicamos. */}
-        {!matrizMode && aulaAllow('requerimentos') && (
-          <button onClick={() => { navigate('requerimentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <FileText size={18} /><span>Requerimentos</span>
+          <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-start gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold text-left ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <MessageSquare size={18} className="shrink-0 mt-0.5" /><span className="leading-tight">Feedback & Requerimentos</span>
           </button>
         )}
         {/* Metas — em ambos os modos. No filial, também replica no Acesso Rápido da Início. */}
@@ -288,12 +278,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
       <div>
         <div className="flex flex-col gap-1.5">
           {/* Modo Matriz: 3 hubs top-level (Sessões Gerais, Análise com IA, Comparativos)
-              + Votações/Capital/Requerimentos que continuam na sidebar. */}
+              + Capital, que continua na sidebar. Requerimentos vive na aba
+              unificada "Feedback & Requerimentos" acima. */}
           {matrizMode && (
             <>
               <div className="mt-4 mb-1.5 px-1">
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
-                  style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
+                  style={{ color: '#000000', background: '#F0B429', border: '1px solid #F0B429' }}>
                   <Layers size={10} /> Matriz
                 </span>
               </div>
@@ -309,17 +300,9 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'comparativos-matriz' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <BarChart3 size={16} /><span>Comparativos Matriz</span>
               </button>
-              <button onClick={() => { navigate('matriz-votacoes'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-votacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-                <Vote size={16} /><span>Votações</span>
-              </button>
               <button onClick={() => { navigate('matriz-capital'); onClose?.(); }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Landmark size={16} /><span>Capital</span>
-              </button>
-              <button onClick={() => { navigate('matriz-requerimentos'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-requerimentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-                <FileText size={16} /><span>Requerimentos</span>
               </button>
             </>
           )}
@@ -342,7 +325,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 {blockLabel && (
                   <div className="mt-4 mb-1.5 px-1">
                     <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
-                      style={{ color: '#D4AF37', background: '#D4AF370C', border: '1px solid #D4AF3722' }}>
+                      style={{ color: '#000000', background: '#F0B429', border: '1px solid #F0B429' }}>
                       {blockLabel}
                     </span>
                   </div>
@@ -493,7 +476,12 @@ function LogMaxAppInner() {
         .replace(/^empresa-colaboradores$/,    'rh-funcionários')
         .replace(/^rh-colaboradores$/,         'rh-funcionários')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
-        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores');
+        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
+        // Votações removida; Feedback + Requerimentos unificados numa só tela com abas.
+        .replace(/^votacoes$/,                 'inicio')
+        .replace(/^matriz-votacoes$/,          'inicio')
+        .replace(/^requerimentos$/,            'feedback-org')
+        .replace(/^matriz-requerimentos$/,     'feedback-org');
       return migrado;
     } catch { return 'inicio'; }
   });
@@ -850,8 +838,7 @@ function LogMaxAppInner() {
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
-      case 'feedback-org':                 return <FeedbackOrganizacionalView showToast={st} profile={profile} />;
-      case 'votacoes':                     return <MatrizVotacoesView showToast={st} profile={profile} />;
+      case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
       case 'metas':                        return <MetasView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
@@ -863,10 +850,7 @@ function LogMaxAppInner() {
       case 'matriz-logistica':             return <MatrizLogisticaView />;
       case 'matriz-marketing':             return <MatrizMarketingView />;
       case 'matriz-operacoes':             return <MatrizOperacoesView />;
-      case 'matriz-votacoes':              return <MatrizVotacoesView showToast={st} profile={profile} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
-      case 'requerimentos':                return <RequerimentosView showToast={st} profile={profile} />;
-      case 'matriz-requerimentos':         return <MatrizRequerimentosView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       default:
         return (

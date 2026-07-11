@@ -1,10 +1,9 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Star, Target, X, Building2 } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Star, Target, X } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import { dataExtensoBR, saudacaoBR } from '../lib/dates';
-import { FILIAL_COLOR, isFilialHolding } from '../lib/filiais';
 import {
   Bar,
   Line,
@@ -19,7 +18,7 @@ import {
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, FilialBadge } from '../components/ui';
 import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
@@ -69,10 +68,10 @@ export const InicioView = ({
     : '/icon-relogio-central.png';
   const filialFilter = filialAtiva ? { filial: filialAtiva } : undefined;
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
-  const { data: notasRecebidas, isLoading: loadingNR } = useFetchData<any>('/api/notasrecebidasview', filialFilter);
+  const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', filialFilter);
   const { data: pedidos, isLoading: loadingPed } = useFetchData<any>('/api/pedidosview', filialFilter);
   const { data: artes } = useFetchData<any>('/api/marketingartesview', filialFilter);
-  const isLoading = loadingCR || loadingNR || loadingPed;
+  const isLoading = loadingCR || loadingCP || loadingPed;
 
   // Card de Artes Promocionais: aparece pra qualquer usuário logado se houver
   // pelo menos uma arte publicada. Marketing também vê (vai pro mesmo gallery).
@@ -116,17 +115,22 @@ export const InicioView = ({
   const totalRecebido = contasPagas.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
   const totalTitulos  = totalRecebido + contasAberto.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
   const pctPago = totalTitulos > 0 ? Math.round((totalRecebido / totalTitulos) * 100) : 0;
-  const notasCount = notasRecebidas.length;
+
+  // Contas a Pagar: mesmo cálculo do card de Contas a Receber, espelhado.
+  const contasPagarAberto = contasPagar.filter((c: any) => c.status !== 'Pago');
+  const contasPagarPagas  = contasPagar.filter((c: any) => c.status === 'Pago');
+  const contasPagarCount = contasPagarAberto.length;
+  const contasPagarValor = contasPagarAberto
+    .reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0)
+    .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const totalPagoCP = contasPagarPagas.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
+  const totalTitulosCP = totalPagoCP + contasPagarAberto.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
+  const pctPagoCP = totalTitulosCP > 0 ? Math.round((totalPagoCP / totalTitulosCP) * 100) : 0;
 
   // Saudação + data local do Acre — só recalcula ao montar a view.
   const primeiroNome = (profile?.nome ?? profile?.email?.split('@')[0] ?? '').split(' ')[0];
   const saudacaoTxt  = React.useMemo(() => saudacaoBR(), []);
   const dataExtenso  = React.useMemo(() => dataExtensoBR(), []);
-  // "Matriz" (holding) vs. "Matriz" (modo consolidado, filialAtiva=null).
-  // Ambos aparecem no filialAtiva do contexto — checamos escolheu em outro
-  // ponto se precisar distinguir, aqui a intenção do label é a mesma.
-  const filialLabel = filialAtiva ?? 'Matriz';
-  const filialStyle = isFilialHolding(filialLabel) ? FILIAL_COLOR[filialLabel] : FILIAL_COLOR.Matriz;
   const SHORTCUTS_BY_MODULE: Record<string, { label: string; desc: string; icon: any; view: string }[]> = {
     empresa:    [
       { label: 'Filiais',          desc: 'Unidades e escritórios',    icon: Boxes,         view: 'empresa-filiais'           },
@@ -215,10 +219,7 @@ export const InicioView = ({
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1 first-letter:uppercase">{dataExtenso}</p>
         </div>
-        <span className={`inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-full border text-xs font-bold ${filialStyle.bg} ${filialStyle.text} ${filialStyle.border}`}>
-          <Building2 size={12} />
-          {filialAtiva ?? 'Matriz — consolidado'}
-        </span>
+        <FilialBadge filial={filialAtiva ?? 'Matriz'} />
       </div>
 
       {pesquisasPendentesCount > 0 && (
@@ -278,11 +279,25 @@ export const InicioView = ({
                 <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
               </div>
             </div>
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
-              <span className="text-5xl sm:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
-              <span className="text-xs font-medium text-gray-500 mb-10 tracking-wide">Notas fiscais capturadas</span>
-              <button onClick={() => onNavigate?.('compras-notasrecebidas')} className="neu-button-accent w-full py-4 rounded-xl font-bold text-sm mt-auto">Ver notas recebidas</button>
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Pagar</h4>
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
+                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
+                    strokeDasharray={`${pctPagoCP} ${100 - pctPagoCP}`} strokeDashoffset="0" strokeLinecap="round" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasPagarCount}</span>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                </div>
+              </div>
+              <div className="text-center mt-auto">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                  {pctPagoCP}% pago do total
+                </span>
+                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasPagarValor}</span>
+              </div>
             </div>
             <div className="neu-flat rounded-3xl p-6 flex flex-col border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-4 pl-2 uppercase tracking-widest">Pedidos de Compra</h4>

@@ -97,8 +97,6 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   'categorias_produto':               'categorias_produto',
   'subcategorias_produto':            'subcategorias_produto',
   'itens_campanha':                   'itens_campanha',
-  'votacoes':                         'votacoes',
-  'votacoes_votos':                   'votacoes_votos',
   'capital_filial':                   'capital_filial',
   'requerimentos':                    'requerimentos',
 };
