@@ -3,7 +3,6 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
-import { useFavorites } from './hooks/useFavorites';
 import { useAulaConfig } from './hooks/useAulaConfig';
 import { aulaFiltraUsuario, aulaPermiteView } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
@@ -197,7 +196,7 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   return true;
 };
 
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, favorites, isFavorite, toggleFavorite, aulaAllow }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -361,11 +360,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             const label = subLabel(sub);
                             const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
                             const isActive = activeView === viewId;
-                            const fav = isFavorite?.(viewId);
                             return (
-                              <div key={label} className="group relative">
+                              <div key={label} className="relative">
                                 <button onClick={() => { navigate(viewId); onClose?.(); }}
-                                  className={`w-full nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 pr-7 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
+                                  className={`w-full nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
                                   style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                                   <span>{label}</span>
                                   {(badges?.[viewId] ?? 0) > 0 && (
@@ -374,15 +372,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                                     </span>
                                   )}
                                 </button>
-                                {toggleFavorite && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleFavorite({ viewId, label }); }}
-                                    className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center transition-opacity ${fav ? 'text-amber-400 opacity-100' : 'text-gray-600 opacity-0 group-hover:opacity-100 hover:text-amber-400'}`}
-                                    title={fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-                                  >
-                                    <Star size={11} className={fav ? 'fill-amber-400' : ''} />
-                                  </button>
-                                )}
                               </div>
                             );
                           })}
@@ -536,7 +525,6 @@ function LogMaxAppInner() {
   // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
   // de outras filiais). Modo Matriz (null) vê tudo.
   const badges = useSidebarBadges(profile, filialAtiva);
-  const { favorites, isFavorite, toggle: toggleFavorite } = useFavorites(profile?.id);
   const { config: aulaConfig } = useAulaConfig();
 
   // Atualiza o guard que navigate/goBack consultam. Assim clique em card da
@@ -746,10 +734,10 @@ function LogMaxAppInner() {
       );
     }
     switch (activeView) {
-      case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} favorites={favorites} toggleFavorite={toggleFavorite} badges={badges} matrizMode={matrizMode} />;
-      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
-      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
-      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />;
+      case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} badges={badges} matrizMode={matrizMode} />;
+      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
+      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} />;
+      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'empresa-categorias':              return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
@@ -903,7 +891,6 @@ function LogMaxAppInner() {
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
                 visibleModules={visibleModules} profile={profile} badges={badges}
                 matrizMode={matrizMode}
-                favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
                 aulaAllow={aulaAllow}
               />
             </motion.aside>
@@ -919,7 +906,6 @@ function LogMaxAppInner() {
           handleSignOut={handleSignOut}
           visibleModules={visibleModules} profile={profile} badges={badges}
           matrizMode={matrizMode}
-          favorites={favorites} isFavorite={isFavorite} toggleFavorite={toggleFavorite}
           aulaAllow={aulaAllow}
         />
       </aside>

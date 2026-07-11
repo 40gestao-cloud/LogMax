@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, DollarSign, Users, Building2,
   Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo,
-  ChevronRight, Star,
+  ChevronRight,
 } from 'lucide-react';
 import { allSetores } from '../lib/rbac';
 import { SETOR_MODULES } from '../lib/sectorAccess';
@@ -113,16 +113,12 @@ export function HubView({
   profile,
   navigate,
   badges = {},
-  isFavorite,
-  toggleFavorite,
 }: {
   title: string;
   macros: MacroDef[];
   profile: UserProfile | null;
   navigate: (viewId: string) => void;
   badges?: Record<string, number>;
-  isFavorite?: (viewId: string) => boolean;
-  toggleFavorite?: (fav: { viewId: string; label: string }) => void;
 }) {
   const [stage, setStage] = useState<Stage>({ kind: 'macros' });
 
@@ -263,12 +259,11 @@ export function HubView({
                 const label = subLabel(s);
                 const viewId = `${stage.modulo.id}-${slug(label)}`;
                 const b = badges[viewId] ?? 0;
-                const fav = isFavorite?.(viewId) ?? false;
                 return (
                   <div key={label} className="relative group">
                     <button
                       onClick={() => navigate(viewId)}
-                      className="w-full neu-flat rounded-xl px-4 py-3 pr-10 border border-white/5 flex items-center justify-between text-left hover:border-accent/30 hover:bg-accent/5 transition-colors"
+                      className="w-full neu-flat rounded-xl px-4 py-3 border border-white/5 flex items-center justify-between text-left hover:border-accent/30 hover:bg-accent/5 transition-colors"
                     >
                       <span className="text-sm font-semibold text-gray-200 group-hover:text-accent">{label}</span>
                       {b > 0 && (
@@ -277,15 +272,6 @@ export function HubView({
                         </span>
                       )}
                     </button>
-                    {toggleFavorite && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleFavorite({ viewId, label }); }}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center transition-opacity ${fav ? 'text-amber-400 opacity-100' : 'text-gray-600 opacity-0 group-hover:opacity-100 hover:text-amber-400'}`}
-                        title={fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-                      >
-                        <Star size={12} className={fav ? 'fill-amber-400' : ''} />
-                      </button>
-                    )}
                   </div>
                 );
               })}
