@@ -1,8 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Star, Target, X } from 'lucide-react';
+import { ArrowRight, Boxes, ClipboardList, ShoppingCart, TrendingUp, CreditCard, Package, Users, ShoppingBag, DollarSign, Megaphone, Star, Target, X, Building2 } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
+import { dataExtensoBR, saudacaoBR } from '../lib/dates';
+import { FILIAL_COLOR, isFilialHolding } from '../lib/filiais';
 import {
   Bar,
   Line,
@@ -103,11 +105,28 @@ export const InicioView = ({
   }, [pesquisasAtivas, minhasRespostas, profile]);
 
   const contasAberto = contasReceber.filter((c: any) => c.status !== 'Pago');
+  const contasPagas  = contasReceber.filter((c: any) => c.status === 'Pago');
   const contasReceberCount = contasAberto.length;
   const contasReceberValor = contasAberto
     .reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0)
     .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  // Donut de progresso (pago / total). Fração calculada por VALOR — melhor
+  // que por quantidade porque uma conta grande sozinha pesa diferente de 10
+  // pequenas. Estático (sem animate-spin) — leitura calma, não "carregando".
+  const totalRecebido = contasPagas.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
+  const totalTitulos  = totalRecebido + contasAberto.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
+  const pctPago = totalTitulos > 0 ? Math.round((totalRecebido / totalTitulos) * 100) : 0;
   const notasCount = notasRecebidas.length;
+
+  // Saudação + data local do Acre — só recalcula ao montar a view.
+  const primeiroNome = (profile?.nome ?? profile?.email?.split('@')[0] ?? '').split(' ')[0];
+  const saudacaoTxt  = React.useMemo(() => saudacaoBR(), []);
+  const dataExtenso  = React.useMemo(() => dataExtensoBR(), []);
+  // "Matriz" (holding) vs. "Matriz" (modo consolidado, filialAtiva=null).
+  // Ambos aparecem no filialAtiva do contexto — checamos escolheu em outro
+  // ponto se precisar distinguir, aqui a intenção do label é a mesma.
+  const filialLabel = filialAtiva ?? 'Matriz';
+  const filialStyle = isFilialHolding(filialLabel) ? FILIAL_COLOR[filialLabel] : FILIAL_COLOR.Matriz;
   const SHORTCUTS_BY_MODULE: Record<string, { label: string; desc: string; icon: any; view: string }[]> = {
     empresa:    [
       { label: 'Filiais',          desc: 'Unidades e escritórios',    icon: Boxes,         view: 'empresa-filiais'           },
@@ -186,6 +205,22 @@ export const InicioView = ({
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
       {!isAdmin && <PontoFAB />}
+
+      {/* Header — saudação + data + badge da filial ativa. Substitui a
+          entrada "fria" nos cards e dá contexto imediato de quem/quando/onde. */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-100 tracking-tight truncate">
+            {saudacaoTxt}{primeiroNome ? `, ${primeiroNome}` : ''}
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1 first-letter:uppercase">{dataExtenso}</p>
+        </div>
+        <span className={`inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-full border text-xs font-bold ${filialStyle.bg} ${filialStyle.text} ${filialStyle.border}`}>
+          <Building2 size={12} />
+          {filialAtiva ?? 'Matriz — consolidado'}
+        </span>
+      </div>
+
       {pesquisasPendentesCount > 0 && (
         <button onClick={() => onNavigate?.('minhas-pesquisas')}
           className="neu-flat rounded-3xl p-5 sm:p-6 border border-accent/20 hover:border-accent/40 transition-colors flex items-center gap-4 text-left shrink-0">
@@ -217,8 +252,74 @@ export const InicioView = ({
         </button>
       )}
 
+      {isLoading ? <LoadingSpinner /> : (
+        <div className="flex flex-col gap-6 shrink-0">
+          <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
+              {/* Donut estático: fração paga vs. total, calculado por VALOR.
+                  Substitui o anel animate-spin que lia como "carregando". */}
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
+                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
+                    strokeDasharray={`${pctPago} ${100 - pctPago}`} strokeDashoffset="0" strokeLinecap="round" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasReceberCount}</span>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                </div>
+              </div>
+              <div className="text-center mt-auto">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                  {pctPago}% recebido do total
+                </span>
+                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
+              </div>
+            </div>
+            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
+              <span className="text-5xl sm:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
+              <span className="text-xs font-medium text-gray-500 mb-10 tracking-wide">Notas fiscais capturadas</span>
+              <button onClick={() => onNavigate?.('compras-notasrecebidas')} className="neu-button-accent w-full py-4 rounded-xl font-bold text-sm mt-auto">Ver notas recebidas</button>
+            </div>
+            <div className="neu-flat rounded-3xl p-6 flex flex-col border border-accent/20">
+              <h4 className="text-xs font-bold text-gray-400 mb-4 pl-2 uppercase tracking-widest">Pedidos de Compra</h4>
+              <div className="flex-1 min-h-[140px] w-full mb-6">
+                <ResponsiveContainer width="100%" height="100%" minHeight={140}>
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                    <XAxis dataKey="name" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="qtd" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis yAxisId="valor" orientation="right" stroke={chartColors.accent} fontSize={10} tickLine={false} axisLine={false} width={44}
+                      tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: chartColors.tooltipBg, border: `1px solid ${chartColors.tooltipBorder}`, borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
+                      itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                      labelStyle={{ color: chartColors.legend, fontSize: '11px' }}
+                      formatter={(value: number, name: string) =>
+                        name === 'Valor (R$)'
+                          ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                          : value
+                      } />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: chartColors.legend, paddingTop: '10px' }} />
+                    <Bar yAxisId="qtd" dataKey="qtd" fill={chartColors.bar} radius={[4, 4, 0, 0]} stroke={chartColors.barStroke} strokeWidth={1} name="Pedidos" />
+                    <Line yAxisId="valor" type="monotone" dataKey="valor" stroke={chartColors.accent} strokeWidth={3} dot={{ r: 3, fill: chartColors.tooltipBg, stroke: chartColors.accent, strokeWidth: 2 }} activeDot={{ r: 5, fill: chartColors.accent, strokeWidth: 0 }} name="Valor (R$)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex gap-3 mt-auto">
+                <button onClick={() => onNavigate?.('compras-pedidos')} className="flex-1 neu-pressed py-3 rounded-xl font-bold text-xs text-gray-300 hover:text-white transition-colors">Ver pedidos</button>
+                <button onClick={() => onNavigate?.('compras-cotações')} className="flex-1 neu-button py-3 rounded-xl font-bold text-xs text-accent hover:text-white transition-colors">Cotações</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 shrink-0">
-        <div className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5 border border-accent/20">
+        <div className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col gap-5 border border-accent/20">
           <h3 className="text-lg font-bold text-gray-200 shrink-0 flex items-center gap-2">
             <Star size={16} className="text-amber-400 fill-amber-400" /> Acesso Rápido
           </h3>
@@ -284,85 +385,28 @@ export const InicioView = ({
         </div>
 
         <div
-          className="lg:col-span-7 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden border border-accent/20"
+          className="lg:col-span-5 neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden border border-accent/20"
         >
-          <div className="flex flex-col items-center justify-center text-center w-full py-4">
-            <img src={relogioIcon} alt="Relógio" className="w-40 h-40 object-contain mb-5" />
-            <h3 className="text-4xl font-bold text-accent mb-5">Central de Tempo</h3>
-
-            <h2 className="text-xl font-semibold text-white leading-snug mb-6">
+          <div className="flex flex-col items-center justify-center text-center w-full py-2">
+            <img src={relogioIcon} alt="Relógio" className="w-24 h-24 object-contain mb-3" />
+            <h3 className="text-xl font-bold text-accent mb-2">Central de Tempo</h3>
+            <p className="text-xs text-gray-500 leading-snug mb-5">
               Relógio, alarmes, cronômetro e timer
-            </h2>
-
+            </p>
             <button
               onClick={() => onNavigate?.('central-tempo')}
-              className="btn-shimmer py-3.5 px-7 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all"
+              className="btn-shimmer py-3 px-6 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all"
               style={{
                 background:  'var(--color-accent)',
                 color:       'var(--color-accent-text)',
                 border:      'none',
                 boxShadow:   '0 1px 2px rgba(0, 0, 0, 0.35)',
               }}>
-              Abrir Central de Tempo <ArrowRight size={16} />
+              Abrir <ArrowRight size={14} />
             </button>
           </div>
         </div>
       </div>
-
-      {isLoading ? <LoadingSpinner /> : (
-        <div className="flex flex-col gap-6 shrink-0 mb-8">
-          <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] relative" style={{ borderColor: 'var(--color-border)' }}>
-                <div className="absolute inset-0 rounded-full border-t-[3px] border-accent animate-spin-slow" style={{ animationDuration: '6s' }}></div>
-                <span className="text-3xl sm:text-4xl font-black text-accent drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{contasReceberCount}</span>
-              </div>
-              <div className="text-center mt-auto">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Valor Total</span>
-                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
-              </div>
-            </div>
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 w-full text-left uppercase tracking-widest">Notas Fiscais</h4>
-              <span className="text-5xl sm:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-md mt-4">{notasCount}</span>
-              <span className="text-xs font-medium text-gray-500 mb-10 tracking-wide">Notas fiscais capturadas</span>
-              <button onClick={() => onNavigate?.('compras-notasrecebidas')} className="neu-button-accent w-full py-4 rounded-xl font-bold text-sm mt-auto">Ver notas recebidas</button>
-            </div>
-            <div className="neu-flat rounded-3xl p-6 flex flex-col border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-4 pl-2 uppercase tracking-widest">Pedidos de Compra</h4>
-              <div className="flex-1 min-h-[140px] w-full mb-6">
-                <ResponsiveContainer width="100%" height="100%" minHeight={140}>
-                  <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-                    <XAxis dataKey="name" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis yAxisId="qtd" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <YAxis yAxisId="valor" orientation="right" stroke={chartColors.accent} fontSize={10} tickLine={false} axisLine={false} width={44}
-                      tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: chartColors.tooltipBg, border: `1px solid ${chartColors.tooltipBorder}`, borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
-                      itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
-                      labelStyle={{ color: chartColors.legend, fontSize: '11px' }}
-                      formatter={(value: number, name: string) =>
-                        name === 'Valor (R$)'
-                          ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                          : value
-                      } />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: chartColors.legend, paddingTop: '10px' }} />
-                    <Bar yAxisId="qtd" dataKey="qtd" fill={chartColors.bar} radius={[4, 4, 0, 0]} stroke={chartColors.barStroke} strokeWidth={1} name="Pedidos" />
-                    <Line yAxisId="valor" type="monotone" dataKey="valor" stroke={chartColors.accent} strokeWidth={3} dot={{ r: 3, fill: chartColors.tooltipBg, stroke: chartColors.accent, strokeWidth: 2 }} activeDot={{ r: 5, fill: chartColors.accent, strokeWidth: 0 }} name="Valor (R$)" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex gap-4 mt-auto">
-                <button onClick={() => onNavigate?.('compras-pedidos')} className="flex-1 neu-pressed py-3.5 rounded-xl font-bold text-[10px] text-gray-400 hover:text-white transition-colors">SAIBA MAIS</button>
-                <button onClick={() => onNavigate?.('compras-cotações')} className="flex-1 neu-button py-3.5 rounded-xl font-bold text-[10px] text-accent hover:text-white transition-colors">MAPA DE COTAÇÃO</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 };

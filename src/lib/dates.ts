@@ -35,3 +35,23 @@ export function formatDataHoraBR(iso: string | Date | null | undefined): string 
   if (Number.isNaN(d.getTime())) return '';
   return FMT_DATETIME.format(d);
 }
+
+const FMT_EXTENSO = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Rio_Branco',
+  weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+});
+
+/** Data por extenso no fuso do Acre: "quarta-feira, 10 de julho de 2026". */
+export function dataExtensoBR(d: Date = new Date()): string {
+  return FMT_EXTENSO.format(d);
+}
+
+/** Saudação por hora do dia no fuso do Acre: "Bom dia/tarde/noite". */
+export function saudacaoBR(d: Date = new Date()): string {
+  const h = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Rio_Branco', hour: '2-digit', hour12: false,
+  }).format(d));
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
