@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, Clock, Trash2, ChevronDown, ChevronUp,
@@ -355,7 +356,7 @@ function ModalConfig({
   config: CapitalConfig | null; onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void; profile: UserProfile | null;
 }) {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = todayBR();
   const [dataInicio, setDataInicio] = useState(config?.data_inicio ?? hoje);
   const [dataFim, setDataFim] = useState(config?.data_fim ?? '');
   const [reservaPct, setReservaPct] = useState(String(config?.reserva_min_pct ?? 0));

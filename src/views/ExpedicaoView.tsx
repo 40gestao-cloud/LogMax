@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,7 +31,7 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
     if (!validate()) return;
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       const qtd = Number(extras.qtd_expedida) || 0;
       const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: extras.status, filial };
       const s = await dbInsert('/api/expedicao', payload);

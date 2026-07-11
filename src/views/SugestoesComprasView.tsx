@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayBR } from '../lib/dates';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ShoppingCart, AlertTriangle, X, Save } from 'lucide-react';
@@ -52,7 +53,7 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
     setIsSaving(true);
     showToast("Criando requisição...", 'info', false);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       await dbInsert('/api/requisicoesview', {
         item: requestingItem.nome,
         qtd: qtdNum,

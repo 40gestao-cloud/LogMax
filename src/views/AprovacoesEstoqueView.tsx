@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
@@ -54,7 +55,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
       aprovUpdated = true;
       await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovado' });
       if (ap.req?.produto_id && ap.req?.qtd) {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayBR();
         try {
           await dbInsert('/api/movimentacoesestoqueview', {
             produto_id:            ap.req.produto_id,

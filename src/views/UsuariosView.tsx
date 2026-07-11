@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
@@ -174,7 +175,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         margin: { left: margin, right: margin },
       });
 
-      doc.save(`logmax-usuarios-${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(`logmax-usuarios-${todayBR()}.pdf`);
     } catch (err: any) {
       showToast(`Erro ao gerar PDF: ${err?.message ?? '—'}`, 'error');
     } finally {
@@ -184,7 +185,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const handleExportExcel = async () => {
     setExportingExcel(true);
     try {
-      await exportToExcel('Usuários', usuariosExportColumns, buildUsuariosExportRows(), `logmax-usuarios-${new Date().toISOString().slice(0, 10)}`);
+      await exportToExcel('Usuários', usuariosExportColumns, buildUsuariosExportRows(), `logmax-usuarios-${todayBR()}`);
     } catch (err: any) {
       showToast(`Erro ao gerar Excel: ${err?.message ?? '—'}`, 'error');
     } finally {

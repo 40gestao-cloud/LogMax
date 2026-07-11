@@ -1,13 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export type UserRole = 'admin' | 'ceo' | 'gerente' | 'colaborador';
+export type UserRole = 'admin' | 'ceo' | 'gerente' | 'colaborador' | 'conselheiro';
 
 export interface AuthedUser {
   id: string;
   email: string;
   role: UserRole;
   setor: string;
+  setores_extras: string[];
+  is_conselheiro: boolean;
+}
+
+/**
+ * Espelha `hasSetor` do front (src/lib/rbac.ts): considera setor primário,
+ * setores_extras, admin/CEO, conselheiro e o setor coringa 'all'. Endpoints
+ * DEVEM usar isto em vez de `user.setor === 'X'`, senão um usuário multi-setor
+ * (acesso via setores_extras) leva 403 mesmo com o botão liberado na UI.
+ */
+export function userHasSetor(user: AuthedUser, setor: string): boolean {
+  if (user.role === 'admin' || user.role === 'ceo') return true;
+  if (user.role === 'conselheiro' || (user.role === 'gerente' && user.is_conselheiro)) return true;
+  if (user.setor === 'all') return true;
+  if (user.setor === setor) return true;
+  return user.setores_extras.includes(setor);
 }
 
 /**
@@ -61,7 +77,7 @@ export async function authenticate(
 
   const { data: profile } = await client
     .from('user_profiles')
-    .select('role, setor')
+    .select('role, setor, setores_extras, is_conselheiro')
     .eq('id', user.id)
     .single();
 
@@ -75,6 +91,8 @@ export async function authenticate(
     email: user.email ?? '',
     role: profile.role as UserRole,
     setor: profile.setor as string,
+    setores_extras: Array.isArray(profile.setores_extras) ? (profile.setores_extras as string[]) : [],
+    is_conselheiro: profile.is_conselheiro === true,
   };
 }
 

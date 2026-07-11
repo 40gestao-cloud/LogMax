@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -61,7 +62,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       const qtd = Number(extras.qtd_recebida) || 0;
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
       const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today };
@@ -97,7 +98,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     confirmingRef.current = item.id;
     setConfirmSaving(true);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       // Movimentação PRIMEIRO — se falhar, status fica Pendente e o botão "Confirmar" reaparesce para retry.
       // Só atualiza o status após a movimentação estar salva no banco.
       if (confirmStatus === 'Concluído' || confirmStatus === 'Parcial') {

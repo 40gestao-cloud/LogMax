@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { todayBR } from '../lib/dates';
 import { motion } from 'motion/react';
 import { Users, TrendingUp, TrendingDown, Award, Calendar, Clock, AlertTriangle } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -111,7 +112,7 @@ export function MatrizRHView() {
     return m;
   }, [funcionarios]);
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = todayBR();
   const freqHoje = useMemo(() => {
     const hoje_ = new Date().toDateString();
     return frequencias.filter((r: any) => new Date(r.data ?? r.created_at).toDateString() === hoje_);

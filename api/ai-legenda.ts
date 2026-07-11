@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { authenticate, applyCors } from '../lib/auth.js';
+import { authenticate, applyCors, userHasSetor } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 import { callLLM } from '../lib/llm.js';
 
@@ -130,8 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Geração de copy é privilégio de Marketing + admin/CEO. Endpoint
     // separado do /api/ai-chat (que exige financeiro) justamente porque
     // são públicos-alvo diferentes.
-    const canUse =
-      user.role === 'admin' || user.role === 'ceo' || user.setor === 'marketing';
+    const canUse = userHasSetor(user, 'marketing');
     if (!canUse) {
       log.warn('access.denied', { user_id: user.id, role: user.role, setor: user.setor });
       return res.status(403).json({ error: 'Geração de legenda disponível apenas para Marketing, Admin e CEO.' });

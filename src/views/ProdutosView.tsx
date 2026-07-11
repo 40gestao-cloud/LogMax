@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -400,7 +401,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
         const saved = await dbInsert<any>('/api/produtosview', insertPayload);
         const novoId = saved?.id;
-        const hoje = new Date().toISOString().slice(0, 10);
+        const hoje = todayBR();
         let saldoFinal = 0;
         if (novoId && estoqueInicial > 0) {
           try {

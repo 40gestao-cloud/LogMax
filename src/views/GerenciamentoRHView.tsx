@@ -1,4 +1,5 @@
 import React from 'react';
+import { todayBR } from '../lib/dates';
 import { motion } from 'motion/react';
 import { Users, DollarSign, Palmtree, BookOpen, Clock, CalendarCheck } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -37,7 +38,7 @@ export const GerenciamentoRHView = () => {
   const isLoading = lFun || lFol || lFer || lPon || lTre;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const anoMes = new Date().toISOString().slice(0, 7);
+  const anoMes = todayBR().slice(0, 7);
 
   // Funcionários
   const funAtivos = funcionarios.filter((f: any) => f.status === 'Ativo').length;

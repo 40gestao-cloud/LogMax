@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -154,7 +155,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = todayBR();
   const ativosHoje = afastamentos.filter((a: any) => a.data_inicio <= hoje && a.data_fim >= hoje).length;
   const pendentesAplicar = afastamentos.filter((a: any) => !a.aplicado_no_ponto).length;
   const totalDiasMes = afastamentos

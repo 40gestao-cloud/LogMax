@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { authenticate, applyCors } from '../lib/auth.js';
+import { authenticate, applyCors, userHasSetor } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 
 /**
@@ -19,8 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await authenticate(req, res);
     if (!user) return;
 
-    const canUseMaxAI =
-      user.role === 'admin' || user.role === 'ceo' || user.setor === 'financeiro';
+    const canUseMaxAI = userHasSetor(user, 'financeiro');
     if (!canUseMaxAI) {
       return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });
     }

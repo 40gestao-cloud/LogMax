@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,7 +48,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const anoMes = new Date().toISOString().slice(0, 7);
+  const anoMes = todayBR().slice(0, 7);
   const ativos = funcionarios.filter((f: any) => f.status === 'Ativo').length;
   const afastados = funcionarios.filter((f: any) => f.status === 'Afastado').length;
   const desligados = funcionarios.filter((f: any) => f.status === 'Desligado').length;

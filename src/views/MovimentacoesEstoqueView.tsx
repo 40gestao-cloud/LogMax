@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -44,7 +45,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
     setIsSaving(true);
     showToast("Registrando...", 'info', false);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       const payload = { ...form, qtd, origem: extras.origem, destino: extras.destino, data: today, filial };
       const saved = await dbInsert('/api/movimentacoesestoqueview', payload);
       setData([saved ?? { id: Date.now(), ...payload }, ...data]);

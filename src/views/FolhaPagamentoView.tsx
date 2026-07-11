@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,7 +48,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
-  const hoje = new Date().toISOString().slice(0, 7);
+  const hoje = todayBR().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
   const [showForm, setShowForm] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);

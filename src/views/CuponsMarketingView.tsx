@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -177,7 +178,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBR();
   const ativos = cupons.filter((c: any) => c.validade_fim >= today).length;
   const expirados = cupons.length - ativos;
   const usosTotais = cupons.reduce((s: number, c: any) => s + Number(c.usos || 0), 0);

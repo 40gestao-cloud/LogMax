@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { todayBR } from '../lib/dates';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
@@ -84,7 +85,7 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
     try {
       const updated = await dbUpdate('/api/pesquisasview', p.id, {
         status: 'Ativa',
-        data_inicio: p.data_inicio ?? new Date().toISOString().slice(0, 10),
+        data_inicio: p.data_inicio ?? todayBR(),
       });
       setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...updated } : x));
       showToast('Pesquisa publicada.', 'success');

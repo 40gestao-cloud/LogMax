@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { todayBR } from '../lib/dates';
 import { motion } from 'motion/react';
 import { Instagram, Youtube, Facebook, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -36,7 +37,7 @@ const METRICAS: { key: string; label: string }[] = [
 
 const EMPTY_FORM = {
   plataforma: 'Instagram' as Plataforma,
-  data_registro: new Date().toISOString().slice(0, 10),
+  data_registro: todayBR(),
   seguidores: '',
   curtidas: '',
   visualizacoes: '',

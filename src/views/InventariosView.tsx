@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,7 +30,7 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
     if (!validate()) return;
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       const payload = { ...form, qtd_sistema: Number(extras.qtd_sistema) || 0, qtd_contada: Number(extras.qtd_contada) || 0, status: extras.status, data: today, filial };
       const s = await dbInsert('/api/inventariosestoqueview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);

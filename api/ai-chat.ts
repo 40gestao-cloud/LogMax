@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { authenticate, applyCors } from '../lib/auth.js';
+import { authenticate, applyCors, userHasSetor } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 import { callLLM, type LLMMessage } from '../lib/llm.js';
 
@@ -48,8 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Acesso ao MaxAI restrito a admin/CEO (visão global) e Financeiro.
     // UI gateia também, mas validar server-side previne uso direto do endpoint.
-    const canUseMaxAI =
-      user.role === 'admin' || user.role === 'ceo' || user.setor === 'financeiro';
+    const canUseMaxAI = userHasSetor(user, 'financeiro');
     if (!canUseMaxAI) {
       log.warn('access.denied', { user_id: user.id, role: user.role, setor: user.setor });
       return res.status(403).json({ error: 'MaxAI disponível apenas para Admin, CEO e Financeiro.' });

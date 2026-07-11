@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -54,7 +55,7 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
 
   const isLoading = loadingV || loadingI;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBR();
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
   const enriched = vendas.map((v: any) => ({
@@ -120,7 +121,7 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
       // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido.
       // Itens órfãos (produto deletado/inválido) são pulados silenciosamente — o
       // cancelamento da venda não pode falhar por causa de dados antigos.
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayBR();
       const itensVenda = venda.itens ?? [];
       let estornados = 0;
       let orfaos = 0;
