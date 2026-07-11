@@ -55,7 +55,7 @@ Sem isso, todos os dados aparecem vazios.
 
 **Passos:**
 1. Criar conta em [supabase.com](https://supabase.com) e criar um novo projeto
-2. No SQL Editor do Supabase, rodar o arquivo `logmax_supabase_schema.sql` (já existe na raiz)
+2. No SQL Editor do Supabase, rodar o arquivo `docs/setup-turma/logmax_supabase_schema.sql`
 3. Criar o arquivo `.env` na raiz do projeto com:
    ```
    VITE_SUPABASE_URL=https://<seu-projeto>.supabase.co

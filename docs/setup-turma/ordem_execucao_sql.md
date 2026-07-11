@@ -164,7 +164,7 @@ Todos os arquivos estão em `supabase/migrations/`. Execute em ordem.
 | # | Arquivo | O que faz |
 |---|---|---|
 | 108 | **(Bloco SQL inline — cole no Editor)** | Dropa policies `auth_all`/`auth_read` que sobreviveram ao hardening. **Veja abaixo.** |
-| 109 | `marketing_links_migration.sql` (raiz) | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas`. |
+| 109 | `marketing_links_migration.sql` | ADD COLUMN `link_propaganda/status_link/obs_link` em `marketing_tarefas`. |
 
 ### Fase 4 — Seed do Admin Master (110)
 

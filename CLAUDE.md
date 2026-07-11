@@ -41,9 +41,8 @@ Endpoints Vercel (Node). Tudo precisa de service-role + checagem RBAC manual:
 - **`.env.example`** — chaves necessárias (`VITE_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `CRON_SECRET`, `PONTO_*`, `VITE_PONTO_*`).
 - **`.github/workflows/test.yml`** — CI (vitest).
 
-### SQL legado na raiz (referência histórica)
-`logmax_supabase_schema.sql`, `logmax_rls.sql`, `rls_policies.sql`, `seed_data.sql`, `pdv_tables.sql`, `rh_tables.sql`, `marketing_tables.sql`, `pesquisas_tables.sql`, `tarefas_table.sql`, `user_profiles_table.sql`, `qr_ponto_table.sql`, `promocoes_reversao.sql`, `marketing_links_migration.sql`, `p0_fixes.sql`, `p2_fixes.sql`, `ordem_execucao_sql.md`.
-**Para schema atual prefira `supabase/migrations/`.** Esses arquivos são snapshots iniciais ou one-shots — úteis pra entender intenção original, não pra estado vigente.
+### SQL de bootstrap de turma (`docs/setup-turma/`)
+15 arquivos SQL + `ordem_execucao_sql.md`. Sequência inicial usada pelo `SETUP_NOVA_TURMA.md` pra criar schema/RLS/seed em cada novo projeto Supabase de turma. **Para schema vigente prefira `supabase/migrations/`** — o bootstrap é um snapshot congelado da fase inicial, não reflete o estado atual do banco.
 
 ### Testes (`tests/`)
 `pdv.test.ts`, `setup.ts` — cobertura mínima (foco em PDV).

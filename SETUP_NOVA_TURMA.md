@@ -18,25 +18,25 @@ Este documento lista a **ordem exata** de aplicação dos SQLs para subir um Sup
 
 ---
 
-## Bloco 1 — Schema base (SQLs na raiz do repo)
+## Bloco 1 — Schema base (SQLs em `docs/setup-turma/`)
 
 | # | Arquivo | O que faz |
 |---|---|---|
-| 001 | `logmax_supabase_schema.sql` | Tabelas-base do ERP (filiais, colaboradores, produtos, requisições, financeiro) |
-| 002 | `user_profiles_table.sql` | RBAC: tabela `user_profiles` (role + setor) |
-| 003 | `rh_tables.sql` | Módulo RH (funcionários, cargos, folha, férias) |
-| 004 | `pdv_tables.sql` | Módulo PDV (vendas, itens_venda) |
-| 005 | `marketing_tables.sql` | Módulo Marketing (promoções, tarefas) |
-| 006 | `marketing_links_migration.sql` | Colunas de link/aprovação em `marketing_tarefas` |
-| 007 | `tarefas_table.sql` | Tabela genérica `tarefas` (compartilhada por módulos) |
-| 008 | `pesquisas_tables.sql` | Submódulo Pesquisas RH (clima/eNPS) |
-| 009 | `qr_ponto_table.sql` | Registros de ponto por QR (`ponto_qr_registros`) |
-| 010 | `promocoes_reversao.sql` | RPC `reverter_promocoes_expiradas` |
-| 011 | `p0_fixes.sql` | Correções P0 sobre o schema inicial |
-| 012 | `p2_fixes.sql` | Correções P2 (inclui tabela `configuracoes`) |
-| 013 | `logmax_rls.sql` | RLS bootstrap (substituído depois pelo hardening, mas precisa rodar) |
-| 014 | `rls_policies.sql` | RLS de `controle_caixa` + ajustes |
-| 015 | `seed_data.sql` | Dados de demonstração (recomendado pra turma didática) |
+| 001 | `docs/setup-turma/logmax_supabase_schema.sql` | Tabelas-base do ERP (filiais, colaboradores, produtos, requisições, financeiro) |
+| 002 | `docs/setup-turma/user_profiles_table.sql` | RBAC: tabela `user_profiles` (role + setor) |
+| 003 | `docs/setup-turma/rh_tables.sql` | Módulo RH (funcionários, cargos, folha, férias) |
+| 004 | `docs/setup-turma/pdv_tables.sql` | Módulo PDV (vendas, itens_venda) |
+| 005 | `docs/setup-turma/marketing_tables.sql` | Módulo Marketing (promoções, tarefas) |
+| 006 | `docs/setup-turma/marketing_links_migration.sql` | Colunas de link/aprovação em `marketing_tarefas` |
+| 007 | `docs/setup-turma/tarefas_table.sql` | Tabela genérica `tarefas` (compartilhada por módulos) |
+| 008 | `docs/setup-turma/pesquisas_tables.sql` | Submódulo Pesquisas RH (clima/eNPS) |
+| 009 | `docs/setup-turma/qr_ponto_table.sql` | Registros de ponto por QR (`ponto_qr_registros`) |
+| 010 | `docs/setup-turma/promocoes_reversao.sql` | RPC `reverter_promocoes_expiradas` |
+| 011 | `docs/setup-turma/p0_fixes.sql` | Correções P0 sobre o schema inicial |
+| 012 | `docs/setup-turma/p2_fixes.sql` | Correções P2 (inclui tabela `configuracoes`) |
+| 013 | `docs/setup-turma/logmax_rls.sql` | RLS bootstrap (substituído depois pelo hardening, mas precisa rodar) |
+| 014 | `docs/setup-turma/rls_policies.sql` | RLS de `controle_caixa` + ajustes |
+| 015 | `docs/setup-turma/seed_data.sql` | Dados de demonstração (recomendado pra turma didática) |
 
 ---
 
