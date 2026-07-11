@@ -226,8 +226,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     try {
       const { data, error } = await supabase.rpc('resetar_dados_operacionais');
       if (error) throw error;
-      const preservados = (data as any)?.usuarios_preservados ?? users.length;
-      showToast(`Reset concluído. ${preservados} usuário(s) preservado(s).`, 'success');
+      const d = data as any;
+      const partes = [
+        `${d?.usuarios_preservados ?? users.length} usuário(s)`,
+        d?.funcionarios_preservados != null ? `${d.funcionarios_preservados} funcionário(s)` : null,
+        d?.filiais_preservadas      != null ? `${d.filiais_preservadas} filial(is)`         : null,
+      ].filter(Boolean).join(', ');
+      showToast(`Reset concluído. Preservados: ${partes}.`, 'success');
       setResetOpen(false);
       setResetConfirm('');
       // Reload imediato pra UI refletir o estado zerado.
@@ -809,10 +814,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                Apaga <strong className="text-gray-200">TODOS os dados e cadastros</strong> (vendas, estoque, financeiro,
+                Apaga <strong className="text-gray-200">TODOS os dados operacionais</strong> (vendas, estoque, financeiro,
                 folha, ponto, avaliações, marketing, histórico MaxBank, produtos, clientes, fornecedores etc.).
-                Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial)
-                e as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais).
+                Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial),
+                os <strong className="text-gray-200">funcionários</strong>, o <strong className="text-gray-200">histórico de frequência</strong>,
+                as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais) e as <strong className="text-gray-200">filiais</strong>.
                 Use ao trocar a turma de setor pra começar do zero.
                 Operação irreversível.
               </p>
@@ -853,12 +859,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
                   <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
-                  <li>Cadastros: produtos, serviços, clientes, fornecedores, funcionários</li>
+                  <li>Cadastros: produtos, serviços, clientes, fornecedores</li>
                   <li>Configurações, formas de pagamento, categorias de produto</li>
                 </ul>
                 <p className="text-emerald-400 text-xs pt-2">
-                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial), as carteiras MaxBank
-                  (saldo de salário, benefícios e bonificações) e as <strong>filiais</strong>.
+                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial),
+                  os <strong>funcionários</strong> e o <strong>histórico de frequência</strong>,
+                  as carteiras MaxBank (saldo de salário, benefícios e bonificações)
+                  e as <strong>filiais</strong> (com CNPJ e demais cadastros).
                 </p>
               </div>
               <div className="flex flex-col gap-2 mb-4">
