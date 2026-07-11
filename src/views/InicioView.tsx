@@ -36,7 +36,32 @@ export const InicioView = ({
   // do início refletem só a filial dele. Admin/CEO/Matriz (filialAtiva=null)
   // seguem vendo o consolidado das 3 unidades.
   const { filialAtiva } = useFilial();
-  const { theme } = useTheme();
+  const { theme, accentColor } = useTheme();
+
+  // Cores do gráfico lidas dos tokens de tema (dark/light/premium + accent),
+  // recomputadas quando tema/accent muda. Recharts recebe hex concreto porque
+  // `var(--...)` não resolve em atributos SVG de presentação.
+  const chartColors = React.useMemo(() => {
+    const fallback = {
+      grid: '#1a1a1a', axis: '#6b7280', accent: '#F0B429',
+      bar: 'rgba(240,180,41,0.12)', barStroke: 'rgba(240,180,41,0.35)',
+      tooltipBg: '#0d0d0d', tooltipBorder: 'rgba(255,255,255,0.08)', legend: '#9ca3af',
+    };
+    if (typeof window === 'undefined') return fallback;
+    const cs = getComputedStyle(document.documentElement);
+    const v = (name: string, fb: string) => cs.getPropertyValue(name).trim() || fb;
+    return {
+      grid:          v('--color-border', fallback.grid),
+      axis:          v('--color-text-dim', fallback.axis),
+      accent:        v('--color-accent', fallback.accent),
+      bar:           v('--color-surface-md', fallback.bar),
+      barStroke:     v('--color-border-md', fallback.barStroke),
+      tooltipBg:     v('--color-card-bg', fallback.tooltipBg),
+      tooltipBorder: v('--color-card-border', fallback.tooltipBorder),
+      legend:        v('--color-text-muted', fallback.legend),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme, accentColor]);
   const relogioIcon = theme === 'light'
     ? '/icon-relogio-central-modoclaro.png'
     : '/icon-relogio-central.png';
@@ -148,11 +173,13 @@ export const InicioView = ({
     const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-      const compra = pedidos.filter((p: any) => {
+      const doMes = pedidos.filter((p: any) => {
         const pd = new Date(p.created_at);
         return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
-      }).length;
-      return { name: MESES[d.getMonth()], compra, pedido: compra };
+      });
+      const qtd = doMes.length;
+      const valor = doMes.reduce((s: number, p: any) => s + (Number(p.valor_total) || 0), 0);
+      return { name: MESES[d.getMonth()], qtd, valor };
     });
   })();
 
@@ -288,7 +315,7 @@ export const InicioView = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
             <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] border-[#000000] relative">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full neu-flat flex items-center justify-center mb-6 sm:mb-8 border-[3px] relative" style={{ borderColor: 'var(--color-border)' }}>
                 <div className="absolute inset-0 rounded-full border-t-[3px] border-accent animate-spin-slow" style={{ animationDuration: '6s' }}></div>
                 <span className="text-3xl sm:text-4xl font-black text-accent drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{contasReceberCount}</span>
               </div>
@@ -308,13 +335,23 @@ export const InicioView = ({
               <div className="flex-1 min-h-[140px] w-full mb-6">
                 <ResponsiveContainer width="100%" height="100%" minHeight={140}>
                   <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
-                    <XAxis dataKey="name" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#000000', border: '1px solid #1a1a1a', borderRadius: '12px', boxShadow: '8px 8px 16px #000' }} itemStyle={{ color: '#e0e0e0', fontWeight: 'bold', fontSize: '12px' }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: '#9ca3af', paddingTop: '10px' }} />
-                    <Bar dataKey="compra" fill="#1f2937" radius={[4, 4, 0, 0]} activeBar={{ fill: '#374151' }} stroke="#111827" strokeWidth={1} name="Compra" />
-                    <Line type="monotone" dataKey="pedido" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: '#000000', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#10B981', strokeWidth: 0 }} name="Pedido" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                    <XAxis dataKey="name" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="qtd" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis yAxisId="valor" orientation="right" stroke={chartColors.accent} fontSize={10} tickLine={false} axisLine={false} width={44}
+                      tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: chartColors.tooltipBg, border: `1px solid ${chartColors.tooltipBorder}`, borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
+                      itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                      labelStyle={{ color: chartColors.legend, fontSize: '11px' }}
+                      formatter={(value: number, name: string) =>
+                        name === 'Valor (R$)'
+                          ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                          : value
+                      } />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', color: chartColors.legend, paddingTop: '10px' }} />
+                    <Bar yAxisId="qtd" dataKey="qtd" fill={chartColors.bar} radius={[4, 4, 0, 0]} stroke={chartColors.barStroke} strokeWidth={1} name="Pedidos" />
+                    <Line yAxisId="valor" type="monotone" dataKey="valor" stroke={chartColors.accent} strokeWidth={3} dot={{ r: 3, fill: chartColors.tooltipBg, stroke: chartColors.accent, strokeWidth: 2 }} activeDot={{ r: 5, fill: chartColors.accent, strokeWidth: 0 }} name="Valor (R$)" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
