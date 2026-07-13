@@ -127,16 +127,17 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas']
+    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas']
   },
   {
-    // Cadastros operacionais — Produtos, Fornecedores e Serviços. Acesso
-    // restrito a admin/CEO (via SETOR_MODULES 'all') e setor logística.
+    // Cadastros operacionais — Produtos, Categorias, Fornecedores e Serviços.
+    // Acesso restrito a admin/CEO (via SETOR_MODULES 'all') e setor logística.
     // Outros setores não veem o módulo nem suas rotas (RLS continua sendo
     // a fonte de verdade). Colaboradores foi movido para RH; Clientes vive
-    // em Vendas; Centros de custo agora pertence ao Financeiro.
+    // em Vendas; Centros de custo agora pertence ao Financeiro. Categorias
+    // veio de Empresa — é pré-requisito de Produto, faz mais sentido aqui.
     id: 'cadastros', label: 'Cadastros', icon: Database,
-    submenus: ['Produtos', 'Fornecedores', 'Serviços']
+    submenus: ['Categorias', 'Produtos', 'Fornecedores', 'Serviços']
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
@@ -470,7 +471,9 @@ function LogMaxAppInner() {
         .replace(/^votacoes$/,                 'inicio')
         .replace(/^matriz-votacoes$/,          'inicio')
         .replace(/^requerimentos$/,            'feedback-org')
-        .replace(/^matriz-requerimentos$/,     'feedback-org');
+        .replace(/^matriz-requerimentos$/,     'feedback-org')
+        // Categorias saiu de Empresa → Cadastros (pré-requisito de Produto).
+        .replace(/^empresa-categorias$/,       'cadastros-categorias');
       return migrado;
     } catch { return 'inicio'; }
   });
@@ -739,7 +742,7 @@ function LogMaxAppInner() {
       case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} />;
       case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
-      case 'empresa-categorias':              return <CategoriasProdutoView showToast={st} profile={profile} />;
+      case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
