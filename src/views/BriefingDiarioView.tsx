@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FILIAIS } from '../components/FilialSelector';
 
 const SETOR_LABEL: Record<string, string> = {
   empresa:    'Empresa',
@@ -311,8 +312,12 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
         return m ? Number(m[1]) : 0;
       };
 
+      // Fanout: cada tarefa aprovada vira 1 cópia por filial operacional
+      // (SuperMax/MaxLook/TechMax). Colaborador de cada filial vê a própria cópia
+      // via RLS. RPCs de edição/descarte usam briefing_id + briefing_tarefa_idx
+      // pra propagar mudança nas 3 cópias juntas.
       if (aprovadasGenericas.length > 0) {
-        const payload = aprovadasGenericas.map(t => ({
+        const payload = aprovadasGenericas.flatMap(t => FILIAIS.map(filial => ({
           modulo:               t.modulo,
           titulo:               t.titulo,
           descricao:            t.descricao,
@@ -325,14 +330,15 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
           briefing_id:          briefing.id,
           briefing_tarefa_idx:  parseIdx(t._id),
           contexto:             t.contexto_origem || null,
-        }));
+          filial,
+        })));
         const { error: insErr } = await supabase.from('tarefas').insert(payload);
         if (insErr) throw insErr;
       }
 
       if (aprovadasMarketing.length > 0) {
         // marketing_tarefas não tem coluna `modulo` (é implicitamente marketing).
-        const payload = aprovadasMarketing.map(t => ({
+        const payload = aprovadasMarketing.flatMap(t => FILIAIS.map(filial => ({
           titulo:               t.titulo,
           descricao:            t.descricao,
           prioridade:           t.prioridade,
@@ -344,7 +350,8 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
           briefing_id:          briefing.id,
           briefing_tarefa_idx:  parseIdx(t._id),
           contexto:             t.contexto_origem || null,
-        }));
+          filial,
+        })));
         const { error: insErr } = await supabase.from('marketing_tarefas').insert(payload);
         if (insErr) throw insErr;
       }
@@ -370,7 +377,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       const setoresAfetados = Array.from(new Set(aprovadas.map(a => a.modulo)));
       for (const s of setoresAfetados) {
         const qtd = aprovadas.filter(a => a.modulo === s).length;
-        await supabase.rpc('notificar_setor', {
+        const { error: notifErr } = await supabase.rpc('notificar_setor', {
           p_setor:     s,
           p_tipo:      'briefing_diario',
           p_titulo:    `Nova pauta: ${qtd} tarefa(s) do briefing diário`,
@@ -379,6 +386,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
           p_urgencia:  'Média',
           p_ref_id:    briefing.id,
         });
+        if (notifErr) console.warn(`[Briefing] notificar_setor(${s}) falhou:`, notifErr.message);
       }
 
       setBriefing(updBriefing);

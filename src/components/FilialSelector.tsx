@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 
 
-const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+export const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 export type FilialOp = typeof FILIAIS[number];
 
 export type FilialSelectorValue = FilialOp | 'Matriz';
