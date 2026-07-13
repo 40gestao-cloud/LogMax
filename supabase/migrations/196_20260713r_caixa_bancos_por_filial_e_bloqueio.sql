@@ -25,6 +25,21 @@
 BEGIN;
 
 -- ═══════════════════════════════════════════════════════════════════
+-- 0. caixa_bancos — garante colunas usadas pelas policies (drift do ERP)
+--    Nas 3 outras turmas a tabela nunca ganhou `filial` nem `is_reserva`
+--    porque essa evolução só rodou direto no ERP. Sem essas colunas as
+--    policies granulares abaixo falham no CREATE.
+-- ═══════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.caixa_bancos
+  ADD COLUMN IF NOT EXISTS filial     text,
+  ADD COLUMN IF NOT EXISTS is_reserva boolean NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_caixa_bancos_filial
+  ON public.caixa_bancos (filial)
+  WHERE filial IS NOT NULL;
+
+-- ═══════════════════════════════════════════════════════════════════
 -- 1. filial_caixa_config — tabela de trava por filial
 -- ═══════════════════════════════════════════════════════════════════
 
