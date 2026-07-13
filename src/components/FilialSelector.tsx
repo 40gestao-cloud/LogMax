@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
-import { useUserProfile } from '../hooks/useUserProfile';
 
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -43,29 +42,14 @@ const FILIAL_META: Record<FilialOp, {
   },
 };
 
-const isFilialOp = (v: string | null | undefined): v is FilialOp =>
-  v === 'SuperMax' || v === 'MaxLook' || v === 'TechMax';
-
 interface Props {
-  title: string;
-  subtitle?: string;
   onSelect: (filial: FilialSelectorValue) => void;
   onVoltar?: () => void;
 }
 
-export function FilialSelector({ title, subtitle, onSelect, onVoltar }: Props) {
-  const { profile } = useUserProfile();
-
-  const isColaborador = profile?.role === 'colaborador';
-  const filialTravada = isColaborador && isFilialOp(profile?.filial) ? profile.filial : null;
-
-  useEffect(() => {
-    if (filialTravada) onSelect(filialTravada);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filialTravada]);
-
-  if (!profile || filialTravada) return null;
-
+// Só admin/CEO/conselheiro chegam aqui — App.tsx trava colaborador/gerente
+// na profile.filial antes de montar este componente.
+export function FilialSelector({ onSelect, onVoltar }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0 }}

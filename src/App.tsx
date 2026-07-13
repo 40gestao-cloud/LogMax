@@ -659,8 +659,6 @@ function LogMaxAppInner() {
           </button>
         </div>
         <FilialSelector
-          title="Selecione a Unidade"
-          subtitle="Escolha a filial que deseja gerenciar nesta sessão."
           onSelect={(v) => v === 'Matriz' ? escolherMatriz() : setFilialAtiva(v)}
         />
       </div>
