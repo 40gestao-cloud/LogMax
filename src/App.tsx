@@ -802,7 +802,7 @@ function LogMaxAppInner() {
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-frequênciadetrabalho': return <FrequenciaTrabalhoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
-      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview"
+      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview" filialScoped
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
       case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;

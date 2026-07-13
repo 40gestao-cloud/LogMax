@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, ChevronRight, AlertCircle, ExternalLink, Send, Link2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { useFilial } from '../contexts/FilialContext';
+import type { FilialOp } from '../components/FilialSelector';
 
 const STATUS_FLOW = ['Pendente', 'Ciente', 'Em Produção', 'Concluído', 'Postado'] as const;
 type TarefaStatus = typeof STATUS_FLOW[number];
@@ -32,7 +34,13 @@ const PRIO_STYLE: Record<string, string> = {
 const EMPTY_FORM = { titulo: '', descricao: '', prioridade: 'Média', prazo: '' };
 
 export const TarefasMarketingView = ({ showToast, profile }: any) => {
-  const { data: tarefas, setData, isLoading } = useFetchData<any>('/api/marketingtarefasview');
+  const { filialAtiva } = useFilial();
+  if (!filialAtiva) return null;
+  return <TarefasMarketingViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+};
+
+const TarefasMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
+  const { data: tarefas, setData, isLoading } = useFetchData<any>('/api/marketingtarefasview', { filial });
   const [showForm, setShowForm]       = useState(false);
   const [form, setForm]               = useState<any>(EMPTY_FORM);
   const [saving, setSaving]           = useState(false);
@@ -71,6 +79,7 @@ export const TarefasMarketingView = ({ showToast, profile }: any) => {
         status:       'Pendente',
         status_link:  'Sem Link',
         nome_criador: profile?.nome ?? '',
+        filial,
       });
       setData((prev: any[]) => [created, ...prev]);
       showToast('Tarefa criada.', 'success');
