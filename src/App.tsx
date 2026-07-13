@@ -189,8 +189,9 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   if (typeof s === 'string') return true;
   if (s.requireRole && !s.requireRole.includes(profile?.role)) return false;
   if (s.requireSetor) {
-    // admin/CEO sempre passa
-    if (profile?.role === 'admin' || profile?.role === 'ceo') return true;
+    // admin/CEO/gerente sempre passam (gerente vê tudo da própria filial —
+    // RLS confina via auth_gerente_da, ver 20260713i_gerente_ve_tudo_da_filial_v2).
+    if (profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') return true;
     const setores = [profile?.setor, ...(profile?.setores_extras ?? [])].filter(Boolean);
     if (!s.requireSetor.some((sec: string) => setores.includes(sec))) return false;
   }
@@ -686,9 +687,14 @@ function LogMaxAppInner() {
   // Multi-setor: união dos módulos de todos os setores do usuário (primário + extras).
   // Admin/CEO (setor='all') passam direto. Sem isso, gerente Vendas com extra=ti
   // não veria o módulo TI no menu (RLS já permitiria, só a UX que falhava).
-  const allowedModuleIds = Array.from(new Set(
-    allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
-  ));
+  // Regra de negócio: role='gerente' vê todos os módulos da própria filial
+  // — RLS restringe a linha à filial do gerente via auth_gerente_da() (ver
+  // 20260713i_gerente_ve_tudo_da_filial_v2.sql).
+  const allowedModuleIds = profile?.role === 'gerente'
+    ? Array.from(new Set(SETOR_MODULES.all))
+    : Array.from(new Set(
+        allSetores(profile).flatMap(s => SETOR_MODULES[s] ?? [])
+      ));
   const allVisibleModules = menuModules.filter(m => allowedModuleIds.includes(m.id));
 
   // Em modo Matriz (filialAtiva===null + podeEscolherFilial) a sidebar mostra

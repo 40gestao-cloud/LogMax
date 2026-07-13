@@ -84,7 +84,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any;
     }
   };
 
-  if (!hasAnySetor(profile, 'vendas', 'logistica', 'financeiro') && !isAdminOuCeo) {
+  if (!hasAnySetor(profile, 'vendas', 'logistica', 'financeiro') && !isAdminOuCeo && profile.role !== 'gerente') {
     return (
       <div className="flex-1 flex items-center justify-center text-center">
         <p className="text-sm text-gray-400">Sem acesso a Pedidos de Venda.</p>

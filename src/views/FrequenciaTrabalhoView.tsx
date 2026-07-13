@@ -114,7 +114,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   // Modal de histórico
   const [modalFunc, setModalFunc] = useState<Funcionario | null>(null);
 
-  const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
+  const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || isConselheiro(profile);
 
   // No modo filial: filtra pela filial ativa.
   // No modo Matriz (filial===null): filtra pelo filialFiltro local (null = todas).

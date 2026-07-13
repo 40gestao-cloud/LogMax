@@ -520,11 +520,11 @@ function ResultadosModal({ pesquisa, onClose }: { pesquisa: any; onClose: () => 
 
 export const PesquisasView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
-  if (!hasSetor(profile, 'rh')) {
+  if (!hasSetor(profile, 'rh') && profile?.role !== 'gerente') {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas RH, admin ou CEO podem gerenciar pesquisas.</p>
+        <p className="text-sm text-gray-400">Apenas RH, gerente da filial, admin ou CEO podem gerenciar pesquisas.</p>
       </div>
     );
   }

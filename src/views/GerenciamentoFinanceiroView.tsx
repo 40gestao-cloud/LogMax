@@ -30,11 +30,11 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
 export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile }) => {
   // Guard: RLS já bloqueia as queries, mas a UI ficaria com tudo zerado
   // sem feedback claro. Mostra estado de "sem acesso" antes de tudo.
-  if (!hasSetor(profile, 'financeiro')) {
+  if (!hasSetor(profile, 'financeiro') && profile?.role !== 'gerente') {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas Financeiro, admin ou CEO podem acessar esta visão.</p>
+        <p className="text-sm text-gray-400">Apenas Financeiro, gerente da filial, admin ou CEO podem acessar esta visão.</p>
       </div>
     );
   }

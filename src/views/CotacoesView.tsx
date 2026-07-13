@@ -75,7 +75,9 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
   // recebimentos/movimentações) cria/envia/gera pedido; gerente do Financeiro
   // (+admin/CEO) aprova.
-  const isCompras    = hasAnySetor(profile, 'compras', 'logistica');
+  // Gerente da filial ativa também cria — regra "gerente vê/faz tudo da
+  // própria filial" (RLS já libera via auth_gerente_da em 20260713i).
+  const isCompras    = hasAnySetor(profile, 'compras', 'logistica') || profile.role === 'gerente';
   const isFinanceiro = hasSetor(profile, 'financeiro');
   // Aprovação restrita ao GERENTE do Financeiro (escolha do usuário); admin/CEO sempre podem.
   const podeDecidir  =

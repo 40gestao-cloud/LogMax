@@ -79,7 +79,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
   const [saving, setSaving] = useState(false);
   const [aplicandoId, setAplicandoId] = useState<string | null>(null);
 
-  const canCRUD = hasSetor(profile, 'rh');
+  const canCRUD = hasSetor(profile, 'rh') || profile?.role === 'gerente';
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? []).filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
       .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')),

@@ -84,8 +84,9 @@ const OrcamentosViewInner = ({
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');
   const isAdminOuCeo   = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
-  const podeDecidirFin = isFinanceiro || isAdminOuCeo;
-  const podeCriarVenda = isVendas || isAdminOuCeo;
+  const isGerente      = profile.role === 'gerente';
+  const podeDecidirFin = isFinanceiro || isAdminOuCeo || isGerente;
+  const podeCriarVenda = isVendas || isAdminOuCeo || isGerente;
 
   // Modo financeiro = aba "Aprovações de Orçamento" no Financeiro;
   // foca em decisões e oculta o botão de criar.

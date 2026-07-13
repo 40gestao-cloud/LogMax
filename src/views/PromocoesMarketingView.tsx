@@ -150,7 +150,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   // admin/CEO. Financeiro consegue ler `marketing_promocoes` (e abrir esta
   // view) mas a RLS de `marketing_artes_insert/update` recusa — escondemos
   // o botão pra não mostrar uma ação que falha.
-  const canPublicarArte = hasSetor(profile, 'marketing');
+  const canPublicarArte = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
 
   // Mapa rápido promocao_id → arte (1 por promoção, garantido pelo UNIQUE).
   const arteByPromocao = useMemo(() => {

@@ -160,7 +160,7 @@ const QRGenerator = () => {
 // ─── Histórico de Ponto QR ────────────────────────────────────────────────────
 const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToast: any }) => {
   const { user } = useAuth();
-  const canSeeAll = profile.role === 'admin' || isConselheiro(profile) || (profile.role === 'gerente' && hasSetor(profile, 'rh'));
+  const canSeeAll = profile.role === 'admin' || isConselheiro(profile) || profile.role === 'gerente';
   // Hard-delete restrito a admin (RH/CEO continuam vendo, mas só admin corrige).
   const canDelete = profile.role === 'admin';
 

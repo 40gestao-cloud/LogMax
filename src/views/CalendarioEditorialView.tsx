@@ -118,7 +118,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   }>(null);
   const [legendaCopiada, setLegendaCopiada] = useState<number | null>(null);
 
-  const canCRUD = hasSetor(profile, 'marketing');
+  const canCRUD = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
 
   const promocoesAprovadas = useMemo(
     () => (promocoes ?? []).filter((p: any) => p.status === 'Aprovado'),

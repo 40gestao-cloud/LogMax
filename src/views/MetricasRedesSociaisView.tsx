@@ -68,7 +68,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
   const [filialForm, setFilialForm] = useState('');
 
   const isAdminCeo = profile.role === 'admin' || profile.role === 'ceo';
-  const podeRegistrar = isAdminCeo || hasSetor(profile, 'marketing');
+  const podeRegistrar = isAdminCeo || hasSetor(profile, 'marketing') || profile.role === 'gerente';
 
   // Links das redes sociais — configuração por filial (1 link por
   // plataforma, no máximo 4), não por registro de métrica. Editado uma

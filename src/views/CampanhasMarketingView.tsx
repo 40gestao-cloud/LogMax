@@ -21,7 +21,18 @@ const STATUS_STYLE: Record<string, string> = {
   'Cancelada':                'bg-red-500/10   text-red-500   border-red-500/20',
 };
 
-const STATUS_OPTIONS = ['Rascunho', 'Ativa', 'Concluída', 'Cancelada'] as const;
+// 'Ativa' não é mais escolha livre no formulário — só chega lá vindo de
+// 'Aprovado'/'Parcialmente Aprovado' (aprovação do Financeiro via "Enviar
+// para Financeiro" no modal de produtos). Sem isso, Marketing pulava a
+// aprovação selecionando 'Ativa' direto na criação/edição.
+const STATUS_OPTIONS = ['Rascunho', 'Concluída', 'Cancelada'] as const;
+
+function opcoesStatus(statusAtual: string): string[] {
+  const extras: string[] = [];
+  if (statusAtual === 'Aprovado' || statusAtual === 'Parcialmente Aprovado' || statusAtual === 'Ativa') extras.push('Ativa');
+  if (!(STATUS_OPTIONS as readonly string[]).includes(statusAtual) && !extras.includes(statusAtual)) extras.push(statusAtual);
+  return [...STATUS_OPTIONS, ...extras];
+}
 
 const makeEmptyForm = (filial: string) => ({
   nome: '', descricao: '', objetivo: '', filial,
@@ -129,7 +140,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
     } finally { setEnviando(false); }
   };
 
-  const canEnviar = hasSetor(profile, 'marketing') && campanha.status === 'Rascunho';
+  const canEnviar = (hasSetor(profile, 'marketing') || profile?.role === 'gerente') && campanha.status === 'Rascunho';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto">
@@ -267,7 +278,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const [modalCamp, setModalCamp] = useState<Campanha | null>(null);
   const [searchCamp, setSearchCamp] = useState('');
 
-  const canCRUD        = hasSetor(profile, 'marketing');
+  const canCRUD        = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
   const canEditarGasto = canCRUD || hasSetor(profile, 'financeiro');
 
   const roiMap = useMemo(() => {
@@ -424,7 +435,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
                   <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {opcoesStatus(form.status).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">

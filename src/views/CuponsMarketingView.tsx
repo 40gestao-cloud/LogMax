@@ -65,7 +65,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
   const [copied, setCopied] = useState<string | null>(null);
   const [searchCup, setSearchCup] = useState('');
 
-  const canCRUD = hasSetor(profile, 'marketing');
+  const canCRUD = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
 
   const campanhasAtivasMap = useMemo(() => {
     const m: Record<string, string> = {};
