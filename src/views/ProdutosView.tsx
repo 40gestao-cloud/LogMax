@@ -16,7 +16,8 @@ import {
   uploadImagemProduto,
   removerImagemAntiga,
   PRODUTO_IMAGEM_ACCEPT,
-  PRODUTO_IMAGEM_MAX_LABEL,
+  PRODUTO_IMAGEM_OUTPUT_MAX_LABEL,
+  PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -139,13 +140,15 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [extrasErrors, setExtrasErrors] = useState<Record<string, string>>({});
 
-  // Imagem do produto — `imagemUrl` é a URL já persistida no bucket;
-  // `imagemUrlAnterior` guarda a referência original para apagarmos do
-  // Storage quando o usuário troca/remove a imagem em modo edição.
-  const [imagemUrl, setImagemUrl] = useState<string>('');
-  const [imagemUrlAnterior, setImagemUrlAnterior] = useState<string>('');
-  const [imagemUploading, setImagemUploading] = useState(false);
-  const imagemInputRef = useRef<HTMLInputElement | null>(null);
+  // Imagens do produto — até PRODUTO_IMAGEM_MAX_SLOTS (capa + extras).
+  // `imagens[i]` é a URL já persistida no bucket; `imagensAnteriores[i]`
+  // guarda a referência original para apagarmos do Storage quando o usuário
+  // troca/remove a imagem em modo edição. Índice 0 = capa (coluna
+  // imagem_url, usada em PDV/Catálogo/Vitrine); 1/2 = imagem_url_2/3.
+  const [imagens, setImagens] = useState<string[]>(() => Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
+  const [imagensAnteriores, setImagensAnteriores] = useState<string[]>(() => Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
+  const [imagemUploading, setImagemUploading] = useState<number | null>(null);
+  const imagemInputRefs = useRef<(HTMLInputElement | null)[]>(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
 
   // Pesquisa é server-side. Ordem de exibição: agrupar por filial (ordem fixa
   // de FILIAIS_HOLDING) e dentro de cada filial mostrar do código maior para
@@ -256,8 +259,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       elegivel_beneficios:    !!item.elegivel_beneficios,
       atributos:              (item.atributos && typeof item.atributos === 'object') ? item.atributos : {},
     });
-    setImagemUrl(item.imagem_url ?? '');
-    setImagemUrlAnterior(item.imagem_url ?? '');
+    const imagensItem = [item.imagem_url ?? '', item.imagem_url_2 ?? '', item.imagem_url_3 ?? ''];
+    setImagens(imagensItem);
+    setImagensAnteriores(imagensItem);
     setErrors({});
     setShowForm(false);
   };
@@ -267,16 +271,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setEditItem(null);
     setForm({ codigo: '', nome: '', preco: '' });
     setExtras({ ...EMPTY_EXTRAS, filial });
-    setImagemUrl('');
-    setImagemUrlAnterior('');
+    setImagens(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
+    setImagensAnteriores(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
     setErrors({});
     setExtrasErrors({});
-    if (imagemInputRef.current) imagemInputRef.current.value = '';
+    imagemInputRefs.current.forEach(ref => { if (ref) ref.value = ''; });
   };
 
-  // Upload de imagem: validação rigorosa (formato + 120 KB) ANTES do POST.
-  // Se aceito, faz upload para o bucket e guarda a URL pública no estado.
-  const handleImagemChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload de imagem: validação rigorosa (formato + 100 KB) ANTES do POST.
+  // Se aceito, faz upload para o bucket e guarda a URL pública no slot.
+  const handleImagemChange = async (slotIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const validacao = validarImagemProduto(file);
@@ -285,22 +289,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       e.target.value = '';
       return;
     }
-    setImagemUploading(true);
+    setImagemUploading(slotIdx);
     try {
-      const url = await uploadImagemProduto(file, editItem?.id);
-      setImagemUrl(url);
+      const url = await uploadImagemProduto(file, editItem?.id, slotIdx + 1);
+      setImagens(prev => prev.map((u, i) => i === slotIdx ? url : u));
       showToast('Imagem carregada!', 'success', true);
     } catch (err: any) {
       console.error('[Produtos] erro upload imagem:', err);
       showToast(err?.message ?? 'Falha ao enviar imagem.', 'error', true);
     } finally {
-      setImagemUploading(false);
+      setImagemUploading(null);
       e.target.value = '';
     }
   };
 
-  const handleRemoverImagem = () => {
-    setImagemUrl('');
+  const handleRemoverImagem = (slotIdx: number) => {
+    setImagens(prev => prev.map((u, i) => i === slotIdx ? '' : u));
   };
 
   const handleSave = async () => {
@@ -360,7 +364,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         filial:                 filial,
         categoria_id:           extras.categoria_id || null,
         subcategoria_id:        extras.subcategoria_id || null,
-        imagem_url:             imagemUrl || null,
+        imagem_url:             imagens[0] || null,
+        imagem_url_2:           imagens[1] || null,
+        imagem_url_3:           imagens[2] || null,
         tipo:                   extras.tipo,
         // Campos de patrimônio só viajam quando tipo='patrimonio' — limpa quando
         // o produto vira (ou volta a ser) estoque/venda.
@@ -388,11 +394,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...basePayload }) : d));
-        // Best-effort cleanup: se a imagem foi trocada ou removida, apaga a
-        // antiga do bucket. Falha aqui não bloqueia o sucesso do UPDATE.
-        if (imagemUrlAnterior && imagemUrlAnterior !== imagemUrl) {
-          removerImagemAntiga(imagemUrlAnterior).catch(() => {});
-        }
+        // Best-effort cleanup: se alguma imagem foi trocada ou removida,
+        // apaga a antiga do bucket. Falha aqui não bloqueia o sucesso do UPDATE.
+        imagensAnteriores.forEach((urlAntiga, i) => {
+          if (urlAntiga && urlAntiga !== imagens[i]) {
+            removerImagemAntiga(urlAntiga).catch(() => {});
+          }
+        });
         showToast('Produto atualizado!', 'success', true);
       } else {
         // Cria com estoque = 0 e gera movimentação Entrada (Saldo Inicial) se
@@ -677,49 +685,54 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                 )}
               </div>
 
-              {/* Imagem do produto */}
+              {/* Imagens do produto — capa + até 2 extras */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <ImagePlus size={12} /> Imagem do produto
+                  <ImagePlus size={12} /> Imagens do produto (até {PRODUTO_IMAGEM_MAX_SLOTS})
                 </p>
-                <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
-                  <ProdutoThumb url={imagemUrl} size="lg" alt={form.nome || 'Produto'} />
-                  <div className="flex-1 flex flex-col gap-2 w-full">
-                    <input
-                      ref={imagemInputRef}
-                      type="file"
-                      accept={PRODUTO_IMAGEM_ACCEPT}
-                      onChange={handleImagemChange}
-                      className="hidden"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => imagemInputRef.current?.click()}
-                        disabled={imagemUploading}
-                        className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {imagemUploading
-                          ? <><Loader2 size={12} className="animate-spin" /> Enviando...</>
-                          : <><ImagePlus size={12} /> {imagemUrl ? 'Trocar imagem' : 'Selecionar imagem'}</>}
-                      </button>
-                      {imagemUrl && !imagemUploading && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {imagens.map((url, slotIdx) => (
+                    <div key={slotIdx} className="neu-pressed rounded-2xl p-3 border border-white/5 flex flex-col items-center gap-2">
+                      <ProdutoThumb url={url} size="lg" alt={slotIdx === 0 ? (form.nome || 'Produto') : `${form.nome || 'Produto'} — foto ${slotIdx + 1}`} />
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                        {slotIdx === 0 ? 'Capa' : `Extra ${slotIdx}`}
+                      </span>
+                      <input
+                        ref={el => { imagemInputRefs.current[slotIdx] = el; }}
+                        type="file"
+                        accept={PRODUTO_IMAGEM_ACCEPT}
+                        onChange={e => handleImagemChange(slotIdx, e)}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
                         <button
                           type="button"
-                          onClick={handleRemoverImagem}
-                          className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5"
+                          onClick={() => imagemInputRefs.current[slotIdx]?.click()}
+                          disabled={imagemUploading === slotIdx}
+                          className="neu-button py-1.5 px-3 rounded-xl text-[11px] font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                          <XIcon size={11} /> Remover
+                          {imagemUploading === slotIdx
+                            ? <><Loader2 size={11} className="animate-spin" /> Enviando...</>
+                            : <><ImagePlus size={11} /> {url ? 'Trocar' : 'Selecionar'}</>}
                         </button>
-                      )}
+                        {url && imagemUploading !== slotIdx && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverImagem(slotIdx)}
+                            className="neu-button py-1.5 px-2 rounded-xl text-[11px] font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                          >
+                            <XIcon size={10} /> Remover
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-[11px] text-gray-500 leading-snug">
-                      Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> até{' '}
-                      <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_MAX_LABEL}</span> — a foto é comprimida
-                      automaticamente para WebP 1024 px, então pode enviar direto da câmera. Sem imagem, o produto exibe um ícone padrão.
-                    </p>
-                  </div>
+                  ))}
                 </div>
+                <p className="text-[11px] text-gray-500 leading-snug mt-2">
+                  Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> — cada foto é comprimida
+                  automaticamente para WebP até <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_OUTPUT_MAX_LABEL}</span>,
+                  então pode enviar direto da câmera. A capa é a que aparece no PDV, Catálogo e vitrine; sem imagem, o produto exibe um ícone padrão.
+                </p>
               </div>
 
               {/* Etiqueta EAN-13 */}

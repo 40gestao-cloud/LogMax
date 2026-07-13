@@ -38,10 +38,22 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [editItem, setEditItem] = useState<any | null>(null);
   // produtoSel = id do produto escolhido no dropdown, ITEM_OUTRO ou '' (nenhum).
   // form.item = texto final que vai pra BD (nome do produto ou texto livre).
+  // Usado só no modo edição (1 requisição já existente) — criação nova usa
+  // o editor em lote (batchItens) logo abaixo, mesmo para 1 item só.
   const [produtoSel, setProdutoSel] = useState<string>('');
   const [form, setForm] = useState({ item: '', solicitante: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+
+  // Criação em lote: N linhas de {produto/item, qtd} compartilhando
+  // solicitante/urgência/centro de custo. Cada requisição continua sendo 1
+  // linha independente (Cotações/Pedidos seguem 1:1) — o lote só agiliza a
+  // etapa de solicitação quando vários itens vão pro mesmo fornecedor.
+  const linhaVazia = () => ({ produtoSel: '', item: '', qtd: '1' });
+  const [batchItens, setBatchItens] = useState<{ produtoSel: string; item: string; qtd: string }[]>([linhaVazia()]);
+  const [batchForm, setBatchForm] = useState({ solicitante: '' });
+  const [batchExtras, setBatchExtras] = useState({ urgencia: 'Normal', centro_custo: '' });
+  const [batchErrors, setBatchErrors] = useState<Record<string, string>>({});
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -64,6 +76,66 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
     setErrors({});
   };
 
+  const closeBatchForm = () => {
+    setShowForm(false);
+    setBatchItens([linhaVazia()]);
+    setBatchForm({ solicitante: '' });
+    setBatchExtras({ urgencia: 'Normal', centro_custo: '' });
+    setBatchErrors({});
+  };
+
+  const addBatchRow = () => setBatchItens(rows => [...rows, linhaVazia()]);
+  const removeBatchRow = (idx: number) => setBatchItens(rows => rows.length <= 1 ? rows : rows.filter((_, i) => i !== idx));
+  const updateBatchRow = (idx: number, patch: Partial<{ produtoSel: string; item: string; qtd: string }>) =>
+    setBatchItens(rows => rows.map((r, i) => i === idx ? { ...r, ...patch } : r));
+
+  const handleBatchProdutoChange = (idx: number, value: string) => {
+    setBatchErrors(e => { const { [`item_${idx}`]: _omit, ...rest } = e; return rest; });
+    if (value === ITEM_OUTRO || value === '') {
+      updateBatchRow(idx, { produtoSel: value, item: '' });
+    } else {
+      const p = produtosOrdenados.find((pr: any) => pr.id === value);
+      updateBatchRow(idx, { produtoSel: value, item: p?.nome ?? '' });
+    }
+  };
+
+  const validateBatch = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!batchForm.solicitante.trim()) errs.solicitante = 'Obrigatório';
+    batchItens.forEach((r, i) => { if (!r.item.trim()) errs[`item_${i}`] = 'Obrigatório'; });
+    setBatchErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSaveBatch = async () => {
+    if (!validateBatch()) return;
+    setIsSaving(true);
+    showToast(batchItens.length > 1 ? 'Criando requisições em lote...' : 'Criando requisição...', 'info', false);
+    try {
+      if (!supabase) throw new Error('Supabase não configurado');
+      const payloadItens = batchItens.map(r => ({ item: r.item.trim(), qtd: parseInt(r.qtd, 10) || 1 }));
+      const { data: saved, error: rpcErr } = await supabase.rpc('criar_requisicoes_compra_lote', {
+        p_itens:        payloadItens,
+        p_solicitante:  batchForm.solicitante,
+        p_urgencia:     batchExtras.urgencia,
+        p_centro_custo: batchExtras.centro_custo,
+        p_filial:       filial,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      const rows: any[] = Array.isArray(saved) ? saved : [];
+      if (rows.length) setData((prev: any[]) => [...rows, ...prev]);
+      showToast(
+        rows.length > 1 ? `${rows.length} requisições criadas e enviadas para aprovação!` : 'Requisição criada e enviada para aprovação!',
+        'success', true
+      );
+      closeBatchForm();
+    } catch (err: any) {
+      showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleProdutoChange = (value: string) => {
     setProdutoSel(value);
     clearError('item');
@@ -77,10 +149,12 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
     }
   };
 
+  // Só edição de requisição já existente — criação nova usa handleSaveBatch
+  // (RPC em lote), mesmo quando é 1 item só.
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate() || !editItem) return;
     setIsSaving(true);
-    showToast(editItem ? "Atualizando..." : "Criando requisição...", 'info', false);
+    showToast("Atualizando...", 'info', false);
     try {
       const payload = {
         item: form.item,
@@ -89,27 +163,9 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
         urgencia: extras.urgencia,
         centro_custo: extras.centro_custo,
       };
-      if (editItem) {
-        const updated = await dbUpdate('/api/requisicoesview', editItem.id, payload);
-        setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
-        showToast("Requisição atualizada!", 'success', true);
-      } else {
-        // RPC transacional: cria requisicao + aprovacao_compras pendente
-        // atomicamente. Resolve a categoria do bug em que a aprovação
-        // ficava órfã quando a 2ª INSERT batia em RLS.
-        if (!supabase) throw new Error('Supabase não configurado');
-        const { data: saved, error: rpcErr } = await supabase.rpc('criar_requisicao_compra', {
-          p_item:         payload.item,
-          p_solicitante:  payload.solicitante,
-          p_qtd:          payload.qtd,
-          p_urgencia:     payload.urgencia,
-          p_centro_custo: payload.centro_custo,
-          p_filial:       filial,
-        });
-        if (rpcErr) throw new Error(rpcErr.message);
-        if (saved) setData((prev: any[]) => [saved, ...prev]);
-        showToast("Requisição criada e enviada para aprovação!", 'success', true);
-      }
+      const updated = await dbUpdate('/api/requisicoesview', editItem.id, payload);
+      setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
+      showToast("Requisição atualizada!", 'success', true);
       closeForm();
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -146,7 +202,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+          <NeuButtonAccent onClick={() => { closeBatchForm(); setShowForm(v => !v); }}>
             <Plus size={16} /> Nova
           </NeuButtonAccent>
         </div>
@@ -156,61 +212,159 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
         {isFormOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Requisição' : 'Nova Requisição'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <FormField label="Item solicitado *" error={errors.item}>
-                  <select
-                    className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.item ? 'border border-red-500/40' : ''}`}
-                    value={produtoSel}
-                    onChange={e => handleProdutoChange(e.target.value)}
-                  >
-                    <option value="">Selecione um produto...</option>
-                    {produtosOrdenados.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nome}{p.codigo ? ` (${p.codigo})` : ''}
-                      </option>
-                    ))}
-                    <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
-                  </select>
-                  {produtoSel === ITEM_OUTRO && (
-                    <input
-                      className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}
-                      value={form.item}
-                      onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
-                      placeholder="Descreva o item solicitado"
-                      autoFocus
-                    />
-                  )}
-                </FormField>
-                <FormField label="Solicitante *" error={errors.solicitante}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.solicitante ? 'border border-red-500/40' : ''}`}
-                    value={form.solicitante} onChange={e => { setForm(f => ({ ...f, solicitante: e.target.value })); clearError('solicitante'); }}
-                    placeholder="Nome do solicitante" />
-                </FormField>
-                <FormField label="Quantidade">
-                  <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} />
-                </FormField>
-                <FormField label="Urgência">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.urgencia} onChange={e => setExtras(x => ({ ...x, urgencia: e.target.value }))}>
-                    <option>Normal</option>
-                    <option>Alta</option>
-                    <option>Urgente</option>
-                  </select>
-                </FormField>
-                <FormField label="Centro de Custo">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.centro_custo} onChange={e => setExtras(x => ({ ...x, centro_custo: e.target.value }))}
-                    placeholder="Ex: TI, Marketing" />
-                </FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
-                  <Save size={14} /> {editItem ? 'Atualizar' : 'Enviar para Aprovação'}
-                </NeuButtonAccent>
-              </div>
+              <h3 className="text-sm font-bold text-gray-200">
+                {editItem ? 'Editar Requisição' : batchItens.length > 1 ? `Nova Requisição em Lote (${batchItens.length} itens)` : 'Nova Requisição'}
+              </h3>
+
+              {editItem ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <FormField label="Item solicitado *" error={errors.item}>
+                      <select
+                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.item ? 'border border-red-500/40' : ''}`}
+                        value={produtoSel}
+                        onChange={e => handleProdutoChange(e.target.value)}
+                      >
+                        <option value="">Selecione um produto...</option>
+                        {produtosOrdenados.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome}{p.codigo ? ` (${p.codigo})` : ''}
+                          </option>
+                        ))}
+                        <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
+                      </select>
+                      {produtoSel === ITEM_OUTRO && (
+                        <input
+                          className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}
+                          value={form.item}
+                          onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
+                          placeholder="Descreva o item solicitado"
+                          autoFocus
+                        />
+                      )}
+                    </FormField>
+                    <FormField label="Solicitante *" error={errors.solicitante}>
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.solicitante ? 'border border-red-500/40' : ''}`}
+                        value={form.solicitante} onChange={e => { setForm(f => ({ ...f, solicitante: e.target.value })); clearError('solicitante'); }}
+                        placeholder="Nome do solicitante" />
+                    </FormField>
+                    <FormField label="Quantidade">
+                      <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Urgência">
+                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.urgencia} onChange={e => setExtras(x => ({ ...x, urgencia: e.target.value }))}>
+                        <option>Normal</option>
+                        <option>Alta</option>
+                        <option>Urgente</option>
+                      </select>
+                    </FormField>
+                    <FormField label="Centro de Custo">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.centro_custo} onChange={e => setExtras(x => ({ ...x, centro_custo: e.target.value }))}
+                        placeholder="Ex: TI, Marketing" />
+                    </FormField>
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+                    <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
+                      <Save size={14} /> Atualizar
+                    </NeuButtonAccent>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField label="Solicitante *" error={batchErrors.solicitante}>
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm ${batchErrors.solicitante ? 'border border-red-500/40' : ''}`}
+                        value={batchForm.solicitante}
+                        onChange={e => { setBatchForm({ solicitante: e.target.value }); setBatchErrors(be => ({ ...be, solicitante: '' })); }}
+                        placeholder="Nome do solicitante" />
+                    </FormField>
+                    <FormField label="Urgência">
+                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={batchExtras.urgencia} onChange={e => setBatchExtras(x => ({ ...x, urgencia: e.target.value }))}>
+                        <option>Normal</option>
+                        <option>Alta</option>
+                        <option>Urgente</option>
+                      </select>
+                    </FormField>
+                    <FormField label="Centro de Custo">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={batchExtras.centro_custo} onChange={e => setBatchExtras(x => ({ ...x, centro_custo: e.target.value }))}
+                        placeholder="Ex: TI, Marketing" />
+                    </FormField>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Itens da requisição</p>
+                    {batchItens.map((row, idx) => {
+                      const produtoEscolhido = row.produtoSel && row.produtoSel !== ITEM_OUTRO
+                        ? produtosOrdenados.find((p: any) => p.id === row.produtoSel)
+                        : null;
+                      return (
+                        <div key={idx} className="neu-pressed rounded-xl p-3 border border-white/5 grid grid-cols-1 sm:grid-cols-[1fr_110px_auto] gap-3 sm:items-start">
+                          <FormField label={`Item ${idx + 1} *`} error={batchErrors[`item_${idx}`]}>
+                            <select
+                              className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${batchErrors[`item_${idx}`] ? 'border border-red-500/40' : ''}`}
+                              value={row.produtoSel}
+                              onChange={e => handleBatchProdutoChange(idx, e.target.value)}
+                            >
+                              <option value="">Selecione um produto...</option>
+                              {produtosOrdenados.map((p: any) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nome}{p.codigo ? ` (${p.codigo})` : ''}
+                                </option>
+                              ))}
+                              <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
+                            </select>
+                            {row.produtoSel === ITEM_OUTRO && (
+                              <input
+                                className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 w-full ${batchErrors[`item_${idx}`] ? 'border border-red-500/40' : ''}`}
+                                value={row.item}
+                                onChange={e => { updateBatchRow(idx, { item: e.target.value }); setBatchErrors(be => ({ ...be, [`item_${idx}`]: '' })); }}
+                                placeholder="Descreva o item solicitado"
+                                autoFocus
+                              />
+                            )}
+                            {produtoEscolhido?.fornecedor && (
+                              <p className="text-[10px] text-gray-600 mt-1">Fornecedor habitual: {produtoEscolhido.fornecedor}</p>
+                            )}
+                          </FormField>
+                          <FormField label="Qtd">
+                            <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                              value={row.qtd} onChange={e => updateBatchRow(idx, { qtd: e.target.value })} />
+                          </FormField>
+                          <button
+                            type="button"
+                            onClick={() => removeBatchRow(idx)}
+                            disabled={batchItens.length <= 1}
+                            title="Remover item"
+                            className="w-9 h-9 sm:mt-6 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={addBatchRow}
+                      className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1.5 self-start"
+                    >
+                      <Plus size={13} /> Adicionar item
+                    </button>
+                  </div>
+
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={closeBatchForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+                    <NeuButtonAccent onClick={handleSaveBatch} isLoading={isSaving}>
+                      <Save size={14} /> {batchItens.length > 1 ? `Enviar ${batchItens.length} para Aprovação` : 'Enviar para Aprovação'}
+                    </NeuButtonAccent>
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}

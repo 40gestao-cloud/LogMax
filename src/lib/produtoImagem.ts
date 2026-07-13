@@ -3,10 +3,18 @@ import { resizeImage, extFromMime, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './im
 
 export const PRODUTO_IMAGEM_BUCKET = 'produto-imagens';
 // Teto bruto de entrada (compatibilidade com imports antigos). Depois do
-// resize client-side o arquivo real gravado no bucket fica em ~30-80 KB.
+// resize client-side o arquivo real gravado no bucket fica abaixo de
+// PRODUTO_IMAGEM_OUTPUT_MAX_BYTES.
 export const PRODUTO_IMAGEM_MAX_BYTES = MAX_INPUT_BYTES;
 export const PRODUTO_IMAGEM_MAX_LABEL = MAX_INPUT_LABEL;
 export const PRODUTO_IMAGEM_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
+// Teto real do arquivo já comprimido — espelha o file_size_limit do bucket
+// (migration 188_20260713j_produto_multi_imagem.sql). uploadImagemProduto
+// repete o resize com qualidade/dimensão menores até caber aqui.
+export const PRODUTO_IMAGEM_OUTPUT_MAX_BYTES = 100 * 1024;
+export const PRODUTO_IMAGEM_OUTPUT_MAX_LABEL = '100 KB';
+// Até 3 imagens por produto: capa (slot 1, coluna imagem_url) + 2 extras.
+export const PRODUTO_IMAGEM_MAX_SLOTS = 3;
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp']);
@@ -47,20 +55,27 @@ export function extrairPathDoBucket(url: string | null | undefined): string | nu
 
 // Upload + retorno da URL pública. `produtoId` quando disponível dá um path
 // estável; cadastros novos usam um UUID temporário. A imagem passa por
-// resize+recompressão client-side antes de subir (WebP, máx 1024x1024).
+// resize+recompressão client-side antes de subir (WebP, máx 1024x1024,
+// reduzindo qualidade/dimensão até caber em PRODUTO_IMAGEM_OUTPUT_MAX_BYTES).
+// `slot` (1-3) distingue capa e imagens extras no path do bucket.
 export async function uploadImagemProduto(
   file: File,
   produtoId?: string | null,
+  slot: number = 1,
 ): Promise<string> {
   if (!supabase) throw new Error('Supabase não configurado.');
   const validacao = validarImagemProduto(file);
   if (!validacao.ok) throw new Error(validacao.motivo);
 
-  const optimized = await resizeImage(file, { maxWidth: 1024, maxHeight: 1024 });
+  const optimized = await resizeImage(file, {
+    maxWidth: 1024,
+    maxHeight: 1024,
+    maxBytes: PRODUTO_IMAGEM_OUTPUT_MAX_BYTES,
+  });
   const ext = extFromMime(optimized.type) || validacao.ext;
 
   const slug = produtoId ?? (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const path = `${slug}/${Date.now()}.${ext}`;
+  const path = `${slug}/img${slot}-${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase
     .storage

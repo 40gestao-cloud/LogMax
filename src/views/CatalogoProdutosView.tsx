@@ -29,6 +29,10 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   const [filialFiltro, setFilialFiltro] = useState<string>('todas');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('todas');
   const [selecionado, setSelecionado] = useState<any | null>(null);
+  // Modal de detalhes: qual das até 3 imagens do produto está em destaque.
+  // Reseta pra capa toda vez que um produto diferente é aberto.
+  const [imagemAtiva, setImagemAtiva] = useState<string | null>(null);
+  useEffect(() => { setImagemAtiva(selecionado?.imagem_url ?? null); }, [selecionado?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, categoriaFiltro]);
 
@@ -204,8 +208,24 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
               </button>
 
               <div className="flex flex-col sm:flex-row gap-5 items-start">
-                <div className="shrink-0 mx-auto sm:mx-0">
-                  <ProdutoThumb url={selecionado.imagem_url} size="lg" alt={selecionado.nome} />
+                <div className="shrink-0 mx-auto sm:mx-0 flex flex-col items-center gap-2">
+                  <ProdutoThumb url={imagemAtiva} size="lg" alt={selecionado.nome} />
+                  {[selecionado.imagem_url, selecionado.imagem_url_2, selecionado.imagem_url_3].filter(Boolean).length > 1 && (
+                    <div className="flex gap-1.5">
+                      {[selecionado.imagem_url, selecionado.imagem_url_2, selecionado.imagem_url_3]
+                        .filter(Boolean)
+                        .map((url: string, i: number) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setImagemAtiva(url)}
+                            className={`rounded-lg overflow-hidden border transition-colors ${imagemAtiva === url ? 'border-accent' : 'border-white/10 opacity-70 hover:opacity-100'}`}
+                          >
+                            <ProdutoThumb url={url} size="xs" alt={`${selecionado.nome} — foto ${i + 1}`} />
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-2">
                   {selecionado.filial && <FilialBadge filial={selecionado.filial} />}

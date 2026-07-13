@@ -21,9 +21,15 @@ export interface ResizeOptions {
   quality?: number;
   /** Formato de saída. Padrão WebP (menor). Use jpeg como fallback se precisar. */
   outputMime?: 'image/webp' | 'image/jpeg';
+  /**
+   * Teto de bytes do arquivo final. Se o primeiro encode ficar acima,
+   * o resize é repetido reduzindo qualidade e depois dimensões até caber
+   * (ou esgotar as tentativas — nesse caso lança erro claro).
+   */
+  maxBytes?: number;
 }
 
-const DEFAULTS: Required<ResizeOptions> = {
+const DEFAULTS: Required<Omit<ResizeOptions, 'maxBytes'>> = {
   maxWidth: 1024,
   maxHeight: 1024,
   quality: 0.82,
@@ -47,6 +53,46 @@ function renameFile(file: File, mime: string): string {
   return `${base}.${extFromMime(mime)}`;
 }
 
+function encode(
+  canvas: OffscreenCanvas | HTMLCanvasElement,
+  outputMime: 'image/webp' | 'image/jpeg',
+  quality: number,
+): Promise<Blob> {
+  return 'convertToBlob' in canvas
+    ? (canvas as OffscreenCanvas).convertToBlob({ type: outputMime, quality })
+    : new Promise<Blob>((resolve, reject) => {
+        (canvas as HTMLCanvasElement).toBlob(
+          b => (b ? resolve(b) : reject(new Error('canvas.toBlob devolveu null'))),
+          outputMime,
+          quality,
+        );
+      });
+}
+
+function drawToCanvas(bitmap: ImageBitmap, w: number, h: number): OffscreenCanvas | HTMLCanvasElement {
+  const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+  const canvas: OffscreenCanvas | HTMLCanvasElement = useOffscreen
+    ? new OffscreenCanvas(w, h)
+    : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const ctx = canvas.getContext('2d') as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null;
+  if (!ctx) {
+    throw new Error('Navegador não suporta canvas 2D — atualize o browser.');
+  }
+  (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  return canvas;
+}
+
+// Passos de tentativa quando `maxBytes` é informado: primeiro reduz
+// qualidade (mantendo dimensões), depois reduz dimensões também. Cobre
+// fotos de celular "cheias de detalhe" que não cabem no teto só baixando
+// a qualidade.
+const QUALITY_STEPS = [0.82, 0.65, 0.5, 0.35];
+const SCALE_STEPS = [1, 0.75, 0.5];
+
 // Redimensiona `file` para caber num bounding box e recomprime em WebP.
 // Nunca amplia — se a imagem já é menor que o box, só recomprime.
 // Retorna o arquivo original inalterado se for SVG.
@@ -60,7 +106,7 @@ export async function resizeImage(file: File, opts?: ResizeOptions): Promise<Fil
     );
   }
 
-  const { maxWidth, maxHeight, quality, outputMime } = { ...DEFAULTS, ...opts };
+  const { maxWidth, maxHeight, quality, outputMime, maxBytes } = { ...DEFAULTS, ...opts };
 
   let bitmap: ImageBitmap;
   try {
@@ -69,39 +115,40 @@ export async function resizeImage(file: File, opts?: ResizeOptions): Promise<Fil
     throw new Error('Não foi possível ler a imagem. Verifique se o arquivo não está corrompido.');
   }
 
-  const scale = Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1);
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
+  try {
+    const baseW = Math.round(bitmap.width * Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1));
+    const baseH = Math.round(bitmap.height * Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1));
 
-  const useOffscreen = typeof OffscreenCanvas !== 'undefined';
-  const canvas: OffscreenCanvas | HTMLCanvasElement = useOffscreen
-    ? new OffscreenCanvas(w, h)
-    : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    if (!maxBytes) {
+      const canvas = drawToCanvas(bitmap, baseW, baseH);
+      const blob = await encode(canvas, outputMime, quality);
+      return new File([blob], renameFile(file, outputMime), { type: outputMime, lastModified: Date.now() });
+    }
 
-  const ctx = canvas.getContext('2d') as
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
-    | null;
-  if (!ctx) {
+    // Com teto de bytes: tenta qualidade decrescente nas dimensões-base;
+    // se nenhuma qualidade coube, reduz também as dimensões e repete.
+    let melhorBlob: Blob | null = null;
+    for (const scaleStep of SCALE_STEPS) {
+      const w = Math.max(1, Math.round(baseW * scaleStep));
+      const h = Math.max(1, Math.round(baseH * scaleStep));
+      const canvas = drawToCanvas(bitmap, w, h);
+      for (const q of QUALITY_STEPS) {
+        const blob = await encode(canvas, outputMime, q);
+        if (!melhorBlob || blob.size < melhorBlob.size) melhorBlob = blob;
+        if (blob.size <= maxBytes) {
+          return new File([blob], renameFile(file, outputMime), { type: outputMime, lastModified: Date.now() });
+        }
+      }
+    }
+    // Nenhuma combinação coube no teto — devolve a menor encontrada, mas
+    // avisa claramente em vez de subir algo que o bucket vai rejeitar.
+    const kb = melhorBlob ? Math.round(melhorBlob.size / 1024) : null;
+    throw new Error(
+      kb
+        ? `Não foi possível comprimir a imagem abaixo de ${Math.round(maxBytes / 1024)} KB (ficou em ${kb} KB). Tente uma foto mais simples ou com menos detalhe.`
+        : 'Falha ao comprimir a imagem.',
+    );
+  } finally {
     bitmap.close?.();
-    throw new Error('Navegador não suporta canvas 2D — atualize o browser.');
   }
-  (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high';
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close?.();
-
-  const blob: Blob = 'convertToBlob' in canvas
-    ? await (canvas as OffscreenCanvas).convertToBlob({ type: outputMime, quality })
-    : await new Promise<Blob>((resolve, reject) => {
-        (canvas as HTMLCanvasElement).toBlob(
-          b => (b ? resolve(b) : reject(new Error('canvas.toBlob devolveu null'))),
-          outputMime,
-          quality,
-        );
-      });
-
-  return new File([blob], renameFile(file, outputMime), {
-    type: outputMime,
-    lastModified: Date.now(),
-  });
 }

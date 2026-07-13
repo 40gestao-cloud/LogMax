@@ -18,6 +18,8 @@ export interface Produto {
   status: 'Ativo' | 'Inativo' | string;
   tipo?: string | null;
   imagem_url?: string | null;
+  imagem_url_2?: string | null;
+  imagem_url_3?: string | null;
   elegivel_beneficios?: boolean | null;
   ativo?: boolean;
   created_at?: string;
