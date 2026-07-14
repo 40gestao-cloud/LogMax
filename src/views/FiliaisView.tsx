@@ -8,6 +8,8 @@ import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone,
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
 import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
 
 // Equipamentos & mobiliário por nicho — cada unidade tem sua grade completa,
@@ -107,10 +109,24 @@ function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'x
 export const FiliaisView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/filiaisview');
   const confirm = useConfirm();
+  const { profile } = useUserProfile();
   // Unidade ativa vinda do topbar (SUPERMAX/MAXLOOK/TECHMAX). null = Matriz.
   // É essa que define a grade de equipamentos & mobiliário do formulário.
   const { filialAtiva } = useFilial();
   const nichoAtivo: FilialHolding = filialAtiva ?? 'Matriz';
+  // RLS (migr. 187 + 200): admin/CEO/conselheiro fazem tudo. Gerente também
+  // faz CRUD, mas só na própria filial (nicho === profile.filial). Espelha
+  // no frontend: botão "Novo" aparece pra gerente e o INSERT amarra o nicho
+  // do payload em profile.filial pra a policy WITH CHECK passar.
+  const canManage = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
+  const canCreate = canManage || profile?.role === 'gerente';
+  const canEditRow = (item: any) => {
+    if (canManage) return true;
+    if (profile?.role !== 'gerente') return false;
+    const nicho = item?.detalhes?.nicho ?? 'Matriz';
+    return profile.filial === nicho;
+  };
+  const canDeleteRow = canEditRow;
   const [isSaving, setIsSaving]     = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [editItem, setEditItem]     = useState<any | null>(null);
@@ -284,9 +300,11 @@ export const FiliaisView = ({ showToast }: any) => {
             <input type="text" placeholder="Buscar filial..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-            <Plus size={16} /> Novo
-          </NeuButtonAccent>
+          {canCreate && (
+            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+              <Plus size={16} /> Novo
+            </NeuButtonAccent>
+          )}
         </div>
       </div>
 
@@ -538,8 +556,12 @@ export const FiliaisView = ({ showToast }: any) => {
 
               <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
                 <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                <button onClick={() => handleDelete(item.id, item.imagem_url)} className="action-btn-delete"><Trash2 size={12} /></button>
+                {canEditRow(item) && (
+                  <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                )}
+                {canDeleteRow(item) && (
+                  <button onClick={() => handleDelete(item.id, item.imagem_url)} className="action-btn-delete"><Trash2 size={12} /></button>
+                )}
               </div>
             </motion.div>
           ))}
