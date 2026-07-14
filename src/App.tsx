@@ -492,29 +492,39 @@ function LogMaxAppInner() {
   useEffect(() => {
     try { sessionStorage.setItem('logmax:viewHistory', JSON.stringify(viewHistory)); } catch {}
   }, [viewHistory]);
+  // Refs espelham o estado atual pra que navigate/goBack não precisem chamar
+  // setState aninhado (padrão anti-React: updater pode reexecutar em StrictMode
+  // dev ou em renders concorrentes, duplicando entradas na pilha e fazendo o
+  // botão Voltar pular vários passos de uma vez).
+  const activeViewRef = useRef(activeView);
+  const viewHistoryRef = useRef(viewHistory);
+  useEffect(() => { activeViewRef.current = activeView; }, [activeView]);
+  useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
   // Ref usado pelo navigate/goBack pra bloquear views fora da whitelist do
   // Modo Aula sem exigir aulaConfig como dep (evita recriar o callback e
   // invalidar props memoizadas). O ref é atualizado logo abaixo.
   const aulaGuardRef = useRef<(view: string) => boolean>(() => true);
   const navigate = useCallback((view: string) => {
     if (!aulaGuardRef.current(view)) return;
-    setActiveView(prev => {
-      if (prev === view) return prev;
-      setViewHistory(h => [...h, prev]);
-      return view;
-    });
+    const prev = activeViewRef.current;
+    if (prev === view) return;
+    setViewHistory(h => [...h, prev]);
+    setActiveView(view);
   }, []);
   const goBack = useCallback(() => {
-    setViewHistory(h => {
-      if (h.length === 0) return h;
-      // Pula pra trás enquanto encontrar views bloqueadas pelo Modo Aula
-      // (evita o botão Voltar "engolir" a pilha em loop).
-      let idx = h.length - 1;
-      while (idx >= 0 && !aulaGuardRef.current(h[idx])) idx--;
-      if (idx < 0) { setActiveView('inicio'); return []; }
-      setActiveView(h[idx]);
-      return h.slice(0, idx);
-    });
+    const h = viewHistoryRef.current;
+    if (h.length === 0) return;
+    // Pula pra trás enquanto encontrar views bloqueadas pelo Modo Aula
+    // (evita o botão Voltar "engolir" a pilha em loop).
+    let idx = h.length - 1;
+    while (idx >= 0 && !aulaGuardRef.current(h[idx])) idx--;
+    if (idx < 0) {
+      setActiveView('inicio');
+      setViewHistory([]);
+      return;
+    }
+    setActiveView(h[idx]);
+    setViewHistory(h.slice(0, idx));
   }, []);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
