@@ -73,16 +73,17 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   const [decidindo, setDecidindo] = useState(false);
 
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
-  // recebimentos/movimentações) cria/envia/gera pedido; gerente do Financeiro
-  // (+admin/CEO) aprova.
-  // Gerente da filial ativa também cria — regra "gerente vê/faz tudo da
-  // própria filial" (RLS já libera via auth_gerente_da em 20260713i).
+  // recebimentos/movimentações) cria/envia/gera pedido; Financeiro / gerente
+  // da filial / admin/CEO aprova.
+  // Gerente vê/faz tudo da própria filial — inclui aprovar cotação —, e o
+  // RLS já libera via auth_gerente_da (migr. 20260713i). Antes o frontend
+  // exigia gerente COM setor financeiro pra decidir, o que travava gerentes
+  // "puros" que a régua canônica manda liberar.
   const isCompras    = hasAnySetor(profile, 'compras', 'logistica') || profile.role === 'gerente';
   const isFinanceiro = hasSetor(profile, 'financeiro');
-  // Aprovação restrita ao GERENTE do Financeiro (escolha do usuário); admin/CEO sempre podem.
   const podeDecidir  =
     profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile) ||
-    (profile.role === 'gerente' && hasSetor(profile, 'financeiro'));
+    profile.role === 'gerente' || isFinanceiro;
 
   // IDs de cotações que já têm pedido gerado.
   const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());

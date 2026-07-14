@@ -17,7 +17,7 @@ import { LoadingSpinner, EmptyState, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasSetor, isConselheiro } from '../lib/rbac';
+import { isConselheiro } from '../lib/rbac';
 
 type Period = '7d' | '30d' | 'year';
 type KpiKey = 'receita' | 'despesa' | 'ordens' | 'estoque';
@@ -41,14 +41,13 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
   const { data: vendas,        isLoading: loadingVendas } = useFetchData<any>('/api/vendasview', filialFilter);
   const isLoading = loadingCR || loadingCP || loadingPed || loadingProd || loadingVendas;
 
-  // Drill-down dos KPIs liberado para: Admin, CEO, Gerente Financeiro,
-  // Gerente Logística. Os demais perfis (e visitantes via deep-link) veem
-  // os cards mas eles não respondem a clique. RLS continua sendo a defesa
-  // real — gerentes só veem os registros do próprio escopo.
+  // Drill-down dos KPIs liberado para: Admin, CEO, qualquer Gerente (regra
+  // canônica "gerente vê/faz tudo da própria filial"). RLS continua sendo a
+  // defesa real — gerentes só veem os registros do próprio escopo.
   const canExpandKpis = !!profile && (
     profile.role === 'admin' || isConselheiro(profile) ||
     profile.role === 'ceo' ||
-    (profile.role === 'gerente' && (hasSetor(profile, 'financeiro') || hasSetor(profile, 'logistica')))
+    profile.role === 'gerente'
   );
   const [expandedKpi, setExpandedKpi] = useState<KpiKey | null>(null);
   const detailPanelRef = useRef<HTMLDivElement>(null);
