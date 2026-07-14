@@ -6,6 +6,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { MatrizConsolidado } from '../components/MatrizConsolidado';
 
 type AtributoDef = {
   key: string;
@@ -79,7 +80,23 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     );
   }, [data, search]);
 
-  if (!filialAtiva) return null;
+  if (!filialAtiva) {
+    return (
+      <MatrizConsolidado
+        titulo="Serviços"
+        descricao="Visão consolidada dos serviços nas 3 filiais."
+        endpoint="/api/servicosview"
+        colunas={[
+          { key: 'codigo', label: 'Código', render: r => <span className="font-mono text-xs text-accent">{r.codigo ?? '—'}</span> },
+          { key: 'nome', label: 'Nome', render: r => <span className="font-semibold text-gray-100">{r.nome ?? '—'}</span> },
+          { key: 'tipo', label: 'Tipo' },
+          { key: 'valor', label: 'Valor', render: r => r.valor != null ? `R$ ${Number(r.valor).toFixed(2).replace('.', ',')}` : '—' },
+          { key: 'status', label: 'Status' },
+        ]}
+        ordenarPor={(a, b) => String(a.codigo ?? '').localeCompare(String(b.codigo ?? ''))}
+      />
+    );
+  }
   if (isLoading) return <LoadingSpinner />;
 
   const openNew = () => {

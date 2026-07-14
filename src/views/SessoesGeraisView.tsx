@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, DollarSign, Users, Building2,
@@ -113,14 +113,68 @@ export function HubView({
   profile,
   navigate,
   badges = {},
+  registerBackHandler,
 }: {
   title: string;
   macros: MacroDef[];
   profile: UserProfile | null;
   navigate: (viewId: string) => void;
   badges?: Record<string, number>;
+  registerBackHandler?: (h: (() => boolean) | null) => void;
 }) {
-  const [stage, setStage] = useState<Stage>({ kind: 'macros' });
+  // Persistimos o estágio interno em sessionStorage keyado pelo título do hub,
+  // pra que o botão Voltar (que traz o usuário de volta pro hub) restaure o
+  // breadcrumb onde ele parou — em vez de sempre reabrir na tela de macros.
+  const storageKey = `logmax:hub:${title}`;
+  const [stage, setStage] = useState<Stage>(() => {
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (!raw) return { kind: 'macros' };
+      const saved = JSON.parse(raw);
+      if (saved.kind === 'modulos') {
+        const macro = macros.find(m => m.kind === 'group' && m.id === saved.macroId);
+        if (macro && macro.kind === 'group') return { kind: 'modulos', macro };
+      }
+      if (saved.kind === 'submenus') {
+        const macro = macros.find(m => m.kind === 'group' && m.id === saved.macroId);
+        if (macro && macro.kind === 'group') {
+          const modulo = macro.modulos.find(m => m.id === saved.moduloId);
+          if (modulo) return { kind: 'submenus', macro, modulo };
+        }
+      }
+    } catch {}
+    return { kind: 'macros' };
+  });
+  useEffect(() => {
+    try {
+      const s =
+        stage.kind === 'macros'   ? { kind: 'macros' } :
+        stage.kind === 'modulos'  ? { kind: 'modulos',  macroId: stage.macro.id } :
+                                    { kind: 'submenus', macroId: stage.macro.id, moduloId: stage.modulo.id };
+      sessionStorage.setItem(storageKey, JSON.stringify(s));
+    } catch {}
+  }, [stage, storageKey]);
+  // Registra um back handler enquanto o hub estiver em nível interno; assim o
+  // botão Voltar do topbar consome uma etapa do breadcrumb antes de sair da
+  // view. Em macros o handler é nulo e o Voltar segue o fluxo normal (view
+  // anterior). Também considera que grupos com 1 módulo pulam a etapa modulos.
+  useEffect(() => {
+    if (!registerBackHandler) return;
+    if (stage.kind === 'macros') { registerBackHandler(null); return; }
+    registerBackHandler(() => {
+      if (stage.kind === 'submenus') {
+        if (stage.macro.modulos.length === 1) setStage({ kind: 'macros' });
+        else setStage({ kind: 'modulos', macro: stage.macro });
+        return true;
+      }
+      if (stage.kind === 'modulos') {
+        setStage({ kind: 'macros' });
+        return true;
+      }
+      return false;
+    });
+    return () => registerBackHandler(null);
+  }, [stage, registerBackHandler]);
 
   // Filtro por setor: para group macros, mantém só módulos que o setor acessa
   const allowedModuleIds = useMemo(() => new Set(

@@ -504,14 +504,27 @@ function LogMaxAppInner() {
   // Modo Aula sem exigir aulaConfig como dep (evita recriar o callback e
   // invalidar props memoizadas). O ref é atualizado logo abaixo.
   const aulaGuardRef = useRef<(view: string) => boolean>(() => true);
+  // Views com navegação interna (HubView macros→modulos→submenus, wizards)
+  // registram um back handler que consome um passo interno. Se retornar true,
+  // Voltar é considerado tratado e a pilha de views não é despilhada.
+  const backHandlerRef = useRef<null | (() => boolean)>(null);
+  const registerBackHandler = useCallback((h: (() => boolean) | null) => {
+    backHandlerRef.current = h;
+  }, []);
   const navigate = useCallback((view: string) => {
     if (!aulaGuardRef.current(view)) return;
     const prev = activeViewRef.current;
     if (prev === view) return;
+    // Sair da view atual descarta qualquer back handler interno pendente —
+    // ele pertence à view que está saindo.
+    backHandlerRef.current = null;
     setViewHistory(h => [...h, prev]);
     setActiveView(view);
   }, []);
   const goBack = useCallback(() => {
+    // Primeiro tenta consumir um passo interno da view atual (ex.: HubView
+    // volta de submenus → modulos → macros antes de despilhar a view).
+    if (backHandlerRef.current?.()) return;
     const h = viewHistoryRef.current;
     if (h.length === 0) return;
     // Pula pra trás enquanto encontrar views bloqueadas pelo Modo Aula
@@ -752,9 +765,9 @@ function LogMaxAppInner() {
     }
     switch (activeView) {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} badges={badges} matrizMode={matrizMode} />;
-      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
-      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} />;
-      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
+      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
+      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
+      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;

@@ -6,6 +6,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { isConselheiro } from '../lib/rbac';
+import { MatrizConsolidado } from '../components/MatrizConsolidado';
 
 const STATUS_FLOW = ['Pendente', 'Ciente', 'Em Andamento', 'Concluído'] as const;
 type TarefaStatus = typeof STATUS_FLOW[number];
@@ -291,6 +292,25 @@ const TarefasViewInner = ({ showToast, profile, modulo, filial }: TarefasViewPro
 
 export const TarefasView = ({ showToast, profile, modulo }: TarefasViewProps) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) {
+    return (
+      <MatrizConsolidado
+        titulo={`Tarefas de ${MODULE_LABEL[modulo] ?? modulo}`}
+        descricao="Visão consolidada das tarefas nas 3 filiais."
+        endpoint="/api/tarefasview"
+        extraFilter={{ modulo }}
+        colunas={[
+          { key: 'titulo', label: 'Título' },
+          { key: 'status', label: 'Status', render: r => (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[r.status] ?? ''}`}>{r.status}</span>
+          )},
+          { key: 'prioridade', label: 'Prioridade', render: r => (
+            <span className={`font-bold ${PRIO_STYLE[r.prioridade] ?? 'text-gray-400'}`}>{r.prioridade ?? '—'}</span>
+          )},
+          { key: 'prazo', label: 'Prazo', render: r => r.prazo ? new Date(r.prazo).toLocaleDateString('pt-BR') : '—' },
+        ]}
+      />
+    );
+  }
   return <TarefasViewInner showToast={showToast} profile={profile} modulo={modulo} filial={filialAtiva} />;
 };

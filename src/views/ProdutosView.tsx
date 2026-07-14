@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
+import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -1061,6 +1062,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
 
 export const ProdutosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) {
+    return (
+      <MatrizConsolidado
+        titulo="Produtos"
+        descricao="Visão consolidada dos produtos nas 3 filiais."
+        endpoint="/api/produtosview"
+        colunas={[
+          { key: 'codigo', label: 'Código', render: r => <span className="font-mono text-xs text-accent">{r.codigo ?? '—'}</span> },
+          { key: 'nome', label: 'Nome', render: r => <span className="font-semibold text-gray-100">{r.nome ?? '—'}</span> },
+          { key: 'tipo', label: 'Tipo' },
+          { key: 'preco_venda', label: 'Preço venda', render: r => r.preco_venda != null ? `R$ ${Number(r.preco_venda).toFixed(2).replace('.', ',')}` : '—' },
+          { key: 'estoque_atual', label: 'Estoque' },
+          { key: 'status', label: 'Status' },
+        ]}
+        ordenarPor={(a, b) => String(a.codigo ?? '').localeCompare(String(b.codigo ?? ''))}
+      />
+    );
+  }
   return <ProdutosViewInner showToast={showToast} filial={filialAtiva} />;
 };
