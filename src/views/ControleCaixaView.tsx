@@ -366,12 +366,13 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
       ? [profile.filial as FilialOperacional]
       : [];
 
-  // Histórico também trava por filial pra colaborador/gerente — sem isso a
-  // tabela mostrava sessões de outras unidades e o botão "Reabrir" permitia
-  // reabrir (na prática, "abrir") caixa de filial alheia.
+  // Histórico sempre trava por filial pra bater com os cards visíveis. Admin/CEO
+  // em modo Matriz vê as 3 operacionais; com filial escolhida no topbar, só
+  // essa. Colaborador/gerente, só a própria. Sem esse filtro, admin/CEO que
+  // escolhia uma filial no topbar via histórico de todas as unidades.
   const { data: historico, isLoading: histLoading, reload } = useFetchData<any>(
     '/api/controlecaixaview',
-    cross ? undefined : (filiaisVisiveis[0] ? { filial: filiaisVisiveis[0] } : { filial: '__none__' }),
+    filiaisVisiveis.length > 0 ? { filial: [...filiaisVisiveis] } : { filial: '__none__' },
   );
 
   const handleReabrir = async (h: any) => {
