@@ -39,14 +39,14 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'empresa-macro', label: 'Empresa', icon: Building2, color: 'from-slate-500/20 to-slate-500/5 border-slate-500/30 text-slate-300',
     modulos: [
       { id: 'empresa', label: 'Empresa', icon: Building2, color: 'text-slate-300',
-        submenus: ['Filiais', 'Categorias', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas'] },
+        submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas'] },
     ],
   },
   {
     kind: 'group', id: 'logistica-matriz', label: 'Logística', icon: Package, color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',
     modulos: [
       { id: 'cadastros', label: 'Cadastros', icon: Database, color: 'text-sky-400',
-        submenus: ['Produtos', 'Serviços'] },
+        submenus: ['Categorias', 'Produtos', 'Serviços'] },
       { id: 'compras', label: 'Compras', icon: ShoppingCart, color: 'text-sky-400',
         submenus: ['Gerenciamento', 'Relatórios'] },
       { id: 'estoque', label: 'Estoque', icon: Package, color: 'text-sky-400',
