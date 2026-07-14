@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Landmark, FileText, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, BancoThumb } from '../components/ui';
+import { LoadingSpinner, BancoThumb, FilialBadge } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -76,6 +76,20 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   const totalReceber = receber.filter((r: any) => r.status !== 'Pago').reduce((acc: number, r: any) => acc + Number(r.valor || 0), 0);
   const totalPagar = pagar.filter((p: any) => p.status !== 'Pago').reduce((acc: number, p: any) => acc + Number(p.valor || 0), 0);
 
+  // Breakdown por filial — só aparece em modo Matriz (filialAtiva=null).
+  // Rateio de "Total a Receber" e "Total a Pagar" (não-pagos) e do saldo
+  // em bancos ativos, agrupado por SuperMax/MaxLook/TechMax.
+  const isMatriz = !filialAtiva;
+  const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+  const somaPorFilial = (rows: any[], pred: (r: any) => boolean) => {
+    const map: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const r of rows) if (pred(r) && r.filial in map) map[r.filial] += Number(r.valor || 0);
+    return map;
+  };
+  const breakdownReceber = isMatriz ? somaPorFilial(receber, (r) => r.status !== 'Pago') : null;
+  const breakdownPagar   = isMatriz ? somaPorFilial(pagar,   (p) => p.status !== 'Pago') : null;
+  const breakdownBancos  = isMatriz ? somaPorFilial(bancosAtivos.map((b: any) => ({ ...b, valor: b.saldo })), () => true) : null;
+
   const pipeline = [
     {
       icon: ArrowUpRight, label: 'A Receber', total: receber.length,
@@ -144,6 +158,16 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
             R$ {totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">contas abertas + atrasadas</p>
+          {breakdownReceber && (
+            <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-1.5">
+              {FILIAIS_OP.map(f => (
+                <div key={f} className="flex items-center justify-between text-[10px]">
+                  <FilialBadge filial={f} />
+                  <span className="font-mono text-gray-300">R$ {breakdownReceber[f].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Total a Pagar</p>
@@ -151,6 +175,16 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
             R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">pendentes + atrasadas</p>
+          {breakdownPagar && (
+            <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-1.5">
+              {FILIAIS_OP.map(f => (
+                <div key={f} className="flex items-center justify-between text-[10px]">
+                  <FilialBadge filial={f} />
+                  <span className="font-mono text-gray-300">R$ {breakdownPagar[f].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Saldo em Bancos</p>
@@ -158,6 +192,16 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
             R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-gray-600 mt-1">{bancosAtivos.length} conta(s) ativa(s)</p>
+          {breakdownBancos && (
+            <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-1.5">
+              {FILIAIS_OP.map(f => (
+                <div key={f} className="flex items-center justify-between text-[10px]">
+                  <FilialBadge filial={f} />
+                  <span className={`font-mono ${breakdownBancos[f] < 0 ? 'text-red-400' : 'text-gray-300'}`}>R$ {breakdownBancos[f].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -192,7 +236,10 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
                 {proxReceber.map((r: any) => (
                   <div key={r.id} className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-semibold text-gray-200">{r.descricao ?? '—'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-200">{r.descricao ?? '—'}</p>
+                        {isMatriz && <FilialBadge filial={r.filial} />}
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {r.cliente?.nome ?? 'Sem cliente'} · vence <span className="font-mono">{r.vencimento}</span>
                       </p>
@@ -221,7 +268,10 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
                 {proxPagar.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-semibold text-gray-200">{p.descricao ?? '—'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-200">{p.descricao ?? '—'}</p>
+                        {isMatriz && <FilialBadge filial={p.filial} />}
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {p.fornecedor?.nome ?? 'Sem fornecedor'} · vence <span className="font-mono">{p.vencimento}</span>
                       </p>
@@ -249,8 +299,11 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
               <div key={b.id} className="neu-flat rounded-2xl p-4 border border-white/5">
                 <div className="flex items-center gap-3">
                   <BancoThumb url={b.imagem_url} size="xs" alt={b.banco ?? b.conta ?? 'Banco'} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-gray-400 truncate">{b.banco ?? '—'}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-gray-400 truncate">{b.banco ?? '—'}</p>
+                      {isMatriz && <FilialBadge filial={b.filial} />}
+                    </div>
                     <p className="text-[10px] text-gray-600 mt-0.5 truncate">{b.tipo ?? '—'} · {b.conta ?? '—'}</p>
                   </div>
                 </div>
