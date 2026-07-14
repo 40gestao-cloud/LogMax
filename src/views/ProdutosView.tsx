@@ -620,13 +620,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       placeholder="Ex: Samsung, Nestlé, 3M" />
                   </FormField>
                   {/* Peso/Volume só faz sentido em supermercado (KG/L/M vendável).
-                      Em roupa e eletrônico é informação irrelevante pro cadastro. */}
+                      Em roupa e eletrônico é informação irrelevante pro cadastro.
+                      A unidade vem do seletor `Unidade` mais abaixo — mostramos
+                      inline como sufixo pra o operador não digitar "1 kg" e o
+                      "kg" ser descartado pela máscara decimal. */}
                   {filial === 'SuperMax' && (
-                    <FormField label="Peso / Volume *" error={extrasErrors.peso}>
-                      <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}
-                        value={extras.peso} inputMode="decimal"
-                        onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
-                        placeholder="Ex: 1.5 (em kg/l/m…)" />
+                    <FormField label={`Peso / Volume (${extras.unidade || 'UN'}) *`} error={extrasErrors.peso}>
+                      <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}>
+                        <input className="flex-1 bg-transparent py-2 pl-3 pr-2 outline-none"
+                          value={extras.peso} inputMode="decimal"
+                          onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
+                          placeholder="Ex: 1,5" />
+                        <span className="text-xs font-bold text-accent px-3 py-2 border-l border-white/5 bg-white/[0.02] shrink-0">
+                          {extras.unidade || 'UN'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1">Unidade vem do seletor <span className="font-bold text-gray-400">Unidade</span> logo abaixo.</p>
                     </FormField>
                   )}
                 </div>
