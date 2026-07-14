@@ -17,6 +17,7 @@ import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { PDVViewSupermax } from './PDVViewSupermax';
+import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -1185,6 +1186,36 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     </div>
   );
 
+  // Operador já solicitou fechamento — bloqueia venda até Financeiro confirmar.
+  // Financeiro pode "reabrir" em ControleCaixaView se precisar corrigir.
+  if (caixa.status === 'Aguardando Confirmação') return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
+      <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
+        <Lock size={28} className="text-yellow-400" />
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-gray-300">Aguardando confirmação do Financeiro</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-md">
+          Você encerrou o caixa de <span className="text-gray-300 font-bold">{filialFiltro}</span> às {caixa.fechado_em ? new Date(caixa.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' }) : '—'}.
+          O Financeiro vai revisar os valores em <span className="text-accent font-bold">Controle de Caixa</span> e confirmar.
+          Novas vendas só depois de reabrir o caixa.
+        </p>
+      </div>
+      <div className="flex gap-3 flex-wrap justify-center">
+        <button onClick={refreshCaixa}
+          className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
+          Verificar novamente
+        </button>
+        {onVoltar && (
+          <button onClick={onVoltar}
+            className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-2">
+            <ArrowLeft size={14} /> Trocar PDV
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   // Dispatch: SuperMax tem PDV proprio (UX estilo supermercado MaxPOS).
   // Demais filiais (MaxLook, TechMax) continuam no PDV generico abaixo.
   // Todos os hooks acima ja rodaram — esta condicional so afeta o JSX retornado.
@@ -1336,6 +1367,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               title="Trocar PDV">
               <Store size={12} /> Trocar PDV
             </button>
+          )}
+          {caixa.status === 'Aberto' && (
+            <PDVFecharCaixa
+              caixa={{ id: caixa.id, valor_abertura: caixa.valor_abertura, filial: caixa.filial, data: caixa.data }}
+              showToast={showToast}
+              onFechamentoSolicitado={refreshCaixa}
+              className="py-1.5 px-3 text-[10px] hidden sm:flex"
+            />
           )}
           <button
             onClick={async () => {

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
+import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -1286,6 +1287,14 @@ export const PDVViewSupermax = ({
         fullscreen={fullscreen}
         onToggleFullscreen={() => setFullscreen(f => !f)}
         onOpenHelp={() => setHelpOpen(true)}
+        extraActions={
+          <PDVFecharCaixa
+            caixa={{ id: caixa.id, valor_abertura: caixa.valor_abertura, filial: caixa.filial, data: caixa.data }}
+            showToast={showToast}
+            onFechamentoSolicitado={refreshCaixa}
+            className="px-3 py-1.5 text-xs uppercase tracking-wider bg-white flex items-center gap-1.5 border-2"
+          />
+        }
       />
 
       {/* Tabela de itens + sidebar */}
@@ -3040,7 +3049,7 @@ export const PDVViewSupermax = ({
 };
 
 const Header = ({
-  operadorNome, cupomSeq, caixaAberto, datetime, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp,
+  operadorNome, cupomSeq, caixaAberto, datetime, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp, extraActions,
 }: {
   operadorNome: string;
   cupomSeq: string;
@@ -3050,6 +3059,7 @@ const Header = ({
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   onOpenHelp: () => void;
+  extraActions?: React.ReactNode;
 }) => (
   <div
     className="px-4 py-3 flex items-center justify-between shrink-0 border-b-2 gap-3"
@@ -3081,6 +3091,7 @@ const Header = ({
       )}
     </div>
     <div className="flex items-center gap-2 shrink-0">
+      {extraActions}
       {onSwitchFilial && (
         <button
           type="button"

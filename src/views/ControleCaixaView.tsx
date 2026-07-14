@@ -127,6 +127,35 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
     onChanged();
   };
 
+  // Confirma fechamento solicitado pelo operador. Aceita observação extra
+  // do Financeiro e um valor reconferido (se Financeiro reconferiu e divergiu
+  // do que o operador lançou).
+  const [obsExtra, setObsExtra] = useState('');
+  const [valorReconf, setValorReconf] = useState('');
+  const handleConfirmarFechamento = async () => {
+    if (!supabase || !caixa) return;
+    setSaving(true);
+    const p_valor_reconferido = valorReconf.trim() ? parseBRL(valorReconf) : null;
+    const { data, error } = await supabase.rpc('confirmar_fechamento_caixa', {
+      p_controle_id:       caixa.id,
+      p_observacao_extra:  obsExtra.trim() || null,
+      p_valor_reconferido: p_valor_reconferido,
+    });
+    setSaving(false);
+    if (error) { showToast(`Erro ao confirmar: ${error.message}`, 'error'); return; }
+    const res = data as any;
+    const tipo = res?.tipo as string;
+    const dif = Number(res?.diferenca ?? 0);
+    const msg = tipo === 'exato'
+      ? 'Fechamento confirmado — valor exato.'
+      : tipo === 'sobra'
+        ? `Fechamento confirmado com SOBRA de ${fmtBRL(dif)}.`
+        : `Fechamento confirmado com FALTA de ${fmtBRL(Math.abs(dif))}.`;
+    showToast(msg, tipo === 'exato' ? 'success' : 'info');
+    setObsExtra(''); setValorReconf('');
+    onChanged();
+  };
+
   const handleAbrir = async () => {
     const valor = parseBRL(valorAbertura);
     if (!valor || valor <= 0) { showToast('Informe um valor de abertura válido.', 'error'); return; }
@@ -159,6 +188,112 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
       setSaving(false);
     }
   };
+
+  // ── CAIXA AGUARDANDO CONFIRMAÇÃO (operador do PDV solicitou fechamento) ──
+  if (caixa && caixa.status === 'Aguardando Confirmação') {
+    const esperado = Number(caixa.valor_esperado ?? 0);
+    const contadoOperador = Number(caixa.valor_fechamento ?? 0);
+    const diferenca = Number(caixa.diferenca ?? 0);
+    const tipoDif = caixa.tipo_diferenca ?? 'exato';
+    const valorFinal = valorReconf.trim() ? (parseBRL(valorReconf) ?? contadoOperador) : contadoOperador;
+    const difFinal = valorFinal - esperado;
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+        className="neu-flat rounded-3xl p-6 border border-yellow-500/30 flex flex-col gap-4"
+        style={{ background: 'color-mix(in srgb, #EAB308 6%, var(--color-bg-base))' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'color-mix(in srgb, #EAB308 15%, var(--color-bg-base))' }}>
+            <Calculator size={22} className="text-yellow-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <FilialBadge filial={filial} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-400">Aguardando Confirmação</span>
+              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-500/15 text-blue-400">PDV</span>
+            </div>
+            <p className="text-xs text-gray-400">
+              Encerrado por <span className="text-gray-200 font-bold">{caixa.fechado_por_nome ?? '—'}</span> às {fmtHora(caixa.fechado_em ?? null)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="neu-pressed rounded-lg px-2.5 py-2">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Esperado</div>
+            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(esperado)}</div>
+          </div>
+          <div className="neu-pressed rounded-lg px-2.5 py-2">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Contado (operador)</div>
+            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(contadoOperador)}</div>
+          </div>
+          <div className="neu-pressed rounded-lg px-2.5 py-2 col-span-2">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Diferença apurada</div>
+            <div className={`font-black tabular-nums ${tipoDif === 'exato' ? 'text-gray-200' : tipoDif === 'sobra' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {tipoDif === 'exato' ? 'Exato' : `${tipoDif === 'sobra' ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(diferenca))}`}
+            </div>
+          </div>
+        </div>
+
+        {caixa.observacao && (
+          <div className="neu-pressed rounded-lg px-3 py-2 text-[11px]">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px] mb-1">Observação do operador</div>
+            <div className="text-gray-300 whitespace-pre-line">{caixa.observacao}</div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+          <input type="text" inputMode="numeric" placeholder={`Reconferir valor (opcional — atual: ${fmtBRL(contadoOperador)})`}
+            className="neu-input py-2 px-3 rounded-xl text-xs tabular-nums"
+            value={valorReconf}
+            onChange={e => setValorReconf(formatBRL(e.target.value))}
+            onKeyDown={handleMoneyKeyDown} />
+          {valorReconf.trim() && (
+            <p className={`text-[10px] font-bold ${Math.abs(difFinal) < 0.005 ? 'text-gray-400' : difFinal > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              Reconferido: {Math.abs(difFinal) < 0.005 ? 'Exato' : `${difFinal > 0 ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(difFinal))}`}
+            </p>
+          )}
+          <input type="text" placeholder="Observação do Financeiro (opcional)"
+            className="neu-input py-2 px-3 rounded-xl text-xs"
+            value={obsExtra}
+            onChange={e => setObsExtra(e.target.value)} />
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            onClick={async () => {
+              if (!supabase) return;
+              if (!await confirm(`Reabrir este caixa de ${filial}? O operador poderá voltar a vender e o fechamento anterior será descartado.`)) return;
+              setSaving(true);
+              const { error } = await supabase.from('controle_caixa').update({
+                status: 'Aberto',
+                valor_fechamento: null,
+                valor_esperado: null,
+                diferenca: null,
+                tipo_diferenca: null,
+                fechado_por: null,
+                fechado_por_nome: null,
+                fechado_em: null,
+                origem_fechamento: null,
+              }).eq('id', caixa.id);
+              setSaving(false);
+              if (error) { showToast(`Erro ao reabrir: ${error.message}`, 'error'); return; }
+              showToast(`Caixa de ${filial} reaberto.`, 'info');
+              onChanged();
+            }}
+            disabled={saving}
+            className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-orange-300 hover:text-orange-200 flex items-center gap-1.5 disabled:opacity-50">
+            <RotateCcw size={11} /> Reabrir
+          </button>
+          <button
+            onClick={handleConfirmarFechamento}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-emerald-300 bg-emerald-900/30 border border-emerald-500/30 hover:bg-emerald-900/50 flex items-center gap-1.5 disabled:opacity-50">
+            <Lock size={11} /> {saving ? '…' : 'Confirmar fechamento'}
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return caixa ? (
     /* ── CAIXA ABERTO ── */

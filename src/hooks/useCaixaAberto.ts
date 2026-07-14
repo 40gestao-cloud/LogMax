@@ -12,10 +12,19 @@ export interface CaixaAberto {
   data: string;
   filial: FilialOperacional;
   valor_abertura: number;
-  status: 'Aberto' | 'Fechado' | 'Suspenso';
+  status: 'Aberto' | 'Aguardando Confirmação' | 'Fechado' | 'Suspenso';
   aberto_por: string | null;
   aberto_por_nome: string | null;
   aberto_em: string | null;
+  // Só preenchidos quando operador solicitou fechamento (status='Aguardando Confirmação')
+  valor_fechamento?: number | null;
+  valor_esperado?: number | null;
+  diferenca?: number | null;
+  tipo_diferenca?: 'sobra' | 'falta' | 'exato' | null;
+  fechado_por_nome?: string | null;
+  fechado_em?: string | null;
+  observacao?: string | null;
+  origem_fechamento?: 'operador' | 'financeiro' | null;
 }
 
 // Caixa aberto de UMA filial específica. PDV usa este — só vende quando o
@@ -34,7 +43,7 @@ export function useCaixaAberto(filial: FilialOperacional | null) {
         .select('*')
         .eq('data', today)
         .eq('filial', filial)
-        .eq('status', 'Aberto')
+        .in('status', ['Aberto', 'Aguardando Confirmação'])
         .eq('ativo', true)
         .maybeSingle();
       setCaixa(data ?? null);
@@ -77,8 +86,9 @@ export function useCaixasDoDia() {
         .from('controle_caixa')
         .select('*')
         .eq('data', today)
-        .eq('status', 'Aberto')
-        .eq('ativo', true);
+        .in('status', ['Aberto', 'Aguardando Confirmação'])
+        .eq('ativo', true)
+        .order('aberto_em', { ascending: false });
       const next = Object.fromEntries(FILIAIS_OPERACIONAIS.map(f => [f, null])) as Record<FilialOperacional, CaixaAberto | null>;
       (data ?? []).forEach((row: any) => {
         if ((FILIAIS_OPERACIONAIS as readonly string[]).includes(row.filial)) {
