@@ -96,7 +96,8 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
     <>
       <button
         onClick={() => setOpen(true)}
-        title="Fechar meu caixa e enviar ao Financeiro"
+        data-action="fechar-caixa-header"
+        title="Fechar meu caixa e enviar ao Financeiro (Ctrl+L)"
         className={`neu-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-accent transition-colors ${className}`}
       >
         <Lock size={14} /> Fechar meu caixa

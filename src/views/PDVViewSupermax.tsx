@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator,
+  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
@@ -192,6 +192,20 @@ export const PDVViewSupermax = ({
   // Modal de ajuda — manual passo-a-passo + tabela de teclas.
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Picker F3 (PIX / Fiado) — padrão do card picker F2. Navegação por ↑↓ + Enter.
+  const [payerPickerOpen, setPayerPickerOpen] = useState(false);
+  const [payerPickerIdx, setPayerPickerIdx]   = useState(0);
+
+  // Seleção de item no carrinho por ↑↓ (Del apaga selecionado). -1 = último item.
+  const [selectedCartIdx, setSelectedCartIdx] = useState<number>(-1);
+
+  // Reimpressão (Ctrl+R) — últimas N vendas concluídas da filial nesta sessão.
+  const [reprintOpen, setReprintOpen] = useState(false);
+  const [reprintList, setReprintList] = useState<Array<{ id: string; created_at: string; total_final: number; forma_pagamento: string }>>([]);
+  const [reprintIdx, setReprintIdx]   = useState(0);
+  const [reprintLoading, setReprintLoading] = useState(false);
+  const sessionStartRef = useRef<string>(new Date().toISOString());
+
   const [cupomSeq]   = useState(() => String(Date.now()).slice(-6));
   const [nowTick, setNowTick] = useState(0);
   const codeInputRef   = useRef<HTMLInputElement>(null);
@@ -210,6 +224,11 @@ export const PDVViewSupermax = ({
   }, []);
 
   useEffect(() => { codeInputRef.current?.focus(); }, []);
+
+  // Se o carrinho encolheu, reseta seleção pra não ficar apontando pra idx inválido
+  useEffect(() => {
+    if (selectedCartIdx >= cart.length) setSelectedCartIdx(-1);
+  }, [cart.length, selectedCartIdx]);
 
   // Map<id, estoque> derivado de produtos — O(1) lookup e dep estável
   // (mesma referência de Map só muda quando produtos muda).
@@ -519,12 +538,114 @@ export const PDVViewSupermax = ({
     processCode(raw);
   };
 
+  // Reimprimir (Ctrl+R): busca últimas 10 vendas da filial nesta sessão do PDV
+  // e abre um picker; ao escolher, popula lastVenda e reabre reciboModalOpen.
+  const openReprint = useCallback(async () => {
+    if (!supabase) return;
+    try {
+      setReprintLoading(true);
+      setReprintOpen(true);
+      setReprintIdx(0);
+      const { data, error } = await supabase
+        .from('vendas')
+        .select('id, created_at, total_final, forma_pagamento')
+        .eq('filial', filial)
+        .eq('status', 'Concluída')
+        .eq('ativo', true)
+        .gte('created_at', sessionStartRef.current)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      setReprintList((data ?? []) as Array<{ id: string; created_at: string; total_final: number; forma_pagamento: string }>);
+    } catch (err: any) {
+      showToast?.(`Erro ao carregar vendas: ${err?.message ?? '—'}`, 'error', true);
+      setReprintOpen(false);
+    } finally {
+      setReprintLoading(false);
+    }
+  }, [filial, showToast]);
+
+  const confirmReprint = useCallback(async (vendaId: string) => {
+    if (!supabase) return;
+    try {
+      const [{ data: venda, error: vErr }, { data: itens, error: iErr }] = await Promise.all([
+        supabase.from('vendas').select('id, total_final, total, desconto, forma_pagamento, cliente_id').eq('id', vendaId).single(),
+        supabase.from('itens_venda').select('nome_produto, qtd, preco_unitario, subtotal').eq('venda_id', vendaId),
+      ]);
+      if (vErr) throw vErr;
+      if (iErr) throw iErr;
+      const cli = venda?.cliente_id ? ((clientes as any[]).find(c => c.id === venda.cliente_id)?.nome ?? null) : null;
+      setLastVenda({
+        id: String(venda!.id).slice(-6).toUpperCase(),
+        total: Number(venda!.total_final ?? 0),
+        subtotal: Number(venda!.total ?? 0),
+        desconto: Number(venda!.desconto ?? 0),
+        forma: String(venda!.forma_pagamento ?? '—'),
+        cliente: cli,
+        itens: (itens ?? []).map((it: any) => ({
+          nome_produto: it.nome_produto,
+          qtd: Number(it.qtd ?? 0),
+          preco_unitario: Number(it.preco_unitario ?? 0),
+          subtotal: Number(it.subtotal ?? 0),
+        })),
+      });
+      setReprintOpen(false);
+      setReciboModalOpen(true);
+    } catch (err: any) {
+      showToast?.(`Erro ao reimprimir: ${err?.message ?? '—'}`, 'error', true);
+    }
+  }, [clientes, showToast]);
+
   // F-key listeners globais — só ativos fora de modais
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || isClosing;
+      const target = e.target as HTMLElement | null;
+      const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+
+      // Shift+F1 ou ? — abrir manual/ajuda (padrão universal)
+      if ((e.key === 'F1' && e.shiftKey) || (e.key === '?' && !isEditable)) {
+        e.preventDefault();
+        if (anyModal) return;
+        setHelpOpen(true);
+        return;
+      }
+
+      // Ctrl+M — trocar PDV (equivalente ao "menu" do MaxPOS)
+      if ((e.key === 'm' || e.key === 'M') && e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (anyModal) return;
+        if (cart.length === 0 && onSwitchFilial) onSwitchFilial('');
+        return;
+      }
+
+      // Ctrl+L — abrir "Fechar meu caixa" (modal do header com relatório do turno)
+      if ((e.key === 'l' || e.key === 'L') && e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (anyModal) return;
+        if (cart.length === 0) {
+          document.querySelector<HTMLButtonElement>('[data-action="fechar-caixa-header"]')?.click();
+        }
+        return;
+      }
+
+      // Ctrl+F — alternar tela cheia
+      if ((e.key === 'f' || e.key === 'F') && e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (anyModal) return;
+        setFullscreen(f => !f);
+        return;
+      }
+
+      // Ctrl+R — reimprimir última venda (fora de venda)
+      if ((e.key === 'r' || e.key === 'R') && e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (anyModal || cart.length > 0) return;
+        openReprint();
+        return;
+      }
 
       if (e.key === 'F4' || e.key === 'F5') {
         e.preventDefault();
@@ -560,10 +681,17 @@ export const PDVViewSupermax = ({
       if (e.key === 'Delete') {
         if (anyModal) return;
         // Não come Delete quando o operador está editando um input/select
-        const tgt = e.target as HTMLElement | null;
-        const isEditable = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable);
         if (isEditable) return;
         e.preventDefault();
+        // Se há item selecionado por seta → remove ele; senão, último
+        if (selectedCartIdx >= 0 && selectedCartIdx < cart.length) {
+          const sel = cart[selectedCartIdx];
+          if (sel) {
+            removeFromCart(sel.produto_id);
+            setSelectedCartIdx(-1);
+          }
+          return;
+        }
         removeLast();
         return;
       }
@@ -617,7 +745,7 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast]);
+  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint]);
 
   // === FINALIZAR ===
   const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1) => {
@@ -1323,7 +1451,13 @@ export const PDVViewSupermax = ({
               return (
               <div
                 key={item.produto_id}
-                className={`grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b border-gray-200 ${idx === cart.length - 1 ? 'bg-yellow-50' : ''}`}
+                className={`grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b ${
+                  idx === selectedCartIdx
+                    ? 'bg-yellow-200 border-yellow-500 ring-2 ring-yellow-500'
+                    : idx === cart.length - 1 && selectedCartIdx < 0
+                      ? 'bg-yellow-50 border-gray-200'
+                      : 'border-gray-200'
+                }`}
               >
                 <div className="text-gray-500">{String(idx + 1).padStart(3, '0')}</div>
                 <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
@@ -1461,10 +1595,22 @@ export const PDVViewSupermax = ({
                 } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
                   e.preventDefault();
                   setSuggestionIdx(prev => Math.max(prev - 1, 0));
+                } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && code.length === 0 && cart.length > 0) {
+                  // Sem código digitado e sem sugestões: setas navegam itens do carrinho.
+                  // Del em cima do selecionado remove aquele item específico.
+                  e.preventDefault();
+                  setSelectedCartIdx(prev => {
+                    if (prev < 0) return e.key === 'ArrowUp' ? cart.length - 1 : 0;
+                    if (e.key === 'ArrowUp')   return prev <= 0 ? cart.length - 1 : prev - 1;
+                    return prev >= cart.length - 1 ? 0 : prev + 1;
+                  });
                 } else if (e.key === 'Escape' && code.length > 0) {
                   e.preventDefault();
                   setCode(''); codeNativeRef.current = '';
                   setSuggestionIdx(-1);
+                } else if (e.key === 'Escape' && selectedCartIdx >= 0) {
+                  e.preventDefault();
+                  setSelectedCartIdx(-1);
                 }
               }}
               onBlur={() => {
@@ -1608,9 +1754,9 @@ export const PDVViewSupermax = ({
             // F1/F2 funcionam mesmo em misto (Dinheiro/Cartão aceitam parcial).
             // F3 (PIX) só fora do misto — PIX é forma única.
             const mistoActive = pagamentos.length > 0 || parseBRL(parcialValor) > 0;
-            if (e.key === 'F1') { e.preventDefault(); e.stopPropagation(); handlePayChoice('Dinheiro'); return; }
-            if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); setCardPickerIdx(0); setCardPickerOpen(true); return; }
-            if (e.key === 'F3' && !mistoActive) { e.preventDefault(); e.stopPropagation(); handlePayChoice('PIX'); return; }
+            if (e.key === 'F1' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); handlePayChoice('Dinheiro'); return; }
+            if (e.key === 'F2' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); setCardPickerIdx(0); setCardPickerOpen(true); return; }
+            if (e.key === 'F3' && !e.shiftKey && !mistoActive) { e.preventDefault(); e.stopPropagation(); setPayerPickerIdx(0); setPayerPickerOpen(true); return; }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
@@ -1914,13 +2060,13 @@ export const PDVViewSupermax = ({
                   <li>
                     <b>Conferir.</b> A última leitura aparece destacada na barra lateral direita.
                     Pra remover o último item: <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Del</kbd>.
-                    Pra remover qualquer item: clique no <span className="inline-flex items-center justify-center w-5 h-5 text-white rounded text-xs" style={{ background: RED }}><X size={11} /></span> da linha.
+                    Pra remover <b>qualquer item</b>: com o campo CÓDIGO vazio, use <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>↑ ↓</kbd> pra selecionar a linha (fica amarela) e aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Del</kbd>.
                   </li>
                   <li>
                     <b>Subtotal / fechar venda.</b> Com o carrinho montado, aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> no campo CÓDIGO vazio, ou <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F4</kbd>/<kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F5</kbd>, ou clique <b>FECHAR VENDA</b>.
                   </li>
                   <li>
-                    <b>Escolher forma de pagamento.</b> Use <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F1</kbd> Dinheiro, <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F2</kbd> Cartão (abre picker Crédito/Débito), <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F3</kbd> PIX, ou setas + Enter pra Fiado.
+                    <b>Escolher forma de pagamento.</b> Use <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F1</kbd> Dinheiro, <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F2</kbd> Cartão (picker Crédito/Débito) ou <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F3</kbd> PIX/Fiado (picker) — <b>tudo por teclado</b>.
                   </li>
                   <li>
                     <b>Confirmar o valor.</b>
@@ -1957,6 +2103,7 @@ export const PDVViewSupermax = ({
                 <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2">
                   {[
                     ['Enter', 'No campo vazio: abre o pagamento. Com texto: adiciona produto.'],
+                    ['F3', 'Fechar / suspender caixa (fora de venda).'],
                     ['F4 / F5', 'Subtotal — abre o modal de pagamento.'],
                     ['F6', 'Desconto no total (% ou R$).'],
                     ['F7', 'Consulta de preço (não adiciona ao carrinho).'],
@@ -1964,9 +2111,9 @@ export const PDVViewSupermax = ({
                     ['F9', 'Cancelar venda (pede confirmação).'],
                     ['F11', 'Suprimento — entrada de dinheiro no caixa.'],
                     ['F12', 'Sangria — retirada de dinheiro do caixa.'],
-                    ['Del', 'Remove o último item do carrinho.'],
-                    ['↑ ↓', 'Navega nas sugestões enquanto digita.'],
-                    ['Esc', 'Limpa o campo / sai da tela cheia / cancela venda.'],
+                    ['Del', 'Remove o último item — ou o item selecionado por ↑↓.'],
+                    ['↑ ↓', 'Sugestões enquanto digita · com campo vazio: seleciona item do carrinho.'],
+                    ['Esc', 'Limpa o campo / desmarca item / sai da tela cheia / cancela venda.'],
                     ['N*EAN', 'Quantidade do mesmo item (ex: 3*7891 ou 0,350*7891 pra peso).'],
                   ].map(([k, v]) => (
                     <React.Fragment key={k}>
@@ -1985,8 +2132,8 @@ export const PDVViewSupermax = ({
                 <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2">
                   {[
                     ['F1', 'Dinheiro — abre modal de valor recebido.'],
-                    ['F2', 'Cartão — abre picker Crédito / Débito.'],
-                    ['F3', 'PIX — gera QR Code (só como forma única).'],
+                    ['F2', 'Cartão — picker Crédito / Débito.'],
+                    ['F3', 'Picker PIX / Fiado (só como forma única — não aceita misto).'],
                     ['↑ ↓ ← →', 'Navega entre as formas.'],
                     ['Tab', 'Próximo elemento focável (preso no modal).'],
                     ['Enter', 'Confirma forma focada. Com pagamentos lançados e restante 0: fecha venda.'],
@@ -2000,6 +2147,30 @@ export const PDVViewSupermax = ({
                 </div>
               </section>
 
+              {/* Operação de caixa — 100% teclado */}
+              <section>
+                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
+                  Operação de caixa — teclado 100%
+                </h3>
+                <div className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2">
+                  {[
+                    ['Ctrl+R', 'Reimprimir uma das últimas vendas concluídas desta sessão.'],
+                    ['Ctrl+L', 'Fechar meu caixa (relatório do turno + valor contado).'],
+                    ['Ctrl+M', 'Trocar de PDV (SuperMax / MaxLook / TechMax).'],
+                    ['Ctrl+F', 'Entrar / sair de tela cheia.'],
+                    ['Shift+F1 · ?', 'Abrir este manual.'],
+                  ].map(([k, v]) => (
+                    <React.Fragment key={k}>
+                      <kbd className="text-xs font-mono px-2 py-1 rounded border self-start text-center" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>{k}</kbd>
+                      <span style={{ color: '#374151' }}>{v}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                  Todas as ações do PDV têm atalho — o operador não precisa tirar as mãos do teclado durante o turno.
+                </p>
+              </section>
+
               {/* Dicas */}
               <section>
                 <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
@@ -2010,7 +2181,7 @@ export const PDVViewSupermax = ({
                   <li>Badge <span className="px-1.5 py-0.5 text-[10px] font-black uppercase rounded border" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}>Ruptura</span> aparece quando a quantidade vendida supera o estoque — confira o produto antes de fechar.</li>
                   <li>Pra deixar dinheiro no caixa (troco inicial, reforço): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F11</kbd>. Pra retirar (depósito, pagto fornecedor): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F12</kbd> — sempre registrando o motivo.</li>
                   <li><b>PIX/Fiado não aceitam pagamento parcial</b>. Pra dividir entre formas, use Dinheiro + Cartão.</li>
-                  <li>Pra alternar entre filiais (SuperMax/MaxLook/TechMax) sem perder o turno, use o seletor no header.</li>
+                  <li>Pra alternar entre filiais (SuperMax/MaxLook/TechMax) sem perder o turno: <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Ctrl+M</kbd> (só com carrinho vazio).</li>
                 </ul>
               </section>
             </div>
@@ -2706,6 +2877,163 @@ export const PDVViewSupermax = ({
         </div>
       )}
 
+      {/* Reimpressão (Ctrl+R) — últimas 10 vendas concluídas da filial nesta sessão */}
+      {reprintOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && reprintOpen && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
+            if (e.key === 'Escape') {
+              e.preventDefault(); e.stopPropagation();
+              setReprintOpen(false);
+              requestAnimationFrame(() => codeInputRef.current?.focus());
+              return;
+            }
+            if (reprintLoading || reprintList.length === 0) return;
+            if (e.key === 'ArrowDown') {
+              e.preventDefault(); e.stopPropagation();
+              setReprintIdx(i => Math.min(i + 1, reprintList.length - 1));
+              return;
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault(); e.stopPropagation();
+              setReprintIdx(i => Math.max(i - 1, 0));
+              return;
+            }
+            if (e.key === 'Enter') {
+              e.preventDefault(); e.stopPropagation();
+              const v = reprintList[reprintIdx];
+              if (v) confirmReprint(v.id);
+              return;
+            }
+            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-2xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK, fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
+              <div className="flex items-center gap-2">
+                <Receipt size={20} />
+                <div>
+                  <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Ctrl+R · Reimpressão</div>
+                  <div className="text-lg font-black tracking-wide">Últimas vendas desta sessão</div>
+                </div>
+              </div>
+              <button
+                onClick={() => { setReprintOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+                className="text-white p-1" tabIndex={-1}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              {reprintLoading ? (
+                <div className="text-center py-10 text-gray-500 flex flex-col items-center gap-2">
+                  <Loader2 className="animate-spin" size={28} />
+                  <span className="text-sm font-bold uppercase tracking-wider">Carregando vendas…</span>
+                </div>
+              ) : reprintList.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm">
+                  Nenhuma venda concluída nesta sessão do PDV.
+                </div>
+              ) : (
+                <div className="border-2 rounded overflow-hidden" style={{ borderColor: NAVY_DARK }}>
+                  <div className="px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white grid grid-cols-[110px_1fr_120px_100px] gap-2" style={{ background: NAVY_DARK }}>
+                    <span>ID</span>
+                    <span>Forma de pagamento</span>
+                    <span className="text-right">Total</span>
+                    <span className="text-right">Hora</span>
+                  </div>
+                  {reprintList.map((v, idx) => {
+                    const hh = new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onMouseEnter={() => setReprintIdx(idx)}
+                        onClick={() => confirmReprint(v.id)}
+                        className={`w-full grid grid-cols-[110px_1fr_120px_100px] gap-2 px-3 py-2 text-sm tabular-nums text-left border-b border-gray-200 last:border-b-0 ${idx === reprintIdx ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
+                      >
+                        <span className="font-mono text-gray-600 truncate">#{String(v.id).slice(-6).toUpperCase()}</span>
+                        <span className="truncate font-bold text-gray-900">{v.forma_pagamento || '—'}</span>
+                        <span className="text-right font-black" style={{ color: MONEY }}>R$ {fmt(Number(v.total_final ?? 0))}</span>
+                        <span className="text-right text-gray-500">{hh}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center pt-3">
+                ↑↓ navegar · Enter reimprimir · Esc voltar
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
+      {payerPickerOpen && (
+        <div
+          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && payerPickerOpen && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPayerPickerOpen(false); return; }
+            if (e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+              e.preventDefault(); e.stopPropagation();
+              setPayerPickerIdx(i => (i === 0 ? 1 : 0));
+              return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+              e.preventDefault(); e.stopPropagation();
+              setPayerPickerIdx(i => (i === 0 ? 1 : 0));
+              return;
+            }
+            if (e.key === 'Enter') {
+              e.preventDefault(); e.stopPropagation();
+              const forma: FormaPagamento = payerPickerIdx === 0 ? 'PIX' : 'Fiado';
+              setPayerPickerOpen(false);
+              handlePayChoice(forma);
+              return;
+            }
+            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F3 · Outras formas</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">PIX ou Fiado?</div>
+            </div>
+            <div className="p-6 space-y-3">
+              {([
+                { forma: 'PIX' as const,   Icon: Wallet },
+                { forma: 'Fiado' as const, Icon: UsersIcon },
+              ]).map(({ forma, Icon }, idx) => {
+                const active = idx === payerPickerIdx;
+                return (
+                  <button
+                    key={forma}
+                    onClick={() => { setPayerPickerOpen(false); handlePayChoice(forma); }}
+                    onMouseEnter={() => setPayerPickerIdx(idx as 0 | 1)}
+                    className={`w-full border-2 px-4 py-4 flex items-center gap-3 font-black uppercase tracking-wide text-left ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
+                    style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
+                  >
+                    <Icon size={22} />
+                    <span>{forma}</span>
+                  </button>
+                );
+              })}
+              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center pt-2">
+                ↑↓ navegar · Enter selecionar · Esc voltar
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Parcelas Cartão Crédito (1x-12x) — só forma única; misto não pergunta */}
       {parcelasModalOpen && (() => {
         const parcial = parseBRL(parcialValor);
@@ -3098,7 +3426,7 @@ const Header = ({
           onClick={() => onSwitchFilial('')}
           className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-2 bg-white flex items-center gap-1.5"
           style={{ color: NAVY_DARK, borderColor: NAVY_DARK }}
-          title="Trocar de PDV"
+          title="Trocar de PDV (Ctrl+M)"
         >
           Trocar PDV
         </button>
@@ -3108,7 +3436,7 @@ const Header = ({
         onClick={onToggleFullscreen}
         className="w-11 h-11 rounded-full flex items-center justify-center font-black border-2"
         style={{ background: 'white', color: NAVY_DARK, borderColor: NAVY_DARK }}
-        title={fullscreen ? 'Sair tela cheia (Esc)' : 'Entrar em tela cheia'}
+        title={fullscreen ? 'Sair tela cheia (Esc · Ctrl+F)' : 'Entrar em tela cheia (Ctrl+F)'}
         aria-label={fullscreen ? 'Sair tela cheia' : 'Entrar em tela cheia'}
       >
         {fullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
@@ -3118,7 +3446,7 @@ const Header = ({
         onClick={onOpenHelp}
         className="w-11 h-11 rounded-full flex items-center justify-center font-black border-2 hover:brightness-110"
         style={{ background: NAVY_DARK, color: YELLOW, borderColor: NAVY_DARK }}
-        title="Manual do PDV"
+        title="Manual do PDV (Shift+F1 ou ?)"
         aria-label="Manual do PDV"
       >
         <HelpCircle size={20} />
