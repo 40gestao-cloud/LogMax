@@ -21,11 +21,3 @@ export const FILIAL_COLOR: Record<FilialHolding, { bg: string; text: string; bor
 
 export const isFilialHolding = (v: any): v is FilialHolding =>
   typeof v === 'string' && (FILIAIS_HOLDING as readonly string[]).includes(v);
-
-// Prefixo de SKU por unidade — evita colisão de códigos entre as 3 empresas.
-// Matriz não tem prefixo (não opera produtos de venda).
-export const PRODUTO_PREFIX_FILIAL: Partial<Record<FilialHolding, string>> = {
-  TechMax:  'TM-',
-  SuperMax: 'SM-',
-  MaxLook:  'ML-',
-};

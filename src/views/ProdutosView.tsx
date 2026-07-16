@@ -11,7 +11,7 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT, PRODUTO_PREFIX_FILIAL } from '../lib/filiais';
+import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -334,15 +334,6 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       return;
     }
     setExtrasErrors({});
-    // Regra de SKU por unidade: bloqueia código sem o prefixo esperado da filial.
-    // Matriz não tem prefixo (não opera produtos de venda) — passa direto.
-    const prefixoExigido = PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL];
-    if (prefixoExigido && !form.codigo.toUpperCase().startsWith(prefixoExigido)) {
-      const msg = 'O código do produto não está em conformidade com a empresa selecionada';
-      setErrors({ codigo: msg });
-      showToast(msg, 'error', true);
-      return;
-    }
     setIsSaving(true);
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
@@ -551,12 +542,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   <FormField label="Código *" error={errors.codigo}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
                       value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
-                      placeholder={`Ex: ${PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL] ?? 'PRD-'}001`} />
-                    {PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL] && (
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        Use o prefixo <span className="font-mono text-accent">{PRODUTO_PREFIX_FILIAL[filial as keyof typeof PRODUTO_PREFIX_FILIAL]}</span> para produtos da {filial}.
-                      </p>
-                    )}
+                      placeholder="Ex: 001" />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.
+                    </p>
                   </FormField>
                   <FormField label="Nome do produto *" error={errors.nome}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}

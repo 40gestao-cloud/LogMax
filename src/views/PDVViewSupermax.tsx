@@ -257,16 +257,14 @@ export const PDVViewSupermax = ({
     });
   }, [estoqueMap]);
 
-  // Filtro de disponibilidade pra venda no SuperMax:
-  //  - status Ativo (ou ausente = legado)
-  //  - tipo != patrimonio (patrimônio é gerido pelo Financeiro, não vende)
-  //  - filial: SuperMax próprio OU Matriz (compartilhado entre unidades) OU
-  //    sem filial setada (cadastros antigos / não migrados)
-  // Sem isso, produtos cadastrados como "Matriz" (sem prefixo SM-) ficam de
-  // fora — operador busca por nome ("feijão") e nada aparece/seleciona.
+  // Filtro de disponibilidade pra venda no SuperMax: só produtos da própria
+  // filial. Fallback anterior (Matriz + null-filial) foi removido junto com
+  // o UNIQUE global de produtos.codigo: agora dois produtos ativos podem ter
+  // "001" em filiais distintas, e o match por código em processCode/scanner
+  // não teria como escolher o certo.
   const produtosDisponiveis = useMemo(() => produtos
     .filter((p: any) => (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio')
-    .filter((p: any) => !p.filial || p.filial === filial || p.filial === 'Matriz'),
+    .filter((p: any) => p.filial === filial),
   [produtos]);
 
   const subtotal   = cart.reduce((s, i) => s + i.subtotal, 0);
