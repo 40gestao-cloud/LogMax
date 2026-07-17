@@ -17,12 +17,17 @@ const FILIAL_COLOR: Record<FilialOp, string> = {
   TechMax:  'text-orange-400',
 };
 
-const DIMENSOES: { id: 'logistica'|'financeiro'|'rh'|'vendas'|'marketing'; label: string }[] = [
-  { id: 'vendas',     label: 'Vendas' },
-  { id: 'financeiro', label: 'Financeiro' },
-  { id: 'logistica',  label: 'Logística' },
-  { id: 'rh',         label: 'RH' },
-  { id: 'marketing',  label: 'Marketing' },
+type DimId = 'logistica'|'financeiro'|'rh'|'vendas'|'marketing';
+
+const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const PCT = (v: number) => `${v.toFixed(1)}%`;
+
+const DIMENSOES: { id: DimId; label: string; hint: string; fmt: (v: number) => string }[] = [
+  { id: 'vendas',     label: 'Vendas',     hint: 'faturamento no período',              fmt: BRL },
+  { id: 'financeiro', label: 'Financeiro', hint: 'receitas − despesas pagas',           fmt: BRL },
+  { id: 'logistica',  label: 'Logística',  hint: '% do catálogo fora do crítico',       fmt: PCT },
+  { id: 'rh',         label: 'RH',         hint: 'taxa de presença no período',         fmt: PCT },
+  { id: 'marketing',  label: 'Marketing',  hint: 'receita de campanhas ativas',         fmt: BRL },
 ];
 
 type Competicao = {
@@ -349,7 +354,10 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
                         if (!dim) return null;
                         return (
                           <tr key={d.id} className="border-t border-white/5">
-                            <td className="py-3 text-gray-200 font-bold">{d.label}</td>
+                            <td className="py-3">
+                              <div className="text-gray-200 font-bold">{d.label}</div>
+                              <div className="text-[10px] text-gray-500">{d.hint}</div>
+                            </td>
                             <td className="py-3 text-right text-gray-500 tabular-nums pr-4">{dim.peso}%</td>
                             {OP_FILIAIS.map(f => {
                               const cell = dim.filiais?.[f];
@@ -361,9 +369,7 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
                                     {pts.toFixed(1)} pts
                                   </div>
                                   <div className="text-[10px] text-gray-500">
-                                    {typeof cell?.valor === 'number'
-                                      ? cell.valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
-                                      : '—'}
+                                    {typeof cell?.valor === 'number' ? d.fmt(cell.valor) : '—'}
                                   </div>
                                 </td>
                               );
