@@ -5,7 +5,7 @@
 // Valor false / ausente = módulo oculto na sidebar.
 //
 // Além disso, o modo Matriz injeta os módulos 'matriz-rh', 'matriz-financeiro',
-// 'matriz-marketing' e 'matriz-operacoes' que só existem nesse modo.
+// 'matriz-marketing' e 'matriz-avaliacoes' que só existem nesse modo.
 
 export const MATRIZ_ALLOWED_SUBMENUS: Record<string, string[] | true> = {
   empresa:     ['Filiais'],
@@ -26,9 +26,8 @@ export const MATRIZ_MODULES = [
   { id: 'matriz-financeiro', label: 'Financeiro Comparativo', group: null },
   { id: 'matriz-logistica',  label: 'Logística Comparativo',  group: null },
   { id: 'matriz-marketing',  label: 'Marketing Comparativo',  group: null },
-  { id: 'matriz-operacoes',  label: 'Operações Comparativo',  group: null },
-  { id: 'matriz-cadastros',  label: 'Cadastros Consolidado',  group: null },
   { id: 'matriz-competicao', label: 'Competição',             group: null },
+  { id: 'matriz-avaliacoes', label: 'Central de Avaliação',   group: null },
   { id: 'matriz-capital',        label: 'Capital',        group: null },
 ] as const;
 

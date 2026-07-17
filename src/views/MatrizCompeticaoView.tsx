@@ -68,11 +68,13 @@ const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : ''
 const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
-export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; profile: UserProfile }) {
+export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
   const { session } = useAuth();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
-  const podeVotar     = podeGerenciar || isConselheiro(profile);
-  const podeAcessar   = podeVotar;
+  // Votação restrita a CEO + conselheiros (alinha com RLS voto_write).
+  // Admin gerencia mas não vota.
+  const podeVotar     = profile.role === 'ceo' || isConselheiro(profile);
+  const podeAcessar   = podeGerenciar || isConselheiro(profile);
 
   const [tab, setTab] = useState<Tab>('placar');
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
@@ -302,13 +304,24 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
                       {fmtDataBR(placar.competicao.data_inicio)} → {fmtDataBR(placar.competicao.data_fim)}
                     </p>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
-                    placar.competicao.status === 'em_andamento'
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
-                  }`}>
-                    {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {podeVotar && placar.competicao.status === 'em_andamento' && navigate && (
+                      <button
+                        onClick={() => navigate('matriz-avaliacoes')}
+                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all"
+                        title="Avaliar itens das 3 filiais"
+                      >
+                        <Award size={12} /> Central de Avaliação
+                      </button>
+                    )}
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
+                      placar.competicao.status === 'em_andamento'
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
+                    }`}>
+                      {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Pódio */}

@@ -677,17 +677,21 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       const usersFilial = users.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
       let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
       if (isAdminOuCEO) {
-        const gerentes = usersFilial
-          .filter(u => u.role === 'gerente' && u.id !== profile.id)
-          .map(user => ({ user, tipo: 'ceo_gerente' as const }));
-        // Em modo Matriz, admin/CEO também avalia colaboradores diretamente
-        // (competição inter-filiais precisa granularidade individual).
-        const colaboradores = isMatriz
-          ? usersFilial
-              .filter(u => u.role === 'colaborador' && u.id !== profile.id)
-              .map(user => ({ user, tipo: 'ceo_colaborador' as const }))
-          : [];
-        alvos = [...gerentes, ...colaboradores];
+        // Em Matriz com ciclo Matriz aberto, admin/CEO avalia gerentes/colaboradores
+        // pelo ciclo Matriz (bloco abaixo) — evita listar a mesma pessoa 2×.
+        if (isMatriz && cicloMatrizAberto) {
+          alvos = [];
+        } else {
+          const gerentes = usersFilial
+            .filter(u => u.role === 'gerente' && u.id !== profile.id)
+            .map(user => ({ user, tipo: 'ceo_gerente' as const }));
+          const colaboradores = isMatriz
+            ? usersFilial
+                .filter(u => u.role === 'colaborador' && u.id !== profile.id)
+                .map(user => ({ user, tipo: 'ceo_colaborador' as const }))
+            : [];
+          alvos = [...gerentes, ...colaboradores];
+        }
       } else if (isGerente) {
         const setoresGerente = allSetores(profile);
         alvos = usersFilial

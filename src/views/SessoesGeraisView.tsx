@@ -108,7 +108,6 @@ export const COMPARATIVOS_MATRIZ_MACROS: MacroDef[] = [
   { kind: 'leaf', id: 'matriz-financeiro', label: 'Financeiro Comparativo', icon: DollarSign, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',    viewId: 'matriz-financeiro', description: 'Financeiro consolidado' },
   { kind: 'leaf', id: 'matriz-logistica',  label: 'Logística Comparativo',  icon: Package,    color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',            viewId: 'matriz-logistica',  description: 'Estoque e compras consolidados' },
   { kind: 'leaf', id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone,  color: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 text-pink-400',        viewId: 'matriz-marketing',  description: 'Marketing consolidado' },
-  { kind: 'leaf', id: 'matriz-operacoes',  label: 'Operações Comparativo',  icon: Monitor,    color: 'from-indigo-500/20 to-indigo-500/5 border-indigo-500/30 text-indigo-400', viewId: 'matriz-operacoes',  description: 'TI, tarefas, afastamentos' },
 ];
 
 // ── UI ─────────────────────────────────────────────────────────────────────
