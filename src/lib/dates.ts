@@ -18,6 +18,14 @@ export function todayBR(): string {
   return FMT.format(new Date());
 }
 
+/** Data N dias antes de hoje no fuso do Acre, formato `YYYY-MM-DD`. */
+export function daysAgoBR(dias: number): string {
+  const [y, m, d] = todayBR().split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - dias);
+  return dt.toISOString().slice(0, 10);
+}
+
 const FMT_DATETIME = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Rio_Branco',
   day:    '2-digit',

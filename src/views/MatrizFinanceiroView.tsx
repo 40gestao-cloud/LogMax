@@ -5,17 +5,19 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
 import { FilialsComparativo, OP_FILIAIS, FilialOp } from '../components/FilialsComparativo';
+import { daysAgoBR } from '../lib/dates';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 type Period = '7d' | '30d' | '3m';
 const PERIOD_LABELS: Record<Period, string> = { '7d': '7 dias', '30d': '30 dias', '3m': '3 meses' };
 
-function periodStart(p: Period): Date {
-  const now = new Date();
-  if (p === '7d')  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-  if (p === '30d') return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
-  return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+// Corte no fuso do Acre — retorna 'YYYY-MM-DD' que permite comparação
+// string direta com ISOs (r.created_at, c.vencimento).
+function periodStartISO(p: Period): string {
+  if (p === '7d')  return daysAgoBR(6);
+  if (p === '30d') return daysAgoBR(29);
+  return daysAgoBR(89);
 }
 
 function sumByFilial(arr: any[], key: string): Record<FilialOp, number> {
@@ -38,12 +40,12 @@ export function MatrizFinanceiroView() {
 
   const isLoading = lV || lR || lP;
 
-  const cutoff = useMemo(() => periodStart(period), [period]);
+  const cutoffISO = useMemo(() => periodStartISO(period), [period]);
 
   // ── Vendas / ticket (contexto operacional) ─────────────────────────────
   const vPeriodo = useMemo(
-    () => vendas.filter((v: any) => new Date(v.created_at) >= cutoff && v.status !== 'Cancelada'),
-    [vendas, cutoff],
+    () => vendas.filter((v: any) => String(v.created_at ?? '') >= cutoffISO && v.status !== 'Cancelada'),
+    [vendas, cutoffISO],
   );
   const vendasTotal = useMemo(() => sumByFilial(vPeriodo, 'total_final'), [vPeriodo]);
   const vendasCount = useMemo(() => countByFilial(vPeriodo), [vPeriodo]);
@@ -56,8 +58,6 @@ export function MatrizFinanceiroView() {
   // ── Resultado financeiro alinhado ao placar da Competição ──────────────
   // A RPC calcular_placar_competicao usa: contas_receber Pago  −  contas_pagar Pago
   // no período (por vencimento). Espelhamos aqui pra não divergir.
-  const cutoffISO = useMemo(() => cutoff.toISOString().slice(0, 10), [cutoff]);
-
   const receberPagoPeriodo = useMemo(
     () => contasReceber.filter((c: any) =>
       c.status === 'Pago' && c.ativo !== false && (c.vencimento ?? '') >= cutoffISO,

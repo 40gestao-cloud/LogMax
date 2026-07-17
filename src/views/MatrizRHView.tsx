@@ -5,15 +5,15 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
 import { FilialsComparativo, OP_FILIAIS, FilialOp } from '../components/FilialsComparativo';
+import { daysAgoBR } from '../lib/dates';
 
 type Period = '7d' | '30d' | '3m';
 const PERIOD_LABELS: Record<Period, string> = { '7d': '7 dias', '30d': '30 dias', '3m': '3 meses' };
 
-function periodStart(p: Period): Date {
-  const now = new Date();
-  if (p === '7d')  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-  if (p === '30d') return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
-  return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+function periodStartISO(p: Period): string {
+  if (p === '7d')  return daysAgoBR(6);
+  if (p === '30d') return daysAgoBR(29);
+  return daysAgoBR(89);
 }
 
 export function MatrizRHView() {
@@ -24,7 +24,7 @@ export function MatrizRHView() {
 
   const isLoading = lFn || lFr;
 
-  const cutoff = useMemo(() => periodStart(period), [period]);
+  const cutoffISO = useMemo(() => periodStartISO(period), [period]);
 
   const fnFilialMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -33,8 +33,8 @@ export function MatrizRHView() {
   }, [funcionarios]);
 
   const freqPeriodo = useMemo(() =>
-    frequencias.filter((r: any) => new Date(r.data ?? r.created_at) >= cutoff),
-    [frequencias, cutoff],
+    frequencias.filter((r: any) => String(r.data ?? r.created_at ?? '') >= cutoffISO),
+    [frequencias, cutoffISO],
   );
 
   const presencasPeriodo = useMemo(() => {

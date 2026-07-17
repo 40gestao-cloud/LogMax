@@ -378,7 +378,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             {OP_FILIAIS.map(f => {
                               const cell = dim.filiais?.[f];
                               const pts = Number(cell?.pontos ?? 0);
-                              const isBest = pts === Math.max(...OP_FILIAIS.map(x => Number(dim.filiais?.[x]?.pontos ?? 0)));
+                              const maxPts = Math.max(...OP_FILIAIS.map(x => Number(dim.filiais?.[x]?.pontos ?? 0)));
+                              const isBest = maxPts > 0 && pts === maxPts;
                               return (
                                 <td key={f} className="py-3 text-right tabular-nums pr-4">
                                   <div className={isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}>

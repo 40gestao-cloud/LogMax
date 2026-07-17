@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Trophy, Star, Check, X, MessageSquare, Loader2, Search,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -584,6 +585,32 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
   const [comentarioLocal, setComentarioLocal] = useState<string>(minha?.comentario ?? '');
   const [notaLocal, setNotaLocal] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
 
+  // Autosave por debounce — 800ms sem digitar dispara o RPC. Assim comentário
+  // e nota não se perdem se o avaliador fecha a aba sem tirar foco do input.
+  const comentarioDeb = useDebouncedValue(comentarioLocal, 800);
+  const notaDeb       = useDebouncedValue(notaLocal, 800);
+  const jaMontou = useRef(false);
+
+  useEffect(() => {
+    if (!jaMontou.current) { jaMontou.current = true; return; }
+    const c = comentarioDeb.trim() === '' ? null : comentarioDeb.trim();
+    if (c !== (minha?.comentario ?? null)) onSubmit({ comentario: c });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comentarioDeb]);
+
+  useEffect(() => {
+    if (!jaMontou.current) return;
+    if (notaDeb === '') {
+      if (minha?.nota != null) onSubmit({ nota: null });
+      return;
+    }
+    const n = Number(notaDeb);
+    if (Number.isFinite(n) && n >= 0 && n <= 10 && n !== minha?.nota) {
+      onSubmit({ nota: n });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notaDeb]);
+
   const descricao = firstNonEmpty(item, tipo.descField);
   const statusLocal = item.status ?? '—';
 
@@ -649,10 +676,6 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
                 min={0} max={10} step={0.5}
                 value={notaLocal}
                 onChange={e => setNotaLocal(e.target.value)}
-                onBlur={() => {
-                  const n = notaLocal === '' ? null : Number(notaLocal);
-                  if (n === null || (n >= 0 && n <= 10 && n !== minha?.nota)) onSubmit({ nota: n });
-                }}
                 disabled={submitting}
                 placeholder="0-10"
                 className="neu-input w-16 py-1 px-2 text-xs font-mono rounded-lg text-gray-200"
@@ -666,12 +689,8 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
               type="text"
               value={comentarioLocal}
               onChange={e => setComentarioLocal(e.target.value)}
-              onBlur={() => {
-                const c = comentarioLocal.trim() === '' ? null : comentarioLocal.trim();
-                if (c !== (minha?.comentario ?? null)) onSubmit({ comentario: c });
-              }}
               disabled={submitting}
-              placeholder="Comentário (opcional)"
+              placeholder="Comentário (salva sozinho)"
               className="neu-input flex-1 py-1 px-2 text-xs rounded-lg text-gray-200"
             />
           </div>

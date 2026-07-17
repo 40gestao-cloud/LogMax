@@ -5,6 +5,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
 import { FilialsComparativo, OP_FILIAIS, FilialOp, Metric } from '../components/FilialsComparativo';
+import { daysAgoBR, todayBR } from '../lib/dates';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -31,12 +32,12 @@ export function MatrizMarketingView() {
 
   const isLoading = lCa || lMe || lRo;
 
-  const cutoff = useMemo(() => {
-    const d = new Date();
-    if (period === '30d') { d.setDate(d.getDate() - 29); return d; }
-    if (period === '90d') { d.setDate(d.getDate() - 89); return d; }
-    return new Date(d.getFullYear(), 0, 1);
+  const cutoffISO = useMemo(() => {
+    if (period === '30d') return daysAgoBR(29);
+    if (period === '90d') return daysAgoBR(89);
+    return `${todayBR().slice(0, 4)}-01-01`;
   }, [period]);
+  const hojeISO = useMemo(() => todayBR(), []);
 
   const campanhasAtivas = useMemo(
     () => campanhas.filter((c: any) => c.status === 'Ativa' || c.status === 'Ativo'),
@@ -48,8 +49,6 @@ export function MatrizMarketingView() {
   // a lógica de calcular_placar_competicao (marketing = SUM(receita) do
   // v_campanha_roi das campanhas da filial no intervalo). Campanhas sem
   // filial ficam de fora, pra não distorcer o comparativo.
-  const cutoffISO = useMemo(() => cutoff.toISOString().slice(0, 10), [cutoff]);
-  const hojeISO   = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const receitaCampanhas = useMemo(() => {
     const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
     for (const r of roi) {
@@ -90,8 +89,8 @@ export function MatrizMarketingView() {
   [ultimaMetricaPorFilialPlat]);
 
   const metricasPeriodo = useMemo(
-    () => metricas.filter((m: any) => new Date(m.data_registro ?? m.created_at) >= cutoff),
-    [metricas, cutoff],
+    () => metricas.filter((m: any) => String(m.data_registro ?? m.created_at ?? '') >= cutoffISO),
+    [metricas, cutoffISO],
   );
   const curtidasTotal    = useMemo(() => sumByFilial(metricasPeriodo, 'curtidas'), [metricasPeriodo]);
   const comentariosTotal = useMemo(() => sumByFilial(metricasPeriodo, 'comentarios'), [metricasPeriodo]);
