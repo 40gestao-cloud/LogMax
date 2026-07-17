@@ -300,16 +300,27 @@ export function MatrizRequerimentosView({
     return list;
   }, [requerimentos, filialFiltro, statusFiltro, search]);
 
-  // Contadores por status para os pills
+  // Contadores por status para os pills — respeitam filial + busca (mas não
+  // o próprio filtro de status, pra que os números batam com a lista renderizada
+  // ao trocar de aba).
   const contadores = useMemo(() => {
-    const base = requerimentos.filter(r => filialFiltro ? r.filial === filialFiltro : true);
+    let base = requerimentos;
+    if (filialFiltro) base = base.filter(r => r.filial === filialFiltro);
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      base = base.filter(r =>
+        r.titulo.toLowerCase().includes(s) ||
+        (r.criado_por_nome ?? '').toLowerCase().includes(s) ||
+        (r.descricao ?? '').toLowerCase().includes(s),
+      );
+    }
     return {
       Pendente:    base.filter(r => r.status === 'Pendente').length,
       'Em Análise': base.filter(r => r.status === 'Em Análise').length,
       Aprovado:    base.filter(r => r.status === 'Aprovado').length,
       Negado:      base.filter(r => r.status === 'Negado').length,
     } as Record<StatusReq, number>;
-  }, [requerimentos, filialFiltro]);
+  }, [requerimentos, filialFiltro, search]);
 
   const handleExcluir = async (id: string) => {
     const ok = await confirm({ message: 'Excluir este requerimento? Esta ação não pode ser desfeita.', danger: true });
