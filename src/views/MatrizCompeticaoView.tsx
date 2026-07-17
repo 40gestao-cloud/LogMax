@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -31,6 +33,17 @@ type Competicao = {
   status: 'em_andamento'|'aguardando_encerramento'|'encerrada';
   pesos: Record<string, number>;
   vencedora: string | null;
+  analise_ia: string | null;
+  created_at: string;
+};
+
+type Voto = {
+  id: string;
+  competicao_id: string;
+  votante_id: string;
+  voto: 'aceita' | 'rejeita';
+  filial_escolhida: string | null;
+  comentario: string | null;
   created_at: string;
 };
 
@@ -50,15 +63,28 @@ const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
 export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; profile: UserProfile }) {
+  const { session } = useAuth();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
-  const podeAcessar   = podeGerenciar || isConselheiro(profile);
+  const podeVotar     = podeGerenciar || isConselheiro(profile);
+  const podeAcessar   = podeVotar;
 
   const [tab, setTab] = useState<Tab>('placar');
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
   const [placar, setPlacar] = useState<Placar | null>(null);
+  const [competicaoAtual, setCompeticaoAtual] = useState<Competicao | null>(null);
+  const [votos, setVotos] = useState<Voto[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingPlacar, setLoadingPlacar] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [gerandoAnalise, setGerandoAnalise] = useState(false);
+  const [votando, setVotando] = useState(false);
+  const [encerrando, setEncerrando] = useState(false);
+  const [modalParabens, setModalParabens] = useState<string | null>(null);
+
+  // Voto em elaboração
+  const [meuVoto, setMeuVoto] = useState<'aceita' | 'rejeita' | ''>('');
+  const [comentario, setComentario] = useState('');
+  const [filialSugerida, setFilialSugerida] = useState<FilialOp | ''>('');
 
   // Form da nova competição
   const [form, setForm] = useState({
@@ -81,7 +107,7 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
     setLoadingList(true);
     const { data } = await supabase
       .from('competicoes_matriz')
-      .select('id, nome, data_inicio, data_fim, status, pesos, vencedora, created_at')
+      .select('id, nome, data_inicio, data_fim, status, pesos, vencedora, analise_ia, created_at')
       .eq('ativo', true)
       .order('created_at', { ascending: false });
     setCompeticoes(data ?? []);
@@ -90,24 +116,99 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
 
   useEffect(() => { if (podeAcessar) carregarLista(); }, [podeAcessar, carregarLista]);
 
-  const carregarPlacar = useCallback(async (id: string) => {
+  const carregarVotos = useCallback(async (id: string) => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('competicao_votos')
+      .select('id, competicao_id, votante_id, voto, filial_escolhida, comentario, created_at')
+      .eq('competicao_id', id)
+      .order('created_at', { ascending: true });
+    setVotos(data ?? []);
+  }, []);
+
+  const carregarPlacar = useCallback(async (comp: Competicao) => {
     if (!supabase) return;
     setLoadingPlacar(true);
     setPlacar(null);
-    const { data, error } = await supabase.rpc('calcular_placar_competicao', { p_competicao_id: id });
+    setCompeticaoAtual(comp);
+    const { data, error } = await supabase.rpc('calcular_placar_competicao', { p_competicao_id: comp.id });
     if (error) {
       showToast?.(`Erro ao calcular placar: ${error.message}`, 'error');
     } else {
       setPlacar(data as Placar);
     }
+    await carregarVotos(comp.id);
     setLoadingPlacar(false);
-  }, [showToast]);
+  }, [showToast, carregarVotos]);
 
   useEffect(() => {
-    const alvo = ativa ?? aguardando[0] ?? null;
-    if (alvo) carregarPlacar(alvo.id);
-    else setPlacar(null);
-  }, [ativa, aguardando, carregarPlacar]);
+    // Prioridade: em_andamento > aguardando_encerramento > última encerrada
+    const alvo = ativa ?? aguardando[0] ?? competicoes.find(c => c.status === 'encerrada') ?? null;
+    if (alvo) carregarPlacar(alvo);
+    else { setPlacar(null); setCompeticaoAtual(null); }
+  }, [ativa, aguardando, competicoes, carregarPlacar]);
+
+  const jaVotei = useMemo(() => votos.some(v => v.votante_id === profile.id), [votos, profile.id]);
+  const contagemVotos = useMemo(() => ({
+    aceita:  votos.filter(v => v.voto === 'aceita').length,
+    rejeita: votos.filter(v => v.voto === 'rejeita').length,
+  }), [votos]);
+
+  const gerarAnalise = async () => {
+    if (!competicaoAtual || !session?.access_token) return;
+    setGerandoAnalise(true);
+    try {
+      const resp = await fetch('/api/ai-competicao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ competicao_id: competicaoAtual.id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        showToast?.(data?.error ?? 'Falha na IA.', 'error');
+      } else {
+        showToast?.(data.from_cache ? 'Análise recuperada do cache.' : 'Análise gerada!', 'success');
+        await carregarLista();
+      }
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro de rede.', 'error');
+    }
+    setGerandoAnalise(false);
+  };
+
+  const registrarVoto = async () => {
+    if (!competicaoAtual || !supabase || !meuVoto) return;
+    if (meuVoto === 'rejeita' && !filialSugerida) {
+      return showToast?.('Ao rejeitar, indique qual filial você acha vencedora.', 'error');
+    }
+    setVotando(true);
+    const { error } = await supabase.from('competicao_votos').insert({
+      competicao_id: competicaoAtual.id,
+      votante_id:    profile.id,
+      voto:          meuVoto,
+      filial_escolhida: meuVoto === 'rejeita' ? filialSugerida : null,
+      comentario:    comentario.trim() || null,
+    });
+    setVotando(false);
+    if (error) return showToast?.(`Erro ao votar: ${error.message}`, 'error');
+    showToast?.('Voto registrado.', 'success');
+    setMeuVoto(''); setComentario(''); setFilialSugerida('');
+    await carregarVotos(competicaoAtual.id);
+  };
+
+  const declararVencedora = async (filial: FilialOp) => {
+    if (!competicaoAtual || !supabase) return;
+    if (!confirm(`Confirma declarar ${filial} como vencedora de "${competicaoAtual.nome}"?`)) return;
+    setEncerrando(true);
+    const { error } = await supabase.rpc('declarar_vencedora', {
+      p_competicao_id: competicaoAtual.id,
+      p_vencedora: filial,
+    });
+    setEncerrando(false);
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    setModalParabens(filial);
+    await carregarLista();
+  };
 
   const criar = async () => {
     if (!supabase) return;
@@ -276,10 +377,205 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
                   Ranking 3-2-1 por linha × peso da dimensão. Empate divide igual.
                 </p>
               </div>
+
+              {/* Análise IA */}
+              {competicaoAtual && competicaoAtual.status !== 'em_andamento' && (
+                <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                      <Sparkles size={13} className="text-accent" /> Análise IA
+                    </h3>
+                    {competicaoAtual.status !== 'encerrada' && (
+                      <NeuButtonAccent onClick={gerarAnalise} disabled={gerandoAnalise} variant="">
+                        {gerandoAnalise
+                          ? <><Loader2 size={12} className="animate-spin" /> Analisando…</>
+                          : <><Sparkles size={12} /> {competicaoAtual.analise_ia ? 'Regenerar' : 'Gerar análise'}</>}
+                      </NeuButtonAccent>
+                    )}
+                  </div>
+                  {competicaoAtual.analise_ia ? (
+                    <div className="text-sm text-gray-200 leading-relaxed">
+                      <ReactMarkdown>{competicaoAtual.analise_ia}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <EmptyState message="Análise ainda não gerada. Clique em Gerar análise pra ouvir a opinião da IA." />
+                  )}
+                </div>
+              )}
+
+              {/* Votação */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && (
+                <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                      <MessageCircle size={13} className="text-accent" /> Votação do conselho
+                    </h3>
+                    <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
+                      <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
+                      <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
+                    </div>
+                  </div>
+
+                  {jaVotei ? (
+                    <p className="text-xs text-gray-400 mb-4">
+                      Você já registrou seu voto. Aguarde os demais eleitores.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setMeuVoto('aceita')}
+                          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${
+                            meuVoto === 'aceita'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40'
+                              : 'neu-button text-gray-400 hover:text-white'
+                          }`}>
+                          <ThumbsUp size={13} /> Aceito o placar
+                        </button>
+                        <button onClick={() => setMeuVoto('rejeita')}
+                          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${
+                            meuVoto === 'rejeita'
+                              ? 'bg-red-500/15 text-red-400 border border-red-500/40'
+                              : 'neu-button text-gray-400 hover:text-white'
+                          }`}>
+                          <ThumbsDown size={13} /> Rejeito
+                        </button>
+                      </div>
+
+                      {meuVoto === 'rejeita' && (
+                        <FormField label="Filial que você acha vencedora">
+                          <select value={filialSugerida}
+                            onChange={e => setFilialSugerida(e.target.value as FilialOp)}
+                            className="neu-input rounded-lg px-3 py-2 text-xs w-full">
+                            <option value="">Selecione…</option>
+                            {OP_FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                        </FormField>
+                      )}
+
+                      {meuVoto && (
+                        <>
+                          <FormField label="Comentário (opcional)">
+                            <textarea value={comentario} onChange={e => setComentario(e.target.value)}
+                              className="neu-input rounded-lg px-3 py-2 text-xs w-full" rows={2}
+                              placeholder="Justifique seu voto…" />
+                          </FormField>
+                          <div className="flex justify-end">
+                            <NeuButtonAccent onClick={registrarVoto} disabled={votando} variant="">
+                              {votando ? <><Loader2 size={12} className="animate-spin" /> Registrando…</> : 'Registrar voto'}
+                            </NeuButtonAccent>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {votos.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/5">
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
+                        Votos registrados ({votos.length})
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {votos.map(v => (
+                          <div key={v.id} className="flex items-start gap-2 text-xs">
+                            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${
+                              v.voto === 'aceita'
+                                ? 'bg-emerald-500/15 text-emerald-400'
+                                : 'bg-red-500/15 text-red-400'
+                            }`}>
+                              {v.voto === 'aceita' ? 'Aceita' : `Rejeita → ${v.filial_escolhida}`}
+                            </span>
+                            <span className="text-gray-400 truncate">{v.comentario ?? '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Declaração de vencedora */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length > 0 && (
+                <div className="neu-flat rounded-3xl p-5 border border-accent/30">
+                  <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
+                    <Crown size={13} className="text-accent" /> Declarar vencedora
+                  </h3>
+                  <p className="text-xs text-gray-400 mb-4">
+                    Sugestão do placar automático: <span className="text-emerald-400 font-bold">{podio[0]?.filial}</span> ({podio[0]?.total.toFixed(2)} pts).
+                    Se maioria rejeitou o placar, escolha manualmente a filial vencedora.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {OP_FILIAIS.map(f => (
+                      <button key={f} onClick={() => declararVencedora(f)} disabled={encerrando}
+                        className={`neu-button rounded-xl p-3 text-xs font-bold uppercase tracking-widest transition-colors ${FILIAL_COLOR[f]} hover:border-accent`}
+                        style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
+                        {encerrando ? <Loader2 size={12} className="animate-spin inline" /> : `Declarar ${f}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Estado encerrado — mostra vencedora + votos */}
+              {competicaoAtual && competicaoAtual.status === 'encerrada' && (
+                <div className="neu-flat rounded-3xl p-6 border border-emerald-500/30 text-center">
+                  <Crown size={32} className="text-emerald-400 mx-auto mb-2" />
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Vencedora declarada</p>
+                  <p className={`text-2xl font-black tracking-wider mt-1 ${FILIAL_COLOR[competicaoAtual.vencedora as FilialOp]}`}>
+                    🏆 {competicaoAtual.vencedora}
+                  </p>
+                  {votos.length > 0 && (
+                    <p className="text-[10px] text-gray-500 mt-3">
+                      {contagemVotos.aceita} aceita · {contagemVotos.rejeita} rejeita
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </>
       )}
+
+      {/* Modal de parabenização */}
+      <AnimatePresence>
+        {modalParabens && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+            onClick={() => setModalParabens(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 20 }}
+              transition={{ type: 'spring', damping: 20 }}
+              className="neu-flat rounded-3xl p-8 sm:p-12 border border-emerald-500/40 max-w-lg w-full text-center relative"
+              onClick={e => e.stopPropagation()}
+              style={{ background: 'radial-gradient(circle at top, rgba(16,185,129,0.15), transparent 70%)' }}
+            >
+              <button onClick={() => setModalParabens(null)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-white">
+                <X size={18} />
+              </button>
+              <div className="text-7xl mb-3">🏆</div>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-400 mb-2">
+                Parabéns
+              </p>
+              <h2 className={`text-4xl font-black tracking-wider ${FILIAL_COLOR[modalParabens as FilialOp]}`}>
+                {modalParabens}
+              </h2>
+              <p className="text-sm text-gray-300 mt-4">
+                venceu a competição <strong>{competicaoAtual?.nome}</strong>!
+              </p>
+              <p className="text-xs text-gray-500 mt-2">
+                Período: {fmtDataBR(competicaoAtual?.data_inicio ?? '')} → {fmtDataBR(competicaoAtual?.data_fim ?? '')}
+              </p>
+              <div className="mt-6">
+                <NeuButtonAccent onClick={() => setModalParabens(null)} variant="">
+                  Fechar
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {tab === 'config' && (
         <>
