@@ -552,6 +552,17 @@ function LogMaxAppInner() {
   // ── Filial de sessão ── deve ficar ANTES dos early returns para respeitar Rules of Hooks ──
   const { filialAtiva, escolheu, setFilialAtiva, escolherMatriz, clearFilial } = useFilial();
 
+  // Transição Filial → Matriz: reseta activeView pra 'inicio'. Entre filiais
+  // (SuperMax → MaxLook) a view atual continua fazendo sentido (produtos,
+  // vendas etc.); pra Matriz a maioria das views operacionais é irrelevante.
+  const filialAnteriorRef = useRef<FilialOp | null>(filialAtiva);
+  useEffect(() => {
+    if (filialAnteriorRef.current !== null && filialAtiva === null && escolheu) {
+      setActiveView('inicio');
+    }
+    filialAnteriorRef.current = filialAtiva;
+  }, [filialAtiva, escolheu]);
+
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
   // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
   // de outras filiais). Modo Matriz (null) vê tudo.
