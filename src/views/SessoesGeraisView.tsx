@@ -36,17 +36,24 @@ const subPermitido = (s: SubmenuLike, profile: UserProfile | null) => {
 // Mantém em sync com MATRIZ_ALLOWED_SUBMENUS de lib/matrizMenu.ts.
 export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
   {
+    // Formas/Condições/Projetos/Tarefas são filialScoped (todas têm coluna
+    // filial no schema) — em Matriz virariam consolidado read-only, escopo
+    // que não temos ainda. Fica só Filiais (agora consolidado das 4 unidades)
+    // e Cliente Especial, que é decisão de holding do admin/CEO.
     kind: 'group', id: 'empresa-macro', label: 'Empresa', icon: Building2, color: 'from-slate-500/20 to-slate-500/5 border-slate-500/30 text-slate-300',
     modulos: [
       { id: 'empresa', label: 'Empresa', icon: Building2, color: 'text-slate-300',
-        submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas'] },
+        submenus: ['Filiais'] },
+      { id: 'vendas', label: 'Governança', icon: Users, color: 'text-slate-300',
+        submenus: ['Cliente Especial'] },
     ],
   },
   {
+    // Cadastros (Categorias/Produtos/Serviços) também são filialScoped — sem
+    // consolidado read-only, sai do hub. Compras/Estoque mantêm só Gerenciamento
+    // e Relatórios (que já leem consolidado).
     kind: 'group', id: 'logistica-matriz', label: 'Logística', icon: Package, color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',
     modulos: [
-      { id: 'cadastros', label: 'Cadastros', icon: Database, color: 'text-sky-400',
-        submenus: ['Categorias', 'Produtos', 'Serviços'] },
       { id: 'compras', label: 'Compras', icon: ShoppingCart, color: 'text-sky-400',
         submenus: ['Gerenciamento', 'Relatórios'] },
       { id: 'estoque', label: 'Estoque', icon: Package, color: 'text-sky-400',
