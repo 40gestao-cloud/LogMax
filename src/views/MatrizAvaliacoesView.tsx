@@ -16,7 +16,11 @@ const FILIAL_COLOR: Record<FilialOp, string> = {
   TechMax:  'text-orange-400 bg-orange-500/10 ring-orange-500/30',
 };
 
-type ItemTipo = 'requisicao'|'cotacao'|'promocao'|'arte'|'campanha'|'pedido_venda'|'ferias'|'requerimento';
+type ItemTipo =
+  |'requisicao'|'cotacao'|'promocao'|'arte'|'campanha'
+  |'pedido_venda'|'ferias'|'requerimento'
+  |'cadastro_produto'|'cadastro_cliente'|'cadastro_fornecedor'
+  |'cadastro_servico'|'cadastro_categoria';
 
 type TipoConfig = {
   id: ItemTipo;
@@ -36,6 +40,13 @@ const TIPOS: TipoConfig[] = [
   { id: 'pedido_venda', label: 'Pedidos de Venda', endpoint: '/api/pedidosvendaview',       descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
   { id: 'ferias',       label: 'Férias',           endpoint: '/api/feriasview',             descField: ['funcionario_nome','colaborador_nome','descricao'], dateField: 'data_inicio', creative: false },
   { id: 'requerimento', label: 'Requerimentos',    endpoint: 'requerimentos',               descField: ['titulo','descricao','assunto'], dateField: 'created_at', creative: false },
+
+  // Cadastros — só entram na fila se criados dentro do período da competição
+  { id: 'cadastro_produto',    label: 'Cadastros: Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
+  { id: 'cadastro_cliente',    label: 'Cadastros: Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+  { id: 'cadastro_fornecedor', label: 'Cadastros: Fornecedores',endpoint: '/api/crmview-fornecedores',   descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+  { id: 'cadastro_servico',    label: 'Cadastros: Serviços',    endpoint: '/api/servicosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
+  { id: 'cadastro_categoria',  label: 'Cadastros: Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
 ];
 
 type Competicao = {
