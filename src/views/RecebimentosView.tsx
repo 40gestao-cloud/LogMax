@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -6,10 +6,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+
+// Saldo por pedido vem da view v_pedido_saldo (migr. 202) — soma qtd_recebida
+// de recebimentos ativos e devolve quanto ainda cabe. Bloqueia recebimento
+// que ultrapasse o pedido (defesa em INSERT + Confirmar).
+type SaldoPedido = { qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: number };
 
 const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -40,6 +46,42 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const confirmingRef = useRef<string | null>(null);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
+
+  // Cache de saldo por pedido — recarrega quando a lista de pedidos ou de
+  // recebimentos muda (usuário registra/inativa/confirma → saldo mexe).
+  const [saldos, setSaldos] = useState<Record<string, SaldoPedido>>({});
+  const reloadSaldos = useCallback(async () => {
+    if (!supabase) return;
+    const { data: rows, error } = await supabase
+      .from('v_pedido_saldo')
+      .select('pedido_id, qtd_pedida, qtd_recebida_total, qtd_saldo')
+      .eq('filial', filial);
+    if (error) {
+      // View pode não existir ainda (migração 202 pendente) — degrada
+      // silenciosamente para o comportamento antigo (sem validação).
+      console.warn('[Recebimentos] saldo indisponível:', error.message);
+      return;
+    }
+    const map: Record<string, SaldoPedido> = {};
+    (rows ?? []).forEach((r: any) => {
+      map[r.pedido_id] = {
+        qtd_pedida: Number(r.qtd_pedida ?? 0),
+        qtd_recebida_total: Number(r.qtd_recebida_total ?? 0),
+        qtd_saldo: Number(r.qtd_saldo ?? 0),
+      };
+    });
+    setSaldos(map);
+  }, [filial]);
+  useEffect(() => { reloadSaldos(); }, [reloadSaldos, pedidos.length, data.length]);
+
+  // Retorna quanto o item atual pode chegar a receber, sem estourar o pedido.
+  // saldo já EXCLUI o próprio recebimento (a view soma todos ativos, então
+  // subtraímos o que já está lá pra devolvê-lo ao teto).
+  const maxPermitido = (pedidoId: string, qtdAtualDoItem = 0): number => {
+    const s = saldos[pedidoId];
+    if (!s) return Infinity; // saldo indisponível → não bloqueia
+    return s.qtd_saldo + qtdAtualDoItem;
+  };
   const produtosOrdenados = useMemo(() => {
     // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
     // Sem normalizar, `localeCompare` deixa itens com leading whitespace
@@ -65,9 +107,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       const today = todayBR();
       const qtd = Number(extras.qtd_recebida) || 0;
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
+      const maxAceito = maxPermitido(form.pedido_id, 0);
+      if (qtd > maxAceito) {
+        showToast(`Excede o saldo do pedido — máximo ${maxAceito} unidades.`, 'error', true);
+        return;
+      }
       const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today };
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
+      await reloadSaldos();
       showToast("Recebimento registrado! Use o botão Confirmar para atualizar o estoque.", 'success', true);
       closeForm();
     } catch (err: any) {
@@ -82,6 +130,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     try {
       await dbDelete('/api/recebimentosview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
+      await reloadSaldos();
       showToast('Recebimento inativado.', 'success', true);
     } catch (err: any) {
       const msg = err?.message ?? 'verifique o console';
@@ -92,7 +141,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const handleConfirmar = async (item: any) => {
     if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
-    if (!(Number(item.qtd_recebida) > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
+    const qtdItem = Number(item.qtd_recebida) || 0;
+    if (!(qtdItem > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
+    // Defesa em profundidade — bloqueia se o pedido foi editado depois do
+    // registro e agora o total ficou acima do pedido.
+    const maxAceito = maxPermitido(item.pedido_id, qtdItem);
+    if (qtdItem > maxAceito) {
+      showToast(`Recebimento excede o saldo do pedido — máximo ${maxAceito} unidades. Ajuste antes de confirmar.`, 'error', true);
+      return;
+    }
     // Guard sincrônico contra double-click (vide ref acima).
     if (confirmingRef.current === item.id) return;
     confirmingRef.current = item.id;
@@ -125,6 +182,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       }
       await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
+      await reloadSaldos();
 
       // Sincronia: recebimento "Concluído" fecha o pedido relacionado.
       // "Parcial" deixa o pedido em "Em Entrega" para permitir entregas adicionais.
@@ -173,7 +231,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
                   const desc = p.item_descricao ?? p.req?.item ?? '';
-                  return <option key={p.id} value={p.id}>Pedido #{p.id.slice(-6).toUpperCase()}{desc ? ` — ${desc}` : ''} — {p.status}</option>;
+                  const s = saldos[p.id];
+                  const sufSaldo = s ? ` — falta ${s.qtd_saldo}/${s.qtd_pedida}` : '';
+                  const esgotado = s && s.qtd_saldo <= 0;
+                  return <option key={p.id} value={p.id} disabled={esgotado}>Pedido #{p.id.slice(-6).toUpperCase()}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
                 })}</select></FormField>
                 <FormField label="Produto recebido">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.produto_id} onChange={e => setExtras(x => ({ ...x, produto_id: e.target.value }))}>
@@ -213,7 +274,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                             {item.status === 'Pendente' && (
                               <button
-                                onClick={() => { setConfirmando(confirmando === item.id ? null : item.id); setConfirmProduto(''); setConfirmStatus('Concluído'); }}
+                                onClick={() => {
+                                  setConfirmando(confirmando === item.id ? null : item.id);
+                                  setConfirmProduto('');
+                                  // Auto-status: soma dos recebimentos ativos (incluindo esse) atinge
+                                  // o pedido → sugere Concluído (fecha pedido). Senão Parcial.
+                                  const s = saldos[item.pedido_id];
+                                  const fecha = s ? s.qtd_recebida_total >= s.qtd_pedida : true;
+                                  setConfirmStatus(fecha ? 'Concluído' : 'Parcial');
+                                }}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
                               >
                                 <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
@@ -228,6 +297,13 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <td colSpan={6} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
+                                {saldos[item.pedido_id] && (
+                                  <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 -mt-1 mb-1">
+                                    <span>Pedido: <strong className="text-gray-200">{saldos[item.pedido_id].qtd_pedida}</strong></span>
+                                    <span>Já recebido: <strong className="text-gray-200">{saldos[item.pedido_id].qtd_recebida_total}</strong></span>
+                                    <span>Saldo restante: <strong className={saldos[item.pedido_id].qtd_saldo > 0 ? 'text-amber-300' : 'text-emerald-300'}>{saldos[item.pedido_id].qtd_saldo}</strong></span>
+                                  </div>
+                                )}
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
                                   <label htmlFor={`receb-produto-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
                                   <select id={`receb-produto-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmProduto} onChange={e => setConfirmProduto(e.target.value)}>
