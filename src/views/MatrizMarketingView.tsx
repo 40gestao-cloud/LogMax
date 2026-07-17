@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
+import { CompeticaoBadge } from '../components/CompeticaoBadge';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialOp = typeof OP_FILIAIS[number];
@@ -200,6 +201,7 @@ export function MatrizMarketingView() {
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Marketing — Comparativo entre Unidades</h2>
           <p className="text-sm text-gray-400 mt-1">Artes, campanhas, promoções e calendário editorial.</p>
+          <div className="mt-2"><CompeticaoBadge /></div>
         </div>
         <select
           value={period} onChange={e => setPeriod(e.target.value as any)}

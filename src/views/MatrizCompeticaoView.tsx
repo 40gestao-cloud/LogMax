@@ -34,6 +34,7 @@ type Competicao = {
   pesos: Record<string, number>;
   vencedora: string | null;
   analise_ia: string | null;
+  placar_snapshot: any | null;
   created_at: string;
 };
 
@@ -56,7 +57,7 @@ type Placar = {
   };
 };
 
-type Tab = 'config' | 'placar';
+type Tab = 'config' | 'placar' | 'historico';
 const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
 
 const isoToday   = () => new Date().toISOString().slice(0, 10);
@@ -107,7 +108,7 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
     setLoadingList(true);
     const { data } = await supabase
       .from('competicoes_matriz')
-      .select('id, nome, data_inicio, data_fim, status, pesos, vencedora, analise_ia, created_at')
+      .select('id, nome, data_inicio, data_fim, status, pesos, vencedora, analise_ia, placar_snapshot, created_at')
       .eq('ativo', true)
       .order('created_at', { ascending: false });
     setCompeticoes(data ?? []);
@@ -264,12 +265,12 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {(['placar','config'] as Tab[]).map(t => (
+          {(['placar','config','historico'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
                 tab === t ? 'bg-accent/15 text-accent border border-accent/30' : 'neu-button text-gray-400 hover:text-white'
               }`}>
-              {t === 'placar' ? 'Placar' : 'Config'}
+              {t === 'placar' ? 'Placar' : t === 'config' ? 'Config' : 'Histórico'}
             </button>
           ))}
         </div>
@@ -626,7 +627,7 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
           )}
 
           <div className="neu-flat rounded-3xl p-5 border border-white/5">
-            <h3 className="text-sm font-bold text-gray-200 mb-4">Histórico de competições</h3>
+            <h3 className="text-sm font-bold text-gray-200 mb-4">Todas as competições</h3>
             {loadingList ? (
               <LoadingSpinner />
             ) : competicoes.length === 0 ? (
@@ -660,6 +661,78 @@ export function MatrizCompeticaoView({ showToast, profile }: { showToast: any; p
               </div>
             )}
           </div>
+        </>
+      )}
+
+      {tab === 'historico' && (
+        <>
+          {loadingList ? (
+            <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>
+          ) : (() => {
+            const encerradas = competicoes.filter(c => c.status === 'encerrada');
+            if (encerradas.length === 0) {
+              return (
+                <div className="neu-flat rounded-3xl p-12 border border-white/5">
+                  <EmptyState message="Nenhuma competição encerrada ainda." />
+                </div>
+              );
+            }
+            return (
+              <div className="flex flex-col gap-4">
+                {encerradas.map(c => {
+                  const snap = c.placar_snapshot as Placar | null;
+                  const totais = snap?.placar?.total_por_filial ?? {};
+                  const podioSnap = OP_FILIAIS
+                    .map(f => ({ filial: f, total: Number(totais[f] ?? 0) }))
+                    .sort((a, b) => b.total - a.total);
+                  return (
+                    <div key={c.id} className="neu-flat rounded-3xl p-5 border border-white/5">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                        <div>
+                          <h4 className="text-base font-bold text-gray-100">{c.nome}</h4>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {fmtDataBR(c.data_inicio)} → {fmtDataBR(c.data_fim)}
+                          </p>
+                        </div>
+                        {c.vencedora && (
+                          <span className={`text-sm font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 ${FILIAL_COLOR[c.vencedora as FilialOp] ?? ''}`}>
+                            🏆 {c.vencedora}
+                          </span>
+                        )}
+                      </div>
+                      {snap ? (
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          {podioSnap.map((p, idx) => (
+                            <div key={p.filial}
+                              className={`neu-pressed rounded-xl p-3 text-center ${p.filial === c.vencedora ? 'ring-1 ring-emerald-500/40' : ''}`}>
+                              <p className={`text-[10px] font-black uppercase tracking-widest ${FILIAL_COLOR[p.filial]}`}>
+                                {['1º','2º','3º'][idx]} · {p.filial}
+                              </p>
+                              <p className={`text-lg font-black font-mono tabular-nums mt-1 ${p.filial === c.vencedora ? 'text-emerald-400' : 'text-gray-200'}`}>
+                                {p.total.toFixed(2)} pts
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-gray-500 mb-3">Placar snapshot indisponível.</p>
+                      )}
+                      {c.analise_ia && (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-[10px] uppercase tracking-widest font-bold text-gray-500 hover:text-accent">
+                            Análise IA
+                          </summary>
+                          <div className="mt-3 text-gray-300 leading-relaxed">
+                            <ReactMarkdown>{c.analise_ia}</ReactMarkdown>
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </>
       )}
     </motion.div>
