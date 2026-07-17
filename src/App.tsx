@@ -24,7 +24,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers, Landmark, GraduationCap, Lock,
+  Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -310,6 +310,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
               <button onClick={() => { navigate('matriz-capital'); onClose?.(); }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Landmark size={16} /><span>Capital</span>
+              </button>
+              <button onClick={() => { navigate('matriz-cadastros'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-cadastros' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <ClipboardList size={16} /><span>Cadastros Consolidado</span>
+              </button>
+              <button onClick={() => { navigate('matriz-competicao'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <Trophy size={16} /><span>Competição</span>
               </button>
             </>
           )}

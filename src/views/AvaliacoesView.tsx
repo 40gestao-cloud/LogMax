@@ -660,9 +660,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // Em modo Matriz: ciclo Matriz aberto (para avaliações de filiais como entidade)
   const cicloMatrizAberto = isMatriz ? (ciclos.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
 
-  // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos.
+  // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos
+  // + o ciclo Matriz (que cobre gerentes/colaboradores de todas as filiais + conselheiros).
   const pendentes = useMemo(() => {
-    if (ciclosOperacionaisAbertos.length === 0) return [];
+    if (ciclosOperacionaisAbertos.length === 0 && !cicloMatrizAberto) return [];
     const minhasFeitasPorCiclo = new Map<string, Set<string>>();
     avaliacoes.forEach(a => {
       if (a.avaliador_id !== profile.id) return;
@@ -703,18 +704,22 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       });
     });
 
-    // Conselho — só admin/CEO em modo Matriz, só se houver ciclo Matriz aberto.
-    // Só role='conselheiro' puro; gerente+is_conselheiro=true continua sendo
-    // avaliado como gerente na filial dele.
+    // Ciclo Matriz — admin/CEO em modo Matriz avalia conselheiros + gerentes + colaboradores
+    // de todas as filiais (ciclo consolidado). Só role='conselheiro' puro; gerente+is_conselheiro=true
+    // continua sendo avaliado como gerente na filial dele.
     if (isAdminOuCEO && isMatriz && cicloMatrizAberto) {
-      const feitasMatriz = new Set(
-        avaliacoes
-          .filter(a => a.ciclo_id === cicloMatrizAberto.id && a.avaliador_id === profile.id && a.tipo === 'ceo_conselheiro')
-          .map(a => a.avaliado_id!),
-      );
+      const feitasMatriz = minhasFeitasPorCiclo.get(cicloMatrizAberto.id) ?? new Set();
       const conselheiros = users.filter(u => u.role === 'conselheiro' && u.id !== profile.id);
       conselheiros.forEach(user => {
-        if (!feitasMatriz.has(user.id)) out.push({ user, tipo: 'ceo_conselheiro' as const, ciclo: cicloMatrizAberto });
+        if (!feitasMatriz.has(`${user.id}::ceo_conselheiro`)) out.push({ user, tipo: 'ceo_conselheiro' as const, ciclo: cicloMatrizAberto });
+      });
+      const gerentesMatriz = users.filter(u => u.role === 'gerente' && u.id !== profile.id);
+      gerentesMatriz.forEach(user => {
+        if (!feitasMatriz.has(`${user.id}::ceo_gerente`)) out.push({ user, tipo: 'ceo_gerente' as const, ciclo: cicloMatrizAberto });
+      });
+      const colaboradoresMatriz = users.filter(u => u.role === 'colaborador' && u.id !== profile.id);
+      colaboradoresMatriz.forEach(user => {
+        if (!feitasMatriz.has(`${user.id}::ceo_colaborador`)) out.push({ user, tipo: 'ceo_colaborador' as const, ciclo: cicloMatrizAberto });
       });
     }
     return out;
@@ -1482,8 +1487,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           )}
         </div>
 
-        {ciclosOperacionaisAbertos.length === 0 ? (
-          <EmptyState message="Nenhum ciclo de filial aberto no momento." />
+        {ciclosOperacionaisAbertos.length === 0 && !cicloMatrizAberto ? (
+          <EmptyState message="Nenhum ciclo aberto no momento." />
         ) : pendentes.length === 0 ? (
           <EmptyState message="Você concluiu todas as suas avaliações. 🎉" />
         ) : isMatriz && pendentesAgrupadosPorFilial ? (
