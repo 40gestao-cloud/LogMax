@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { DollarSign, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, RotateCcw } from 'lucide-react';
 import {
   Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Legend,
 } from 'recharts';
@@ -100,8 +100,9 @@ export function MatrizFinanceiroView() {
   const { data: contasPagar,   isLoading: lCP } = useFetchData('/api/contaspagarview');
   const { data: vendas,        isLoading: lV  } = useFetchData('/api/vendasview');
   const { data: pedidos,       isLoading: lP  } = useFetchData('/api/pedidosview');
+  const { data: devolucoes,    isLoading: lD  } = useFetchData('/api/devolucoesview');
 
-  const isLoading = lCR || lCP || lV || lP;
+  const isLoading = lCR || lCP || lV || lP || lD;
 
   const cutoff = useMemo(() => periodStart(period), [period]);
 
@@ -144,6 +145,24 @@ export function MatrizFinanceiroView() {
     for (const f of OP_FILIAIS) out[f] = vendasCount[f] > 0 ? vendasTotal[f] / vendasCount[f] : 0;
     return out as Record<FilialOp, number>;
   }, [vendasTotal, vendasCount]);
+
+  // Devoluções — só Concluída conta como estorno efetivo
+  const devPeriodo = useMemo(
+    () => devolucoes.filter((d: any) => new Date(d.created_at) >= cutoff && d.status === 'Concluída'),
+    [devolucoes, cutoff],
+  );
+  const devTotal = useMemo(() => sumByFilial(devPeriodo, 'valor_devolvido'), [devPeriodo]);
+  const devCount = useMemo(() => countByFilial(devPeriodo), [devPeriodo]);
+  const receitaLiquida = useMemo(() => {
+    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const f of OP_FILIAIS) out[f] = vendasTotal[f] - devTotal[f];
+    return out as Record<FilialOp, number>;
+  }, [vendasTotal, devTotal]);
+  const taxaDevolucao = useMemo(() => {
+    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const f of OP_FILIAIS) out[f] = vendasTotal[f] > 0 ? (devTotal[f] / vendasTotal[f]) * 100 : 0;
+    return out as Record<FilialOp, number>;
+  }, [vendasTotal, devTotal]);
 
   // Pedidos de compra
   const pedTotal     = useMemo(() => sumByFilial(pedPeriodo, 'valor_total'), [pedPeriodo]);
@@ -220,6 +239,14 @@ export function MatrizFinanceiroView() {
               <KpiRow label="Receita de vendas" values={vendasTotal} fmt={BRL} />
               <KpiRow label="Nº de vendas" values={vendasCount} />
               <KpiRow label="Ticket médio" values={ticketMedio} fmt={BRL} />
+            </SectionCard>
+
+            {/* Vendas & Devoluções — comparativo consolidado */}
+            <SectionCard title="Vendas & Devoluções" icon={RotateCcw}>
+              <KpiRow label="Devoluções (R$)" values={devTotal} fmt={BRL} highlight="min" />
+              <KpiRow label="Nº de devoluções" values={devCount} highlight="min" />
+              <KpiRow label="Taxa de devolução" values={taxaDevolucao} fmt={v => `${v.toFixed(1)}%`} highlight="min" />
+              <KpiRow label="Receita líquida" values={receitaLiquida} fmt={BRL} />
             </SectionCard>
 
             {/* Compras */}

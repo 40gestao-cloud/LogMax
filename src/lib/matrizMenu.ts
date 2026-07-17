@@ -27,6 +27,7 @@ export const MATRIZ_MODULES = [
   { id: 'matriz-logistica',  label: 'Logística Comparativo',  group: null },
   { id: 'matriz-marketing',  label: 'Marketing Comparativo',  group: null },
   { id: 'matriz-operacoes',  label: 'Operações Comparativo',  group: null },
+  { id: 'matriz-cadastros',  label: 'Cadastros Consolidado',  group: null },
   { id: 'matriz-capital',        label: 'Capital',        group: null },
 ] as const;
 

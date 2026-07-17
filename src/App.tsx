@@ -115,6 +115,7 @@ const MatrizFinanceiroView                 = lazy(() => import('./views/MatrizFi
 const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLogisticaView').then(m => ({ default: m.MatrizLogisticaView })));
 const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
 const MatrizOperacoesView                  = lazy(() => import('./views/MatrizOperacoesView').then(m => ({ default: m.MatrizOperacoesView })));
+const MatrizCadastrosView                  = lazy(() => import('./views/MatrizCadastrosView').then(m => ({ default: m.MatrizCadastrosView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -885,6 +886,7 @@ function LogMaxAppInner() {
       case 'matriz-logistica':             return <MatrizLogisticaView />;
       case 'matriz-marketing':             return <MatrizMarketingView />;
       case 'matriz-operacoes':             return <MatrizOperacoesView />;
+      case 'matriz-cadastros':             return <MatrizCadastrosView />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       default:
