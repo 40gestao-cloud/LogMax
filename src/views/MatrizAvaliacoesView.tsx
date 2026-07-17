@@ -107,6 +107,7 @@ type Avaliacao = {
 };
 
 type Filtro = 'todos' | 'pendentes' | 'avaliados';
+type FilialFiltro = 'todas' | FilialOp;
 
 function firstNonEmpty(row: any, fields: string[]): string {
   for (const f of fields) {
@@ -132,6 +133,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
   const [tipoAtivo, setTipoAtivo] = useState<ItemTipo>('arte');
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [filialFiltro, setFilialFiltro] = useState<FilialFiltro>('todas');
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
 
@@ -202,7 +204,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         />
 
         <PainelTipo
-          key={`${tipoAtivo}-${filtro}`}
+          key={`${tipoAtivo}-${filtro}-${filialFiltro}`}
           tipoConfig={tipoConfig}
           grupoLabel={grupoAtivo.label}
           competicao={competicao}
@@ -211,6 +213,8 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
           showToast={showToast}
           filtro={filtro}
           onFiltroChange={setFiltro}
+          filialFiltro={filialFiltro}
+          onFilialFiltroChange={setFilialFiltro}
         />
       </div>
     </motion.div>
@@ -345,7 +349,7 @@ const ENDPOINT_TO_TABLE: Record<string, string> = {
 };
 
 // ── Painel principal do tipo ativo ────────────────────────────────────
-function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, showToast, filtro, onFiltroChange }: {
+function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, showToast, filtro, onFiltroChange, filialFiltro, onFilialFiltroChange }: {
   tipoConfig: TipoConfig;
   grupoLabel: string;
   competicao: Competicao;
@@ -354,6 +358,8 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
   showToast: any;
   filtro: Filtro;
   onFiltroChange: (f: Filtro) => void;
+  filialFiltro: FilialFiltro;
+  onFilialFiltroChange: (f: FilialFiltro) => void;
 }) {
   const { data: itens, isLoading: lItens } = useFetchData<any>(tipoConfig.endpoint);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
@@ -393,15 +399,18 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
     return idx;
   }, [avaliacoes]);
 
-  // Aplica filtro
+  // Aplica filtros (filial + status)
   const itensFiltrados = useMemo(() => {
-    if (filtro === 'todos') return itensNoPeriodo;
-    return itensNoPeriodo.filter((it: any) => {
+    const porFilial = filialFiltro === 'todas'
+      ? itensNoPeriodo
+      : itensNoPeriodo.filter((it: any) => it.filial === filialFiltro);
+    if (filtro === 'todos') return porFilial;
+    return porFilial.filter((it: any) => {
       const minha = avaliacoesPorItem[it.id]?.find(a => a.avaliador_id === profile.id);
       const jaAvaliei = !!minha && (minha.decisao !== null || minha.nota !== null || (minha.comentario ?? '').trim() !== '');
       return filtro === 'pendentes' ? !jaAvaliei : jaAvaliei;
     });
-  }, [itensNoPeriodo, avaliacoesPorItem, profile.id, filtro]);
+  }, [itensNoPeriodo, avaliacoesPorItem, profile.id, filtro, filialFiltro]);
 
   async function submeter(item: any, patch: Partial<{ decisao: 'Aprovado'|'Reprovado'|null; nota: number|null; comentario: string|null }>) {
     if (!podeAvaliar) return;
@@ -431,25 +440,48 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
-  const total = itensNoPeriodo.length;
-  const pendentes = itensNoPeriodo.filter((it: any) => {
+  const itensParaContagem = filialFiltro === 'todas'
+    ? itensNoPeriodo
+    : itensNoPeriodo.filter((it: any) => it.filial === filialFiltro);
+  const total = itensParaContagem.length;
+  const pendentes = itensParaContagem.filter((it: any) => {
     const minha = avaliacoesPorItem[it.id]?.find(a => a.avaliador_id === profile.id);
     return !minha || (minha.decisao === null && minha.nota === null && !(minha.comentario ?? '').trim());
   }).length;
   const feitos = total - pendentes;
 
+  // Contagens por filial (independente do filtro atual — sempre mostra o total real)
+  const porFilialCount = useMemo(() => {
+    const out: Record<FilialOp, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const it of itensNoPeriodo) {
+      const f = it.filial as FilialOp;
+      if (out[f] !== undefined) out[f]++;
+    }
+    return out;
+  }, [itensNoPeriodo]);
+
   return (
     <section className="flex flex-col gap-3 min-w-0">
       {/* Header do painel */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-black">{grupoLabel}</span>
-          <h3 className="text-lg font-bold text-gray-100 truncate">{tipoConfig.label}</h3>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-black">{grupoLabel}</span>
+            <h3 className="text-lg font-bold text-gray-100 truncate">{tipoConfig.label}</h3>
+          </div>
+          <div className="flex items-center gap-1 neu-pressed rounded-xl p-1">
+            <FiltroBtn active={filtro === 'todos'}      onClick={() => onFiltroChange('todos')}      label="Todos"     count={total} />
+            <FiltroBtn active={filtro === 'pendentes'}  onClick={() => onFiltroChange('pendentes')}  label="Pendentes" count={pendentes} tone="warn" />
+            <FiltroBtn active={filtro === 'avaliados'}  onClick={() => onFiltroChange('avaliados')}  label="Avaliados" count={feitos}    tone="ok" />
+          </div>
         </div>
-        <div className="flex items-center gap-1 neu-pressed rounded-xl p-1">
-          <FiltroBtn active={filtro === 'todos'}      onClick={() => onFiltroChange('todos')}      label="Todos"     count={total} />
-          <FiltroBtn active={filtro === 'pendentes'}  onClick={() => onFiltroChange('pendentes')}  label="Pendentes" count={pendentes} tone="warn" />
-          <FiltroBtn active={filtro === 'avaliados'}  onClick={() => onFiltroChange('avaliados')}  label="Avaliados" count={feitos}    tone="ok" />
+
+        {/* Filtro por filial */}
+        <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
+          <FilialFiltroBtn active={filialFiltro === 'todas'}    onClick={() => onFilialFiltroChange('todas')}    label="Todas"    count={itensNoPeriodo.length} />
+          <FilialFiltroBtn active={filialFiltro === 'SuperMax'} onClick={() => onFilialFiltroChange('SuperMax')} label="SuperMax" count={porFilialCount.SuperMax} filial="SuperMax" />
+          <FilialFiltroBtn active={filialFiltro === 'MaxLook'}  onClick={() => onFilialFiltroChange('MaxLook')}  label="MaxLook"  count={porFilialCount.MaxLook}  filial="MaxLook" />
+          <FilialFiltroBtn active={filialFiltro === 'TechMax'}  onClick={() => onFilialFiltroChange('TechMax')}  label="TechMax"  count={porFilialCount.TechMax}  filial="TechMax" />
         </div>
       </div>
 
@@ -460,10 +492,12 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
         <div className="neu-flat rounded-2xl border border-accent/10 p-10 flex flex-col items-center gap-2 text-center">
           <Search size={20} className="text-gray-600" />
           <p className="text-sm text-gray-400">
-            {filtro === 'pendentes'
-              ? 'Nenhum item pendente — você já avaliou tudo desse tipo.'
+            {filialFiltro !== 'todas' && total === 0
+              ? `Nenhum(a) ${tipoConfig.label.toLowerCase()} da filial ${filialFiltro} no período.`
+              : filtro === 'pendentes'
+              ? 'Nenhum item pendente — você já avaliou tudo aqui.'
               : filtro === 'avaliados'
-              ? 'Você ainda não avaliou nenhum item desse tipo.'
+              ? 'Você ainda não avaliou nenhum item aqui.'
               : `Nenhum(a) ${tipoConfig.label.toLowerCase()} nas 3 filiais dentro do período da competição.`}
           </p>
         </div>
@@ -484,6 +518,29 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
         </div>
       )}
     </section>
+  );
+}
+
+const FILIAL_TONE: Record<FilialOp, string> = {
+  SuperMax: 'bg-sky-500/20 text-sky-300',
+  MaxLook:  'bg-amber-400/20 text-amber-200',
+  TechMax:  'bg-orange-500/20 text-orange-300',
+};
+
+function FilialFiltroBtn({ active, onClick, label, count, filial }: {
+  active: boolean; onClick: () => void; label: string; count: number; filial?: FilialOp;
+}) {
+  const badgeCls = filial ? FILIAL_TONE[filial] : 'bg-white/10 text-gray-300';
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+        active ? 'neu-button text-accent ring-1 ring-accent/30' : 'text-gray-400 hover:text-gray-200'
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full ${badgeCls}`}>{count}</span>
+    </button>
   );
 }
 
