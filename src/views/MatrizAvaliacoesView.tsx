@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Star, Check, X, MessageSquare, Loader2 } from 'lucide-react';
+import {
+  Trophy, Star, Check, X, MessageSquare, Loader2, Search,
+  Palette, ShoppingCart, Package, Users, UserCircle, ChevronRight,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -26,28 +29,62 @@ type TipoConfig = {
   id: ItemTipo;
   label: string;
   endpoint: string;
-  descField: string[];  // fallback chain: primeiro campo não vazio
+  descField: string[];
   dateField: string;
-  creative: boolean;   // recebe nota 0-10
+  creative: boolean;
 };
 
-const TIPOS: TipoConfig[] = [
-  { id: 'arte',         label: 'Artes',            endpoint: '/api/marketingartesview',     descField: ['titulo','nome','descricao'], dateField: 'created_at', creative: true  },
-  { id: 'promocao',     label: 'Promoções',        endpoint: '/api/marketingpromocoesview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true  },
-  { id: 'campanha',     label: 'Campanhas',        endpoint: '/api/marketingcampanhasview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true  },
-  { id: 'requisicao',   label: 'Requisições',      endpoint: '/api/requisicoesview',        descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
-  { id: 'cotacao',      label: 'Cotações',         endpoint: '/api/cotacoesview',           descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
-  { id: 'pedido_venda', label: 'Pedidos de Venda', endpoint: '/api/pedidosvendaview',       descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
-  { id: 'ferias',       label: 'Férias',           endpoint: '/api/feriasview',             descField: ['funcionario_nome','colaborador_nome','descricao'], dateField: 'data_inicio', creative: false },
-  { id: 'requerimento', label: 'Requerimentos',    endpoint: 'requerimentos',               descField: ['titulo','descricao','assunto'], dateField: 'created_at', creative: false },
+type GrupoConfig = {
+  id: string;
+  label: string;
+  icon: any;
+  tipos: TipoConfig[];
+};
 
-  // Cadastros — só entram na fila se criados dentro do período da competição
-  { id: 'cadastro_produto',    label: 'Cadastros: Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-  { id: 'cadastro_cliente',    label: 'Cadastros: Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
-  { id: 'cadastro_fornecedor', label: 'Cadastros: Fornecedores',endpoint: '/api/crmview-fornecedores',   descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
-  { id: 'cadastro_servico',    label: 'Cadastros: Serviços',    endpoint: '/api/servicosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-  { id: 'cadastro_categoria',  label: 'Cadastros: Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
+const GRUPOS: GrupoConfig[] = [
+  {
+    id: 'marketing', label: 'Marketing', icon: Palette,
+    tipos: [
+      { id: 'arte',     label: 'Artes',     endpoint: '/api/marketingartesview',     descField: ['titulo','nome','descricao'], dateField: 'created_at', creative: true },
+      { id: 'promocao', label: 'Promoções', endpoint: '/api/marketingpromocoesview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true },
+      { id: 'campanha', label: 'Campanhas', endpoint: '/api/marketingcampanhasview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true },
+    ],
+  },
+  {
+    id: 'vendas', label: 'Vendas', icon: ShoppingCart,
+    tipos: [
+      { id: 'pedido_venda', label: 'Pedidos de Venda', endpoint: '/api/pedidosvendaview', descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
+    ],
+  },
+  {
+    id: 'compras', label: 'Compras', icon: Package,
+    tipos: [
+      { id: 'requisicao', label: 'Requisições', endpoint: '/api/requisicoesview', descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
+      { id: 'cotacao',    label: 'Cotações',    endpoint: '/api/cotacoesview',    descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
+    ],
+  },
+  {
+    id: 'rh', label: 'RH', icon: UserCircle,
+    tipos: [
+      { id: 'ferias',       label: 'Férias',        endpoint: '/api/feriasview',    descField: ['funcionario_nome','colaborador_nome','descricao'], dateField: 'data_inicio', creative: false },
+      { id: 'requerimento', label: 'Requerimentos', endpoint: 'requerimentos',      descField: ['titulo','descricao','assunto'],                     dateField: 'created_at',  creative: false },
+    ],
+  },
+  {
+    id: 'cadastros', label: 'Cadastros', icon: Users,
+    tipos: [
+      { id: 'cadastro_produto',    label: 'Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
+      { id: 'cadastro_cliente',    label: 'Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+      { id: 'cadastro_fornecedor', label: 'Fornecedores',endpoint: '/api/crmview-fornecedores',   descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+      { id: 'cadastro_servico',    label: 'Serviços',    endpoint: '/api/servicosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
+      { id: 'cadastro_categoria',  label: 'Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
+    ],
+  },
 ];
+
+const TIPO_BY_ID = new Map<ItemTipo, TipoConfig>(
+  GRUPOS.flatMap(g => g.tipos.map(t => [t.id, t] as const)),
+);
 
 type Competicao = {
   id: string;
@@ -68,6 +105,8 @@ type Avaliacao = {
   nota: number | null;
   comentario: string | null;
 };
+
+type Filtro = 'todos' | 'pendentes' | 'avaliados';
 
 function firstNonEmpty(row: any, fields: string[]): string {
   for (const f of fields) {
@@ -91,11 +130,11 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const podeAvaliar = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar = profile.role === 'admin' || podeAvaliar;
 
-  const [tab, setTab] = useState<ItemTipo>('arte');
+  const [tipoAtivo, setTipoAtivo] = useState<ItemTipo>('arte');
+  const [filtro, setFiltro] = useState<Filtro>('todos');
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
 
-  // Carrega competição em andamento
   useEffect(() => {
     (async () => {
       setLoadingComp(true);
@@ -128,59 +167,195 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
     );
   }
 
+  const tipoConfig = TIPO_BY_ID.get(tipoAtivo)!;
+  const grupoAtivo = GRUPOS.find(g => g.tipos.some(t => t.id === tipoAtivo))!;
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          <Trophy className="inline w-4 h-4 text-amber-400 mr-1" />
-          {competicao.nome} — <span className="font-mono text-accent">{competicao.data_inicio}</span> a <span className="font-mono text-accent">{competicao.data_fim}</span>
-        </p>
-        {!podeAvaliar && (
-          <p className="text-xs text-gray-500 mt-2 italic">
-            Você tem acesso de leitura. Apenas CEO e conselheiros pontuam.
-          </p>
-        )}
+      {/* Cabeçalho da competição */}
+      <div className="neu-flat rounded-2xl border border-accent/20 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
+            <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+              <Trophy size={12} className="text-amber-400" />
+              <span className="font-mono font-bold text-gray-200">{competicao.nome}</span>
+              <span className="text-gray-500">·</span>
+              <span className="font-mono">{competicao.data_inicio} → {competicao.data_fim}</span>
+            </div>
+          </div>
+          {!podeAvaliar && (
+            <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-gray-500/15 text-gray-400 border border-gray-500/30">
+              Modo leitura
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Abas */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {TIPOS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap transition-all ${
-              tab === t.id
-                ? 'neu-pressed text-accent ring-1 ring-accent/40'
-                : 'neu-button text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Layout: sidebar interna + painel principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_1fr] gap-5">
+        <SidebarTipos
+          competicao={competicao}
+          profile={profile}
+          tipoAtivo={tipoAtivo}
+          onSelectTipo={setTipoAtivo}
+        />
 
-      <AbaAvaliacao
-        key={tab}
-        tipo={TIPOS.find(t => t.id === tab)!}
-        competicao={competicao}
-        profile={profile}
-        podeAvaliar={podeAvaliar}
-        showToast={showToast}
-      />
+        <PainelTipo
+          key={`${tipoAtivo}-${filtro}`}
+          tipoConfig={tipoConfig}
+          grupoLabel={grupoAtivo.label}
+          competicao={competicao}
+          profile={profile}
+          podeAvaliar={podeAvaliar}
+          showToast={showToast}
+          filtro={filtro}
+          onFiltroChange={setFiltro}
+        />
+      </div>
     </motion.div>
   );
 }
 
-// ── Aba por tipo ─────────────────────────────────────────────────────
-function AbaAvaliacao({ tipo, competicao, profile, podeAvaliar, showToast }: {
-  tipo: TipoConfig;
+// ── Sidebar com grupos e contagem ─────────────────────────────────────
+function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
+  competicao: Competicao;
+  profile: UserProfile;
+  tipoAtivo: ItemTipo;
+  onSelectTipo: (id: ItemTipo) => void;
+}) {
+  // Contadores por tipo: {total_no_periodo, avaliados_por_mim}
+  const [contadores, setContadores] = useState<Record<string, { total: number; meus: number }>>({});
+  const [loading, setLoading] = useState(true);
+
+  const carregarContadores = useCallback(async () => {
+    setLoading(true);
+    // Todas as avaliações do usuário atual nesta competição, agrupadas por tipo
+    const { data: minhasAvals } = await supabase
+      .from('avaliacoes_matriz')
+      .select('item_tipo,item_id')
+      .eq('competicao_id', competicao.id)
+      .eq('avaliador_id', profile.id)
+      .eq('ativo', true);
+    const meusPorTipo: Record<string, Set<string>> = {};
+    (minhasAvals ?? []).forEach((a: any) => {
+      if (!meusPorTipo[a.item_tipo]) meusPorTipo[a.item_tipo] = new Set();
+      meusPorTipo[a.item_tipo].add(a.item_id);
+    });
+
+    // Conta itens em cada tabela dentro do período. Uma query por tipo (paralela).
+    const ini = competicao.data_inicio;
+    const fim = competicao.data_fim + 'T23:59:59.999';
+    const tipos = GRUPOS.flatMap(g => g.tipos);
+    const results = await Promise.all(tipos.map(async t => {
+      const table = ENDPOINT_TO_TABLE[t.endpoint] ?? t.endpoint;
+      const { data } = await supabase
+        .from(table)
+        .select('id,filial,' + t.dateField)
+        .in('filial', OP_FILIAIS as unknown as string[])
+        .gte(t.dateField, ini)
+        .lte(t.dateField, fim);
+      const rows = (data ?? []) as any[];
+      return [t.id, rows] as const;
+    }));
+
+    const novos: Record<string, { total: number; meus: number }> = {};
+    for (const [tipoId, rows] of results) {
+      const total = rows.length;
+      const meus = rows.filter(r => meusPorTipo[tipoId]?.has(r.id)).length;
+      novos[tipoId] = { total, meus };
+    }
+    setContadores(novos);
+    setLoading(false);
+  }, [competicao.id, competicao.data_inicio, competicao.data_fim, profile.id]);
+
+  useEffect(() => { carregarContadores(); }, [carregarContadores]);
+
+  // Recarrega quando o usuário avaliar (via evento custom)
+  useEffect(() => {
+    const handler = () => carregarContadores();
+    window.addEventListener('avaliacao-matriz:changed', handler);
+    return () => window.removeEventListener('avaliacao-matriz:changed', handler);
+  }, [carregarContadores]);
+
+  return (
+    <aside className="neu-flat rounded-2xl border border-accent/10 p-3 flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+      {GRUPOS.map(grupo => {
+        const Icon = grupo.icon;
+        return (
+          <div key={grupo.id} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 px-2 mb-1">
+              <Icon size={12} className="text-accent shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{grupo.label}</span>
+            </div>
+            {grupo.tipos.map(tipo => {
+              const c = contadores[tipo.id];
+              const total = c?.total ?? 0;
+              const meus = c?.meus ?? 0;
+              const pendentes = Math.max(0, total - meus);
+              const isActive = tipoAtivo === tipo.id;
+              return (
+                <button
+                  key={tipo.id}
+                  onClick={() => onSelectTipo(tipo.id)}
+                  className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all ${
+                    isActive
+                      ? 'neu-pressed text-accent ring-1 ring-accent/40'
+                      : 'text-gray-300 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <span className="truncate">{tipo.label}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {loading ? (
+                      <Loader2 size={10} className="animate-spin text-gray-600" />
+                    ) : total === 0 ? (
+                      <span className="text-[9px] text-gray-600 font-mono">0</span>
+                    ) : pendentes > 0 ? (
+                      <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30">
+                        {pendentes}
+                      </span>
+                    ) : (
+                      <Check size={11} className="text-emerald-400" />
+                    )}
+                    {isActive && <ChevronRight size={11} className="text-accent" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </aside>
+  );
+}
+
+// Endpoint → nome da tabela (usado pra count queries no sidebar)
+const ENDPOINT_TO_TABLE: Record<string, string> = {
+  '/api/marketingartesview':       'marketing_artes',
+  '/api/marketingpromocoesview':   'marketing_promocoes',
+  '/api/marketingcampanhasview':   'marketing_campanhas',
+  '/api/requisicoesview':          'requisicoes',
+  '/api/cotacoesview':             'cotacoes',
+  '/api/pedidosvendaview':         'pedidos_venda',
+  '/api/feriasview':               'ferias',
+  '/api/produtosview':             'produtos',
+  '/api/crmview-clientes':         'clientes',
+  '/api/crmview-fornecedores':     'fornecedores',
+  '/api/servicosview':             'servicos',
+};
+
+// ── Painel principal do tipo ativo ────────────────────────────────────
+function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, showToast, filtro, onFiltroChange }: {
+  tipoConfig: TipoConfig;
+  grupoLabel: string;
   competicao: Competicao;
   profile: UserProfile;
   podeAvaliar: boolean;
   showToast: any;
+  filtro: Filtro;
+  onFiltroChange: (f: Filtro) => void;
 }) {
-  const { data: itens, isLoading: lItens } = useFetchData<any>(tipo.endpoint);
+  const { data: itens, isLoading: lItens } = useFetchData<any>(tipoConfig.endpoint);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [loadingAv, setLoadingAv] = useState(true);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
@@ -191,26 +366,24 @@ function AbaAvaliacao({ tipo, competicao, profile, podeAvaliar, showToast }: {
       .from('avaliacoes_matriz')
       .select('id,competicao_id,filial_avaliada,item_tipo,item_id,avaliador_id,decisao,nota,comentario')
       .eq('competicao_id', competicao.id)
-      .eq('item_tipo', tipo.id)
+      .eq('item_tipo', tipoConfig.id)
       .eq('ativo', true);
     setAvaliacoes((data as any) ?? []);
     setLoadingAv(false);
-  }, [competicao.id, tipo.id]);
+  }, [competicao.id, tipoConfig.id]);
 
   useEffect(() => { carregarAvaliacoes(); }, [carregarAvaliacoes]);
 
-  // Filtra itens: dentro do período + filial em ['SuperMax','MaxLook','TechMax']
   const itensNoPeriodo = useMemo(() => {
     const ini = new Date(competicao.data_inicio);
     const fim = new Date(competicao.data_fim);
     fim.setHours(23, 59, 59, 999);
     return itens.filter((r: any) => {
-      const d = new Date(r[tipo.dateField] ?? r.created_at);
+      const d = new Date(r[tipoConfig.dateField] ?? r.created_at);
       return d >= ini && d <= fim && OP_FILIAIS.includes(r.filial as FilialOp);
     });
-  }, [itens, competicao, tipo.dateField]);
+  }, [itens, competicao, tipoConfig.dateField]);
 
-  // Índice avaliações por item_id
   const avaliacoesPorItem = useMemo(() => {
     const idx: Record<string, Avaliacao[]> = {};
     for (const a of avaliacoes) {
@@ -219,6 +392,16 @@ function AbaAvaliacao({ tipo, competicao, profile, podeAvaliar, showToast }: {
     }
     return idx;
   }, [avaliacoes]);
+
+  // Aplica filtro
+  const itensFiltrados = useMemo(() => {
+    if (filtro === 'todos') return itensNoPeriodo;
+    return itensNoPeriodo.filter((it: any) => {
+      const minha = avaliacoesPorItem[it.id]?.find(a => a.avaliador_id === profile.id);
+      const jaAvaliei = !!minha && (minha.decisao !== null || minha.nota !== null || (minha.comentario ?? '').trim() !== '');
+      return filtro === 'pendentes' ? !jaAvaliei : jaAvaliei;
+    });
+  }, [itensNoPeriodo, avaliacoesPorItem, profile.id, filtro]);
 
   async function submeter(item: any, patch: Partial<{ decisao: 'Aprovado'|'Reprovado'|null; nota: number|null; comentario: string|null }>) {
     if (!podeAvaliar) return;
@@ -231,7 +414,7 @@ function AbaAvaliacao({ tipo, competicao, profile, podeAvaliar, showToast }: {
     const { error } = await supabase.rpc('avaliar_item_matriz', {
       p_competicao_id:   competicao.id,
       p_filial_avaliada: item.filial,
-      p_item_tipo:       tipo.id,
+      p_item_tipo:       tipoConfig.id,
       p_item_id:         item.id,
       p_decisao:         decisao,
       p_nota:            nota,
@@ -245,29 +428,83 @@ function AbaAvaliacao({ tipo, competicao, profile, podeAvaliar, showToast }: {
     }
     showToast('Avaliação registrada', 'success');
     carregarAvaliacoes();
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
-  if (lItens || loadingAv) return <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>;
-
-  if (itensNoPeriodo.length === 0) {
-    return <EmptyState message={`📭 Nada para avaliar — nenhum(a) ${tipo.label.toLowerCase()} nas 3 filiais dentro do período da competição.`} />;
-  }
+  const total = itensNoPeriodo.length;
+  const pendentes = itensNoPeriodo.filter((it: any) => {
+    const minha = avaliacoesPorItem[it.id]?.find(a => a.avaliador_id === profile.id);
+    return !minha || (minha.decisao === null && minha.nota === null && !(minha.comentario ?? '').trim());
+  }).length;
+  const feitos = total - pendentes;
 
   return (
-    <div className="flex flex-col gap-3">
-      {itensNoPeriodo.map((item: any) => (
-        <ItemRow
-          key={item.id}
-          item={item}
-          tipo={tipo}
-          avaliacoes={avaliacoesPorItem[item.id] ?? []}
-          minhaId={profile.id}
-          podeAvaliar={podeAvaliar}
-          submitting={submittingIds.has(item.id)}
-          onSubmit={patch => submeter(item, patch)}
-        />
-      ))}
-    </div>
+    <section className="flex flex-col gap-3 min-w-0">
+      {/* Header do painel */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-black">{grupoLabel}</span>
+          <h3 className="text-lg font-bold text-gray-100 truncate">{tipoConfig.label}</h3>
+        </div>
+        <div className="flex items-center gap-1 neu-pressed rounded-xl p-1">
+          <FiltroBtn active={filtro === 'todos'}      onClick={() => onFiltroChange('todos')}      label="Todos"     count={total} />
+          <FiltroBtn active={filtro === 'pendentes'}  onClick={() => onFiltroChange('pendentes')}  label="Pendentes" count={pendentes} tone="warn" />
+          <FiltroBtn active={filtro === 'avaliados'}  onClick={() => onFiltroChange('avaliados')}  label="Avaliados" count={feitos}    tone="ok" />
+        </div>
+      </div>
+
+      {/* Corpo */}
+      {lItens || loadingAv ? (
+        <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
+      ) : itensFiltrados.length === 0 ? (
+        <div className="neu-flat rounded-2xl border border-accent/10 p-10 flex flex-col items-center gap-2 text-center">
+          <Search size={20} className="text-gray-600" />
+          <p className="text-sm text-gray-400">
+            {filtro === 'pendentes'
+              ? 'Nenhum item pendente — você já avaliou tudo desse tipo.'
+              : filtro === 'avaliados'
+              ? 'Você ainda não avaliou nenhum item desse tipo.'
+              : `Nenhum(a) ${tipoConfig.label.toLowerCase()} nas 3 filiais dentro do período da competição.`}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {itensFiltrados.map((item: any) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              tipo={tipoConfig}
+              avaliacoes={avaliacoesPorItem[item.id] ?? []}
+              minhaId={profile.id}
+              podeAvaliar={podeAvaliar}
+              submitting={submittingIds.has(item.id)}
+              onSubmit={patch => submeter(item, patch)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FiltroBtn({ active, onClick, label, count, tone }: {
+  active: boolean; onClick: () => void; label: string; count: number; tone?: 'warn'|'ok';
+}) {
+  const toneCls = tone === 'warn'
+    ? 'bg-amber-500/20 text-amber-300'
+    : tone === 'ok'
+    ? 'bg-emerald-500/20 text-emerald-300'
+    : 'bg-white/10 text-gray-300';
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+        active ? 'neu-button text-accent ring-1 ring-accent/30' : 'text-gray-400 hover:text-gray-200'
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full ${toneCls}`}>{count}</span>
+    </button>
   );
 }
 
