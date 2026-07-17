@@ -1,18 +1,19 @@
 -- =================================================================
--- Avaliações: novo tipo `ceo_colaborador` para modo Matriz.
+-- Avaliações: novos tipos `ceo_colaborador` e `ceo_conselheiro` para modo Matriz.
 --
 -- Contexto:
 --   No modo Matriz (admin/CEO em holding view) já era possível
 --   avaliar gerentes de todas as filiais (tipo `ceo_gerente`),
---   mas colaboradores ficavam fora — no dia-a-dia quem os avalia
---   é o gerente do setor (tipo `gerente_colaborador`). Para o
---   modelo de competição inter-filiais, o CEO precisa poder tocar
---   diretamente em colaboradores também, agrupados por filial.
+--   mas colaboradores e conselheiros ficavam fora. Para a
+--   competição inter-filiais, o CEO precisa tocar diretamente
+--   em colaboradores (por filial) e no Conselho (global).
 --
 -- Mudança:
 --   Amplia CHECK constraint `chk_aval_tipo` para incluir
---   `ceo_colaborador`. RLS e demais RPCs são agnósticas ao tipo,
---   então nada mais muda no banco.
+--   `ceo_colaborador` e `ceo_conselheiro`. RLS e demais RPCs
+--   são agnósticas ao tipo, então nada mais muda no banco.
+--   Conselheiros são avaliados dentro do ciclo Matriz (que já
+--   existe pra avaliar filial-como-entidade).
 --
 -- Idempotente.
 -- =================================================================
@@ -26,6 +27,7 @@ ALTER TABLE public.avaliacoes
   CHECK (tipo IN (
     'ceo_gerente',
     'ceo_colaborador',
+    'ceo_conselheiro',
     'gerente_colaborador',
     'feedback_colaborador',
     'ti_dev_ia',
