@@ -49,7 +49,7 @@ function ModalAvaliacao({
 }: {
   ciclo: Ciclo;
   alvo: AvaliadoTarget;
-  tipo?: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+  tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'gerente_colaborador' | 'feedback_colaborador';
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => Promise<void> | void;
@@ -482,7 +482,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const [avaliando, setAvaliando] = useState<{
     ciclo: Ciclo;
     alvo: AvaliadoTarget;
-    tipo?: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador';
+    tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'gerente_colaborador' | 'feedback_colaborador';
   } | null>(null);
 
   const [editando, setEditando] = useState<{
@@ -670,15 +670,23 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       minhasFeitasPorCiclo.get(a.ciclo_id)!.add(`${a.avaliado_id}::${a.tipo}`);
     });
 
-    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
+    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
     ciclosOperacionaisAbertos.forEach(ciclo => {
       const feitas = minhasFeitasPorCiclo.get(ciclo.id) ?? new Set();
       const usersFilial = users.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
-      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
+      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
       if (isAdminOuCEO) {
-        alvos = usersFilial
+        const gerentes = usersFilial
           .filter(u => u.role === 'gerente' && u.id !== profile.id)
           .map(user => ({ user, tipo: 'ceo_gerente' as const }));
+        // Em modo Matriz, admin/CEO também avalia colaboradores diretamente
+        // (competição inter-filiais precisa granularidade individual).
+        const colaboradores = isMatriz
+          ? usersFilial
+              .filter(u => u.role === 'colaborador' && u.id !== profile.id)
+              .map(user => ({ user, tipo: 'ceo_colaborador' as const }))
+          : [];
+        alvos = [...gerentes, ...colaboradores];
       } else if (isGerente) {
         const setoresGerente = allSetores(profile);
         alvos = usersFilial
@@ -945,6 +953,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
     const grupos = [
       mkGrupo('ceo_gerente', 'CEO → Gerentes', 'Avaliações que o CEO/admin entregou aos gerentes.'),
+      mkGrupo('ceo_colaborador', 'CEO → Colaboradores', 'Avaliações que o CEO/admin entregou diretamente a colaboradores (modo Matriz).'),
       mkGrupo('gerente_colaborador', 'Gerentes → Colaboradores', 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.'),
       mkGrupo('feedback_colaborador', 'Feedback Reverso', 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.'),
       mkGrupo('matriz_filial', 'Avaliação das Filiais', 'Notas atribuídas às filiais como unidade nos 7 eixos da competição.'),
@@ -1672,7 +1681,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           <ModalAvaliacao
             ciclo={editando.ciclo}
             alvo={editando.alvo}
-            tipo={editando.tipo as 'ceo_gerente' | 'gerente_colaborador' | 'feedback_colaborador'}
+            tipo={editando.tipo as 'ceo_gerente' | 'ceo_colaborador' | 'gerente_colaborador' | 'feedback_colaborador'}
             avaliacaoExistente={editando.avaliacaoExistente}
             onClose={() => setEditando(null)}
             onSaved={reload}
