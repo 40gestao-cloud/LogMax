@@ -3,20 +3,21 @@
 // com IA). Mantidos num só lugar para os dois fluxos ficarem em sincronia
 // e evitar duplicação entre AvaliacoesView e DesenvolvimentoIAView.
 
-// ── Modo Filial: 3 categorias de competência ─────────────────────────────────
+// ── Modo Filial: critérios aplicados a Conselheiros/Gerentes/Colaboradores ──
 export const CRITERIOS = {
-  tecnica:        ['Domínio técnico', 'Produtividade', 'Qualidade do trabalho'],
-  comportamental: ['Proatividade', 'Trabalho em Equipe', 'Pontualidade', 'Apresentação Profissional'],
-  socioemocional: ['Inteligência emocional', 'Comunicação Assertiva', 'Autogestão e Disciplina'],
+  desempenho: [
+    'Frequência de Trabalho',
+    'Pontualidade',
+    'Desempenho individual',
+    'Desempenho em Equipe',
+  ],
 } as const;
 
 export type CategoriaCriterio = keyof typeof CRITERIOS;
 export type Categoria = CategoriaCriterio;
 
 export const CATEGORIA_LABEL: Record<string, string> = {
-  tecnica:        'Técnicas',
-  comportamental: 'Comportamentais',
-  socioemocional: 'Socioemocionais',
+  desempenho: 'Critérios de Avaliação',
 };
 
 // ── Modo Matriz: 7 eixos da competição de filiais ────────────────────────────
