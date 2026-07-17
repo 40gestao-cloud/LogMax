@@ -89,6 +89,53 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
     profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile) ||
     profile.role === 'gerente' || isFinanceiro;
 
+  // Alçada de aprovação por valor (migr. 204). Buscada 1x por filial.
+  // Regra: valor <= limite → Financeiro decide; valor > limite → Gerente
+  // da filial decide. Admin/CEO sempre podem (override total).
+  const [alcadaLimite, setAlcadaLimite] = useState<number | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('alcadas_compra')
+      .select('valor_limite_financeiro')
+      .eq('filial', filial)
+      .eq('ativo', true)
+      .maybeSingle()
+      .then(({ data: row, error }) => {
+        if (cancelled) return;
+        if (error) {
+          // Migração 204 pendente → degrada pro fluxo antigo (todos podem).
+          console.warn('[Cotacoes] alçada indisponível:', error.message);
+          setAlcadaLimite(null);
+          return;
+        }
+        setAlcadaLimite(row ? Number(row.valor_limite_financeiro ?? 0) : null);
+      });
+    return () => { cancelled = true; };
+  }, [filial]);
+
+  // Retorna quem pode decidir esta cotação específica.
+  const podeDecidirCotacao = (cot: any): boolean => {
+    // Admin/CEO/conselheiro sempre — override total.
+    if (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile)) return true;
+    // Sem alçada configurada → fallback pro comportamento antigo.
+    if (alcadaLimite === null) return podeDecidir;
+    const valor = Number(cot.valor_total ?? 0);
+    if (valor <= alcadaLimite) {
+      // Baixa alçada → Financeiro.
+      return isFinanceiro;
+    }
+    // Alta alçada → Gerente da filial (só ele).
+    return profile.role === 'gerente';
+  };
+
+  const alcadaLabel = (cot: any): { label: string; color: string } => {
+    if (alcadaLimite === null) return { label: 'Financeiro', color: 'text-cyan-300 border-cyan-400/20' };
+    const valor = Number(cot.valor_total ?? 0);
+    if (valor <= alcadaLimite) return { label: 'Financeiro', color: 'text-cyan-300 border-cyan-400/20' };
+    return { label: 'Gerente/CEO', color: 'text-amber-300 border-amber-400/20' };
+  };
+
   // IDs de cotações que já têm pedido gerado.
   const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -526,7 +573,20 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(item.valor_total ?? 0))}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span>R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
+                          {item.status === 'Aguardando Financeiro' && (() => {
+                            const a = alcadaLabel(item);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] font-bold uppercase tracking-widest border ${a.color}`}
+                                title={alcadaLimite !== null ? `Alçada: limite Financeiro R$ ${formatBRL(alcadaLimite)}` : 'Alçada não configurada'}>
+                                {a.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.prazo_entrega || '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.validade || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
@@ -539,7 +599,7 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
                         <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           {/* Aguardando Financeiro: gerente do Financeiro decide */}
-                          {item.status === 'Aguardando Financeiro' && podeDecidir && (
+                          {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'aprovar' }); setFeedbackInput(''); }}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors flex items-center gap-1">
@@ -664,7 +724,7 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
                           <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} /></td>
                           {podeDecidir && (
                             <td className="py-2.5 px-3 text-right">
-                              {c.status === 'Aguardando Financeiro' && (
+                              {c.status === 'Aguardando Financeiro' && podeDecidirCotacao(c) && (
                                 <button
                                   onClick={() => {
                                     setComparando(null);

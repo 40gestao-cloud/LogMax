@@ -86,6 +86,7 @@ const UsuariosView                 = lazy(() => import('./views/UsuariosView').t
 const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
 const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 const DevolucoesView                       = lazy(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
+const AlcadasView                          = lazy(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
 const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
@@ -155,6 +156,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Duplicatas',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
+      { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
       'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
@@ -835,6 +837,7 @@ function LogMaxAppInner() {
       case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'vendas-devoluções':            return <DevolucoesView showToast={st} profile={profile} />;
+      case 'financeiro-alçadas':           return <AlcadasView showToast={st} profile={profile} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
       case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} />;
       case 'vendas-clienteespecial':       return <ClienteEspecialView showToast={st} profile={profile} />;
