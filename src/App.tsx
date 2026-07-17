@@ -85,6 +85,7 @@ const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView
 const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
 const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
 const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
+const DevolucoesView                       = lazy(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
 const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
@@ -165,6 +166,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
     submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas',
+      { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] },
       { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] },
       'Tarefas'],
   },
@@ -832,6 +834,7 @@ function LogMaxAppInner() {
       case 'vendas-pdv':                    return <PDVView showToast={st} profile={profile} filialAtiva={filialAtiva} />;
       case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
+      case 'vendas-devoluções':            return <DevolucoesView showToast={st} profile={profile} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
       case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} />;
       case 'vendas-clienteespecial':       return <ClienteEspecialView showToast={st} profile={profile} />;
