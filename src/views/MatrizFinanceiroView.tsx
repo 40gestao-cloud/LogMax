@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { DollarSign, RotateCcw } from 'lucide-react';
+import { DollarSign, TrendingDown, Scale } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
@@ -32,18 +32,19 @@ function countByFilial(arr: any[]): Record<FilialOp, number> {
 export function MatrizFinanceiroView() {
   const [period, setPeriod] = useState<Period>('30d');
 
-  const { data: vendas,     isLoading: lV } = useFetchData('/api/vendasview');
-  const { data: devolucoes, isLoading: lD } = useFetchData('/api/devolucoesview');
+  const { data: vendas,        isLoading: lV } = useFetchData('/api/vendasview');
+  const { data: contasReceber, isLoading: lR } = useFetchData('/api/contasreceberview');
+  const { data: contasPagar,   isLoading: lP } = useFetchData('/api/contaspagarview');
 
-  const isLoading = lV || lD;
+  const isLoading = lV || lR || lP;
 
   const cutoff = useMemo(() => periodStart(period), [period]);
 
+  // ── Vendas / ticket (contexto operacional) ─────────────────────────────
   const vPeriodo = useMemo(
     () => vendas.filter((v: any) => new Date(v.created_at) >= cutoff && v.status !== 'Cancelada'),
     [vendas, cutoff],
   );
-
   const vendasTotal = useMemo(() => sumByFilial(vPeriodo, 'total_final'), [vPeriodo]);
   const vendasCount = useMemo(() => countByFilial(vPeriodo), [vPeriodo]);
   const ticketMedio = useMemo(() => {
@@ -52,29 +53,38 @@ export function MatrizFinanceiroView() {
     return out as Record<FilialOp, number>;
   }, [vendasTotal, vendasCount]);
 
-  const devPeriodo = useMemo(
-    () => devolucoes.filter((d: any) => new Date(d.created_at) >= cutoff && d.status === 'Concluída'),
-    [devolucoes, cutoff],
+  // ── Resultado financeiro alinhado ao placar da Competição ──────────────
+  // A RPC calcular_placar_competicao usa: contas_receber Pago  −  contas_pagar Pago
+  // no período (por vencimento). Espelhamos aqui pra não divergir.
+  const cutoffISO = useMemo(() => cutoff.toISOString().slice(0, 10), [cutoff]);
+
+  const receberPagoPeriodo = useMemo(
+    () => contasReceber.filter((c: any) =>
+      c.status === 'Pago' && c.ativo !== false && (c.vencimento ?? '') >= cutoffISO,
+    ),
+    [contasReceber, cutoffISO],
   );
-  const devTotal = useMemo(() => sumByFilial(devPeriodo, 'valor_devolvido'), [devPeriodo]);
-  const devCount = useMemo(() => countByFilial(devPeriodo), [devPeriodo]);
-  const receitaLiquida = useMemo(() => {
+  const pagarPagoPeriodo = useMemo(
+    () => contasPagar.filter((c: any) =>
+      c.status === 'Pago' && c.ativo !== false && (c.vencimento ?? '') >= cutoffISO,
+    ),
+    [contasPagar, cutoffISO],
+  );
+
+  const receitasPagas = useMemo(() => sumByFilial(receberPagoPeriodo, 'valor'), [receberPagoPeriodo]);
+  const despesasPagas = useMemo(() => sumByFilial(pagarPagoPeriodo,   'valor'), [pagarPagoPeriodo]);
+  const resultado = useMemo(() => {
     const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-    for (const f of OP_FILIAIS) out[f] = vendasTotal[f] - devTotal[f];
+    for (const f of OP_FILIAIS) out[f] = receitasPagas[f] - despesasPagas[f];
     return out as Record<FilialOp, number>;
-  }, [vendasTotal, devTotal]);
-  const taxaDevolucao = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-    for (const f of OP_FILIAIS) out[f] = vendasTotal[f] > 0 ? (devTotal[f] / vendasTotal[f]) * 100 : 0;
-    return out as Record<FilialOp, number>;
-  }, [vendasTotal, devTotal]);
+  }, [receitasPagas, despesasPagas]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Financeiro — Comparativo entre Unidades</h2>
-          <p className="text-sm text-gray-400 mt-1">Faturamento e receita líquida no período — <span className="font-mono text-accent">{PERIOD_LABELS[period]}</span></p>
+          <p className="text-sm text-gray-400 mt-1">Resultado por unidade no período — <span className="font-mono text-accent">{PERIOD_LABELS[period]}</span></p>
           <div className="mt-2"><CompeticaoBadge /></div>
         </div>
         <select
@@ -92,7 +102,18 @@ export function MatrizFinanceiroView() {
       ) : (
         <div className="flex flex-col gap-6">
           <FilialsComparativo
-            title="Faturamento / Vendas"
+            title="Resultado — Receitas Pagas − Despesas Pagas"
+            subtitle="mesmo cálculo do placar da Competição"
+            icon={Scale}
+            metrics={[
+              { label: 'Receitas pagas', values: receitasPagas, fmt: BRL, highlight: 'max' },
+              { label: 'Despesas pagas', values: despesasPagas, fmt: BRL, highlight: 'min' },
+              { label: 'Resultado líquido', values: resultado, fmt: BRL, highlight: 'max' },
+            ]}
+          />
+          <FilialsComparativo
+            title="Faturamento (Vendas)"
+            subtitle="contexto operacional — não entra no placar"
             icon={DollarSign}
             metrics={[
               { label: 'Receita de vendas', values: vendasTotal, fmt: BRL, highlight: 'max' },
@@ -100,16 +121,10 @@ export function MatrizFinanceiroView() {
               { label: 'Ticket médio',      values: ticketMedio, fmt: BRL, highlight: 'max' },
             ]}
           />
-          <FilialsComparativo
-            title="Receita Líquida"
-            icon={RotateCcw}
-            metrics={[
-              { label: 'Devoluções (R$)',   values: devTotal, fmt: BRL, highlight: 'min' },
-              { label: 'Nº de devoluções',  values: devCount, highlight: 'min' },
-              { label: 'Taxa de devolução', values: taxaDevolucao, fmt: v => `${v.toFixed(1)}%`, highlight: 'min' },
-              { label: 'Receita líquida',   values: receitaLiquida, fmt: BRL, highlight: 'max' },
-            ]}
-          />
+          <p className="text-[10px] text-gray-500 -mt-3 px-1">
+            <TrendingDown size={10} className="inline mr-1 text-gray-500" />
+            Devoluções entram nas vendas canceladas (excluídas do faturamento). Se receita paga ainda estiver zerada, é porque as contas ainda não foram baixadas — mesmo comportamento do placar.
+          </p>
         </div>
       )}
     </motion.div>

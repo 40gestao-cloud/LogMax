@@ -1693,8 +1693,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             onClose={() => setAvaliando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={avaliando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : csAtivo}
-            categoriaLabel={avaliando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : clAtivo}
+            criteriosSet={avaliando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : CRITERIOS}
+            categoriaLabel={avaliando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL}
             evidenciasAvaliado={avaliando.alvo.kind === 'user'
               ? evidencias.filter(e =>
                   e.colaborador_id === (avaliando.alvo as Extract<AvaliadoTarget, { kind: 'user' }>).user.id &&
@@ -1711,8 +1711,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             onClose={() => setEditando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={editando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : csAtivo}
-            categoriaLabel={editando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : clAtivo}
+            criteriosSet={editando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : CRITERIOS}
+            categoriaLabel={editando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL}
           />
         )}
       </AnimatePresence>

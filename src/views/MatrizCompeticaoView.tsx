@@ -68,6 +68,9 @@ const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : ''
 const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
+// Quórum mínimo pra encerrar a competição: maioria simples do conselho (CEO + 2 conselheiros = 3 votantes).
+const QUORUM_MINIMO = 2;
+
 export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
   const { session } = useAuth();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
@@ -433,6 +436,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
                       <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
                       <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
+                      <span className={votos.length >= QUORUM_MINIMO ? 'text-emerald-400' : 'text-yellow-400'}>
+                        Quórum: {votos.length}/{QUORUM_MINIMO}
+                      </span>
                     </div>
                   </div>
 
@@ -513,8 +519,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
               )}
 
-              {/* Declaração de vencedora */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length > 0 && (
+              {/* Declaração de vencedora — exige quórum mínimo de 2 votos (maioria de 3: CEO + 2 conselheiros) */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length >= QUORUM_MINIMO && (
                 <div className="neu-flat rounded-3xl p-5 border border-accent/30">
                   <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
                     <Crown size={13} className="text-accent" /> Declarar vencedora

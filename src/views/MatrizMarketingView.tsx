@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Megaphone, TrendingUp, Users } from 'lucide-react';
+import { Megaphone, TrendingUp, Users, DollarSign } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
 import { FilialsComparativo, OP_FILIAIS, FilialOp, Metric } from '../components/FilialsComparativo';
+
+const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function countByFilial(arr: any[]): Record<FilialOp, number> {
   const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
@@ -25,8 +27,9 @@ export function MatrizMarketingView() {
 
   const { data: campanhas, isLoading: lCa } = useFetchData('/api/marketingcampanhasview');
   const { data: metricas,  isLoading: lMe } = useFetchData('/api/metricasredessociaisview');
+  const { data: roi,       isLoading: lRo } = useFetchData('/api/campanharoiview');
 
-  const isLoading = lCa || lMe;
+  const isLoading = lCa || lMe || lRo;
 
   const cutoff = useMemo(() => {
     const d = new Date();
@@ -40,6 +43,27 @@ export function MatrizMarketingView() {
     [campanhas],
   );
   const campanhasCount = useMemo(() => countByFilial(campanhasAtivas), [campanhasAtivas]);
+
+  // Receita das campanhas cuja janela sobrepõe o período filtrado — espelha
+  // a lógica de calcular_placar_competicao (marketing = SUM(receita) do
+  // v_campanha_roi das campanhas da filial no intervalo). Campanhas sem
+  // filial ficam de fora, pra não distorcer o comparativo.
+  const cutoffISO = useMemo(() => cutoff.toISOString().slice(0, 10), [cutoff]);
+  const hojeISO   = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const receitaCampanhas = useMemo(() => {
+    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const r of roi) {
+      const fil = r.filial;
+      if (!fil || out[fil] === undefined) continue;
+      const ini = String(r.data_inicio ?? '');
+      const fim = String(r.data_fim ?? '');
+      // Sobreposição: campanha começou até hoje E terminou depois do cutoff.
+      if (ini && fim && ini <= hojeISO && fim >= cutoffISO) {
+        out[fil] += Number(r.receita) || 0;
+      }
+    }
+    return out as Record<FilialOp, number>;
+  }, [roi, cutoffISO, hojeISO]);
 
   // Redes sociais — último registro por plataforma × filial
   const PLATAFORMAS_RS = ['Instagram', 'TikTok', 'Facebook', 'YouTube'] as const;
@@ -118,6 +142,14 @@ export function MatrizMarketingView() {
             />
           )}
 
+          <FilialsComparativo
+            title="Receita das Campanhas"
+            subtitle="mesmo cálculo do placar da Competição"
+            icon={DollarSign}
+            metrics={[
+              { label: `Receita atribuída (${PERIOD_LABELS[period]})`, values: receitaCampanhas, fmt: BRL, highlight: 'max' },
+            ]}
+          />
           <FilialsComparativo
             title="Campanhas de Marketing"
             icon={Megaphone}

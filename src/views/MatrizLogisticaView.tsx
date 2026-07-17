@@ -29,8 +29,8 @@ export function MatrizLogisticaView() {
     for (const p of produtos) {
       const fil = p.filial;
       if (out[fil] === undefined) continue;
-      const min = Number(p.estoque_minimo ?? 0) || 10;
-      if ((Number(p.estoque) ?? 0) <= min) out[fil]++;
+      const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : 10;
+      if ((Number(p.estoque) || 0) <= min) out[fil]++;
     }
     return out as Record<FilialOp, number>;
   }, [produtos]);
