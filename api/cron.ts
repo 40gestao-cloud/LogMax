@@ -2,11 +2,25 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '../lib/log.js';
 
-// Disparado pelo Vercel Cron diariamente (ver vercel.json -> crons).
-// Vercel injeta automaticamente Authorization: Bearer ${CRON_SECRET}
-// nas chamadas agendadas — validamos pra rejeitar requests externos.
+// Dispatcher de tarefas agendadas — reduz nº de serverless functions
+// (limite 12 no Hobby). Vercel Cron chama /api/cron?task=<nome> nos
+// horários definidos em vercel.json > crons.
+//
+// Tasks disponíveis:
+//   ?task=reverter-promocoes  → RPC reverter_promocoes_expiradas
+//   ?task=expirar-competicoes → RPC expirar_competicoes
+//
+// Cada task chama uma RPC idempotente que retorna nº de linhas
+// afetadas.
+
+const TASKS: Record<string, string> = {
+  'reverter-promocoes':  'reverter_promocoes_expiradas',
+  'expirar-competicoes': 'expirar_competicoes',
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const log = createLogger(req, 'reverter-promocoes-expiradas');
+  const taskParam = String(req.query.task ?? '');
+  const log = createLogger(req, `cron:${taskParam || 'unknown'}`);
 
   try {
     const cronSecret = process.env.CRON_SECRET;
@@ -17,6 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.headers.authorization !== `Bearer ${cronSecret}`) {
       log.warn('auth.invalid_secret');
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const rpc = TASKS[taskParam];
+    if (!rpc) {
+      log.warn('task.unknown', { task: taskParam });
+      return res.status(400).json({ error: `Task desconhecida: ${taskParam}` });
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -30,15 +50,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data, error } = await admin.rpc('reverter_promocoes_expiradas');
+    const { data, error } = await admin.rpc(rpc);
     if (error) {
       log.error('rpc.failed', error);
       return res.status(500).json({ error: error.message });
     }
 
     const total = typeof data === 'number' ? data : 0;
-    log.info('promocoes.reverted', { total });
-    return res.status(200).json({ success: true, total });
+    log.info('cron.ok', { task: taskParam, total });
+    return res.status(200).json({ success: true, task: taskParam, total });
   } catch (err) {
     log.error('handler.unhandled', err);
     return res.status(500).json({ error: 'Erro interno do servidor.' });

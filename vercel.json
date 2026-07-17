@@ -4,11 +4,11 @@
   ],
   "crons": [
     {
-      "path": "/api/reverter-promocoes-expiradas",
+      "path": "/api/cron?task=reverter-promocoes",
       "schedule": "5 3 * * *"
     },
     {
-      "path": "/api/expirar-competicoes",
+      "path": "/api/cron?task=expirar-competicoes",
       "schedule": "10 3 * * *"
     }
   ]
