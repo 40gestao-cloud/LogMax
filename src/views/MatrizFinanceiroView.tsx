@@ -4,32 +4,13 @@ import { DollarSign, TrendingDown, Scale } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
-import { FilialsComparativo, OP_FILIAIS, FilialOp } from '../components/FilialsComparativo';
-import { daysAgoBR } from '../lib/dates';
+import { FilialsComparativo } from '../components/FilialsComparativo';
+import {
+  Period, PERIOD_LABELS, periodStartISO,
+  sumByFilial, countByFilial, zerosByFilial, OP_FILIAIS, FilialOp,
+} from '../lib/matrizAgg';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-type Period = '7d' | '30d' | '3m';
-const PERIOD_LABELS: Record<Period, string> = { '7d': '7 dias', '30d': '30 dias', '3m': '3 meses' };
-
-// Corte no fuso do Acre — retorna 'YYYY-MM-DD' que permite comparação
-// string direta com ISOs (r.created_at, c.vencimento).
-function periodStartISO(p: Period): string {
-  if (p === '7d')  return daysAgoBR(6);
-  if (p === '30d') return daysAgoBR(29);
-  return daysAgoBR(89);
-}
-
-function sumByFilial(arr: any[], key: string): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial] += Number(r[key]) || 0;
-  return out as Record<FilialOp, number>;
-}
-function countByFilial(arr: any[]): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial]++;
-  return out as Record<FilialOp, number>;
-}
 
 export function MatrizFinanceiroView() {
   const [period, setPeriod] = useState<Period>('30d');
@@ -50,9 +31,9 @@ export function MatrizFinanceiroView() {
   const vendasTotal = useMemo(() => sumByFilial(vPeriodo, 'total_final'), [vPeriodo]);
   const vendasCount = useMemo(() => countByFilial(vPeriodo), [vPeriodo]);
   const ticketMedio = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const f of OP_FILIAIS) out[f] = vendasCount[f] > 0 ? vendasTotal[f] / vendasCount[f] : 0;
-    return out as Record<FilialOp, number>;
+    return out;
   }, [vendasTotal, vendasCount]);
 
   // ── Resultado financeiro alinhado ao placar da Competição ──────────────
@@ -74,9 +55,9 @@ export function MatrizFinanceiroView() {
   const receitasPagas = useMemo(() => sumByFilial(receberPagoPeriodo, 'valor'), [receberPagoPeriodo]);
   const despesasPagas = useMemo(() => sumByFilial(pagarPagoPeriodo,   'valor'), [pagarPagoPeriodo]);
   const resultado = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const f of OP_FILIAIS) out[f] = receitasPagas[f] - despesasPagas[f];
-    return out as Record<FilialOp, number>;
+    return out;
   }, [receitasPagas, despesasPagas]);
 
   return (

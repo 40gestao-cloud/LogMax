@@ -4,17 +4,11 @@ import { Clock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
-import { FilialsComparativo, OP_FILIAIS, FilialOp } from '../components/FilialsComparativo';
-import { daysAgoBR } from '../lib/dates';
-
-type Period = '7d' | '30d' | '3m';
-const PERIOD_LABELS: Record<Period, string> = { '7d': '7 dias', '30d': '30 dias', '3m': '3 meses' };
-
-function periodStartISO(p: Period): string {
-  if (p === '7d')  return daysAgoBR(6);
-  if (p === '30d') return daysAgoBR(29);
-  return daysAgoBR(89);
-}
+import { FilialsComparativo } from '../components/FilialsComparativo';
+import {
+  Period, PERIOD_LABELS, periodStartISO,
+  zerosByFilial, OP_FILIAIS, FilialOp,
+} from '../lib/matrizAgg';
 
 export function MatrizRHView() {
   const [period, setPeriod] = useState<Period>('30d');
@@ -38,30 +32,30 @@ export function MatrizRHView() {
   );
 
   const presencasPeriodo = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const r of freqPeriodo) {
       const fil = fnFilialMap[r.funcionario_id];
       if (fil && out[fil] !== undefined && r.status === 'Presente') out[fil]++;
     }
-    return out as Record<FilialOp, number>;
+    return out;
   }, [freqPeriodo, fnFilialMap]);
 
   const faltasPeriodo = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const r of freqPeriodo) {
       const fil = fnFilialMap[r.funcionario_id];
       if (fil && out[fil] !== undefined && r.status === 'Falta') out[fil]++;
     }
-    return out as Record<FilialOp, number>;
+    return out;
   }, [freqPeriodo, fnFilialMap]);
 
   const taxaPresenca = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const f of OP_FILIAIS) {
       const total = presencasPeriodo[f] + faltasPeriodo[f];
       out[f] = total > 0 ? Math.round((presencasPeriodo[f] / total) * 100) : 0;
     }
-    return out as Record<FilialOp, number>;
+    return out;
   }, [presencasPeriodo, faltasPeriodo]);
 
   return (

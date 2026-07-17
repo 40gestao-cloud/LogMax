@@ -4,21 +4,11 @@ import { Megaphone, TrendingUp, Users, DollarSign } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
-import { FilialsComparativo, OP_FILIAIS, FilialOp, Metric } from '../components/FilialsComparativo';
+import { FilialsComparativo, FilialOp, Metric } from '../components/FilialsComparativo';
 import { daysAgoBR, todayBR } from '../lib/dates';
+import { sumByFilial, countByFilial, zerosByFilial, OP_FILIAIS } from '../lib/matrizAgg';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-function countByFilial(arr: any[]): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial]++;
-  return out as Record<FilialOp, number>;
-}
-function sumByFilial(arr: any[], key: string): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial] += Number(r[key]) || 0;
-  return out as Record<FilialOp, number>;
-}
 
 const PERIOD_LABELS = { '30d': '30 dias', '90d': '90 dias', 'ano': 'Este ano' } as const;
 type Period = keyof typeof PERIOD_LABELS;
@@ -50,9 +40,9 @@ export function MatrizMarketingView() {
   // v_campanha_roi das campanhas da filial no intervalo). Campanhas sem
   // filial ficam de fora, pra não distorcer o comparativo.
   const receitaCampanhas = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const r of roi) {
-      const fil = r.filial;
+      const fil = r.filial as FilialOp;
       if (!fil || out[fil] === undefined) continue;
       const ini = String(r.data_inicio ?? '');
       const fim = String(r.data_fim ?? '');
@@ -61,7 +51,7 @@ export function MatrizMarketingView() {
         out[fil] += Number(r.receita) || 0;
       }
     }
-    return out as Record<FilialOp, number>;
+    return out;
   }, [roi, cutoffISO, hojeISO]);
 
   // Redes sociais — último registro por plataforma × filial

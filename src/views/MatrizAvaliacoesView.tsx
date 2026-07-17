@@ -202,6 +202,8 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
           profile={profile}
           tipoAtivo={tipoAtivo}
           onSelectTipo={setTipoAtivo}
+          filialFiltro={filialFiltro}
+          podeAvaliar={podeAvaliar}
         />
 
         <PainelTipo
@@ -223,11 +225,13 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 }
 
 // ── Sidebar com grupos e contagem ─────────────────────────────────────
-function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
+function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFiltro, podeAvaliar }: {
   competicao: Competicao;
   profile: UserProfile;
   tipoAtivo: ItemTipo;
   onSelectTipo: (id: ItemTipo) => void;
+  filialFiltro: FilialFiltro;
+  podeAvaliar: boolean;
 }) {
   // Contadores por tipo: {total_no_periodo, avaliados_por_mim}
   const [contadores, setContadores] = useState<Record<string, { total: number; meus: number }>>({});
@@ -249,15 +253,20 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
     });
 
     // Conta itens em cada tabela dentro do período. Uma query por tipo (paralela).
+    // Se filialFiltro !== 'todas', restringe a contagem à filial selecionada
+    // pra sidebar refletir o mesmo escopo do painel.
     const ini = competicao.data_inicio;
     const fim = competicao.data_fim + 'T23:59:59.999';
+    const filiaisAlvo: readonly string[] = filialFiltro === 'todas'
+      ? (OP_FILIAIS as unknown as string[])
+      : [filialFiltro];
     const tipos = GRUPOS.flatMap(g => g.tipos);
     const results = await Promise.all(tipos.map(async t => {
       const table = ENDPOINT_TO_TABLE[t.endpoint] ?? t.endpoint;
       const { data } = await supabase
         .from(table)
         .select('id,filial,' + t.dateField)
-        .in('filial', OP_FILIAIS as unknown as string[])
+        .in('filial', filiaisAlvo as string[])
         .gte(t.dateField, ini)
         .lte(t.dateField, fim);
       const rows = (data ?? []) as any[];
@@ -272,7 +281,7 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
     }
     setContadores(novos);
     setLoading(false);
-  }, [competicao.id, competicao.data_inicio, competicao.data_fim, profile.id]);
+  }, [competicao.id, competicao.data_inicio, competicao.data_fim, profile.id, filialFiltro]);
 
   useEffect(() => { carregarContadores(); }, [carregarContadores]);
 
@@ -299,6 +308,8 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
               const meus = c?.meus ?? 0;
               const pendentes = Math.max(0, total - meus);
               const isActive = tipoAtivo === tipo.id;
+              // Admin acessa a Central em modo leitura, então "pendente pra mim"
+              // não faz sentido — mostra só o total do período.
               return (
                 <button
                   key={tipo.id}
@@ -315,6 +326,8 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo }: {
                       <Loader2 size={10} className="animate-spin text-gray-600" />
                     ) : total === 0 ? (
                       <span className="text-[9px] text-gray-600 font-mono">0</span>
+                    ) : !podeAvaliar ? (
+                      <span className="text-[9px] font-mono text-gray-400">{total}</span>
                     ) : pendentes > 0 ? (
                       <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30">
                         {pendentes}

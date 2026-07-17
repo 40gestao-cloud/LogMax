@@ -4,20 +4,10 @@ import { Package, AlertTriangle } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
 import { CompeticaoBadge } from '../components/CompeticaoBadge';
-import { FilialsComparativo, OP_FILIAIS, FilialOp } from '../components/FilialsComparativo';
+import { FilialsComparativo } from '../components/FilialsComparativo';
+import { sumByFilial, countByFilial, zerosByFilial, OP_FILIAIS } from '../lib/matrizAgg';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-function countByFilial(arr: any[]): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial]++;
-  return out as Record<FilialOp, number>;
-}
-function sumByFilial(arr: any[], key: string): Record<FilialOp, number> {
-  const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
-  for (const r of arr) if (out[r.filial] !== undefined) out[r.filial] += Number(r[key]) || 0;
-  return out as Record<FilialOp, number>;
-}
 
 export function MatrizLogisticaView() {
   const { data: produtos, isLoading } = useFetchData('/api/saldosestoqueview');
@@ -25,14 +15,14 @@ export function MatrizLogisticaView() {
   const totalProdutos = useMemo(() => countByFilial(produtos), [produtos]);
 
   const estoqueCritico = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const p of produtos) {
       const fil = p.filial;
       if (out[fil] === undefined) continue;
       const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : 10;
       if ((Number(p.estoque) || 0) <= min) out[fil]++;
     }
-    return out as Record<FilialOp, number>;
+    return out;
   }, [produtos]);
 
   const valorEstoque = useMemo(() =>
@@ -43,10 +33,10 @@ export function MatrizLogisticaView() {
   [produtos]);
 
   const taxaCritico = useMemo(() => {
-    const out: Record<string, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    const out = zerosByFilial();
     for (const f of OP_FILIAIS)
       out[f] = totalProdutos[f] > 0 ? Math.round((estoqueCritico[f] / totalProdutos[f]) * 100) : 0;
-    return out as Record<FilialOp, number>;
+    return out;
   }, [estoqueCritico, totalProdutos]);
 
   return (
