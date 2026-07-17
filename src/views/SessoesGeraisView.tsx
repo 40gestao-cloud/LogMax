@@ -56,8 +56,11 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
   {
     kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',
     modulos: [
+      // Aprovações de Cotação: admin/CEO precisa aprovar cotações acima da
+      // alçada (migr. 204) mesmo em modo Matriz — antes tinha que trocar
+      // pra cada filial. Alçadas: configuração é da holding, mora aqui.
       { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-green-400',
-        submenus: ['Gerenciamento', 'Relatórios'] },
+        submenus: ['Aprovações de Cotação', 'Alçadas', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {
