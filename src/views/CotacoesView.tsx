@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
@@ -13,6 +13,10 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
+
+// Status considerados "propostas vivas" para contagem de concorrentes.
+// Cancelado/Negado são histórico — aparecem na comparação mas não contam.
+const STATUS_VIVOS = new Set(['Aguardando Financeiro', 'Aprovado']);
 
 // notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -132,6 +136,37 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
   }));
 
+  // Agrupa cotações por requisição para mostrar propostas concorrentes.
+  // Boa prática de compras: coletar >=3 propostas por requisição antes de
+  // aprovar. Trata Cancelado/Negado como propostas históricas — aparecem
+  // no modal de comparação, mas não contam pro aviso soft.
+  const propostasPorRequisicao = useMemo(() => {
+    const map = new Map<string, any[]>();
+    enriched.forEach((c: any) => {
+      if (!c.requisicao_id) return;
+      const arr = map.get(c.requisicao_id) ?? [];
+      arr.push(c);
+      map.set(c.requisicao_id, arr);
+    });
+    return map;
+  }, [enriched]);
+  const contarVivos = (reqId: string) =>
+    (propostasPorRequisicao.get(reqId) ?? []).filter((c: any) => STATUS_VIVOS.has(c.status)).length;
+
+  // Modal de comparação — chave = requisicao_id.
+  const [comparando, setComparando] = useState<string | null>(null);
+  const propostasDoModal = useMemo(() => {
+    if (!comparando) return [];
+    const lista = propostasPorRequisicao.get(comparando) ?? [];
+    // Menor preço primeiro (proposta candidata a vencedora).
+    return [...lista].sort((a, b) => Number(a.valor_total ?? 0) - Number(b.valor_total ?? 0));
+  }, [comparando, propostasPorRequisicao]);
+  const menorPrecoDoModal = useMemo(() => {
+    const vivos = propostasDoModal.filter((c: any) => STATUS_VIVOS.has(c.status));
+    if (vivos.length === 0) return null;
+    return Math.min(...vivos.map((c: any) => Number(c.valor_total ?? 0)));
+  }, [propostasDoModal]);
+
   const enrichedFiltered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return enriched;
@@ -154,6 +189,16 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   // Compras cria a cotação → vai direto para 'Aguardando Financeiro' e notifica.
   const handleSave = async () => {
     if (!validate()) return;
+    // Aviso soft: recomendado ter >=3 propostas por requisição antes do envio.
+    // Bloqueio hard atrapalharia compra urgente; então só confirma.
+    const vivosAtuais = contarVivos(form.requisicao_id);
+    if (vivosAtuais < 2) {
+      const ordinal = vivosAtuais === 0 ? '1ª' : '2ª';
+      const ok = await confirm(
+        `Esta será a ${ordinal} proposta para esta requisição. Boa prática de compras é coletar pelo menos 3 propostas antes de enviar ao Financeiro. Deseja enviar assim mesmo?`
+      );
+      if (!ok) return;
+    }
     setIsSaving(true);
     showToast('Enviando cotação ao Financeiro...', 'info', false);
     try {
@@ -464,7 +509,21 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
                 <AnimatePresence>
                   {enrichedFiltered.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.req?.item ?? '—'}</td>
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{item.req?.item ?? '—'}</span>
+                          {item.requisicao_id && (propostasPorRequisicao.get(item.requisicao_id) ?? []).length > 1 && (
+                            <button
+                              onClick={() => setComparando(item.requisicao_id)}
+                              title="Comparar propostas concorrentes"
+                              className="neu-button px-2 py-0.5 rounded-full text-[10px] font-bold text-cyan-300 hover:bg-cyan-400/10 border border-cyan-400/20 flex items-center gap-1"
+                            >
+                              <GitCompare size={10} />
+                              {(propostasPorRequisicao.get(item.requisicao_id) ?? []).length} propostas
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(item.valor_total ?? 0))}</td>
@@ -540,6 +599,102 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
           />
         </div>
       )}
+
+      {/* Modal de comparação de propostas concorrentes (mesma requisição) */}
+      <AnimatePresence>
+        {comparando && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setComparando(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-300">
+                    Comparar propostas
+                    <span className="text-accent ml-2">
+                      — {requisicoes.find((r: any) => r.id === comparando)?.item ?? 'requisição'}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {propostasDoModal.length} proposta(s) registrada(s). A menor entre as vivas está destacada.
+                  </p>
+                </div>
+                <button onClick={() => setComparando(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="overflow-auto main-scrollbar flex-1">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                      <th className="pb-3 font-bold px-3">Fornecedor</th>
+                      <th className="pb-3 font-bold px-3 text-right">Valor</th>
+                      <th className="pb-3 font-bold px-3">Prazo</th>
+                      <th className="pb-3 font-bold px-3">Validade</th>
+                      <th className="pb-3 font-bold px-3 text-center">Status</th>
+                      {podeDecidir && <th className="pb-3 font-bold px-3 text-right">Ação</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {propostasDoModal.map((c: any) => {
+                      const isVivo = STATUS_VIVOS.has(c.status);
+                      const isMenor = isVivo && menorPrecoDoModal !== null && Number(c.valor_total ?? 0) === menorPrecoDoModal;
+                      return (
+                        <tr key={c.id}
+                          className={`border-b border-white/5 ${isMenor ? 'bg-emerald-400/5' : ''} ${!isVivo ? 'opacity-50' : ''}`}>
+                          <td className="py-2.5 px-3 text-xs text-gray-200">
+                            <div className="flex items-center gap-1.5">
+                              {isMenor && <span title="Menor preço"><Award size={12} className="text-emerald-400 shrink-0" /></span>}
+                              {c.forn?.nome ?? '—'}
+                            </div>
+                          </td>
+                          <td className={`py-2.5 px-3 text-xs font-mono text-right tabular-nums ${isMenor ? 'text-emerald-300 font-bold' : 'text-gray-200'}`}>
+                            R$ {formatBRL(Number(c.valor_total ?? 0))}
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-gray-400">{c.prazo_entrega || '—'}</td>
+                          <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{c.validade || '—'}</td>
+                          <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} /></td>
+                          {podeDecidir && (
+                            <td className="py-2.5 px-3 text-right">
+                              {c.status === 'Aguardando Financeiro' && (
+                                <button
+                                  onClick={() => {
+                                    setComparando(null);
+                                    setDecisao({ cot: c, tipo: 'aprovar' });
+                                    setFeedbackInput('');
+                                  }}
+                                  className="neu-button py-1 px-2.5 rounded-lg text-[11px] font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors inline-flex items-center gap-1"
+                                >
+                                  <Check size={10} /> Aprovar
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end mt-4 shrink-0">
+                <button onClick={() => setComparando(null)}
+                  className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal de decisão do Financeiro */}
       <AnimatePresence>
