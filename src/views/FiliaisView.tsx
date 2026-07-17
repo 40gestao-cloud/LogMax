@@ -146,7 +146,15 @@ export const FiliaisView = ({ showToast }: any) => {
   const [imagemUploading, setImagemUploading] = useState(false);
   const imagemInputRef = useRef<HTMLInputElement>(null);
 
-  const filtered = data.filter((item: any) =>
+  // Isolamento por filial: mostra apenas os registros cujo nicho bate com a
+  // unidade ativa no topbar. Vale pra admin/CEO/gerente/colaborador — o
+  // seletor de unidade é a régua canônica de escopo. Registros históricos
+  // sem `detalhes.nicho` gravado caem no fallback do nome via detectarNicho.
+  const escopadoPorFilial = data.filter((item: any) => {
+    const nichoItem = detectarNicho(item.detalhes?.nicho, item.nome);
+    return nichoItem === nichoAtivo;
+  });
+  const filtered = escopadoPorFilial.filter((item: any) =>
     [item.nome, item.cnpj, item.cidade, item.celular, item.endereco, item.representante]
       .some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
@@ -285,8 +293,10 @@ export const FiliaisView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gestão de Filiais</h2>
-          <p className="text-sm text-gray-400 mt-1">Gerencie os locais e unidades físicas da empresa.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gestão de Filiais — {nichoAtivo}</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Você está vendo apenas as unidades de <span className="text-accent font-bold">{nichoAtivo}</span>. Troque de unidade no topbar para ver outras.
+          </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           {data.length > 0 && (
