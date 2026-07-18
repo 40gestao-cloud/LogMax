@@ -693,6 +693,48 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
               )}
 
+              {/* Aguardando votação — visão somente-leitura pra quem gerencia mas não vota (admin) */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && !podeVotar && (
+                <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                      <MessageCircle size={13} className="text-accent" /> Votação do conselho
+                    </h3>
+                    <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
+                      <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
+                      <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
+                      <span className={votos.length >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
+                        Quórum: {votos.length}/{quorumMinimo}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Aguardando CEO e conselheiros votarem pra declarar a filial vencedora. Nenhuma ação sua é necessária aqui.
+                  </p>
+                  {votos.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/5">
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
+                        Votos registrados ({votos.length})
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {votos.map(v => (
+                          <div key={v.id} className="flex items-start gap-2 text-xs">
+                            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${
+                              v.voto === 'aceita'
+                                ? 'bg-emerald-500/15 text-emerald-400'
+                                : 'bg-red-500/15 text-red-400'
+                            }`}>
+                              {v.voto === 'aceita' ? 'Aceita' : `Rejeita → ${v.filial_escolhida}`}
+                            </span>
+                            <span className="text-gray-400 truncate">{v.comentario ?? '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Declaração de vencedora — quórum dinâmico (maioria simples dos eleitores) */}
               {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length >= quorumMinimo && (() => {
                 const sugerida = sugestaoRejeicao ?? podio[0]?.filial;
