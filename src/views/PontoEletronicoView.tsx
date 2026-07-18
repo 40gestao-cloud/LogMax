@@ -543,10 +543,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     setEnviandoCodigo(true);
     setScanResult(null);
     try {
-      const res = await fetch('/api/register-ponto-codigo', {
+      const res = await fetch('/api/register-ponto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ codigo }),
+        body: JSON.stringify({ method: 'codigo', codigo }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -583,10 +583,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     setShowScanner(false);
     setScanResult(null);
     try {
-      const res = await fetch('/api/register-ponto-qr', {
+      const res = await fetch('/api/register-ponto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ method: 'qr', token }),
       });
       const json = await res.json();
       if (!res.ok) {

@@ -11,7 +11,7 @@ type Result =
 // Rota pública /p?t=<token> — destino do QR lido pela câmera nativa do celular.
 // - Sem sessão: mostra LoginScreen; assim que autenticar, o useEffect dispara
 //   o POST com o token preservado na URL.
-// - Com sessão: chama /api/register-ponto-qr imediatamente e mostra o resultado.
+// - Com sessão: chama /api/register-ponto (method=qr) imediatamente e mostra o resultado.
 // - O token é o mesmo HMAC validado em api/register-ponto-qr.ts; janela curta
 //   de validade (já é responsabilidade do servidor).
 export function RegistroPontoExpressView() {
@@ -38,13 +38,13 @@ export function RegistroPontoExpressView() {
     setRegistrando(true);
     setResult(null);
 
-    fetch('/api/register-ponto-qr', {
+    fetch('/api/register-ponto', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ method: 'qr', token }),
     })
       .then(async res => {
         const json = await res.json().catch(() => ({}));

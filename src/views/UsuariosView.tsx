@@ -310,10 +310,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (!session?.access_token) { showToast('Sessão expirada.', 'error'); return; }
     setDeleting(true);
     try {
-      const res = await fetch('/api/delete-user', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ action: 'delete', userId }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', 'error'); return; }
@@ -342,10 +342,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       const payload = (basePayload.role === 'ceo' || basePayload.role === 'conselheiro')
         ? { ...basePayload, setor: 'all', setores_extras: [] }
         : basePayload;
-      const res = await fetch('/api/create-user', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ action: 'create', ...payload }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao criar usuário.', 'error'); return; }
@@ -450,10 +450,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         if (editForm.filial && editForm.filial !== 'Matriz') payload.filial = editForm.filial;
       }
 
-      const res = await fetch('/api/update-user', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ action: 'update', ...payload }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao atualizar.', 'error'); return; }
