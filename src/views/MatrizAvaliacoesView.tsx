@@ -5,7 +5,7 @@ import {
   Palette, ShoppingCart, Package, Users, UserCircle, ChevronRight, Wallet, ArrowLeft,
   Instagram, Building2, Sparkles,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, ENDPOINT_TABLE_MAP } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -364,7 +364,7 @@ function LandingProgresso({ competicao, profile, podeAvaliar, onSelectGrupo }: {
     const fim = competicao.data_fim + 'T23:59:59.999';
     const tipos = GRUPOS.flatMap(g => g.tipos);
     const results = await Promise.all(tipos.map(async t => {
-      const table = ENDPOINT_TO_TABLE[t.endpoint] ?? t.endpoint;
+      const table = ENDPOINT_TABLE_MAP[t.endpoint] ?? t.endpoint;
       const { data } = await supabase
         .from(table)
         .select('id,filial,' + t.dateField)
@@ -499,7 +499,7 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
       : [filialFiltro];
     const tipos = GRUPOS.flatMap(g => g.tipos);
     const results = await Promise.all(tipos.map(async t => {
-      const table = ENDPOINT_TO_TABLE[t.endpoint] ?? t.endpoint;
+      const table = ENDPOINT_TABLE_MAP[t.endpoint] ?? t.endpoint;
       const { data } = await supabase
         .from(table)
         .select('id,filial,' + t.dateField)
@@ -580,25 +580,6 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
     </aside>
   );
 }
-
-// Endpoint → nome da tabela (usado pra count queries)
-const ENDPOINT_TO_TABLE: Record<string, string> = {
-  '/api/marketingartesview':              'marketing_artes',
-  '/api/marketingpromocoesview':          'marketing_promocoes',
-  '/api/marketingcampanhasview':          'marketing_campanhas',
-  '/api/metricasredessociaisview':        'metricas_redes_sociais',
-  '/api/requisicoesview':                 'requisicoes',
-  '/api/cotacoesview':                    'cotacoes',
-  '/api/orcamentosview':                  'orcamentos',
-  '/api/produtosview':                    'produtos',
-  '/api/crmview-clientes':                'clientes',
-  '/api/crmview-fornecedores':            'fornecedores',
-  '/api/servicosview':                    'servicos',
-  '/api/contaspagarview':                 'contas_pagar',
-  '/api/contasreceberview':               'contas_receber',
-  '/api/frequenciatrabalhocomfilialview': 'frequencia_trabalho_com_filial',
-  '/api/avaliacoesview':                  'avaliacoes',
-};
 
 // ── Painel principal do tipo ativo ────────────────────────────────────
 function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, showToast, filtro, onFiltroChange, filialFiltro, onFilialFiltroChange }: {

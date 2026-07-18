@@ -102,6 +102,8 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   'requerimentos':                    'requerimentos',
   '/api/avaliacoesmatrizview':        'avaliacoes_matriz',
   '/api/competicoesmatrizview':       'competicoes_matriz',
+  '/api/avaliacoesview':              'avaliacoes',
+  '/api/frequenciatrabalhocomfilialview': 'frequencia_trabalho_com_filial',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
@@ -122,7 +124,7 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'vendas',
   'marketing_promocoes', 'marketing_tarefas',
   'marketing_campanhas', 'marketing_cupons', 'marketing_calendario',
-  'treinamento_inscricoes', 'afastamentos', 'frequencia_trabalho',
+  'treinamento_inscricoes', 'afastamentos', 'frequencia_trabalho', 'frequencia_trabalho_com_filial',
   'relatorios_bi', 'briefings_diarios',
   'tarefas',
   'ti_chamados', 'desenvolvimentos_ia',
