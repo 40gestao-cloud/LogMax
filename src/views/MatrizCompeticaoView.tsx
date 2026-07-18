@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2 } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialOp = typeof OP_FILIAIS[number];
@@ -100,6 +101,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [encerrando, setEncerrando] = useState(false);
   const [encerrandoAgora, setEncerrandoAgora] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
+  const [baixandoPdf, setBaixandoPdf] = useState(false);
   const [modalParabens, setModalParabens] = useState<string | null>(null);
   const [editandoVoto, setEditandoVoto] = useState(false);
   // Total de eleitores elegíveis (CEO + conselheiros da Matriz). Alimenta
@@ -400,6 +402,43 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     );
   }
 
+  const baixarPdfResultado = async () => {
+    if (!placar || !competicaoAtual) return;
+    setBaixandoPdf(true);
+    try {
+      const dimensoes = DIMENSOES
+        .filter(d => !!placar.placar?.por_dimensao?.[d.id])
+        .map(d => {
+          const dim = placar.placar!.por_dimensao[d.id];
+          const semJulgamento = placar.dims_origem?.[d.id] === 'sem_julgamento';
+          const filiais: Record<string, { valor: number | null; pontos: number }> = {};
+          for (const f of OP_FILIAIS) {
+            const cell = dim.filiais?.[f];
+            filiais[f] = { valor: typeof cell?.valor === 'number' ? cell.valor : null, pontos: Number(cell?.pontos ?? 0) };
+          }
+          return { id: d.id, label: d.label, peso: Number(dim.peso ?? 0), fmt: d.fmt, semJulgamento, filiais };
+        });
+      await exportCompeticaoResultadoPDF(
+        {
+          nome: competicaoAtual.nome,
+          data_inicio: competicaoAtual.data_inicio,
+          data_fim: competicaoAtual.data_fim,
+          status: competicaoAtual.status,
+          vencedora: competicaoAtual.vencedora,
+          analise_ia: competicaoAtual.analise_ia,
+        },
+        podio,
+        dimensoes,
+        votos,
+        `competicao-${competicaoAtual.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`,
+      );
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    } finally {
+      setBaixandoPdf(false);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -449,6 +488,15 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={baixarPdfResultado}
+                      disabled={baixandoPdf}
+                      className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+                      title="Baixar resultado por filial em PDF"
+                    >
+                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+                      Baixar PDF
+                    </button>
                     {placar.competicao.status === 'em_andamento' && navigate && (
                       <button
                         onClick={() => navigate('matriz-avaliacoes')}

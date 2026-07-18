@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   Trophy, Star, Check, X, MessageSquare, Loader2, Search,
   Palette, ShoppingCart, Package, Users, UserCircle, ChevronRight, Wallet, ArrowLeft,
-  Instagram, Building2, Sparkles,
+  Instagram, Building2, Sparkles, FileDown, FileSpreadsheet,
 } from 'lucide-react';
 import { supabase, ENDPOINT_TABLE_MAP } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -12,6 +12,7 @@ import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
+import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialOp = typeof OP_FILIAIS[number];
@@ -165,6 +166,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const [filialFiltro, setFilialFiltro] = useState<FilialFiltro>('todas');
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
+  const [exportando, setExportando] = useState<'pdf' | 'excel' | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -197,6 +199,32 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       </motion.div>
     );
   }
+
+  const nomeArquivo = `central-avaliacao-${competicao.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`;
+
+  const baixarPDF = async () => {
+    setExportando('pdf');
+    try {
+      const rel = await buscarRelatorioCentralAvaliacao(competicao);
+      await exportCentralAvaliacaoPDF(rel, nomeArquivo);
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    } finally {
+      setExportando(null);
+    }
+  };
+
+  const baixarExcel = async () => {
+    setExportando('excel');
+    try {
+      const rel = await buscarRelatorioCentralAvaliacao(competicao);
+      await exportCentralAvaliacaoExcel(rel, nomeArquivo);
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar Excel.', 'error');
+    } finally {
+      setExportando(null);
+    }
+  };
 
   const tipoConfig = tipoAtivo ? TIPO_BY_ID.get(tipoAtivo)! : null;
   const grupoFocado = tipoAtivo ? GRUPOS.find(g => g.tipos.some(t => t.id === tipoAtivo))! : null;
@@ -247,11 +275,31 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
               </div>
             </div>
           </div>
-          {!podeAvaliar && (
-            <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-gray-500/15 text-gray-400 border border-gray-500/30">
-              Modo leitura
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={baixarPDF}
+              disabled={exportando !== null}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+              title="Baixar consolidado da Central de Avaliação em PDF"
+            >
+              {exportando === 'pdf' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+              PDF
+            </button>
+            <button
+              onClick={baixarExcel}
+              disabled={exportando !== null}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+              title="Baixar consolidado da Central de Avaliação em Excel"
+            >
+              {exportando === 'excel' ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
+              Excel
+            </button>
+            {!podeAvaliar && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-gray-500/15 text-gray-400 border border-gray-500/30">
+                Modo leitura
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
