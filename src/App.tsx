@@ -7,7 +7,7 @@ import { useAulaConfig } from './hooks/useAulaConfig';
 import { aulaFiltraUsuario, aulaPermiteView } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import {
-  SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS, COMPARATIVOS_MATRIZ_MACROS,
+  SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS,
 } from './views/SessoesGeraisView';
 import { MATRIZ_ALLOWED_SUBMENUS, MATRIZ_MODULES } from './lib/matrizMenu';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -110,10 +110,6 @@ const OrcamentosView                       = lazy(() => import('./views/Orcament
 const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
 const ClienteEspecialView                  = lazy(() => import('./views/ClienteEspecialView').then(m => ({ default: m.ClienteEspecialView })));
 const MetricasRedesSociaisView             = lazy(() => import('./views/MetricasRedesSociaisView').then(m => ({ default: m.MetricasRedesSociaisView })));
-const MatrizRHView                         = lazy(() => import('./views/MatrizRHView').then(m => ({ default: m.MatrizRHView })));
-const MatrizFinanceiroView                 = lazy(() => import('./views/MatrizFinanceiroView').then(m => ({ default: m.MatrizFinanceiroView })));
-const MatrizLogisticaView                  = lazy(() => import('./views/MatrizLogisticaView').then(m => ({ default: m.MatrizLogisticaView })));
-const MatrizMarketingView                  = lazy(() => import('./views/MatrizMarketingView').then(m => ({ default: m.MatrizMarketingView })));
 const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
@@ -301,10 +297,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
               <button onClick={() => { navigate('analise-ia'); onClose?.(); }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'analise-ia' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Brain size={16} /><span>Análise com IA</span>
-              </button>
-              <button onClick={() => { navigate('comparativos-matriz'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'comparativos-matriz' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-                <BarChart3 size={16} /><span>Comparativos Matriz</span>
               </button>
               <button onClick={() => { navigate('matriz-capital'); onClose?.(); }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -791,7 +783,6 @@ function LogMaxAppInner() {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} badges={badges} matrizMode={matrizMode} />;
       case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
       case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
-      case 'comparativos-matriz':             return <HubView title="Comparativos Matriz" macros={COMPARATIVOS_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
@@ -889,10 +880,6 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
-      case 'matriz-rh':                    return <MatrizRHView />;
-      case 'matriz-financeiro':            return <MatrizFinanceiroView />;
-      case 'matriz-logistica':             return <MatrizLogisticaView />;
-      case 'matriz-marketing':             return <MatrizMarketingView />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
       case 'matriz-avaliacoes':            return <MatrizAvaliacoesView showToast={st} profile={profile} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;

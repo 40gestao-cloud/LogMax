@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react';
 import {
   Trophy, Star, Check, X, MessageSquare, Loader2, Search,
-  Palette, ShoppingCart, Package, Users, UserCircle, ChevronRight,
+  Palette, ShoppingCart, Package, Users, UserCircle, ChevronRight, Wallet, ArrowLeft,
+  Instagram, Building2, Sparkles,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -10,6 +11,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialOp = typeof OP_FILIAIS[number];
@@ -22,9 +24,11 @@ const FILIAL_COLOR: Record<FilialOp, string> = {
 
 type ItemTipo =
   |'requisicao'|'cotacao'|'promocao'|'arte'|'campanha'
-  |'pedido_venda'|'ferias'|'requerimento'
+  |'orcamento'|'redes_sociais'
   |'cadastro_produto'|'cadastro_cliente'|'cadastro_fornecedor'
-  |'cadastro_servico'|'cadastro_categoria';
+  |'cadastro_servico'|'cadastro_categoria'
+  |'conta_pagar'|'conta_receber'
+  |'frequencia_trabalho'|'avaliacao_desempenho';
 
 type TipoConfig = {
   id: ItemTipo;
@@ -46,15 +50,16 @@ const GRUPOS: GrupoConfig[] = [
   {
     id: 'marketing', label: 'Marketing', icon: Palette,
     tipos: [
-      { id: 'arte',     label: 'Artes',     endpoint: '/api/marketingartesview',     descField: ['titulo','nome','descricao'], dateField: 'created_at', creative: true },
-      { id: 'promocao', label: 'Promoções', endpoint: '/api/marketingpromocoesview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true },
-      { id: 'campanha', label: 'Campanhas', endpoint: '/api/marketingcampanhasview', descField: ['nome','titulo','descricao'], dateField: 'created_at', creative: true },
+      { id: 'arte',          label: 'Artes',         endpoint: '/api/marketingartesview',       descField: ['titulo','nome','descricao'], dateField: 'created_at',    creative: true },
+      { id: 'promocao',      label: 'Promoções',     endpoint: '/api/marketingpromocoesview',   descField: ['nome','titulo','descricao'], dateField: 'created_at',    creative: true },
+      { id: 'campanha',      label: 'Campanhas',     endpoint: '/api/marketingcampanhasview',   descField: ['nome','titulo','descricao'], dateField: 'created_at',    creative: true },
+      { id: 'redes_sociais', label: 'Redes Sociais', endpoint: '/api/metricasredessociaisview', descField: ['plataforma'],                dateField: 'data_registro', creative: true },
     ],
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingCart,
     tipos: [
-      { id: 'pedido_venda', label: 'Pedidos de Venda', endpoint: '/api/pedidosvendaview', descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
+      { id: 'orcamento', label: 'Orçamentos', endpoint: '/api/orcamentosview', descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
     ],
   },
   {
@@ -67,18 +72,25 @@ const GRUPOS: GrupoConfig[] = [
   {
     id: 'rh', label: 'RH', icon: UserCircle,
     tipos: [
-      { id: 'ferias',       label: 'Férias',        endpoint: '/api/feriasview',    descField: ['funcionario_nome','colaborador_nome','descricao'], dateField: 'data_inicio', creative: false },
-      { id: 'requerimento', label: 'Requerimentos', endpoint: 'requerimentos',      descField: ['titulo','descricao','assunto'],                     dateField: 'created_at',  creative: false },
+      { id: 'frequencia_trabalho',  label: 'Frequência de Trabalho', endpoint: '/api/frequenciatrabalhocomfilialview', descField: ['nome_funcionario','justificativa','status'], dateField: 'data',       creative: false },
+      { id: 'avaliacao_desempenho', label: 'Desempenho',             endpoint: '/api/avaliacoesview',                  descField: ['observacao','tipo'],                         dateField: 'created_at', creative: false },
     ],
   },
   {
     id: 'cadastros', label: 'Cadastros', icon: Users,
     tipos: [
-      { id: 'cadastro_produto',    label: 'Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-      { id: 'cadastro_cliente',    label: 'Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+      { id: 'cadastro_categoria',  label: 'Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
       { id: 'cadastro_fornecedor', label: 'Fornecedores',endpoint: '/api/crmview-fornecedores',   descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
       { id: 'cadastro_servico',    label: 'Serviços',    endpoint: '/api/servicosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-      { id: 'cadastro_categoria',  label: 'Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
+      { id: 'cadastro_produto',    label: 'Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
+      { id: 'cadastro_cliente',    label: 'Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
+    ],
+  },
+  {
+    id: 'financeiro', label: 'Financeiro', icon: Wallet,
+    tipos: [
+      { id: 'conta_pagar',   label: 'Contas a Pagar',   endpoint: '/api/contaspagarview',   descField: ['descricao','fornecedor_nome','numero_documento'], dateField: 'created_at', creative: false },
+      { id: 'conta_receber', label: 'Contas a Receber', endpoint: '/api/contasreceberview', descField: ['descricao','cliente_nome','numero_documento'],    dateField: 'created_at', creative: false },
     ],
   },
 ];
@@ -109,6 +121,7 @@ type Avaliacao = {
 
 type Filtro = 'todos' | 'pendentes' | 'avaliados';
 type FilialFiltro = 'todas' | FilialOp;
+type Secao = null | 'filiais' | 'matriz';
 
 function firstNonEmpty(row: any, fields: string[]): string {
   for (const f of fields) {
@@ -132,7 +145,11 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const podeAvaliar = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar = profile.role === 'admin' || podeAvaliar;
 
-  const [tipoAtivo, setTipoAtivo] = useState<ItemTipo>('arte');
+  // Fluxo: secao=null → 2 cards (Dados Filiais / Tarefas Matriz).
+  //        secao='filiais' → landing dos 6 grupos → drilldown por tipo.
+  //        secao='matriz'  → painel de Tarefas da Matriz (3 tipos).
+  const [secao, setSecao] = useState<Secao>(null);
+  const [tipoAtivo, setTipoAtivo] = useState<ItemTipo | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [filialFiltro, setFilialFiltro] = useState<FilialFiltro>('todas');
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
@@ -170,21 +187,53 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
     );
   }
 
-  const tipoConfig = TIPO_BY_ID.get(tipoAtivo)!;
-  const grupoAtivo = GRUPOS.find(g => g.tipos.some(t => t.id === tipoAtivo))!;
+  const tipoConfig = tipoAtivo ? TIPO_BY_ID.get(tipoAtivo)! : null;
+  const grupoFocado = tipoAtivo ? GRUPOS.find(g => g.tipos.some(t => t.id === tipoAtivo))! : null;
+
+  const entrarNoGrupo = (grupoId: string) => {
+    const g = GRUPOS.find(x => x.id === grupoId);
+    if (!g || g.tipos.length === 0) return;
+    setTipoAtivo(g.tipos[0].id);
+    setFiltro('todos');
+    setFilialFiltro('todas');
+  };
+  const voltarLanding = () => setTipoAtivo(null);
+  const voltarSecao = () => { setSecao(null); setTipoAtivo(null); };
+
+  const headerTitulo = tipoAtivo && grupoFocado
+    ? `${grupoFocado.label} — Central de Avaliação`
+    : secao === 'filiais'
+    ? 'Dados das Filiais'
+    : secao === 'matriz'
+    ? 'Tarefas da Matriz'
+    : 'Central de Avaliação — Matriz';
+
+  const mostraBackSecao = secao !== null && !tipoAtivo;
+  const mostraBackTipo  = !!grupoFocado;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
       {/* Cabeçalho da competição */}
       <div className="neu-flat rounded-2xl border border-accent/20 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
-            <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
-              <Trophy size={12} className="text-amber-400" />
-              <span className="font-mono font-bold text-gray-200">{competicao.nome}</span>
-              <span className="text-gray-500">·</span>
-              <span className="font-mono">{competicao.data_inicio} → {competicao.data_fim}</span>
+          <div className="flex items-center gap-3 min-w-0">
+            {(mostraBackTipo || mostraBackSecao) && (
+              <button
+                onClick={mostraBackTipo ? voltarLanding : voltarSecao}
+                className="shrink-0 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg neu-button text-gray-300 hover:text-accent">
+                <ArrowLeft size={12} /> Voltar
+              </button>
+            )}
+            <div className="flex flex-col gap-1 min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-accent tracking-tight truncate">
+                {headerTitulo}
+              </h2>
+              <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                <Trophy size={12} className="text-amber-400" />
+                <span className="font-mono font-bold text-gray-200">{competicao.nome}</span>
+                <span className="text-gray-500">·</span>
+                <span className="font-mono">{competicao.data_inicio} → {competicao.data_fim}</span>
+              </div>
             </div>
           </div>
           {!podeAvaliar && (
@@ -195,51 +244,110 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         </div>
       </div>
 
-      {/* Layout: sidebar interna + painel principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_1fr] gap-5">
-        <SidebarTipos
-          competicao={competicao}
-          profile={profile}
-          tipoAtivo={tipoAtivo}
-          onSelectTipo={setTipoAtivo}
-          filialFiltro={filialFiltro}
-          podeAvaliar={podeAvaliar}
-        />
-
-        <PainelTipo
-          key={`${tipoAtivo}-${filtro}-${filialFiltro}`}
-          tipoConfig={tipoConfig}
-          grupoLabel={grupoAtivo.label}
+      {secao === null ? (
+        <LandingSecoes onSelect={setSecao} />
+      ) : secao === 'matriz' ? (
+        <MatrizTarefasPanel
           competicao={competicao}
           profile={profile}
           podeAvaliar={podeAvaliar}
           showToast={showToast}
-          filtro={filtro}
-          onFiltroChange={setFiltro}
-          filialFiltro={filialFiltro}
-          onFilialFiltroChange={setFilialFiltro}
         />
-      </div>
+      ) : tipoAtivo === null ? (
+        <LandingProgresso
+          competicao={competicao}
+          profile={profile}
+          podeAvaliar={podeAvaliar}
+          onSelectGrupo={entrarNoGrupo}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(200px,240px)_1fr] gap-5">
+          <SidebarTipos
+            competicao={competicao}
+            profile={profile}
+            tipoAtivo={tipoAtivo}
+            onSelectTipo={setTipoAtivo}
+            filialFiltro={filialFiltro}
+            podeAvaliar={podeAvaliar}
+            grupoFocado={grupoFocado!.id}
+          />
+
+          <PainelTipo
+            key={`${tipoAtivo}-${filtro}-${filialFiltro}`}
+            tipoConfig={tipoConfig!}
+            grupoLabel={grupoFocado!.label}
+            competicao={competicao}
+            profile={profile}
+            podeAvaliar={podeAvaliar}
+            showToast={showToast}
+            filtro={filtro}
+            onFiltroChange={setFiltro}
+            filialFiltro={filialFiltro}
+            onFilialFiltroChange={setFilialFiltro}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }
 
-// ── Sidebar com grupos e contagem ─────────────────────────────────────
-function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFiltro, podeAvaliar }: {
+// ── Landing de 2 seções (nível topo) ──────────────────────────────────
+function LandingSecoes({ onSelect }: { onSelect: (s: Exclude<Secao,null>) => void }) {
+  const secoes = [
+    {
+      id: 'filiais' as const,
+      label: 'Dados das Filiais',
+      hint: 'Cadastros, Compras, Financeiro, RH, Vendas e Marketing avaliados a partir do que as filiais registraram no período.',
+      icon: Building2,
+      tint: 'from-sky-500/20 to-cyan-500/10 ring-sky-500/30',
+    },
+    {
+      id: 'matriz' as const,
+      label: 'Tarefas da Matriz',
+      hint: 'Treinamentos e apresentações criadas pela Matriz — CEO e conselheiros dão nota 0-10 por participante.',
+      icon: Sparkles,
+      tint: 'from-amber-400/20 to-orange-500/10 ring-amber-400/30',
+    },
+  ];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {secoes.map(s => {
+        const Icon = s.icon;
+        return (
+          <button
+            key={s.id}
+            onClick={() => onSelect(s.id)}
+            className={`neu-flat rounded-2xl border border-white/5 hover:border-accent/50 p-6 text-left transition-all group flex flex-col gap-3 bg-gradient-to-br ${s.tint}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center ring-1 ring-accent/25">
+                <Icon size={22} className="text-accent" />
+              </div>
+              <ChevronRight size={18} className="text-gray-500 group-hover:text-accent transition-colors" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-gray-100">{s.label}</h3>
+              <p className="text-xs text-gray-400 mt-1 leading-snug">{s.hint}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Landing: 6 cards de progresso (1 por dimensão) ────────────────────
+function LandingProgresso({ competicao, profile, podeAvaliar, onSelectGrupo }: {
   competicao: Competicao;
   profile: UserProfile;
-  tipoAtivo: ItemTipo;
-  onSelectTipo: (id: ItemTipo) => void;
-  filialFiltro: FilialFiltro;
   podeAvaliar: boolean;
+  onSelectGrupo: (grupoId: string) => void;
 }) {
-  // Contadores por tipo: {total_no_periodo, avaliados_por_mim}
   const [contadores, setContadores] = useState<Record<string, { total: number; meus: number }>>({});
   const [loading, setLoading] = useState(true);
 
-  const carregarContadores = useCallback(async () => {
+  const carregar = useCallback(async () => {
     setLoading(true);
-    // Todas as avaliações do usuário atual nesta competição, agrupadas por tipo
     const { data: minhasAvals } = await supabase
       .from('avaliacoes_matriz')
       .select('item_tipo,item_id')
@@ -252,9 +360,138 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
       meusPorTipo[a.item_tipo].add(a.item_id);
     });
 
-    // Conta itens em cada tabela dentro do período. Uma query por tipo (paralela).
-    // Se filialFiltro !== 'todas', restringe a contagem à filial selecionada
-    // pra sidebar refletir o mesmo escopo do painel.
+    const ini = competicao.data_inicio;
+    const fim = competicao.data_fim + 'T23:59:59.999';
+    const tipos = GRUPOS.flatMap(g => g.tipos);
+    const results = await Promise.all(tipos.map(async t => {
+      const table = ENDPOINT_TO_TABLE[t.endpoint] ?? t.endpoint;
+      const { data } = await supabase
+        .from(table)
+        .select('id,filial,' + t.dateField)
+        .in('filial', OP_FILIAIS as unknown as string[])
+        .gte(t.dateField, ini)
+        .lte(t.dateField, fim);
+      const rows = (data ?? []) as any[];
+      return [t.id, rows] as const;
+    }));
+
+    const novos: Record<string, { total: number; meus: number }> = {};
+    for (const [tipoId, rows] of results) {
+      novos[tipoId] = {
+        total: rows.length,
+        meus: rows.filter(r => meusPorTipo[tipoId]?.has(r.id)).length,
+      };
+    }
+    setContadores(novos);
+    setLoading(false);
+  }, [competicao.id, competicao.data_inicio, competicao.data_fim, profile.id]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    const h = () => carregar();
+    window.addEventListener('avaliacao-matriz:changed', h);
+    return () => window.removeEventListener('avaliacao-matriz:changed', h);
+  }, [carregar]);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {GRUPOS.map(grupo => {
+        const Icon = grupo.icon;
+        const totais = grupo.tipos.reduce((acc, t) => {
+          const c = contadores[t.id] ?? { total: 0, meus: 0 };
+          acc.total += c.total; acc.meus += c.meus;
+          return acc;
+        }, { total: 0, meus: 0 });
+        const pendentes = Math.max(0, totais.total - totais.meus);
+        const pct = totais.total === 0 ? 0 : Math.round(100 * totais.meus / totais.total);
+        const semDados = totais.total === 0;
+
+        return (
+          <button
+            key={grupo.id}
+            onClick={() => onSelectGrupo(grupo.id)}
+            className="neu-flat rounded-2xl border border-white/5 hover:border-accent/40 p-5 text-left transition-all group flex flex-col gap-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center ring-1 ring-accent/20">
+                  <Icon size={16} className="text-accent" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-gray-100">{grupo.label}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                    {grupo.tipos.length} {grupo.tipos.length === 1 ? 'critério' : 'critérios'}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight size={14} className="text-gray-500 group-hover:text-accent transition-colors" />
+            </div>
+
+            {loading ? (
+              <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-gray-500" /><span className="text-[10px] text-gray-500">Carregando…</span></div>
+            ) : semDados ? (
+              <div className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-2 py-1 self-start">
+                Sem itens no período
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-end justify-between gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Progresso</span>
+                    <span className="text-2xl font-black tabular-nums text-gray-100">{pct}%</span>
+                  </div>
+                  <div className="flex flex-col items-end text-[10px] font-mono">
+                    {podeAvaliar && pendentes > 0 && (
+                      <span className="font-black text-amber-300">
+                        {pendentes} pendente{pendentes !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    <span className="text-gray-500">{totais.meus}/{totais.total}</span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Sidebar com tipos do grupo focado ─────────────────────────────────
+function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFiltro, podeAvaliar, grupoFocado }: {
+  competicao: Competicao;
+  profile: UserProfile;
+  tipoAtivo: ItemTipo;
+  onSelectTipo: (id: ItemTipo) => void;
+  filialFiltro: FilialFiltro;
+  podeAvaliar: boolean;
+  grupoFocado: string;
+}) {
+  const gruposVisiveis = useMemo(
+    () => GRUPOS.filter(g => g.id === grupoFocado),
+    [grupoFocado],
+  );
+  const [contadores, setContadores] = useState<Record<string, { total: number; meus: number }>>({});
+  const [loading, setLoading] = useState(true);
+
+  const carregarContadores = useCallback(async () => {
+    setLoading(true);
+    const { data: minhasAvals } = await supabase
+      .from('avaliacoes_matriz')
+      .select('item_tipo,item_id')
+      .eq('competicao_id', competicao.id)
+      .eq('avaliador_id', profile.id)
+      .eq('ativo', true);
+    const meusPorTipo: Record<string, Set<string>> = {};
+    (minhasAvals ?? []).forEach((a: any) => {
+      if (!meusPorTipo[a.item_tipo]) meusPorTipo[a.item_tipo] = new Set();
+      meusPorTipo[a.item_tipo].add(a.item_id);
+    });
+
     const ini = competicao.data_inicio;
     const fim = competicao.data_fim + 'T23:59:59.999';
     const filiaisAlvo: readonly string[] = filialFiltro === 'todas'
@@ -285,7 +522,6 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
 
   useEffect(() => { carregarContadores(); }, [carregarContadores]);
 
-  // Recarrega quando o usuário avaliar (via evento custom)
   useEffect(() => {
     const handler = () => carregarContadores();
     window.addEventListener('avaliacao-matriz:changed', handler);
@@ -294,7 +530,7 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
 
   return (
     <aside className="neu-flat rounded-2xl border border-accent/10 p-3 flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
-      {GRUPOS.map(grupo => {
+      {gruposVisiveis.map(grupo => {
         const Icon = grupo.icon;
         return (
           <div key={grupo.id} className="flex flex-col gap-1">
@@ -308,8 +544,6 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
               const meus = c?.meus ?? 0;
               const pendentes = Math.max(0, total - meus);
               const isActive = tipoAtivo === tipo.id;
-              // Admin acessa a Central em modo leitura, então "pendente pra mim"
-              // não faz sentido — mostra só o total do período.
               return (
                 <button
                   key={tipo.id}
@@ -347,19 +581,23 @@ function SidebarTipos({ competicao, profile, tipoAtivo, onSelectTipo, filialFilt
   );
 }
 
-// Endpoint → nome da tabela (usado pra count queries no sidebar)
+// Endpoint → nome da tabela (usado pra count queries)
 const ENDPOINT_TO_TABLE: Record<string, string> = {
-  '/api/marketingartesview':       'marketing_artes',
-  '/api/marketingpromocoesview':   'marketing_promocoes',
-  '/api/marketingcampanhasview':   'marketing_campanhas',
-  '/api/requisicoesview':          'requisicoes',
-  '/api/cotacoesview':             'cotacoes',
-  '/api/pedidosvendaview':         'pedidos_venda',
-  '/api/feriasview':               'ferias',
-  '/api/produtosview':             'produtos',
-  '/api/crmview-clientes':         'clientes',
-  '/api/crmview-fornecedores':     'fornecedores',
-  '/api/servicosview':             'servicos',
+  '/api/marketingartesview':              'marketing_artes',
+  '/api/marketingpromocoesview':          'marketing_promocoes',
+  '/api/marketingcampanhasview':          'marketing_campanhas',
+  '/api/metricasredessociaisview':        'metricas_redes_sociais',
+  '/api/requisicoesview':                 'requisicoes',
+  '/api/cotacoesview':                    'cotacoes',
+  '/api/orcamentosview':                  'orcamentos',
+  '/api/produtosview':                    'produtos',
+  '/api/crmview-clientes':                'clientes',
+  '/api/crmview-fornecedores':            'fornecedores',
+  '/api/servicosview':                    'servicos',
+  '/api/contaspagarview':                 'contas_pagar',
+  '/api/contasreceberview':               'contas_receber',
+  '/api/frequenciatrabalhocomfilialview': 'frequencia_trabalho_com_filial',
+  '/api/avaliacoesview':                  'avaliacoes',
 };
 
 // ── Painel principal do tipo ativo ────────────────────────────────────
@@ -413,7 +651,6 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
     return idx;
   }, [avaliacoes]);
 
-  // Aplica filtros (filial + status)
   const itensFiltrados = useMemo(() => {
     const porFilial = filialFiltro === 'todas'
       ? itensNoPeriodo
@@ -464,7 +701,6 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
   }).length;
   const feitos = total - pendentes;
 
-  // Contagens por filial (independente do filtro atual — sempre mostra o total real)
   const porFilialCount = useMemo(() => {
     const out: Record<FilialOp, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
     for (const it of itensNoPeriodo) {
@@ -476,7 +712,6 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
 
   return (
     <section className="flex flex-col gap-3 min-w-0">
-      {/* Header do painel */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
@@ -490,7 +725,6 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
           </div>
         </div>
 
-        {/* Filtro por filial */}
         <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
           <FilialFiltroBtn active={filialFiltro === 'todas'}    onClick={() => onFilialFiltroChange('todas')}    label="Todas"    count={itensNoPeriodo.length} />
           <FilialFiltroBtn active={filialFiltro === 'SuperMax'} onClick={() => onFilialFiltroChange('SuperMax')} label="SuperMax" count={porFilialCount.SuperMax} filial="SuperMax" />
@@ -499,7 +733,6 @@ function PainelTipo({ tipoConfig, grupoLabel, competicao, profile, podeAvaliar, 
         </div>
       </div>
 
-      {/* Corpo */}
       {lItens || loadingAv ? (
         <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
       ) : itensFiltrados.length === 0 ? (
@@ -598,8 +831,6 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
   const [comentarioLocal, setComentarioLocal] = useState<string>(minha?.comentario ?? '');
   const [notaLocal, setNotaLocal] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
 
-  // Autosave por debounce — 800ms sem digitar dispara o RPC. Assim comentário
-  // e nota não se perdem se o avaliador fecha a aba sem tirar foco do input.
   const comentarioDeb = useDebouncedValue(comentarioLocal, 800);
   const notaDeb       = useDebouncedValue(notaLocal, 800);
   const jaMontou = useRef(false);
@@ -626,16 +857,41 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
 
   const descricao = firstNonEmpty(item, tipo.descField);
   const statusLocal = item.status ?? '—';
+  const arteUrl = tipo.id === 'arte' ? (item.arte_url as string | null) : null;
+  // Redes Sociais: mostra os números registrados pela filial (seguidores/curtidas/comentários)
+  // como sublinha, pra o conselho julgar sem sair da tela.
+  const redesSociaisExtras = tipo.id === 'redes_sociais' ? (
+    <div className="flex items-center gap-3 text-[10px] font-mono text-gray-400 flex-wrap">
+      <span className="flex items-center gap-1"><Instagram size={10} className="text-pink-400" />{item.plataforma}</span>
+      <span>👥 {Number(item.seguidores ?? 0).toLocaleString('pt-BR')} seguidores</span>
+      <span>❤ {Number(item.curtidas ?? 0).toLocaleString('pt-BR')} curtidas</span>
+      <span>💬 {Number(item.comentarios ?? 0).toLocaleString('pt-BR')} comentários</span>
+    </div>
+  ) : null;
 
   return (
     <div className="neu-flat p-4 rounded-2xl border border-accent/10 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex flex-col gap-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <FilialBadge filial={item.filial} />
-            <span className="text-[10px] font-mono uppercase text-gray-500">status local: <span className="text-gray-300">{statusLocal}</span></span>
+        <div className="flex items-start gap-3 min-w-0">
+          {arteUrl && (
+            <a href={arteUrl} target="_blank" rel="noopener noreferrer"
+               className="shrink-0 block w-16 h-16 rounded-lg overflow-hidden ring-1 ring-white/10 hover:ring-accent/50 transition-all bg-black/30"
+               title="Abrir arte em nova aba">
+              <img src={arteUrl} alt={descricao}
+                   className="w-full h-full object-cover"
+                   onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </a>
+          )}
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <FilialBadge filial={item.filial} />
+              {tipo.id !== 'redes_sociais' && (
+                <span className="text-[10px] font-mono uppercase text-gray-500">status local: <span className="text-gray-300">{statusLocal}</span></span>
+              )}
+            </div>
+            <p className="text-sm font-bold text-gray-100 truncate">{descricao}</p>
+            {redesSociaisExtras}
           </div>
-          <p className="text-sm font-bold text-gray-100 truncate">{descricao}</p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {tipo.creative && (
@@ -714,3 +970,8 @@ function ItemRow({ item, tipo, avaliacoes, minhaId, podeAvaliar, submitting, onS
     </div>
   );
 }
+
+// re-export tipos para o painel de Tarefas da Matriz
+export type { Competicao as CentralCompeticao };
+export const CENTRAL_FILIAL_TONE = FILIAL_TONE;
+export { OP_FILIAIS as CENTRAL_OP_FILIAIS };

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion } from 'motion/react';
-import { Instagram, Youtube, Facebook, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
+import { Instagram, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner } from '../components/ui';
@@ -10,21 +10,17 @@ import { useFilial } from '../contexts/FilialContext';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-type Plataforma = 'Instagram' | 'TikTok' | 'Facebook' | 'YouTube';
-const PLATAFORMAS: Plataforma[] = ['Instagram', 'TikTok', 'Facebook', 'YouTube'];
+type Plataforma = 'Instagram' | 'TikTok';
+const PLATAFORMAS: Plataforma[] = ['Instagram', 'TikTok'];
 
 const PLAT_COLOR: Record<Plataforma, string> = {
   Instagram: 'text-pink-400',
   TikTok:    'text-cyan-300',
-  Facebook:  'text-blue-400',
-  YouTube:   'text-red-400',
 };
 
 const PLAT_ICON: Record<Plataforma, React.ReactNode> = {
   Instagram: <Instagram size={14} />,
   TikTok:    <span className="text-xs font-black">TT</span>,
-  Facebook:  <Facebook size={14} />,
-  YouTube:   <Youtube size={14} />,
 };
 
 const METRICAS: { key: string; label: string }[] = [

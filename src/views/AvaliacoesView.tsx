@@ -1601,40 +1601,42 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       )}
 
-      {/* ── E. AVALIAÇÕES RECEBIDAS ── */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        <div className="flex items-center gap-2 mb-5">
-          <Eye size={16} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-300">Avaliações Recebidas</h3>
-          {recebidas.length > 0 && (
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">
-              {recebidas.length} {recebidas.length === 1 ? 'registro' : 'registros'}
-            </span>
+      {/* ── E. AVALIAÇÕES RECEBIDAS ── admin/CEO não recebem avaliação */}
+      {profile.role !== 'admin' && profile.role !== 'ceo' && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+          <div className="flex items-center gap-2 mb-5">
+            <Eye size={16} className="text-accent" />
+            <h3 className="text-sm font-bold text-gray-300">Avaliações Recebidas</h3>
+            {recebidas.length > 0 && (
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">
+                {recebidas.length} {recebidas.length === 1 ? 'registro' : 'registros'}
+              </span>
+            )}
+          </div>
+
+          {recebidas.length === 0 ? (
+            <EmptyState message="Você ainda não recebeu nenhuma avaliação." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {recebidas.map(r => (
+                <CardAvaliacao
+                  key={r.avaliacao.id}
+                  avaliacao={r.avaliacao}
+                  criterios={r.criterios}
+                  direcaoLabel="de"
+                  nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+                  onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
+                  canEditarPDI={isAdminOuCEO || isRH}
+                  categoriaLabel={clAtivo}
+                  profile={profile}
+                  treinamentos={treinamentos}
+                  showToast={showToast}
+                />
+              ))}
+            </div>
           )}
         </div>
-
-        {recebidas.length === 0 ? (
-          <EmptyState message="Você ainda não recebeu nenhuma avaliação." />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recebidas.map(r => (
-              <CardAvaliacao
-                key={r.avaliacao.id}
-                avaliacao={r.avaliacao}
-                criterios={r.criterios}
-                direcaoLabel="de"
-                nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
-                onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
-                canEditarPDI={isAdminOuCEO || isRH}
-                categoriaLabel={clAtivo}
-                profile={profile}
-                treinamentos={treinamentos}
-                showToast={showToast}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ── E. AVALIAÇÕES FEITAS ── */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

@@ -17,18 +17,27 @@ const FILIAL_COLOR: Record<FilialOp, string> = {
   TechMax:  'text-orange-400',
 };
 
-type DimId = 'logistica'|'financeiro'|'rh'|'vendas'|'marketing';
+type DimId = 'marketing'|'vendas'|'compras'|'rh'|'cadastros'|'financeiro'|'matriz';
 
-const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const PCT = (v: number) => `${v.toFixed(1)}%`;
+const NOTA = (v: number) => `${(v/10).toFixed(1)} / 10`;
 
+// Placar é 100% derivado da Central. Marketing e Matriz usam nota 0-10
+// (mostrada como valor/10); demais usam taxa de aprovação (0-100%).
 const DIMENSOES: { id: DimId; label: string; hint: string; fmt: (v: number) => string }[] = [
-  { id: 'vendas',     label: 'Vendas',     hint: 'faturamento no período',              fmt: BRL },
-  { id: 'financeiro', label: 'Financeiro', hint: 'receitas − despesas pagas',           fmt: BRL },
-  { id: 'logistica',  label: 'Logística',  hint: '% do catálogo fora do crítico',       fmt: PCT },
-  { id: 'rh',         label: 'RH',         hint: 'taxa de presença no período',         fmt: PCT },
-  { id: 'marketing',  label: 'Marketing',  hint: 'receita de campanhas ativas',         fmt: BRL },
+  { id: 'marketing',  label: 'Marketing',  hint: 'média das notas do conselho (arte, promoção, campanha, redes sociais)', fmt: NOTA },
+  { id: 'vendas',     label: 'Vendas',     hint: '% aprovação em orçamentos',                                              fmt: PCT },
+  { id: 'compras',    label: 'Compras',    hint: '% aprovação em requisições e cotações',                                  fmt: PCT },
+  { id: 'rh',         label: 'RH',         hint: '% aprovação em frequência e desempenho',                                 fmt: PCT },
+  { id: 'cadastros',  label: 'Cadastros',  hint: '% aprovação em cadastros (produto/cliente/etc)',                         fmt: PCT },
+  { id: 'financeiro', label: 'Financeiro', hint: '% aprovação em contas a pagar e a receber',                              fmt: PCT },
+  { id: 'matriz',     label: 'Matriz',     hint: 'média das notas do conselho em Tarefas da Matriz por participante',      fmt: NOTA },
 ];
+
+const DIM_IDS: DimId[] = DIMENSOES.map(d => d.id);
+const PESOS_DEFAULT: Record<DimId, number> = {
+  marketing: 15, vendas: 15, compras: 14, rh: 14, cadastros: 14, financeiro: 14, matriz: 14,
+};
 
 type Competicao = {
   id: string;
@@ -55,9 +64,9 @@ type Voto = {
 
 type Placar = {
   competicao: any;
-  // 'conselho' quando a dimensão marketing usa média das notas 0-10 do
-  // conselho; 'atividade' quando cai no fallback (campanhas ativas + artes).
-  marketing_origem?: 'conselho' | 'atividade';
+  // 'julgada' quando ao menos 1 filial recebeu avaliação relevante na dim;
+  // 'sem_julgamento' quando conselho ainda não tocou naquela dimensão.
+  dims_origem?: Record<DimId, 'julgada' | 'sem_julgamento'>;
   placar: {
     por_dimensao: Record<string, { peso: number; filiais: Record<string, { valor: number; pontos: number; ponderado: number }> }>;
     total_por_filial: Record<string, number>;
@@ -107,8 +116,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     nome: '',
     data_inicio: isoToday(),
     data_fim: isoIn(90),
-    pesos: { logistica: 20, financeiro: 25, rh: 15, vendas: 25, marketing: 15 },
+    pesos: { ...PESOS_DEFAULT },
   });
+
+  // Modal de edição de pesos (durante em_andamento).
+  const [editPesosOpen, setEditPesosOpen] = useState(false);
+  const [pesosEdit, setPesosEdit] = useState<Record<DimId, number>>({ ...PESOS_DEFAULT });
+  const [salvandoPesos, setSalvandoPesos] = useState(false);
+  const somaPesosEdit = useMemo(
+    () => DIM_IDS.reduce((acc, id) => acc + Number(pesosEdit[id] || 0), 0),
+    [pesosEdit],
+  );
 
   const somaPesos = useMemo(() =>
     Object.values(form.pesos).reduce((a, b) => a + Number(b || 0), 0),
@@ -260,6 +278,38 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     await carregarVotos(competicaoAtual.id);
   };
 
+  const abrirEditPesos = () => {
+    if (!competicaoAtual) return;
+    const p = competicaoAtual.pesos ?? {};
+    setPesosEdit({
+      marketing:  Number(p.marketing  ?? PESOS_DEFAULT.marketing),
+      vendas:     Number(p.vendas     ?? PESOS_DEFAULT.vendas),
+      compras:    Number(p.compras    ?? PESOS_DEFAULT.compras),
+      rh:         Number(p.rh         ?? PESOS_DEFAULT.rh),
+      cadastros:  Number(p.cadastros  ?? PESOS_DEFAULT.cadastros),
+      financeiro: Number(p.financeiro ?? PESOS_DEFAULT.financeiro),
+      matriz:     Number(p.matriz     ?? PESOS_DEFAULT.matriz),
+    });
+    setEditPesosOpen(true);
+  };
+
+  const salvarPesos = async () => {
+    if (!competicaoAtual || !supabase) return;
+    if (somaPesosEdit !== 100) {
+      return showToast?.(`Soma dos pesos precisa ser 100 (agora: ${somaPesosEdit}).`, 'error');
+    }
+    setSalvandoPesos(true);
+    const { error } = await supabase.rpc('atualizar_pesos_competicao', {
+      p_competicao_id: competicaoAtual.id,
+      p_pesos: pesosEdit,
+    });
+    setSalvandoPesos(false);
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    showToast?.('Pesos atualizados.', 'success');
+    setEditPesosOpen(false);
+    await carregarLista();
+  };
+
   const encerrarAgora = async () => {
     if (!competicaoAtual || !supabase) return;
     if (!confirm(`Encerrar "${competicaoAtual.nome}" agora? A competição vai pra "aguardando encerramento" e libera votação do conselho.`)) return;
@@ -339,7 +389,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             <Trophy size={24} /> Competição entre Filiais
           </h2>
           <p className="text-sm text-gray-400 mt-1">
-            Ranking 3-2-1 por dimensão × peso configurável = pontuação total por filial.
+            Ranking 3-2-1 por dimensão × peso. Placar 100% derivado da Central de Avaliação.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -362,7 +412,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>
           ) : !placar ? (
             <div className="neu-flat rounded-3xl p-12 border border-white/5">
-              <EmptyState message="Nenhuma competição em andamento. Vá em Config pra criar." />
+              <EmptyState message={podeGerenciar
+                ? 'Nenhuma competição em andamento. Vá em Config pra criar.'
+                : 'Nenhuma competição em andamento. Aguarde admin/CEO abrir uma.'} />
             </div>
           ) : (
             <>
@@ -388,15 +440,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       </button>
                     )}
                     {podeGerenciar && placar.competicao.status === 'em_andamento' && (
-                      <button
-                        onClick={encerrarAgora}
-                        disabled={encerrandoAgora}
-                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
-                        title="Força encerramento antes da data_fim"
-                      >
-                        {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
-                        Encerrar agora
-                      </button>
+                      <>
+                        <button
+                          onClick={abrirEditPesos}
+                          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all"
+                          title="Redistribuir pesos das dimensões"
+                        >
+                          <Pencil size={12} /> Editar pesos
+                        </button>
+                        <button
+                          onClick={encerrarAgora}
+                          disabled={encerrandoAgora}
+                          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                          title="Força encerramento antes da data_fim"
+                        >
+                          {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
+                          Encerrar agora
+                        </button>
+                      </>
                     )}
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
                       placar.competicao.status === 'em_andamento'
@@ -449,20 +510,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       {DIMENSOES.map(d => {
                         const dim = placar.placar?.por_dimensao?.[d.id];
                         if (!dim) return null;
-                        const isMktConselho = d.id === 'marketing' && placar.marketing_origem === 'conselho';
-                        const hintTxt = isMktConselho ? 'média das notas do conselho × 10' : d.hint;
+                        const semJulgamento = placar.dims_origem?.[d.id] === 'sem_julgamento';
                         return (
                           <tr key={d.id} className="border-t border-white/5">
                             <td className="py-3">
                               <div className="text-gray-200 font-bold flex items-center gap-1.5">
                                 {d.label}
-                                {isMktConselho && (
-                                  <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30">
-                                    Conselho
+                                {semJulgamento && (
+                                  <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+                                    Sem julgamento
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[10px] text-gray-500">{hintTxt}</div>
+                              <div className="text-[10px] text-gray-500">{d.hint}</div>
                             </td>
                             <td className="py-3 text-right text-gray-500 tabular-nums pr-4">{dim.peso}%</td>
                             {OP_FILIAIS.map(f => {
@@ -687,6 +747,56 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         </>
       )}
 
+      {/* Modal de edição de pesos (durante em_andamento) */}
+      <AnimatePresence>
+        {editPesosOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+            onClick={() => !salvandoPesos && setEditPesosOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="neu-flat rounded-3xl p-6 sm:p-8 border border-accent/30 max-w-xl w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                  <Pencil size={13} className="text-accent" /> Editar pesos das dimensões
+                </h3>
+                <button onClick={() => !salvandoPesos && setEditPesosOpen(false)}
+                  className="text-gray-500 hover:text-white" disabled={salvandoPesos}>
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3">
+                Soma atual: <span className={somaPesosEdit === 100 ? 'text-emerald-400' : 'text-red-400'}>{somaPesosEdit}%</span>
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+                {DIMENSOES.map(d => (
+                  <FormField key={d.id} label={`${d.label} (%)`}>
+                    <input type="number" min={0} max={100} value={pesosEdit[d.id]}
+                      onChange={e => setPesosEdit(p => ({ ...p, [d.id]: Number(e.target.value) || 0 }))}
+                      className="neu-input rounded-lg px-3 py-2 text-xs w-full tabular-nums" />
+                  </FormField>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEditPesosOpen(false)} disabled={salvandoPesos}
+                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white">
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={salvarPesos} disabled={salvandoPesos || somaPesosEdit !== 100} variant="">
+                  {salvandoPesos
+                    ? <><Loader2 size={12} className="animate-spin" /> Salvando…</>
+                    : 'Aplicar pesos'}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Modal de parabenização */}
       <AnimatePresence>
         {modalParabens && (
@@ -759,7 +869,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">
                 Pesos das dimensões · soma atual: <span className={somaPesos === 100 ? 'text-emerald-400' : 'text-red-400'}>{somaPesos}%</span>
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {DIMENSOES.map(d => (
                   <FormField key={d.id} label={`${d.label} (%)`}>
                     <input type="number" min={0} max={100} value={form.pesos[d.id]}

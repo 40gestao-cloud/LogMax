@@ -63,11 +63,8 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
   {
     kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',
     modulos: [
-      // Aprovações de Cotação: admin/CEO precisa aprovar cotações acima da
-      // alçada (migr. 204) mesmo em modo Matriz — antes tinha que trocar
-      // pra cada filial. Alçadas: configuração é da holding, mora aqui.
       { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-green-400',
-        submenus: ['Aprovações de Cotação', 'Alçadas', 'Gerenciamento', 'Relatórios'] },
+        submenus: ['Alçadas', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {
@@ -81,7 +78,7 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'ti-matriz', label: 'TI & Suporte', icon: Monitor, color: 'from-indigo-500/20 to-indigo-500/5 border-indigo-500/30 text-indigo-400',
     modulos: [
       { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-indigo-400',
-        submenus: ['Chamados', 'Desenvolvimento com IA'] },
+        submenus: ['Desenvolvimento com IA'] },
     ],
   },
 ];
@@ -100,14 +97,6 @@ export const ANALISE_IA_MACROS: MacroDef[] = [
     viewId: 'briefing-diario',
     description: 'Pauta diária proposta pela IA por setor',
   },
-];
-
-// Hub Comparativos Matriz (Matriz only) — 5 comparativos
-export const COMPARATIVOS_MATRIZ_MACROS: MacroDef[] = [
-  { kind: 'leaf', id: 'matriz-rh',         label: 'RH Comparativo',        icon: Users,     color: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400', viewId: 'matriz-rh',         description: 'RH consolidado das 3 filiais' },
-  { kind: 'leaf', id: 'matriz-financeiro', label: 'Financeiro Comparativo', icon: DollarSign, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',    viewId: 'matriz-financeiro', description: 'Financeiro consolidado' },
-  { kind: 'leaf', id: 'matriz-logistica',  label: 'Logística Comparativo',  icon: Package,    color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',            viewId: 'matriz-logistica',  description: 'Estoque e compras consolidados' },
-  { kind: 'leaf', id: 'matriz-marketing',  label: 'Marketing Comparativo',  icon: Megaphone,  color: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 text-pink-400',        viewId: 'matriz-marketing',  description: 'Marketing consolidado' },
 ];
 
 // ── UI ─────────────────────────────────────────────────────────────────────
