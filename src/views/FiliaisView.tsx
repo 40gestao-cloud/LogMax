@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -92,6 +92,11 @@ const TODAS_CHAVES_EQUIP: string[] = Array.from(new Set(
 const equipZeros = (): Record<string, string> =>
   Object.fromEntries(TODAS_CHAVES_EQUIP.map(k => [k, '']));
 
+// Preço unitário por item — chave irmã `${key}Preco`, mesma grade.
+const precoKey = (k: string) => `${k}Preco`;
+const equipPrecoZeros = (): Record<string, string> =>
+  Object.fromEntries(TODAS_CHAVES_EQUIP.map(k => [precoKey(k), '']));
+
 function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'xs' | 'md' | 'lg'; alt?: string }) {
   const dim = size === 'xs' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-10 h-10';
   if (url) return (
@@ -138,6 +143,7 @@ export const FiliaisView = ({ showToast }: any) => {
     tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
     capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
     ...equipZeros(),
+    ...equipPrecoZeros(),
   });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -176,6 +182,9 @@ export const FiliaisView = ({ showToast }: any) => {
     const equipCarregado = Object.fromEntries(
       TODAS_CHAVES_EQUIP.map(k => [k, nStr(d[k])])
     );
+    const precoCarregado = Object.fromEntries(
+      TODAS_CHAVES_EQUIP.map(k => [precoKey(k), d[precoKey(k)] != null ? formatBRL(d[precoKey(k)]) : ''])
+    );
     setDetalhes({
       nicho: d.nicho ?? '',
       tamanhoM2: nStr(d.tamanhoM2),
@@ -187,6 +196,7 @@ export const FiliaisView = ({ showToast }: any) => {
       dataInauguracao: d.dataInauguracao ?? '',
       investimentoInicial: d.investimentoInicial != null ? formatBRL(d.investimentoInicial) : '',
       ...equipCarregado,
+      ...precoCarregado,
     });
     setImagemUrl(item.imagem_url ?? '');
     setImagemUrlAnterior(item.imagem_url ?? '');
@@ -207,6 +217,7 @@ export const FiliaisView = ({ showToast }: any) => {
       tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
       capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
       ...equipZeros(),
+      ...equipPrecoZeros(),
     });
     setImagemUrl('');
     setImagemUrlAnterior('');
@@ -244,6 +255,16 @@ export const FiliaisView = ({ showToast }: any) => {
       const equipPayload = Object.fromEntries(
         chavesEquipParaSalvar.map(k => [k, num(detalhes[k])])
       );
+      const precoPayload = Object.fromEntries(
+        chavesEquipParaSalvar.map(k => [precoKey(k), detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : null])
+      );
+      // Valor total investido em equipamentos & mobiliário — soma automática
+      // de qtd × preço unitário por item da grade do nicho ativo.
+      const valorTotalEquipamentos = chavesEquipParaSalvar.reduce((acc, k) => {
+        const qtd = num(detalhes[k]) ?? 0;
+        const preco = detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : 0;
+        return acc + qtd * preco;
+      }, 0);
       const detalhesPayload = {
         nicho,
         tamanhoM2: num(detalhes.tamanhoM2),
@@ -254,7 +275,9 @@ export const FiliaisView = ({ showToast }: any) => {
         horarioFuncionamento: detalhes.horarioFuncionamento || null,
         dataInauguracao: detalhes.dataInauguracao || null,
         investimentoInicial: detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : null,
+        valorTotalEquipamentos: valorTotalEquipamentos > 0 ? valorTotalEquipamentos : null,
         ...equipPayload,
+        ...precoPayload,
       };
       const payload = { ...form, ...extras, detalhes: detalhesPayload, imagem_url: imagemUrl || null };
       if (editItem) {
@@ -289,6 +312,17 @@ export const FiliaisView = ({ showToast }: any) => {
       showToast(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error', true);
     }
   };
+
+  // Total investido em equipamentos & mobiliário — recalcula ao digitar,
+  // pra dar feedback imediato antes de salvar.
+  const totalEquipamentosForm = useMemo(() =>
+    CAMPOS_NICHO[nichoAtivo].reduce((acc, [k]) => {
+      const qtd = Number(detalhes[k] || 0);
+      const preco = detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : 0;
+      return acc + qtd * preco;
+    }, 0),
+    [detalhes, nichoAtivo],
+  );
 
   const isFormOpen = showForm || !!editItem;
 
@@ -457,15 +491,37 @@ export const FiliaisView = ({ showToast }: any) => {
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
                   <Package size={12} /> Equipamentos & Mobiliário <span className="text-accent">· {nichoAtivo}</span>
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {CAMPOS_NICHO[nichoAtivo].map(([key, label]) => (
-                    <FormField key={key} label={label}>
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0"
-                        value={detalhes[key] ?? ''}
-                        onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
-                        placeholder="0" />
-                    </FormField>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {CAMPOS_NICHO[nichoAtivo].map(([key, label]) => {
+                    const qtd = Number(detalhes[key] || 0);
+                    const preco = detalhes[precoKey(key)] ? parseBRL(detalhes[precoKey(key)]) : 0;
+                    const subtotal = qtd * preco;
+                    return (
+                      <div key={key} className="neu-pressed rounded-xl p-3 border border-white/5 flex flex-col gap-2">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
+                        <div className="flex items-center gap-2">
+                          <input className="neu-input py-2 px-3 rounded-lg text-sm w-1/2" type="number" min="0"
+                            value={detalhes[key] ?? ''}
+                            onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
+                            placeholder="Qtd" title="Quantidade" />
+                          <input className="neu-input py-2 px-3 rounded-lg text-sm w-1/2" type="text" inputMode="numeric"
+                            value={detalhes[precoKey(key)] ?? ''}
+                            onChange={e => setDetalhes(d => ({ ...d, [precoKey(key)]: formatBRL(e.target.value) }))}
+                            onKeyDown={handleMoneyKeyDown}
+                            placeholder="R$ unit." title="Preço unitário" />
+                        </div>
+                        {subtotal > 0 && (
+                          <p className="text-[10px] text-gray-500 tabular-nums">
+                            Subtotal: <span className="text-gray-300 font-bold">R$ {formatBRL(subtotal)}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido em equipamentos & mobiliário</span>
+                  <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(totalEquipamentosForm)}</span>
                 </div>
               </div>
 
@@ -540,12 +596,16 @@ export const FiliaisView = ({ showToast }: any) => {
                     <Calendar size={11} className="text-gray-500 shrink-0" />Inaugurada em {new Date(item.detalhes.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </div>
                 )}
-                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null) && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Wallet size={11} className="text-gray-500 shrink-0" />
-                    {item.detalhes.valorAluguel != null && `Aluguel: R$ ${formatBRL(item.detalhes.valorAluguel)}`}
-                    {item.detalhes.valorAluguel != null && item.detalhes.investimentoInicial != null && ' · '}
-                    {item.detalhes.investimentoInicial != null && `Investimento: R$ ${formatBRL(item.detalhes.investimentoInicial)}`}
+                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null || item.detalhes?.valorTotalEquipamentos != null) && (
+                  <div className="flex items-start gap-2 text-xs text-gray-400">
+                    <Wallet size={11} className="text-gray-500 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5">
+                      {item.detalhes.valorAluguel != null && <span>Aluguel: R$ {formatBRL(item.detalhes.valorAluguel)}</span>}
+                      {item.detalhes.investimentoInicial != null && <span>Investimento: R$ {formatBRL(item.detalhes.investimentoInicial)}</span>}
+                      {item.detalhes.valorTotalEquipamentos != null && (
+                        <span className="text-accent font-bold">Equip. & mobiliário: R$ {formatBRL(item.detalhes.valorTotalEquipamentos)}</span>
+                      )}
+                    </div>
                   </div>
                 )}
                 {(() => {
