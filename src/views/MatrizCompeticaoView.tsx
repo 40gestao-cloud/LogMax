@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -55,7 +55,9 @@ type Voto = {
 
 type Placar = {
   competicao: any;
-  kpis: Record<string, Record<string, number>>;
+  // 'conselho' quando a dimensão marketing usa média das notas 0-10 do
+  // conselho; 'atividade' quando cai no fallback (campanhas ativas + artes).
+  marketing_origem?: 'conselho' | 'atividade';
   placar: {
     por_dimensao: Record<string, { peso: number; filiais: Record<string, { valor: number; pontos: number; ponderado: number }> }>;
     total_por_filial: Record<string, number>;
@@ -67,9 +69,6 @@ const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : ''
 
 const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
-
-// Quórum mínimo pra encerrar a competição: maioria simples do conselho (CEO + 2 conselheiros = 3 votantes).
-const QUORUM_MINIMO = 2;
 
 export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
   const { session } = useAuth();
@@ -90,12 +89,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [gerandoAnalise, setGerandoAnalise] = useState(false);
   const [votando, setVotando] = useState(false);
   const [encerrando, setEncerrando] = useState(false);
+  const [encerrandoAgora, setEncerrandoAgora] = useState(false);
   const [modalParabens, setModalParabens] = useState<string | null>(null);
+  const [editandoVoto, setEditandoVoto] = useState(false);
+  // Total de eleitores elegíveis (CEO + conselheiros da Matriz). Alimenta
+  // o quórum dinâmico (maioria simples). RPC contar_votantes_matriz.
+  const [totalVotantes, setTotalVotantes] = useState<number>(0);
 
   // Voto em elaboração
   const [meuVoto, setMeuVoto] = useState<'aceita' | 'rejeita' | ''>('');
   const [comentario, setComentario] = useState('');
   const [filialSugerida, setFilialSugerida] = useState<FilialOp | ''>('');
+  const [meuVotoAtual, setMeuVotoAtual] = useState<Voto | null>(null);
 
   // Form da nova competição
   const [form, setForm] = useState({
@@ -126,6 +131,22 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   }, []);
 
   useEffect(() => { if (podeAcessar) carregarLista(); }, [podeAcessar, carregarLista]);
+
+  // Quórum dinâmico: pega o total de eleitores elegíveis. Se a RPC não
+  // existir (migração 212 não aplicada ainda), cai em 3 como fallback.
+  useEffect(() => {
+    if (!podeAcessar || !supabase) return;
+    (async () => {
+      const { data, error } = await supabase.rpc('contar_votantes_matriz');
+      if (!error && typeof data === 'number') setTotalVotantes(data);
+      else setTotalVotantes(3);
+    })();
+  }, [podeAcessar]);
+
+  const quorumMinimo = useMemo(
+    () => Math.max(1, Math.ceil((totalVotantes || 1) / 2)),
+    [totalVotantes],
+  );
 
   const carregarVotos = useCallback(async (id: string) => {
     if (!supabase) return;
@@ -165,6 +186,35 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     rejeita: votos.filter(v => v.voto === 'rejeita').length,
   }), [votos]);
 
+  // Sincroniza o voto que o usuário já registrou (pra permitir editar).
+  useEffect(() => {
+    const meu = votos.find(v => v.votante_id === profile.id) ?? null;
+    setMeuVotoAtual(meu);
+    if (meu && editandoVoto) {
+      setMeuVoto(meu.voto);
+      setComentario(meu.comentario ?? '');
+      setFilialSugerida((meu.filial_escolhida as FilialOp) ?? '');
+    }
+  }, [votos, profile.id, editandoVoto]);
+
+  // Sugestão de vencedora quando conselho rejeita o placar automático:
+  // filial mais votada nos "rejeita → filial_escolhida". Empate ou sem
+  // rejeição → mantém o 1º do pódio.
+  const sugestaoRejeicao = useMemo(() => {
+    if (contagemVotos.rejeita <= contagemVotos.aceita) return null;
+    const contagem: Record<string, number> = {};
+    votos.forEach(v => {
+      if (v.voto === 'rejeita' && v.filial_escolhida) {
+        contagem[v.filial_escolhida] = (contagem[v.filial_escolhida] ?? 0) + 1;
+      }
+    });
+    const entries = Object.entries(contagem);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => b[1] - a[1]);
+    if (entries.length > 1 && entries[0][1] === entries[1][1]) return null;
+    return entries[0][0] as FilialOp;
+  }, [votos, contagemVotos]);
+
   const gerarAnalise = async () => {
     if (!competicaoAtual || !session?.access_token) return;
     setGerandoAnalise(true);
@@ -193,18 +243,34 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       return showToast?.('Ao rejeitar, indique qual filial você acha vencedora.', 'error');
     }
     setVotando(true);
-    const { error } = await supabase.from('competicao_votos').insert({
+    // UPSERT: se conselheiro já votou, atualiza o próprio voto
+    // (RLS voto_update libera enquanto status='aguardando_encerramento').
+    const { error } = await supabase.from('competicao_votos').upsert({
       competicao_id: competicaoAtual.id,
       votante_id:    profile.id,
       voto:          meuVoto,
       filial_escolhida: meuVoto === 'rejeita' ? filialSugerida : null,
       comentario:    comentario.trim() || null,
-    });
+    }, { onConflict: 'competicao_id,votante_id' });
     setVotando(false);
     if (error) return showToast?.(`Erro ao votar: ${error.message}`, 'error');
-    showToast?.('Voto registrado.', 'success');
+    showToast?.(editandoVoto ? 'Voto atualizado.' : 'Voto registrado.', 'success');
     setMeuVoto(''); setComentario(''); setFilialSugerida('');
+    setEditandoVoto(false);
     await carregarVotos(competicaoAtual.id);
+  };
+
+  const encerrarAgora = async () => {
+    if (!competicaoAtual || !supabase) return;
+    if (!confirm(`Encerrar "${competicaoAtual.nome}" agora? A competição vai pra "aguardando encerramento" e libera votação do conselho.`)) return;
+    setEncerrandoAgora(true);
+    const { error } = await supabase.rpc('encerrar_competicao_agora', {
+      p_competicao_id: competicaoAtual.id,
+    });
+    setEncerrandoAgora(false);
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    showToast?.('Competição encerrada — abra a votação.', 'success');
+    await carregarLista();
   };
 
   const declararVencedora = async (filial: FilialOp) => {
@@ -243,6 +309,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     setTab('placar');
   };
 
+  // Pódio ordenado por pontuação total.
+  // Todos os hooks precisam ser chamados incondicionalmente — este useMemo
+  // fica ANTES do early return de acesso.
+  const podio = useMemo(() => {
+    if (!placar) return [];
+    const totais = placar.placar?.total_por_filial ?? {};
+    return OP_FILIAIS
+      .map(f => ({ filial: f, total: Number(totais[f] ?? 0) }))
+      .sort((a, b) => b.total - a.total);
+  }, [placar]);
+
   if (!podeAcessar) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -253,15 +330,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       </div>
     );
   }
-
-  // Pódio ordenado por pontuação total
-  const podio = useMemo(() => {
-    if (!placar) return [];
-    const totais = placar.placar?.total_por_filial ?? {};
-    return OP_FILIAIS
-      .map(f => ({ filial: f, total: Number(totais[f] ?? 0) }))
-      .sort((a, b) => b.total - a.total);
-  }, [placar]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
@@ -275,7 +343,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {(['placar','config','historico'] as Tab[]).map(t => (
+          {((podeGerenciar
+              ? ['placar','config','historico']
+              : ['placar','historico']) as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
                 tab === t ? 'bg-accent/15 text-accent border border-accent/30' : 'neu-button text-gray-400 hover:text-white'
@@ -308,13 +378,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {podeVotar && placar.competicao.status === 'em_andamento' && navigate && (
+                    {placar.competicao.status === 'em_andamento' && navigate && (
                       <button
                         onClick={() => navigate('matriz-avaliacoes')}
                         className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all"
                         title="Avaliar itens das 3 filiais"
                       >
                         <Award size={12} /> Central de Avaliação
+                      </button>
+                    )}
+                    {podeGerenciar && placar.competicao.status === 'em_andamento' && (
+                      <button
+                        onClick={encerrarAgora}
+                        disabled={encerrandoAgora}
+                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                        title="Força encerramento antes da data_fim"
+                      >
+                        {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
+                        Encerrar agora
                       </button>
                     )}
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
@@ -368,11 +449,20 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       {DIMENSOES.map(d => {
                         const dim = placar.placar?.por_dimensao?.[d.id];
                         if (!dim) return null;
+                        const isMktConselho = d.id === 'marketing' && placar.marketing_origem === 'conselho';
+                        const hintTxt = isMktConselho ? 'média das notas do conselho × 10' : d.hint;
                         return (
                           <tr key={d.id} className="border-t border-white/5">
                             <td className="py-3">
-                              <div className="text-gray-200 font-bold">{d.label}</div>
-                              <div className="text-[10px] text-gray-500">{d.hint}</div>
+                              <div className="text-gray-200 font-bold flex items-center gap-1.5">
+                                {d.label}
+                                {isMktConselho && (
+                                  <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30">
+                                    Conselho
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-gray-500">{hintTxt}</div>
                             </td>
                             <td className="py-3 text-right text-gray-500 tabular-nums pr-4">{dim.peso}%</td>
                             {OP_FILIAIS.map(f => {
@@ -437,16 +527,26 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
                       <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
                       <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
-                      <span className={votos.length >= QUORUM_MINIMO ? 'text-emerald-400' : 'text-yellow-400'}>
-                        Quórum: {votos.length}/{QUORUM_MINIMO}
+                      <span className={votos.length >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
+                        Quórum: {votos.length}/{quorumMinimo}
                       </span>
                     </div>
                   </div>
 
-                  {jaVotei ? (
-                    <p className="text-xs text-gray-400 mb-4">
-                      Você já registrou seu voto. Aguarde os demais eleitores.
-                    </p>
+                  {jaVotei && !editandoVoto ? (
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <p className="text-xs text-gray-400">
+                        Você já registrou seu voto ({meuVotoAtual?.voto === 'aceita'
+                          ? 'Aceita'
+                          : `Rejeita → ${meuVotoAtual?.filial_escolhida ?? '—'}`}). Aguarde os demais eleitores.
+                      </p>
+                      <button
+                        onClick={() => setEditandoVoto(true)}
+                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all shrink-0"
+                      >
+                        <Pencil size={11} /> Trocar voto
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex flex-col gap-3 mb-4">
                       <div className="flex items-center gap-2">
@@ -486,9 +586,22 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                               className="neu-input rounded-lg px-3 py-2 text-xs w-full" rows={2}
                               placeholder="Justifique seu voto…" />
                           </FormField>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-2">
+                            {editandoVoto && (
+                              <button
+                                onClick={() => {
+                                  setEditandoVoto(false);
+                                  setMeuVoto(''); setComentario(''); setFilialSugerida('');
+                                }}
+                                className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white"
+                              >
+                                Cancelar
+                              </button>
+                            )}
                             <NeuButtonAccent onClick={registrarVoto} disabled={votando} variant="">
-                              {votando ? <><Loader2 size={12} className="animate-spin" /> Registrando…</> : 'Registrar voto'}
+                              {votando
+                                ? <><Loader2 size={12} className="animate-spin" /> Registrando…</>
+                                : editandoVoto ? 'Atualizar voto' : 'Registrar voto'}
                             </NeuButtonAccent>
                           </div>
                         </>
@@ -520,27 +633,39 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
               )}
 
-              {/* Declaração de vencedora — exige quórum mínimo de 2 votos (maioria de 3: CEO + 2 conselheiros) */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length >= QUORUM_MINIMO && (
-                <div className="neu-flat rounded-3xl p-5 border border-accent/30">
-                  <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
-                    <Crown size={13} className="text-accent" /> Declarar vencedora
-                  </h3>
-                  <p className="text-xs text-gray-400 mb-4">
-                    Sugestão do placar automático: <span className="text-emerald-400 font-bold">{podio[0]?.filial}</span> ({podio[0]?.total.toFixed(2)} pts).
-                    Se maioria rejeitou o placar, escolha manualmente a filial vencedora.
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {OP_FILIAIS.map(f => (
-                      <button key={f} onClick={() => declararVencedora(f)} disabled={encerrando}
-                        className={`neu-button rounded-xl p-3 text-xs font-bold uppercase tracking-widest transition-colors ${FILIAL_COLOR[f]} hover:border-accent`}
-                        style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
-                        {encerrando ? <Loader2 size={12} className="animate-spin inline" /> : `Declarar ${f}`}
-                      </button>
-                    ))}
+              {/* Declaração de vencedora — quórum dinâmico (maioria simples dos eleitores) */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length >= quorumMinimo && (() => {
+                const sugerida = sugestaoRejeicao ?? podio[0]?.filial;
+                const origem = sugestaoRejeicao ? 'maioria do conselho rejeitou o placar' : 'placar automático';
+                return (
+                  <div className="neu-flat rounded-3xl p-5 border border-accent/30">
+                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
+                      <Crown size={13} className="text-accent" /> Declarar vencedora
+                    </h3>
+                    <p className="text-xs text-gray-400 mb-4">
+                      Sugestão ({origem}): <span className="text-emerald-400 font-bold">{sugerida}</span>
+                      {!sugestaoRejeicao && podio[0] && <> ({podio[0].total.toFixed(2)} pts)</>}.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {OP_FILIAIS.map(f => {
+                        const isSugerida = f === sugerida;
+                        return (
+                          <button key={f} onClick={() => declararVencedora(f)} disabled={encerrando}
+                            className={`neu-button rounded-xl p-3 text-xs font-bold uppercase tracking-widest transition-colors ${FILIAL_COLOR[f]} hover:border-accent ${isSugerida ? 'ring-2 ring-accent/60' : ''}`}
+                            style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
+                            {encerrando ? <Loader2 size={12} className="animate-spin inline" /> : (
+                              <>
+                                {isSugerida && <Award size={11} className="inline mr-1 text-accent" />}
+                                Declarar {f}
+                              </>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Estado encerrado — mostra vencedora + votos */}
               {competicaoAtual && competicaoAtual.status === 'encerrada' && (
