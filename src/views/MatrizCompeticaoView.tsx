@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -99,6 +99,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [votando, setVotando] = useState(false);
   const [encerrando, setEncerrando] = useState(false);
   const [encerrandoAgora, setEncerrandoAgora] = useState(false);
+  const [excluindo, setExcluindo] = useState<string | null>(null);
   const [modalParabens, setModalParabens] = useState<string | null>(null);
   const [editandoVoto, setEditandoVoto] = useState(false);
   // Total de eleitores elegíveis (CEO + conselheiros da Matriz). Alimenta
@@ -337,6 +338,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     await carregarLista();
   };
 
+  const excluirCompeticao = async (c: Competicao) => {
+    if (!supabase) return;
+    if (!confirm(`Excluir "${c.nome}" definitivamente da lista? Use pra descartar competições de teste. Essa ação não pode ser desfeita pela UI.`)) return;
+    setExcluindo(c.id);
+    const { error } = await supabase.rpc('excluir_competicao_matriz', {
+      p_competicao_id: c.id,
+    });
+    setExcluindo(null);
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    showToast?.('Competição excluída.', 'success');
+    if (competicaoAtual?.id === c.id) {
+      setCompeticaoAtual(null);
+      setPlacar(null);
+      setVotos([]);
+    }
+    await carregarLista();
+  };
+
   const criar = async () => {
     if (!supabase) return;
     if (!form.nome.trim()) return showToast?.('Informe o nome da competição.', 'error');
@@ -466,6 +485,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     }`}>
                       {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
                     </span>
+                    {podeGerenciar && competicaoAtual && (
+                      <button
+                        onClick={() => excluirCompeticao(competicaoAtual)}
+                        disabled={excluindo === competicaoAtual.id}
+                        title="Excluir competição (uso pra descartar testes)"
+                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-gray-500 hover:text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                      >
+                        {excluindo === competicaoAtual.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        Excluir
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -958,6 +988,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       }`}>
                         {c.status.replace(/_/g, ' ')}
                       </span>
+                      <button
+                        onClick={() => excluirCompeticao(c)}
+                        disabled={excluindo === c.id}
+                        title="Excluir competição (uso pra descartar testes)"
+                        className="flex items-center justify-center w-7 h-7 rounded-lg neu-button text-gray-500 hover:text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all shrink-0"
+                      >
+                        {excluindo === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      </button>
                     </div>
                   </div>
                 ))}
