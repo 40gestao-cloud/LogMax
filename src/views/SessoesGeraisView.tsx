@@ -23,10 +23,11 @@ const subLabel = (s: SubmenuLike) => (typeof s === 'string' ? s : s.label);
 
 // Paleta de tints — mapeada a partir do primeiro token de cor de MacroDef.color.
 // Classes listadas explicitamente pra o JIT do Tailwind gerar tudo.
-type TintKey = 'slate'|'sky'|'green'|'purple'|'indigo'|'cyan'|'teal'|'pink'|'amber';
+type TintKey = 'slate'|'sky'|'blue'|'green'|'purple'|'indigo'|'cyan'|'teal'|'pink'|'amber'|'red'|'orange';
 const TINTS: Record<TintKey, { icon: string; iconBg: string; iconRing: string; glow: string; hairline: string }> = {
   slate:  { icon: 'text-slate-300',  iconBg: 'bg-slate-500/10',  iconRing: 'ring-slate-500/25',  glow: 'bg-slate-500/20',  hairline: 'border-slate-500/20'  },
   sky:    { icon: 'text-sky-400',    iconBg: 'bg-sky-500/10',    iconRing: 'ring-sky-500/25',    glow: 'bg-sky-500/25',    hairline: 'border-sky-500/25'    },
+  blue:   { icon: 'text-blue-400',   iconBg: 'bg-blue-500/10',   iconRing: 'ring-blue-500/25',   glow: 'bg-blue-500/25',   hairline: 'border-blue-500/25'   },
   green:  { icon: 'text-emerald-400',iconBg: 'bg-emerald-500/10',iconRing: 'ring-emerald-500/25',glow: 'bg-emerald-500/25',hairline: 'border-emerald-500/25'},
   purple: { icon: 'text-purple-400', iconBg: 'bg-purple-500/10', iconRing: 'ring-purple-500/25', glow: 'bg-purple-500/25', hairline: 'border-purple-500/25' },
   indigo: { icon: 'text-indigo-400', iconBg: 'bg-indigo-500/10', iconRing: 'ring-indigo-500/25', glow: 'bg-indigo-500/25', hairline: 'border-indigo-500/25' },
@@ -34,6 +35,8 @@ const TINTS: Record<TintKey, { icon: string; iconBg: string; iconRing: string; g
   teal:   { icon: 'text-teal-400',   iconBg: 'bg-teal-500/10',   iconRing: 'ring-teal-500/25',   glow: 'bg-teal-500/25',   hairline: 'border-teal-500/25'   },
   pink:   { icon: 'text-pink-400',   iconBg: 'bg-pink-500/10',   iconRing: 'ring-pink-500/25',   glow: 'bg-pink-500/25',   hairline: 'border-pink-500/25'   },
   amber:  { icon: 'text-amber-300',  iconBg: 'bg-amber-500/10',  iconRing: 'ring-amber-500/25',  glow: 'bg-amber-500/25',  hairline: 'border-amber-500/25'  },
+  red:    { icon: 'text-red-400',    iconBg: 'bg-red-500/10',    iconRing: 'ring-red-500/25',    glow: 'bg-red-500/25',    hairline: 'border-red-500/25'    },
+  orange: { icon: 'text-orange-400', iconBg: 'bg-orange-500/10', iconRing: 'ring-orange-500/25', glow: 'bg-orange-500/25', hairline: 'border-orange-500/25' },
 };
 function pickTint(color: string): typeof TINTS[TintKey] {
   const m = color.match(/(?:from-|text-)([a-z]+)-/);
@@ -61,11 +64,11 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     // filial no schema) — em Matriz virariam consolidado read-only, escopo
     // que não temos ainda. Fica só Filiais (agora consolidado das 4 unidades)
     // e Cliente Especial, que é decisão de holding do admin/CEO.
-    kind: 'group', id: 'empresa-macro', label: 'Empresa', icon: Building2, color: 'from-slate-500/20 to-slate-500/5 border-slate-500/30 text-slate-300',
+    kind: 'group', id: 'empresa-macro', label: 'Empresa', icon: Building2, color: 'from-amber-500/20 to-amber-500/5 border-amber-500/30 text-amber-300',
     modulos: [
-      { id: 'empresa', label: 'Empresa', icon: Building2, color: 'text-slate-300',
+      { id: 'empresa', label: 'Empresa', icon: Building2, color: 'text-amber-300',
         submenus: ['Filiais'] },
-      { id: 'vendas', label: 'Governança', icon: Users, color: 'text-slate-300',
+      { id: 'vendas', label: 'Governança', icon: Users, color: 'text-amber-300',
         submenus: ['Cliente Especial'] },
     ],
   },
@@ -73,32 +76,32 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     // Cadastros (Categorias/Produtos/Serviços) também são filialScoped — sem
     // consolidado read-only, sai do hub. Compras/Estoque mantêm só Gerenciamento
     // e Relatórios (que já leem consolidado).
-    kind: 'group', id: 'logistica-matriz', label: 'Logística', icon: Package, color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',
+    kind: 'group', id: 'logistica-matriz', label: 'Logística', icon: Package, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',
     modulos: [
-      { id: 'compras', label: 'Compras', icon: ShoppingCart, color: 'text-sky-400',
+      { id: 'compras', label: 'Compras', icon: ShoppingCart, color: 'text-green-400',
         submenus: ['Gerenciamento', 'Relatórios'] },
-      { id: 'estoque', label: 'Estoque', icon: Package, color: 'text-sky-400',
+      { id: 'estoque', label: 'Estoque', icon: Package, color: 'text-green-400',
         submenus: ['Gerenciamento', 'Relatórios'] },
     ],
   },
   {
-    kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-green-500/20 to-green-500/5 border-green-500/30 text-green-400',
+    kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400',
     modulos: [
-      { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-green-400',
+      { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-purple-400',
         submenus: ['Alçadas', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {
-    kind: 'group', id: 'rh-matriz', label: 'Recursos Humanos', icon: Users, color: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400',
+    kind: 'group', id: 'rh-matriz', label: 'Recursos Humanos', icon: Users, color: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 text-blue-400',
     modulos: [
-      { id: 'rh', label: 'RH', icon: Users, color: 'text-purple-400',
+      { id: 'rh', label: 'RH', icon: Users, color: 'text-blue-400',
         submenus: ['Frequência de Trabalho', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {
-    kind: 'group', id: 'ti-matriz', label: 'TI & Suporte', icon: Monitor, color: 'from-indigo-500/20 to-indigo-500/5 border-indigo-500/30 text-indigo-400',
+    kind: 'group', id: 'ti-matriz', label: 'TI & Suporte', icon: Monitor, color: 'from-red-500/20 to-red-500/5 border-red-500/30 text-red-400',
     modulos: [
-      { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-indigo-400',
+      { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-red-400',
         submenus: ['Desenvolvimento com IA'] },
     ],
   },
@@ -108,13 +111,13 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
 export const ANALISE_IA_MACROS: MacroDef[] = [
   {
     kind: 'leaf', id: 'painel-bi', label: 'Painel de BI', icon: Brain,
-    color: 'from-cyan-500/20 to-cyan-500/5 border-cyan-500/30 text-cyan-400',
+    color: 'from-orange-500/20 to-orange-500/5 border-orange-500/30 text-orange-400',
     viewId: 'painel-bi',
     description: 'Relatórios executivos com IA por setor',
   },
   {
     kind: 'leaf', id: 'briefing-diario', label: 'Briefing Diário', icon: ListTodo,
-    color: 'from-teal-500/20 to-teal-500/5 border-teal-500/30 text-teal-400',
+    color: 'from-red-500/20 to-red-500/5 border-red-500/30 text-red-400',
     viewId: 'briefing-diario',
     description: 'Pauta diária proposta pela IA por setor',
   },
