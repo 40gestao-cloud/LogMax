@@ -142,6 +142,7 @@ export const FiliaisView = ({ showToast }: any) => {
     nicho: '',
     tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
     capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
+    folhaPagamento: '',
     ...equipZeros(),
     ...equipPrecoZeros(),
   });
@@ -195,6 +196,7 @@ export const FiliaisView = ({ showToast }: any) => {
       horarioFuncionamento: d.horarioFuncionamento ?? '',
       dataInauguracao: d.dataInauguracao ?? '',
       investimentoInicial: d.investimentoInicial != null ? formatBRL(d.investimentoInicial) : '',
+      folhaPagamento: d.folhaPagamento != null ? formatBRL(d.folhaPagamento) : '',
       ...equipCarregado,
       ...precoCarregado,
     });
@@ -216,6 +218,7 @@ export const FiliaisView = ({ showToast }: any) => {
       nicho: '',
       tamanhoM2: '', tipoImovel: '', valorAluguel: '', vagas: '',
       capacidade: '', horarioFuncionamento: '', dataInauguracao: '', investimentoInicial: '',
+      folhaPagamento: '',
       ...equipZeros(),
       ...equipPrecoZeros(),
     });
@@ -265,17 +268,25 @@ export const FiliaisView = ({ showToast }: any) => {
         const preco = detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : 0;
         return acc + qtd * preco;
       }, 0);
+      const valorAluguel = detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : 0;
+      const folhaPagamento = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
+      // Total investido = equipamentos & mobiliário + aluguel + folha de
+      // pagamento. Investimento inicial fica de fora — é entrada manual
+      // separada (aporte de abertura), não recorrente como os outros três.
+      const valorTotalInvestido = valorTotalEquipamentos + valorAluguel + folhaPagamento;
       const detalhesPayload = {
         nicho,
         tamanhoM2: num(detalhes.tamanhoM2),
         tipoImovel: detalhes.tipoImovel || null,
-        valorAluguel: detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : null,
+        valorAluguel: valorAluguel > 0 ? valorAluguel : null,
         vagas: num(detalhes.vagas),
         capacidade: num(detalhes.capacidade),
         horarioFuncionamento: detalhes.horarioFuncionamento || null,
         dataInauguracao: detalhes.dataInauguracao || null,
         investimentoInicial: detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : null,
+        folhaPagamento: folhaPagamento > 0 ? folhaPagamento : null,
         valorTotalEquipamentos: valorTotalEquipamentos > 0 ? valorTotalEquipamentos : null,
+        valorTotalInvestido: valorTotalInvestido > 0 ? valorTotalInvestido : null,
         ...equipPayload,
         ...precoPayload,
       };
@@ -313,8 +324,8 @@ export const FiliaisView = ({ showToast }: any) => {
     }
   };
 
-  // Total investido em equipamentos & mobiliário — recalcula ao digitar,
-  // pra dar feedback imediato antes de salvar.
+  // Total investido — equipamentos & mobiliário + aluguel + folha de
+  // pagamento. Recalcula ao digitar, pra dar feedback imediato antes de salvar.
   const totalEquipamentosForm = useMemo(() =>
     CAMPOS_NICHO[nichoAtivo].reduce((acc, [k]) => {
       const qtd = Number(detalhes[k] || 0);
@@ -323,6 +334,11 @@ export const FiliaisView = ({ showToast }: any) => {
     }, 0),
     [detalhes, nichoAtivo],
   );
+  const totalInvestidoForm = useMemo(() => {
+    const aluguel = detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : 0;
+    const folha = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
+    return totalEquipamentosForm + aluguel + folha;
+  }, [totalEquipamentosForm, detalhes.tipoImovel, detalhes.valorAluguel, detalhes.folhaPagamento]);
 
   const isFormOpen = showForm || !!editItem;
 
@@ -482,6 +498,12 @@ export const FiliaisView = ({ showToast }: any) => {
                       onKeyDown={handleMoneyKeyDown}
                       placeholder="R$ 0,00" />
                   </FormField>
+                  <FormField label="Funcionários — Valor total da folha de pagamento">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.folhaPagamento}
+                      onChange={e => setDetalhes(d => ({ ...d, folhaPagamento: formatBRL(e.target.value) }))}
+                      onKeyDown={handleMoneyKeyDown}
+                      placeholder="R$ 0,00" />
+                  </FormField>
                 </div>
               </div>
 
@@ -519,9 +541,27 @@ export const FiliaisView = ({ showToast }: any) => {
                     );
                   })}
                 </div>
-                <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido em equipamentos & mobiliário</span>
-                  <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(totalEquipamentosForm)}</span>
+                <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-[11px] text-gray-500">
+                    <span>Equipamentos & mobiliário</span>
+                    <span className="tabular-nums">R$ {formatBRL(totalEquipamentosForm)}</span>
+                  </div>
+                  {detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel && (
+                    <div className="flex items-center justify-between text-[11px] text-gray-500">
+                      <span>Aluguel</span>
+                      <span className="tabular-nums">R$ {detalhes.valorAluguel}</span>
+                    </div>
+                  )}
+                  {detalhes.folhaPagamento && (
+                    <div className="flex items-center justify-between text-[11px] text-gray-500">
+                      <span>Folha de pagamento</span>
+                      <span className="tabular-nums">R$ {detalhes.folhaPagamento}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido</span>
+                    <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(totalInvestidoForm)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -596,14 +636,17 @@ export const FiliaisView = ({ showToast }: any) => {
                     <Calendar size={11} className="text-gray-500 shrink-0" />Inaugurada em {new Date(item.detalhes.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </div>
                 )}
-                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null || item.detalhes?.valorTotalEquipamentos != null) && (
+                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null
+                  || item.detalhes?.folhaPagamento != null || item.detalhes?.valorTotalEquipamentos != null) && (
                   <div className="flex items-start gap-2 text-xs text-gray-400">
                     <Wallet size={11} className="text-gray-500 shrink-0 mt-0.5" />
                     <div className="flex flex-col gap-0.5">
                       {item.detalhes.valorAluguel != null && <span>Aluguel: R$ {formatBRL(item.detalhes.valorAluguel)}</span>}
-                      {item.detalhes.investimentoInicial != null && <span>Investimento: R$ {formatBRL(item.detalhes.investimentoInicial)}</span>}
-                      {item.detalhes.valorTotalEquipamentos != null && (
-                        <span className="text-accent font-bold">Equip. & mobiliário: R$ {formatBRL(item.detalhes.valorTotalEquipamentos)}</span>
+                      {item.detalhes.folhaPagamento != null && <span>Folha de pagamento: R$ {formatBRL(item.detalhes.folhaPagamento)}</span>}
+                      {item.detalhes.investimentoInicial != null && <span>Investimento inicial: R$ {formatBRL(item.detalhes.investimentoInicial)}</span>}
+                      {item.detalhes.valorTotalEquipamentos != null && <span>Equip. & mobiliário: R$ {formatBRL(item.detalhes.valorTotalEquipamentos)}</span>}
+                      {item.detalhes.valorTotalInvestido != null && (
+                        <span className="text-accent font-bold">Total investido: R$ {formatBRL(item.detalhes.valorTotalInvestido)}</span>
                       )}
                     </div>
                   </div>
