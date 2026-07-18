@@ -99,6 +99,17 @@ const TIPO_BY_ID = new Map<ItemTipo, TipoConfig>(
   GRUPOS.flatMap(g => g.tipos.map(t => [t.id, t] as const)),
 );
 
+// Paleta por grupo — halo + tile do ícone, coerente com a identidade de cada macro.
+const GRUPO_TINT: Record<string, { glow: string; iconBg: string; iconRing: string; iconColor: string }> = {
+  marketing:  { glow: 'bg-pink-500/25',    iconBg: 'bg-pink-500/10',    iconRing: 'ring-pink-500/25',    iconColor: 'text-pink-400' },
+  vendas:     { glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400' },
+  compras:    { glow: 'bg-sky-500/25',     iconBg: 'bg-sky-500/10',     iconRing: 'ring-sky-500/25',     iconColor: 'text-sky-400' },
+  rh:         { glow: 'bg-purple-500/25',  iconBg: 'bg-purple-500/10',  iconRing: 'ring-purple-500/25',  iconColor: 'text-purple-400' },
+  cadastros:  { glow: 'bg-cyan-500/25',    iconBg: 'bg-cyan-500/10',    iconRing: 'ring-cyan-500/25',    iconColor: 'text-cyan-400' },
+  financeiro: { glow: 'bg-green-500/25',   iconBg: 'bg-green-500/10',   iconRing: 'ring-green-500/25',   iconColor: 'text-green-400' },
+  default:    { glow: 'bg-slate-500/25',   iconBg: 'bg-slate-500/10',   iconRing: 'ring-slate-500/25',   iconColor: 'text-slate-300' },
+};
+
 type Competicao = {
   id: string;
   nome: string;
@@ -297,16 +308,26 @@ function LandingSecoes({ onSelect }: { onSelect: (s: Exclude<Secao,null>) => voi
     {
       id: 'filiais' as const,
       label: 'Dados das Filiais',
-      hint: 'Cadastros, Compras, Financeiro, RH, Vendas e Marketing avaliados a partir do que as filiais registraram no período.',
+      hint: 'Cadastros, Compras, Financeiro, RH, Vendas e Marketing — avaliados a partir do que as filiais registraram no período.',
       icon: Building2,
-      tint: 'from-sky-500/20 to-cyan-500/10 ring-sky-500/30',
+      glow: 'bg-sky-500/25',
+      iconBg: 'bg-sky-500/10',
+      iconRing: 'ring-sky-500/25',
+      iconColor: 'text-sky-400',
+      hairline: 'border-sky-500/25',
+      chips: ['Marketing', 'Vendas', 'Compras', 'Financeiro', 'RH', 'Cadastros'],
     },
     {
       id: 'matriz' as const,
       label: 'Tarefas da Matriz',
       hint: 'Treinamentos e apresentações criadas pela Matriz — CEO e conselheiros dão nota 0-10 por participante.',
       icon: Sparkles,
-      tint: 'from-amber-400/20 to-orange-500/10 ring-amber-400/30',
+      glow: 'bg-amber-500/25',
+      iconBg: 'bg-amber-500/10',
+      iconRing: 'ring-amber-500/25',
+      iconColor: 'text-amber-300',
+      hairline: 'border-amber-500/25',
+      chips: ['Treinamento em Vendas', 'Treinamento em IA', 'Apresentação'],
     },
   ];
   return (
@@ -317,17 +338,27 @@ function LandingSecoes({ onSelect }: { onSelect: (s: Exclude<Secao,null>) => voi
           <button
             key={s.id}
             onClick={() => onSelect(s.id)}
-            className={`neu-flat rounded-2xl border border-white/5 hover:border-accent/50 p-6 text-left transition-all group flex flex-col gap-3 bg-gradient-to-br ${s.tint}`}
+            className="relative neu-flat rounded-2xl p-6 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center ring-1 ring-accent/25">
-                <Icon size={22} className="text-accent" />
+            <div className={`pointer-events-none absolute -top-20 -right-20 w-56 h-56 rounded-full blur-3xl opacity-60 ${s.glow}`} />
+
+            <div className="relative flex items-start justify-between gap-4 mb-5">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ring-1 ${s.iconBg} ${s.iconRing}`}>
+                <Icon size={22} strokeWidth={1.8} className={s.iconColor} />
               </div>
-              <ChevronRight size={18} className="text-gray-500 group-hover:text-accent transition-colors" />
+              <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
             </div>
-            <div>
-              <h3 className="text-lg font-black text-gray-100">{s.label}</h3>
+
+            <div className="relative">
+              <h3 className="text-lg font-black text-gray-100 tracking-tight">{s.label}</h3>
               <p className="text-xs text-gray-400 mt-1 leading-snug">{s.hint}</p>
+              <div className={`mt-4 pt-3 border-t ${s.hairline} flex flex-wrap gap-1.5`}>
+                {s.chips.map(c => (
+                  <span key={c} className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.04] text-gray-400 ring-1 ring-white/5">
+                    {c}
+                  </span>
+                ))}
+              </div>
             </div>
           </button>
         );
@@ -406,50 +437,53 @@ function LandingProgresso({ competicao, profile, podeAvaliar, onSelectGrupo }: {
         const pct = totais.total === 0 ? 0 : Math.round(100 * totais.meus / totais.total);
         const semDados = totais.total === 0;
 
+        const tint = GRUPO_TINT[grupo.id] ?? GRUPO_TINT.default;
         return (
           <button
             key={grupo.id}
             onClick={() => onSelectGrupo(grupo.id)}
-            className="neu-flat rounded-2xl border border-white/5 hover:border-accent/40 p-5 text-left transition-all group flex flex-col gap-3"
+            className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all flex flex-col gap-4"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center ring-1 ring-accent/20">
-                  <Icon size={16} className="text-accent" />
+            <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${tint.glow}`} />
+
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
+                  <Icon size={20} strokeWidth={1.8} className={tint.iconColor} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-black text-gray-100">{grupo.label}</span>
+                  <span className="text-base font-black text-gray-100 tracking-tight">{grupo.label}</span>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
                     {grupo.tipos.length} {grupo.tipos.length === 1 ? 'critério' : 'critérios'}
                   </span>
                 </div>
               </div>
-              <ChevronRight size={14} className="text-gray-500 group-hover:text-accent transition-colors" />
+              <ChevronRight size={15} className="text-gray-600 group-hover:text-accent transition-colors shrink-0" />
             </div>
 
             {loading ? (
-              <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-gray-500" /><span className="text-[10px] text-gray-500">Carregando…</span></div>
+              <div className="relative flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-gray-500" /><span className="text-[10px] text-gray-500">Carregando…</span></div>
             ) : semDados ? (
-              <div className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-2 py-1 self-start">
+              <div className="relative text-[10px] font-bold uppercase tracking-widest text-yellow-300 bg-yellow-500/10 ring-1 ring-yellow-500/25 rounded-lg px-2 py-1 self-start">
                 Sem itens no período
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="relative flex flex-col gap-2">
                 <div className="flex items-end justify-between gap-3">
                   <div className="flex flex-col">
                     <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Progresso</span>
-                    <span className="text-2xl font-black tabular-nums text-gray-100">{pct}%</span>
+                    <span className="text-3xl font-black tabular-nums text-gray-100 leading-none mt-1">{pct}<span className="text-lg text-gray-500">%</span></span>
                   </div>
                   <div className="flex flex-col items-end text-[10px] font-mono">
                     {podeAvaliar && pendentes > 0 && (
-                      <span className="font-black text-amber-300">
-                        {pendentes} pendente{pendentes !== 1 ? 's' : ''}
+                      <span className="font-black text-amber-300 uppercase tracking-widest">
+                        {pendentes} pend.
                       </span>
                     )}
-                    <span className="text-gray-500">{totais.meus}/{totais.total}</span>
+                    <span className="text-gray-500 tabular-nums">{totais.meus}/{totais.total}</span>
                   </div>
                 </div>
-                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden ring-1 ring-white/5">
                   <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
                 </div>
               </div>

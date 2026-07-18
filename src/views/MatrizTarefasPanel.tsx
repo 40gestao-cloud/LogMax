@@ -18,7 +18,10 @@ type TipoConfig = {
   label: string;
   hint: string;
   icon: any;
-  tint: string;
+  glow: string;
+  iconBg: string;
+  iconRing: string;
+  iconColor: string;
   novoLabel: string;
 };
 
@@ -28,7 +31,7 @@ const TIPOS: TipoConfig[] = [
     label: 'Treinamento em Vendas',
     hint: 'Criar treinamento, definir participantes por filial e nota 0-10 do conselho.',
     icon: GraduationCap,
-    tint: 'from-emerald-500/20 to-teal-500/10 ring-emerald-500/30',
+    glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400',
     novoLabel: 'Novo treinamento em Vendas',
   },
   {
@@ -36,7 +39,7 @@ const TIPOS: TipoConfig[] = [
     label: 'Treinamento em IA',
     hint: 'Criar treinamento em IA, participantes por filial, nota 0-10 do conselho.',
     icon: Cpu,
-    tint: 'from-fuchsia-500/20 to-violet-500/10 ring-fuchsia-500/30',
+    glow: 'bg-fuchsia-500/25', iconBg: 'bg-fuchsia-500/10', iconRing: 'ring-fuchsia-500/25', iconColor: 'text-fuchsia-400',
     novoLabel: 'Novo treinamento em IA',
   },
   {
@@ -44,7 +47,7 @@ const TIPOS: TipoConfig[] = [
     label: 'Apresentação Profissional',
     hint: 'Criar pauta de apresentação, selecionar participantes e nota 0-10 do conselho.',
     icon: Presentation,
-    tint: 'from-amber-400/20 to-orange-500/10 ring-amber-400/30',
+    glow: 'bg-amber-500/25', iconBg: 'bg-amber-500/10', iconRing: 'ring-amber-500/25', iconColor: 'text-amber-300',
     novoLabel: 'Nova apresentação',
   },
 ];
@@ -141,23 +144,27 @@ function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => v
           <button
             key={t.id}
             onClick={() => onSelect(t.id)}
-            className={`neu-flat rounded-2xl border border-white/5 hover:border-accent/50 p-5 text-left transition-all group flex flex-col gap-3 bg-gradient-to-br ${t.tint}`}
+            className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all flex flex-col gap-4"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="w-11 h-11 rounded-xl bg-accent/15 flex items-center justify-center ring-1 ring-accent/25">
-                <Icon size={20} className="text-accent" />
+            <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${t.glow}`} />
+
+            <div className="relative flex items-start justify-between gap-2">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center ring-1 ${t.iconBg} ${t.iconRing}`}>
+                <Icon size={20} strokeWidth={1.8} className={t.iconColor} />
               </div>
-              <ChevronRight size={16} className="text-gray-500 group-hover:text-accent transition-colors" />
+              <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
             </div>
-            <div>
-              <h3 className="text-base font-black text-gray-100">{t.label}</h3>
+
+            <div className="relative">
+              <h3 className="text-base font-black text-gray-100 tracking-tight">{t.label}</h3>
               <p className="text-[11px] text-gray-400 mt-1 leading-snug">{t.hint}</p>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-mono">
+
+            <div className="relative flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold pt-3 border-t border-white/5">
               {loading ? (
                 <Loader2 size={11} className="animate-spin text-gray-500" />
               ) : (
-                <span className="text-gray-400">
+                <span className="text-gray-400 tabular-nums">
                   {contadores[t.id]} tarefa{contadores[t.id] === 1 ? '' : 's'} nesta competição
                 </span>
               )}

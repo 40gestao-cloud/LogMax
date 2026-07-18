@@ -20,6 +20,27 @@ export type MacroDef = GroupMacro | LeafMacro;
 
 const slug = (s: string) => s.toLowerCase().replace(/ /g, '').replace(/\//g, '');
 const subLabel = (s: SubmenuLike) => (typeof s === 'string' ? s : s.label);
+
+// Paleta de tints — mapeada a partir do primeiro token de cor de MacroDef.color.
+// Classes listadas explicitamente pra o JIT do Tailwind gerar tudo.
+type TintKey = 'slate'|'sky'|'green'|'purple'|'indigo'|'cyan'|'teal'|'pink'|'amber';
+const TINTS: Record<TintKey, { icon: string; iconBg: string; iconRing: string; glow: string; hairline: string }> = {
+  slate:  { icon: 'text-slate-300',  iconBg: 'bg-slate-500/10',  iconRing: 'ring-slate-500/25',  glow: 'bg-slate-500/20',  hairline: 'border-slate-500/20'  },
+  sky:    { icon: 'text-sky-400',    iconBg: 'bg-sky-500/10',    iconRing: 'ring-sky-500/25',    glow: 'bg-sky-500/25',    hairline: 'border-sky-500/25'    },
+  green:  { icon: 'text-emerald-400',iconBg: 'bg-emerald-500/10',iconRing: 'ring-emerald-500/25',glow: 'bg-emerald-500/25',hairline: 'border-emerald-500/25'},
+  purple: { icon: 'text-purple-400', iconBg: 'bg-purple-500/10', iconRing: 'ring-purple-500/25', glow: 'bg-purple-500/25', hairline: 'border-purple-500/25' },
+  indigo: { icon: 'text-indigo-400', iconBg: 'bg-indigo-500/10', iconRing: 'ring-indigo-500/25', glow: 'bg-indigo-500/25', hairline: 'border-indigo-500/25' },
+  cyan:   { icon: 'text-cyan-400',   iconBg: 'bg-cyan-500/10',   iconRing: 'ring-cyan-500/25',   glow: 'bg-cyan-500/25',   hairline: 'border-cyan-500/25'   },
+  teal:   { icon: 'text-teal-400',   iconBg: 'bg-teal-500/10',   iconRing: 'ring-teal-500/25',   glow: 'bg-teal-500/25',   hairline: 'border-teal-500/25'   },
+  pink:   { icon: 'text-pink-400',   iconBg: 'bg-pink-500/10',   iconRing: 'ring-pink-500/25',   glow: 'bg-pink-500/25',   hairline: 'border-pink-500/25'   },
+  amber:  { icon: 'text-amber-300',  iconBg: 'bg-amber-500/10',  iconRing: 'ring-amber-500/25',  glow: 'bg-amber-500/25',  hairline: 'border-amber-500/25'  },
+};
+function pickTint(color: string): typeof TINTS[TintKey] {
+  const m = color.match(/(?:from-|text-)([a-z]+)-/);
+  const raw = (m?.[1] ?? 'slate') as string;
+  const key = (raw === 'emerald' ? 'green' : raw) as TintKey;
+  return TINTS[key] ?? TINTS.slate;
+}
 const subPermitido = (s: SubmenuLike, profile: UserProfile | null) => {
   if (typeof s === 'string') return true;
   if (s.requireRole && !s.requireRole.includes(profile?.role ?? '')) return false;
@@ -235,31 +256,58 @@ export function HubView({
             key="macros"
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-5"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             {macrosVisiveis.map(macro => {
               const total = macroBadge(macro);
               const Icon = macro.icon;
+              const tint = pickTint(macro.color);
+              const chips = macro.kind === 'leaf'
+                ? []
+                : macro.modulos.flatMap(m => m.submenus.filter(s => subPermitido(s, profile)).map(subLabel));
               return (
                 <button
                   key={macro.id}
                   onClick={() => handleMacroClick(macro)}
-                  className={`neu-flat rounded-3xl p-6 border bg-gradient-to-br text-left group hover:scale-[1.02] active:scale-[0.98] transition-transform ${macro.color}`}
+                  className="relative neu-flat rounded-2xl p-6 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <Icon size={32} strokeWidth={1.5} />
-                    {total > 0 && (
-                      <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                        {total} pendente{total > 1 ? 's' : ''}
-                      </span>
+                  {/* Halo colorido no canto — dá identidade sem apelar pra gradient washed */}
+                  <div className={`pointer-events-none absolute -top-20 -right-20 w-56 h-56 rounded-full blur-3xl opacity-60 ${tint.glow}`} />
+
+                  <div className="relative flex items-start justify-between gap-4 mb-5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
+                      <Icon size={22} strokeWidth={1.8} className={tint.icon} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {total > 0 && (
+                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
+                          {total} pend.
+                        </span>
+                      )}
+                      <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <h3 className="text-lg font-black text-gray-100 tracking-tight">{macro.label}</h3>
+                    {macro.kind === 'leaf' && macro.description && (
+                      <p className="text-xs text-gray-400 mt-1 leading-snug">{macro.description}</p>
+                    )}
+                    {chips.length > 0 && (
+                      <div className={`mt-4 pt-3 border-t ${tint.hairline} flex flex-wrap gap-1.5`}>
+                        {chips.slice(0, 5).map(c => (
+                          <span key={c} className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.04] text-gray-400 ring-1 ring-white/5">
+                            {c}
+                          </span>
+                        ))}
+                        {chips.length > 5 && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.04] text-gray-500 ring-1 ring-white/5">
+                            +{chips.length - 5}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <h3 className="text-xl font-black mb-1">{macro.label}</h3>
-                  <p className="text-xs text-gray-400">
-                    {macro.kind === 'leaf'
-                      ? (macro.description ?? '—')
-                      : macro.modulos.map(m => m.label).join(' · ')}
-                  </p>
                 </button>
               );
             })}
@@ -276,34 +324,51 @@ export function HubView({
             {stage.macro.modulos.map(mod => {
               const Icon = mod.icon;
               const b = moduleBadge(mod);
+              const tint = pickTint(mod.color);
+              const submenusVisiveis = mod.submenus.filter(s => subPermitido(s, profile));
               return (
                 <button
                   key={mod.id}
                   onClick={() => setStage({ kind: 'submenus', macro: stage.macro, modulo: mod })}
-                  className="neu-flat rounded-2xl p-5 border border-white/5 text-left hover:border-accent/30 transition-colors"
+                  className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/20 transition-all"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <Icon size={22} className={mod.color} />
-                    {b > 0 && (
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                        {b}
-                      </span>
-                    )}
+                  <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${tint.glow}`} />
+
+                  <div className="relative flex items-start justify-between gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
+                      <Icon size={18} strokeWidth={1.8} className={tint.icon} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {b > 0 && (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
+                          {b}
+                        </span>
+                      )}
+                      <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors" />
+                    </div>
                   </div>
-                  <h4 className="text-base font-bold text-gray-100 mb-1">{mod.label}</h4>
-                  <p className="text-xs text-gray-500">{mod.submenus.length} submódulo(s)</p>
+
+                  <div className="relative">
+                    <h4 className="text-base font-black text-gray-100 tracking-tight">{mod.label}</h4>
+                    <p className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mt-0.5">
+                      {submenusVisiveis.length} submódulo{submenusVisiveis.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </motion.div>
         )}
 
-        {stage.kind === 'submenus' && (
+        {stage.kind === 'submenus' && (() => {
+          const ModIcon = stage.modulo.icon;
+          const tint = pickTint(stage.modulo.color);
+          return (
           <motion.div
             key="submenus"
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
             {stage.modulo.submenus
               .filter(s => subPermitido(s, profile))
@@ -312,23 +377,39 @@ export function HubView({
                 const viewId = `${stage.modulo.id}-${slug(label)}`;
                 const b = badges[viewId] ?? 0;
                 return (
-                  <div key={label} className="relative group">
-                    <button
-                      onClick={() => navigate(viewId)}
-                      className="w-full neu-flat rounded-xl px-4 py-3 border border-white/5 flex items-center justify-between text-left hover:border-accent/30 hover:bg-accent/5 transition-colors"
-                    >
-                      <span className="text-sm font-semibold text-gray-200 group-hover:text-accent">{label}</span>
-                      {b > 0 && (
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                          {b}
-                        </span>
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    key={label}
+                    onClick={() => navigate(viewId)}
+                    className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/20 transition-all"
+                  >
+                    <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${tint.glow}`} />
+
+                    <div className="relative flex items-start justify-between gap-3 mb-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
+                        <ModIcon size={18} strokeWidth={1.8} className={tint.icon} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {b > 0 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
+                            {b} pend.
+                          </span>
+                        )}
+                        <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors" />
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <h4 className="text-base font-black text-gray-100 tracking-tight group-hover:text-accent transition-colors">{label}</h4>
+                      <p className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mt-0.5">
+                        {stage.modulo.label}
+                      </p>
+                    </div>
+                  </button>
                 );
               })}
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
     </div>
   );
