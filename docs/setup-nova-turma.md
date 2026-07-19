@@ -120,6 +120,28 @@ Isso mantém as instâncias em sync sem re-rodar tudo do zero.
 
 ---
 
+## 7.1. Integração MaxBank — Área Cliente Pix (opcional)
+
+O PDV do LogMax pode gerar QR de Pix apontando pra Área Cliente pública do MaxBank (cliente escaneia com câmera nativa, paga sem login). Sem essas 2 envs, o QR volta pro formato antigo `LOGMAX-PIX-<uuid>` e o operador MaxBank continua lendo normal — turma opera sem Área Cliente.
+
+**No dashboard Vercel do LogMax da turma:**
+
+- `VITE_MAXBANK_URL` — URL pública do MaxBank (sem trailing slash). Ex.: `https://maxbank.vercel.app`
+- `VITE_MAXBANK_BRANCH_ID` — id da turma no MaxBank (ver `src/lib/supabase.ts` do repo MaxBank):
+
+| Turma | branchId |
+|---|---|
+| LogMax ERP | `1` |
+| LogMax Contabilidade | `2` |
+| LogMax Aprendiz | `3` |
+| LogMax ADM | `4` |
+
+Depois de setar, redeploy o LogMax da turma e verifique no PDV que o QR do Pix agora vira URL clicável (`https://maxbank.vercel.app/pagar/<branchId>/<uuid>`).
+
+Rollback: apagar as 2 envs no Vercel e redeploy — QR antigo volta imediato.
+
+---
+
 ## 8. Sanity check
 
 Depois do deploy:

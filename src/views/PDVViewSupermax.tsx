@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
+import { buildPixQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
@@ -2424,7 +2425,7 @@ export const PDVViewSupermax = ({
               <div className="flex justify-center">
                 <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
                   <QRCodeSVG
-                    value={`LOGMAX-PIX-${pixModal.id}`}
+                    value={buildPixQrValue(pixModal.id)}
                     size={220}
                     level="M"
                   />

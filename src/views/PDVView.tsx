@@ -16,6 +16,7 @@ import type { Produto, Cliente } from '../types/domain';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { buildPixQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 
@@ -2137,7 +2138,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               <div className="p-4 rounded-3xl border border-white/5"
                 style={{ background: '#ffffff' }}>
                 <QRCodeSVG
-                  value={`LOGMAX-PIX-${pixPendente.id}`}
+                  value={buildPixQrValue(pixPendente.id)}
                   size={208}
                   bgColor="#ffffff"
                   fgColor="#000000"

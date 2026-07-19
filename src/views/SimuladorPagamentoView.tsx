@@ -8,7 +8,11 @@ import { supabase } from '../lib/supabase';
 
 type Stage = 'scanning' | 'confirming' | 'paying' | 'success' | 'error';
 
-const PIX_REGEX = /^LOGMAX-PIX-([0-9a-f-]{36})$/i;
+// Aceita QR no formato antigo `LOGMAX-PIX-<uuid>` E no formato novo URL
+// `<VITE_MAXBANK_URL>/pagar/<branchId>/<uuid>` (introduzido pra Área Cliente
+// do MaxBank, ver src/lib/pixQr.ts). Simulador embutido continua servindo
+// como fallback quando MaxBank não está deployado ou envs não setadas.
+const PIX_REGEX = /(?:^LOGMAX-PIX-|\/pagar\/\d+\/)([0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i;
 
 // Identidade própria de PWA ("Banco Simulado": manifest, ícone, theme,
 // document.title) é aplicada via script inline no <head> do index.html
