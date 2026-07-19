@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, DollarSign, Users, Building2,
-  Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo,
+  Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo, TrendingUp,
   ChevronRight,
 } from 'lucide-react';
 import { allSetores } from '../lib/rbac';
@@ -104,6 +104,16 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
       { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-red-400',
         submenus: ['Desenvolvimento com IA'] },
     ],
+  },
+  // Leaf — vai direto pro Relatório de Vendas (Orçamentos/Pedidos/Histórico
+  // em abas). PDVView/OrcamentosView/PedidosVendaView/HistoricoVendasView
+  // exigem filialAtiva (operação do dia a dia), não servem em Matriz —
+  // esta tela é o consolidado read-only das 3 unidades.
+  {
+    kind: 'leaf', id: 'relatorio-vendas', label: 'Vendas', icon: TrendingUp,
+    color: 'from-cyan-500/20 to-cyan-500/5 border-cyan-500/30 text-cyan-400',
+    viewId: 'relatorio-vendas',
+    description: 'Orçamentos, Pedidos de Venda e Histórico das 3 unidades',
   },
 ];
 

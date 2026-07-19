@@ -59,6 +59,7 @@ const AprovacoesEstoqueView   = lazy(() => import('./views/AprovacoesEstoqueView
 const ExpedicaoView           = lazy(() => import('./views/ExpedicaoView').then(m => ({ default: m.ExpedicaoView })));
 const InventariosView         = lazy(() => import('./views/InventariosView').then(m => ({ default: m.InventariosView })));
 const RelatoriosComprasView        = lazy(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
+const RelatoriosVendasView         = lazy(() => import('./views/RelatoriosVendasView').then(m => ({ default: m.RelatoriosVendasView })));
 const RelatoriosEstoqueView        = lazy(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
 const SugestoesComprasView         = lazy(() => import('./views/SugestoesComprasView').then(m => ({ default: m.SugestoesComprasView })));
 const GerenciamentoComprasView     = lazy(() => import('./views/GerenciamentoComprasView').then(m => ({ default: m.GerenciamentoComprasView })));
@@ -804,6 +805,7 @@ function LogMaxAppInner() {
       case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
       case 'compras-relatórios':              return <RelatoriosComprasView showToast={st} />;
+      case 'relatorio-vendas':                return <RelatoriosVendasView showToast={st} />;
       case 'estoque-minhasaprovações':        return <AprovacoesEstoqueView showToast={st} />;
       case 'estoque-requisições':             return <RequisicoesEstoqueView showToast={st} />;
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
