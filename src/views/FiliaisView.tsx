@@ -101,7 +101,8 @@ function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'x
   const dim = size === 'xs' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-10 h-10';
   if (url) return (
     <div className={`${dim} rounded-xl overflow-hidden shrink-0 border border-white/10 bg-white flex items-center justify-center`}>
-      <img src={url} alt={alt ?? 'Logo'} className="w-full h-full object-contain p-0.5" />
+      <img src={url} alt={alt ?? 'Logo'} className="w-full h-full object-contain p-0.5"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
     </div>
   );
   return (
@@ -206,9 +207,10 @@ export const FiliaisView = ({ showToast }: any) => {
     setShowForm(false);
   };
 
-  const closeForm = () => {
-    // Se subiu logo mas cancelou sem salvar, remove o órfão do bucket
-    if (imagemUrl && imagemUrl !== imagemUrlAnterior)
+  const closeForm = (opts?: { skipOrphanCleanup?: boolean }) => {
+    // Se subiu logo mas cancelou sem salvar, remove o órfão do bucket.
+    // Pulado após save bem-sucedido — nesse caso imagemUrl já foi persistida.
+    if (!opts?.skipOrphanCleanup && imagemUrl && imagemUrl !== imagemUrlAnterior)
       removerLogoFilial(imagemUrl).catch(() => {});
     setShowForm(false);
     setEditItem(null);
@@ -302,7 +304,7 @@ export const FiliaisView = ({ showToast }: any) => {
         setData([saved ?? { id: Date.now(), ...payload, status: 'Ativa' }, ...data]);
         showToast('Filial criada com sucesso!', 'success', true);
       }
-      closeForm();
+      closeForm({ skipOrphanCleanup: true });
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[Filiais] erro ao salvar:', err);
@@ -566,7 +568,7 @@ export const FiliaisView = ({ showToast }: any) => {
               </div>
 
               <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+                <button onClick={() => closeForm()} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
                 <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
                   <Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}
                 </NeuButtonAccent>

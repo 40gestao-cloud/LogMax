@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ClipboardList, Megaphone, Target } from 'lucide-react';
+import { ArrowRight, ClipboardList, Megaphone, Target, Trophy } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import { dataExtensoBR, saudacaoBR } from '../lib/dates';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { contarAvaliacoesPendentesMatriz, type ResumoAvaliacaoMatriz } from '../lib/matrizAvaliacaoPendentes';
 import { useFilial } from '../contexts/FilialContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { LoadingSpinner, FilialBadge } from '../components/ui';
@@ -13,7 +14,7 @@ import { PontoFAB } from '../components/PontoFAB';
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
 export const InicioView = ({
-  onNavigate, profile, badges, matrizMode: _matrizMode,
+  onNavigate, profile, badges, matrizMode,
 }: {
   onNavigate?: (view: string) => void;
   profile?: UserProfile;
@@ -57,7 +58,23 @@ export const InicioView = ({
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
   const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', filialFilter);
   const { data: artes } = useFetchData<any>('/api/marketingartesview', filialFilter);
-  const isLoading = loadingCR || loadingCP;
+
+  // Modo Matriz: a entidade Matriz não tem contas a pagar/receber próprias
+  // (isso vive nas filiais) — os 2 cards de Resumo Diário viram Avaliações
+  // em Aberto + atalho pra Competição.
+  const [resumoAvaliacao, setResumoAvaliacao] = React.useState<ResumoAvaliacaoMatriz | null>(null);
+  const [loadingAvaliacao, setLoadingAvaliacao] = React.useState(matrizMode);
+  React.useEffect(() => {
+    if (!matrizMode || !profile?.id) { setLoadingAvaliacao(false); return; }
+    let cancelado = false;
+    setLoadingAvaliacao(true);
+    contarAvaliacoesPendentesMatriz(profile.id)
+      .then(r => { if (!cancelado) setResumoAvaliacao(r); })
+      .finally(() => { if (!cancelado) setLoadingAvaliacao(false); });
+    return () => { cancelado = true; };
+  }, [matrizMode, profile?.id]);
+
+  const isLoading = matrizMode ? loadingAvaliacao : (loadingCR || loadingCP);
 
   // Card de Artes Promocionais: aparece pra qualquer usuário logado se houver
   // pelo menos uma arte publicada. Marketing também vê (vai pro mesmo gallery).
@@ -112,6 +129,11 @@ export const InicioView = ({
   const totalPagoCP = contasPagarPagas.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
   const totalTitulosCP = totalPagoCP + contasPagarAberto.reduce((s: number, c: any) => s + (parseFloat(c.valor) || 0), 0);
   const pctPagoCP = totalTitulosCP > 0 ? Math.round((totalPagoCP / totalTitulosCP) * 100) : 0;
+
+  // Modo Matriz: % já avaliado (inverso do pendente) pro donut.
+  const avaliacaoTotal = resumoAvaliacao?.total ?? 0;
+  const avaliacaoPendentes = resumoAvaliacao?.pendentes ?? 0;
+  const pctAvaliado = avaliacaoTotal > 0 ? Math.round(100 * (avaliacaoTotal - avaliacaoPendentes) / avaliacaoTotal) : 0;
 
   // Saudação + data local do Acre — só recalcula ao montar a view.
   const primeiroNome = (profile?.nome ?? profile?.email?.split('@')[0] ?? '').split(' ')[0];
@@ -170,48 +192,98 @@ export const InicioView = ({
         <div className="flex flex-col gap-6 shrink-0">
           <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-              {/* Donut estático: fração paga vs. total, calculado por VALOR.
-                  Substitui o anel animate-spin que lia como "carregando". */}
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
-                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
-                    strokeDasharray={`${pctPago} ${100 - pctPago}`} strokeDashoffset="0" strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasReceberCount}</span>
-                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+            {matrizMode ? (
+              <>
+                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
+                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Avaliações em Aberto</h4>
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
+                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
+                        strokeDasharray={`${pctAvaliado} ${100 - pctAvaliado}`} strokeDashoffset="0" strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{avaliacaoPendentes}</span>
+                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                    </div>
+                  </div>
+                  <div className="text-center mt-auto">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                      {pctAvaliado}% avaliado
+                    </span>
+                    <span className="text-base sm:text-lg font-bold text-gray-100 block truncate max-w-[200px]" title={resumoAvaliacao?.competicaoNome ?? undefined}>
+                      {resumoAvaliacao?.competicaoNome ?? 'Sem competição ativa'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="text-center mt-auto">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
-                  {pctPago}% recebido do total
-                </span>
-                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
-              </div>
-            </div>
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Pagar</h4>
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
-                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
-                    strokeDasharray={`${pctPagoCP} ${100 - pctPagoCP}`} strokeDashoffset="0" strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasPagarCount}</span>
-                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
+                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Competição</h4>
+                  <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-4">
+                    <Trophy size={28} />
+                  </div>
+                  <span className="text-sm font-bold text-gray-200 mb-1">Competição entre filiais</span>
+                  <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
+                    Ranking, fases e resultado das 3 unidades.
+                  </span>
+                  <button
+                    onClick={() => onNavigate?.('matriz-competicao')}
+                    className="btn-shimmer w-full py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all mt-auto"
+                    style={{
+                      background: 'var(--color-accent)',
+                      color:      'var(--color-accent-text)',
+                      border:     'none',
+                      boxShadow:  '0 1px 2px rgba(0, 0, 0, 0.35)',
+                    }}>
+                    Ver Competição <ArrowRight size={14} />
+                  </button>
                 </div>
-              </div>
-              <div className="text-center mt-auto">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
-                  {pctPagoCP}% pago do total
-                </span>
-                <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasPagarValor}</span>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
+                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
+                  {/* Donut estático: fração paga vs. total, calculado por VALOR.
+                      Substitui o anel animate-spin que lia como "carregando". */}
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
+                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
+                        strokeDasharray={`${pctPago} ${100 - pctPago}`} strokeDashoffset="0" strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasReceberCount}</span>
+                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                    </div>
+                  </div>
+                  <div className="text-center mt-auto">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                      {pctPago}% recebido do total
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
+                  </div>
+                </div>
+                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
+                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Pagar</h4>
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
+                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
+                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
+                        strokeDasharray={`${pctPagoCP} ${100 - pctPagoCP}`} strokeDashoffset="0" strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasPagarCount}</span>
+                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
+                    </div>
+                  </div>
+                  <div className="text-center mt-auto">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                      {pctPagoCP}% pago do total
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasPagarValor}</span>
+                  </div>
+                </div>
+              </>
+            )}
             <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Metas</h4>
               <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-4">
