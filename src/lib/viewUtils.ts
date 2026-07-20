@@ -326,6 +326,133 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
   doc.save(`recibo-${venda.shortId}.pdf`);
 }
 
+// ─── Notas Emitidas ───────────────────────────────────────────────────────
+// Documento não fiscal (LogMax é ambiente educacional). O `tipo` só
+// direciona rótulos e a legenda de rodapé; a estrutura é a mesma.
+export type NotaEmitida = {
+  numero: number;
+  serie: string;
+  tipo: 'NF Produto' | 'NFS-e Serviço' | 'Recibo Simples';
+  filial: string;
+  cliente_nome: string | null;
+  descricao: string;
+  valor_total: number;
+  data_emissao: string;    // ISO ou dd/mm/aaaa; formatado antes de imprimir
+  origem?: string | null;  // rastreio: 'pdv' / 'servico_manual' / 'avulso'
+};
+
+const TITULO_POR_TIPO: Record<NotaEmitida['tipo'], string> = {
+  'NF Produto':     'Nota Fiscal — Venda de Produto',
+  'NFS-e Serviço':  'Nota Fiscal de Serviço',
+  'Recibo Simples': 'Recibo',
+};
+
+const RODAPE_POR_TIPO: Record<NotaEmitida['tipo'], string> = {
+  'NF Produto':     'Documento não fiscal · Emitido em ambiente LogMax',
+  'NFS-e Serviço':  'Documento não fiscal · Emitido em ambiente LogMax',
+  'Recibo Simples': 'Documento não fiscal · Emitido em ambiente LogMax',
+};
+
+/**
+ * PDF da nota emitida. Formato A4 retrato, cabeçalho LogMax colorido
+ * com o tipo, bloco de dados (número/série, filial, cliente, data), a
+ * descrição do produto/serviço num painel e o total em destaque.
+ * Salva como `nota-{tipo-slug}-{filial}-{numero}.pdf`.
+ */
+export async function gerarNotaEmitidaPDF(nota: NotaEmitida) {
+  const [{ default: jsPDF }] = await Promise.all([import('jspdf')]);
+  const doc = new jsPDF();
+
+  const numeroFmt = String(nota.numero).padStart(6, '0');
+  const titulo = TITULO_POR_TIPO[nota.tipo] ?? 'Documento';
+
+  // Cabeçalho preto com faixa do accent
+  doc.setFillColor(10, 10, 10);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LogMax', 14, 14);
+  doc.setFontSize(9);
+  doc.setTextColor(150, 150, 150);
+  doc.text(titulo, 14, 21);
+  doc.setFontSize(11);
+  doc.setTextColor(220, 220, 220);
+  doc.text(`${nota.tipo} · Nº ${numeroFmt} / Série ${nota.serie}`, 14, 29);
+
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+
+  // Bloco de dados
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(9);
+  let y = 44;
+  const linha = (label: string, value: string) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label, 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(value, 55, y);
+    y += 6;
+  };
+  linha('Data de emissão:', nota.data_emissao);
+  linha('Filial:', nota.filial);
+  linha('Cliente:', nota.cliente_nome ?? 'Consumidor final');
+  if (nota.origem && nota.origem !== 'avulso') {
+    linha('Origem:', nota.origem === 'pdv' ? 'Venda no PDV' : 'Serviço prestado');
+  }
+
+  // Painel descrição
+  y += 4;
+  doc.setDrawColor(220, 220, 220);
+  doc.setFillColor(245, 247, 245);
+  doc.roundedRect(14, y, 182, 40, 2, 2, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text(nota.tipo === 'NFS-e Serviço' ? 'DESCRIÇÃO DO SERVIÇO' : 'DESCRIÇÃO', 18, y + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  const linhasDesc = doc.splitTextToSize(nota.descricao || '—', 174);
+  doc.text(linhasDesc.slice(0, 4), 18, y + 14);
+  y += 46;
+
+  // Bloco de valor
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(120, 120, 120);
+  doc.text('VALOR TOTAL', 14, y + 4);
+  doc.setFontSize(20);
+  doc.setTextColor(16, 185, 129);
+  doc.text(
+    `R$ ${nota.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    196, y + 6, { align: 'right' }
+  );
+
+  // Assinatura
+  y += 30;
+  doc.setDrawColor(180, 180, 180);
+  doc.line(14, y + 22, 90, y + 22);
+  doc.line(120, y + 22, 196, y + 22);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Emitente', 52, y + 27, { align: 'center' });
+  doc.text('Cliente', 158, y + 27, { align: 'center' });
+
+  // Rodapé
+  doc.setFontSize(7);
+  doc.setTextColor(140, 140, 140);
+  doc.text(RODAPE_POR_TIPO[nota.tipo] ?? 'Documento não fiscal', 105, 287, { align: 'center' });
+
+  const slugTipo = nota.tipo === 'NF Produto' ? 'nf'
+    : nota.tipo === 'NFS-e Serviço' ? 'nfse'
+    : 'recibo';
+  const slugFilial = nota.filial.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  doc.save(`${slugTipo}-${slugFilial}-${numeroFmt}.pdf`);
+}
+
 /**
  * Excel agrupado: uma aba (worksheet) por grupo. Cada aba leva as mesmas
  * colunas. Nome da aba truncado a 31 chars (limite do Excel).

@@ -757,8 +757,455 @@ function RankingCard({ saldos }: { saldos: Record<Filial, SaldoFilial | null> })
   );
 }
 
+// ── Tab: Prestação de Contas (aplicação do Capital por Filial × Categoria) ─
+function TabPrestacaoContas({
+  notas, saldos,
+}: {
+  notas: NotaRecebida[];
+  saldos: Record<Filial, SaldoFilial | null>;
+}) {
+  // Agrupa notas por filial × categoria. Só entram capital_origem=true e ativas
+  // (o useFetchData já filtra ativo; o filtro capital_origem foi passado no
+  // extraFilter da chamada). Reservado defensivo caso o filtro server-side
+  // devolva algo fora — .filter aqui protege.
+  const matriz = useMemo(() => {
+    const map: Record<Filial, Record<CategoriaGasto, { total: number; count: number }>> = {
+      SuperMax: {} as any, MaxLook: {} as any, TechMax: {} as any,
+    };
+    for (const f of FILIAIS) {
+      for (const c of CATEGORIAS_GASTO_CAPITAL) {
+        map[f][c] = { total: 0, count: 0 };
+      }
+    }
+    for (const n of notas) {
+      if (!n.capital_origem || !n.ativo) continue;
+      if (!(n.filial in map)) continue;
+      const cat = (n.categoria_gasto ?? 'Outro') as CategoriaGasto;
+      if (!CATEGORIAS_GASTO_CAPITAL.includes(cat)) continue;
+      map[n.filial as Filial][cat].total += Number(n.valor_total ?? 0);
+      map[n.filial as Filial][cat].count += 1;
+    }
+    return map;
+  }, [notas]);
+
+  const totaisPorFilial = useMemo(() => {
+    const t: Record<Filial, number> = { SuperMax: 0, MaxLook: 0, TechMax: 0 };
+    for (const f of FILIAIS) {
+      t[f] = CATEGORIAS_GASTO_CAPITAL.reduce((acc, c) => acc + (matriz[f][c]?.total ?? 0), 0);
+    }
+    return t;
+  }, [matriz]);
+
+  const totaisPorCategoria = useMemo(() => {
+    const t: Record<CategoriaGasto, number> = {} as any;
+    for (const c of CATEGORIAS_GASTO_CAPITAL) {
+      t[c] = FILIAIS.reduce((acc, f) => acc + (matriz[f][c]?.total ?? 0), 0);
+    }
+    return t;
+  }, [matriz]);
+
+  const totalGeral = FILIAIS.reduce((acc, f) => acc + totaisPorFilial[f], 0);
+  const totalCapitalAportado = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.capital_total ?? 0), 0);
+  const pctAplicado = totalCapitalAportado > 0 ? (totalGeral / totalCapitalAportado) * 100 : 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Card resumo */}
+      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Landmark size={14} className="text-accent" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Aplicação do Capital Inicial
+              </span>
+            </div>
+            <span className="text-4xl font-black text-accent tabular-nums">{BRL(totalGeral)}</span>
+            <p className="text-xs text-gray-500 mt-1">
+              {notas.filter(n => n.capital_origem && n.ativo).length} notas registradas ·
+              {' '}{pctAplicado.toFixed(1)}% do capital aportado ({BRL(totalCapitalAportado)})
+            </p>
+          </div>
+          <div className="text-xs text-gray-400 max-w-md">
+            <p className="flex items-start gap-2">
+              <Info size={12} className="text-accent shrink-0 mt-0.5" />
+              <span>
+                Notas marcadas em <strong>Compras → Notas Recebidas</strong> pelas filiais como
+                {' '}<em>"Saiu do Capital Inicial"</em>, agrupadas por unidade e categoria.
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Matriz Filial × Categoria */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[720px]">
+          <thead>
+            <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+              <th className="pb-4 pt-1 pl-2 font-bold">Filial</th>
+              {CATEGORIAS_GASTO_CAPITAL.map(c => (
+                <th key={c} className="pb-4 pt-1 px-3 font-bold text-right">{c}</th>
+              ))}
+              <th className="pb-4 pt-1 px-3 font-bold text-right text-accent">Total</th>
+              <th className="pb-4 pt-1 px-3 font-bold text-right">% do Capital</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FILIAIS.map(f => {
+              const capitalF = saldos[f]?.capital_total ?? 0;
+              const totalF = totaisPorFilial[f];
+              const pctF = capitalF > 0 ? (totalF / capitalF) * 100 : 0;
+              const c = FILIAL_COLOR[f];
+              return (
+                <tr key={f} className="border-b border-white/5">
+                  <td className="py-3 pl-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold ${c.bg} ${c.accent}`}>
+                      {f}
+                    </span>
+                  </td>
+                  {CATEGORIAS_GASTO_CAPITAL.map(cat => {
+                    const cell = matriz[f][cat];
+                    return (
+                      <td key={cat} className="py-3 px-3 text-right">
+                        <div className="text-xs font-mono text-gray-200">
+                          {cell.total > 0 ? BRL(cell.total) : <span className="text-gray-600">—</span>}
+                        </div>
+                        {cell.count > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">{cell.count} NF</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="py-3 px-3 text-right">
+                    <div className="text-sm font-bold font-mono text-accent">{BRL(totalF)}</div>
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <div className={`text-xs font-mono font-bold ${pctF > 100 ? 'text-red-400' : pctF > 80 ? 'text-amber-400' : 'text-green-400'}`}>
+                      {pctF.toFixed(1)}%
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">de {BRL(capitalF)}</div>
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-accent/20 bg-accent/5">
+              <td className="py-3 pl-2 text-xs font-black text-accent uppercase tracking-widest">Total</td>
+              {CATEGORIAS_GASTO_CAPITAL.map(cat => (
+                <td key={cat} className="py-3 px-3 text-right text-xs font-mono font-bold text-gray-100">
+                  {totaisPorCategoria[cat] > 0 ? BRL(totaisPorCategoria[cat]) : <span className="text-gray-600">—</span>}
+                </td>
+              ))}
+              <td className="py-3 px-3 text-right text-sm font-black font-mono text-accent">{BRL(totalGeral)}</td>
+              <td className="py-3 px-3 text-right text-xs font-mono font-bold text-gray-300">{pctAplicado.toFixed(1)}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Lista detalhada */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5">
+        <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+          <Landmark size={14} className="text-accent" />
+          Últimas notas aplicadas ao Capital
+        </h3>
+        <div className="overflow-x-auto main-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                <th className="pb-3 pl-2 font-bold">Data</th>
+                <th className="pb-3 px-3 font-bold">Filial</th>
+                <th className="pb-3 px-3 font-bold">Categoria</th>
+                <th className="pb-3 px-3 font-bold">NF · Descrição</th>
+                <th className="pb-3 px-3 font-bold text-center">Doc</th>
+                <th className="pb-3 px-3 font-bold text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notas.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gray-500">
+                    Nenhuma nota marcada como aplicação do Capital ainda.
+                  </td>
+                </tr>
+              ) : (
+                notas.slice(0, 30).map(n => {
+                  const c = n.filial in FILIAL_COLOR ? FILIAL_COLOR[n.filial as Filial] : FILIAL_COLOR.SuperMax;
+                  return (
+                    <tr key={n.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="py-2.5 pl-2 text-[10px] font-mono text-gray-400">
+                        {n.data_emissao ?? fmtDate(n.created_at)}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.bg} ${c.accent}`}>
+                          {n.filial}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-bold">
+                          {n.categoria_gasto ?? 'Outro'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-xs">
+                        <div className="font-semibold text-gray-200">{n.numero_nf}</div>
+                        {n.descricao && (
+                          <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{n.descricao}</div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        {n.anexo_url ? (
+                          <a href={n.anexo_url} target="_blank" rel="noopener noreferrer"
+                            title={n.anexo_nome ?? 'Ver documento'}
+                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
+                            Ver
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-gray-600">sem doc</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-xs font-mono text-gray-200 text-right">
+                        {BRL(Number(n.valor_total ?? 0))}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Faturamento (notas_emitidas por filial × tipo) ────────────────────
+function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
+  // Filtro de período (default: últimos 30 dias).
+  const hoje = new Date();
+  const dias30 = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const [dtIni, setDtIni] = useState(dias30.toISOString().slice(0, 10));
+  const [dtFim, setDtFim] = useState(hoje.toISOString().slice(0, 10));
+
+  const filtradas = useMemo(() => {
+    return notas.filter(n => {
+      if (!n.ativo) return false;
+      if (n.data_emissao < dtIni) return false;
+      if (n.data_emissao > dtFim) return false;
+      return true;
+    });
+  }, [notas, dtIni, dtFim]);
+
+  const matriz = useMemo(() => {
+    const map: Record<Filial, Record<typeof TIPOS_EMITIDAS[number], { total: number; count: number }>> = {
+      SuperMax: {} as any, MaxLook: {} as any, TechMax: {} as any,
+    };
+    for (const f of FILIAIS) {
+      for (const t of TIPOS_EMITIDAS) map[f][t] = { total: 0, count: 0 };
+    }
+    for (const n of filtradas) {
+      if (!(n.filial in map)) continue;
+      if (!TIPOS_EMITIDAS.includes(n.tipo)) continue;
+      map[n.filial as Filial][n.tipo].total += Number(n.valor_total ?? 0);
+      map[n.filial as Filial][n.tipo].count += 1;
+    }
+    return map;
+  }, [filtradas]);
+
+  const totaisFilial: Record<Filial, number> = FILIAIS.reduce((acc, f) => {
+    acc[f] = TIPOS_EMITIDAS.reduce((s, t) => s + matriz[f][t].total, 0);
+    return acc;
+  }, {} as Record<Filial, number>);
+
+  const totaisTipo: Record<typeof TIPOS_EMITIDAS[number], number> = TIPOS_EMITIDAS.reduce((acc, t) => {
+    acc[t] = FILIAIS.reduce((s, f) => s + matriz[f][t].total, 0);
+    return acc;
+  }, {} as any);
+
+  const totalGeral = FILIAIS.reduce((s, f) => s + totaisFilial[f], 0);
+  const totalNotas = filtradas.length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header + filtros */}
+      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 size={14} className="text-accent" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Faturamento por Filial
+              </span>
+            </div>
+            <span className="text-4xl font-black text-accent tabular-nums">{BRL(totalGeral)}</span>
+            <p className="text-xs text-gray-500 mt-1">{totalNotas} nota{totalNotas !== 1 && 's'} emitida{totalNotas !== 1 && 's'} no período</p>
+          </div>
+          <div className="flex gap-3 items-end">
+            <FormField label="De">
+              <input type="date" className="neu-input py-1.5 px-3 rounded-xl text-xs"
+                value={dtIni} onChange={e => setDtIni(e.target.value)} />
+            </FormField>
+            <FormField label="Até">
+              <input type="date" className="neu-input py-1.5 px-3 rounded-xl text-xs"
+                value={dtFim} onChange={e => setDtFim(e.target.value)} />
+            </FormField>
+          </div>
+        </div>
+      </div>
+
+      {/* Matriz Filial × Tipo */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[600px]">
+          <thead>
+            <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+              <th className="pb-4 pt-1 pl-2 font-bold">Filial</th>
+              {TIPOS_EMITIDAS.map(t => (
+                <th key={t} className="pb-4 pt-1 px-3 font-bold text-right">{t}</th>
+              ))}
+              <th className="pb-4 pt-1 px-3 font-bold text-right text-accent">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FILIAIS.map(f => {
+              const c = FILIAL_COLOR[f];
+              return (
+                <tr key={f} className="border-b border-white/5">
+                  <td className="py-3 pl-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold ${c.bg} ${c.accent}`}>
+                      {f}
+                    </span>
+                  </td>
+                  {TIPOS_EMITIDAS.map(t => {
+                    const cell = matriz[f][t];
+                    return (
+                      <td key={t} className="py-3 px-3 text-right">
+                        <div className="text-xs font-mono text-gray-200">
+                          {cell.total > 0 ? BRL(cell.total) : <span className="text-gray-600">—</span>}
+                        </div>
+                        {cell.count > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">{cell.count} nota{cell.count !== 1 && 's'}</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="py-3 px-3 text-right">
+                    <div className="text-sm font-bold font-mono text-accent">{BRL(totaisFilial[f])}</div>
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-accent/20 bg-accent/5">
+              <td className="py-3 pl-2 text-xs font-black text-accent uppercase tracking-widest">Total</td>
+              {TIPOS_EMITIDAS.map(t => (
+                <td key={t} className="py-3 px-3 text-right text-xs font-mono font-bold text-gray-100">
+                  {totaisTipo[t] > 0 ? BRL(totaisTipo[t]) : <span className="text-gray-600">—</span>}
+                </td>
+              ))}
+              <td className="py-3 px-3 text-right text-sm font-black font-mono text-accent">{BRL(totalGeral)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Últimas notas emitidas */}
+      <div className="neu-flat rounded-3xl p-6 border border-white/5">
+        <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+          <BarChart3 size={14} className="text-accent" /> Últimas notas emitidas no período
+        </h3>
+        <div className="overflow-x-auto main-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                <th className="pb-3 pl-2 font-bold">Data</th>
+                <th className="pb-3 px-3 font-bold">Filial</th>
+                <th className="pb-3 px-3 font-bold">Nº</th>
+                <th className="pb-3 px-3 font-bold">Tipo</th>
+                <th className="pb-3 px-3 font-bold">Cliente / Descrição</th>
+                <th className="pb-3 px-3 font-bold text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtradas.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gray-500">
+                    Nenhuma nota emitida no período.
+                  </td>
+                </tr>
+              ) : (
+                filtradas.slice(0, 30).map(n => {
+                  const c = n.filial in FILIAL_COLOR ? FILIAL_COLOR[n.filial as Filial] : FILIAL_COLOR.SuperMax;
+                  return (
+                    <tr key={n.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="py-2.5 pl-2 text-[10px] font-mono text-gray-400">{n.data_emissao}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.bg} ${c.accent}`}>
+                          {n.filial}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-[10px] font-mono text-gray-300">
+                        {String(n.numero).padStart(6, '0')}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-bold">
+                          {n.tipo}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-xs">
+                        <div className="font-semibold text-gray-200">{n.cliente_nome ?? 'Consumidor'}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{n.descricao}</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-xs font-mono text-gray-200 text-right">{BRL(Number(n.valor_total ?? 0))}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── View principal ─────────────────────────────────────────────────────────
-type Tab = 'geral' | 'dre' | 'emprestimos' | 'config';
+type Tab = 'geral' | 'dre' | 'prestacao' | 'faturamento' | 'emprestimos' | 'config';
+
+type NotaEmitidaMatriz = {
+  id: string;
+  filial: string;
+  tipo: 'NF Produto' | 'NFS-e Serviço' | 'Recibo Simples';
+  origem: 'pdv' | 'servico_manual' | 'avulso';
+  valor_total: number;
+  data_emissao: string;
+  descricao: string;
+  cliente_nome: string | null;
+  ativo: boolean;
+  numero: number;
+  serie: string;
+};
+
+const TIPOS_EMITIDAS = ['NF Produto', 'NFS-e Serviço', 'Recibo Simples'] as const;
+
+// Categorias de gasto que a filial reporta em notas_recebidas quando o
+// pagamento sai do Capital Inicial. Fonte: mig. 220 (chk_notas_recebidas_categoria).
+const CATEGORIAS_GASTO_CAPITAL = ['Produto', 'Equipamento', 'Mobiliário', 'Aluguel', 'Serviço', 'Outro'] as const;
+type CategoriaGasto = typeof CATEGORIAS_GASTO_CAPITAL[number];
+
+type NotaRecebida = {
+  id: string;
+  filial: string;
+  numero_nf: string;
+  categoria_gasto: CategoriaGasto | null;
+  descricao: string | null;
+  valor_total: number | null;
+  data_emissao: string | null;
+  capital_origem: boolean;
+  anexo_url: string | null;
+  anexo_nome: string | null;
+  anexo_tamanho: number | null;
+  criado_por: string | null;
+  created_at: string;
+  ativo: boolean;
+};
 
 export function MatrizCapitalView({
   profile,
@@ -779,6 +1226,8 @@ export function MatrizCapitalView({
   const { data: emprestimos = [], reload: reloadEmp } = useFetchData<Emprestimo>('emprestimos_filial', undefined, false);
   const { data: configs = [] } = useFetchData<CapitalConfig>('capital_config', undefined, false);
   const { data: bancos = [] } = useFetchData<Banco>('caixa_bancos', { status: 'Ativo' }, false);
+  const { data: notasRecebidas = [] } = useFetchData<NotaRecebida>('/api/notasrecebidasview', { capital_origem: true }, false);
+  const { data: notasEmitidas = [] } = useFetchData<NotaEmitidaMatriz>('/api/notasemitidasview', undefined, false);
 
   const configAtiva = configs[0] ?? null;
   const taxaPadrao = configAtiva?.taxa_juros_padrao ?? 0;
@@ -822,6 +1271,8 @@ export function MatrizCapitalView({
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: 'geral', label: 'Visão Geral' },
     { id: 'dre', label: 'DRE' },
+    { id: 'prestacao', label: 'Prestação de Contas' },
+    { id: 'faturamento', label: 'Faturamento' },
     { id: 'emprestimos', label: 'Empréstimos', badge: pendentesCount > 0 ? pendentesCount : undefined },
     { id: 'config', label: 'Config' },
   ];
@@ -901,6 +1352,10 @@ export function MatrizCapitalView({
       )}
 
       {tab === 'dre' && <TabDRE saldos={saldos} />}
+
+      {tab === 'prestacao' && <TabPrestacaoContas notas={notasRecebidas} saldos={saldos} />}
+
+      {tab === 'faturamento' && <TabFaturamento notas={notasEmitidas} />}
 
       {tab === 'emprestimos' && (
         <TabEmprestimos

@@ -66,6 +66,7 @@ const GerenciamentoComprasView     = lazy(() => import('./views/GerenciamentoCom
 const GerenciamentoEstoqueView     = lazy(() => import('./views/GerenciamentoEstoqueView').then(m => ({ default: m.GerenciamentoEstoqueView })));
 const RelatoriosFinanceirosView    = lazy(() => import('./views/RelatoriosFinanceirosView').then(m => ({ default: m.RelatoriosFinanceirosView })));
 const RecibosVendasView            = lazy(() => import('./views/RecibosVendasView').then(m => ({ default: m.RecibosVendasView })));
+const NotasEmitidasView            = lazy(() => import('./views/NotasEmitidasView').then(m => ({ default: m.NotasEmitidasView })));
 const IntegracaoBancariaView       = lazy(() => import('./views/IntegracaoBancariaView').then(m => ({ default: m.IntegracaoBancariaView })));
 const GerenciamentoFinanceiroView  = lazy(() => import('./views/GerenciamentoFinanceiroView').then(m => ({ default: m.GerenciamentoFinanceiroView })));
 const PatrimonioView               = lazy(() => import('./views/PatrimonioView').then(m => ({ default: m.PatrimonioView })));
@@ -157,6 +158,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
+      'Notas Emitidas',
       'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
   },
   {
@@ -830,6 +832,7 @@ function LogMaxAppInner() {
       case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView profile={profile} />;
       case 'financeiro-relatórios':               return <RelatoriosFinanceirosView showToast={st} />;
       case 'financeiro-recibosdevendas':          return <RecibosVendasView showToast={st} profile={profile} />;
+      case 'financeiro-notasemitidas':            return <NotasEmitidasView showToast={st} profile={profile} />;
       case 'rh-funcionários':     return <FuncionariosView showToast={st} />;
       case 'rh-departamentos':    return <GenericCRUDView showToast={st} title="Departamentos" subtitle="Gerencie os departamentos da empresa." endpoint="/api/departamentosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Tecnologia da Informação' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
