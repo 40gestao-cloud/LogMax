@@ -8,6 +8,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } f
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, gerarNotaEmitidaPDF } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { hasSetor } from '../lib/rbac';
+import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 type NotaEmitida = {
@@ -57,7 +58,7 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
     tipo: TIPOS_POR_NICHO[filial] ?? 'Recibo Simples' as NotaEmitida['tipo'],
     cliente_id: '',
     valor_total: '',
-    data_emissao: new Date().toISOString().slice(0, 10),
+    data_emissao: todayBR(),
   });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -84,7 +85,7 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
     tipo: TIPOS_POR_NICHO[filial] ?? 'Recibo Simples',
     cliente_id: '',
     valor_total: '',
-    data_emissao: new Date().toISOString().slice(0, 10),
+    data_emissao: todayBR(),
   });
 
   const closeForm = () => {
