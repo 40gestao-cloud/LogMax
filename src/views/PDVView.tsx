@@ -1604,67 +1604,42 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   );
                 }
 
-                // MaxLook: card boutique portrait — imagem grande no topo, info abaixo.
-                // Fashion tags: marca em cima (grife), "Última peça" quando estoque=1.
+                // MaxLook: card só-texto compacto (padrão MaxPOS). Marca dourada
+                // uppercase + categoria pequena + nome. Sem imagem, sem "Última peça"
+                // — layout limpo tipo lista de PDV real de boutique.
                 if (filialMeta.layout === 'fashion') {
-                  const ultimaPeca = !semEstoque && p.estoque === 1;
+                  const inCartFashion = inCart;
                   return (
                     <motion.button
                       key={p.id}
                       onClick={onClick}
-                      whileTap={!semEstoque ? { scale: 0.97 } : {}}
+                      whileTap={!semEstoque ? { scale: 0.98 } : {}}
                       disabled={semEstoque}
-                      className="neu-button rounded-2xl overflow-hidden flex flex-col text-left transition-all border border-transparent relative"
-                      style={cardStyle}
+                      className="rounded-xl px-3 py-2.5 flex flex-col gap-1 text-left transition-all border relative bg-white hover:shadow-md disabled:opacity-40"
+                      style={{
+                        borderColor: inCartFashion ? filialMeta.accentBar : 'rgba(0,0,0,0.08)',
+                        background: inCartFashion ? `${filialMeta.accentBar}15` : 'white',
+                        boxShadow: inCartFashion ? undefined : '0 1px 2px rgba(0,0,0,0.04)',
+                      }}
                     >
-                      {inCart && (
-                        <span className="absolute top-2 right-2 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
-                          style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                      {inCartFashion && (
+                        <span className="absolute top-1.5 right-1.5 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                          style={{ background: filialMeta.accentBar, color: '#0A0A0A' }}>
                           {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
                         </span>
                       )}
-                      {ultimaPeca && (
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider z-10"
-                          style={{ background: '#0A0A0A', color: filialMeta.accentBar, border: `1px solid ${filialMeta.accentBar}` }}>
-                          Última peça
+                      {p.marca && (
+                        <span className="text-[11px] font-black uppercase tracking-[0.18em] truncate"
+                          style={{ color: filialMeta.accentBar }}>
+                          {p.marca}
                         </span>
                       )}
-                      <div className="w-full aspect-square bg-black/30 flex items-center justify-center overflow-hidden border-b border-white/5">
-                        {p.imagem_url ? (
-                          <img src={p.imagem_url} alt={p.nome} loading="lazy" decoding="async"
-                            className="w-full h-full object-cover"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <Package size={40} strokeWidth={1.25} className="text-gray-700" />
-                        )}
-                      </div>
-                      <div className="p-2.5 sm:p-3 flex flex-col gap-1 flex-1">
-                        {p.marca && (
-                          <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.25em] truncate"
-                            style={{ color: filialMeta.accentBar }}>
-                            {p.marca}
-                          </span>
-                        )}
-                        {p.categoria && (
-                          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 truncate">
-                            {p.categoria}
-                          </span>
-                        )}
-                        <span className="text-xs sm:text-sm font-bold text-gray-100 leading-tight line-clamp-2">{p.nome}</span>
-                        <div className="flex items-end justify-between mt-auto pt-1">
-                          <span className="text-sm sm:text-base font-black text-accent tabular-nums">
-                            {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          </span>
-                          {!semEstoque && (
-                            <span className="text-[9px] font-bold text-gray-500 hidden sm:inline">
-                              {p.estoque ?? '∞'} peças
-                            </span>
-                          )}
-                          {semEstoque && (
-                            <span className="text-[9px] font-bold text-red-500">Esgotado</span>
-                          )}
-                        </div>
-                      </div>
+                      {p.categoria && (
+                        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 truncate -mt-0.5">
+                          {p.categoria}
+                        </span>
+                      )}
+                      <span className="text-sm font-bold text-gray-900 leading-tight line-clamp-1 truncate">{p.nome}</span>
                     </motion.button>
                   );
                 }
