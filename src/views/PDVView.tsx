@@ -261,6 +261,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [isClosing, setIsClosing] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
+  // Tela de agradecimento full-screen (portado do simulador MaxPOS).
+  // Aparece logo após venda concluída e fecha com ENTER ou click.
+  const [thankYouOpen, setThankYouOpen] = useState(false);
   // Pix em aguardo: payload na DB + snapshot do carrinho para chamar o RPC após confirmação
   const [pixPendente, setPixPendente] = useState<{ id: string; valor: number } | null>(null);
   // Cartão (maquininha MaxPay) em aguardo: pendente em cartao_pendentes; PDV
@@ -711,6 +714,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
     const shortId = String(vendaId).slice(-6).toUpperCase();
     setLastVenda({ id: shortId, total: snap.totalFinal });
+    setThankYouOpen(true);
     setCart([]);
     setDesconto('');
     setFormaPagamento('Dinheiro');
@@ -2438,6 +2442,55 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <X size={12} /> Cancelar
               </button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Tela de agradecimento full-screen (padrão MaxPOS trainer). Aparece
+          logo apos venda; ENTER ou click fecha e volta pro PDV. Cor + logo
+          seguem a paleta da filial (dourado MaxLook, laranja TechMax). */}
+      <AnimatePresence>
+        {thankYouOpen && (
+          <motion.div
+            key="thankyou-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[310] flex items-center justify-center"
+            style={{ background: paleta?.lightMode ? 'rgba(255,255,255,0.98)' : 'rgba(0,0,0,0.92)' }}
+            onClick={() => setThankYouOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                setThankYouOpen(false);
+              } else { e.stopPropagation(); }
+            }}
+            tabIndex={-1}
+            ref={(el) => { if (el && thankYouOpen) el.focus(); }}
+          >
+            <div className="flex flex-col items-center justify-center text-center px-8 py-6 max-h-screen w-full">
+              <img
+                src={filialMeta.logo}
+                alt={filialFiltro}
+                className="object-contain drop-shadow-2xl"
+                style={{ maxHeight: '60vh', maxWidth: '70vw', width: 'auto', height: 'auto' }}
+                draggable={false}
+              />
+              <div className="mt-4 text-3xl md:text-4xl lg:text-5xl font-black tracking-wide shrink-0"
+                style={{ color: paleta?.lightMode ? '#0A0A0A' : '#f5f5f5' }}>
+                {filialFiltro === 'MaxLook'
+                  ? 'Obrigada pela sua visita'
+                  : filialFiltro === 'TechMax'
+                  ? 'Obrigado pela preferência'
+                  : 'Agradecemos a sua preferência'}
+              </div>
+              <div className="mt-5 px-6 py-3 rounded-full text-sm md:text-base font-black uppercase tracking-[0.3em] animate-pulse shrink-0"
+                style={{
+                  background: filialMeta.accentBar ?? 'var(--color-accent)',
+                  color: paleta?.accentText ?? '#ffffff',
+                }}>
+                Pressione ENTER ou clique para continuar
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
