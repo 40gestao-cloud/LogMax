@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -570,10 +570,15 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     if (!supabase) { setIsLoading(false); return; }
     if (!hasLoadedOnce.current) setIsLoading(true);
     try {
-      // Em modo Matriz carrega tudo (sem filtro de filial)
+      // Em modo Matriz carrega tudo (sem filtro de filial).
+      // Em modo filial, também traz o ciclo Matriz + avaliações matriz_filial
+      // dessa filial — pra a filial ver o feedback do conselho sobre ela.
       const ciclosQ = supabase.from('ciclos_avaliacao').select('*').order('created_at', { ascending: false });
       const avalsQ  = supabase.from('avaliacoes').select('*');
-      if (filial) { ciclosQ.eq('filial', filial); avalsQ.eq('filial', filial); }
+      if (filial) {
+        ciclosQ.or(`filial.eq.${filial},filial.eq.Matriz`);
+        avalsQ.or(`filial.eq.${filial},avaliada_filial.eq.${filial}`);
+      }
       const [resC, resU, resA, resCr, resEv] = await Promise.all([
         ciclosQ,
         supabase.from('user_profiles').select('*'),
@@ -609,6 +614,18 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       reload();
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao fechar.', 'error');
+    }
+  };
+
+  const reabrirCiclo = async (id: string) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from('ciclos_avaliacao').update({ status: 'Aberto' }).eq('id', id);
+      if (error) throw error;
+      showToast?.('Ciclo reaberto — voltou a aceitar avaliações.', 'success');
+      reload();
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao reabrir.', 'error');
     }
   };
 
@@ -876,6 +893,35 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
   }, [avaliacoes, criterios, users, ciclos, profile.id]);
 
+  // ── Feedback da Matriz para a filial atual (modo filial) ────────────────
+  // Traz avaliações 'matriz_filial' que o conselho registrou sobre esta filial.
+  // Como avaliado_id é null, elas não caem em "Recebidas". Este bloco existe
+  // pra qualquer usuário da filial ver o feedback consolidado.
+  const feedbackMatriz = useMemo(() => {
+    if (!filial) return [];
+    return avaliacoes
+      .filter(a => a.tipo === 'matriz_filial' && a.avaliada_filial === filial)
+      .map(av => {
+        const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+        const avaliador = users.find(u => u.id === av.avaliador_id);
+        const crits = criterios.filter(c => c.avaliacao_id === av.id);
+        const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+        return {
+          avaliacao: av,
+          criterios: crits,
+          media,
+          avaliadorNome: avaliador?.nome ?? '—',
+          cicloNome: ciclo?.nome ?? '—',
+        };
+      })
+      .sort((a, b) => b.avaliacao.created_at.localeCompare(a.avaliacao.created_at));
+  }, [filial, avaliacoes, criterios, users, ciclos]);
+
+  const feedbackMatrizMediaGeral = useMemo(() => {
+    if (feedbackMatriz.length === 0) return 0;
+    return feedbackMatriz.reduce((s, f) => s + f.media, 0) / feedbackMatriz.length;
+  }, [feedbackMatriz]);
+
   // ── Consolidado do ciclo ──────────────────────────────────────────────────
   const [cicloConsolidadoId, setCicloConsolidadoId] = useState<string | null>(null);
   const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
@@ -1070,6 +1116,44 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       </div>
 
+      {/* ── FEEDBACK DA MATRIZ (só modo filial) ── */}
+      {filial && feedbackMatriz.length > 0 && (
+        <div className="neu-flat rounded-3xl p-6 border border-amber-500/20 shrink-0">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Award size={16} className="text-amber-300" />
+              <h3 className="text-sm font-bold text-gray-300">Feedback da Matriz para {filial}</h3>
+              <span className="text-[10px] text-gray-500 font-bold">
+                {feedbackMatriz.length} {feedbackMatriz.length === 1 ? 'avaliação' : 'avaliações'} do conselho
+              </span>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Média geral</p>
+              <p className="text-xl font-black text-amber-300 tabular-nums">{feedbackMatrizMediaGeral.toFixed(1)}<span className="text-sm text-gray-500">/{ESCALA_MAX}</span></p>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Notas e comentários que o CEO / conselheiros registraram sobre a filial nos 7 eixos da competição.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {feedbackMatriz.map(f => (
+              <CardAvaliacao
+                key={f.avaliacao.id}
+                avaliacao={f.avaliacao}
+                criterios={f.criterios}
+                direcaoLabel="Conselho"
+                nomeContraparte={`${f.avaliadorNome} · ${f.cicloNome}`}
+                showPDI={false}
+                categoriaLabel={CATEGORIA_LABEL_MATRIZ}
+                profile={profile}
+                treinamentos={treinamentos}
+                showToast={showToast}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── A. CICLOS (admin/CEO) ── */}
       {isAdminOuCEO && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
@@ -1110,12 +1194,20 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                       <td className="py-3 px-4 text-center text-xs text-gray-400">{c.feedback_anonimo ? 'Sim' : 'Não'}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          {c.status === 'Aberto' && (
+                          {c.status === 'Aberto' ? (
                             <button
                               onClick={() => fecharCiclo(c.id)}
                               className="text-[10px] text-gray-500 hover:text-yellow-400 font-bold uppercase tracking-widest flex items-center gap-1"
                             >
                               <Lock size={11} /> Fechar
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => reabrirCiclo(c.id)}
+                              title="Volta o ciclo para Aberto — libera edição/nova avaliação"
+                              className="text-[10px] text-gray-500 hover:text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1"
+                            >
+                              <LockOpen size={11} /> Reabrir
                             </button>
                           )}
                           <button

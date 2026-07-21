@@ -254,8 +254,8 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BookOpen size={18} /><span>Catálogo</span>
           </button>
         )}
-        {/* Avaliações: só no modo Matriz */}
-        {matrizMode && aulaAllow('avaliacoes') && (
+        {/* Avaliações: Matriz gerencia ciclos + avalia filiais; filial vê feedback do conselho */}
+        {aulaAllow('avaliacoes') && (
           <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Star size={18} /><span>Avaliações</span>
           </button>
