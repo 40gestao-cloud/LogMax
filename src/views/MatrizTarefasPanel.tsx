@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import {
   GraduationCap, Cpu, Presentation, Plus, X, Trash2, Loader2,
   Star, MessageSquare, ChevronRight, ArrowLeft, Check, Users,
+  UserCircle, Megaphone, DollarSign, Package,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -10,7 +11,9 @@ import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { CENTRAL_FILIAL_TONE, CENTRAL_OP_FILIAIS, type CentralCompeticao as Competicao } from './MatrizAvaliacoesView';
 
-type TipoTarefa = 'tarefa_treinamento_vendas' | 'tarefa_treinamento_ia' | 'tarefa_apresentacao';
+type TipoTarefa =
+  | 'tarefa_treinamento_vendas' | 'tarefa_treinamento_ia' | 'tarefa_apresentacao'
+  | 'tarefa_rh' | 'tarefa_marketing' | 'tarefa_financeiro' | 'tarefa_logistica';
 type FilialOp = typeof CENTRAL_OP_FILIAIS[number];
 
 type TipoConfig = {
@@ -27,28 +30,60 @@ type TipoConfig = {
 
 const TIPOS: TipoConfig[] = [
   {
-    id: 'tarefa_treinamento_vendas',
-    label: 'Vendas e Atendimento',
-    hint: 'Criar atividade, definir participantes por filial e nota 0-10 do conselho.',
-    icon: GraduationCap,
-    glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400',
-    novoLabel: 'Nova atividade de Vendas e Atendimento',
-  },
-  {
-    id: 'tarefa_treinamento_ia',
-    label: 'Desenvolvimento com IA',
-    hint: 'Criar atividade de Desenvolvimento com IA, participantes por filial, nota 0-10 do conselho.',
-    icon: Cpu,
-    glow: 'bg-fuchsia-500/25', iconBg: 'bg-fuchsia-500/10', iconRing: 'ring-fuchsia-500/25', iconColor: 'text-fuchsia-400',
-    novoLabel: 'Nova atividade de Desenvolvimento com IA',
-  },
-  {
     id: 'tarefa_apresentacao',
     label: 'Apresentação Profissional',
     hint: 'Criar pauta de apresentação, selecionar participantes e nota 0-10 do conselho.',
     icon: Presentation,
     glow: 'bg-amber-500/25', iconBg: 'bg-amber-500/10', iconRing: 'ring-amber-500/25', iconColor: 'text-amber-300',
     novoLabel: 'Nova apresentação',
+  },
+  {
+    id: 'tarefa_treinamento_ia',
+    label: 'Desenvolvimento com IA',
+    hint: 'Criar atividade de Desenvolvimento com IA, participantes por filial, nota 0-10 do conselho.',
+    icon: Cpu,
+    glow: 'bg-orange-500/25', iconBg: 'bg-orange-500/10', iconRing: 'ring-orange-500/25', iconColor: 'text-orange-400',
+    novoLabel: 'Nova atividade de Desenvolvimento com IA',
+  },
+  {
+    id: 'tarefa_rh',
+    label: 'Recursos Humanos',
+    hint: 'Criar atividade de RH, definir participantes por filial e nota 0-10 do conselho.',
+    icon: UserCircle,
+    glow: 'bg-sky-500/25', iconBg: 'bg-sky-500/10', iconRing: 'ring-sky-500/25', iconColor: 'text-sky-400',
+    novoLabel: 'Nova atividade de Recursos Humanos',
+  },
+  {
+    id: 'tarefa_financeiro',
+    label: 'Financeiro',
+    hint: 'Criar atividade Financeira, participantes por filial e nota 0-10 do conselho.',
+    icon: DollarSign,
+    glow: 'bg-rose-500/25', iconBg: 'bg-rose-500/10', iconRing: 'ring-rose-500/25', iconColor: 'text-rose-400',
+    novoLabel: 'Nova atividade de Financeiro',
+  },
+  {
+    id: 'tarefa_logistica',
+    label: 'Logística',
+    hint: 'Criar atividade de Logística, participantes por filial e nota 0-10 do conselho.',
+    icon: Package,
+    glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400',
+    novoLabel: 'Nova atividade de Logística',
+  },
+  {
+    id: 'tarefa_marketing',
+    label: 'Marketing',
+    hint: 'Criar atividade de Marketing, participantes por filial e nota 0-10 do conselho.',
+    icon: Megaphone,
+    glow: 'bg-pink-500/25', iconBg: 'bg-pink-500/10', iconRing: 'ring-pink-500/25', iconColor: 'text-pink-400',
+    novoLabel: 'Nova atividade de Marketing',
+  },
+  {
+    id: 'tarefa_treinamento_vendas',
+    label: 'Vendas e Atendimento',
+    hint: 'Criar atividade, definir participantes por filial e nota 0-10 do conselho.',
+    icon: GraduationCap,
+    glow: 'bg-blue-500/25', iconBg: 'bg-blue-500/10', iconRing: 'ring-blue-500/25', iconColor: 'text-blue-400',
+    novoLabel: 'Nova atividade de Vendas e Atendimento',
   },
 ];
 
@@ -108,12 +143,16 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast
   );
 }
 
-// ── Landing: 3 cards dos tipos de tarefa ──────────────────────────────
+// ── Landing: cards por tipo de tarefa ────────────────────────────────
 function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => void; competicao: Competicao }) {
   const [contadores, setContadores] = useState<Record<TipoTarefa, number>>({
     tarefa_treinamento_vendas: 0,
     tarefa_treinamento_ia: 0,
     tarefa_apresentacao: 0,
+    tarefa_rh: 0,
+    tarefa_marketing: 0,
+    tarefa_financeiro: 0,
+    tarefa_logistica: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -131,6 +170,10 @@ function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => v
         tarefa_treinamento_vendas: contagens['tarefa_treinamento_vendas'] ?? 0,
         tarefa_treinamento_ia:     contagens['tarefa_treinamento_ia'] ?? 0,
         tarefa_apresentacao:       contagens['tarefa_apresentacao'] ?? 0,
+        tarefa_rh:                 contagens['tarefa_rh'] ?? 0,
+        tarefa_marketing:          contagens['tarefa_marketing'] ?? 0,
+        tarefa_financeiro:         contagens['tarefa_financeiro'] ?? 0,
+        tarefa_logistica:          contagens['tarefa_logistica'] ?? 0,
       });
       setLoading(false);
     })();
