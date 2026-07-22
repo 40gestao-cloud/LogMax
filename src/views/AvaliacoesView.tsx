@@ -1318,6 +1318,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       {/* ── PÓDIO DA COMPETIÇÃO — só modo filial ── */}
       {filial && <PodioFilialCard filial={filial} />}
 
+      {/* ── PÓDIO DO CICLO PADRÃO — só modo filial ── */}
+      {filial && <PodioPadraoCard filial={filial} />}
+
       {/* ── A. CICLOS (admin/CEO — só modo Matriz) ── */}
       {isAdminOuCEO && isMatriz && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
@@ -2253,6 +2256,76 @@ function PodioFilialCard({ filial }: { filial: string }) {
           <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Competição das Filiais</p>
           <h3 className="text-xl font-black leading-tight mt-0.5">{comp.nome}</h3>
           <p className="text-xs font-bold mt-1 opacity-80">{statusLabel}</p>
+        </div>
+        <div className="text-right">
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-4xl leading-none">{medal.emoji}</span>
+            <span className="text-lg sm:text-2xl font-black uppercase tracking-wider">{medal.label}</span>
+          </div>
+          <p className="text-sm font-black mt-1">
+            <FilialBadge filial={filial} />
+            <span className="ml-2 tabular-nums">{meu.media.toFixed(1)}</span>
+            <span className="text-xs font-bold opacity-70"> / 10 · {meu.n} nota{meu.n === 1 ? '' : 's'}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Card de pódio da filial no ciclo padrão de avaliações — só modo filial.
+// Ranking = média das notas que CEO + conselheiros deram a gerentes e
+// colaboradores da filial no último ciclo Fechado. Escondido enquanto
+// nenhum ciclo fechou ou minha filial está fora do top 3.
+// ─────────────────────────────────────────────────────────────────────────
+type PlacarPadrao = {
+  ciclo_id: string;
+  ciclo_nome: string;
+  data_fim: string;
+  por_filial: PlacarPorFilial;
+};
+
+function PodioPadraoCard({ filial }: { filial: string }) {
+  const [loading, setLoading] = useState(true);
+  const [placar, setPlacar] = useState<PlacarPadrao | null>(null);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let cancelou = false;
+    (async () => {
+      const { data } = await supabase!.rpc('calcular_placar_padrao');
+      if (cancelou) return;
+      setPlacar((data as PlacarPadrao) ?? null);
+      setLoading(false);
+    })();
+    return () => { cancelou = true; };
+  }, [filial]);
+
+  if (loading || !placar) return null;
+
+  const ranking = Object.entries(placar.por_filial ?? {})
+    .map(([f, v]) => ({ filial: f, media: Number(v?.media ?? 0), n: Number(v?.n ?? 0) }))
+    .filter(x => x.n > 0)
+    .sort((a, b) => b.media - a.media || b.n - a.n);
+  const meu = ranking.find(x => x.filial === filial);
+  if (!meu) return null;
+  const pos = ranking.findIndex(x => x.filial === filial) + 1;
+  if (pos < 1 || pos > 3) return null;
+
+  const medal = pos === 1
+    ? { klass: 'medal-card--gold',   label: '1º Lugar', emoji: '🥇' }
+    : pos === 2
+      ? { klass: 'medal-card--silver', label: '2º Lugar', emoji: '🥈' }
+      : { klass: 'medal-card--bronze', label: '3º Lugar', emoji: '🥉' };
+
+  return (
+    <div className={`medal-card ${medal.klass} shrink-0`}>
+      <div className="relative flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Ciclo Padrão de Avaliações</p>
+          <h3 className="text-xl font-black leading-tight mt-0.5">{placar.ciclo_nome}</h3>
+          <p className="text-xs font-bold mt-1 opacity-80">Resultado final · CEO + Conselho</p>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-2 justify-end">
