@@ -431,9 +431,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <Calendar size={11} />
                       {fmtDataBR(placar.competicao.data_inicio)} → {fmtDataBR(placar.competicao.data_fim)}
                     </p>
-                    {placar.competicao.descricao && (
+                    {/* Descrição vem da lista completa (competicaoAtual) — a RPC de placar
+                        não devolve esse campo, então placar.competicao.descricao é sempre undefined. */}
+                    {competicaoAtual?.descricao && (
                       <p className="text-xs text-gray-300 mt-2 whitespace-pre-wrap max-w-xl">
-                        {placar.competicao.descricao}
+                        {competicaoAtual.descricao}
                       </p>
                     )}
                   </div>

@@ -37,6 +37,22 @@ export const CATEGORIA_LABEL_MATRIZ: Record<string, string> = {
   criterios: 'Critérios de Avaliação',
 };
 
+// ── Admin → CEO / Conselheiro: 6 critérios estratégicos ─────────────────────
+export const CRITERIOS_ADMIN = {
+  estrategico: [
+    'Pontualidade',
+    'Decisões Estratégicas',
+    'Planos de Ação',
+    'Qualidade de Relatórios',
+    'Ordem de Comando',
+    'Condução dos Trabalhos',
+  ],
+} as const;
+
+export const CATEGORIA_LABEL_ADMIN: Record<string, string> = {
+  estrategico: 'Critérios de Avaliação',
+};
+
 // Tipo genérico usado pelo form (aceita qualquer um dos dois sets).
 export type CriteriosSet = Record<string, readonly string[]>;
 

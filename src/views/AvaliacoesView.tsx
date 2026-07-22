@@ -10,7 +10,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor, isConselheiro } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
-import { CRITERIOS, CRITERIOS_MATRIZ, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
+import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, CATEGORIA_LABEL_ADMIN, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -35,6 +35,14 @@ type AvaliadoTarget =
 
 const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
+// Retorna o set de critérios adequado a partir do tipo/alvo.
+// admin_ceo / admin_conselheiro usam o set estratégico do admin.
+const criteriosSetPorTipo = (tipo: string | undefined, alvoKind: 'user' | 'filial'): { cs: CriteriosSet; label: Record<string, string> } => {
+  if (alvoKind === 'filial') return { cs: CRITERIOS_MATRIZ, label: CATEGORIA_LABEL_MATRIZ };
+  if (tipo === 'admin_ceo' || tipo === 'admin_conselheiro') return { cs: CRITERIOS_ADMIN, label: CATEGORIA_LABEL_ADMIN };
+  return { cs: CRITERIOS, label: CATEGORIA_LABEL };
+};
+
 const fmtData = (s: string) => {
   const [y, m, d] = s.split('-');
   return `${d}/${m}/${y}`;
@@ -49,7 +57,7 @@ function ModalAvaliacao({
 }: {
   ciclo: Ciclo;
   alvo: AvaliadoTarget;
-  tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
+  tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => Promise<void> | void;
@@ -204,9 +212,16 @@ function ModalAvaliacao({
 // Modal: novo ciclo
 // ----------------------------------------------------------------------
 
-function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string | null }) {
+function ModalNovoCiclo({ onClose, onSaved, showToast, filial, cicloEditar }: { onClose: () => void; onSaved: () => void; showToast: any; filial: string | null; cicloEditar?: Ciclo | null }) {
+  const isEdit = !!cicloEditar;
   // Modo Matriz: default é 'Matriz' (ciclo consolidado)
-  const [form, setForm] = useState({ nome: '', data_inicio: '', data_fim: '', feedback_anonimo: true, filial_sel: filial ?? 'Matriz' });
+  const [form, setForm] = useState({
+    nome: cicloEditar?.nome ?? '',
+    data_inicio: cicloEditar?.data_inicio ?? '',
+    data_fim: cicloEditar?.data_fim ?? '',
+    feedback_anonimo: cicloEditar?.feedback_anonimo ?? true,
+    filial_sel: cicloEditar?.filial ?? filial ?? 'Matriz',
+  });
   const [saving, setSaving] = useState(false);
 
   const handleSalvar = async () => {
@@ -215,15 +230,25 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
       showToast?.('Preencha nome e período.', 'error'); return;
     }
     setSaving(true);
-    const filialAlvo = filial ?? form.filial_sel;
+    // Em edit mode preserva a filial original do ciclo (form.filial_sel foi inicializado com ela);
+    // isso evita que um admin/CEO em modo filial reescreva sem querer a filial de um ciclo Matriz.
+    const filialAlvo = isEdit ? form.filial_sel : (filial ?? form.filial_sel);
     try {
-      const { error } = await supabase.from('ciclos_avaliacao').insert({ nome: form.nome, data_inicio: form.data_inicio, data_fim: form.data_fim, feedback_anonimo: form.feedback_anonimo, filial: filialAlvo });
-      if (error) throw error;
-      showToast?.('Ciclo criado!', 'success');
+      if (isEdit && cicloEditar) {
+        const { error } = await supabase.from('ciclos_avaliacao')
+          .update({ nome: form.nome, data_inicio: form.data_inicio, data_fim: form.data_fim, feedback_anonimo: form.feedback_anonimo, filial: filialAlvo })
+          .eq('id', cicloEditar.id);
+        if (error) throw error;
+        showToast?.('Ciclo atualizado!', 'success');
+      } else {
+        const { error } = await supabase.from('ciclos_avaliacao').insert({ nome: form.nome, data_inicio: form.data_inicio, data_fim: form.data_fim, feedback_anonimo: form.feedback_anonimo, filial: filialAlvo });
+        if (error) throw error;
+        showToast?.('Ciclo criado!', 'success');
+      }
       onSaved();
       onClose();
     } catch (err: any) {
-      showToast?.(err?.message ?? 'Erro ao criar ciclo.', 'error');
+      showToast?.(err?.message ?? 'Erro ao salvar ciclo.', 'error');
     } finally {
       setSaving(false);
     }
@@ -242,7 +267,7 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-accent">Novo Ciclo de Avaliação</h3>
+          <h3 className="text-lg font-bold text-accent">{isEdit ? 'Editar Ciclo de Avaliação' : 'Novo Ciclo de Avaliação'}</h3>
           <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
             <X size={14} />
           </button>
@@ -313,7 +338,7 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial }: { onClose: () =
               Cancelar
             </button>
             <NeuButtonAccent onClick={handleSalvar} isLoading={saving}>
-              <CheckCircle2 size={14} /> Criar
+              <CheckCircle2 size={14} /> {isEdit ? 'Salvar' : 'Criar'}
             </NeuButtonAccent>
           </div>
         </div>
@@ -471,6 +496,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNovoCiclo, setShowNovoCiclo] = useState(false);
+  const [editandoCiclo, setEditandoCiclo] = useState<Ciclo | null>(null);
   const [uploadingEv, setUploadingEv] = useState(false);
   const evidFileRef = useRef<HTMLInputElement>(null);
   const [painel, setPainel] = useState<Array<{ filial: string; eixo: string; nota_subjetiva: number | null; metrica_valor: number | null; metrica_label: string | null }> | null>(null);
@@ -482,7 +508,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const [avaliando, setAvaliando] = useState<{
     ciclo: Ciclo;
     alvo: AvaliadoTarget;
-    tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
+    tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
   } | null>(null);
 
   const [editando, setEditando] = useState<{
@@ -493,6 +519,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   } | null>(null);
 
   const isAdminOuCEO = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+  // Gestão (editar/excluir avaliações, avaliar na Matriz) é restrita a admin/CEO —
+  // a RPC `atualizar_avaliacao` só aceita esses dois roles; conselheiro veria botões
+  // que falham no save. Também alinha com a régua "conselho recebe, admin/CEO avalia".
+  const podeGerirAvaliacoes = profile.role === 'admin' || profile.role === 'ceo';
   // Critérios e rótulos conforme o contexto ativo
   const csAtivo    = isMatriz ? CRITERIOS_MATRIZ : CRITERIOS;
   const clAtivo    = isMatriz ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
@@ -505,21 +535,25 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const podeEditarAvaliacao = (av: Avaliacao): boolean => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);
     if (!ciclo || ciclo.status !== 'Aberto') return false;
-    return isAdminOuCEO || av.avaliador_id === profile.id;
+    return podeGerirAvaliacoes || av.avaliador_id === profile.id;
   };
 
   const excluirAvaliacao = async (av: Avaliacao) => {
     if (!supabase) return;
-    if (!isAdminOuCEO) return;
+    if (!podeGerirAvaliacoes) return;
+    const ciclo = ciclos.find(c => c.id === av.ciclo_id);
+    if (!ciclo || ciclo.status !== 'Aberto') {
+      showToast?.('Ciclo fechado — exclusão não permitida.', 'error');
+      return;
+    }
     const critsCount = criterios.filter(c => c.avaliacao_id === av.id).length;
     const avaliadoNome = av.avaliada_filial ?? users.find(u => u.id === av.avaliado_id)?.nome ?? '—';
     const avaliador = users.find(u => u.id === av.avaliador_id);
-    const ciclo     = ciclos.find(c => c.id === av.ciclo_id);
     const msg =
       `Excluir esta avaliação?\n\n` +
       `  • De: ${avaliador?.nome ?? '—'}\n` +
       `  • Para: ${avaliadoNome}\n` +
-      `  • Ciclo: ${ciclo?.nome ?? '—'}\n` +
+      `  • Ciclo: ${ciclo.nome}\n` +
       `  • ${critsCount} critério(s) com notas\n\n` +
       `Esta ação é irreversível.`;
     if (!await confirm(msg)) return;
@@ -688,12 +722,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       minhasFeitasPorCiclo.get(a.ciclo_id)!.add(`${a.avaliado_id}::${a.tipo}`);
     });
 
-    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
+    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
     ciclosOperacionaisAbertos.forEach(ciclo => {
       const feitas = minhasFeitasPorCiclo.get(ciclo.id) ?? new Set();
       const usersFilial = users.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
-      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
-      if (isAdminOuCEO) {
+      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
+      if (podeGerirAvaliacoes) {
         // Em Matriz com ciclo Matriz aberto, admin/CEO avalia gerentes/colaboradores
         // pelo ciclo Matriz (bloco abaixo) — evita listar a mesma pessoa 2×.
         if (isMatriz && cicloMatrizAberto) {
@@ -714,12 +748,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         alvos = usersFilial
           .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
           .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
-      } else {
+      } else if (profile.role === 'colaborador') {
         const setoresColaborador = allSetores(profile);
         const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
         const ceos = users.filter(u => u.role === 'ceo');
         alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
       }
+      // Conselheiro puro não avalia indivíduos no Padrão — atua só na Competição/Matriz.
       alvos.forEach(a => {
         if (!feitas.has(`${a.user.id}::${a.tipo}`)) out.push({ ...a, ciclo });
       });
@@ -728,11 +763,14 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     // Ciclo Matriz — admin/CEO em modo Matriz avalia conselheiros + gerentes + colaboradores
     // de todas as filiais (ciclo consolidado). Só role='conselheiro' puro; gerente+is_conselheiro=true
     // continua sendo avaliado como gerente na filial dele.
-    if (isAdminOuCEO && isMatriz && cicloMatrizAberto) {
+    if (podeGerirAvaliacoes && isMatriz && cicloMatrizAberto) {
       const feitasMatriz = minhasFeitasPorCiclo.get(cicloMatrizAberto.id) ?? new Set();
+      const isAdmin = profile.role === 'admin';
       const conselheiros = users.filter(u => u.role === 'conselheiro' && u.id !== profile.id);
       conselheiros.forEach(user => {
-        if (!feitasMatriz.has(`${user.id}::ceo_conselheiro`)) out.push({ user, tipo: 'ceo_conselheiro' as const, ciclo: cicloMatrizAberto });
+        // Admin usa set estratégico próprio (admin_conselheiro); CEO/conselheiro mantêm ceo_conselheiro.
+        const tipoConsel = isAdmin ? 'admin_conselheiro' as const : 'ceo_conselheiro' as const;
+        if (!feitasMatriz.has(`${user.id}::${tipoConsel}`)) out.push({ user, tipo: tipoConsel, ciclo: cicloMatrizAberto });
       });
       const gerentesMatriz = users.filter(u => u.role === 'gerente' && u.id !== profile.id);
       gerentesMatriz.forEach(user => {
@@ -742,9 +780,16 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       colaboradoresMatriz.forEach(user => {
         if (!feitasMatriz.has(`${user.id}::ceo_colaborador`)) out.push({ user, tipo: 'ceo_colaborador' as const, ciclo: cicloMatrizAberto });
       });
+      // Admin avalia CEOs com o set estratégico.
+      if (isAdmin) {
+        const ceos = users.filter(u => u.role === 'ceo' && u.id !== profile.id);
+        ceos.forEach(user => {
+          if (!feitasMatriz.has(`${user.id}::admin_ceo`)) out.push({ user, tipo: 'admin_ceo' as const, ciclo: cicloMatrizAberto });
+        });
+      }
     }
     return out;
-  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, users, profile.id, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
+  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, users, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
 
   // Filiais ainda não avaliadas no ciclo Matriz aberto
   const filiaisJaAvaliadas = useMemo((): Set<string> => {
@@ -858,7 +903,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
   const recebidas = useMemo(() => {
     return avaliacoes
-      .filter(a => a.avaliado_id === profile.id)
+      // Exclui `ti_dev_ia` — pertence ao submódulo TI Desenvolvimento IA, tem set de
+      // critérios próprio e é exibido lá, não na Central de Avaliação.
+      .filter(a => a.avaliado_id === profile.id && a.tipo !== 'ti_dev_ia')
       .map(av => {
         const ciclo = ciclos.find(c => c.id === av.ciclo_id);
         const avaliador = users.find(u => u.id === av.avaliador_id);
@@ -875,7 +922,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
   const feitas = useMemo(() => {
     return avaliacoes
-      .filter(a => a.avaliador_id === profile.id)
+      .filter(a => a.avaliador_id === profile.id && a.tipo !== 'ti_dev_ia')
       .map(av => {
         const ciclo = ciclos.find(c => c.id === av.ciclo_id);
         // Pode ser avaliação de filial (avaliado_id=null) ou de pessoa
@@ -1022,8 +1069,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     };
 
     const grupos = [
+      mkGrupo('admin_ceo', 'Admin → CEO', 'Avaliações estratégicas que o admin entregou ao CEO (ciclo Matriz).'),
+      mkGrupo('admin_conselheiro', 'Admin → Conselheiros', 'Avaliações estratégicas que o admin entregou aos conselheiros (ciclo Matriz).'),
       mkGrupo('ceo_gerente', 'CEO → Gerentes', 'Avaliações que o CEO/admin entregou aos gerentes.'),
-      mkGrupo('ceo_conselheiro', 'CEO → Conselheiros', 'Avaliações que o CEO/admin entregou aos conselheiros (ciclo Matriz).'),
+      mkGrupo('ceo_conselheiro', 'CEO → Conselheiros', 'Avaliações que o CEO entregou aos conselheiros (ciclo Matriz).'),
       mkGrupo('ceo_colaborador', 'CEO → Colaboradores', 'Avaliações que o CEO/admin entregou diretamente a colaboradores (modo Matriz).'),
       mkGrupo('gerente_colaborador', 'Gerentes → Colaboradores', 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.'),
       mkGrupo('feedback_colaborador', 'Feedback Reverso', 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.'),
@@ -1210,6 +1259,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                               <LockOpen size={11} /> Reabrir
                             </button>
                           )}
+                          <button
+                            onClick={() => setEditandoCiclo(c)}
+                            title="Editar ciclo (nome, período, unidade, anonimato)"
+                            className="text-[10px] text-gray-500 hover:text-accent font-bold uppercase tracking-widest flex items-center gap-1"
+                          >
+                            <Pencil size={11} /> Editar
+                          </button>
                           <button
                             onClick={() => excluirCiclo(c)}
                             title="Excluir ciclo (apaga avaliações em cascata)"
@@ -1719,7 +1775,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                   nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
                   onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
                   canEditarPDI={isAdminOuCEO || isRH}
-                  categoriaLabel={clAtivo}
+                  categoriaLabel={criteriosSetPorTipo(r.avaliacao.tipo, 'user').label}
                   profile={profile}
                   treinamentos={treinamentos}
                   showToast={showToast}
@@ -1755,11 +1811,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 nomeContraparte={`${f.avaliadoNome} · ${f.cicloNome}`}
                 canEditar={podeEditarAvaliacao(f.avaliacao)}
                 onEditar={() => abrirEdicao(f.avaliacao)}
-                canExcluir={isAdminOuCEO}
+                canExcluir={podeGerirAvaliacoes}
                 onExcluir={() => excluirAvaliacao(f.avaliacao)}
                 canEditarPDI={!f.isFilialEval && (isAdminOuCEO || isRH || f.avaliacao.avaliador_id === profile.id)}
                 showPDI={!f.isFilialEval}
-                categoriaLabel={f.isFilialEval ? CATEGORIA_LABEL_MATRIZ : clAtivo}
+                categoriaLabel={criteriosSetPorTipo(f.avaliacao.tipo, f.isFilialEval ? 'filial' : 'user').label}
                 profile={profile}
                 treinamentos={treinamentos}
                 showToast={showToast}
@@ -1779,6 +1835,15 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             filial={filial}
           />
         )}
+        {editandoCiclo && (
+          <ModalNovoCiclo
+            onClose={() => setEditandoCiclo(null)}
+            onSaved={reload}
+            showToast={showToast}
+            filial={filial}
+            cicloEditar={editandoCiclo}
+          />
+        )}
         {avaliando && (
           <ModalAvaliacao
             ciclo={avaliando.ciclo}
@@ -1787,8 +1852,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             onClose={() => setAvaliando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={avaliando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : CRITERIOS}
-            categoriaLabel={avaliando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL}
+            criteriosSet={criteriosSetPorTipo(avaliando.tipo, avaliando.alvo.kind).cs}
+            categoriaLabel={criteriosSetPorTipo(avaliando.tipo, avaliando.alvo.kind).label}
             evidenciasAvaliado={avaliando.alvo.kind === 'user'
               ? evidencias.filter(e =>
                   e.colaborador_id === (avaliando.alvo as Extract<AvaliadoTarget, { kind: 'user' }>).user.id &&
@@ -1800,13 +1865,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           <ModalAvaliacao
             ciclo={editando.ciclo}
             alvo={editando.alvo}
-            tipo={editando.tipo as 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'}
+            tipo={editando.tipo as 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'}
             avaliacaoExistente={editando.avaliacaoExistente}
             onClose={() => setEditando(null)}
             onSaved={reload}
             showToast={showToast}
-            criteriosSet={editando.alvo.kind === 'filial' ? CRITERIOS_MATRIZ : CRITERIOS}
-            categoriaLabel={editando.alvo.kind === 'filial' ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL}
+            criteriosSet={criteriosSetPorTipo(editando.tipo, editando.alvo.kind).cs}
+            categoriaLabel={criteriosSetPorTipo(editando.tipo, editando.alvo.kind).label}
           />
         )}
       </AnimatePresence>

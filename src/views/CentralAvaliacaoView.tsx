@@ -27,21 +27,36 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
   const [aba, setAba] = useState<Aba>(initialTab);
 
   useEffect(() => {
-    if (!podeCompeticao) { setLoading(false); return; }
+    if (!podeCompeticao || !supabase) { setLoading(false); return; }
     let cancelou = false;
-    (async () => {
-      const { data } = await supabase
+
+    // Inclui `aguardando_encerramento` — durante a votação do conselho a aba
+    // continua útil pra revisitar itens/tarefas já pontuados. Some só quando
+    // encerrada de fato.
+    const verificar = async () => {
+      const { data } = await supabase!
         .from('competicoes_matriz')
         .select('id')
         .eq('ativo', true)
-        .eq('status', 'em_andamento')
+        .in('status', ['em_andamento', 'aguardando_encerramento'])
         .maybeSingle();
       if (!cancelou) {
         setTemCompeticao(!!data);
         setLoading(false);
       }
-    })();
-    return () => { cancelou = true; };
+    };
+
+    verificar();
+
+    // Realtime: aba aparece/some sem precisar recarregar quando admin cria/encerra.
+    const canal = supabase
+      .channel('central-avaliacao-competicao')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'competicoes_matriz' }, () => {
+        verificar();
+      })
+      .subscribe();
+
+    return () => { cancelou = true; supabase!.removeChannel(canal); };
   }, [podeCompeticao]);
 
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
