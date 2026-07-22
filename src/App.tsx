@@ -24,7 +24,7 @@ import {
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
-  Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList,
+  Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -81,6 +81,7 @@ const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioVi
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const CentralAvaliacaoView         = lazy(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
+const DemandasView                 = lazy(() => import('./views/DemandasView').then(m => ({ default: m.DemandasView })));
 const FeedbackRequerimentosView    = lazy(() => import('./views/FeedbackRequerimentosView').then(m => ({ default: m.FeedbackRequerimentosView })));
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
@@ -94,8 +95,6 @@ const CampanhasMarketingView               = lazy(() => import('./views/Campanha
 const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
 const CalendarioEditorialView              = lazy(() => import('./views/CalendarioEditorialView').then(m => ({ default: m.CalendarioEditorialView })));
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
-const TarefasMarketingView                 = lazy(() => import('./views/TarefasMarketingView').then(m => ({ default: m.TarefasMarketingView })));
-const TarefasView                          = lazy(() => import('./views/TarefasView').then(m => ({ default: m.TarefasView })));
 const PesquisasView                        = lazy(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
 const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
 const ArtesPromocionaisView                = lazy(() => import('./views/ArtesPromocionaisView').then(m => ({ default: m.ArtesPromocionaisView })));
@@ -128,7 +127,7 @@ type SubmenuItem = string | { label: string; requireRole?: string[]; requireSeto
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas']
+    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos']
   },
   {
     // Cadastros operacionais — Produtos, Categorias, Fornecedores e Serviços.
@@ -142,13 +141,13 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'estoque', label: 'Estoque', icon: Package,
     submenus: ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
-      'Gerenciamento', 'Relatórios', 'Tarefas']
+      'Gerenciamento', 'Relatórios']
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
@@ -159,18 +158,17 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
       'Notas Emitidas',
-      'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios', 'Tarefas']
+      'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas']
+    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
     submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas',
       { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] },
-      { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] },
-      'Tarefas'],
+      { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] }],
   },
   {
     id: 'marketing', label: 'Marketing', icon: Megaphone,
@@ -178,7 +176,6 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       'Redes Sociais',
       'Campanhas', 'Promoções', 'Cupons', 'Calendário',
       { label: 'Vitrine Pública', requireSetor: ['marketing'] },
-      'Tarefas',
     ],
   },
   {
@@ -259,6 +256,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {!matrizMode && aulaAllow('avaliacoes') && (
           <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Star size={18} /><span>Central de Avaliação</span>
+          </button>
+        )}
+        {/* Demandas (modo filial): Metas Estratégicas + Demandas do Conselho.
+            Admin/CEO em filial mode também veem — permite controlar o que
+            chegou pra filial. Some em modo Matriz (lá as demandas são criadas). */}
+        {!matrizMode && aulaAllow('demandas') && (
+          <button onClick={() => { navigate('demandas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'demandas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Inbox size={18} /><span>Demandas</span>
           </button>
         )}
         {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
@@ -863,19 +868,16 @@ function LogMaxAppInner() {
       case 'marketing-cupons':             return <CuponsMarketingView showToast={st} profile={profile} />;
       case 'marketing-calendário':         return <CalendarioEditorialView showToast={st} profile={profile} />;
       case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} />;
-      case 'marketing-tarefas':            return <TarefasMarketingView showToast={st} profile={profile} />;
-      case 'empresa-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="empresa" />;
-      case 'compras-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="compras" />;
-      case 'estoque-tarefas':              return <TarefasView showToast={st} profile={profile} modulo="estoque" />;
-      case 'financeiro-tarefas':           return <TarefasView showToast={st} profile={profile} modulo="financeiro" />;
-      case 'rh-tarefas':                   return <TarefasView showToast={st} profile={profile} modulo="rh" />;
-      case 'vendas-tarefas':               return <TarefasView showToast={st} profile={profile} modulo="vendas" />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
-      case 'metas':                        return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="metas" />;
+      case 'demandas':                     return <DemandasView showToast={st} profile={profile} />;
+      case 'demandas-metas':               return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
+      case 'demandas-conselho':            return <DemandasView showToast={st} profile={profile} initialTab="conselho" />;
+      // Rota antiga 'metas' redireciona pra Demandas > Metas Estratégicas.
+      case 'metas':                        return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;

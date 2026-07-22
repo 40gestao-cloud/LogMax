@@ -11,8 +11,9 @@ import { MetasView } from './MetasView';
 
 type Aba = 'padrao' | 'metas' | 'competicao';
 
-// Central de Avaliação: hub único com Padrão + Metas (sempre) e Competição
-// (só quando há competição ativa + admin/CEO/conselheiro em modo Matriz).
+// Central de Avaliação: Padrão (sempre) + Metas (só em Matriz — no modo filial
+// Metas migrou pra DemandasView) + Competição (só quando há competição ativa +
+// admin/CEO/conselheiro em modo Matriz).
 export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao' }: {
   profile: UserProfile;
   showToast: any;
@@ -66,14 +67,16 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
-        <TabBtn active={aba === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
+        {modoMatriz && (
+          <TabBtn active={aba === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
+        )}
         <TabBtn active={aba === 'padrao'} onClick={() => setAba('padrao')} icon={<Star size={12} />} label="Padrão" />
         {mostrarCompeticao && (
           <TabBtn active={aba === 'competicao'} onClick={() => setAba('competicao')} icon={<Trophy size={12} className="text-amber-300" />} label="Competição do Conselho" />
         )}
       </div>
       {aba === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
-      {aba === 'metas'    && <MetasView profile={profile} showToast={showToast} />}
+      {aba === 'metas'    && modoMatriz && <MetasView profile={profile} showToast={showToast} />}
       {aba === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
     </div>
   );
