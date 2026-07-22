@@ -73,7 +73,6 @@ const PatrimonioView               = lazy(() => import('./views/PatrimonioView')
 const FuncionariosView             = lazy(() => import('./views/FuncionariosView').then(m => ({ default: m.FuncionariosView })));
 const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoView').then(m => ({ default: m.FolhaPagamentoView })));
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
-const MetasView                    = lazy(() => import('./views/MetasView').then(m => ({ default: m.MetasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
 const FrequenciaTrabalhoView       = lazy(() => import('./views/FrequenciaTrabalhoView').then(m => ({ default: m.FrequenciaTrabalhoView })));
@@ -255,11 +254,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BookOpen size={18} /><span>Catálogo</span>
           </button>
         )}
-        {/* Avaliações (modo filial): entra direto no wrapper Padrão.
+        {/* Central de Avaliação (modo filial): hub com abas Padrão/Metas.
             No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
         {!matrizMode && aulaAllow('avaliacoes') && (
           <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Star size={18} /><span>Avaliações</span>
+            <Star size={18} /><span>Central de Avaliação</span>
           </button>
         )}
         {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
@@ -274,12 +273,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <MessageSquare size={18} className="shrink-0 mt-0.5" /><span className="leading-tight">Feedback & Requerimentos</span>
           </button>
         )}
-        {/* Metas — em ambos os modos. No filial, também replica no Acesso Rápido da Início. */}
-        {aulaAllow('metas') && (
-          <button onClick={() => { navigate('metas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'metas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Target size={18} /><span>Metas</span>
-          </button>
-        )}
+        {/* Metas foi consolidada dentro da Central de Avaliação (aba Metas). */}
       </div>
 
       <div>
@@ -603,6 +597,7 @@ function LogMaxAppInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
+
   const toggleModule = (id: string) => setOpenModules(prev => ({ ...prev, [id]: !prev[id] }));
 
   const showToast = useCallback((message: string, type = 'info', autoHide = true) => {
@@ -880,8 +875,8 @@ function LogMaxAppInner() {
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
+      case 'metas':                        return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="metas" />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
-      case 'metas':                        return <MetasView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;

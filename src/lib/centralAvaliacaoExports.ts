@@ -64,8 +64,8 @@ const GRUPOS: GrupoCfg[] = [
 ];
 
 const TAREFA_TIPOS = [
-  { id: 'tarefa_treinamento_vendas', label: 'Treinamento em Vendas' },
-  { id: 'tarefa_treinamento_ia',     label: 'Treinamento em IA' },
+  { id: 'tarefa_treinamento_vendas', label: 'Vendas e Atendimento' },
+  { id: 'tarefa_treinamento_ia',     label: 'Desenvolvimento com IA' },
   { id: 'tarefa_apresentacao',       label: 'Apresentação Profissional' },
 ];
 

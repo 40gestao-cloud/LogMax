@@ -28,19 +28,19 @@ type TipoConfig = {
 const TIPOS: TipoConfig[] = [
   {
     id: 'tarefa_treinamento_vendas',
-    label: 'Treinamento em Vendas',
-    hint: 'Criar treinamento, definir participantes por filial e nota 0-10 do conselho.',
+    label: 'Vendas e Atendimento',
+    hint: 'Criar atividade, definir participantes por filial e nota 0-10 do conselho.',
     icon: GraduationCap,
     glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400',
-    novoLabel: 'Novo treinamento em Vendas',
+    novoLabel: 'Nova atividade de Vendas e Atendimento',
   },
   {
     id: 'tarefa_treinamento_ia',
-    label: 'Treinamento em IA',
-    hint: 'Criar treinamento em IA, participantes por filial, nota 0-10 do conselho.',
+    label: 'Desenvolvimento com IA',
+    hint: 'Criar atividade de Desenvolvimento com IA, participantes por filial, nota 0-10 do conselho.',
     icon: Cpu,
     glow: 'bg-fuchsia-500/25', iconBg: 'bg-fuchsia-500/10', iconRing: 'ring-fuchsia-500/25', iconColor: 'text-fuchsia-400',
-    novoLabel: 'Novo treinamento em IA',
+    novoLabel: 'Nova atividade de Desenvolvimento com IA',
   },
   {
     id: 'tarefa_apresentacao',
