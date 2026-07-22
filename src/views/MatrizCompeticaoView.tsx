@@ -4,7 +4,7 @@ import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown,
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -470,48 +470,48 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={baixarPdfResultado}
-                      disabled={baixandoPdf}
-                      className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
-                      title="Baixar resultado por filial em PDF"
-                    >
-                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
-                      Baixar PDF
-                    </button>
+                    {/* Ordem: Central de Avaliação → Baixar PDF → Status → Encerrar agora → Excluir */}
                     {placar.competicao.status === 'em_andamento' && navigate && (
                       <button
                         onClick={() => navigate('matriz-avaliacoes')}
-                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all"
+                        className="btn-shimmer btn-shimmer--gold"
                         title="Avaliar itens das 3 filiais"
                       >
                         <Award size={12} /> Central de Avaliação
                       </button>
                     )}
+                    <button
+                      onClick={baixarPdfResultado}
+                      disabled={baixandoPdf}
+                      className="btn-shimmer btn-shimmer--glass-black"
+                      title="Baixar resultado por filial em PDF"
+                    >
+                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+                      Baixar PDF
+                    </button>
+                    <span
+                      className={`btn-shimmer ${placar.competicao.status === 'em_andamento' ? 'btn-shimmer--glass-green' : 'btn-shimmer--glass-yellow'}`}
+                      style={{ cursor: 'default' }}
+                    >
+                      {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
+                    </span>
                     {podeGerenciar && placar.competicao.status === 'em_andamento' && (
                       <button
                         onClick={encerrarAgora}
                         disabled={encerrandoAgora}
-                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                        className="btn-shimmer btn-shimmer--glass-yellow"
                         title="Força encerramento antes da data_fim"
                       >
                         {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
                         Encerrar agora
                       </button>
                     )}
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
-                      placar.competicao.status === 'em_andamento'
-                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
-                    }`}>
-                      {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
-                    </span>
                     {podeGerenciar && competicaoAtual && (
                       <button
                         onClick={() => excluirCompeticao(competicaoAtual)}
                         disabled={excluindo === competicaoAtual.id}
                         title="Excluir competição (uso pra descartar testes)"
-                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-gray-500 hover:text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                        className="btn-shimmer btn-shimmer--glass-red"
                       >
                         {excluindo === competicaoAtual.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                         Excluir
@@ -531,7 +531,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           {['1º','2º','3º'][idx]}
                         </span>
                       </div>
-                      <p className={`text-xs font-black uppercase tracking-wider ${FILIAL_COLOR[p.filial as FilialOp]}`}>{p.filial}</p>
+                      <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
                       <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${idx === 0 && p.n > 0 ? 'text-emerald-400' : 'text-gray-200'}`}>
                         {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                       </p>
@@ -563,7 +563,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         const isBest = p.n > 0 && p.media === Math.max(...podio.map(x => x.n > 0 ? x.media : -Infinity));
                         return (
                           <tr key={p.filial} className="border-t border-white/5">
-                            <td className={`py-3 font-bold ${FILIAL_COLOR[p.filial as FilialOp]}`}>{p.filial}</td>
+                            <td className="py-3"><FilialBadge filial={p.filial} /></td>
                             <td className="py-3 text-right text-gray-300 tabular-nums pr-4">{p.n}</td>
                             <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}

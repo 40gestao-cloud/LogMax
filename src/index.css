@@ -680,6 +680,81 @@ table,
   animation: badge-shimmer 3.2s linear infinite;
 }
 
+/* ── Botões de ação do Placar (Competição) — variantes shimmer ─────────── */
+@keyframes btn-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.btn-shimmer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  background-size: 200% auto;
+  transition: transform .12s ease, filter .12s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-shimmer:hover:not(:disabled)  { filter: brightness(1.10); }
+.btn-shimmer:active:not(:disabled) { transform: translateY(1px); }
+.btn-shimmer:disabled { opacity: 0.55; cursor: not-allowed; animation: none; }
+
+/* Baixar PDF — vidro preto */
+.btn-shimmer--glass-black {
+  background: linear-gradient(100deg, rgba(0,0,0,0.85) 0%, rgba(40,40,40,0.72) 35%, rgba(70,70,70,0.62) 50%, rgba(40,40,40,0.72) 65%, rgba(0,0,0,0.85) 100%);
+  background-size: 200% auto; color: #e5e7eb;
+  border-color: rgba(255,255,255,0.20) !important;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: btn-shimmer 3.2s linear infinite;
+}
+
+/* Central de Avaliação — dourado sólido premium */
+.btn-shimmer--gold {
+  background: linear-gradient(100deg, #B8860B 0%, #F0B429 35%, #f0d878 50%, #F0B429 65%, #B8860B 100%);
+  background-size: 200% auto; color: #000;
+  border-color: #F0B429 !important;
+  animation: btn-shimmer 2.4s linear infinite;
+}
+
+/* Em Andamento — vidro verde */
+.btn-shimmer--glass-green {
+  background: linear-gradient(100deg, rgba(20,83,45,0.60) 0%, rgba(22,163,74,0.38) 35%, rgba(74,222,128,0.32) 50%, rgba(22,163,74,0.38) 65%, rgba(20,83,45,0.60) 100%);
+  background-size: 200% auto; color: #4ade80;
+  border-color: rgba(34,197,94,0.55) !important;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: btn-shimmer 2.8s linear infinite;
+}
+
+/* Encerrar agora — vidro amarelo */
+.btn-shimmer--glass-yellow {
+  background: linear-gradient(100deg, rgba(133,77,14,0.60) 0%, rgba(202,138,4,0.42) 35%, rgba(250,204,21,0.35) 50%, rgba(202,138,4,0.42) 65%, rgba(133,77,14,0.60) 100%);
+  background-size: 200% auto; color: #fde047;
+  border-color: rgba(234,179,8,0.60) !important;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: btn-shimmer 2.6s linear infinite;
+}
+
+/* Excluir — vidro vermelho */
+.btn-shimmer--glass-red {
+  background: linear-gradient(100deg, rgba(127,29,29,0.60) 0%, rgba(220,38,38,0.42) 35%, rgba(248,113,113,0.35) 50%, rgba(220,38,38,0.42) 65%, rgba(127,29,29,0.60) 100%);
+  background-size: 200% auto; color: #fca5a5;
+  border-color: rgba(239,68,68,0.60) !important;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: btn-shimmer 2.8s linear infinite;
+}
+
+/* Light theme: escurece texto onde couber pra manter contraste */
+[data-theme="light"] .btn-shimmer--glass-black { color: #f3f4f6; }
+[data-theme="light"] .btn-shimmer--glass-green { color: #14532d; border-color: rgba(22,163,74,0.65) !important; }
+[data-theme="light"] .btn-shimmer--glass-yellow { color: #713f12; border-color: rgba(202,138,4,0.70) !important; }
+[data-theme="light"] .btn-shimmer--glass-red   { color: #7f1d1d; border-color: rgba(220,38,38,0.70) !important; }
+
 [data-theme="light"] .role-badge--admin       { background: #F0B429; color: #000; border-color: #F0B429 !important; }
 [data-theme="light"] .role-badge--ceo         { background: #F0B429; color: #000; border-color: #F0B429 !important; }
 [data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #F0B429 !important; }
