@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award, Crown, Briefcase, Users, MessageCircle, type LucideIcon } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor, isConselheiro } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
 import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, CATEGORIA_LABEL_ADMIN, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
+import { FILIAL_COLOR } from '../lib/filiais';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -42,6 +43,38 @@ const criteriosSetPorTipo = (tipo: string | undefined, alvoKind: 'user' | 'filia
   if (tipo === 'admin_ceo' || tipo === 'admin_conselheiro') return { cs: CRITERIOS_ADMIN, label: CATEGORIA_LABEL_ADMIN };
   return { cs: CRITERIOS, label: CATEGORIA_LABEL };
 };
+
+// ── Agrupamento visual de "Avaliações a Fazer" por hierarquia ──────────────
+// Cada avaliação tem um `tipo` distinto no schema; visualmente elas caem em
+// 4 grupos com peso/critérios/mensagem próprios:
+//   estrategico  → admin/CEO avaliando CEO/Conselheiro (6 critérios estratégicos)
+//   gerentes     → CEO/admin avaliando gerentes
+//   colaboradores→ CEO/admin/gerente avaliando colaboradores
+//   feedback     → colaborador dando feedback pro gerente/CEO
+type HierGrupo = 'estrategico' | 'gerentes' | 'colaboradores' | 'feedback';
+
+const grupoDoTipo = (tipo: string): HierGrupo => {
+  if (tipo === 'admin_ceo' || tipo === 'admin_conselheiro' || tipo === 'ceo_conselheiro') return 'estrategico';
+  if (tipo === 'ceo_gerente') return 'gerentes';
+  if (tipo === 'ceo_colaborador' || tipo === 'gerente_colaborador') return 'colaboradores';
+  return 'feedback';
+};
+
+const HIER_META: Record<HierGrupo, {
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+  accent: string;   // cor do ícone/label
+  border: string;   // borda do card (por role dentro do grupo)
+  chip: string;     // pill do tipo de critério
+}> = {
+  estrategico:   { label: 'Estratégico',    hint: 'CEO & Conselheiros · 6 critérios estratégicos', icon: Crown,          accent: 'text-amber-300',   border: 'border-amber-500/30',   chip: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
+  gerentes:      { label: 'Gerentes',       hint: '4 critérios de desempenho',                     icon: Briefcase,      accent: 'text-sky-300',      border: 'border-sky-500/25',      chip: 'bg-sky-500/10 text-sky-300 border-sky-500/25' },
+  colaboradores: { label: 'Colaboradores',  hint: '4 critérios de desempenho',                     icon: Users,          accent: 'text-gray-300',     border: 'border-white/10',        chip: 'bg-white/5 text-gray-400 border-white/10' },
+  feedback:      { label: 'Meu feedback',   hint: 'Sobre meu gerente / CEO',                       icon: MessageCircle,  accent: 'text-emerald-300',  border: 'border-emerald-500/25', chip: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25' },
+};
+
+const ORDEM_HIER: HierGrupo[] = ['estrategico', 'gerentes', 'colaboradores', 'feedback'];
 
 const fmtData = (s: string) => {
   const [y, m, d] = s.split('-');
@@ -889,17 +922,21 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     }
   };
 
-  // Agrupa pendentes por ciclo/filial (modo Matriz)
-  const pendentesAgrupadosPorFilial = useMemo(() => {
-    if (!isMatriz) return null;
-    const grupos: Record<string, typeof pendentes> = {};
-    pendentes.forEach(p => {
-      const f = p.ciclo.filial;
-      if (!grupos[f]) grupos[f] = [];
-      grupos[f].push(p);
+  // Agrupa pendentes por hierarquia (estratégico / gerentes / colaboradores /
+  // feedback). Vale nos dois modos — em Matriz cada card mostra a filial num
+  // chip secundário. Ordena por filial → nome dentro de cada grupo.
+  const pendentesPorHierarquia = useMemo(() => {
+    const grupos: Record<HierGrupo, typeof pendentes> = { estrategico: [], gerentes: [], colaboradores: [], feedback: [] };
+    pendentes.forEach(p => grupos[grupoDoTipo(p.tipo)].push(p));
+    (Object.keys(grupos) as HierGrupo[]).forEach(g => {
+      grupos[g].sort((a, b) => {
+        const fa = a.user.filial ?? '';
+        const fb = b.user.filial ?? '';
+        return fa === fb ? a.user.nome.localeCompare(b.user.nome) : fa.localeCompare(fb);
+      });
     });
     return grupos;
-  }, [isMatriz, pendentes]);
+  }, [pendentes]);
 
   const recebidas = useMemo(() => {
     return avaliacoes
@@ -1573,69 +1610,157 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             <LoadingSpinner />
           ) : !painel || painel.length === 0 ? (
             <EmptyState message="Sem dados do painel. Avalie ao menos uma filial ou aguarde geração de vendas/contas no período." />
-          ) : (
-            <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                    <th className="pb-3 font-bold px-3">Eixo</th>
-                    {FILIAIS_OP.map(f => (
-                      <th key={f} className="pb-3 font-bold px-3 text-center">{f}</th>
-                    ))}
-                    <th className="pb-3 font-bold px-3 text-center">Líder</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {CRITERIOS_MATRIZ.criterios.map(eixo => {
-                    const linhaPorFilial: Record<string, typeof painel[number] | undefined> = {};
-                    painel.filter(p => p.eixo === eixo).forEach(p => { linhaPorFilial[p.filial] = p; });
-                    const rank = rankingPorEixo[eixo] ?? [];
-                    const lider = rank[0];
-                    const label = linhaPorFilial[FILIAIS_OP[0]]?.metrica_label ?? null;
-                    return (
-                      <tr key={eixo} className="border-b border-white/5 hover:bg-white/[0.02]">
-                        <td className="py-3 px-3 font-semibold text-gray-200">
-                          {eixo}
-                          {label && <span className="block text-[9px] text-gray-500 font-normal mt-0.5">{label}</span>}
-                        </td>
-                        {FILIAIS_OP.map(f => {
-                          const cell = linhaPorFilial[f];
-                          const isLider = lider && lider.filial === f && lider.score > 0;
-                          const nota = cell?.nota_subjetiva;
-                          const metrica = cell?.metrica_valor;
-                          return (
-                            <td key={f} className={`py-3 px-3 text-center tabular-nums ${isLider ? 'text-accent font-black' : 'text-gray-300'}`}>
-                              {nota != null && (
-                                <div>{Number(nota).toFixed(1)}<span className="text-[9px] text-gray-500">/10</span></div>
-                              )}
-                              {metrica != null && (
-                                <div className="text-[10px] text-gray-500 font-mono">
-                                  {label?.startsWith('R$') || label?.includes('(R$)')
-                                    ? `R$ ${Number(metrica).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                    : label?.includes('(%)')
-                                    ? `${Number(metrica).toFixed(1)}%`
-                                    : Number(metrica).toLocaleString('pt-BR')}
-                                </div>
-                              )}
-                              {nota == null && metrica == null && <span className="text-gray-600">—</span>}
-                            </td>
-                          );
-                        })}
-                        <td className="py-3 px-3 text-center">
-                          {lider && lider.score > 0 ? (
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest"
-                              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
-                              {lider.filial}
+          ) : (() => {
+            // Totais por filial: soma das notas subjetivas (0-10) por eixo — mesma
+            // base do ranking. Fallback pra metrica_valor quando nota_subjetiva é null.
+            const totaisPorFilial: Record<string, number> = {};
+            const vitoriasPorFilial: Record<string, number> = {};
+            FILIAIS_OP.forEach(f => { totaisPorFilial[f] = 0; vitoriasPorFilial[f] = 0; });
+            CRITERIOS_MATRIZ.criterios.forEach(eixo => {
+              const rank = rankingPorEixo[eixo] ?? [];
+              const lider = rank[0];
+              if (lider && lider.score > 0) vitoriasPorFilial[lider.filial] = (vitoriasPorFilial[lider.filial] ?? 0) + 1;
+              painel.filter(p => p.eixo === eixo).forEach(p => {
+                const s = p.nota_subjetiva != null ? Number(p.nota_subjetiva) : (p.metrica_valor ?? 0);
+                totaisPorFilial[p.filial] = (totaisPorFilial[p.filial] ?? 0) + s;
+              });
+            });
+            const totalRank = FILIAIS_OP
+              .map(f => ({ filial: f, total: totaisPorFilial[f] }))
+              .sort((a, b) => b.total - a.total);
+            const liderGeral = totalRank[0]?.total > 0 ? totalRank[0].filial : null;
+            const posGeral: Record<string, number> = {};
+            totalRank.forEach((r, i) => { posGeral[r.filial] = i + 1; });
+
+            const MEDALHA = ['🥇', '🥈', '🥉'];
+
+            return (
+              <div className="overflow-x-auto main-scrollbar">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                      <th className="pb-3 font-bold px-3">Eixo</th>
+                      {FILIAIS_OP.map(f => {
+                        const cor = FILIAL_COLOR[f];
+                        return (
+                          <th key={f} className="pb-3 font-bold px-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${cor.bg} ${cor.text} ${cor.border}`}>
+                              <Building2 size={9} /> {f}
                             </span>
-                          ) : <span className="text-gray-600">—</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                          </th>
+                        );
+                      })}
+                      <th className="pb-3 font-bold px-3 text-center">Líder</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CRITERIOS_MATRIZ.criterios.map(eixo => {
+                      const linhaPorFilial: Record<string, typeof painel[number] | undefined> = {};
+                      painel.filter(p => p.eixo === eixo).forEach(p => { linhaPorFilial[p.filial] = p; });
+                      const rank = rankingPorEixo[eixo] ?? [];
+                      const lider = rank[0];
+                      const posPorFilial: Record<string, number> = {};
+                      rank.forEach((r, i) => { posPorFilial[r.filial] = i + 1; });
+                      const label = linhaPorFilial[FILIAIS_OP[0]]?.metrica_label ?? null;
+                      return (
+                        <tr key={eixo} className="border-b border-white/5 hover:bg-white/[0.02]">
+                          <td className="py-3 px-3 font-semibold text-gray-200">
+                            {eixo}
+                            {label && <span className="block text-[9px] text-gray-500 font-normal mt-0.5">{label}</span>}
+                          </td>
+                          {FILIAIS_OP.map(f => {
+                            const cell = linhaPorFilial[f];
+                            const isLider = lider && lider.filial === f && lider.score > 0;
+                            const pos = posPorFilial[f];
+                            const nota = cell?.nota_subjetiva;
+                            const metrica = cell?.metrica_valor;
+                            const notaN = nota != null ? Number(nota) : null;
+                            // barra de intensidade: 0-10 → 0-100% da célula, opacidade suave
+                            const intensity = notaN != null ? Math.max(0, Math.min(1, notaN / ESCALA_MAX)) : 0;
+                            return (
+                              <td key={f} className={`py-2 px-2 text-center tabular-nums ${isLider ? 'text-accent font-black' : 'text-gray-300'}`}>
+                                <div className="relative rounded-lg overflow-hidden px-2 py-2">
+                                  {notaN != null && (
+                                    <div
+                                      className="absolute inset-0 pointer-events-none"
+                                      style={{
+                                        background: `linear-gradient(90deg, var(--color-accent) 0%, var(--color-accent) ${intensity * 100}%, transparent ${intensity * 100}%)`,
+                                        opacity: isLider ? 0.22 : 0.10,
+                                      }}
+                                    />
+                                  )}
+                                  <div className="relative">
+                                    {notaN != null && (
+                                      <div className="flex items-center justify-center gap-1">
+                                        {pos && pos <= 3 && lider && lider.score > 0 && (
+                                          <span className="text-[10px] leading-none" title={`${pos}º lugar`}>{MEDALHA[pos - 1]}</span>
+                                        )}
+                                        <span>{notaN.toFixed(1)}<span className="text-[9px] text-gray-500">/10</span></span>
+                                      </div>
+                                    )}
+                                    {metrica != null && (
+                                      <div className="text-[10px] text-gray-500 font-mono">
+                                        {label?.startsWith('R$') || label?.includes('(R$)')
+                                          ? `R$ ${Number(metrica).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                          : label?.includes('(%)')
+                                          ? `${Number(metrica).toFixed(1)}%`
+                                          : Number(metrica).toLocaleString('pt-BR')}
+                                      </div>
+                                    )}
+                                    {nota == null && metrica == null && <span className="text-gray-600">—</span>}
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td className="py-3 px-3 text-center">
+                            {lider && lider.score > 0 ? (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.bg ?? ''} ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.text ?? ''} ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.border ?? ''}`}>
+                                🥇 {lider.filial}
+                              </span>
+                            ) : <span className="text-gray-600">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Linha TOTAL: soma dos scores + líder geral */}
+                    <tr className="border-t-2 border-white/10 bg-white/[0.03]">
+                      <td className="py-3 px-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Total (0-70)
+                        <span className="block text-[9px] text-gray-600 font-normal normal-case tracking-normal mt-0.5">
+                          Soma dos 7 eixos · vitórias por eixo
+                        </span>
+                      </td>
+                      {FILIAIS_OP.map(f => {
+                        const total = totaisPorFilial[f] ?? 0;
+                        const vits = vitoriasPorFilial[f] ?? 0;
+                        const pos = posGeral[f];
+                        const isLiderGeral = liderGeral === f;
+                        return (
+                          <td key={f} className={`py-3 px-3 text-center tabular-nums ${isLiderGeral ? 'text-accent font-black' : 'text-gray-300 font-bold'}`}>
+                            <div className="flex items-center justify-center gap-1">
+                              {pos && liderGeral && <span className="text-[11px] leading-none">{MEDALHA[pos - 1]}</span>}
+                              <span>{total.toFixed(1)}</span>
+                            </div>
+                            <div className="text-[9px] text-gray-500 font-normal mt-0.5">
+                              {vits} {vits === 1 ? 'vitória' : 'vitórias'}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="py-3 px-3 text-center">
+                        {liderGeral ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.bg ?? ''} ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.text ?? ''} ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.border ?? ''}`}>
+                            👑 {liderGeral}
+                          </span>
+                        ) : <span className="text-gray-600">—</span>}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1663,56 +1788,56 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           <EmptyState message="Nenhum ciclo aberto no momento." />
         ) : pendentes.length === 0 ? (
           <EmptyState message="Você concluiu todas as suas avaliações. 🎉" />
-        ) : isMatriz && pendentesAgrupadosPorFilial ? (
-          <div className="flex flex-col gap-6">
-            {Object.entries(pendentesAgrupadosPorFilial).map(([filialGrupo, grupo]) => (
-              <div key={filialGrupo}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Building2 size={12} className="text-accent" />
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{filialGrupo}</span>
-                  <span className="text-[10px] text-gray-600">
-                    Ciclo: {grupo[0].ciclo.nome} · {grupo.length} pendente(s)
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {grupo.map(({ user, tipo, ciclo }) => (
-                    <button
-                      key={`${ciclo.id}::${user.id}::${tipo}`}
-                      onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
-                      className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
-                      style={{ border: '1px solid rgba(255,255,255,0.05)' }}
-                    >
-                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                        {user.role} · {user.setor}
-                      </span>
-                      <span className="text-sm font-bold text-gray-200">{user.nome}</span>
-                      <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
-                        <Star size={10} /> Avaliar agora
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pendentes.map(({ user, tipo, ciclo }) => (
-              <button
-                key={`${ciclo.id}::${user.id}::${tipo}`}
-                onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
-                className="neu-button rounded-2xl p-4 flex flex-col gap-1 text-left transition-all hover:border-accent"
-                style={{ border: '1px solid rgba(255,255,255,0.05)' }}
-              >
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  {user.role} · {user.setor}
-                </span>
-                <span className="text-sm font-bold text-gray-200">{user.nome}</span>
-                <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
-                  <Star size={10} /> Avaliar agora
-                </span>
-              </button>
-            ))}
+          <div className="flex flex-col gap-7">
+            {ORDEM_HIER.map(gid => {
+              const grupo = pendentesPorHierarquia[gid];
+              if (grupo.length === 0) return null;
+              const meta = HIER_META[gid];
+              const Icone = meta.icon;
+              return (
+                <div key={gid}>
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <Icone size={14} className={meta.accent} />
+                    <span className={`text-xs font-bold uppercase tracking-widest ${meta.accent}`}>{meta.label}</span>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black bg-white/5 text-gray-300">
+                      {grupo.length}
+                    </span>
+                    <span className="text-[10px] text-gray-600">· {meta.hint}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {grupo.map(({ user, tipo, ciclo }) => (
+                      <button
+                        key={`${ciclo.id}::${user.id}::${tipo}`}
+                        onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
+                        className={`neu-button rounded-2xl p-4 flex flex-col gap-1.5 text-left transition-all hover:border-accent border ${meta.border}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-bold text-gray-100 leading-tight">{user.nome}</span>
+                          <Icone size={13} className={`${meta.accent} shrink-0 mt-0.5`} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                          {user.role} · {user.setor}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {isMatriz && user.filial && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/10 flex items-center gap-1">
+                              <Building2 size={9} /> {user.filial}
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${meta.chip}`}>
+                            {ciclo.nome}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
+                          <Star size={10} /> Avaliar agora
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
