@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
@@ -82,6 +83,7 @@ const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + 
 
 export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
   const { session } = useAuth();
+  const confirm = useConfirm();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
   // Votação restrita a CEO + conselheiros (alinha com RLS voto_write).
   // Admin gerencia mas não vota.
@@ -315,7 +317,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const encerrarAgora = async () => {
     if (!competicaoAtual || !supabase) return;
-    if (!confirm(`Encerrar "${competicaoAtual.nome}" agora? A competição vai pra "aguardando encerramento" e libera votação do conselho.`)) return;
+    if (!await confirm({
+      message: `Encerrar "${competicaoAtual.nome}" agora? A competição vai pra "aguardando encerramento" e libera votação do conselho.`,
+      confirmLabel: 'Encerrar',
+      danger: true,
+    })) return;
     setEncerrandoAgora(true);
     const { error } = await supabase.rpc('encerrar_competicao_agora', {
       p_competicao_id: competicaoAtual.id,
@@ -328,7 +334,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const declararVencedora = async (filial: FilialOp) => {
     if (!competicaoAtual || !supabase) return;
-    if (!confirm(`Confirma declarar ${filial} como vencedora de "${competicaoAtual.nome}"?`)) return;
+    if (!await confirm({
+      message: `Confirma declarar ${filial} como vencedora de "${competicaoAtual.nome}"?`,
+      confirmLabel: 'Declarar vencedora',
+    })) return;
     setEncerrando(true);
     const { error } = await supabase.rpc('declarar_vencedora', {
       p_competicao_id: competicaoAtual.id,
@@ -342,7 +351,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const excluirCompeticao = async (c: Competicao) => {
     if (!supabase) return;
-    if (!confirm(`Excluir "${c.nome}" definitivamente da lista? Use pra descartar competições de teste. Essa ação não pode ser desfeita pela UI.`)) return;
+    if (!await confirm({
+      message: `Excluir "${c.nome}" definitivamente da lista? Use pra descartar competições de teste. Essa ação não pode ser desfeita pela UI.`,
+      confirmLabel: 'Excluir',
+      danger: true,
+    })) return;
     setExcluindo(c.id);
     const { error } = await supabase.rpc('excluir_competicao_matriz', {
       p_competicao_id: c.id,

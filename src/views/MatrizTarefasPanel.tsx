@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { CENTRAL_FILIAL_TONE, CENTRAL_OP_FILIAIS, type CentralCompeticao as Competicao } from './MatrizAvaliacoesView';
@@ -234,6 +235,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
 
   const podeCriar = profile.role === 'admin' || profile.role === 'ceo' || (profile.role === 'gerente' && (profile as any).is_conselheiro) || profile.role === 'conselheiro';
 
@@ -319,7 +321,11 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   }
 
   async function removerTarefa(tarefaId: string) {
-    if (!confirm('Remover esta tarefa? Notas ficarão preservadas no histórico mas somem do placar ativo.')) return;
+    if (!await confirm({
+      message: 'Remover esta tarefa? Notas ficarão preservadas no histórico mas somem do placar ativo.',
+      confirmLabel: 'Remover',
+      danger: true,
+    })) return;
     const { error } = await supabase.rpc('remover_matriz_tarefa', { p_tarefa_id: tarefaId });
     if (error) return showToast(error.message || 'Erro ao remover', 'error');
     showToast('Tarefa removida', 'success');
