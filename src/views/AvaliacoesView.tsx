@@ -4,14 +4,13 @@ import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, 
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
 import { PDISection } from '../components/PDISection';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores, hasSetor, isConselheiro } from '../lib/rbac';
 import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/avaliacoesPdf';
 import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, CATEGORIA_LABEL_ADMIN, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
-import { FILIAL_COLOR } from '../lib/filiais';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -64,17 +63,70 @@ const HIER_META: Record<HierGrupo, {
   label: string;
   hint: string;
   icon: LucideIcon;
-  accent: string;   // cor do ícone/label
-  border: string;   // borda do card (por role dentro do grupo)
-  chip: string;     // pill do tipo de critério
+  border: string;      // borda dos cards do grupo (subtil)
+  badgeBg: string;     // bg sólido do pill do título
+  badgeText: string;   // cor do texto/ícone dentro do pill
+  countBg: string;     // bg do contador dentro do pill
+  chipCard: string;    // pill secundário (nome do ciclo) — mantém tom suave
+  chipCardText: string;
 }> = {
-  estrategico:   { label: 'Estratégico',    hint: 'CEO & Conselheiros · 6 critérios estratégicos', icon: Crown,          accent: 'text-amber-300',   border: 'border-amber-500/30',   chip: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-  gerentes:      { label: 'Gerentes',       hint: '4 critérios de desempenho',                     icon: Briefcase,      accent: 'text-sky-300',      border: 'border-sky-500/25',      chip: 'bg-sky-500/10 text-sky-300 border-sky-500/25' },
-  colaboradores: { label: 'Colaboradores',  hint: '4 critérios de desempenho',                     icon: Users,          accent: 'text-gray-300',     border: 'border-white/10',        chip: 'bg-white/5 text-gray-400 border-white/10' },
-  feedback:      { label: 'Meu feedback',   hint: 'Sobre meu gerente / CEO',                       icon: MessageCircle,  accent: 'text-emerald-300',  border: 'border-emerald-500/25', chip: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25' },
+  estrategico: {
+    label: 'Estratégico', hint: 'CEO & Conselheiros · 6 critérios estratégicos', icon: Crown,
+    border: 'border-amber-500/30',
+    badgeBg: 'bg-amber-400',       badgeText: 'text-black',   countBg: 'bg-black/20',
+    chipCard: 'bg-amber-500/10 border-amber-500/30', chipCardText: 'text-amber-300',
+  },
+  gerentes: {
+    label: 'Gerentes', hint: '4 critérios de desempenho', icon: Briefcase,
+    border: 'border-sky-500/25',
+    badgeBg: 'bg-sky-800',         badgeText: 'text-white',   countBg: 'bg-white/20',
+    chipCard: 'bg-sky-500/10 border-sky-500/25', chipCardText: 'text-sky-300',
+  },
+  colaboradores: {
+    label: 'Colaboradores', hint: '4 critérios de desempenho', icon: Users,
+    border: 'border-white/10',
+    badgeBg: 'bg-gray-700',        badgeText: 'text-white',   countBg: 'bg-white/20',
+    chipCard: 'bg-white/5 border-white/10', chipCardText: 'text-gray-400',
+  },
+  feedback: {
+    label: 'Meu feedback', hint: 'Sobre meu gerente / CEO', icon: MessageCircle,
+    border: 'border-emerald-500/25',
+    badgeBg: 'bg-emerald-500',     badgeText: 'text-white',   countBg: 'bg-white/25',
+    chipCard: 'bg-emerald-500/10 border-emerald-500/25', chipCardText: 'text-emerald-300',
+  },
 };
 
 const ORDEM_HIER: HierGrupo[] = ['estrategico', 'gerentes', 'colaboradores', 'feedback'];
+
+// Cor da borda do card por filial — bate com as filial-badge do index.css:
+// SuperMax azul, MaxLook nude/bege, TechMax laranja, Matriz cinza.
+const FILIAL_BORDER_HEX: Record<string, string> = {
+  SuperMax: '#1d4ed8',
+  MaxLook:  '#c9a882',
+  TechMax:  '#f97316',
+  Matriz:   'rgba(107,114,128,0.5)',
+};
+
+// ── Identidade visual dos 3 supergrupos da Visão do Ciclo ───────────────────
+type SuperGrupoId = 'matriz_filial' | 'gerentes_colaboradores' | 'ceo_conselheiros';
+
+const SUPER_META: Record<SuperGrupoId, {
+  icon: LucideIcon;
+  accent: string;   // cor do ícone e barrinha (classe Tailwind)
+  bar: string;      // bg da barrinha lateral
+  chip: string;     // background da pill do label
+}> = {
+  matriz_filial:          { icon: Building2, accent: 'text-amber-300',   bar: 'bg-amber-400',   chip: 'bg-amber-500/10 border-amber-500/25' },
+  gerentes_colaboradores: { icon: Users,     accent: 'text-sky-300',      bar: 'bg-sky-400',      chip: 'bg-sky-500/10 border-sky-500/25' },
+  ceo_conselheiros:       { icon: Crown,     accent: 'text-amber-300',    bar: 'bg-amber-400',    chip: 'bg-amber-500/10 border-amber-500/25' },
+};
+
+// Semáforo por faixa de nota (0-10). Reutilizado nas linhas e chips.
+const notaCorClasses = (nota: number): string => {
+  if (nota >= 8)   return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30';
+  if (nota >= 5)   return 'text-amber-300 bg-amber-500/10 border-amber-500/30';
+  return 'text-red-400 bg-red-500/10 border-red-500/30';
+};
 
 const fmtData = (s: string) => {
   const [y, m, d] = s.split('-');
@@ -824,14 +876,24 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     return out;
   }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, users, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
 
-  // Filiais ainda não avaliadas no ciclo Matriz aberto
-  const filiaisJaAvaliadas = useMemo((): Set<string> => {
-    if (!cicloMatrizAberto) return new Set();
+  // Filiais ainda não avaliadas no ciclo Matriz aberto — mapa filial → média que EU dei.
+  const minhasNotasPorFilial = useMemo((): Record<string, number | null> => {
+    const out: Record<string, number | null> = {};
+    if (!cicloMatrizAberto) return out;
     const feitas = avaliacoes.filter(
       a => a.ciclo_id === cicloMatrizAberto.id && a.avaliador_id === profile.id && a.tipo === 'matriz_filial'
     );
-    return new Set(feitas.map(a => a.avaliada_filial).filter(Boolean) as string[]);
-  }, [cicloMatrizAberto, avaliacoes, profile.id]);
+    feitas.forEach(a => {
+      if (!a.avaliada_filial) return;
+      const crits = criterios.filter(c => c.avaliacao_id === a.id);
+      out[a.avaliada_filial] = crits.length === 0 ? null : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+    });
+    return out;
+  }, [cicloMatrizAberto, avaliacoes, criterios, profile.id]);
+
+  const filiaisJaAvaliadas = useMemo((): Set<string> =>
+    new Set(Object.keys(minhasNotasPorFilial)),
+  [minhasNotasPorFilial]);
 
   // Evidências do próprio usuário no ciclo aberto atual
   const minhasEvidencias = useMemo(() =>
@@ -1396,12 +1458,16 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
               </div>
 
               <div className="flex flex-col gap-6">
-                {consolidado.grupos.map(grupo => (
+                {consolidado.grupos.map(grupo => {
+                  const meta = SUPER_META[grupo.tipo as SuperGrupoId];
+                  const Icone = meta.icon;
+                  return (
                   <div key={grupo.tipo}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="w-1 h-4 bg-accent rounded-full" />
-                      <h4 className="text-xs font-bold text-gray-300 uppercase tracking-widest">{grupo.label}</h4>
-                      <span className="text-[10px] text-gray-500 font-bold ml-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className={`w-1 h-4 rounded-full ${meta.bar}`} />
+                      <Icone size={13} className={meta.accent} />
+                      <h4 className={`text-xs font-bold uppercase tracking-widest ${meta.accent}`}>{grupo.label}</h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.chip} ${meta.accent}`}>
                         {grupo.linhas.length} {grupo.linhas.length === 1 ? 'avaliado' : 'avaliados'}
                         {' · '}
                         {grupo.totalAvaliacoes} {grupo.totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}
@@ -1410,8 +1476,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                     <p className="text-[11px] text-gray-500 mb-3 pl-3">{grupo.descricao}</p>
 
                     {grupo.linhas.length === 0 ? (
-                      <div className="pl-3 py-4 text-[11px] text-gray-500 italic border-l border-white/5">
-                        Nenhuma avaliação registrada neste bloco ainda.
+                      <div className="neu-pressed rounded-2xl px-4 py-6 flex flex-col items-center gap-2 text-center border border-white/5">
+                        <Icone size={22} className="text-gray-600" />
+                        <p className="text-[11px] text-gray-500">Nenhuma avaliação registrada neste bloco ainda.</p>
                       </div>
                     ) : (
                     <div className="overflow-x-auto main-scrollbar">
@@ -1451,7 +1518,14 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                                   </td>
                                   <td className="py-3 px-4 text-xs font-mono text-center text-gray-300 tabular-nums">{l.qtdAvaliacoes}</td>
                                   <td className="py-3 px-4 text-center">
-                                    <span className="text-base font-black text-accent tabular-nums">{l.mediaGeral.toFixed(1)}</span>
+                                    <div className="flex flex-col items-center gap-1.5 min-w-[90px]">
+                                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-black tabular-nums border ${notaCorClasses(l.mediaGeral)}`}>
+                                        {l.mediaGeral.toFixed(1)}<span className="text-[9px] opacity-70">/10</span>
+                                      </span>
+                                      <div className="w-full h-1 rounded-full bg-white/5 overflow-hidden">
+                                        <div className={`h-full ${l.mediaGeral >= 8 ? 'bg-emerald-400' : l.mediaGeral >= 5 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${Math.max(0, Math.min(1, l.mediaGeral / ESCALA_MAX)) * 100}%` }} />
+                                      </div>
+                                    </div>
                                   </td>
                                 </tr>
                                 {aberto && (
@@ -1531,7 +1605,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                     </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -1541,11 +1616,16 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       {/* ── B. AVALIAR FILIAIS (apenas modo Matriz, admin/CEO) ── */}
       {isMatriz && isAdminOuCEO && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <Building2 size={16} className="text-accent" />
               <h3 className="text-sm font-bold text-gray-300">Avaliar Filiais</h3>
               <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
+              {cicloMatrizAberto && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
+                  {filiaisJaAvaliadas.size} de {FILIAIS_OP.length} avaliadas
+                </span>
+              )}
             </div>
             {cicloMatrizAberto && (
               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
@@ -1560,21 +1640,34 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {FILIAIS_OP.map(f => {
                 const jaAvaliou = filiaisJaAvaliadas.has(f);
+                const minhaNota = minhasNotasPorFilial[f];
                 return (
                   <button
                     key={f}
                     onClick={() => !jaAvaliou && setAvaliando({ ciclo: cicloMatrizAberto, alvo: { kind: 'filial', filial: f } })}
                     disabled={jaAvaliou}
-                    className={`neu-button rounded-2xl p-5 flex flex-col gap-2 text-left transition-all ${jaAvaliou ? 'opacity-50 cursor-not-allowed' : 'hover:border-accent'}`}
-                    style={{ border: `1px solid ${jaAvaliou ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.05)'}` }}
+                    className={`neu-button rounded-2xl p-5 flex flex-col gap-3 text-left transition-all border border-white/5 ${jaAvaliou ? 'cursor-not-allowed opacity-90' : 'hover:border-accent'}`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className={jaAvaliou ? 'text-emerald-500' : 'text-accent'} />
-                      <span className="text-sm font-bold text-gray-200">{f}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <FilialBadge filial={f} />
+                      {jaAvaliou && <CheckCircle2 size={16} className="text-emerald-400" />}
                     </div>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${jaAvaliou ? 'text-emerald-500' : 'text-accent'}`}>
-                      {jaAvaliou ? <><CheckCircle2 size={10} /> Avaliada</> : <><Star size={10} /> Avaliar agora</>}
-                    </span>
+                    {jaAvaliou ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Sua nota</span>
+                        {minhaNota != null ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-black tabular-nums border ${notaCorClasses(minhaNota)}`}>
+                            {minhaNota.toFixed(1)}<span className="text-[9px] opacity-70">/10</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Avaliada</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center gap-1">
+                        <Star size={10} /> Avaliar agora
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1640,16 +1733,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                   <thead>
                     <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       <th className="pb-3 font-bold px-3">Eixo</th>
-                      {FILIAIS_OP.map(f => {
-                        const cor = FILIAL_COLOR[f];
-                        return (
-                          <th key={f} className="pb-3 font-bold px-3 text-center">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${cor.bg} ${cor.text} ${cor.border}`}>
-                              <Building2 size={9} /> {f}
-                            </span>
-                          </th>
-                        );
-                      })}
+                      {FILIAIS_OP.map(f => (
+                        <th key={f} className="pb-3 font-bold px-3 text-center">
+                          <FilialBadge filial={f} />
+                        </th>
+                      ))}
                       <th className="pb-3 font-bold px-3 text-center">Líder</th>
                     </tr>
                   </thead>
@@ -1715,9 +1803,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                           })}
                           <td className="py-3 px-3 text-center">
                             {lider && lider.score > 0 ? (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.bg ?? ''} ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.text ?? ''} ${FILIAL_COLOR[lider.filial as keyof typeof FILIAL_COLOR]?.border ?? ''}`}>
-                                🥇 {lider.filial}
-                              </span>
+                              <span className="inline-flex items-center gap-1"><span className="text-xs">🥇</span><FilialBadge filial={lider.filial} /></span>
                             ) : <span className="text-gray-600">—</span>}
                           </td>
                         </tr>
@@ -1750,9 +1836,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                       })}
                       <td className="py-3 px-3 text-center">
                         {liderGeral ? (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.bg ?? ''} ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.text ?? ''} ${FILIAL_COLOR[liderGeral as keyof typeof FILIAL_COLOR]?.border ?? ''}`}>
-                            👑 {liderGeral}
-                          </span>
+                          <span className="inline-flex items-center gap-1"><span className="text-xs">👑</span><FilialBadge filial={liderGeral} /></span>
                         ) : <span className="text-gray-600">—</span>}
                       </td>
                     </tr>
@@ -1795,46 +1879,90 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
               if (grupo.length === 0) return null;
               const meta = HIER_META[gid];
               const Icone = meta.icon;
+
+              // Sub-agrupa por filial quando faz sentido: modo Matriz + pelo menos
+              // 2 filiais representadas. Grupo estratégico (CEO/Conselheiros) e
+              // qualquer grupo com todos da mesma filial cai no fluxo flat.
+              const filiaisUnicas = Array.from(new Set(grupo.map(p => p.user.filial).filter(Boolean) as string[])).sort();
+              // Só sub-agrupa se TODOS têm filial — evita item com filial=null sumir
+              // silenciosamente (iteramos filiaisUnicas, que filtra null).
+              const subBox = isMatriz && filiaisUnicas.length >= 2 && grupo.every(p => !!p.user.filial);
+              const porFilial = grupo.reduce<Record<string, typeof grupo>>((acc, p) => {
+                const f = p.user.filial ?? '';
+                (acc[f] ||= []).push(p);
+                return acc;
+              }, {});
+
+              const renderCard = ({ user, tipo, ciclo }: typeof grupo[number]) => {
+                const corFilial = user.filial ? FILIAL_BORDER_HEX[user.filial] : undefined;
+                return (
+                <button
+                  key={`${ciclo.id}::${user.id}::${tipo}`}
+                  onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
+                  className={`neu-button rounded-2xl p-4 flex flex-col gap-1.5 text-left transition-all hover:border-accent border-2 ${corFilial ? '' : meta.border}`}
+                  style={corFilial ? { borderColor: corFilial } : undefined}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-bold text-gray-100 leading-tight">{user.nome}</span>
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${meta.badgeBg}`}>
+                      <Icone size={12} className={meta.badgeText} />
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                    {user.role} · {user.setor}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    {/* Em subBox a filial já está no header — não repete no card */}
+                    {!subBox && isMatriz && user.filial && (
+                      <FilialBadge filial={user.filial} />
+                    )}
+                    <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${meta.chipCard} ${meta.chipCardText}`}>
+                      {ciclo.nome}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
+                    <Star size={10} /> Avaliar agora
+                  </span>
+                </button>
+                );
+              };
+
               return (
                 <div key={gid}>
                   <div className="flex items-center gap-2 mb-3 flex-wrap">
-                    <Icone size={14} className={meta.accent} />
-                    <span className={`text-xs font-bold uppercase tracking-widest ${meta.accent}`}>{meta.label}</span>
-                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black bg-white/5 text-gray-300">
-                      {grupo.length}
+                    <span className={`inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full ${meta.badgeBg}`}>
+                      <Icone size={12} className={meta.badgeText} />
+                      <span className={`text-[11px] font-black uppercase tracking-widest ${meta.badgeText}`}>{meta.label}</span>
+                      <span className={`min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black ${meta.countBg} ${meta.badgeText}`}>
+                        {grupo.length}
+                      </span>
                     </span>
-                    <span className="text-[10px] text-gray-600">· {meta.hint}</span>
+                    <span className="text-[10px] text-gray-500">{meta.hint}</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {grupo.map(({ user, tipo, ciclo }) => (
-                      <button
-                        key={`${ciclo.id}::${user.id}::${tipo}`}
-                        onClick={() => setAvaliando({ ciclo, alvo: { kind: 'user', user }, tipo })}
-                        className={`neu-button rounded-2xl p-4 flex flex-col gap-1.5 text-left transition-all hover:border-accent border ${meta.border}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-bold text-gray-100 leading-tight">{user.nome}</span>
-                          <Icone size={13} className={`${meta.accent} shrink-0 mt-0.5`} />
-                        </div>
-                        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                          {user.role} · {user.setor}
-                        </span>
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                          {isMatriz && user.filial && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/10 flex items-center gap-1">
-                              <Building2 size={9} /> {user.filial}
-                            </span>
-                          )}
-                          <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${meta.chip}`}>
-                            {ciclo.nome}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-accent flex items-center gap-1 mt-1">
-                          <Star size={10} /> Avaliar agora
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {subBox ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {filiaisUnicas.map(f => {
+                        const itens = porFilial[f] ?? [];
+                        return (
+                          <div key={f} className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FilialBadge filial={f} />
+                              <span className="text-[10px] text-gray-500 font-bold">
+                                {itens.length} {itens.length === 1 ? 'pendente' : 'pendentes'}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                              {itens.map(renderCard)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {grupo.map(renderCard)}
+                    </div>
+                  )}
                 </div>
               );
             })}
