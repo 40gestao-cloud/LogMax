@@ -10,9 +10,9 @@
 --
 -- Fonte:
 --   • Último ciclo COM status='Fechado' (data_fim desc).
---   • Notas cujo avaliador é CEO ou Conselheiro (role='ceo',
---     role='conselheiro', OU is_conselheiro=true). Gerente e
---     colaborador ficam fora.
+--   • Notas cujo avaliador é Admin ou CEO (role='admin' ou 'ceo').
+--     Conselheiro, gerente e colaborador ficam fora — no ciclo Padrão
+--     só admin/CEO avaliam gerentes/colaboradores.
 --   • Avaliado com filial IN ('SuperMax','MaxLook','TechMax') —
 --     Matriz não compete.
 --
@@ -65,10 +65,7 @@ BEGIN
         JOIN public.user_profiles av ON av.id = a.avaliador_id
        WHERE a.ciclo_id = v_ciclo.id
          AND up.filial IN ('SuperMax','MaxLook','TechMax')
-         AND (
-              av.role IN ('ceo','conselheiro')
-           OR av.is_conselheiro = true
-         )
+         AND av.role IN ('admin','ceo')
        GROUP BY up.filial
     ) q;
 

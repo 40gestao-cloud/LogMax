@@ -830,18 +830,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             : [];
           alvos = [...gerentes, ...colaboradores];
         }
-      } else if (isGerente) {
-        const setoresGerente = allSetores(profile);
-        alvos = usersFilial
-          .filter(u => u.role === 'colaborador' && setoresGerente.includes(u.setor))
-          .map(user => ({ user, tipo: 'gerente_colaborador' as const }));
-      } else if (profile.role === 'colaborador') {
-        const setoresColaborador = allSetores(profile);
-        const gerentesSetor = usersFilial.filter(u => u.role === 'gerente' && setoresColaborador.includes(u.setor));
-        const ceos = users.filter(u => u.role === 'ceo');
-        alvos = [...gerentesSetor, ...ceos].map(user => ({ user, tipo: 'feedback_colaborador' as const }));
       }
-      // Conselheiro puro não avalia indivíduos no Padrão — atua só na Competição/Matriz.
+      // Régua do Padrão: só admin/CEO avaliam gerentes e colaboradores.
+      // Gerente, colaborador e conselheiro não geram pendências aqui —
+      // conselheiro atua só na Competição/Matriz.
       alvos.forEach(a => {
         if (!feitas.has(`${a.user.id}::${a.tipo}`)) out.push({ ...a, ciclo });
       });
@@ -2325,7 +2317,7 @@ function PodioPadraoCard({ filial }: { filial: string }) {
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Ciclo Padrão de Avaliações</p>
           <h3 className="text-xl font-black leading-tight mt-0.5">{placar.ciclo_nome}</h3>
-          <p className="text-xs font-bold mt-1 opacity-80">Resultado final · CEO + Conselho</p>
+          <p className="text-xs font-bold mt-1 opacity-80">Resultado final · Admin + CEO</p>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-2 justify-end">
