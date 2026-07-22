@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Star } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -19,35 +19,13 @@ const FILIAL_COLOR: Record<FilialOp, string> = {
   TechMax:  'text-orange-400',
 };
 
-type DimId = 'marketing'|'vendas'|'compras'|'rh'|'cadastros'|'financeiro'|'matriz';
-
-const PCT = (v: number) => `${v.toFixed(1)}%`;
-const NOTA = (v: number) => `${(v/10).toFixed(1)} / 10`;
-
-// Placar é 100% derivado da Central. Marketing e Matriz usam nota 0-10
-// (mostrada como valor/10); demais usam taxa de aprovação (0-100%).
-const DIMENSOES: { id: DimId; label: string; hint: string; fmt: (v: number) => string }[] = [
-  { id: 'marketing',  label: 'Marketing',  hint: 'média das notas do conselho (arte, promoção, campanha, redes sociais)', fmt: NOTA },
-  { id: 'vendas',     label: 'Vendas',     hint: '% aprovação em orçamentos',                                              fmt: PCT },
-  { id: 'compras',    label: 'Compras',    hint: '% aprovação em requisições e cotações',                                  fmt: PCT },
-  { id: 'rh',         label: 'RH',         hint: '% aprovação em frequência e desempenho',                                 fmt: PCT },
-  { id: 'cadastros',  label: 'Cadastros',  hint: '% aprovação em cadastros (produto/cliente/etc)',                         fmt: PCT },
-  { id: 'financeiro', label: 'Financeiro', hint: '% aprovação em contas a pagar e a receber',                              fmt: PCT },
-  { id: 'matriz',     label: 'Matriz',     hint: 'média das notas do conselho em Tarefas da Matriz por participante',      fmt: NOTA },
-];
-
-const DIM_IDS: DimId[] = DIMENSOES.map(d => d.id);
-const PESOS_DEFAULT: Record<DimId, number> = {
-  marketing: 15, vendas: 15, compras: 14, rh: 14, cadastros: 14, financeiro: 14, matriz: 14,
-};
-
 type Competicao = {
   id: string;
   nome: string;
+  descricao: string | null;
   data_inicio: string;
   data_fim: string;
   status: 'em_andamento'|'aguardando_encerramento'|'encerrada';
-  pesos: Record<string, number>;
   vencedora: string | null;
   analise_ia: string | null;
   placar_snapshot: any | null;
@@ -66,14 +44,25 @@ type Voto = {
 
 type Placar = {
   competicao: any;
-  // 'julgada' quando ao menos 1 filial recebeu avaliação relevante na dim;
-  // 'sem_julgamento' quando conselho ainda não tocou naquela dimensão.
-  dims_origem?: Record<DimId, 'julgada' | 'sem_julgamento'>;
-  placar: {
-    por_dimensao: Record<string, { peso: number; filiais: Record<string, { valor: number; pontos: number; ponderado: number }> }>;
-    total_por_filial: Record<string, number>;
-  };
+  por_filial: Record<string, { media: number; n: number }>;
 };
+
+// Snapshots antigos (pré-migração 227) tinham forma { placar: { total_por_filial } }
+// — este helper normaliza pra podium consistente na aba Histórico.
+function podiumFromSnapshot(snap: any): { filial: string; total: number }[] {
+  if (!snap) return [];
+  // Formato novo
+  if (snap.por_filial) {
+    return OP_FILIAIS
+      .map(f => ({ filial: f as string, total: Number(snap.por_filial?.[f]?.media ?? 0) }))
+      .sort((a, b) => b.total - a.total);
+  }
+  // Formato legado
+  const totais = snap.placar?.total_por_filial ?? {};
+  return OP_FILIAIS
+    .map(f => ({ filial: f as string, total: Number(totais[f] ?? 0) }))
+    .sort((a, b) => b.total - a.total);
+}
 
 type Tab = 'config' | 'placar' | 'historico';
 const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
@@ -119,24 +108,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // Form da nova competição
   const [form, setForm] = useState({
     nome: '',
+    descricao: '',
     data_inicio: isoToday(),
     data_fim: isoIn(90),
-    pesos: { ...PESOS_DEFAULT },
   });
-
-  // Modal de edição de pesos (durante em_andamento).
-  const [editPesosOpen, setEditPesosOpen] = useState(false);
-  const [pesosEdit, setPesosEdit] = useState<Record<DimId, number>>({ ...PESOS_DEFAULT });
-  const [salvandoPesos, setSalvandoPesos] = useState(false);
-  const somaPesosEdit = useMemo(
-    () => DIM_IDS.reduce((acc, id) => acc + Number(pesosEdit[id] || 0), 0),
-    [pesosEdit],
-  );
-
-  const somaPesos = useMemo(() =>
-    Object.values(form.pesos).reduce((a, b) => a + Number(b || 0), 0),
-    [form.pesos],
-  );
 
   const ativa = useMemo(() => competicoes.find(c => c.status === 'em_andamento') ?? null, [competicoes]);
   const aguardando = useMemo(() => competicoes.filter(c => c.status === 'aguardando_encerramento'), [competicoes]);
@@ -146,7 +121,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     setLoadingList(true);
     const { data } = await supabase
       .from('competicoes_matriz')
-      .select('id, nome, data_inicio, data_fim, status, pesos, vencedora, analise_ia, placar_snapshot, created_at')
+      .select('id, nome, descricao, data_inicio, data_fim, status, vencedora, analise_ia, placar_snapshot, created_at')
       .eq('ativo', true)
       .order('created_at', { ascending: false });
     setCompeticoes(data ?? []);
@@ -283,38 +258,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     await carregarVotos(competicaoAtual.id);
   };
 
-  const abrirEditPesos = () => {
-    if (!competicaoAtual) return;
-    const p = competicaoAtual.pesos ?? {};
-    setPesosEdit({
-      marketing:  Number(p.marketing  ?? PESOS_DEFAULT.marketing),
-      vendas:     Number(p.vendas     ?? PESOS_DEFAULT.vendas),
-      compras:    Number(p.compras    ?? PESOS_DEFAULT.compras),
-      rh:         Number(p.rh         ?? PESOS_DEFAULT.rh),
-      cadastros:  Number(p.cadastros  ?? PESOS_DEFAULT.cadastros),
-      financeiro: Number(p.financeiro ?? PESOS_DEFAULT.financeiro),
-      matriz:     Number(p.matriz     ?? PESOS_DEFAULT.matriz),
-    });
-    setEditPesosOpen(true);
-  };
-
-  const salvarPesos = async () => {
-    if (!competicaoAtual || !supabase) return;
-    if (somaPesosEdit !== 100) {
-      return showToast?.(`Soma dos pesos precisa ser 100 (agora: ${somaPesosEdit}).`, 'error');
-    }
-    setSalvandoPesos(true);
-    const { error } = await supabase.rpc('atualizar_pesos_competicao', {
-      p_competicao_id: competicaoAtual.id,
-      p_pesos: pesosEdit,
-    });
-    setSalvandoPesos(false);
-    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
-    showToast?.('Pesos atualizados.', 'success');
-    setEditPesosOpen(false);
-    await carregarLista();
-  };
-
   const encerrarAgora = async () => {
     if (!competicaoAtual || !supabase) return;
     if (!await confirm({
@@ -374,13 +317,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const criar = async () => {
     if (!supabase) return;
     if (!form.nome.trim()) return showToast?.('Informe o nome da competição.', 'error');
-    if (somaPesos !== 100) return showToast?.(`Soma dos pesos precisa ser 100 (agora: ${somaPesos}).`, 'error');
     setSalvando(true);
     const { error } = await supabase.rpc('criar_competicao', {
       p_nome: form.nome.trim(),
       p_data_inicio: form.data_inicio,
       p_data_fim: form.data_fim,
-      p_pesos: form.pesos,
+      p_descricao: form.descricao.trim() || null,
     });
     setSalvando(false);
     if (error) {
@@ -388,7 +330,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       return;
     }
     showToast?.('Competição criada!', 'success');
-    setForm(f => ({ ...f, nome: '' }));
+    setForm(f => ({ ...f, nome: '', descricao: '' }));
     await carregarLista();
     setTab('placar');
   };
@@ -398,10 +340,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // fica ANTES do early return de acesso.
   const podio = useMemo(() => {
     if (!placar) return [];
-    const totais = placar.placar?.total_por_filial ?? {};
     return OP_FILIAIS
-      .map(f => ({ filial: f, total: Number(totais[f] ?? 0) }))
-      .sort((a, b) => b.total - a.total);
+      .map(f => ({
+        filial: f,
+        media: Number(placar.por_filial?.[f]?.media ?? 0),
+        n:     Number(placar.por_filial?.[f]?.n ?? 0),
+      }))
+      .sort((a, b) => b.media - a.media);
   }, [placar]);
 
   if (!podeAcessar) {
@@ -419,18 +364,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     if (!placar || !competicaoAtual) return;
     setBaixandoPdf(true);
     try {
-      const dimensoes = DIMENSOES
-        .filter(d => !!placar.placar?.por_dimensao?.[d.id])
-        .map(d => {
-          const dim = placar.placar!.por_dimensao[d.id];
-          const semJulgamento = placar.dims_origem?.[d.id] === 'sem_julgamento';
-          const filiais: Record<string, { valor: number | null; pontos: number }> = {};
-          for (const f of OP_FILIAIS) {
-            const cell = dim.filiais?.[f];
-            filiais[f] = { valor: typeof cell?.valor === 'number' ? cell.valor : null, pontos: Number(cell?.pontos ?? 0) };
-          }
-          return { id: d.id, label: d.label, peso: Number(dim.peso ?? 0), fmt: d.fmt, semJulgamento, filiais };
-        });
       await exportCompeticaoResultadoPDF(
         {
           nome: competicaoAtual.nome,
@@ -440,8 +373,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
           vencedora: competicaoAtual.vencedora,
           analise_ia: competicaoAtual.analise_ia,
         },
-        podio,
-        dimensoes,
+        podio.map(p => ({ filial: p.filial, media: p.media, n: p.n })),
         votos,
         `competicao-${competicaoAtual.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`,
       );
@@ -460,7 +392,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             <Trophy size={24} /> Competição entre Filiais
           </h2>
           <p className="text-sm text-gray-400 mt-1">
-            Ranking 3-2-1 por dimensão × peso. Placar 100% derivado da Central de Avaliação.
+            Média das notas do conselho por filial nas Tarefas da Matriz. Ranking direto pela média.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -499,6 +431,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <Calendar size={11} />
                       {fmtDataBR(placar.competicao.data_inicio)} → {fmtDataBR(placar.competicao.data_fim)}
                     </p>
+                    {placar.competicao.descricao && (
+                      <p className="text-xs text-gray-300 mt-2 whitespace-pre-wrap max-w-xl">
+                        {placar.competicao.descricao}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -520,24 +457,15 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       </button>
                     )}
                     {podeGerenciar && placar.competicao.status === 'em_andamento' && (
-                      <>
-                        <button
-                          onClick={abrirEditPesos}
-                          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all"
-                          title="Redistribuir pesos das dimensões"
-                        >
-                          <Pencil size={12} /> Editar pesos
-                        </button>
-                        <button
-                          onClick={encerrarAgora}
-                          disabled={encerrandoAgora}
-                          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
-                          title="Força encerramento antes da data_fim"
-                        >
-                          {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
-                          Encerrar agora
-                        </button>
-                      </>
+                      <button
+                        onClick={encerrarAgora}
+                        disabled={encerrandoAgora}
+                        className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all"
+                        title="Força encerramento antes da data_fim"
+                      >
+                        {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
+                        Encerrar agora
+                      </button>
                     )}
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg ${
                       placar.competicao.status === 'em_andamento'
@@ -560,78 +488,57 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                 </div>
 
-                {/* Pódio */}
+                {/* Pódio — média das notas por filial (× 10, escala 0-100) */}
                 <div className="grid grid-cols-3 gap-3">
                   {podio.map((p, idx) => (
                     <div key={p.filial}
-                      className={`neu-pressed rounded-2xl p-4 text-center ${idx === 0 ? 'ring-1 ring-emerald-500/40' : ''}`}>
+                      className={`neu-pressed rounded-2xl p-4 text-center ${idx === 0 && p.n > 0 ? 'ring-1 ring-emerald-500/40' : ''}`}>
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        {idx === 0 && <Award size={14} className="text-emerald-400" />}
+                        {idx === 0 && p.n > 0 && <Award size={14} className="text-emerald-400" />}
                         <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
                           {['1º','2º','3º'][idx]}
                         </span>
                       </div>
-                      <p className={`text-xs font-black uppercase tracking-wider ${FILIAL_COLOR[p.filial]}`}>{p.filial}</p>
-                      <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${idx === 0 ? 'text-emerald-400' : 'text-gray-200'}`}>
-                        {p.total.toFixed(2)}
+                      <p className={`text-xs font-black uppercase tracking-wider ${FILIAL_COLOR[p.filial as FilialOp]}`}>{p.filial}</p>
+                      <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${idx === 0 && p.n > 0 ? 'text-emerald-400' : 'text-gray-200'}`}>
+                        {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                       </p>
-                      <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">pontos</p>
+                      <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
+                        {p.n === 0 ? 'sem notas' : `nota média (${p.n} nota${p.n === 1 ? '' : 's'})`}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Tabela por dimensão */}
+              {/* Detalhe por filial */}
               <div className="neu-flat rounded-3xl p-5 border border-white/5">
                 <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                  <Sparkles size={13} className="text-accent" /> Ranking por dimensão
+                  <Star size={13} className="text-accent" /> Notas do conselho por filial
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                       <tr>
-                        <th className="text-left pb-3 font-bold">Dimensão</th>
-                        <th className="text-right pb-3 font-bold pr-4">Peso</th>
-                        {OP_FILIAIS.map(f => (
-                          <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
-                        ))}
+                        <th className="text-left pb-3 font-bold">Filial</th>
+                        <th className="text-right pb-3 font-bold pr-4">Notas registradas</th>
+                        <th className="text-right pb-3 font-bold pr-4">Média (0-10)</th>
+                        <th className="text-right pb-3 font-bold pr-4">Escala 0-100</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {DIMENSOES.map(d => {
-                        const dim = placar.placar?.por_dimensao?.[d.id];
-                        if (!dim) return null;
-                        const semJulgamento = placar.dims_origem?.[d.id] === 'sem_julgamento';
+                      {podio.map(p => {
+                        const isBest = p.n > 0 && p.media === Math.max(...podio.map(x => x.n > 0 ? x.media : -Infinity));
                         return (
-                          <tr key={d.id} className="border-t border-white/5">
-                            <td className="py-3">
-                              <div className="text-gray-200 font-bold flex items-center gap-1.5">
-                                {d.label}
-                                {semJulgamento && (
-                                  <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
-                                    Sem julgamento
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-gray-500">{d.hint}</div>
+                          <tr key={p.filial} className="border-t border-white/5">
+                            <td className={`py-3 font-bold ${FILIAL_COLOR[p.filial as FilialOp]}`}>{p.filial}</td>
+                            <td className="py-3 text-right text-gray-300 tabular-nums pr-4">{p.n}</td>
+                            <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
+                              {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                             </td>
-                            <td className="py-3 text-right text-gray-500 tabular-nums pr-4">{dim.peso}%</td>
-                            {OP_FILIAIS.map(f => {
-                              const cell = dim.filiais?.[f];
-                              const pts = Number(cell?.pontos ?? 0);
-                              const maxPts = Math.max(...OP_FILIAIS.map(x => Number(dim.filiais?.[x]?.pontos ?? 0)));
-                              const isBest = maxPts > 0 && pts === maxPts;
-                              return (
-                                <td key={f} className="py-3 text-right tabular-nums pr-4">
-                                  <div className={isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}>
-                                    {pts.toFixed(1)} pts
-                                  </div>
-                                  <div className="text-[10px] text-gray-500">
-                                    {typeof cell?.valor === 'number' ? d.fmt(cell.valor) : '—'}
-                                  </div>
-                                </td>
-                              );
-                            })}
+                            <td className="py-3 text-right text-gray-500 tabular-nums pr-4">
+                              {p.n === 0 ? '—' : p.media.toFixed(1)}
+                            </td>
                           </tr>
                         );
                       })}
@@ -639,7 +546,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </table>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3">
-                  Ranking 3-2-1 por linha × peso da dimensão. Empate divide igual.
+                  Média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz, agrupada pela filial do participante.
                 </p>
               </div>
 
@@ -837,7 +744,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </h3>
                     <p className="text-xs text-gray-400 mb-4">
                       Sugestão ({origem}): <span className="text-emerald-400 font-bold">{sugerida}</span>
-                      {!sugestaoRejeicao && podio[0] && <> ({podio[0].total.toFixed(2)} pts)</>}.
+                      {!sugestaoRejeicao && podio[0] && podio[0].n > 0 && <> (nota média {(podio[0].media / 10).toFixed(1)})</>}.
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {OP_FILIAIS.map(f => {
@@ -879,56 +786,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
           )}
         </>
       )}
-
-      {/* Modal de edição de pesos (durante em_andamento) */}
-      <AnimatePresence>
-        {editPesosOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
-            onClick={() => !salvandoPesos && setEditPesosOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-              className="neu-flat rounded-3xl p-6 sm:p-8 border border-accent/30 max-w-xl w-full"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                  <Pencil size={13} className="text-accent" /> Editar pesos das dimensões
-                </h3>
-                <button onClick={() => !salvandoPesos && setEditPesosOpen(false)}
-                  className="text-gray-500 hover:text-white" disabled={salvandoPesos}>
-                  <X size={16} />
-                </button>
-              </div>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3">
-                Soma atual: <span className={somaPesosEdit === 100 ? 'text-emerald-400' : 'text-red-400'}>{somaPesosEdit}%</span>
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-                {DIMENSOES.map(d => (
-                  <FormField key={d.id} label={`${d.label} (%)`}>
-                    <input type="number" min={0} max={100} value={pesosEdit[d.id]}
-                      onChange={e => setPesosEdit(p => ({ ...p, [d.id]: Number(e.target.value) || 0 }))}
-                      className="neu-input rounded-lg px-3 py-2 text-xs w-full tabular-nums" />
-                  </FormField>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setEditPesosOpen(false)} disabled={salvandoPesos}
-                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white">
-                  Cancelar
-                </button>
-                <NeuButtonAccent onClick={salvarPesos} disabled={salvandoPesos || somaPesosEdit !== 100} variant="">
-                  {salvandoPesos
-                    ? <><Loader2 size={12} className="animate-spin" /> Salvando…</>
-                    : 'Aplicar pesos'}
-                </NeuButtonAccent>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Modal de parabenização */}
       <AnimatePresence>
@@ -986,6 +843,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       className="neu-input rounded-lg px-3 py-2 text-xs w-full" placeholder="Ex.: Trimestre Q3 2026" />
                   </FormField>
                 </div>
+                <div className="md:col-span-3">
+                  <FormField label="Descrição (opcional)">
+                    <textarea value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                      className="neu-input rounded-lg px-3 py-2 text-xs w-full" rows={3}
+                      placeholder="Objetivo, regras ou tema da competição…" />
+                  </FormField>
+                </div>
                 <FormField label="Início">
                   <input type="date" value={form.data_inicio}
                     onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
@@ -999,21 +863,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 <div />
               </div>
 
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">
-                Pesos das dimensões · soma atual: <span className={somaPesos === 100 ? 'text-emerald-400' : 'text-red-400'}>{somaPesos}%</span>
+              <p className="text-[10px] text-gray-500 mb-4">
+                Ranking será a média das notas 0-10 do conselho nas Tarefas da Matriz, por filial do participante.
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {DIMENSOES.map(d => (
-                  <FormField key={d.id} label={`${d.label} (%)`}>
-                    <input type="number" min={0} max={100} value={form.pesos[d.id]}
-                      onChange={e => setForm(f => ({ ...f, pesos: { ...f.pesos, [d.id]: Number(e.target.value) || 0 } }))}
-                      className="neu-input rounded-lg px-3 py-2 text-xs w-full tabular-nums" />
-                  </FormField>
-                ))}
-              </div>
-
               <div className="mt-5 flex items-center justify-end">
-                <NeuButtonAccent onClick={criar} disabled={salvando || somaPesos !== 100 || !form.nome.trim()} variant="">
+                <NeuButtonAccent onClick={criar} disabled={salvando || !form.nome.trim()} variant="">
                   {salvando ? <><Loader2 size={13} className="animate-spin" /> Criando…</> : <><Plus size={13} /> Criar competição</>}
                 </NeuButtonAccent>
               </div>
@@ -1082,11 +936,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             return (
               <div className="flex flex-col gap-4">
                 {encerradas.map(c => {
-                  const snap = c.placar_snapshot as Placar | null;
-                  const totais = snap?.placar?.total_por_filial ?? {};
-                  const podioSnap = OP_FILIAIS
-                    .map(f => ({ filial: f, total: Number(totais[f] ?? 0) }))
-                    .sort((a, b) => b.total - a.total);
+                  const snap = c.placar_snapshot as any;
+                  const podioSnap = podiumFromSnapshot(snap);
+                  const escalaLegado = !!snap?.placar?.total_por_filial; // snapshot antigo → pontos ponderados
                   return (
                     <div key={c.id} className="neu-flat rounded-3xl p-5 border border-white/5">
                       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -1107,11 +959,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           {podioSnap.map((p, idx) => (
                             <div key={p.filial}
                               className={`neu-pressed rounded-xl p-3 text-center ${p.filial === c.vencedora ? 'ring-1 ring-emerald-500/40' : ''}`}>
-                              <p className={`text-[10px] font-black uppercase tracking-widest ${FILIAL_COLOR[p.filial]}`}>
+                              <p className={`text-[10px] font-black uppercase tracking-widest ${FILIAL_COLOR[p.filial as FilialOp]}`}>
                                 {['1º','2º','3º'][idx]} · {p.filial}
                               </p>
                               <p className={`text-lg font-black font-mono tabular-nums mt-1 ${p.filial === c.vencedora ? 'text-emerald-400' : 'text-gray-200'}`}>
-                                {p.total.toFixed(2)} pts
+                                {escalaLegado ? `${p.total.toFixed(2)} pts` : (p.total === 0 ? '—' : (p.total / 10).toFixed(1))}
                               </p>
                             </div>
                           ))}

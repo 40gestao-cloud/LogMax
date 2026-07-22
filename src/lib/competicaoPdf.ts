@@ -1,8 +1,8 @@
-// Export PDF do resultado da Competição entre Filiais (placar por dimensão,
-// pódio, votação do conselho e vencedora). Mesmo padrão dos outros exports
-// do projeto: jsPDF + autoTable em dynamic import pra não inflar o bundle.
-
-const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+// Export PDF do resultado da Competição entre Filiais (pódio, votação do
+// conselho e vencedora). Placar é a média das notas 0-10 do conselho nas
+// Tarefas da Matriz por filial do participante. Mesmo padrão dos outros
+// exports do projeto: jsPDF + autoTable em dynamic import pra não inflar
+// o bundle.
 
 const fmtDataBR = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '—');
 
@@ -20,15 +20,6 @@ const markdownToPlainBlocks = (md: string): { bold: boolean; text: string }[] =>
     });
 };
 
-export type PlacarDimensaoPDF = {
-  id: string;
-  label: string;
-  peso: number;
-  fmt: (v: number) => string;
-  semJulgamento: boolean;
-  filiais: Record<string, { valor: number | null; pontos: number }>;
-};
-
 export type CompeticaoResultadoPDF = {
   nome: string;
   data_inicio: string;
@@ -44,12 +35,11 @@ export type VotoPDF = {
   comentario: string | null;
 };
 
-export type PodioLinhaPDF = { filial: string; total: number };
+export type PodioLinhaPDF = { filial: string; media: number; n: number };
 
 export async function exportCompeticaoResultadoPDF(
   competicao: CompeticaoResultadoPDF,
   podio: PodioLinhaPDF[],
-  dimensoes: PlacarDimensaoPDF[],
   votos: VotoPDF[],
   filename: string,
 ) {
@@ -107,41 +97,18 @@ export async function exportCompeticaoResultadoPDF(
 
   autoTable(doc, {
     startY: cursorY,
-    head: [['Posição', 'Filial', 'Pontos']],
-    body: podio.map((p, i) => [`${i + 1}º`, p.filial, p.total.toFixed(2)]),
+    head: [['Posição', 'Filial', 'Notas', 'Média (0-10)']],
+    body: podio.map((p, i) => [
+      `${i + 1}º`,
+      p.filial,
+      String(p.n),
+      p.n === 0 ? '—' : (p.media / 10).toFixed(1),
+    ]),
     theme: 'grid',
     headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
     bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
     alternateRowStyles: { fillColor: [245, 247, 245] },
-    columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
-    margin: { left: margin, right: margin },
-  });
-  cursorY = (doc as any).lastAutoTable.finalY + 8;
-
-  // ─── Ranking por dimensão ───────────────────────────────────────
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
-  doc.text('Ranking por dimensão', margin, cursorY);
-  cursorY += 6;
-
-  autoTable(doc, {
-    startY: cursorY,
-    head: [['Dimensão', 'Peso', ...OP_FILIAIS.map(f => f)]],
-    body: dimensoes.map(d => [
-      d.label + (d.semJulgamento ? ' (sem julgamento)' : ''),
-      `${d.peso}%`,
-      ...OP_FILIAIS.map(f => {
-        const cell = d.filiais[f];
-        if (!cell) return '—';
-        const valorStr = cell.valor != null ? d.fmt(cell.valor) : '—';
-        return `${cell.pontos.toFixed(1)} pts (${valorStr})`;
-      }),
-    ]),
-    theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 8.5 },
-    bodyStyles: { textColor: [50, 50, 50], fontSize: 8 },
-    alternateRowStyles: { fillColor: [245, 247, 245] },
+    columnStyles: { 3: { halign: 'center', fontStyle: 'bold' } },
     margin: { left: margin, right: margin },
   });
   cursorY = (doc as any).lastAutoTable.finalY + 8;
