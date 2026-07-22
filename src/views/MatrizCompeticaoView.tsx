@@ -158,9 +158,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const carregarPlacar = useCallback(async (comp: Competicao) => {
     if (!supabase) return;
-    setLoadingPlacar(true);
-    setPlacar(null);
-    setCompeticaoAtual(comp);
+    setCompeticaoAtual(prev => {
+      // Só ativa o loading + limpa o pódio quando muda de competição — refresh
+      // da mesma competição (nova tarefa, nota, voto) troca a data em placa
+      // pelo dado novo sem piscar.
+      const mudouComp = prev?.id !== comp.id;
+      if (mudouComp) {
+        setPlacar(null);
+        setLoadingPlacar(true);
+      }
+      return comp;
+    });
     const { data, error } = await supabase.rpc('calcular_placar_competicao', { p_competicao_id: comp.id });
     if (error) {
       showToast?.(`Erro ao calcular placar: ${error.message}`, 'error');
@@ -294,11 +302,33 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const excluirCompeticao = async (c: Competicao) => {
     if (!supabase) return;
+    // Hard delete via RPC. Se a competição está em andamento ou aguardando
+    // encerramento, tarefas, participantes, notas do conselho e votos vão
+    // TODOS embora — não dá pra reverter pela UI. Aviso mais forte nesse
+    // caso e pede confirmação dupla.
+    const ativa = c.status === 'em_andamento' || c.status === 'aguardando_encerramento';
+    const aviso = ativa
+      ? `⚠️ ATENÇÃO: "${c.nome}" está ${c.status === 'em_andamento' ? 'EM ANDAMENTO' : 'AGUARDANDO ENCERRAMENTO'}.\n\n` +
+        `Excluir vai remover PERMANENTEMENTE:\n` +
+        `  • todas as tarefas cadastradas\n` +
+        `  • todos os participantes\n` +
+        `  • todas as notas do conselho\n` +
+        `  • todos os votos registrados\n\n` +
+        `Isso não pode ser desfeito pela UI. Use "Encerrar agora" se quer só finalizar. Tem certeza que quer excluir?`
+      : `Excluir "${c.nome}" definitivamente da lista? Use pra descartar competições de teste. Essa ação não pode ser desfeita pela UI.`;
     if (!await confirm({
-      message: `Excluir "${c.nome}" definitivamente da lista? Use pra descartar competições de teste. Essa ação não pode ser desfeita pela UI.`,
-      confirmLabel: 'Excluir',
+      message: aviso,
+      confirmLabel: ativa ? 'Excluir mesmo assim' : 'Excluir',
       danger: true,
     })) return;
+    if (ativa) {
+      // Segunda barreira só pra ativa/aguardando — evita clique acidental.
+      if (!await confirm({
+        message: `Última confirmação: excluir "${c.nome}" ${c.status === 'em_andamento' ? 'em andamento' : 'aguardando encerramento'} de vez?`,
+        confirmLabel: 'Sim, excluir',
+        danger: true,
+      })) return;
+    }
     setExcluindo(c.id);
     const { error } = await supabase.rpc('excluir_competicao_matriz', {
       p_competicao_id: c.id,

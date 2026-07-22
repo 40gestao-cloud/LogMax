@@ -1058,25 +1058,39 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       }).sort((a, b) => b.mediaGeral - a.mediaGeral || a.nome.localeCompare(b.nome));
     };
 
-    const mkGrupo = (
-      tipo: string,
+    // Agrupa os 8 tipos crus em 3 supergrupos visíveis na Visão do Ciclo.
+    // Cada pessoa aparece 1× por supergrupo (buildLinhas agrega por avaliado_id
+    // mesmo se recebeu avaliações de tipos diferentes dentro do mesmo bloco).
+    const mkSuperGrupo = (
+      id: 'matriz_filial' | 'gerentes_colaboradores' | 'ceo_conselheiros',
+      tipos: string[],
       label: string,
       descricao: string,
     ) => {
-      const avs = avalCiclo.filter(a => a.tipo === tipo);
-      const linhas = tipo === 'matriz_filial' ? buildLinhasFilial(avs) : buildLinhas(avs);
-      return { tipo, label, descricao, linhas, totalAvaliacoes: avs.length };
+      const avs = avalCiclo.filter(a => tipos.includes(a.tipo));
+      const linhas = id === 'matriz_filial' ? buildLinhasFilial(avs) : buildLinhas(avs);
+      return { tipo: id, label, descricao, linhas, totalAvaliacoes: avs.length };
     };
 
     const grupos = [
-      mkGrupo('admin_ceo', 'Admin → CEO', 'Avaliações estratégicas que o admin entregou ao CEO (ciclo Matriz).'),
-      mkGrupo('admin_conselheiro', 'Admin → Conselheiros', 'Avaliações estratégicas que o admin entregou aos conselheiros (ciclo Matriz).'),
-      mkGrupo('ceo_gerente', 'CEO → Gerentes', 'Avaliações que o CEO/admin entregou aos gerentes.'),
-      mkGrupo('ceo_conselheiro', 'CEO → Conselheiros', 'Avaliações que o CEO entregou aos conselheiros (ciclo Matriz).'),
-      mkGrupo('ceo_colaborador', 'CEO → Colaboradores', 'Avaliações que o CEO/admin entregou diretamente a colaboradores (modo Matriz).'),
-      mkGrupo('gerente_colaborador', 'Gerentes → Colaboradores', 'Avaliações que os gerentes entregaram aos colaboradores dos seus setores.'),
-      mkGrupo('feedback_colaborador', 'Feedback Reverso', 'Colaboradores avaliando seus gerentes e o CEO. Quando o ciclo é anônimo, o autor é ocultado.'),
-      mkGrupo('matriz_filial', 'Avaliação das Filiais', 'Notas atribuídas às filiais como unidade nos 7 eixos da competição.'),
+      mkSuperGrupo(
+        'matriz_filial',
+        ['matriz_filial'],
+        'Avaliação das Filiais',
+        'Notas atribuídas às filiais como unidade nos 7 eixos da competição.',
+      ),
+      mkSuperGrupo(
+        'gerentes_colaboradores',
+        ['ceo_gerente', 'ceo_colaborador', 'gerente_colaborador', 'feedback_colaborador'],
+        'Avaliação de Gerentes e Colaboradores',
+        'Notas do CEO/admin e dos gerentes aos gerentes e colaboradores, mais o feedback reverso (anônimo quando o ciclo pede).',
+      ),
+      mkSuperGrupo(
+        'ceo_conselheiros',
+        ['admin_ceo', 'admin_conselheiro', 'ceo_conselheiro'],
+        'Avaliação de CEO e Conselheiros',
+        'Notas estratégicas do admin ao CEO e aos conselheiros + notas do CEO aos conselheiros (ciclo Matriz).',
+      ),
     ];
 
     const todosCrits = criterios.filter(c => avalCiclo.some(a => a.id === c.avaliacao_id));
@@ -1345,7 +1359,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
               </div>
 
               <div className="flex flex-col gap-6">
-                {consolidado.grupos.map(grupo => grupo.linhas.length === 0 ? null : (
+                {consolidado.grupos.map(grupo => (
                   <div key={grupo.tipo}>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="w-1 h-4 bg-accent rounded-full" />
@@ -1358,6 +1372,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                     </div>
                     <p className="text-[11px] text-gray-500 mb-3 pl-3">{grupo.descricao}</p>
 
+                    {grupo.linhas.length === 0 ? (
+                      <div className="pl-3 py-4 text-[11px] text-gray-500 italic border-l border-white/5">
+                        Nenhuma avaliação registrada neste bloco ainda.
+                      </div>
+                    ) : (
                     <div className="overflow-x-auto main-scrollbar">
                       <table className="w-full text-left border-collapse">
                         <thead>
@@ -1473,6 +1492,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                         </tbody>
                       </table>
                     </div>
+                    )}
                   </div>
                 ))}
               </div>

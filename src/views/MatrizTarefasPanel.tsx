@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   GraduationCap, Cpu, Presentation, Plus, X, Trash2, Loader2,
@@ -485,7 +485,17 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
   const notas = avals.filter(a => a.nota !== null && a.nota !== undefined).map(a => Number(a.nota));
   const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
 
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [notaLocal, setNotaLocal] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
+
+  // Sincroniza com o servidor quando a nota do usuário muda por fora (outra
+  // sessão, refetch após salvar noutro dispositivo). Não sobrescreve enquanto
+  // ele está digitando (input focado) pra não roubar keystroke.
+  useEffect(() => {
+    if (document.activeElement === inputRef.current) return;
+    const desejado = minha?.nota != null ? String(minha.nota) : '';
+    setNotaLocal(prev => prev === desejado ? prev : desejado);
+  }, [minha?.nota]);
 
   const salvar = () => {
     if (notaLocal === '') {
@@ -511,6 +521,7 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
         <div className="flex items-center gap-1">
           <Star size={11} className="text-amber-400" />
           <input
+            ref={inputRef}
             type="number" min={0} max={10} step={0.5}
             value={notaLocal}
             onChange={e => setNotaLocal(e.target.value)}
