@@ -81,6 +81,7 @@ const PainelBIView                 = lazy(() => import('./views/PainelBIView').t
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
+const CentralAvaliacaoView         = lazy(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
 const FeedbackRequerimentosView    = lazy(() => import('./views/FeedbackRequerimentosView').then(m => ({ default: m.FeedbackRequerimentosView })));
 const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
 const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
@@ -254,8 +255,9 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BookOpen size={18} /><span>Catálogo</span>
           </button>
         )}
-        {/* Avaliações: Matriz gerencia ciclos + avalia filiais; filial vê feedback do conselho */}
-        {aulaAllow('avaliacoes') && (
+        {/* Avaliações (modo filial): entra direto no wrapper Padrão.
+            No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
+        {!matrizMode && aulaAllow('avaliacoes') && (
           <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Star size={18} /><span>Avaliações</span>
           </button>
@@ -309,8 +311,8 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Trophy size={16} /><span>Competição</span>
               </button>
-              <button onClick={() => { navigate('matriz-avaliacoes'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onClick={() => { navigate('avaliacoes'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Star size={16} /><span>Central de Avaliação</span>
               </button>
             </>
@@ -877,7 +879,7 @@ function LogMaxAppInner() {
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
-      case 'avaliacoes':                   return <AvaliacoesView showToast={st} profile={profile} />;
+      case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
       case 'metas':                        return <MetasView showToast={st} profile={profile} />;
       case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
@@ -886,7 +888,7 @@ function LogMaxAppInner() {
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
-      case 'matriz-avaliacoes':            return <MatrizAvaliacoesView showToast={st} profile={profile} />;
+      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       default:
