@@ -755,6 +755,42 @@ table,
 [data-theme="light"] .btn-shimmer--glass-yellow { color: #713f12; border-color: rgba(202,138,4,0.70) !important; }
 [data-theme="light"] .btn-shimmer--glass-red   { color: #7f1d1d; border-color: rgba(220,38,38,0.70) !important; }
 
+/* ── Cards de pódio (Central de Avaliação → resultado da competição) ────── */
+.medal-card {
+  position: relative;
+  border-radius: 24px;
+  padding: 24px;
+  border: 2px solid;
+  background-size: 200% auto;
+  animation: btn-shimmer 3.2s linear infinite;
+  overflow: hidden;
+}
+.medal-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 60%);
+}
+
+.medal-card--gold {
+  background: linear-gradient(120deg, #6B4E00 0%, #B8860B 25%, #F0B429 45%, #f7d772 55%, #F0B429 70%, #B8860B 90%, #6B4E00 100%);
+  color: #000;
+  border-color: #F0B429;
+  box-shadow: 0 0 40px rgba(240,180,41,0.30);
+}
+.medal-card--silver {
+  background: linear-gradient(120deg, #4b5563 0%, #9ca3af 25%, #d1d5db 45%, #f3f4f6 55%, #d1d5db 70%, #9ca3af 90%, #4b5563 100%);
+  color: #111;
+  border-color: #d1d5db;
+  box-shadow: 0 0 40px rgba(209,213,219,0.25);
+}
+.medal-card--bronze {
+  background: linear-gradient(120deg, #4a1c07 0%, #92400e 25%, #c2691b 45%, #ea8b3e 55%, #c2691b 70%, #92400e 90%, #4a1c07 100%);
+  color: #1a0800;
+  border-color: #c2691b;
+  box-shadow: 0 0 40px rgba(194,105,27,0.28);
+}
+
 [data-theme="light"] .role-badge--admin       { background: #F0B429; color: #000; border-color: #F0B429 !important; }
 [data-theme="light"] .role-badge--ceo         { background: #F0B429; color: #000; border-color: #F0B429 !important; }
 [data-theme="light"] .role-badge--gerente     { background: rgba(0,0,0,0.75); color: #fff; border-color: #F0B429 !important; }

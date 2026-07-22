@@ -613,7 +613,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const clAtivo    = isMatriz ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
   const isGerente   = profile.role === 'gerente';
   const isRH        = hasSetor(profile, 'rh');
-  const podeVerConsolidado = isAdminOuCEO || isRH;
+  // RH deixou de ter acesso global — agora é usuário comum (bounded na
+  // própria filial + próprios dados). Mantém `isRH` só pra descrição do header.
+  const podeVerConsolidado = isAdminOuCEO;
 
   const { data: treinamentos } = useFetchData<any>('/api/treinamentosview');
 
@@ -1269,11 +1271,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             Avaliações de Desempenho{filial ? ` — ${filial}` : ' — Matriz'}
           </h2>
           <p className="text-sm text-gray-400 mt-1">
-            {isAdminOuCEO && 'Gerencie ciclos, avalie gerentes e filiais, acompanhe o consolidado. '}
-            {!isAdminOuCEO && isRH && 'RH: você vê o consolidado de todos os setores e pode propor itens de PDI em qualquer avaliação. '}
-            {!isRH && isGerente && 'Avalie os colaboradores do seu setor e veja a nota que recebeu do CEO. '}
-            {!isRH && profile.role === 'colaborador' && 'Dê feedback sobre seu gerente e CEO e veja a nota que recebeu. '}
-            Veja o histórico do que você avaliou e o que recebeu.
+            {isAdminOuCEO && isMatriz && 'Gerencie ciclos, avalie CEO/conselheiros, gerentes, colaboradores e filiais, acompanhe o consolidado.'}
+            {!(isAdminOuCEO && isMatriz) && 'Acompanhe as avaliações que você recebeu e o desempenho da sua filial na competição.'}
           </p>
         </div>
       </div>
@@ -1316,8 +1315,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       )}
 
-      {/* ── A. CICLOS (admin/CEO) ── */}
-      {isAdminOuCEO && (
+      {/* ── PÓDIO DA COMPETIÇÃO — só modo filial ── */}
+      {filial && <PodioFilialCard filial={filial} />}
+
+      {/* ── A. CICLOS (admin/CEO — só modo Matriz) ── */}
+      {isAdminOuCEO && isMatriz && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -1397,8 +1399,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       )}
 
-      {/* ── E. CONSOLIDADO DO CICLO (admin/CEO + RH) ── */}
-      {podeVerConsolidado && ciclos.length > 0 && (
+      {/* ── E. CONSOLIDADO DO CICLO (admin/CEO — só modo Matriz) ── */}
+      {podeVerConsolidado && isMatriz && ciclos.length > 0 && (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="flex items-center gap-2">
@@ -1848,7 +1850,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       )}
 
-      {/* ── C. A FAZER (avaliações de pessoas) ── */}
+      {/* ── C. A FAZER (avaliações de pessoas) — admin/CEO em modo Matriz ── */}
+      {isAdminOuCEO && isMatriz && (
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
@@ -1969,6 +1972,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           </div>
         )}
       </div>
+      )}
 
       {/* ── D. COMPROVANTES DE VENDAS ONLINE ── */}
       {cicloAberto && (
@@ -2037,29 +2041,53 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
           {recebidas.length === 0 ? (
             <EmptyState message="Você ainda não recebeu nenhuma avaliação." />
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {recebidas.map(r => (
-                <CardAvaliacao
-                  key={r.avaliacao.id}
-                  avaliacao={r.avaliacao}
-                  criterios={r.criterios}
-                  direcaoLabel="de"
-                  nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
-                  onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
-                  canEditarPDI={isAdminOuCEO || isRH}
-                  categoriaLabel={criteriosSetPorTipo(r.avaliacao.tipo, 'user').label}
-                  profile={profile}
-                  treinamentos={treinamentos}
-                  showToast={showToast}
-                />
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            // Nota final = média das médias por avaliação (só admin/CEO avaliam
+            // gerente/colab hoje, então a média deles é o resultado final).
+            const notasPorAval = recebidas.map(r => {
+              const cs = r.criterios;
+              return cs.length === 0 ? 0 : cs.reduce((s, c) => s + c.nota, 0) / cs.length;
+            });
+            const notaFinal = notasPorAval.length === 0 ? 0
+              : notasPorAval.reduce((s, n) => s + n, 0) / notasPorAval.length;
+            return (
+              <div className="flex flex-col gap-4">
+                {/* Card destaque — Nota Final */}
+                <div className={`rounded-2xl p-5 border-2 ${notaCorClasses(notaFinal)} flex items-center justify-between gap-4 flex-wrap`}>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Nota Final</p>
+                    <p className="text-[11px] opacity-70 mt-0.5">Média das notas de Admin e CEO ({recebidas.length} {recebidas.length === 1 ? 'avaliação' : 'avaliações'})</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-4xl font-black tabular-nums leading-none">{notaFinal.toFixed(1)}</span>
+                    <span className="text-sm font-bold opacity-70">/ 10</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {recebidas.map(r => (
+                    <CardAvaliacao
+                      key={r.avaliacao.id}
+                      avaliacao={r.avaliacao}
+                      criterios={r.criterios}
+                      direcaoLabel="de"
+                      nomeContraparte={`${r.avaliadorNome} · ${r.cicloNome}`}
+                      onExportPDF={() => handleExportarAvaliacaoIndividualPDF(r.avaliacao)}
+                      canEditarPDI={isAdminOuCEO || isRH}
+                      categoriaLabel={criteriosSetPorTipo(r.avaliacao.tipo, 'user').label}
+                      profile={profile}
+                      treinamentos={treinamentos}
+                      showToast={showToast}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
-      {/* ── E. AVALIAÇÕES FEITAS ── */}
+      {/* ── E. AVALIAÇÕES FEITAS — admin/CEO em modo Matriz ── */}
+      {isAdminOuCEO && isMatriz && (
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         <div className="flex items-center gap-2 mb-5">
           <Send size={16} className="text-accent" />
@@ -2097,6 +2125,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           </div>
         )}
       </div>
+      )}
 
       {/* Modais */}
       <AnimatePresence>
@@ -2156,3 +2185,87 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
   const { filialAtiva } = useFilial();
   return <AvaliacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Card de pódio da filial na competição matriz — só modo filial.
+// Busca a competição mais recente ativa/encerrada e mostra medalha
+// (ouro/prata/bronze) conforme posição da filial no ranking.
+// ─────────────────────────────────────────────────────────────────────────
+type CompMini = { id: string; nome: string; status: string; vencedora: string | null };
+type PlacarPorFilial = Record<string, { media: number; n: number }>;
+
+function PodioFilialCard({ filial }: { filial: string }) {
+  const [loading, setLoading] = useState(true);
+  const [comp, setComp] = useState<CompMini | null>(null);
+  const [placar, setPlacar] = useState<PlacarPorFilial | null>(null);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let cancelou = false;
+    (async () => {
+      // Última competição relevante: em andamento, aguardando, ou encerrada.
+      const { data: comps } = await supabase!
+        .from('competicoes_matriz')
+        .select('id, nome, status, vencedora')
+        .eq('ativo', true)
+        .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
+        .order('data_inicio', { ascending: false })
+        .limit(1);
+      const c = comps?.[0] as CompMini | undefined;
+      if (!c) { if (!cancelou) setLoading(false); return; }
+      const { data: p } = await supabase!.rpc('calcular_placar_competicao', { p_competicao_id: c.id });
+      if (cancelou) return;
+      setComp(c);
+      setPlacar((p as any)?.por_filial ?? null);
+      setLoading(false);
+    })();
+    return () => { cancelou = true; };
+  }, [filial]);
+
+  if (loading || !comp || !placar) return null;
+
+  const ranking = Object.entries(placar)
+    .map(([f, v]) => ({ filial: f, media: Number(v?.media ?? 0), n: Number(v?.n ?? 0) }))
+    .sort((a, b) => b.media - a.media || b.n - a.n);
+  const meu = ranking.find(x => x.filial === filial);
+  if (!meu) return null;
+  // Sem notas ainda + competição não encerrada → não faz sentido mostrar medalha
+  if (meu.n === 0 && comp.status !== 'encerrada') return null;
+  const pos = ranking.findIndex(x => x.filial === filial) + 1;
+  if (pos < 1 || pos > 3) return null;
+
+  const medal = pos === 1
+    ? { klass: 'medal-card--gold',   label: 'Vencedora — 1º Lugar', emoji: '🥇' }
+    : pos === 2
+      ? { klass: 'medal-card--silver', label: '2º Lugar',             emoji: '🥈' }
+      : { klass: 'medal-card--bronze', label: '3º Lugar',             emoji: '🥉' };
+
+  const statusLabel = comp.status === 'encerrada'
+    ? 'Resultado final'
+    : comp.status === 'aguardando_encerramento'
+      ? 'Aguardando encerramento — votação em curso'
+      : 'Andamento';
+
+  return (
+    <div className={`medal-card ${medal.klass} shrink-0`}>
+      <div className="relative flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Competição das Filiais</p>
+          <h3 className="text-xl font-black leading-tight mt-0.5">{comp.nome}</h3>
+          <p className="text-xs font-bold mt-1 opacity-80">{statusLabel}</p>
+        </div>
+        <div className="text-right">
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-4xl leading-none">{medal.emoji}</span>
+            <span className="text-lg sm:text-2xl font-black uppercase tracking-wider">{medal.label}</span>
+          </div>
+          <p className="text-sm font-black mt-1">
+            <FilialBadge filial={filial} />
+            <span className="ml-2 tabular-nums">{meu.media.toFixed(1)}</span>
+            <span className="text-xs font-bold opacity-70"> / 10 · {meu.n} nota{meu.n === 1 ? '' : 's'}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
