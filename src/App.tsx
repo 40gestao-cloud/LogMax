@@ -557,16 +557,24 @@ function LogMaxAppInner() {
   // ── Filial de sessão ── deve ficar ANTES dos early returns para respeitar Rules of Hooks ──
   const { filialAtiva, escolheu, setFilialAtiva, escolherMatriz, clearFilial } = useFilial();
 
-  // Transição Filial → Matriz: reseta activeView pra 'inicio'. Entre filiais
-  // (SuperMax → MaxLook) a view atual continua fazendo sentido (produtos,
-  // vendas etc.); pra Matriz a maioria das views operacionais é irrelevante.
+  // Qualquer troca de contexto (Filial↔Matriz ou entre filiais) reseta
+  // activeView pra 'inicio'. Cada contexto tem sidebar/RBAC diferentes,
+  // manter a view anterior gera flash de "sem permissão" ou dados de
+  // outra filial. Guard `primeiraTrocaRef` evita disparar no mount inicial
+  // — aí queremos preservar o activeView vindo do sessionStorage.
+  // Feito durante o render (padrão "store info from previous renders") em
+  // vez de useEffect: assim o reset acontece ANTES do commit, sem flash da
+  // view antiga sob a nova filial.
   const filialAnteriorRef = useRef<FilialOp | null>(filialAtiva);
-  useEffect(() => {
-    if (filialAnteriorRef.current !== null && filialAtiva === null && escolheu) {
+  const primeiraTrocaRef = useRef(true);
+  if (escolheu && filialAnteriorRef.current !== filialAtiva) {
+    filialAnteriorRef.current = filialAtiva;
+    if (primeiraTrocaRef.current) {
+      primeiraTrocaRef.current = false;
+    } else {
       setActiveView('inicio');
     }
-    filialAnteriorRef.current = filialAtiva;
-  }, [filialAtiva, escolheu]);
+  }
 
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
   // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
