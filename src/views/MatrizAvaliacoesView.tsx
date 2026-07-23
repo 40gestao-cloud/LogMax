@@ -7,6 +7,7 @@ import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
+import { PainelComparativoEixos } from './PainelComparativoEixos';
 import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -159,6 +160,8 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         podeAvaliar={podeAvaliar}
         showToast={showToast}
       />
+
+      <PainelComparativoEixos showToast={showToast} />
 
       <VisaoCicloPorParticipante competicao={competicao} />
     </motion.div>

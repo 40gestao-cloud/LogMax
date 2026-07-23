@@ -131,43 +131,39 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
     );
   }
 
+  const totalAvaliacoes = avaliacoes.length;
+  const totalFiliaisAvaliadas = new Set(
+    avaliacoes.filter(a => a.avaliada_filial).map(a => a.avaliada_filial as string),
+  ).size;
+  const mediaCiclo = criterios.length === 0
+    ? 0
+    : criterios.reduce((s, c) => s + c.nota, 0) / criterios.length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col gap-4"
     >
-      {/* ── Form: cards Avaliar Filial ── */}
-      <div className="neu-flat rounded-2xl border border-white/5 p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Building2 size={16} className="text-accent" />
-            <h3 className="text-sm font-bold text-gray-200">Avaliar Filiais</h3>
-            <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
-            {ciclo && (
+      {/* ── Form: cards Avaliar Filial — só aparece pra quem pode avaliar
+             (CEO/conselheiro). Se admin/leitor, some inteiro pra não ocupar
+             espaço com card vazio "Modo leitura". ── */}
+      {ciclo && podeAvaliar && (
+        <div className="neu-flat rounded-2xl border border-white/5 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Building2 size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-200">Avaliar Filiais</h3>
+              <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
                 {filiaisJaAvaliadas.size} de {FILIAIS_OP.length} avaliadas
               </span>
-            )}
-          </div>
-          {ciclo && (
+            </div>
             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
               Ciclo: {ciclo.nome}
             </span>
-          )}
-        </div>
+          </div>
 
-        <p className="text-[11px] text-gray-500 mb-4">
-          Notas dos 7 eixos que compõem o placar. Entram na média unificada da competição
-          quando o `created_at` cai no período — as 3 filiais precisam ter ≥1 nota pra fonte
-          entrar (gate).
-        </p>
-
-        {!ciclo ? (
-          <EmptyState message="Nenhum ciclo Matriz aberto. Crie um ciclo com unidade = Matriz para avaliar as filiais." />
-        ) : !podeAvaliar ? (
-          <EmptyState message="Modo leitura. Só admin, CEO e conselheiros dão nota nos 7 eixos." />
-        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {FILIAIS_OP.map(f => {
               const jaAvaliou = filiaisJaAvaliadas.has(f);
@@ -205,19 +201,48 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* ── Histórico / Visão do Ciclo — consolidado das avaliações de filial ── */}
-      {ciclo && historico.length > 0 && (
+      {!ciclo && (
         <div className="neu-flat rounded-2xl border border-white/5 p-4 sm:p-5">
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <ClipboardList size={16} className="text-accent" />
-            <h3 className="text-sm font-bold text-gray-200">Visão do Ciclo — Avaliação das Filiais</h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
-              {historico.length} filial{historico.length === 1 ? '' : 's'} avaliada{historico.length === 1 ? '' : 's'}
+          <EmptyState message="Nenhum ciclo Matriz aberto. Crie um ciclo com unidade = Matriz para avaliar as filiais." />
+        </div>
+      )}
+
+      {/* ── Visão do Ciclo — Avaliação das Filiais (header + contadores + tabela) ── */}
+      {ciclo && historico.length > 0 && (
+        <div className="neu-flat rounded-3xl p-6 border border-white/5">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Visão do Ciclo — Avaliação das Filiais</h3>
+              <span className="px-2 py-1 rounded-lg bg-emerald-900/40 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
+                {ciclo.status === 'Aberto' ? 'Aberto' : 'Fechado'}
+              </span>
+            </div>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+              Ciclo: {ciclo.nome}
             </span>
           </div>
+
+          {/* Contadores rápidos: avaliações · avaliados · média — mesmos do
+              antigo bloco E de AvaliacoesView. */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="neu-pressed rounded-2xl px-4 py-3 text-center">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliações</p>
+              <p className="text-xl font-black text-gray-200 tabular-nums mt-0.5">{totalAvaliacoes}</p>
+            </div>
+            <div className="neu-pressed rounded-2xl px-4 py-3 text-center">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Avaliados</p>
+              <p className="text-xl font-black text-gray-200 tabular-nums mt-0.5">{totalFiliaisAvaliadas}</p>
+            </div>
+            <div className="neu-pressed rounded-2xl px-4 py-3 text-center">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Média</p>
+              <p className="text-xl font-black text-accent tabular-nums mt-0.5">{mediaCiclo.toFixed(1)}</p>
+            </div>
+          </div>
+
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
