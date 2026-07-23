@@ -14,8 +14,8 @@ import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORI
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean; filial: string };
-type Avaliacao = {
+export type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean; filial: string };
+export type Avaliacao = {
   id: string;
   ciclo_id: string;
   avaliador_id: string;
@@ -25,19 +25,19 @@ type Avaliacao = {
   observacao: string | null;
   created_at: string;
 };
-type Criterio = { id: string; avaliacao_id: string; categoria: string; criterio: string; nota: number };
+export type Criterio = { id: string; avaliacao_id: string; categoria: string; criterio: string; nota: number };
 type Evidencia = { id: string; ciclo_id: string; colaborador_id: string; imagem_url: string; created_at: string };
 
 // Alvo de uma avaliação: usuário ou filial como entidade
-type AvaliadoTarget =
+export type AvaliadoTarget =
   | { kind: 'user'; user: UserProfile }
   | { kind: 'filial'; filial: string };
 
-const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+export const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
 // Retorna o set de critérios adequado a partir do tipo/alvo.
 // admin_ceo / admin_conselheiro usam o set estratégico do admin.
-const criteriosSetPorTipo = (tipo: string | undefined, alvoKind: 'user' | 'filial'): { cs: CriteriosSet; label: Record<string, string> } => {
+export const criteriosSetPorTipo = (tipo: string | undefined, alvoKind: 'user' | 'filial'): { cs: CriteriosSet; label: Record<string, string> } => {
   if (alvoKind === 'filial') return { cs: CRITERIOS_MATRIZ, label: CATEGORIA_LABEL_MATRIZ };
   if (tipo === 'admin_ceo' || tipo === 'admin_conselheiro') return { cs: CRITERIOS_ADMIN, label: CATEGORIA_LABEL_ADMIN };
   return { cs: CRITERIOS, label: CATEGORIA_LABEL };
@@ -122,7 +122,7 @@ const SUPER_META: Record<SuperGrupoId, {
 };
 
 // Semáforo por faixa de nota (0-10). Reutilizado nas linhas e chips.
-const notaCorClasses = (nota: number): string => {
+export const notaCorClasses = (nota: number): string => {
   if (nota >= 8)   return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30';
   if (nota >= 5)   return 'text-amber-300 bg-amber-500/10 border-amber-500/30';
   return 'text-red-400 bg-red-500/10 border-red-500/30';
@@ -137,7 +137,7 @@ const fmtData = (s: string) => {
 // Modal de Avaliação
 // ----------------------------------------------------------------------
 
-function ModalAvaliacao({
+export function ModalAvaliacao({
   ciclo, alvo, tipo, avaliacaoExistente, onClose, onSaved, showToast, criteriosSet, categoriaLabel, evidenciasAvaliado,
 }: {
   ciclo: Ciclo;
@@ -870,25 +870,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     return out;
   }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, users, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
 
-  // Filiais ainda não avaliadas no ciclo Matriz aberto — mapa filial → média que EU dei.
-  const minhasNotasPorFilial = useMemo((): Record<string, number | null> => {
-    const out: Record<string, number | null> = {};
-    if (!cicloMatrizAberto) return out;
-    const feitas = avaliacoes.filter(
-      a => a.ciclo_id === cicloMatrizAberto.id && a.avaliador_id === profile.id && a.tipo === 'matriz_filial'
-    );
-    feitas.forEach(a => {
-      if (!a.avaliada_filial) return;
-      const crits = criterios.filter(c => c.avaliacao_id === a.id);
-      out[a.avaliada_filial] = crits.length === 0 ? null : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
-    });
-    return out;
-  }, [cicloMatrizAberto, avaliacoes, criterios, profile.id]);
-
-  const filiaisJaAvaliadas = useMemo((): Set<string> =>
-    new Set(Object.keys(minhasNotasPorFilial)),
-  [minhasNotasPorFilial]);
-
   // Evidências do próprio usuário no ciclo aberto atual
   const minhasEvidencias = useMemo(() =>
     cicloAberto ? evidencias.filter(e => e.colaborador_id === profile.id && e.ciclo_id === cicloAberto.id) : [],
@@ -1165,13 +1146,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       return { tipo: id, label, descricao, linhas, totalAvaliacoes: avs.length };
     };
 
+    // Supergrupo 'matriz_filial' foi movido pra Competição do Conselho
+    // (AvaliacaoFilialPanel). As notas dos 7 eixos alimentam o placar
+    // da competição, então histórico e form vivem juntos lá.
     const grupos = [
-      mkSuperGrupo(
-        'matriz_filial',
-        ['matriz_filial'],
-        'Avaliação das Filiais',
-        'Notas atribuídas às filiais como unidade nos 7 eixos da competição.',
-      ),
       mkSuperGrupo(
         'gerentes_colaboradores',
         ['ceo_gerente', 'ceo_colaborador', 'gerente_colaborador', 'feedback_colaborador'],
@@ -1610,68 +1588,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
       )}
 
-      {/* ── B. AVALIAR FILIAIS (apenas modo Matriz, admin/CEO) ── */}
-      {isMatriz && isAdminOuCEO && (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Building2 size={16} className="text-accent" />
-              <h3 className="text-sm font-bold text-gray-300">Avaliar Filiais</h3>
-              <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
-              {cicloMatrizAberto && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
-                  {filiaisJaAvaliadas.size} de {FILIAIS_OP.length} avaliadas
-                </span>
-              )}
-            </div>
-            {cicloMatrizAberto && (
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                Ciclo: {cicloMatrizAberto.nome}
-              </span>
-            )}
-          </div>
-
-          {!cicloMatrizAberto ? (
-            <EmptyState message="Nenhum ciclo Matriz aberto. Crie um ciclo com unidade = Matriz para avaliar as filiais." />
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {FILIAIS_OP.map(f => {
-                const jaAvaliou = filiaisJaAvaliadas.has(f);
-                const minhaNota = minhasNotasPorFilial[f];
-                return (
-                  <button
-                    key={f}
-                    onClick={() => !jaAvaliou && setAvaliando({ ciclo: cicloMatrizAberto, alvo: { kind: 'filial', filial: f } })}
-                    disabled={jaAvaliou}
-                    className={`neu-button rounded-2xl p-5 flex flex-col gap-3 text-left transition-all border border-white/5 ${jaAvaliou ? 'cursor-not-allowed opacity-90' : 'hover:border-accent'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <FilialBadge filial={f} />
-                      {jaAvaliou && <CheckCircle2 size={16} className="text-emerald-400" />}
-                    </div>
-                    {jaAvaliou ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Sua nota</span>
-                        {minhaNota != null ? (
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-black tabular-nums border ${notaCorClasses(minhaNota)}`}>
-                            {minhaNota.toFixed(1)}<span className="text-[9px] opacity-70">/10</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Avaliada</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center gap-1">
-                        <Star size={10} /> Avaliar agora
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── B. AVALIAR FILIAIS — movido pra Central de Avaliação → Competição
+             do Conselho (AvaliacaoFilialPanel), abaixo dos cards de Tarefas.
+             Notas dos 7 eixos alimentam o placar da competição, então o
+             formulário vive junto do resto do julgamento. ── */}
 
       {/* ── B2. PAINEL COMPARATIVO DOS 7 EIXOS (Matriz, admin/CEO/RH) ── */}
       {isMatriz && podeVerConsolidado && cicloMatrizAberto && (

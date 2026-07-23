@@ -6,6 +6,7 @@ import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
+import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
 import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -148,6 +149,12 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
       <MatrizTarefasPanel
         competicao={competicao}
+        profile={profile}
+        podeAvaliar={podeAvaliar}
+        showToast={showToast}
+      />
+
+      <AvaliacaoFilialPanel
         profile={profile}
         podeAvaliar={podeAvaliar}
         showToast={showToast}
