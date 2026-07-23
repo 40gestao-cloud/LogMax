@@ -20,16 +20,16 @@ export const CATEGORIA_LABEL: Record<string, string> = {
   desempenho: 'Critérios de Avaliação',
 };
 
-// ── Modo Matriz: 7 eixos da competição de filiais ────────────────────────────
+// ── Modo Matriz: eixos subjetivos da competição de filiais ───────────────────
+// Financeiro / RH / Redes Sociais e Marketing / Logística / Vendas e Atendimento
+// foram removidos: cada um já é medido por dados objetivos (painel BI) e/ou
+// avaliado como Tarefa da Matriz (tarefa_rh, tarefa_financeiro, tarefa_logistica,
+// tarefa_marketing, tarefa_treinamento_vendas). Aqui ficam só os 2 eixos que
+// não têm equivalente objetivo/tarefa.
 export const CRITERIOS_MATRIZ = {
   criterios: [
     'Frequência de Trabalho',
-    'Financeiro',
     'Planejamento e Organização',
-    'Recursos Humanos',
-    'Redes Sociais e Marketing',
-    'Logística',
-    'Vendas e Atendimento',
   ],
 } as const;
 

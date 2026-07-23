@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Star } from 'lucide-react';
+import { Building2, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Star, Trash2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, FilialBadge, LoadingSpinner } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -13,6 +13,7 @@ import {
   type Avaliacao,
   type Criterio,
 } from './AvaliacoesView';
+import { CRITERIOS_MATRIZ } from '../lib/avaliacaoCriterios';
 
 // Painel "Avaliação das Filiais" — form dos 7 eixos + histórico consolidado
 // por filial. Antes esses dois blocos viviam na aba Padrão (bloco B "Avaliar
@@ -23,29 +24,33 @@ import {
 //
 // Persistência não muda: avaliacoes (tipo='matriz_filial') + criterios_avaliacao.
 // Só admin/CEO/conselheiro dão nota; painel exibe histórico pra todos.
-export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
+export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
   profile: UserProfile;
   showToast: any;
-  podeAvaliar: boolean;
+  // Ciclo Matriz da competição corrente (criado por trigger em
+  // competicoes_matriz). Sem competição ativa, o painel não aparece —
+  // a Central inteira já cai em EmptyState antes de chegar aqui.
+  cicloId: string;
 }) {
   const [ciclo, setCiclo]           = useState<Ciclo | null>(null);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [criterios, setCriterios]   = useState<Criterio[]>([]);
-  const [users, setUsers]           = useState<Pick<UserProfile, 'id' | 'nome'>[]>([]);
+  const [users, setUsers]           = useState<Pick<UserProfile, 'id' | 'nome' | 'role'>[]>([]);
   const [loading, setLoading]       = useState(true);
   const [avaliando, setAvaliando]   = useState<{ filial: string } | null>(null);
   const [linhaAberta, setLinhaAberta] = useState<string | null>(null);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+
+  const ehAdmin = profile.role === 'admin';
 
   const carregar = useCallback(async () => {
     if (!supabase) { setLoading(false); return; }
     const { data: cs } = await supabase
       .from('ciclos_avaliacao')
       .select('*')
-      .eq('status', 'Aberto')
-      .eq('filial', 'Matriz')
-      .order('data_inicio', { ascending: false })
-      .limit(1);
-    const c = (cs?.[0] as Ciclo | undefined) ?? null;
+      .eq('id', cicloId)
+      .maybeSingle();
+    const c = (cs as Ciclo | null) ?? null;
     setCiclo(c);
     if (!c) { setAvaliacoes([]); setCriterios([]); setUsers([]); setLoading(false); return; }
 
@@ -62,19 +67,48 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
     const ids = avsArr.map(a => a.id);
     const avaliadorIds = Array.from(new Set(avsArr.map(a => a.avaliador_id)));
     const [{ data: crs }, { data: us }] = await Promise.all([
+      // Só os eixos subjetivos ativos. Avaliações antigas com os 5 eixos
+      // removidos ainda têm rows em criterios_avaliacao — ficam de fora
+      // pra não distorcer médias históricas.
       supabase.from('criterios_avaliacao')
         .select('id, avaliacao_id, categoria, criterio, nota')
-        .in('avaliacao_id', ids),
+        .in('avaliacao_id', ids)
+        .in('criterio', [...CRITERIOS_MATRIZ.criterios]),
       supabase.from('user_profiles')
-        .select('id, nome')
+        .select('id, nome, role')
         .in('id', avaliadorIds),
     ]);
     setCriterios((crs as Criterio[]) ?? []);
-    setUsers((us as Pick<UserProfile, 'id' | 'nome'>[]) ?? []);
+    setUsers((us as Pick<UserProfile, 'id' | 'nome' | 'role'>[]) ?? []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { setLoading(true); carregar(); }, [carregar]);
+  useEffect(() => { setLoading(true); carregar(); }, [carregar, cicloId]);
+
+  // Notas antigas do admin (não deveria ter, mas se existirem oferece
+  // botão de excluir — admin não é conselho e não pesa em nada).
+  const minhasNotasAdmin = useMemo(() => {
+    if (!ehAdmin) return [];
+    return avaliacoes
+      .filter(a => a.avaliador_id === profile.id && a.avaliada_filial)
+      .map(a => {
+        const crits = criterios.filter(c => c.avaliacao_id === a.id);
+        const media = crits.length === 0 ? null : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
+        return { id: a.id, filial: a.avaliada_filial as string, media };
+      });
+  }, [ehAdmin, avaliacoes, criterios, profile.id]);
+
+  const excluirMinhaNotaAdmin = async (id: string) => {
+    if (!supabase) return;
+    setExcluindoId(id);
+    const { error } = await supabase.from('avaliacoes').delete().eq('id', id);
+    setExcluindoId(null);
+    if (error) return showToast?.(error.message || 'Erro ao excluir', 'error');
+    showToast?.('Nota removida', 'success');
+    carregar();
+    // Painel Comparativo dos Eixos e outros consumidores recarregam.
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+  };
 
   const minhasNotasPorFilial = useMemo((): Record<string, number | null> => {
     const out: Record<string, number | null> = {};
@@ -96,9 +130,13 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
   );
 
   // Histórico agregado por filial (todas as avaliações do ciclo, todos os avaliadores).
+  // Avaliações de admin ficam de fora do agregado — admin modera aqui mas
+  // não pesa no placar (mesma regra de calcular_placar_competicao).
   const historico = useMemo(() => {
+    const adminIds = new Set(users.filter(u => u.role === 'admin').map(u => u.id));
+    const avaliacoesConselho = avaliacoes.filter(a => !adminIds.has(a.avaliador_id));
     const porFilial = new Map<string, Avaliacao[]>();
-    avaliacoes.forEach(a => {
+    avaliacoesConselho.forEach(a => {
       if (!a.avaliada_filial) return;
       const list = porFilial.get(a.avaliada_filial) ?? [];
       list.push(a);
@@ -131,13 +169,19 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
     );
   }
 
-  const totalAvaliacoes = avaliacoes.length;
+  // Contadores/média excluem admin (não é conselho).
+  const adminIds = new Set(users.filter(u => u.role === 'admin').map(u => u.id));
+  const avaliacoesConselho = avaliacoes.filter(a => !adminIds.has(a.avaliador_id));
+  const idsConselho = new Set(avaliacoesConselho.map(a => a.id));
+  const criteriosConselho = criterios.filter(c => idsConselho.has(c.avaliacao_id));
+
+  const totalAvaliacoes = avaliacoesConselho.length;
   const totalFiliaisAvaliadas = new Set(
-    avaliacoes.filter(a => a.avaliada_filial).map(a => a.avaliada_filial as string),
+    avaliacoesConselho.filter(a => a.avaliada_filial).map(a => a.avaliada_filial as string),
   ).size;
-  const mediaCiclo = criterios.length === 0
+  const mediaCiclo = criteriosConselho.length === 0
     ? 0
-    : criterios.reduce((s, c) => s + c.nota, 0) / criterios.length;
+    : criteriosConselho.reduce((s, c) => s + c.nota, 0) / criteriosConselho.length;
 
   return (
     <motion.div
@@ -145,16 +189,45 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col gap-4"
     >
-      {/* ── Form: cards Avaliar Filial — só aparece pra quem pode avaliar
-             (CEO/conselheiro). Se admin/leitor, some inteiro pra não ocupar
-             espaço com card vazio "Modo leitura". ── */}
-      {ciclo && podeAvaliar && (
+      {/* Admin não é conselho — se tem nota antiga, oferece excluir. */}
+      {ehAdmin && minhasNotasAdmin.length > 0 && (
+        <div className="neu-flat rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-amber-300 text-xs font-bold">
+            <ShieldAlert size={14} />
+            Você (admin) tem {minhasNotasAdmin.length} nota{minhasNotasAdmin.length === 1 ? '' : 's'} antiga{minhasNotasAdmin.length === 1 ? '' : 's'} aqui — não conta em nenhum placar, mas fica registrada no banco. Remova pra limpar.
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {minhasNotasAdmin.map(n => (
+              <div key={n.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-2">
+                  <FilialBadge filial={n.filial as any} />
+                  {n.media != null && (
+                    <span className="text-gray-400 font-mono">{n.media.toFixed(1)}/10</span>
+                  )}
+                </span>
+                <button
+                  onClick={() => excluirMinhaNotaAdmin(n.id)}
+                  disabled={excluindoId === n.id}
+                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg text-red-400 hover:bg-red-500/10 border border-red-500/30 disabled:opacity-50"
+                >
+                  <Trash2 size={11} /> {excluindoId === n.id ? 'Excluindo…' : 'Excluir'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Form "Avaliar Filiais": qualquer um da Central pode abrir.
+          Nota de admin fica no banco mas não pesa em placar/painel/média
+          — o filtro é feito no RPC (migr. 240) e nos memos deste painel. */}
+      {ciclo && (
         <div className="neu-flat rounded-2xl border border-white/5 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <Building2 size={16} className="text-accent" />
               <h3 className="text-sm font-bold text-gray-200">Avaliar Filiais</h3>
-              <span className="text-[10px] text-gray-500 font-bold">7 eixos da competição</span>
+              <span className="text-[10px] text-gray-500 font-bold">Eixos subjetivos da competição</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
                 {filiaisJaAvaliadas.size} de {FILIAIS_OP.length} avaliadas
               </span>
@@ -206,7 +279,7 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
 
       {!ciclo && (
         <div className="neu-flat rounded-2xl border border-white/5 p-4 sm:p-5">
-          <EmptyState message="Nenhum ciclo Matriz aberto. Crie um ciclo com unidade = Matriz para avaliar as filiais." />
+          <EmptyState message="Ciclo da competição não encontrado. Recarregue a página." />
         </div>
       )}
 
@@ -315,7 +388,11 @@ export function AvaliacaoFilialPanel({ profile, showToast, podeAvaliar }: {
           ciclo={ciclo}
           alvo={{ kind: 'filial', filial: avaliando.filial }}
           onClose={() => setAvaliando(null)}
-          onSaved={carregar}
+          onSaved={() => {
+            carregar();
+            // Placar + Painel Comparativo dos Eixos escutam esse evento.
+            window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+          }}
           showToast={showToast}
           criteriosSet={criteriosSetPorTipo(undefined, 'filial').cs}
           categoriaLabel={criteriosSetPorTipo(undefined, 'filial').label}

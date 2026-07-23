@@ -574,6 +574,9 @@ const CardAvaliacao: React.FC<{
 
 const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp | null }) => {
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  // Ids de ciclos amarrados a alguma competição — Padrão os esconde pra
+  // não misturar as duas centrais. Padrão só enxerga ciclos criados aqui.
+  const [ciclosCompeticaoIds, setCiclosCompeticaoIds] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
@@ -698,18 +701,20 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         ciclosQ.or(`filial.eq.${filial},filial.eq.Matriz`);
         avalsQ.or(`filial.eq.${filial},avaliada_filial.eq.${filial}`);
       }
-      const [resC, resU, resA, resCr, resEv] = await Promise.all([
+      const [resC, resU, resA, resCr, resEv, resComp] = await Promise.all([
         ciclosQ,
         supabase.from('user_profiles').select('*'),
         avalsQ,
         supabase.from('criterios_avaliacao').select('*'),
         supabase.from('evidencias_avaliacao').select('*').order('created_at', { ascending: false }),
+        supabase.from('competicoes_matriz').select('ciclo_id').not('ciclo_id', 'is', null),
       ]);
       const firstErr = resC.error || resU.error || resA.error || resCr.error;
       if (firstErr) {
         showToast?.(`Erro ao carregar avaliações: ${firstErr.message}`, 'error');
       }
       setCiclos(resC.data ?? []);
+      setCiclosCompeticaoIds(new Set((resComp.data ?? []).map((r: any) => r.ciclo_id).filter(Boolean)));
       setUsers(resU.data ?? []);
       setAvaliacoes(resA.data ?? []);
       setCriterios(resCr.data ?? []);
@@ -783,18 +788,26 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     }
   };
 
+  // Ciclos visíveis no Padrão: exclui os amarrados a uma competição
+  // (esses vivem só na Central de Avaliação — Competição do Conselho).
+  const ciclosPadrao = useMemo(
+    () => ciclos.filter(c => !ciclosCompeticaoIds.has(c.id)),
+    [ciclos, ciclosCompeticaoIds],
+  );
+
   // Ciclos operacionais (de filial) abertos.
   // Em modo Matriz: todos os ciclos de filial abertos (SuperMax, MaxLook, TechMax).
   // Em modo filial: só o ciclo da filial ativa.
   const ciclosOperacionaisAbertos = useMemo(() =>
-    ciclos.filter(c => c.status === 'Aberto' && c.filial !== 'Matriz' && (filial ? c.filial === filial : true)),
-  [ciclos, filial]);
+    ciclosPadrao.filter(c => c.status === 'Aberto' && c.filial !== 'Matriz' && (filial ? c.filial === filial : true)),
+  [ciclosPadrao, filial]);
 
   // Alias mantido para compatibilidade com JSX que exibe "Ciclo: nome" e para modo filial.
   const cicloAberto = ciclosOperacionaisAbertos[0] ?? null;
 
-  // Em modo Matriz: ciclo Matriz aberto (para avaliações de filiais como entidade)
-  const cicloMatrizAberto = isMatriz ? (ciclos.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
+  // Em modo Matriz: ciclo Matriz aberto (para avaliações estratégicas — admin→CEO,
+  // ceo→gerente etc). Só ciclos criados no Padrão; ciclos de competição ficam fora.
+  const cicloMatrizAberto = isMatriz ? (ciclosPadrao.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
 
   // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos
   // + o ciclo Matriz (que cobre gerentes/colaboradores de todas as filiais + conselheiros).
@@ -984,14 +997,20 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // Traz avaliações 'matriz_filial' que o conselho registrou sobre esta filial.
   // Como avaliado_id é null, elas não caem em "Recebidas". Este bloco existe
   // pra qualquer usuário da filial ver o feedback consolidado.
+  const eixosAtivos = new Set<string>(CRITERIOS_MATRIZ.criterios);
   const feedbackMatriz = useMemo(() => {
     if (!filial) return [];
+    // Feedback de admin fica de fora — admin modera na Matriz, mas média/card
+    // aqui é o julgamento do conselho (mesma regra do placar).
+    const adminIds = new Set(users.filter(u => u.role === 'admin').map(u => u.id));
     return avaliacoes
-      .filter(a => a.tipo === 'matriz_filial' && a.avaliada_filial === filial)
+      .filter(a => a.tipo === 'matriz_filial' && a.avaliada_filial === filial && !adminIds.has(a.avaliador_id))
       .map(av => {
         const ciclo = ciclos.find(c => c.id === av.ciclo_id);
         const avaliador = users.find(u => u.id === av.avaliador_id);
-        const crits = criterios.filter(c => c.avaliacao_id === av.id);
+        // Só eixos ainda ativos entram na média e no card — notas dos 5 eixos
+        // removidos continuam no banco mas ficam de fora dos cálculos.
+        const crits = criterios.filter(c => c.avaliacao_id === av.id && eixosAtivos.has(c.criterio));
         const media = crits.length === 0 ? 0 : crits.reduce((s, c) => s + c.nota, 0) / crits.length;
         return {
           avaliacao: av,
@@ -1016,18 +1035,27 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const [pdiAvaliacaoAberta, setPdiAvaliacaoAberta] = useState<string | null>(null);
 
   useEffect(() => {
-    if (cicloConsolidadoId || ciclos.length === 0) return;
-    const aberto = ciclos.find(c => c.status === 'Aberto');
-    setCicloConsolidadoId(aberto?.id ?? ciclos[0].id);
-  }, [ciclos, cicloConsolidadoId]);
+    if (ciclosPadrao.length === 0) return;
+    // Se o id atual saiu do Padrão (ex.: `ciclosCompeticaoIds` chegou depois
+    // e revelou que era ciclo de competição), reescolhe.
+    if (cicloConsolidadoId && ciclosPadrao.some(c => c.id === cicloConsolidadoId)) return;
+    const aberto = ciclosPadrao.find(c => c.status === 'Aberto');
+    setCicloConsolidadoId(aberto?.id ?? ciclosPadrao[0].id);
+  }, [ciclosPadrao, cicloConsolidadoId]);
 
   const consolidado = useMemo(() => {
     if (!podeVerConsolidado || !cicloConsolidadoId) return null;
     const usersFilialSet = new Set(
       (filial ? users.filter(u => !u.filial || u.filial === filial || u.role === 'ceo' || u.role === 'admin') : users).map(u => u.id)
     );
-    const avalCiclo = avaliacoes.filter(a => a.ciclo_id === cicloConsolidadoId &&
-      (a.avaliado_id ? usersFilialSet.has(a.avaliado_id) : !!a.avaliada_filial)
+    // Visão do Ciclo aqui é do Padrão (pessoa-a-pessoa). Notas 'matriz_filial'
+    // pertencem à Competição do Conselho e são renderizadas no AvaliacaoFilialPanel,
+    // então ficam fora dos contadores e supergrupos aqui — mesmo que caiam no
+    // mesmo ciclo Matriz físico.
+    const avalCiclo = avaliacoes.filter(a =>
+      a.ciclo_id === cicloConsolidadoId
+      && a.tipo !== 'matriz_filial'
+      && (a.avaliado_id ? usersFilialSet.has(a.avaliado_id) : false)
     );
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
 
@@ -1230,7 +1258,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             </div>
           </div>
           <p className="text-[11px] text-gray-500 mb-4">
-            Notas e comentários que o CEO / conselheiros registraram sobre a filial nos 7 eixos da competição.
+            Notas e comentários que o CEO / conselheiros registraram sobre a filial nos eixos subjetivos da competição.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {feedbackMatriz.map(f => (
@@ -1270,7 +1298,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             </NeuButtonAccent>
           </div>
 
-          {ciclos.length === 0 ? (
+          {ciclosPadrao.length === 0 ? (
             <EmptyState message="Nenhum ciclo criado. Abra o primeiro para começar." />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
@@ -1287,7 +1315,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                   </tr>
                 </thead>
                 <tbody>
-                  {ciclos.map(c => (
+                  {ciclosPadrao.map(c => (
                     <tr key={c.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{c.nome}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{c.filial}</td>
@@ -1359,7 +1387,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 onChange={e => { setCicloConsolidadoId(e.target.value); setLinhaExpandida(null); }}
                 className="neu-input rounded-xl px-3 py-2 text-sm"
               >
-                {ciclos.map(c => (
+                {ciclosPadrao.map(c => (
                   <option key={c.id} value={c.id}>{c.nome} · {c.filial} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
                 ))}
               </select>

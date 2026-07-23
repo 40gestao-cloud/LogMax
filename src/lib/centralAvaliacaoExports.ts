@@ -111,14 +111,16 @@ export type CentralRelatorio = {
 export async function buscarRelatorioCentralAvaliacao(competicao: {
   id: string; nome: string; data_inicio: string; data_fim: string;
 }): Promise<CentralRelatorio> {
+  // Admin não é conselho — nota dele fica de fora dos agregados (regra 240).
   const { data: avalsRaw } = await supabase
     .from('avaliacoes_matriz')
-    .select('item_tipo,item_id,decisao,nota,comentario')
+    .select('item_tipo,item_id,decisao,nota,comentario,avaliador:user_profiles!avaliador_id(role)')
     .eq('competicao_id', competicao.id)
     .eq('ativo', true);
 
   const avalsPorChave = new Map<string, any[]>();
   for (const a of (avalsRaw ?? []) as any[]) {
+    if (a.avaliador?.role === 'admin') continue;
     const key = `${a.item_tipo}:${a.item_id}`;
     const list = avalsPorChave.get(key) ?? [];
     list.push(a);

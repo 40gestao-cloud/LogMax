@@ -116,6 +116,9 @@ type AvaliacaoParticipante = {
   avaliador_id: string;
   nota: number | null;
   comentario: string | null;
+  // Vem via JOIN — usado só pra excluir notas de admin da média
+  // exibida (mesma regra do placar em calcular_placar_competicao).
+  avaliador?: { role: string | null } | null;
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -266,12 +269,12 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     if (partIds.length > 0) {
       const { data: as } = await supabase
         .from('avaliacoes_matriz')
-        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario')
+        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario,avaliador:user_profiles!avaliador_id(role)')
         .eq('competicao_id', competicao.id)
         .eq('item_tipo', tipoConfig.id)
         .in('item_id', partIds)
         .eq('ativo', true);
-      setAvaliacoes((as ?? []) as AvaliacaoParticipante[]);
+      setAvaliacoes((as ?? []) as any as AvaliacaoParticipante[]);
     } else {
       setAvaliacoes([]);
     }
@@ -482,7 +485,9 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
   onAvaliar: (patch: { nota?: number|null; comentario?: string|null }) => void;
 }) {
   const minha = avals.find(a => a.avaliador_id === minhaId);
-  const notas = avals.filter(a => a.nota !== null && a.nota !== undefined).map(a => Number(a.nota));
+  // Notas de admin não entram na média — admin é moderador aqui.
+  const avalsConselho = avals.filter(a => a.avaliador?.role !== 'admin');
+  const notas = avalsConselho.filter(a => a.nota !== null && a.nota !== undefined).map(a => Number(a.nota));
   const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
 
   const inputRef = useRef<HTMLInputElement | null>(null);

@@ -25,6 +25,7 @@ type Competicao = {
   data_inicio: string;
   data_fim: string;
   status: string;
+  ciclo_id: string | null;
 };
 
 // Central de Avaliação — Competição: hoje é só o painel de Tarefas da Matriz.
@@ -44,7 +45,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       if (comMask) setLoadingComp(true);
       const { data } = await supabase
         .from('competicoes_matriz')
-        .select('id,nome,data_inicio,data_fim,status')
+        .select('id,nome,data_inicio,data_fim,status,ciclo_id')
         .eq('ativo', true)
         .in('status', ['em_andamento', 'aguardando_encerramento'])
         .maybeSingle();
@@ -155,11 +156,13 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         showToast={showToast}
       />
 
-      <AvaliacaoFilialPanel
-        profile={profile}
-        podeAvaliar={podeAvaliar}
-        showToast={showToast}
-      />
+      {competicao.ciclo_id && (
+        <AvaliacaoFilialPanel
+          profile={profile}
+          cicloId={competicao.ciclo_id}
+          showToast={showToast}
+        />
+      )}
 
       <PainelComparativoEixos showToast={showToast} />
 
@@ -224,8 +227,10 @@ function VisaoCicloPorParticipante({ competicao }: { competicao: Competicao }) {
           .select('id, tarefa_id, nome_snapshot, filial, funcionario_id')
           .in('tarefa_id', tarefaIds)
           .eq('ativo', true),
+        // Notas de admin não entram — admin modera mas não pesa
+        // (mesma regra do placar em calcular_placar_competicao).
         supabase.from('avaliacoes_matriz')
-          .select('item_id, item_tipo, nota')
+          .select('item_id, item_tipo, nota, avaliador:user_profiles!avaliador_id(role)')
           .eq('competicao_id', competicao.id)
           .in('item_tipo', TAREFA_TIPOS_MATRIZ)
           .eq('ativo', true),
@@ -236,6 +241,7 @@ function VisaoCicloPorParticipante({ competicao }: { competicao: Competicao }) {
       const avalsPorItem = new Map<string, number[]>();
       (avals ?? []).forEach((a: any) => {
         if (a.nota == null) return;
+        if (a.avaliador?.role === 'admin') return;
         if (!avalsPorItem.has(a.item_id)) avalsPorItem.set(a.item_id, []);
         avalsPorItem.get(a.item_id)!.push(Number(a.nota));
       });

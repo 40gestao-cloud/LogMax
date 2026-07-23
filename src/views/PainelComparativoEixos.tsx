@@ -51,6 +51,14 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  // Recarrega quando outra parte da Central altera notas (novo avaliar,
+  // remoção de tarefa/participante, admin excluindo nota antiga).
+  useEffect(() => {
+    const h = () => { carregar(); };
+    window.addEventListener('avaliacao-matriz:changed', h);
+    return () => window.removeEventListener('avaliacao-matriz:changed', h);
+  }, [carregar]);
+
   const rankingPorEixo = useMemo(() => {
     if (!painel) return {};
     const porEixo: Record<string, { filial: string; score: number }[]> = {};
@@ -70,7 +78,7 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <BarChart3 size={16} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-200">Painel Comparativo dos 7 Eixos</h3>
+          <h3 className="text-sm font-bold text-gray-200">Painel Comparativo dos Eixos</h3>
           <span className="text-[10px] text-gray-500 font-bold">Ciclo: {ciclo.nome}</span>
         </div>
         <button
@@ -195,9 +203,9 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
                 })}
                 <tr className="border-t-2 border-white/10 bg-white/[0.03]">
                   <td className="py-3 px-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    Total (0-70)
+                    Total (0-{CRITERIOS_MATRIZ.criterios.length * ESCALA_MAX})
                     <span className="block text-[9px] text-gray-600 font-normal normal-case tracking-normal mt-0.5">
-                      Soma dos 7 eixos · vitórias por eixo
+                      Soma dos {CRITERIOS_MATRIZ.criterios.length} eixos · vitórias por eixo
                     </span>
                   </td>
                   {FILIAIS_OP.map(f => {
