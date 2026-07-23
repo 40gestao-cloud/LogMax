@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   GraduationCap, Cpu, Presentation, Plus, X, Trash2, Loader2,
   Star, MessageSquare, ChevronRight, ArrowLeft, Check, Users,
-  UserCircle, Megaphone, DollarSign, Package,
+  UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -99,6 +99,7 @@ type Tarefa = {
   data: string;
   criado_por: string;
   created_at: string;
+  status: 'aberta' | 'encerrada';
 };
 
 type Participante = {
@@ -237,6 +238,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoParticipante[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editandoTarefa, setEditandoTarefa] = useState<Tarefa | null>(null);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
 
@@ -246,7 +248,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     setLoading(true);
     const { data: ts } = await supabase
       .from('matriz_tarefas')
-      .select('id,competicao_id,tipo,nome,descricao,data,criado_por,created_at')
+      .select('id,competicao_id,tipo,nome,descricao,data,criado_por,created_at,status')
       .eq('competicao_id', competicao.id)
       .eq('tipo', tipoConfig.id)
       .eq('ativo', true)
@@ -323,6 +325,30 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
+  async function encerrarTarefa(tarefa: Tarefa) {
+    if (!await confirm({
+      message: `Encerrar "${tarefa.nome}"? Notas continuam contando no placar, mas ninguém poderá mais alterar nota, adicionar/remover participante ou editar a tarefa. Você pode reabrir depois.`,
+      confirmLabel: 'Encerrar',
+    })) return;
+    const { error } = await supabase.rpc('encerrar_matriz_tarefa', { p_tarefa_id: tarefa.id });
+    if (error) return showToast(error.message || 'Erro ao encerrar', 'error');
+    showToast('Tarefa encerrada', 'success');
+    carregar();
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+  }
+
+  async function reabrirTarefa(tarefa: Tarefa) {
+    if (!await confirm({
+      message: `Reabrir "${tarefa.nome}"? Volta a aceitar notas, edição e mudança de participantes.`,
+      confirmLabel: 'Reabrir',
+    })) return;
+    const { error } = await supabase.rpc('reabrir_matriz_tarefa', { p_tarefa_id: tarefa.id });
+    if (error) return showToast(error.message || 'Erro ao reabrir', 'error');
+    showToast('Tarefa reaberta', 'success');
+    carregar();
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+  }
+
   async function removerTarefa(tarefaId: string) {
     if (!await confirm({
       message: 'Remover esta tarefa? Notas ficarão preservadas no histórico mas somem do placar ativo.',
@@ -380,10 +406,13 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
               avalsPorParticipante={avalsPorParticipante}
               submittingIds={submittingIds}
               podeAvaliar={podeAvaliar}
-              podeRemover={profile.role === 'admin' || profile.role === 'ceo'}
+              podeGerenciar={profile.role === 'admin' || profile.role === 'ceo'}
               minhaId={profile.id}
               onAvaliar={avaliarParticipante}
               onRemover={() => removerTarefa(t.id)}
+              onEditar={() => setEditandoTarefa(t)}
+              onEncerrar={() => encerrarTarefa(t)}
+              onReabrir={() => reabrirTarefa(t)}
             />
           ))}
         </div>
@@ -398,44 +427,83 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           showToast={showToast}
         />
       )}
+
+      {editandoTarefa && (
+        <ModalEditarTarefa
+          tipoConfig={tipoConfig}
+          tarefa={tarefas.find(t => t.id === editandoTarefa.id) ?? editandoTarefa}
+          participantes={participantesPorTarefa[editandoTarefa.id] ?? []}
+          onClose={() => setEditandoTarefa(null)}
+          onSalvo={() => { setEditandoTarefa(null); carregar(); }}
+          onRefresh={carregar}
+          showToast={showToast}
+        />
+      )}
     </section>
   );
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeRemover, minhaId, onAvaliar, onRemover }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAvaliar, onRemover, onEditar, onEncerrar, onReabrir }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
   avalsPorParticipante: Record<string, AvaliacaoParticipante[]>;
   submittingIds: Set<string>;
   podeAvaliar: boolean;
-  podeRemover: boolean;
+  podeGerenciar: boolean;
   minhaId: string;
   onAvaliar: (p: Participante, patch: { nota?: number|null; comentario?: string|null }) => void;
   onRemover: () => void;
+  onEditar: () => void;
+  onEncerrar: () => void;
+  onReabrir: () => void;
 }) {
   const porFilial = useMemo(() => {
     const m: Record<FilialOp, Participante[]> = { SuperMax: [], MaxLook: [], TechMax: [] };
     for (const p of participantes) m[p.filial]?.push(p);
     return m;
   }, [participantes]);
+  const encerrada = tarefa.status === 'encerrada';
 
   return (
-    <div className="neu-flat rounded-2xl border border-accent/10 p-4 flex flex-col gap-3">
+    <div className={`neu-flat rounded-2xl border p-4 flex flex-col gap-3 ${encerrada ? 'border-gray-500/25 opacity-95' : 'border-accent/10'}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2 flex-wrap">
             {new Date(tarefa.data + 'T00:00:00').toLocaleDateString('pt-BR')} · {participantes.length} participante{participantes.length === 1 ? '' : 's'}
+            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
+              encerrada
+                ? 'bg-gray-500/20 text-gray-300 ring-1 ring-gray-500/30'
+                : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+            }`}>
+              {encerrada ? <><Lock size={9} /> Encerrada</> : <><Unlock size={9} /> Aberta</>}
+            </span>
           </span>
           <h4 className="text-base font-black text-gray-100">{tarefa.nome}</h4>
           {tarefa.descricao && <p className="text-xs text-gray-400 leading-snug">{tarefa.descricao}</p>}
         </div>
-        {podeRemover && (
-          <button onClick={onRemover}
-            className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg neu-button text-gray-400 hover:text-rose-400 flex items-center gap-1.5">
-            <Trash2 size={11} /> Remover
-          </button>
+        {podeGerenciar && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {!encerrada && (
+              <>
+                <button onClick={onEditar} className="btn-shimmer btn-shimmer--glass-blue" title="Editar tarefa">
+                  <Pencil size={11} /> Editar
+                </button>
+                <button onClick={onEncerrar} className="btn-shimmer btn-shimmer--glass-yellow" title="Encerrar tarefa">
+                  <Lock size={11} /> Encerrar
+                </button>
+              </>
+            )}
+            {encerrada && (
+              <button onClick={onReabrir} className="btn-shimmer btn-shimmer--glass-yellow" title="Reabrir tarefa">
+                <Unlock size={11} /> Reabrir
+              </button>
+            )}
+            <button onClick={onRemover} className="btn-shimmer btn-shimmer--glass-red" title="Remover tarefa">
+              <Trash2 size={11} /> Remover
+            </button>
+          </div>
         )}
       </div>
 
@@ -460,7 +528,7 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
                       tipoConfig={tipoConfig}
                       avals={avalsPorParticipante[p.id] ?? []}
                       minhaId={minhaId}
-                      podeAvaliar={podeAvaliar}
+                      podeAvaliar={podeAvaliar && !encerrada}
                       submitting={submittingIds.has(p.id)}
                       onAvaliar={patch => onAvaliar(p, patch)}
                     />
@@ -709,6 +777,197 @@ function ModalCriarTarefa({ tipoConfig, competicao, onClose, onCriada, showToast
             className="text-xs font-bold px-4 py-2 rounded-lg neu-button text-accent ring-1 ring-accent/40 hover:ring-accent flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             {saving && <Loader2 size={12} className="animate-spin" />}
             Criar tarefa
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Modal de edição (nome/descrição/data + participantes) ────────────
+function ModalEditarTarefa({ tipoConfig: _tipoConfig, tarefa, participantes, onClose, onSalvo, onRefresh, showToast }: {
+  tipoConfig: TipoConfig;
+  tarefa: Tarefa;
+  participantes: Participante[];
+  onClose: () => void;
+  onSalvo: () => void;
+  onRefresh: () => void | Promise<void>;
+  showToast: any;
+}) {
+  const [nome, setNome] = useState(tarefa.nome);
+  const [descricao, setDescricao] = useState(tarefa.descricao ?? '');
+  const [data, setData] = useState(tarefa.data);
+  const [funcionarios, setFuncionarios] = useState<any[]>([]);
+  const [loadingFn, setLoadingFn] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [filtroFilial, setFiltroFilial] = useState<'todas' | FilialOp>('todas');
+  const partByFuncId = useMemo(() => {
+    const m = new Map<string, Participante>();
+    participantes.forEach(p => { if (p.funcionario_id) m.set(p.funcionario_id, p); });
+    return m;
+  }, [participantes]);
+
+  useEffect(() => {
+    (async () => {
+      setLoadingFn(true);
+      const { data } = await supabase
+        .from('funcionarios')
+        .select('id,nome,filial,cargo,ativo')
+        .in('filial', CENTRAL_OP_FILIAIS as unknown as string[])
+        .eq('ativo', true)
+        .order('nome', { ascending: true });
+      setFuncionarios(data ?? []);
+      setLoadingFn(false);
+    })();
+  }, []);
+
+  const funcionariosFiltrados = useMemo(() =>
+    filtroFilial === 'todas' ? funcionarios : funcionarios.filter(f => f.filial === filtroFilial),
+    [funcionarios, filtroFilial]);
+
+  async function toggle(f: any, marcar: boolean) {
+    const part = partByFuncId.get(f.id);
+    if (marcar && !part) {
+      const { error } = await supabase.rpc('adicionar_matriz_participante', {
+        p_tarefa_id: tarefa.id,
+        p_funcionario_id: f.id,
+        p_nome: f.nome,
+        p_filial: f.filial,
+      });
+      if (error) return showToast(error.message || 'Erro ao adicionar participante', 'error');
+      await onRefresh();
+      return;
+    }
+    if (!marcar && part) {
+      const { error } = await supabase.rpc('remover_matriz_participante', { p_participante_id: part.id });
+      if (error) return showToast(error.message || 'Erro ao remover participante', 'error');
+      await onRefresh();
+    }
+  }
+
+  async function salvar() {
+    if (!nome.trim()) return showToast('Informe o nome da tarefa', 'error');
+    setSaving(true);
+    const { error } = await supabase.rpc('atualizar_matriz_tarefa', {
+      p_tarefa_id: tarefa.id,
+      p_nome:      nome.trim(),
+      p_descricao: descricao.trim(),
+      p_data:      data,
+    });
+    setSaving(false);
+    if (error) return showToast(error.message || 'Erro ao salvar', 'error');
+    showToast('Tarefa atualizada', 'success');
+    onSalvo();
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="neu-flat rounded-2xl border border-accent/20 p-5 sm:p-6 w-full max-w-2xl my-6 flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-black text-gray-100">Editar tarefa</h3>
+          <button onClick={onClose} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Nome</label>
+            <input
+              type="text" value={nome} onChange={e => setNome(e.target.value)}
+              className="neu-input py-2 px-3 text-sm rounded-lg text-gray-100"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Data</label>
+            <input
+              type="date" value={data} onChange={e => setData(e.target.value)}
+              className="neu-input py-2 px-3 text-sm rounded-lg text-gray-100"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Descrição (opcional)</label>
+          <textarea
+            value={descricao} onChange={e => setDescricao(e.target.value)}
+            rows={2}
+            className="neu-input py-2 px-3 text-sm rounded-lg text-gray-100 resize-none"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+              Participantes ({partByFuncId.size} nesta tarefa)
+            </label>
+            <div className="flex items-center gap-1 neu-pressed rounded-lg p-0.5">
+              {(['todas', ...CENTRAL_OP_FILIAIS] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFiltroFilial(f as any)}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded transition-all ${
+                    filtroFilial === f ? 'neu-button text-accent' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  {f === 'todas' ? 'Todas' : f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Marcar/desmarcar aplica na hora. Ao remover, as notas do conselho pra essa pessoa somem do placar.
+          </p>
+
+          {loadingFn ? (
+            <div className="flex items-center justify-center py-6"><Loader2 size={16} className="animate-spin text-accent" /></div>
+          ) : funcionariosFiltrados.length === 0 ? (
+            <p className="text-xs text-gray-500 italic py-3 text-center">Nenhum funcionário disponível.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto neu-pressed rounded-xl p-2 flex flex-col gap-1">
+              {funcionariosFiltrados.map(f => {
+                const marcado = partByFuncId.has(f.id);
+                const tone = CENTRAL_FILIAL_TONE[f.filial as FilialOp] ?? 'bg-gray-500/20 text-gray-300';
+                return (
+                  <label
+                    key={f.id}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                      marcado ? 'bg-accent/10 ring-1 ring-accent/30' : 'hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox" checked={marcado}
+                      onChange={e => toggle(f, e.target.checked)}
+                      className="accent-current"
+                    />
+                    <span className="text-xs text-gray-200 flex-1 truncate">{f.nome}</span>
+                    {f.cargo && <span className="text-[10px] text-gray-500 hidden sm:inline">{f.cargo}</span>}
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full ${tone}`}>{f.filial}</span>
+                    {marcado && <Check size={12} className="text-accent" />}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+          <button onClick={onClose} disabled={saving}
+            className="text-xs font-bold px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-gray-200">
+            Fechar
+          </button>
+          <button onClick={salvar} disabled={saving || !nome.trim()}
+            className="text-xs font-bold px-4 py-2 rounded-lg neu-button text-accent ring-1 ring-accent/40 hover:ring-accent flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            {saving && <Loader2 size={12} className="animate-spin" />}
+            Salvar
           </button>
         </div>
       </motion.div>

@@ -1328,7 +1328,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                           {c.status === 'Aberto' ? (
                             <button
                               onClick={() => fecharCiclo(c.id)}
-                              className="text-[10px] text-gray-500 hover:text-yellow-400 font-bold uppercase tracking-widest flex items-center gap-1"
+                              className="btn-shimmer btn-shimmer--glass-yellow"
+                              title="Fechar ciclo"
                             >
                               <Lock size={11} /> Fechar
                             </button>
@@ -1336,7 +1337,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                             <button
                               onClick={() => reabrirCiclo(c.id)}
                               title="Volta o ciclo para Aberto — libera edição/nova avaliação"
-                              className="text-[10px] text-gray-500 hover:text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1"
+                              className="btn-shimmer btn-shimmer--glass-yellow"
                             >
                               <LockOpen size={11} /> Reabrir
                             </button>
@@ -1344,14 +1345,14 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                           <button
                             onClick={() => setEditandoCiclo(c)}
                             title="Editar ciclo (nome, período, unidade, anonimato)"
-                            className="text-[10px] text-gray-500 hover:text-accent font-bold uppercase tracking-widest flex items-center gap-1"
+                            className="btn-shimmer btn-shimmer--glass-blue"
                           >
                             <Pencil size={11} /> Editar
                           </button>
                           <button
                             onClick={() => excluirCiclo(c)}
                             title="Excluir ciclo (apaga avaliações em cascata)"
-                            className="text-[10px] text-gray-500 hover:text-red-500 font-bold uppercase tracking-widest flex items-center gap-1"
+                            className="btn-shimmer btn-shimmer--glass-red"
                           >
                             <Trash2 size={11} /> Excluir
                           </button>

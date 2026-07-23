@@ -93,6 +93,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [encerrando, setEncerrando] = useState(false);
   const [encerrandoAgora, setEncerrandoAgora] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
+  const [editando, setEditando] = useState<Competicao | null>(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [formEdit, setFormEdit] = useState({ nome: '', descricao: '', data_inicio: '', data_fim: '' });
   const [baixandoPdf, setBaixandoPdf] = useState(false);
   const [modalParabens, setModalParabens] = useState<string | null>(null);
   const [editandoVoto, setEditandoVoto] = useState(false);
@@ -350,6 +353,34 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       setPlacar(null);
       setVotos([]);
     }
+    await carregarLista();
+  };
+
+  const abrirEdicao = (c: Competicao) => {
+    setEditando(c);
+    setFormEdit({
+      nome: c.nome,
+      descricao: c.descricao ?? '',
+      data_inicio: c.data_inicio,
+      data_fim: c.data_fim,
+    });
+  };
+
+  const salvarEdicao = async () => {
+    if (!editando || !supabase) return;
+    if (!formEdit.nome.trim()) return showToast?.('Informe o nome da competição.', 'error');
+    setSalvandoEdicao(true);
+    const { error } = await supabase.rpc('atualizar_competicao', {
+      p_competicao_id: editando.id,
+      p_nome: formEdit.nome.trim(),
+      p_data_inicio: formEdit.data_inicio,
+      p_data_fim: formEdit.data_fim,
+      p_descricao: formEdit.descricao.trim() || null,
+    });
+    setSalvandoEdicao(false);
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    showToast?.('Competição atualizada.', 'success');
+    setEditando(null);
     await carregarLista();
   };
 
@@ -889,6 +920,78 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         )}
       </AnimatePresence>
 
+      {/* Modal de edição da competição */}
+      <AnimatePresence>
+        {editando && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+            onClick={() => !salvandoEdicao && setEditando(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 22 }}
+              className="neu-flat rounded-3xl p-6 border border-accent/30 max-w-xl w-full relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setEditando(null)}
+                disabled={salvandoEdicao}
+                className="absolute top-4 right-4 text-gray-500 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+              <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                <Pencil size={13} className="text-accent" /> Editar competição
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="md:col-span-2">
+                  <FormField label="Nome">
+                    <input type="text" value={formEdit.nome}
+                      onChange={e => setFormEdit(f => ({ ...f, nome: e.target.value }))}
+                      className="neu-input rounded-lg px-3 py-2 text-xs w-full" />
+                  </FormField>
+                </div>
+                <div className="md:col-span-2">
+                  <FormField label="Descrição (opcional)">
+                    <textarea value={formEdit.descricao}
+                      onChange={e => setFormEdit(f => ({ ...f, descricao: e.target.value }))}
+                      className="neu-input rounded-lg px-3 py-2 text-xs w-full" rows={3} />
+                  </FormField>
+                </div>
+                <FormField label="Início">
+                  <input type="date" value={formEdit.data_inicio}
+                    onChange={e => setFormEdit(f => ({ ...f, data_inicio: e.target.value }))}
+                    className="neu-input rounded-lg px-3 py-2 text-xs w-full" />
+                </FormField>
+                <FormField label="Fim">
+                  <input type="date" value={formEdit.data_fim}
+                    onChange={e => setFormEdit(f => ({ ...f, data_fim: e.target.value }))}
+                    className="neu-input rounded-lg px-3 py-2 text-xs w-full" />
+                </FormField>
+              </div>
+              <p className="text-[10px] text-gray-500 mb-4">
+                As datas do ciclo da Avaliação de Filial vinculado são atualizadas junto.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setEditando(null)}
+                  disabled={salvandoEdicao}
+                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={salvarEdicao} disabled={salvandoEdicao || !formEdit.nome.trim()} variant="">
+                  {salvandoEdicao
+                    ? <><Loader2 size={13} className="animate-spin" /> Salvando…</>
+                    : <>Salvar</>}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {tab === 'config' && (
         <>
           {podeGerenciar && (
@@ -956,20 +1059,36 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           🏆 {c.vencedora}
                         </span>
                       )}
-                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${
-                        c.status === 'em_andamento' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                          : c.status === 'aguardando_encerramento' ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
-                          : 'bg-gray-500/15 text-gray-400 border border-gray-500/30'
-                      }`}>
-                        {c.status.replace(/_/g, ' ')}
-                      </span>
+                      {c.status === 'em_andamento' ? (
+                        <span className="btn-shimmer btn-shimmer--glass-green" style={{ cursor: 'default' }}>
+                          Em Andamento
+                        </span>
+                      ) : c.status === 'aguardando_encerramento' ? (
+                        <span className="btn-shimmer btn-shimmer--glass-yellow" style={{ cursor: 'default' }}>
+                          Aguardando Encerramento
+                        </span>
+                      ) : (
+                        <span className="btn-shimmer btn-shimmer--glass-gray" style={{ cursor: 'default' }}>
+                          Encerrada
+                        </span>
+                      )}
+                      {c.status !== 'encerrada' && (
+                        <button
+                          onClick={() => abrirEdicao(c)}
+                          title="Editar competição"
+                          className="btn-shimmer btn-shimmer--glass-blue"
+                        >
+                          <Pencil size={12} /> Editar
+                        </button>
+                      )}
                       <button
                         onClick={() => excluirCompeticao(c)}
                         disabled={excluindo === c.id}
                         title="Excluir competição (uso pra descartar testes)"
-                        className="flex items-center justify-center w-7 h-7 rounded-lg neu-button text-gray-500 hover:text-red-400 hover:ring-1 hover:ring-red-400/40 transition-all shrink-0"
+                        className="btn-shimmer btn-shimmer--glass-red"
                       >
                         {excluindo === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        Excluir
                       </button>
                     </div>
                   </div>
