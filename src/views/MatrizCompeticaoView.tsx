@@ -45,6 +45,7 @@ type Voto = {
 type Placar = {
   competicao: any;
   por_filial: Record<string, { media: number; n: number }>;
+  inclui_eixos_conselho?: boolean;
 };
 
 // Snapshots antigos (pré-migração 227) tinham forma { placar: { total_por_filial } }
@@ -518,6 +519,25 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* Composição do placar — sinaliza se os 7 eixos da Avaliação
+                    de Filial entraram (gate: as 3 filiais precisam ter ≥1
+                    avaliação matriz_filial no período). */}
+                <div className="mb-3 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                  <span className="text-gray-500">Fontes:</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-300">
+                    Tarefas da Matriz
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full border ${
+                    placar.inclui_eixos_conselho
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-white/5 border-white/10 text-gray-500 line-through'
+                  }`} title={placar.inclui_eixos_conselho
+                    ? 'Notas dos 7 eixos entraram na média'
+                    : 'Alguma filial ainda não recebeu avaliação de filial no período — fonte ignorada'}>
+                    7 eixos (Avaliação de Filial)
+                  </span>
                 </div>
 
                 {/* Pódio — média das notas por filial (× 10, escala 0-100) */}
