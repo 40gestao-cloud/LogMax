@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   GraduationCap, Cpu, Presentation, Plus, X, Trash2, Loader2,
   Star, MessageSquare, ChevronRight, ArrowLeft, Check, Users,
-  UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock,
+  UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock, Sparkles,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -239,6 +239,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoTarefa, setEditandoTarefa] = useState<Tarefa | null>(null);
+  const [briefingTarefa, setBriefingTarefa] = useState<Tarefa | null>(null);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
 
@@ -413,6 +414,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
               onEditar={() => setEditandoTarefa(t)}
               onEncerrar={() => encerrarTarefa(t)}
               onReabrir={() => reabrirTarefa(t)}
+              onBriefingIa={() => setBriefingTarefa(t)}
             />
           ))}
         </div>
@@ -439,12 +441,22 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           showToast={showToast}
         />
       )}
+
+      {briefingTarefa && (
+        <ModalBriefingIa
+          tarefa={briefingTarefa}
+          competicao={competicao}
+          onClose={() => setBriefingTarefa(null)}
+          onAprovada={() => { carregar(); window.dispatchEvent(new Event('avaliacao-matriz:changed')); }}
+          showToast={showToast}
+        />
+      )}
     </section>
   );
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAvaliar, onRemover, onEditar, onEncerrar, onReabrir }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAvaliar, onRemover, onEditar, onEncerrar, onReabrir, onBriefingIa }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
@@ -458,6 +470,7 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   onEditar: () => void;
   onEncerrar: () => void;
   onReabrir: () => void;
+  onBriefingIa: () => void;
 }) {
   const porFilial = useMemo(() => {
     const m: Record<FilialOp, Participante[]> = { SuperMax: [], MaxLook: [], TechMax: [] };
@@ -487,6 +500,9 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
           <div className="flex items-center gap-1.5 flex-wrap">
             {!encerrada && (
               <>
+                <button onClick={onBriefingIa} className="btn-shimmer btn-shimmer--glass-purple" title="MaxAI Briefing — IA sugere sub-tarefas nos outros tipos pra apoiar esta tarefa">
+                  <Sparkles size={11} /> MaxAI Briefing
+                </button>
                 <button onClick={onEditar} className="btn-shimmer btn-shimmer--glass-blue" title="Editar tarefa">
                   <Pencil size={11} /> Editar
                 </button>
@@ -970,6 +986,167 @@ function ModalEditarTarefa({ tipoConfig: _tipoConfig, tarefa, participantes, onC
             Salvar
           </button>
         </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Modal MaxAI Briefing ─────────────────────────────────────────────
+// Chama /api/ai-briefing-tarefa com a tarefa selecionada. IA devolve
+// até 6 sugestões (uma por tipo restante). Admin/CEO aprova uma-a-uma;
+// cada aprovação chama criar_matriz_tarefa com p_origem='briefing_ia'.
+// Não persiste as sugestões — descarte é implícito (fechar sem aprovar).
+type Sugestao = {
+  tipo: TipoTarefa;
+  nome: string;
+  descricao: string;
+  justificativa: string;
+};
+
+function ModalBriefingIa({ tarefa, competicao, onClose, onAprovada, showToast }: {
+  tarefa: Tarefa;
+  competicao: Competicao;
+  onClose: () => void;
+  onAprovada: () => void;
+  showToast: any;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
+  const [aprovadas, setAprovadas] = useState<Set<string>>(new Set());
+  const [aprovando, setAprovando] = useState<string | null>(null);
+  const [modelo, setModelo] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelou = false;
+    (async () => {
+      setLoading(true);
+      setErro(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
+        const resp = await fetch('/api/ai-briefing-tarefa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ tarefa_id: tarefa.id }),
+        });
+        const data = await resp.json();
+        if (cancelou) return;
+        if (!resp.ok) {
+          setErro(data?.error ?? 'Falha na IA.');
+          setLoading(false);
+          return;
+        }
+        setSugestoes(data.sugestoes ?? []);
+        setModelo(data.modelo_ia ?? null);
+      } catch (err: any) {
+        if (!cancelou) setErro(err?.message ?? 'Falha na IA.');
+      } finally {
+        if (!cancelou) setLoading(false);
+      }
+    })();
+    return () => { cancelou = true; };
+  }, [tarefa.id]);
+
+  const aprovar = async (s: Sugestao) => {
+    setAprovando(s.tipo);
+    const { error } = await supabase.rpc('criar_matriz_tarefa', {
+      p_competicao_id: competicao.id,
+      p_tipo:          s.tipo,
+      p_nome:          s.nome,
+      p_descricao:     s.descricao,
+      p_data:          todayBR(),
+      p_participantes: [],
+      p_origem:        'briefing_ia',
+    });
+    setAprovando(null);
+    if (error) return showToast(error.message || 'Erro ao aprovar sugestão', 'error');
+    setAprovadas(prev => { const n = new Set(prev); n.add(s.tipo); return n; });
+    showToast(`Tarefa criada em ${TIPO_BY_ID.get(s.tipo)?.label ?? s.tipo}`, 'success');
+    onAprovada();
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}>
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="neu-flat rounded-2xl border border-purple-400/25 p-5 w-full max-w-2xl max-h-[90vh] flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center ring-1 ring-purple-500/30 shrink-0">
+              <Sparkles size={16} className="text-purple-300" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-black uppercase tracking-widest text-purple-200">MaxAI Briefing</h3>
+              <p className="text-[11px] text-gray-400 truncate">Sub-tarefas sugeridas para apoiar: <span className="text-gray-200 font-bold">{tarefa.nome}</span></p>
+            </div>
+          </div>
+          <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-200">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto flex flex-col gap-3 -mx-1 px-1">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 size={24} className="animate-spin text-purple-300" />
+              <p className="text-[11px] text-gray-400">IA analisando a tarefa e propondo sub-tarefas nos outros 6 tipos…</p>
+            </div>
+          )}
+
+          {!loading && erro && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-200">
+              {erro}
+            </div>
+          )}
+
+          {!loading && !erro && sugestoes.length === 0 && (
+            <EmptyState message="IA não retornou sugestões desta vez. Feche e tente novamente." />
+          )}
+
+          {!loading && !erro && sugestoes.map(s => {
+            const cfg = TIPO_BY_ID.get(s.tipo);
+            const Icon = cfg?.icon ?? Sparkles;
+            const jaAprovada = aprovadas.has(s.tipo);
+            const emAndamento = aprovando === s.tipo;
+            return (
+              <div key={s.tipo} className={`neu-pressed rounded-xl p-3 flex flex-col gap-2 border ${jaAprovada ? 'border-emerald-500/40 opacity-70' : 'border-white/5'}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ring-1 ${cfg?.iconRing ?? 'ring-gray-500/30'} ${cfg?.iconBg ?? 'bg-gray-500/10'}`}>
+                    <Icon size={13} className={cfg?.iconColor ?? 'text-gray-300'} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{cfg?.label ?? s.tipo}</span>
+                </div>
+                <p className="text-sm font-bold text-gray-100 leading-snug">{s.nome}</p>
+                {s.descricao && <p className="text-xs text-gray-400 leading-snug">{s.descricao}</p>}
+                {s.justificativa && (
+                  <p className="text-[11px] text-purple-200/80 italic leading-snug border-l-2 border-purple-400/40 pl-2">
+                    {s.justificativa}
+                  </p>
+                )}
+                <div className="flex items-center justify-end pt-1">
+                  {jaAprovada ? (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300 flex items-center gap-1">
+                      <Check size={11} /> Criada
+                    </span>
+                  ) : (
+                    <button onClick={() => aprovar(s)} disabled={emAndamento}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg neu-button text-emerald-300 ring-1 ring-emerald-500/30 hover:ring-emerald-500 flex items-center gap-1.5 disabled:opacity-50">
+                      {emAndamento ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                      Aprovar e criar
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {modelo && (
+          <p className="text-[9px] text-gray-500 font-mono text-center">Modelo: {modelo}</p>
+        )}
       </motion.div>
     </motion.div>
   );
