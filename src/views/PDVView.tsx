@@ -16,7 +16,7 @@ import type { Produto, Cliente } from '../types/domain';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { buildPixQrValue } from '../lib/pixQr';
+import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 
@@ -2414,7 +2414,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               <div className="rounded-2xl px-4 py-4 flex flex-col items-center gap-2"
                 style={{ background: '#ffffff', border: '2px solid #0a0a0a' }}>
                 <QRCodeSVG
-                  value={`LOGMAX-CARTAO-${cartaoModal.id}`}
+                  value={buildCartaoQrValue(cartaoModal.id)}
                   size={180}
                   bgColor="#ffffff"
                   fgColor="#0a0a0a"

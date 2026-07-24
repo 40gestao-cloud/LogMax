@@ -12,7 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
-import { buildPixQrValue } from '../lib/pixQr';
+import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
@@ -123,7 +123,7 @@ export const PDVViewSupermax = ({
   const [confirmFocusIdx, setConfirmFocusIdx] = useState<0 | 1>(0);
   const [clientIdx, setClientIdx]             = useState(-1);
 
-  // Busca por nome/código (F8/F10) — replica o classicSearch do MaxPOS.
+  // Busca por nome/código (F8) — replica o classicSearch do MaxPOS.
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchTerm, setSearchTerm]           = useState('');
   const [searchIdx, setSearchIdx]             = useState(0);
@@ -410,7 +410,7 @@ export const PDVViewSupermax = ({
     codeInputRef.current?.focus();
   }, [produtosDisponiveis, addToCart]);
 
-  // Busca completa (modal F8/F10) — sem cap de 2 chars; lista 50 primeiros se vazio.
+  // Busca completa (modal F8) — sem cap de 2 chars; lista 50 primeiros se vazio.
   const filteredSearch = useMemo(() => {
     const t = norm(searchTerm.trim());
     if (!t) return produtosDisponiveis.slice(0, 50);
@@ -427,7 +427,7 @@ export const PDVViewSupermax = ({
     if (searchModalOpen) setSearchIdx(filteredSearch.length > 0 ? 0 : -1);
   }, [searchModalOpen, filteredSearch.length]);
 
-  // Consulta de preço — mesma filtragem da busca F8/F10, listagem só leitura.
+  // Consulta de preço — mesma filtragem da busca F8, listagem só leitura.
   const filteredPriceQuery = useMemo(() => {
     const t = norm(priceQueryTerm.trim());
     if (!t) return produtosDisponiveis.slice(0, 50);
@@ -598,7 +598,7 @@ export const PDVViewSupermax = ({
   // F-key listeners globais — só ativos fora de modais
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // isClosing entra aqui pra F4/F5/F8/F9 não dispararem ações novas durante
+      // isClosing entra aqui pra F3/F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
       const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || isClosing;
       const target = e.target as HTMLElement | null;
@@ -646,17 +646,23 @@ export const PDVViewSupermax = ({
         return;
       }
 
+      // F4 — Subtotal · F5 — Pagamentos (Linx/VR: F4 mostra subtotal, F5
+      // abre formas de pagamento; no LogMax ambos abrem o modal que já
+      // exibe subtotal + escolha da forma — mesmo destino, rótulo do
+      // mercado preservado).
       if (e.key === 'F4' || e.key === 'F5') {
         e.preventDefault();
         if (!anyModal && cart.length > 0) openPayment();
         return;
       }
-      if (e.key === 'F9') {
+      // F3 / F9 — Cancelar cupom (padrão Linx/VR usa F3; F9 mantido como
+      // alias por muscle memory do operador do LogMax anterior).
+      if (e.key === 'F9' || e.key === 'F3') {
         e.preventDefault();
         if (!anyModal) cancelSale();
         return;
       }
-      if (e.key === 'F8' || e.key === 'F10') {
+      if (e.key === 'F8') {
         e.preventDefault();
         if (!anyModal) {
           setSearchTerm('');
@@ -703,8 +709,9 @@ export const PDVViewSupermax = ({
         }
         return;
       }
-      // F3 — fechar/suspender caixa pelo operador
-      if (e.key === 'F3') {
+      // F12 — fechar/suspender caixa pelo operador (padrão gerencial
+      // Linx/VR: menu fechamento/supervisor fica em F12).
+      if (e.key === 'F12') {
         e.preventDefault();
         if (!anyModal && cart.length === 0) {
           setCaixaOpValor('');
@@ -723,8 +730,9 @@ export const PDVViewSupermax = ({
         }
         return;
       }
-      // F11 — suprimento (entrada) · F12 — sangria (saída)
-      if (e.key === 'F11' || e.key === 'F12') {
+      // F10 — sangria (saída) · F11 — suprimento (entrada). Padrão real:
+      // Linx/VR expõem sangria em F10 (menu supervisor) e suprimento em F11.
+      if (e.key === 'F10' || e.key === 'F11') {
         e.preventDefault();
         if (!anyModal) {
           if (!caixa) {
@@ -738,7 +746,7 @@ export const PDVViewSupermax = ({
         return;
       }
     };
-    // capture:true garante que F4/F5/F8/F9 rodem ANTES de qualquer elemento
+    // capture:true garante que F3/F4/F5/F8/F9 rodem ANTES de qualquer elemento
     // focado (select de filial no header, botão, etc.) tentar interpretar a
     // tecla. Sem capture, o navegador pode disparar comportamento default
     // (ex: F5 = recarregar página) antes de chegar aqui.
@@ -1670,7 +1678,7 @@ export const PDVViewSupermax = ({
             disabled={cart.length === 0 || isClosing}
             className="px-6 py-2.5 text-lg font-bold text-white transition disabled:opacity-30 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-green-700"
             style={{ background: MONEY }}
-            title="Fechar venda (F4/F5 ou Enter no campo vazio)"
+            title="Subtotal / Pagamentos (F4 ou F5 · Enter no campo vazio)"
           >
             {isClosing ? <Loader2 size={20} className="animate-spin inline" /> : 'FECHAR VENDA'}
           </button>
@@ -1684,13 +1692,13 @@ export const PDVViewSupermax = ({
             Enter (campo vazio) = SUBTOTAL
           </span>
           <span className="opacity-40">·</span>
-          <span><b>F4</b> / <b>F5</b> Subtotal</span>
+          <span><b>F4</b> Subtotal · <b>F5</b> Pagamentos</span>
           <span className="opacity-40">·</span>
-          <span><b>F8</b> / <b>F10</b> Buscar produto</span>
+          <span><b>F8</b> Buscar produto</span>
           <span className="opacity-40">·</span>
           <span><b>Del</b> Cancelar último item</span>
           <span className="opacity-40">·</span>
-          <span><b>F9</b> Cancelar venda · <b>Esc</b> Sair tela cheia</span>
+          <span><b>F3</b> / <b>F9</b> Cancelar cupom · <b>Esc</b> Sair tela cheia</span>
           <span className="opacity-40">·</span>
           <span><b>N*EAN</b> ou <b>N×EAN</b> Qtd (decimal: <b>0,350*EAN</b>)</span>
           <span className="opacity-40">·</span>
@@ -1698,9 +1706,9 @@ export const PDVViewSupermax = ({
           <span className="opacity-40">·</span>
           <span><b>F7</b> Consulta preço</span>
           <span className="opacity-40">·</span>
-          <span><b>F11</b> Suprimento · <b>F12</b> Sangria</span>
+          <span><b>F10</b> Sangria · <b>F11</b> Suprimento</span>
           <span className="opacity-40">·</span>
-          <span><b>F3</b> Fechar/Suspender caixa</span>
+          <span><b>F12</b> Fechar/Suspender caixa</span>
         </div>
       </div>
 
@@ -2102,14 +2110,15 @@ export const PDVViewSupermax = ({
                 <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2">
                   {[
                     ['Enter', 'No campo vazio: abre o pagamento. Com texto: adiciona produto.'],
-                    ['F3', 'Fechar / suspender caixa (fora de venda).'],
-                    ['F4 / F5', 'Subtotal — abre o modal de pagamento.'],
+                    ['F3 / F9', 'Cancelar cupom (pede confirmação).'],
+                    ['F4', 'Subtotal — abre o modal de pagamento.'],
+                    ['F5', 'Pagamentos — mesmo destino do F4 (padrão Linx/VR).'],
                     ['F6', 'Desconto no total (% ou R$).'],
                     ['F7', 'Consulta de preço (não adiciona ao carrinho).'],
-                    ['F8 / F10', 'Buscar produto por nome ou código.'],
-                    ['F9', 'Cancelar venda (pede confirmação).'],
+                    ['F8', 'Buscar produto por nome ou código.'],
+                    ['F10', 'Sangria — retirada de dinheiro do caixa.'],
                     ['F11', 'Suprimento — entrada de dinheiro no caixa.'],
-                    ['F12', 'Sangria — retirada de dinheiro do caixa.'],
+                    ['F12', 'Fechar / suspender caixa (fora de venda).'],
                     ['Del', 'Remove o último item — ou o item selecionado por ↑↓.'],
                     ['↑ ↓', 'Sugestões enquanto digita · com campo vazio: seleciona item do carrinho.'],
                     ['Esc', 'Limpa o campo / desmarca item / sai da tela cheia / cancela venda.'],
@@ -2546,7 +2555,7 @@ export const PDVViewSupermax = ({
               <div className="flex justify-center">
                 <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
                   <QRCodeSVG
-                    value={`LOGMAX-CARTAO-${cartaoModal.id}`}
+                    value={buildCartaoQrValue(cartaoModal.id)}
                     size={220}
                     level="M"
                   />
@@ -2676,7 +2685,7 @@ export const PDVViewSupermax = ({
         </div>
       )}
 
-      {/* Busca de produto (F8/F10) — ↑↓ navega · Enter adiciona · Esc fecha */}
+      {/* Busca de produto (F8) — ↑↓ navega · Enter adiciona · Esc fecha */}
       {searchModalOpen && (
         <div
           className="fixed inset-0 z-[200] flex items-start justify-center p-6"
@@ -2690,7 +2699,7 @@ export const PDVViewSupermax = ({
           <div className="w-full max-w-4xl mt-12 bg-white border-4 shadow-2xl" style={{ borderColor: NAVY_DARK }}>
             <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
               <span className="font-black tracking-wide text-sm uppercase flex items-center gap-2">
-                <Search size={16} /> F8/F10 · Busca de produtos
+                <Search size={16} /> F8 · Busca de produtos
               </span>
               <button onClick={() => { setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
             </div>
