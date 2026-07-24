@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark } from 'lucide-react';
+import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
@@ -479,8 +479,11 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
     );
   }
   const { caixas, isLoading: caixaLoading, refresh } = useCaixasDoDia();
-  const { data: capitalRows = [] } = useFetchData<any>('capital_filial');
   const { filialAtiva } = useFilial();
+  // Saldo consolidado (capital + gastos + saldo livre) por filial visível.
+  // Vem da RPC calcular_saldo_capital — mesma fonte usada em FilialCapitalView
+  // pra evitar divergência entre as duas telas.
+  const [saldosMap, setSaldosMap] = useState<Record<string, { capital_total: number; despesas_pagas: number; saldo_livre: number; bloqueado: boolean }>>({});
 
   const today = todayBR();
 
@@ -509,6 +512,32 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
     '/api/controlecaixaview',
     filiaisVisiveis.length > 0 ? { filial: [...filiaisVisiveis] } : { filial: '__none__' },
   );
+
+  // Chama a RPC calcular_saldo_capital pra cada filial visível em paralelo.
+  // Se qualquer chamada falhar (RLS, RPC ausente na turma), a filial simplesmente
+  // some do bloco de cards — não vale bloquear o resto da tela.
+  useEffect(() => {
+    if (!supabase || filiaisVisiveis.length === 0) { setSaldosMap({}); return; }
+    let cancelado = false;
+    (async () => {
+      const entries = await Promise.all(filiaisVisiveis.map(async (f) => {
+        const { data, error } = await supabase!.rpc('calcular_saldo_capital', { p_filial: f });
+        if (error || !data?.[0]) return null;
+        const r = data[0];
+        return [f, {
+          capital_total:  Number(r.capital_total  ?? 0),
+          despesas_pagas: Number(r.despesas_pagas ?? 0),
+          saldo_livre:    Number(r.saldo_livre    ?? 0),
+          bloqueado:      !!r.bloqueado,
+        }] as const;
+      }));
+      if (cancelado) return;
+      const map: Record<string, { capital_total: number; despesas_pagas: number; saldo_livre: number; bloqueado: boolean }> = {};
+      for (const e of entries) if (e) map[e[0]] = e[1];
+      setSaldosMap(map);
+    })();
+    return () => { cancelado = true; };
+  }, [filiaisVisiveis.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleReabrir = async (h: any) => {
     if (!supabase) return;
@@ -561,28 +590,54 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
         </p>
       </div>
 
-      {/* Capital por filial — leitura; só aparece se há dados e usuário tem acesso (RLS) */}
-      {capitalRows.length > 0 && (() => {
-        // Pega o registro mais recente por filial (hook já ordena DESC)
-        const capitalMap: Record<string, number> = {};
-        for (const r of capitalRows) {
-          if (!(r.filial in capitalMap)) capitalMap[r.filial] = r.valor;
-        }
-        const filiaisComCapital = filiaisVisiveis.filter(f => f in capitalMap);
-        if (filiaisComCapital.length === 0) return null;
+      {/* Saúde financeira por filial — 3 mini-cards (Capital / Gastos / Saldo
+          Livre) espelhando o cabeçalho de Financeiro → Capital, pra o operador
+          do caixa saber quanto ainda tem antes de aprovar despesas. */}
+      {(() => {
+        const filiaisComSaldo = filiaisVisiveis.filter(f => f in saldosMap);
+        if (filiaisComSaldo.length === 0) return null;
         return (
-          <div className={`shrink-0 grid gap-3 ${filiaisComCapital.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-1 sm:grid-cols-3'}`}>
-            {filiaisComCapital.map(f => (
-              <div key={f} className="neu-flat rounded-2xl p-4 border border-accent/10 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                  <Landmark size={15} className="text-accent" />
+          <div className={`shrink-0 grid gap-4 ${filiaisComSaldo.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3'}`}>
+            {filiaisComSaldo.map(f => {
+              const s = saldosMap[f];
+              return (
+                <div key={f} className="neu-flat rounded-2xl p-4 border border-accent/10 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <FilialBadge filial={f} />
+                    {s.bloqueado && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
+                        Bloqueado
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <Landmark size={11} className="text-accent" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Capital</span>
+                      </div>
+                      <span className="text-sm font-black text-accent tabular-nums truncate">{fmtBRL(s.capital_total)}</span>
+                    </div>
+                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <TrendingDown size={11} className="text-red-400" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Gastos</span>
+                      </div>
+                      <span className="text-sm font-black text-red-400 tabular-nums truncate">{fmtBRL(s.despesas_pagas)}</span>
+                    </div>
+                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <Wallet size={11} className={s.bloqueado ? 'text-red-400' : 'text-green-400'} />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Saldo Livre</span>
+                      </div>
+                      <span className={`text-sm font-black tabular-nums truncate ${s.bloqueado ? 'text-red-400' : 'text-green-400'}`}>
+                        {fmtBRL(s.saldo_livre)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-gray-500">{f} — Capital</div>
-                  <div className="text-base font-black text-accent tabular-nums truncate">{fmtBRL(capitalMap[f])}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })()}

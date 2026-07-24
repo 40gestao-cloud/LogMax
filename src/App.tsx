@@ -171,11 +171,13 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] }],
   },
   {
+    // Vitrine Pública saiu daqui em 2026-07-24 — passou a ser controlada
+    // exclusivamente pela Matriz (Sessões Gerais → Marketing), já que a
+    // tela de login é única e a vitrine é institucional da holding.
     id: 'marketing', label: 'Marketing', icon: Megaphone,
     submenus: [
       'Redes Sociais',
       'Campanhas', 'Promoções', 'Cupons', 'Calendário',
-      { label: 'Vitrine Pública', requireSetor: ['marketing'] },
     ],
   },
   {

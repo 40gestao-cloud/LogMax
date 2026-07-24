@@ -15,6 +15,43 @@ import { useConfirm } from '../contexts/ConfirmContext';
 // não existe no catálogo (compra eventual, serviço, item novo).
 const ITEM_OUTRO = '__outro__';
 
+// Rótulos legíveis dos atributos JSONB (produtos.atributos). Mantido
+// duplicado com CatalogoProdutosView pra não criar dependência cruzada.
+const ATRIBUTO_LABEL: Record<string, string> = {
+  tamanho: 'Tamanho', cor: 'Cor', genero: 'Gênero', colecao: 'Coleção', material: 'Material',
+  modelo: 'Modelo', memoria: 'Memória', tela: 'Tela', bateria: 'Bateria', camera: 'Câmera',
+  garantia_dias: 'Garantia (dias)', requer_imei: 'Requer IMEI/Serial',
+};
+const formatAtributoValor = (v: any): string =>
+  typeof v === 'boolean' ? (v ? 'Sim' : 'Não') : String(v);
+
+// Preview compacto de marca + ficha técnica do produto escolhido. Mostrado
+// abaixo do select pra o solicitante confirmar que pegou o item certo
+// (tamanho/cor no MaxLook, memória/tela no TechMax etc.) sem precisar sair
+// da tela de requisição.
+const ProdutoResumo = ({ produto }: { produto: any }) => {
+  if (!produto) return null;
+  const atr = (produto.atributos && typeof produto.atributos === 'object') ? produto.atributos : {};
+  const atrEntries = Object.entries(atr).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (!produto.marca && atrEntries.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-lg px-3 py-2 border border-white/5 bg-white/[0.02] flex flex-wrap gap-x-3 gap-y-1">
+      {produto.marca && (
+        <span className="text-[10px] text-gray-400">
+          <span className="text-gray-500 font-bold uppercase tracking-widest">Marca:</span>{' '}
+          <span className="text-gray-200 font-bold">{produto.marca}</span>
+        </span>
+      )}
+      {atrEntries.map(([k, v]) => (
+        <span key={k} className="text-[10px] text-gray-400">
+          <span className="text-gray-500 font-bold uppercase tracking-widest">{ATRIBUTO_LABEL[k] ?? k.replace(/_/g, ' ')}:</span>{' '}
+          <span className="text-gray-200 font-bold">{formatAtributoValor(v)}</span>
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
@@ -228,7 +265,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         <option value="">Selecione um produto...</option>
                         {produtosOrdenados.map((p: any) => (
                           <option key={p.id} value={p.id}>
-                            {p.nome}{p.codigo ? ` (${p.codigo})` : ''}
+                            {p.nome}{p.marca ? ` — ${p.marca}` : ''}{p.codigo ? ` (${p.codigo})` : ''}
                           </option>
                         ))}
                         <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
@@ -241,6 +278,9 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                           placeholder="Descreva o item solicitado"
                           autoFocus
                         />
+                      )}
+                      {produtoSel && produtoSel !== ITEM_OUTRO && (
+                        <ProdutoResumo produto={produtosOrdenados.find((p: any) => p.id === produtoSel)} />
                       )}
                     </FormField>
                     <FormField label="Solicitante *" error={errors.solicitante}>
@@ -331,6 +371,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                             {produtoEscolhido?.fornecedor && (
                               <p className="text-[10px] text-gray-600 mt-1">Fornecedor habitual: {produtoEscolhido.fornecedor}</p>
                             )}
+                            <ProdutoResumo produto={produtoEscolhido} />
                           </FormField>
                           <FormField label="Qtd">
                             <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm w-full"

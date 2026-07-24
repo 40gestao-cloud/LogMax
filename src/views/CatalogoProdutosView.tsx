@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy } from 'lucide-react';
+import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import {
   LoadingSpinner,
@@ -23,10 +23,43 @@ const calcMargem = (venda: number, custo: number): number | null => {
 // Catálogo é vitrine read-only para todos os setores. CRUD continua em
 // Empresa → Produtos (ProdutosView). Bloco financeiro (custo + margem) é
 // gated por admin/CEO/financeiro/marketing — demais setores só veem preço de venda.
+// Rótulos legíveis dos atributos JSONB (produtos.atributos). Mesmas chaves
+// declaradas em ProdutosView.ATRIBUTOS_PRODUTO — duplicadas aqui para não
+// criar dependência circular entre views. Se um atributo novo aparecer sem
+// mapa, cai no fallback (chave capitalizada).
+const ATRIBUTO_LABEL: Record<string, string> = {
+  tamanho: 'Tamanho',
+  cor: 'Cor',
+  genero: 'Gênero',
+  colecao: 'Coleção',
+  material: 'Material',
+  modelo: 'Modelo',
+  memoria: 'Memória',
+  tela: 'Tela',
+  bateria: 'Bateria',
+  camera: 'Câmera',
+  garantia_dias: 'Garantia (dias)',
+  requer_imei: 'Requer IMEI/Serial',
+};
+const formatAtributoValor = (v: any): string => {
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+  return String(v);
+};
+
+// Régua canônica de filial: só quem está na Matriz vê as 3 unidades no
+// Catálogo. Colaborador/gerente de SuperMax/MaxLook/TechMax fica travado
+// na própria filial. Admin/CEO alocados fora da Matriz também respeitam
+// a regra (raro, mas mantém o isolamento consistente com Produtos).
+const isMatrizViewer = (profile: UserProfile) =>
+  !profile.filial || profile.filial === 'Matriz';
+
 export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
-  const [filialFiltro, setFilialFiltro] = useState<string>('todas');
+  const podeVerTodasFiliais = isMatrizViewer(profile);
+  const [filialFiltro, setFilialFiltro] = useState<string>(
+    podeVerTodasFiliais ? 'todas' : (profile.filial as string)
+  );
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('todas');
   const [selecionado, setSelecionado] = useState<any | null>(null);
   // Modal de detalhes: qual das até 3 imagens do produto está em destaque.
@@ -110,15 +143,22 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <select
-          value={filialFiltro}
-          onChange={e => setFilialFiltro(e.target.value)}
-          className="neu-input py-2.5 px-3 rounded-xl text-sm"
-          aria-label="Filtrar por unidade"
-        >
-          <option value="todas">Todas as unidades</option>
-          {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
+        {podeVerTodasFiliais ? (
+          <select
+            value={filialFiltro}
+            onChange={e => setFilialFiltro(e.target.value)}
+            className="neu-input py-2.5 px-3 rounded-xl text-sm"
+            aria-label="Filtrar por unidade"
+          >
+            <option value="todas">Todas as unidades</option>
+            {FILIAIS_HOLDING.filter(f => f !== 'Matriz').map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        ) : (
+          <div className="neu-pressed py-2.5 px-3 rounded-xl text-sm text-gray-400 flex items-center gap-2 border border-white/5">
+            <Building2 size={13} className="text-gray-500" />
+            <span>Unidade: <span className="font-bold text-accent">{profile.filial}</span></span>
+          </div>
+        )}
         <select
           value={categoriaFiltro}
           onChange={e => setCategoriaFiltro(e.target.value)}
@@ -158,6 +198,11 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                     <span className="text-sm font-bold text-gray-200 leading-tight line-clamp-2">
                       {p.nome}
                     </span>
+                    {p.marca && (
+                      <span className="text-[10px] text-gray-500 flex items-center gap-1 truncate">
+                        <Award size={9} className="shrink-0" /> {p.marca}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-end justify-between mt-auto pt-1">
                     <span className="text-base font-black text-accent tabular-nums">
@@ -292,6 +337,15 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                     </span>
                   </div>
                 )}
+                {selecionado.marca && (
+                  <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Marca</span>
+                    <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5 truncate">
+                      <Award size={12} className="text-gray-500 shrink-0" />
+                      {selecionado.marca}
+                    </span>
+                  </div>
+                )}
                 <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1">
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status</span>
                   <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5">
@@ -300,6 +354,32 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                   </span>
                 </div>
               </div>
+
+              {/* Ficha técnica — atributos JSONB por nicho (MaxLook: tamanho/cor/gênero...;
+                  TechMax: modelo/memória/tela/bateria...). SuperMax raramente
+                  preenche, então o bloco só renderiza se houver algum atributo. */}
+              {selecionado.atributos && typeof selecionado.atributos === 'object' && Object.keys(selecionado.atributos).length > 0 && (
+                <div className="neu-pressed rounded-xl p-4 flex flex-col gap-3 border border-white/5">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={11} className="text-accent" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Ficha Técnica</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {Object.entries(selecionado.atributos)
+                      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+                      .map(([k, v]) => (
+                        <div key={k} className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                            {ATRIBUTO_LABEL[k] ?? k.replace(/_/g, ' ')}
+                          </span>
+                          <span className="text-sm font-bold text-gray-200 truncate">
+                            {formatAtributoValor(v)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               {/* Bloco sensível: custo + margem só para admin/CEO/financeiro */}
               {podeVerCusto && (

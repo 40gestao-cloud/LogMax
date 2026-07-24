@@ -13,7 +13,7 @@ export const MATRIZ_ALLOWED_SUBMENUS: Record<string, string[] | true> = {
   rh:          ['Frequência de Trabalho', 'Gerenciamento', 'Relatórios'],
   compras:     ['Gerenciamento', 'Relatórios'],
   estoque:     ['Gerenciamento', 'Relatórios'],
-  marketing:   [],
+  marketing:   ['Vitrine Pública'],
   vendas:      [],                       // sem PDV em Matriz
   ti:          true,                     // Tecnologia e IA aparece só em Matriz
   cadastros:   ['Produtos', 'Serviços'], // catálogo global

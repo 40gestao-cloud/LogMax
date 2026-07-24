@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, DollarSign, Users, Building2,
   Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo, TrendingUp,
-  ChevronRight,
+  ChevronRight, Store,
 } from 'lucide-react';
 import { allSetores } from '../lib/rbac';
 import { SETOR_MODULES } from '../lib/sectorAccess';
@@ -103,6 +103,16 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     modulos: [
       { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-red-400',
         submenus: ['Desenvolvimento com IA'] },
+    ],
+  },
+  {
+    // Marketing na Matriz — institucional da holding. A Vitrine Pública é
+    // uma só (tela de login única), então quem controla é a Matriz. Em
+    // filial o submenu não aparece mais (removido do menuModules em App.tsx).
+    kind: 'group', id: 'marketing-matriz', label: 'Marketing', icon: Megaphone, color: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 text-pink-400',
+    modulos: [
+      { id: 'marketing', label: 'Marketing', icon: Store, color: 'text-pink-400',
+        submenus: ['Vitrine Pública'] },
     ],
   },
   // Leaf — vai direto pro Relatório de Vendas (Orçamentos/Pedidos/Histórico
