@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award, Crown, Briefcase, Users, MessageCircle, type LucideIcon } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award, Crown, Briefcase, Users, MessageCircle, Trophy, ClipboardCheck, type LucideIcon } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -783,6 +783,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       setLinhaExpandida(null);
       showToast?.('Ciclo excluído.', 'success');
       reload();
+      // Card do pódio (PodioPadraoCard) e o Painel Comparativo dos Eixos
+      // escutam esse evento pra refetchar — sem isso o card continua mostrando
+      // o ciclo apagado até o próximo mount da rota.
+      window.dispatchEvent(new Event('avaliacao-matriz:changed'));
     } catch (err: any) {
       showToast?.(`Erro ao excluir: ${err?.message ?? 'verifique o console'}`, 'error');
     }
@@ -1989,9 +1993,11 @@ function PodioFilialCard({ filial }: { filial: string }) {
     <div className={`medal-card ${medal.klass} shrink-0`}>
       <div className="relative flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Competição das Filiais</p>
-          <h3 className="text-xl font-black leading-tight mt-0.5">{comp.nome}</h3>
-          <p className="text-xs font-bold mt-1 opacity-80">{statusLabel}</p>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-100 text-[10px] font-black uppercase tracking-widest ring-1 ring-amber-300/40">
+            <Trophy size={11} /> Competição do Conselho
+          </span>
+          <h3 className="text-xl font-black leading-tight mt-1.5">{comp.nome}</h3>
+          <p className="text-xs font-bold mt-1 opacity-80">{statusLabel} · Placar entre as 3 filiais</p>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-2 justify-end">
@@ -2025,6 +2031,7 @@ type PlacarPadrao = {
 function PodioPadraoCard({ filial }: { filial: string }) {
   const [loading, setLoading] = useState(true);
   const [placar, setPlacar] = useState<PlacarPadrao | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -2036,7 +2043,23 @@ function PodioPadraoCard({ filial }: { filial: string }) {
       setLoading(false);
     })();
     return () => { cancelou = true; };
-  }, [filial]);
+  }, [filial, tick]);
+
+  // Refetch quando ciclos/notas mudam: evento local (dispara em exclusão de
+  // ciclo, criação/atualização de avaliação) + realtime na tabela de ciclos
+  // (cobre alteração de status Aberto→Fechado feita em outra aba).
+  useEffect(() => {
+    const bump = () => setTick(t => t + 1);
+    window.addEventListener('avaliacao-matriz:changed', bump);
+    const canal = supabase
+      ?.channel('podio-padrao-ciclos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclos_avaliacao' }, bump)
+      .subscribe();
+    return () => {
+      window.removeEventListener('avaliacao-matriz:changed', bump);
+      if (canal) supabase?.removeChannel(canal);
+    };
+  }, []);
 
   if (loading || !placar) return null;
 
@@ -2059,9 +2082,11 @@ function PodioPadraoCard({ filial }: { filial: string }) {
     <div className={`medal-card ${medal.klass} shrink-0`}>
       <div className="relative flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Ciclo Padrão de Avaliações</p>
-          <h3 className="text-xl font-black leading-tight mt-0.5">{placar.ciclo_nome}</h3>
-          <p className="text-xs font-bold mt-1 opacity-80">Resultado final · Admin + CEO</p>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-sky-500/25 text-sky-100 text-[10px] font-black uppercase tracking-widest ring-1 ring-sky-300/40">
+            <ClipboardCheck size={11} /> Avaliações Padrão
+          </span>
+          <h3 className="text-xl font-black leading-tight mt-1.5">{placar.ciclo_nome}</h3>
+          <p className="text-xs font-bold mt-1 opacity-80">Ciclo fechado · Notas do CEO e conselheiros</p>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-2 justify-end">
