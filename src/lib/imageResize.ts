@@ -90,7 +90,9 @@ function drawToCanvas(bitmap: ImageBitmap, w: number, h: number): OffscreenCanva
 // qualidade (mantendo dimensões), depois reduz dimensões também. Cobre
 // fotos de celular "cheias de detalhe" que não cabem no teto só baixando
 // a qualidade.
-const QUALITY_STEPS = [0.82, 0.65, 0.5, 0.35];
+// Escada de degradação: mantém a maioria das fotos em 0.88 (nítidas),
+// só cai pra 0.65+ quando o arquivo estoura o teto de bytes.
+const QUALITY_STEPS = [0.88, 0.75, 0.6, 0.45];
 const SCALE_STEPS = [1, 0.75, 0.5];
 
 // Redimensiona `file` para caber num bounding box e recomprime em WebP.

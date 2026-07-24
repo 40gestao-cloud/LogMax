@@ -13,6 +13,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { formatBRL } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { hasSetor, isConselheiro } from '../lib/rbac';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const calcMargem = (venda: number, custo: number): number | null => {
@@ -46,20 +47,30 @@ const formatAtributoValor = (v: any): string => {
   return String(v);
 };
 
-// Régua canônica de filial: só quem está na Matriz vê as 3 unidades no
-// Catálogo. Colaborador/gerente de SuperMax/MaxLook/TechMax fica travado
-// na própria filial. Admin/CEO alocados fora da Matriz também respeitam
-// a regra (raro, mas mantém o isolamento consistente com Produtos).
+// Régua canônica de filial no Catálogo:
+//  - Admin/CEO em modo Matriz (filialAtiva=null) → vê as 3 unidades.
+//  - Admin/CEO com filial escolhida no topbar → só produtos daquela filial.
+//  - Gerente/colaborador → travado na própria filial (independente do topbar).
+// A prioridade é: filialAtiva do topbar > profile.filial > 'todas' (só Matriz).
 const isMatrizViewer = (profile: UserProfile) =>
   !profile.filial || profile.filial === 'Matriz';
 
 export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  const { filialAtiva } = useFilial();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
-  const podeVerTodasFiliais = isMatrizViewer(profile);
-  const [filialFiltro, setFilialFiltro] = useState<string>(
-    podeVerTodasFiliais ? 'todas' : (profile.filial as string)
-  );
+  // Só libera o seletor "Todas" quando o usuário é Matriz E está no modo
+  // Matriz (sem filial escolhida no topbar). Se admin/CEO escolheu uma
+  // filial, o Catálogo passa a ser da unidade — sem opção de escapar.
+  const podeVerTodasFiliais = isMatrizViewer(profile) && !filialAtiva;
+  const filialEscopo: string =
+    filialAtiva ? filialAtiva
+    : isMatrizViewer(profile) ? 'todas'
+    : (profile.filial as string);
+  const [filialFiltro, setFilialFiltro] = useState<string>(filialEscopo);
+  // Ressincroniza quando o topbar troca de filial (admin alternando entre
+  // unidades) — sem isso o filtro fica preso na escolha inicial.
+  useEffect(() => { setFilialFiltro(filialEscopo); }, [filialEscopo]);
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('todas');
   const [selecionado, setSelecionado] = useState<any | null>(null);
   // Modal de detalhes: qual das até 3 imagens do produto está em destaque.
@@ -156,7 +167,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
         ) : (
           <div className="neu-pressed py-2.5 px-3 rounded-xl text-sm text-gray-400 flex items-center gap-2 border border-white/5">
             <Building2 size={13} className="text-gray-500" />
-            <span>Unidade: <span className="font-bold text-accent">{profile.filial}</span></span>
+            <span>Unidade: <span className="font-bold text-accent">{filialFiltro}</span></span>
           </div>
         )}
         <select

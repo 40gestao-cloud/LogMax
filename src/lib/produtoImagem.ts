@@ -9,10 +9,11 @@ export const PRODUTO_IMAGEM_MAX_BYTES = MAX_INPUT_BYTES;
 export const PRODUTO_IMAGEM_MAX_LABEL = MAX_INPUT_LABEL;
 export const PRODUTO_IMAGEM_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 // Teto real do arquivo já comprimido — espelha o file_size_limit do bucket
-// (migration 188_20260713j_produto_multi_imagem.sql). uploadImagemProduto
-// repete o resize com qualidade/dimensão menores até caber aqui.
-export const PRODUTO_IMAGEM_OUTPUT_MAX_BYTES = 100 * 1024;
-export const PRODUTO_IMAGEM_OUTPUT_MAX_LABEL = '100 KB';
+// (migration 248_20260724_produto_imagem_qualidade.sql). uploadImagemProduto
+// repete o resize com qualidade/dimensão menores até caber aqui. Subiu de
+// 100 KB → 800 KB em 2026-07-24 pra fotos boas na Vitrine Pública.
+export const PRODUTO_IMAGEM_OUTPUT_MAX_BYTES = 800 * 1024;
+export const PRODUTO_IMAGEM_OUTPUT_MAX_LABEL = '800 KB';
 // Até 3 imagens por produto: capa (slot 1, coluna imagem_url) + 2 extras.
 export const PRODUTO_IMAGEM_MAX_SLOTS = 3;
 
@@ -68,8 +69,11 @@ export async function uploadImagemProduto(
   if (!validacao.ok) throw new Error(validacao.motivo);
 
   const optimized = await resizeImage(file, {
-    maxWidth: 1024,
-    maxHeight: 1024,
+    // 1600 px cobre bem o card do PDV/Catálogo e ainda dá zoom decente
+    // na Vitrine Pública sem estourar o teto de 800 KB.
+    maxWidth: 1600,
+    maxHeight: 1600,
+    quality: 0.88,
     maxBytes: PRODUTO_IMAGEM_OUTPUT_MAX_BYTES,
   });
   const ext = extFromMime(optimized.type) || validacao.ext;

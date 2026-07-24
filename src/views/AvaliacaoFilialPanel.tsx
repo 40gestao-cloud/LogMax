@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Star, Trash2, ShieldAlert } from 'lucide-react';
+import { Building2, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Star, Trash2, ShieldAlert, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, FilialBadge, LoadingSpinner } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -37,7 +37,7 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
   const [criterios, setCriterios]   = useState<Criterio[]>([]);
   const [users, setUsers]           = useState<Pick<UserProfile, 'id' | 'nome' | 'role'>[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [avaliando, setAvaliando]   = useState<{ filial: string } | null>(null);
+  const [avaliando, setAvaliando]   = useState<{ filial: string; existente?: { id: string; observacao: string | null; criterios: Criterio[] } } | null>(null);
   const [linhaAberta, setLinhaAberta] = useState<string | null>(null);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
@@ -128,6 +128,24 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
     () => new Set(Object.keys(minhasNotasPorFilial)),
     [minhasNotasPorFilial],
   );
+
+  // Snapshot da minha avaliação por filial pra passar como `avaliacaoExistente`
+  // ao ModalAvaliacao — permite reabrir o form com as notas/observação já
+  // preenchidas e chamar `atualizar_avaliacao` (upsert) em vez de bater na
+  // UNIQUE(unq_avaliacao_filial) tentando criar de novo.
+  const minhaAvalPorFilial = useMemo(() => {
+    const m: Record<string, { id: string; observacao: string | null; criterios: Criterio[] }> = {};
+    avaliacoes
+      .filter(a => a.avaliador_id === profile.id && a.avaliada_filial)
+      .forEach(a => {
+        m[a.avaliada_filial as string] = {
+          id: a.id,
+          observacao: a.observacao ?? null,
+          criterios: criterios.filter(c => c.avaliacao_id === a.id),
+        };
+      });
+    return m;
+  }, [avaliacoes, criterios, profile.id]);
 
   // Histórico agregado por filial (todas as avaliações do ciclo, todos os avaliadores).
   // Avaliações de admin ficam de fora do agregado — admin modera aqui mas
@@ -241,13 +259,24 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
             {FILIAIS_OP.map(f => {
               const jaAvaliou = filiaisJaAvaliadas.has(f);
               const minhaNota = minhasNotasPorFilial[f];
+              // Reabrir a nota é permitido: admin não avalia aqui (é moderador
+              // via bloco acima), CEO/conselheiro podem corrigir sua nota
+              // reabrindo o mesmo modal — `atualizar_avaliacao` faz upsert.
+              const podeReavaliar = jaAvaliou && !ehAdmin;
+              const abrir = () => {
+                if (jaAvaliou && podeReavaliar) {
+                  setAvaliando({ filial: f, existente: minhaAvalPorFilial[f] });
+                } else if (!jaAvaliou) {
+                  setAvaliando({ filial: f });
+                }
+              };
               return (
                 <button
                   key={f}
-                  onClick={() => !jaAvaliou && setAvaliando({ filial: f })}
-                  disabled={jaAvaliou}
+                  onClick={abrir}
+                  disabled={jaAvaliou && !podeReavaliar}
                   className={`neu-button rounded-2xl p-5 flex flex-col gap-3 text-left transition-all border border-white/5 ${
-                    jaAvaliou ? 'cursor-not-allowed opacity-90' : 'hover:border-accent'
+                    jaAvaliou && !podeReavaliar ? 'cursor-not-allowed opacity-90' : 'hover:border-accent'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -256,13 +285,18 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
                   </div>
                   {jaAvaliou ? (
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Sua nota</span>
-                      {minhaNota != null ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-black tabular-nums border ${notaCorClasses(minhaNota)}`}>
-                          {minhaNota.toFixed(1)}<span className="text-[9px] opacity-70">/10</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Sua nota</span>
+                        {minhaNota != null && (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-black tabular-nums border ${notaCorClasses(minhaNota)}`}>
+                            {minhaNota.toFixed(1)}<span className="text-[9px] opacity-70">/10</span>
+                          </span>
+                        )}
+                      </div>
+                      {podeReavaliar && (
+                        <span className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center gap-1">
+                          <Pencil size={10} /> Editar
                         </span>
-                      ) : (
-                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Avaliada</span>
                       )}
                     </div>
                   ) : (
@@ -387,6 +421,7 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
         <ModalAvaliacao
           ciclo={ciclo}
           alvo={{ kind: 'filial', filial: avaliando.filial }}
+          avaliacaoExistente={avaliando.existente}
           onClose={() => setAvaliando(null)}
           onSaved={() => {
             carregar();
