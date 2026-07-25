@@ -28,6 +28,7 @@ export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'vendas',            label: 'Vendas',           grupo: 'Comercial' },
   { id: 'marketing',         label: 'Marketing',        grupo: 'Comercial' },
   { id: 'ti',                label: 'TI & Suporte',     grupo: 'Tecnologia' },
+  { id: 'max-work',          label: 'Max Work',         grupo: 'Didático' },
 ];
 
 export const AULA_PRESETS: { nome: string; modulos: string[] }[] = [
@@ -59,6 +60,7 @@ export const AULA_SUBMENUS: Record<string, string[]> = {
   vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Cliente Especial', 'Tarefas'],
   marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário', 'Vitrine Pública', 'Tarefas'],
   ti:         ['Chamados', 'Desenvolvimento com IA'],
+  'max-work': ['Docs', 'Planilhas'],
 };
 
 /** Reproduz o cálculo de viewId dos submenus feito em App.tsx.SidebarNav. */
@@ -97,6 +99,10 @@ const VIEW_TO_MODULO_OVERRIDE: Record<string, string> = {
   // Aliases pra views top-level que pertencem a um módulo
   'artes-promocionais': 'marketing',
   'minhas-pesquisas':   'rh',
+  // max-work-docs / max-work-planilhas seguem regra padrão: split('-')[0]='max',
+  // mas queremos que caiam sob 'max-work'. Override explícito abaixo.
+  'max-work-docs':       'max-work',
+  'max-work-planilhas':  'max-work',
 };
 
 /** Retorna o id do módulo a ser checado, ou null se a view é sempre liberada. */

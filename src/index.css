@@ -1777,3 +1777,184 @@ html.theme-switching *::after {
 }
 .pdv-filial-header .neu-button:hover { background: rgba(255, 255, 255, 0.10) !important; }
 
+/* Max Planilhas — wrapper do Fortune-sheet.
+   Fortune-sheet foi desenhado pra ter tema claro fixo (fundo branco). Garantir
+   altura 100% e fundo branco pro toolbar/grade não vazarem transparências do
+   dark mode do LogMax. */
+.max-planilha-wrap { background: #fff; color: #111; height: 100%; }
+.max-planilha-wrap * { box-sizing: content-box; }
+.max-planilha-wrap .fortune-container,
+.max-planilha-wrap .luckysheet { height: 100% !important; }
+
+/* ================================================================
+   Max Docs — tema escopado (Word-like). Toggle claro/escuro só afeta
+   a área do editor; resto do app permanece com o tema global.
+   ================================================================ */
+.max-doc-scope { display: flex; flex-direction: column; height: 100%; }
+
+/* --- LIGHT (Word) --- */
+.max-doc-light { --md-bg: #f3f2f1; --md-fg: #202020; --md-muted: #605e5c;
+  --md-header-bg: #2b579a; --md-header-fg: #ffffff;
+  --md-toolbar-bg: #ffffff; --md-toolbar-border: #e1dfdd;
+  --md-paper: #ffffff; --md-paper-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  --md-btn-hover: #f3f2f1; --md-btn-active-bg: #edebe9; --md-btn-active-fg: #2b579a;
+  background: var(--md-bg); color: var(--md-fg);
+}
+.max-doc-light .md-header { background: var(--md-header-bg); color: var(--md-header-fg); border-bottom: 1px solid rgba(0,0,0,0.1); }
+.max-doc-light .md-header input { color: var(--md-header-fg); }
+.max-doc-light .md-header input::placeholder { color: rgba(255,255,255,0.6); }
+.max-doc-light .md-header .md-status { color: rgba(255,255,255,0.85); }
+.max-doc-light .md-toolbar { background: var(--md-toolbar-bg); border-bottom: 1px solid var(--md-toolbar-border); }
+.max-doc-light .md-toolbtn { color: var(--md-fg); background: transparent; border: 1px solid transparent; }
+.max-doc-light .md-toolbtn:hover { background: var(--md-btn-hover); }
+.max-doc-light .md-toolbtn.md-active { background: var(--md-btn-active-bg); color: var(--md-btn-active-fg); border-color: var(--md-toolbar-border); }
+.max-doc-light .md-divider { background: var(--md-toolbar-border); }
+.max-doc-light .md-page { background: var(--md-bg); }
+.max-doc-light .md-paper { background: var(--md-paper); box-shadow: var(--md-paper-shadow); color: var(--md-fg); border: 1px solid var(--md-toolbar-border); }
+.max-doc-light .md-paper .ProseMirror { color: var(--md-fg); }
+.max-doc-light .md-paper .ProseMirror h1 { color: #1a1a1a; }
+.max-doc-light .md-paper .ProseMirror h2 { color: #1a1a1a; }
+.max-doc-light .md-paper .ProseMirror blockquote { border-left: 3px solid var(--md-btn-active-fg); color: var(--md-muted); }
+
+/* ================================================================
+   Max Docs — estilos do ProseMirror (aplica em light E dark).
+   Tailwind reset zera list-style/margens/tipografia — precisamos
+   restaurar pra que negrito, itálico, listas, títulos e citações
+   apareçam de verdade. Escopo estrito ao editor.
+   ================================================================ */
+.max-doc-scope .md-paper .ProseMirror { font-family: 'Calibri', 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+.max-doc-scope .md-paper .ProseMirror p { margin: 0 0 0.75em; }
+.max-doc-scope .md-paper .ProseMirror h1 { font-size: 2em; font-weight: 700; margin: 0.75em 0 0.5em; line-height: 1.25; }
+.max-doc-scope .md-paper .ProseMirror h2 { font-size: 1.5em; font-weight: 700; margin: 0.75em 0 0.5em; line-height: 1.3; }
+.max-doc-scope .md-paper .ProseMirror h3 { font-size: 1.2em; font-weight: 700; margin: 0.75em 0 0.5em; line-height: 1.35; }
+.max-doc-scope .md-paper .ProseMirror ul { list-style: disc; padding-left: 1.75em; margin: 0 0 0.75em; }
+.max-doc-scope .md-paper .ProseMirror ol { list-style: decimal; padding-left: 1.75em; margin: 0 0 0.75em; }
+.max-doc-scope .md-paper .ProseMirror ul ul { list-style: circle; }
+.max-doc-scope .md-paper .ProseMirror ul ul ul { list-style: square; }
+.max-doc-scope .md-paper .ProseMirror ol ol { list-style: lower-alpha; }
+.max-doc-scope .md-paper .ProseMirror ol ol ol { list-style: lower-roman; }
+.max-doc-scope .md-paper .ProseMirror li { margin: 0.15em 0; }
+.max-doc-scope .md-paper .ProseMirror li p { margin: 0; }
+.max-doc-scope .md-paper .ProseMirror blockquote { padding: 0.25em 0 0.25em 1em; margin: 0.5em 0 1em; font-style: italic; }
+.max-doc-scope .md-paper .ProseMirror strong { font-weight: 700; }
+.max-doc-scope .md-paper .ProseMirror em { font-style: italic; }
+.max-doc-scope .md-paper .ProseMirror u { text-decoration: underline; }
+.max-doc-scope .md-paper .ProseMirror s { text-decoration: line-through; }
+.max-doc-scope .md-paper .ProseMirror code { font-family: 'Consolas', 'Courier New', monospace; background: rgba(128,128,128,0.15); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+.max-doc-scope .md-paper .ProseMirror pre { font-family: 'Consolas', 'Courier New', monospace; background: rgba(128,128,128,0.1); padding: 0.75em 1em; border-radius: 4px; margin: 0.75em 0; overflow-x: auto; }
+.max-doc-scope .md-paper .ProseMirror hr { border: none; border-top: 1px solid currentColor; opacity: 0.2; margin: 1em 0; }
+.max-doc-scope .md-paper .ProseMirror mark { padding: 0 2px; border-radius: 2px; }
+.max-doc-scope .md-paper .ProseMirror sub { font-size: 0.75em; vertical-align: sub; }
+.max-doc-scope .md-paper .ProseMirror sup { font-size: 0.75em; vertical-align: super; }
+
+/* ================================================================
+   Max Docs — ribbon estilo Word: grupos horizontais separados por
+   divisórias verticais, legenda cinza embaixo. Cada grupo tem 2
+   linhas de botões. Overflow horizontal em telas estreitas.
+   ================================================================ */
+.md-ribbon { align-items: stretch; min-height: 90px; padding-bottom: 0 !important; }
+.md-group { display: flex; flex-direction: column; padding: 4px 8px 0; min-width: max-content; }
+.md-group-row1, .md-group-row2 { display: flex; align-items: center; gap: 2px; min-height: 26px; padding: 1px 0; }
+.md-group-label { text-align: center; font-size: 10px; padding: 3px 0 4px; letter-spacing: 0.02em; opacity: 0.65; margin-top: auto; }
+.md-group-divider { width: 1px; margin: 4px 4px 22px; align-self: stretch; }
+
+.max-doc-light .md-group-label { color: #605e5c; }
+.max-doc-light .md-group-divider { background: #e1dfdd; }
+.max-doc-dark  .md-group-label { color: #808080; }
+.max-doc-dark  .md-group-divider { background: rgba(255,255,255,0.08); }
+
+.md-toolbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 3px; font-size: 12px; transition: background 0.1s; cursor: pointer; }
+.max-doc-light .md-toolbtn { color: #202020; background: transparent; border: 1px solid transparent; }
+.max-doc-light .md-toolbtn:hover { background: #f3f2f1; border-color: #e1dfdd; }
+.max-doc-light .md-toolbtn.md-active { background: #edebe9; color: #2b579a; border-color: #c7c6c4; }
+.max-doc-dark .md-toolbtn { color: #d0d0d0; background: transparent; border: 1px solid transparent; }
+.max-doc-dark .md-toolbtn:hover { background: rgba(255,255,255,0.06); color: var(--color-accent); }
+.max-doc-dark .md-toolbtn.md-active { background: rgba(240,180,41,0.15); color: var(--color-accent); }
+
+.md-select { height: 24px; border-radius: 3px; font-size: 12px; padding: 0 4px; outline: none; cursor: pointer; }
+.md-select-font { width: 130px; }
+.md-select-size { width: 50px; }
+.max-doc-light .md-select { background: #fff; color: #202020; border: 1px solid #c7c6c4; }
+.max-doc-light .md-select:hover { border-color: #605e5c; }
+.max-doc-dark  .md-select { background: rgba(255,255,255,0.06); color: #e5e5e5; border: 1px solid rgba(255,255,255,0.15); }
+
+.md-colorbtn { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 28px; height: 26px; padding: 2px 4px 0; border-radius: 3px; cursor: pointer; border: 1px solid transparent; }
+.max-doc-light .md-colorbtn { color: #202020; }
+.max-doc-light .md-colorbtn:hover { background: #f3f2f1; border-color: #e1dfdd; }
+.max-doc-dark  .md-colorbtn { color: #d0d0d0; }
+.max-doc-dark  .md-colorbtn:hover { background: rgba(255,255,255,0.06); color: var(--color-accent); }
+.md-colorbar { display: block; width: 18px; height: 3px; margin-top: 1px; border-radius: 1px; }
+.md-colorbtn input[type="color"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Estilos (cards estilo galeria do Word) */
+.md-styles { display: flex; gap: 4px; align-items: stretch; }
+.md-style-card { display: flex; align-items: center; justify-content: center; min-width: 74px; height: 52px; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-align: center; transition: all 0.1s; }
+.max-doc-light .md-style-card { background: #fff; color: #202020; border: 1px solid #e1dfdd; }
+.max-doc-light .md-style-card:hover { border-color: #2b579a; }
+.max-doc-light .md-style-card.md-active { background: #edebe9; border-color: #2b579a; }
+.max-doc-dark  .md-style-card { background: rgba(255,255,255,0.04); color: #d0d0d0; border: 1px solid rgba(255,255,255,0.08); }
+.max-doc-dark  .md-style-card:hover { border-color: var(--color-accent); }
+.max-doc-dark  .md-style-card.md-active { background: rgba(240,180,41,0.12); border-color: var(--color-accent); }
+.md-style-normal { font-size: 11px; font-weight: 400; }
+.md-style-h1 { font-size: 14px; font-weight: 700; color: #2b579a; }
+.md-style-h2 { font-size: 12px; font-weight: 700; color: #2b579a; }
+.md-style-h3 { font-size: 11px; font-weight: 700; color: #2b579a; }
+.max-doc-dark .md-style-h1, .max-doc-dark .md-style-h2, .max-doc-dark .md-style-h3 { color: var(--color-accent); }
+.max-doc-light .md-headerbtn { color: var(--md-header-fg); background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+.max-doc-light .md-headerbtn:hover { background: rgba(255,255,255,0.2); }
+.max-doc-light .md-savebtn { background: #ffffff; color: var(--md-header-bg); font-weight: 700; }
+.max-doc-light .md-savebtn:hover { background: #f3f2f1; }
+
+/* --- DARK (integra com tema LogMax) --- */
+.max-doc-dark { background: rgba(0,0,0,0.35); color: #e5e5e5; }
+.max-doc-dark .md-header { background: rgba(0,0,0,0.5); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.max-doc-dark .md-header input { color: #e5e5e5; }
+.max-doc-dark .md-toolbar { background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.max-doc-dark .md-toolbtn { color: #d0d0d0; background: transparent; border: 1px solid transparent; }
+.max-doc-dark .md-toolbtn:hover { color: var(--color-accent); background: rgba(255,255,255,0.05); }
+.max-doc-dark .md-toolbtn.md-active { background: rgba(240,180,41,0.15); color: var(--color-accent); }
+.max-doc-dark .md-divider { background: rgba(255,255,255,0.08); }
+.max-doc-dark .md-page { background: rgba(0,0,0,0.2); }
+.max-doc-dark .md-paper { background: #1a1a1a; color: #e5e5e5; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+.max-doc-dark .md-headerbtn { background: rgba(255,255,255,0.06); color: #d0d0d0; border: 1px solid rgba(255,255,255,0.08); }
+.max-doc-dark .md-headerbtn:hover { background: rgba(255,255,255,0.12); }
+.max-doc-dark .md-savebtn { background: var(--color-accent); color: #000; font-weight: 700; }
+
+/* ================================================================
+   Max Planilhas — identidade fixa Excel (verde no header, grade branca)
+   ================================================================ */
+.max-plan-scope { display: flex; flex-direction: column; height: 100%; background: #f3f2f1; }
+.max-plan-header { background: #217346; color: #ffffff; border-bottom: 1px solid rgba(0,0,0,0.15); }
+.max-plan-header input { color: #ffffff; background: transparent; }
+.max-plan-header input::placeholder { color: rgba(255,255,255,0.6); }
+.max-plan-header .md-status { color: rgba(255,255,255,0.85); }
+.max-plan-header .md-headerbtn { background: rgba(255,255,255,0.12); color: #ffffff; border: 1px solid rgba(255,255,255,0.2); }
+.max-plan-header .md-headerbtn:hover { background: rgba(255,255,255,0.2); }
+.max-plan-header .md-savebtn { background: #ffffff; color: #217346; font-weight: 700; }
+.max-plan-header .md-savebtn:hover { background: #f3f2f1; }
+.max-plan-formulabar { background: #ffffff; border-bottom: 1px solid #e1dfdd; color: #605e5c; font-size: 11px; padding: 4px 12px; display: flex; align-items: center; gap: 8px; }
+.max-plan-formulabar .fx { font-style: italic; font-family: 'Cambria Math', serif; color: #217346; font-weight: 700; }
+
+/* ================================================================
+   Max Planilhas — ribbon custom estilo Excel (Fortune-sheet toolbar
+   desligada via showToolbar=false; usamos ref.setCellFormatByRange
+   pra aplicar formatação). Reutiliza md-group/md-toolbtn do Max Docs
+   com sobreposição de cor verde Excel via .max-plan-scope.
+   ================================================================ */
+.max-plan-scope .md-ribbon { background: #ffffff; border-bottom: 1px solid #d4d2d0; min-height: 84px; padding: 4px 8px 0; display: flex; align-items: stretch; overflow-x: auto; }
+.max-plan-scope .md-group { padding: 4px 8px 0; }
+.max-plan-scope .md-group-label { color: #605e5c; }
+.max-plan-scope .md-group-divider { background: #d4d2d0; margin: 4px 4px 22px; width: 1px; }
+.max-plan-scope .md-toolbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 3px; font-size: 12px; color: #202020; background: transparent; border: 1px solid transparent; cursor: pointer; transition: background 0.1s; }
+.max-plan-scope .md-toolbtn:hover { background: #e6f2ea; border-color: #b8dcc4; }
+.max-plan-scope .md-toolbtn.md-active { background: #d1e7d9; color: #217346; border-color: #a3ceb2; }
+.max-plan-scope .md-select { height: 24px; border-radius: 3px; font-size: 12px; padding: 0 4px; background: #fff; color: #202020; border: 1px solid #c7c6c4; cursor: pointer; outline: none; }
+.max-plan-scope .md-select:hover { border-color: #217346; }
+.max-plan-scope .md-select-font { width: 130px; }
+.max-plan-scope .md-select-size { width: 50px; }
+.max-plan-scope .md-select-numfmt { width: 130px; }
+.max-plan-scope .md-colorbtn { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 28px; height: 26px; padding: 2px 4px 0; border-radius: 3px; color: #202020; cursor: pointer; border: 1px solid transparent; }
+.max-plan-scope .md-colorbtn:hover { background: #e6f2ea; border-color: #b8dcc4; }
+.max-plan-scope .md-colorbar { display: block; width: 18px; height: 3px; margin-top: 1px; border-radius: 1px; }
+.max-plan-scope .md-colorbtn input[type="color"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+

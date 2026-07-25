@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           // json incluído para precachear manifest.json e simulador-manifest.json
           // (segundo PWA do /simulador-pagamento — vide SimuladorPagamentoView).
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,json}'],
+          // Max Planilhas usa Fortune-sheet (~2.7 MB). Excluir do precache
+          // pra não inflar o payload inicial da PWA de todo mundo — o chunk
+          // baixa on-demand quando o aluno abre Max Planilhas (Runtime cache
+          // do NetworkFirst do supabase-api não pega esse ativo estático).
+          globIgnores: ['**/vendor-spreadsheet-*.js', '**/vendor-spreadsheet-*.css'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -63,6 +68,16 @@ export default defineConfig(({ mode }) => {
             'vendor-react': ['react', 'react-dom'],
             'vendor-motion': ['motion/react'],
             'vendor-supabase': ['@supabase/supabase-js'],
+            // Max Work — isola editores em chunks próprios: só baixam
+            // quando o aluno abre Max Docs / Max Planilhas, sem
+            // inflar o bundle inicial.
+            'vendor-tiptap': [
+              '@tiptap/react',
+              '@tiptap/starter-kit',
+              '@tiptap/extension-underline',
+              '@tiptap/extension-text-align',
+            ],
+            'vendor-spreadsheet': ['@fortune-sheet/react'],
           },
         },
       },
