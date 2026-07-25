@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet, MessageSquarePlus, FileText, Loader2 } from 'lucide-react';
+import { Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet, MessageSquarePlus, FileText, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -32,7 +32,6 @@ const tipoCls = (t: string) => {
   return `${PILL} bg-gray-500/12 border-gray-500/30 text-gray-400`;
 };
 
-const EMPTY: any = { funcionario_id: '', data: '', entrada: '', saida: '', horas_trabalhadas: '', status: 'Normal' };
 
 const CHECKPOINT_OPTIONS = [
   { key: 'entrada', label: 'Entrada', time: PONTO_HORARIOS.entrada, color: 'text-emerald-400',
@@ -423,9 +422,6 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
   const { data: justificativas, reload: reloadJust } = useFetchData<any>('/api/justificativasfaltaview', { filial });
   const [filtroData, setFiltroData] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<any>(EMPTY);
-  const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'ponto' | 'historico'>('ponto');
 
   const isAdmin = profile?.role === 'admin';
@@ -611,18 +607,6 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
   const extras       = ponto.filter((p: any) => p.status === 'Hora Extra').length;
   const justificados = ponto.filter((p: any) => p.status === 'Justificado').length;
 
-  const handleSave = async () => {
-    if (!form.funcionario_id || !form.data) { showToast('Funcionário e data são obrigatórios.', 'error'); return; }
-    setSaving(true);
-    try {
-      const rec = await dbInsert('/api/pontoeletronicoview', { ...form, horas_trabalhadas: Number(form.horas_trabalhadas || 0) });
-      setData((prev: any[]) => [rec, ...prev]);
-      setForm(EMPTY);
-      setShowForm(false);
-      showToast('Ponto registrado.', 'success');
-    } catch { showToast('Erro ao registrar.', 'error'); }
-    setSaving(false);
-  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -788,55 +772,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
               <input id="ponto-data-filtro" type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm" />
               {filtroData && <button onClick={() => setFiltroData('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar</button>}
             </div>
-            <NeuButtonAccent variant="" onClick={() => setShowForm(v => !v)}>
-              <Plus size={14} />{showForm ? 'Cancelar' : 'Registro Manual'}
-            </NeuButtonAccent>
           </div>
 
-          <AnimatePresence>
-            {showForm && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-                <div className="flex items-center justify-between mb-5">
-                  <h3 className="text-sm font-bold text-gray-300">Registro Manual de Ponto</h3>
-                  <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="ponto-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                    <select id="ponto-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                      <option value="">Selecionar...</option>
-                      {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {[
-                    { label: 'Data *',            k: 'data',             type: 'date' },
-                    { label: 'Entrada',           k: 'entrada',          type: 'text', placeholder: '08:00' },
-                    { label: 'Saída',             k: 'saida',            type: 'text', placeholder: '17:00' },
-                    { label: 'Horas Trabalhadas', k: 'horas_trabalhadas', type: 'number' },
-                  ].map(({ label, k, type, placeholder }: any) => (
-                    <div key={k} className="flex flex-col gap-1.5">
-                      <label htmlFor={`ponto-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                      <input id={`ponto-${k}`} type={type} value={form[k]} placeholder={placeholder} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                    </div>
-                  ))}
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="ponto-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                    <select id="ponto-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                      {['Normal', 'Falta', 'Justificado', 'Hora Extra'].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end mt-5">
-                  <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</NeuButtonAccent>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Tabela de registros manuais */}
+          {/* Tabela de registros de ponto (QR/codigo). Registro manual foi
+              removido — Frequencia de Trabalho ja cumpre esse papel. */}
           <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             {enriched.length === 0 ? <EmptyState message={filtroData ? `Nenhum registro para ${filtroData}.` : 'Nenhum registro de ponto.'} /> : (
               <div className="overflow-x-auto main-scrollbar">
@@ -892,7 +831,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                                   </>
                                 ) : isAdmin ? (
                                   <button onClick={() => setConfirmandoManualId(p.id)}
-                                    title="Excluir registro manual"
+                                    title="Excluir registro"
                                     className="action-btn-delete">
                                     <Trash2 size={12} />
                                   </button>
