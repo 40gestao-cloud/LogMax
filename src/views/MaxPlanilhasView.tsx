@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
-import { Sheet, Plus, Trash2, Loader2, Eye, Pencil, RotateCcw, Inbox } from 'lucide-react';
+import { Sheet, Plus, Trash2, Loader2, Eye, Pencil, RotateCcw, Inbox, FileDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PageLoadingFallback } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -86,6 +86,19 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };
 
+  const [busyExport, setBusyExport] = useState<string | null>(null);
+  const baixar = async (p: Planilha) => {
+    setBusyExport(p.id);
+    try {
+      showToast?.('Preparando XLSX…', 'info');
+      const { exportXlsx } = await import('./maxPlanilhaExport');
+      const sheets = Array.isArray(p.conteudo) && p.conteudo.length > 0 ? p.conteudo : [{ name: 'Planilha1', celldata: [] }];
+      await exportXlsx(p.titulo, sheets as any);
+    } catch (e: any) {
+      showToast?.(`Erro ao gerar XLSX: ${e?.message || e}`, 'error');
+    } finally { setBusyExport(null); }
+  };
+
   const excluir = async (id: string) => {
     if (!supabase) return;
     if (!(await confirm({ message: 'Mover esta planilha para a lixeira? Fica lá por 30 dias antes de sumir de vez.', confirmLabel: 'Mover para lixeira' }))) return;
@@ -156,12 +169,12 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
       ) : tab === 'ativos' ? (
         <>
           <Section titulo="Minhas planilhas" items={minhas} canEdit
-            onAbrir={abrir} onDelete={excluir}
+            onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport}
             emptyMsg="Você ainda não criou nenhuma planilha." />
           {ehDocente && outras.length > 0 && (
             <Section titulo="Planilhas de outros usuários (visão docente)" items={outras}
               canEdit={false} showOwner
-              onAbrir={abrir} onDelete={excluir} emptyMsg="" />
+              onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport} emptyMsg="" />
           )}
         </>
       ) : (
@@ -190,10 +203,12 @@ const TabBtn = ({ active, onClick, icon, children }: any) => (
   </button>
 );
 
-const Section = ({ titulo, items, onAbrir, onDelete, canEdit, emptyMsg, showOwner }: {
+const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner }: {
   titulo: string; items: Planilha[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
   onDelete: (id: string) => void;
+  onBaixar: (p: Planilha) => void;
+  busyExport: string | null;
   canEdit: boolean; emptyMsg: string; showOwner?: boolean;
 }) => (
   <div className="mb-8">
@@ -215,6 +230,10 @@ const Section = ({ titulo, items, onAbrir, onDelete, canEdit, emptyMsg, showOwne
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => onAbrir(p.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir apenas para leitura">
                 <Eye size={13} /> Abrir
+              </button>
+              <button onClick={() => onBaixar(p)} disabled={busyExport === p.id}
+                className="btn-shimmer btn-shimmer--glass-green" title="Baixar em XLSX">
+                {busyExport === p.id ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} Xlsx
               </button>
               {canEdit && (
                 <button onClick={() => onAbrir(p.id, 'edit')} className="btn-shimmer btn-shimmer--glass-blue" title="Abrir para edição">

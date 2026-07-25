@@ -758,6 +758,15 @@ table,
   animation: btn-shimmer 2.8s linear infinite;
 }
 
+/* Baixar DOCX — vidro roxo */
+.btn-shimmer--glass-purple {
+  background: linear-gradient(100deg, rgba(76,29,149,0.60) 0%, rgba(124,58,237,0.42) 35%, rgba(192,132,252,0.35) 50%, rgba(124,58,237,0.42) 65%, rgba(76,29,149,0.60) 100%);
+  background-size: 200% auto; color: #d8b4fe;
+  border-color: rgba(147,51,234,0.60) !important;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: btn-shimmer 2.8s linear infinite;
+}
+
 /* Excluir — vidro vermelho */
 .btn-shimmer--glass-red {
   background: linear-gradient(100deg, rgba(127,29,29,0.60) 0%, rgba(220,38,38,0.42) 35%, rgba(248,113,113,0.35) 50%, rgba(220,38,38,0.42) 65%, rgba(127,29,29,0.60) 100%);
@@ -774,6 +783,7 @@ table,
 [data-theme="light"] .btn-shimmer--glass-red   { color: #7f1d1d; border-color: rgba(220,38,38,0.70) !important; }
 [data-theme="light"] .btn-shimmer--glass-blue  { color: #1e3a8a; border-color: rgba(37,99,235,0.70) !important; }
 [data-theme="light"] .btn-shimmer--glass-gray  { color: #1f2937; border-color: rgba(107,114,128,0.70) !important; }
+[data-theme="light"] .btn-shimmer--glass-purple { color: #4c1d95; border-color: rgba(147,51,234,0.70) !important; }
 
 /* ── Cards de pódio (Central de Avaliação → resultado da competição) ────── */
 .medal-card {
@@ -1958,3 +1968,22 @@ html.theme-switching *::after {
 .max-plan-scope .md-colorbar { display: block; width: 18px; height: 3px; margin-top: 1px; border-radius: 1px; }
 .max-plan-scope .md-colorbtn input[type="color"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+
+
+/* ================================================================
+   Max Docs — impressao (PDF via window.print()).
+   Ativado via .max-doc-printing na <body>: esconde tudo menos o
+   .md-paper e formata como pagina A4 branca.
+   ================================================================ */
+@media print {
+  body.max-doc-printing > *:not(.max-doc-scope),
+  body.max-doc-printing .max-doc-scope > *:not(.md-page),
+  body.max-doc-printing .md-header,
+  body.max-doc-printing .md-toolbar,
+  body.max-doc-printing .md-ribbon { display: none !important; }
+  body.max-doc-printing, body.max-doc-printing .max-doc-scope, body.max-doc-printing .md-page { background: #fff !important; height: auto !important; overflow: visible !important; }
+  body.max-doc-printing .md-page { padding: 0 !important; margin: 0 !important; }
+  body.max-doc-printing .md-paper { max-width: none !important; width: 100% !important; box-shadow: none !important; border: none !important; margin: 0 !important; }
+  body.max-doc-printing .md-paper .ProseMirror { color: #000 !important; padding: 0 !important; min-height: 0 !important; }
+  @page { size: A4; margin: 20mm; }
+}

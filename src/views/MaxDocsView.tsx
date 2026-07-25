@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
-import { FileText, Plus, Trash2, Loader2, Eye, Pencil, RotateCcw, Inbox } from 'lucide-react';
+import { FileText, Plus, Trash2, Loader2, Eye, Pencil, RotateCcw, Inbox, FileDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PageLoadingFallback } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -90,6 +90,18 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };
 
+  const [busyExport, setBusyExport] = useState<string | null>(null);
+  const baixar = async (doc: Doc, formato: 'docx' | 'pdf') => {
+    setBusyExport(`${doc.id}:${formato}`);
+    try {
+      const mod = await import('./maxDocExport');
+      if (formato === 'docx') await mod.exportDocx(doc.titulo, doc.conteudo || '');
+      else mod.exportPdf(doc.titulo, doc.conteudo || '');
+    } catch (e: any) {
+      showToast?.(`Erro ao gerar ${formato.toUpperCase()}: ${e?.message || e}`, 'error');
+    } finally { setBusyExport(null); }
+  };
+
   const excluir = async (id: string) => {
     if (!supabase) return;
     if (!(await confirm({ message: 'Mover este documento para a lixeira? Fica lá por 30 dias antes de sumir de vez.', confirmLabel: 'Mover para lixeira' }))) return;
@@ -161,12 +173,12 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
       ) : tab === 'ativos' ? (
         <>
           <Section titulo="Meus documentos" docs={meus} canEdit
-            onAbrir={abrir} onDelete={excluir}
+            onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport}
             emptyMsg="Você ainda não criou nenhum documento." />
           {ehDocente && outros.length > 0 && (
             <Section titulo="Documentos de outros usuários (visão docente)" docs={outros}
               canEdit={false} showOwner
-              onAbrir={abrir} onDelete={excluir} emptyMsg="" />
+              onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport} emptyMsg="" />
           )}
         </>
       ) : (
@@ -195,10 +207,12 @@ const TabBtn = ({ active, onClick, icon, children }: any) => (
   </button>
 );
 
-const Section = ({ titulo, docs, onAbrir, onDelete, canEdit, emptyMsg, showOwner }: {
+const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner }: {
   titulo: string; docs: Doc[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
   onDelete: (id: string) => void;
+  onBaixar: (doc: Doc, formato: 'docx' | 'pdf') => void;
+  busyExport: string | null;
   canEdit: boolean; emptyMsg: string; showOwner?: boolean;
 }) => (
   <div className="mb-8">
@@ -220,6 +234,14 @@ const Section = ({ titulo, docs, onAbrir, onDelete, canEdit, emptyMsg, showOwner
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => onAbrir(d.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir apenas para leitura">
                 <Eye size={13} /> Abrir
+              </button>
+              <button onClick={() => onBaixar(d, 'docx')} disabled={busyExport === `${d.id}:docx`}
+                className="btn-shimmer btn-shimmer--glass-purple" title="Baixar em DOCX">
+                {busyExport === `${d.id}:docx` ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} Docx
+              </button>
+              <button onClick={() => onBaixar(d, 'pdf')} disabled={busyExport === `${d.id}:pdf`}
+                className="btn-shimmer btn-shimmer--glass-green" title="Baixar em PDF">
+                {busyExport === `${d.id}:pdf` ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} PDF
               </button>
               {canEdit && (
                 <button onClick={() => onAbrir(d.id, 'edit')} className="btn-shimmer btn-shimmer--glass-blue" title="Abrir para edição">
