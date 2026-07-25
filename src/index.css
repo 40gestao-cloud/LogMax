@@ -1848,6 +1848,52 @@ html.theme-switching *::after {
   --univer-primary-900: #0B2B19;
 }
 
+/* Botao MaxAI — gradient tipo Gemini/Copilot (azul → violeta → magenta) */
+.md-ai-btn {
+  background: linear-gradient(135deg, #1B72E8 0%, #4C6CE8 30%, #9B4FE0 60%, #E14FBE 100%) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.28) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.30) inset, 0 4px 14px rgba(155,79,224,0.35) !important;
+  transition: filter 0.15s, box-shadow 0.15s, transform 0.05s !important;
+}
+.md-ai-btn:hover { filter: brightness(1.08) saturate(1.05) !important; box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 6px 20px rgba(225,79,190,0.45) !important; }
+.md-ai-btn:active { transform: translateY(0.5px); }
+.md-ai-btn svg { color: #fff; filter: drop-shadow(0 0 4px rgba(255,255,255,0.55)); }
+
+/* Header do popover — texto "MaxAI" com gradient text */
+.md-ai-title {
+  background: linear-gradient(135deg, #1B72E8, #9B4FE0 55%, #E14FBE);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 700;
+}
+
+/* Items do popover de acoes */
+.md-ai-item {
+  padding: 6px 8px; font-size: 12px; color: #1f2937;
+  background: #fafaf9; border: 1px solid #e5e7eb; border-radius: 6px;
+  cursor: pointer; transition: all 0.12s;
+}
+.md-ai-item:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(27,114,232,0.10), rgba(155,79,224,0.10) 55%, rgba(225,79,190,0.10));
+  border-color: transparent;
+  box-shadow: 0 0 0 1px rgba(155,79,224,0.55), 0 2px 10px rgba(155,79,224,0.20);
+  color: #6d28d9;
+}
+.md-ai-item:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.md-ai-primary {
+  padding: 7px 12px; font-size: 12px; font-weight: 600; color: #fff;
+  background: linear-gradient(135deg, #1B72E8 0%, #4C6CE8 30%, #9B4FE0 60%, #E14FBE 100%);
+  border: 1px solid rgba(255,255,255,0.28); border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.30) inset, 0 4px 14px rgba(155,79,224,0.35);
+  transition: filter 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.md-ai-primary:hover:not(:disabled) { filter: brightness(1.08) saturate(1.05); box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 6px 20px rgba(225,79,190,0.45); }
+.md-ai-primary:active:not(:disabled) { transform: translateY(0.5px); }
+.md-ai-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Header do modulo mais encorpado — sombra sutil pra "encostar" na ribbon */
 .max-doc-scope .md-header,
 .max-plan-scope .max-plan-header {
