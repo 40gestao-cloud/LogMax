@@ -1804,10 +1804,56 @@ html.theme-switching *::after {
    Fortune-sheet foi desenhado pra ter tema claro fixo (fundo branco). Garantir
    altura 100% e fundo branco pro toolbar/grade não vazarem transparências do
    dark mode do LogMax. */
-.max-planilha-wrap { background: #fff; color: #111; height: 100%; }
-.max-planilha-wrap * { box-sizing: content-box; }
-.max-planilha-wrap .fortune-container,
-.max-planilha-wrap .luckysheet { height: 100% !important; }
+/* Max Docs / Max Planilhas — container do Univer. O editor renderiza
+   dentro de .max-univer-host; wrap fica com 100% altura + fundo branco.
+   Faixa fina superior (::before) reforca a marca Word (azul) / Excel (verde). */
+.max-univer-wrap { position: relative; height: 100%; background: #ffffff; }
+.max-univer-host { position: absolute; inset: 0; font-family: 'Segoe UI', 'Calibri', system-ui, -apple-system, sans-serif; }
+.max-univer-host * { font-family: inherit; }
+
+/* Faixa colorida acima da ribbon (3px, marca do modulo) */
+.max-doc-scope .max-univer-wrap::before,
+.max-plan-scope .max-univer-wrap::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  z-index: 2; pointer-events: none;
+}
+.max-doc-scope .max-univer-wrap::before  { background: #2b579a; } /* Word blue */
+.max-plan-scope .max-univer-wrap::before { background: #217346; } /* Excel green */
+
+/* Overrides da paleta primaria do Univer (design tokens do @univerjs/design).
+   Univer usa var(--univer-primary-500/600/700) em hovers, botoes ativos, ring
+   de foco. Sobrescrevemos por escopo pra ribbon acompanhar Word/Excel. */
+.max-doc-scope {
+  --univer-primary-50:  #EAF0F8;
+  --univer-primary-100: #D5E1F1;
+  --univer-primary-200: #ABC3E3;
+  --univer-primary-300: #7EA3D3;
+  --univer-primary-400: #4F82C0;
+  --univer-primary-500: #2b579a;
+  --univer-primary-600: #244A85;
+  --univer-primary-700: #1D3D6E;
+  --univer-primary-800: #163057;
+  --univer-primary-900: #0F2340;
+}
+.max-plan-scope {
+  --univer-primary-50:  #E7F3ED;
+  --univer-primary-100: #CFE7DB;
+  --univer-primary-200: #9FCFB7;
+  --univer-primary-300: #6FB893;
+  --univer-primary-400: #3F9F6D;
+  --univer-primary-500: #217346;
+  --univer-primary-600: #1B613B;
+  --univer-primary-700: #164F30;
+  --univer-primary-800: #103D24;
+  --univer-primary-900: #0B2B19;
+}
+
+/* Header do modulo mais encorpado — sombra sutil pra "encostar" na ribbon */
+.max-doc-scope .md-header,
+.max-plan-scope .max-plan-header {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  z-index: 3; /* fica acima da faixa ::before */
+}
 
 /* ================================================================
    Max Docs — tema escopado (Word-like). Toggle claro/escuro só afeta
@@ -1955,31 +2001,6 @@ html.theme-switching *::after {
 .max-plan-header .md-headerbtn:hover { background: rgba(255,255,255,0.2); }
 .max-plan-header .md-savebtn { background: #ffffff; color: #217346; font-weight: 700; }
 .max-plan-header .md-savebtn:hover { background: #f3f2f1; }
-.max-plan-formulabar { background: #ffffff; border-bottom: 1px solid #e1dfdd; color: #605e5c; font-size: 11px; padding: 4px 12px; display: flex; align-items: center; gap: 8px; }
-.max-plan-formulabar .fx { font-style: italic; font-family: 'Cambria Math', serif; color: #217346; font-weight: 700; }
-
-/* ================================================================
-   Max Planilhas — ribbon custom estilo Excel (Fortune-sheet toolbar
-   desligada via showToolbar=false; usamos ref.setCellFormatByRange
-   pra aplicar formatação). Reutiliza md-group/md-toolbtn do Max Docs
-   com sobreposição de cor verde Excel via .max-plan-scope.
-   ================================================================ */
-.max-plan-scope .md-ribbon { background: #ffffff; border-bottom: 1px solid #d4d2d0; min-height: 84px; padding: 4px 8px 0; display: flex; align-items: stretch; overflow-x: auto; }
-.max-plan-scope .md-group { padding: 4px 8px 0; }
-.max-plan-scope .md-group-label { color: #605e5c; }
-.max-plan-scope .md-group-divider { background: #d4d2d0; margin: 4px 4px 22px; width: 1px; }
-.max-plan-scope .md-toolbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 3px; font-size: 12px; color: #202020; background: transparent; border: 1px solid transparent; cursor: pointer; transition: background 0.1s; }
-.max-plan-scope .md-toolbtn:hover { background: #e6f2ea; border-color: #b8dcc4; }
-.max-plan-scope .md-toolbtn.md-active { background: #d1e7d9; color: #217346; border-color: #a3ceb2; }
-.max-plan-scope .md-select { height: 24px; border-radius: 3px; font-size: 12px; padding: 0 4px; background: #fff; color: #202020; border: 1px solid #c7c6c4; cursor: pointer; outline: none; }
-.max-plan-scope .md-select:hover { border-color: #217346; }
-.max-plan-scope .md-select-font { width: 130px; }
-.max-plan-scope .md-select-size { width: 50px; }
-.max-plan-scope .md-select-numfmt { width: 130px; }
-.max-plan-scope .md-colorbtn { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 28px; height: 26px; padding: 2px 4px 0; border-radius: 3px; color: #202020; cursor: pointer; border: 1px solid transparent; }
-.max-plan-scope .md-colorbtn:hover { background: #e6f2ea; border-color: #b8dcc4; }
-.max-plan-scope .md-colorbar { display: block; width: 18px; height: 3px; margin-top: 1px; border-radius: 1px; }
-.max-plan-scope .md-colorbtn input[type="color"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 
 
@@ -2036,9 +2057,8 @@ html.theme-switching *::after {
 }
 
 /* ================================================================
-   Max Planilhas — ajustes mobile
-   Ribbon do Excel idem. Fortune-sheet ja tem toolbar propria
-   desligada (showToolbar=false), formula bar do Excel encolhe.
+   Max Planilhas — ajustes mobile (header verde encolhe; ribbon
+   fica com Univer, ele já compacta em telas estreitas).
    ================================================================ */
 @media (max-width: 640px) {
   .max-plan-scope .max-plan-header { padding: 6px 8px !important; gap: 4px !important; }
@@ -2047,7 +2067,6 @@ html.theme-switching *::after {
   .max-plan-scope .max-plan-header .md-headerbtn { padding: 6px !important; }
   .max-plan-scope .max-plan-header .md-savebtn { padding: 6px 8px !important; font-size: 11px; }
   .max-plan-scope .max-plan-header .md-savebtn > svg + * { display: none; }
-  .max-plan-scope .md-ribbon { min-height: 76px !important; padding: 2px 4px 0 !important; }
 }
 
 
@@ -2082,16 +2101,6 @@ html.theme-switching *::after {
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
   /* Max Planilhas */
   .max-plan-scope .max-plan-header { padding: 4px 8px !important; }
-  .max-plan-scope .md-ribbon { min-height: 46px !important; padding: 2px 4px 0 !important; }
-  .max-plan-scope .md-group { padding: 1px 4px !important; }
-  .max-plan-scope .md-group-label { display: none; }
-  .max-plan-scope .md-group-row1, .max-plan-scope .md-group-row2 { min-height: 20px; }
-  .max-plan-scope .md-group-divider { margin: 2px 2px !important; }
-  .max-plan-scope .md-toolbtn { min-width: 22px !important; height: 22px !important; padding: 0 3px !important; }
-  .max-plan-scope .md-colorbtn { width: 24px !important; height: 22px !important; }
-  .max-plan-scope .md-select { height: 20px !important; font-size: 10px !important; }
-  .max-plan-scope .md-select-font, .max-plan-scope .md-select-numfmt { width: 78px !important; }
-  .max-plan-scope .md-select-size { width: 38px !important; }
 
   /* Max Docs */
   .max-doc-scope .md-header { padding: 4px 8px !important; }

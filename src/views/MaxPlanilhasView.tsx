@@ -72,16 +72,12 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, profile?.id]);
 
-  const criar = async () => {
-    if (!supabase || !profile?.id) return;
-    const { data, error } = await supabase
-      .from('max_planilhas')
-      .insert({ user_id: profile.id, titulo: 'Planilha sem título', conteudo: [] })
-      .select().single();
-    if (error) { showToast?.(`Erro ao criar: ${error.message}`, 'error'); return; }
+  // Rascunho — abre editor sem tocar no banco. O INSERT so acontece
+  // no primeiro Salvar manual dentro do editor (comportamento Word/Excel).
+  const criar = () => {
+    if (!profile?.id) return;
     setOpenMode('edit');
-    setOpenId(data.id);
-    load();
+    setOpenId('__draft__');
   };
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };
@@ -92,8 +88,7 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
     try {
       showToast?.('Preparando XLSX…', 'info');
       const { exportXlsx } = await import('./maxPlanilhaExport');
-      const sheets = Array.isArray(p.conteudo) && p.conteudo.length > 0 ? p.conteudo : [{ name: 'Planilha1', celldata: [] }];
-      await exportXlsx(p.titulo, sheets as any);
+      await exportXlsx(p.titulo, p.conteudo);
     } catch (e: any) {
       showToast?.(`Erro ao gerar XLSX: ${e?.message || e}`, 'error');
     } finally { setBusyExport(null); }

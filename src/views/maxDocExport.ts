@@ -168,7 +168,23 @@ function paragraphsFromBlock(el: HTMLElement, listCtx?: { kind: 'bullet' | 'orde
   return runs.length ? [new Paragraph({ children: runs, alignment: align, spacing })] : [];
 }
 
-export async function exportDocx(titulo: string, html: string) {
+// Univer guarda o conteudo em IDocumentData: body.dataStream tem o texto
+// puro com '\r' como fim de paragrafo e '\n' como fim de secao. Extraimos
+// texto por paragrafo e montamos HTML simples pra reaproveitar o pipeline
+// HTML→DOCX/PDF ja existente. Formatacao inline (negrito, cor, etc) do
+// documento nao chega no export pela lista — usuario ainda ve rich no
+// editor + pode imprimir via browser mantendo tudo.
+function univerToHtml(conteudo: any): string {
+  if (typeof conteudo === 'string') return conteudo; // fallback caso ainda haja HTML legado
+  const stream: string = conteudo?.body?.dataStream || '';
+  if (!stream) return '';
+  const parts = stream.replace(/\n/g, '').split('\r').map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return '';
+  return parts.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+}
+
+export async function exportDocx(titulo: string, conteudo: any) {
+  const html = univerToHtml(conteudo);
   const doc = new DOMParser().parseFromString(`<!doctype html><body>${html || ''}</body>`, 'text/html');
   const body = doc.body;
   const paragraphs: Paragraph[] = [];
@@ -196,7 +212,8 @@ export async function exportDocx(titulo: string, html: string) {
 
 // PDF via iframe oculto: injeta o HTML com CSS de papel A4 e imprime.
 // Usuario escolhe "Salvar como PDF" no dialogo de impressao do navegador.
-export function exportPdf(titulo: string, html: string) {
+export function exportPdf(titulo: string, conteudo: any) {
+  const html = univerToHtml(conteudo);
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
   document.body.appendChild(iframe);

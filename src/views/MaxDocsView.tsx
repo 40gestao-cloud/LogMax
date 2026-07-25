@@ -12,7 +12,7 @@ type Doc = {
   id: string;
   user_id: string;
   titulo: string;
-  conteudo: string;
+  conteudo: any;
   updated_at: string;
   created_at: string;
   deleted_at: string | null;
@@ -76,16 +76,12 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, profile?.id]);
 
-  const criar = async () => {
-    if (!supabase || !profile?.id) return;
-    const { data, error } = await supabase
-      .from('max_docs')
-      .insert({ user_id: profile.id, titulo: 'Documento sem título', conteudo: '' })
-      .select().single();
-    if (error) { showToast?.(`Erro ao criar: ${error.message}`, 'error'); return; }
+  // Rascunho — abre editor sem tocar no banco. O INSERT so acontece
+  // no primeiro Salvar manual dentro do editor (comportamento Word/Excel).
+  const criar = () => {
+    if (!profile?.id) return;
     setOpenMode('edit');
-    setOpenId(data.id);
-    load();
+    setOpenId('__draft__');
   };
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };
@@ -95,8 +91,8 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
     setBusyExport(`${doc.id}:${formato}`);
     try {
       const mod = await import('./maxDocExport');
-      if (formato === 'docx') await mod.exportDocx(doc.titulo, doc.conteudo || '');
-      else mod.exportPdf(doc.titulo, doc.conteudo || '');
+      if (formato === 'docx') await mod.exportDocx(doc.titulo, doc.conteudo);
+      else mod.exportPdf(doc.titulo, doc.conteudo);
     } catch (e: any) {
       showToast?.(`Erro ao gerar ${formato.toUpperCase()}: ${e?.message || e}`, 'error');
     } finally { setBusyExport(null); }
