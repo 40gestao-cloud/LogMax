@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet, MessageSquarePlus, FileText, Loader2 } from 'lucide-react';
+import { Clock, X, QrCode, CheckCircle, AlertCircle, Camera, RefreshCw, Wifi, History, Calendar, KeyRound, Trash2, FileDown, Sheet } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { useAuth } from '../hooks/useAuth';
@@ -420,83 +420,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
   const { session } = useAuth();
   const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
-  const { data: justificativas, reload: reloadJust } = useFetchData<any>('/api/justificativasfaltaview', { filial });
   const [filtroData, setFiltroData] = useState('');
   const [tab, setTab] = useState<'ponto' | 'historico'>('ponto');
 
   const isAdmin = profile?.role === 'admin';
-
-  // Justificativa de falta
-  const [justModal, setJustModal] = useState<{ pontoId: string; data: string; funcId: string; funcNome: string } | null>(null);
-  const [justMotivo, setJustMotivo] = useState('');
-  const [justSaving, setJustSaving] = useState(false);
-
-  const justMap = useMemo(() => {
-    const m = new Map<string, any>();
-    (justificativas ?? []).forEach((j: any) => m.set(`${j.funcionario_id}|${j.data}`, j));
-    return m;
-  }, [justificativas]);
-
-  const canJustify = profile?.role === 'colaborador' || profile?.role === 'gerente' || profile?.role === 'ceo' || isConselheiro(profile);
-
-  const handleJustificar = async () => {
-    if (!justModal || !justMotivo.trim()) { showToast('Descreva o motivo da falta.', 'error'); return; }
-    setJustSaving(true);
-    try {
-      await dbInsert('/api/justificativasfaltaview', {
-        funcionario_id: justModal.funcId,
-        nome_funcionario: justModal.funcNome,
-        data: justModal.data,
-        motivo: justMotivo.trim(),
-        criado_por: profile?.id,
-        nome_criador: profile?.nome ?? '',
-        role_criador: profile?.role ?? 'colaborador',
-      });
-
-      // Notificação hierárquica
-      if (supabase) {
-        const titulo = `Justificativa de falta: ${justModal.funcNome}`;
-        const msg = `${profile?.nome ?? 'Usuário'} (${profile?.role}) justificou falta de ${justModal.data}: "${justMotivo.trim().slice(0, 100)}"`;
-        const role = profile?.role;
-
-        if (role === 'colaborador') {
-          // Notifica setor do funcionário (gerente vê) + admin/CEO via 'all'
-          if (profile?.setor) {
-            await supabase.rpc('notificar_setor', {
-              p_setor: profile.setor, p_tipo: 'justificativa_falta',
-              p_titulo: titulo, p_mensagem: msg,
-              p_link_view: 'rh-frequênciadetrabalho', p_urgencia: 'Média',
-            });
-          }
-          await supabase.rpc('notificar_setor', {
-            p_setor: 'all', p_tipo: 'justificativa_falta',
-            p_titulo: titulo, p_mensagem: msg,
-            p_link_view: 'rh-frequênciadetrabalho', p_urgencia: 'Média',
-          });
-        } else if (role === 'gerente') {
-          await supabase.rpc('notificar_setor', {
-            p_setor: 'all', p_tipo: 'justificativa_falta',
-            p_titulo: titulo, p_mensagem: msg,
-            p_link_view: 'rh-frequênciadetrabalho', p_urgencia: 'Média',
-          });
-        } else if (role === 'ceo') {
-          await supabase.rpc('notificar_setor', {
-            p_setor: 'all', p_tipo: 'justificativa_falta',
-            p_titulo: titulo, p_mensagem: msg,
-            p_link_view: 'rh-frequênciadetrabalho', p_urgencia: 'Média',
-          });
-        }
-      }
-
-      await reloadJust();
-      setJustModal(null);
-      setJustMotivo('');
-      showToast('Justificativa enviada com sucesso.', 'success');
-    } catch (err: any) {
-      showToast(`Erro: ${err?.message ?? 'tente novamente'}`, 'error');
-    }
-    setJustSaving(false);
-  };
 
   const [confirmandoManualId, setConfirmandoManualId] = useState<string | null>(null);
   const [excluindoManualId, setExcluindoManualId] = useState<string | null>(null);
@@ -787,7 +714,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                     <th className="pb-4 font-bold px-4 text-center">Saída</th>
                     <th className="pb-4 font-bold px-4 text-center">Horas</th>
                     <th className="pb-4 font-bold px-4 text-center">Status</th>
-                    {(isAdmin || canJustify) && <th className="pb-4 font-bold px-4 text-right">Ações</th>}
+                    {isAdmin && <th className="pb-4 font-bold px-4 text-right">Ações</th>}
                   </tr></thead>
                   <tbody>
                     <AnimatePresence>
@@ -802,23 +729,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(p.status)}`}>{p.status}</span>
                           </td>
-                          {(isAdmin || canJustify) && (
+                          {isAdmin && (
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                {p.status === 'Falta' && canJustify && !justMap.has(`${p.funcionario_id}|${p.data}`) && (
-                                  <button
-                                    onClick={() => setJustModal({ pontoId: p.id, data: p.data, funcId: p.funcionario_id, funcNome: p.func?.nome ?? '—' })}
-                                    title="Justificar falta"
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-yellow-400 border border-yellow-400/30 rounded-md px-2 py-1 hover:bg-yellow-400/10 transition-colors">
-                                    <MessageSquarePlus size={10} />Justificar
-                                  </button>
-                                )}
-                                {p.status === 'Falta' && justMap.has(`${p.funcionario_id}|${p.data}`) && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-accent" title={justMap.get(`${p.funcionario_id}|${p.data}`)?.motivo}>
-                                    <FileText size={10} />Justificado
-                                  </span>
-                                )}
-                                {isAdmin && confirmandoManualId === p.id ? (
+                                {confirmandoManualId === p.id ? (
                                   <>
                                     <button onClick={() => handleExcluirManual(p.id)} disabled={excluindoManualId === p.id}
                                       className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
@@ -829,13 +743,13 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                                       Cancelar
                                     </button>
                                   </>
-                                ) : isAdmin ? (
+                                ) : (
                                   <button onClick={() => setConfirmandoManualId(p.id)}
                                     title="Excluir registro"
                                     className="action-btn-delete">
                                     <Trash2 size={12} />
                                   </button>
-                                ) : null}
+                                )}
                               </div>
                             </td>
                           )}
@@ -853,53 +767,6 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
       {/* ── Aba Histórico ── */}
       {tab === 'historico' && <HistoricoPonto profile={profile} showToast={showToast} />}
 
-      {/* ── Modal Justificativa de Falta ── */}
-      <AnimatePresence>
-        {justModal && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
-            onClick={() => { setJustModal(null); setJustMotivo(''); }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-lg w-full"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-lg font-bold text-accent">Justificar Falta</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{justModal.funcNome} — {justModal.data}</p>
-                </div>
-                <button onClick={() => { setJustModal(null); setJustMotivo(''); }} className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-200">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex flex-col gap-1.5 mb-5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Motivo da falta *</label>
-                <textarea
-                  value={justMotivo}
-                  onChange={e => setJustMotivo(e.target.value)}
-                  placeholder="Descreva o motivo da falta..."
-                  rows={4}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => { setJustModal(null); setJustMotivo(''); }} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
-                  Cancelar
-                </button>
-                <button onClick={handleJustificar} disabled={justSaving || !justMotivo.trim()}
-                  className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 disabled:opacity-40 flex items-center gap-2">
-                  {justSaving ? <Loader2 size={12} className="animate-spin" /> : <MessageSquarePlus size={12} />}
-                  {justSaving ? 'Enviando...' : 'Enviar Justificativa'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };
