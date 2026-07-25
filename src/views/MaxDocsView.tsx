@@ -184,7 +184,7 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
             emptyMsg="Você ainda não criou nenhum documento." />
           {ehDocente && outros.length > 0 && (
             <Section titulo="Documentos de outros usuários (visão docente)" docs={outros}
-              canEdit={false} showOwner
+              canEdit={false} showOwner autores={autores}
               onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport} emptyMsg="" />
           )}
         </>
@@ -198,7 +198,7 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
             emptyMsg="Sua lixeira está vazia." />
           {ehDocente && outros.length > 0 && (
             <TrashSection titulo="Excluídos de outros usuários (visão docente)"
-              docs={outros} showOwner
+              docs={outros} showOwner autores={autores}
               onRestore={restaurar} onDeleteForever={excluirDefinitivo} emptyMsg="" />
           )}
         </>
@@ -214,13 +214,14 @@ const TabBtn = ({ active, onClick, icon, children }: any) => (
   </button>
 );
 
-const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner }: {
+const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner, autores }: {
   titulo: string; docs: Doc[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
   onDelete: (id: string) => void;
   onBaixar: (doc: Doc, formato: 'docx' | 'pdf') => void;
   busyExport: string | null;
   canEdit: boolean; emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -236,7 +237,7 @@ const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdi
                 <div className="text-sm font-semibold text-gray-200 truncate">{d.titulo || 'Sem título'}</div>
                 <div className="text-[11px] text-gray-500">
                   Editado {fmt(d.updated_at)}
-                  {showOwner && ` • autor: ${autores[d.user_id] ?? d.user_id.slice(0, 8)}`}
+                  {showOwner && ` • autor: ${autores?.[d.user_id] ?? d.user_id.slice(0, 8)}`}
                 </div>
               </div>
             </div>
@@ -268,11 +269,12 @@ const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdi
   </div>
 );
 
-const TrashSection = ({ titulo, docs, onRestore, onDeleteForever, emptyMsg, showOwner }: {
+const TrashSection = ({ titulo, docs, onRestore, onDeleteForever, emptyMsg, showOwner, autores }: {
   titulo: string; docs: Doc[];
   onRestore: (id: string) => void;
   onDeleteForever: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -291,7 +293,7 @@ const TrashSection = ({ titulo, docs, onRestore, onDeleteForever, emptyMsg, show
                   <div className="text-sm font-semibold text-gray-300 truncate line-through">{d.titulo || 'Sem título'}</div>
                   <div className="text-[11px] text-gray-500">
                     Excluído há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${autores[d.user_id] ?? d.user_id.slice(0, 8)}`}
+                    {showOwner && ` • autor: ${autores?.[d.user_id] ?? d.user_id.slice(0, 8)}`}
                   </div>
                 </div>
               </div>

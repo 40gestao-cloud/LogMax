@@ -179,7 +179,7 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
             emptyMsg="Você ainda não criou nenhuma planilha." />
           {ehDocente && outras.length > 0 && (
             <Section titulo="Planilhas de outros usuários (visão docente)" items={outras}
-              canEdit={false} showOwner
+              canEdit={false} showOwner autores={autores}
               onAbrir={abrir} onDelete={excluir} onBaixar={baixar} busyExport={busyExport} emptyMsg="" />
           )}
         </>
@@ -193,7 +193,7 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
             emptyMsg="Sua lixeira está vazia." />
           {ehDocente && outras.length > 0 && (
             <TrashSection titulo="Excluídas de outros usuários (visão docente)"
-              items={outras} showOwner
+              items={outras} showOwner autores={autores}
               onRestore={restaurar} onDeleteForever={excluirDefinitivo} emptyMsg="" />
           )}
         </>
@@ -209,13 +209,14 @@ const TabBtn = ({ active, onClick, icon, children }: any) => (
   </button>
 );
 
-const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner }: {
+const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEdit, emptyMsg, showOwner, autores }: {
   titulo: string; items: Planilha[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
   onDelete: (id: string) => void;
   onBaixar: (p: Planilha) => void;
   busyExport: string | null;
   canEdit: boolean; emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -231,7 +232,7 @@ const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEd
                 <div className="text-sm font-semibold text-gray-200 truncate">{p.titulo || 'Sem título'}</div>
                 <div className="text-[11px] text-gray-500">
                   Editado {fmt(p.updated_at)}
-                  {showOwner && ` • autor: ${autores[p.user_id] ?? p.user_id.slice(0, 8)}`}
+                  {showOwner && ` • autor: ${autores?.[p.user_id] ?? p.user_id.slice(0, 8)}`}
                 </div>
               </div>
             </div>
@@ -259,11 +260,12 @@ const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEd
   </div>
 );
 
-const TrashSection = ({ titulo, items, onRestore, onDeleteForever, emptyMsg, showOwner }: {
+const TrashSection = ({ titulo, items, onRestore, onDeleteForever, emptyMsg, showOwner, autores }: {
   titulo: string; items: Planilha[];
   onRestore: (id: string) => void;
   onDeleteForever: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -282,7 +284,7 @@ const TrashSection = ({ titulo, items, onRestore, onDeleteForever, emptyMsg, sho
                   <div className="text-sm font-semibold text-gray-300 truncate line-through">{p.titulo || 'Sem título'}</div>
                   <div className="text-[11px] text-gray-500">
                     Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${autores[p.user_id] ?? p.user_id.slice(0, 8)}`}
+                    {showOwner && ` • autor: ${autores?.[p.user_id] ?? p.user_id.slice(0, 8)}`}
                   </div>
                 </div>
               </div>

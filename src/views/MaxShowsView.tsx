@@ -220,7 +220,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
             emptyMsg="Você ainda não importou nenhum PDF." />
           {ehDocente && outros.length > 0 && (
             <Section titulo="Apresentações de outros usuários (visão docente)" shows={outros}
-              showOwner
+              showOwner autores={autores}
               onAbrir={abrir} onDelete={excluir} emptyMsg="" />
           )}
         </>
@@ -234,7 +234,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
             emptyMsg="Sua lixeira está vazia." />
           {ehDocente && outros.length > 0 && (
             <TrashSection titulo="Excluídas de outros usuários (visão docente)"
-              shows={outros} showOwner
+              shows={outros} showOwner autores={autores}
               onRestore={restaurar} onDeleteForever={excluirDefinitivo} emptyMsg="" />
           )}
         </>
@@ -257,11 +257,12 @@ const fmtBytes = (b: number | null): string => {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 };
 
-const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner }: {
+const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner, autores }: {
   titulo: string; shows: Show[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
   onDelete: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -277,7 +278,7 @@ const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner }: {
                 <div className="text-sm font-semibold text-gray-200 truncate">{s.titulo || 'Sem título'}</div>
                 <div className="text-[11px] text-gray-500">
                   {`PDF • ${fmtBytes(s.arquivo_tamanho)} • Enviado ${fmt(s.updated_at)}`}
-                  {showOwner && ` • autor: ${autores[s.user_id] ?? s.user_id.slice(0, 8)}`}
+                  {showOwner && ` • autor: ${autores?.[s.user_id] ?? s.user_id.slice(0, 8)}`}
                 </div>
               </div>
             </div>
@@ -296,11 +297,12 @@ const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner }: {
   </div>
 );
 
-const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, showOwner }: {
+const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, showOwner, autores }: {
   titulo: string; shows: Show[];
   onRestore: (id: string) => void;
   onDeleteForever: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
+  autores?: Record<string, string>;
 }) => (
   <div className="mb-8">
     <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
@@ -311,7 +313,8 @@ const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, sho
         {shows.map(s => {
           const dias = s.deleted_at ? diasAtras(s.deleted_at) : 0;
           const restam = Math.max(0, PURGE_DAYS - dias);
-          const Icon = s.tipo === 'pdf' ? FileText : Presentation;
+          // Max Show hoje so trabalha com PDF importado — ver commit 258f480.
+          const Icon = FileText;
           return (
             <li key={s.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 opacity-70">
               <div className="flex items-center gap-3 min-w-0">
@@ -320,7 +323,7 @@ const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, sho
                   <div className="text-sm font-semibold text-gray-300 truncate line-through">{s.titulo || 'Sem título'}</div>
                   <div className="text-[11px] text-gray-500">
                     Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${autores[s.user_id] ?? s.user_id.slice(0, 8)}`}
+                    {showOwner && ` • autor: ${autores?.[s.user_id] ?? s.user_id.slice(0, 8)}`}
                   </div>
                 </div>
               </div>

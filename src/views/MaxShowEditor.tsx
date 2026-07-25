@@ -23,7 +23,7 @@ type Props = {
   profile?: any;
 };
 
-type PdfDoc = { numPages: number; getPage: (n: number) => Promise<any> };
+type PdfDoc = { numPages: number; getPage: (n: number) => Promise<any>; destroy?: () => Promise<void> | void };
 
 export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const [titulo, setTitulo] = useState('');
