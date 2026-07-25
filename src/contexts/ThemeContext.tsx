@@ -102,16 +102,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [accentColor, theme]);
 
   useEffect(() => {
-    localStorage.setItem('logmax-brightness', String(brightness));
-    // filter:brightness no body — body não é o scroller (o scroll vive em
-    // <main>), então a "armadilha" de position:fixed virando relativo ao
-    // ancestral filtrado não afeta nada visualmente: body cobre o viewport
-    // inteiro com `bg-base` e h-screen.
-    if (brightness === 100) {
-      document.body.style.removeProperty('filter');
-    } else {
-      document.body.style.filter = `brightness(${brightness / 100})`;
-    }
+    // Controle de brilho foi removido da UI. filter:brightness no <body>
+    // forcava repaint da viewport inteira em cada frame de scroll — causa
+    // classica de travamento. Limpa filtro e valor persistido pra qualquer
+    // usuario que tenha resquicio no localStorage.
+    document.body.style.removeProperty('filter');
+    localStorage.removeItem('logmax-brightness');
   }, [brightness]);
 
   const toggleTheme = () => setThemeState(t => t === 'dark' ? 'light' : 'dark');
