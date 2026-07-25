@@ -2135,6 +2135,36 @@ html.theme-switching *::after {
 .max-doc-scope:fullscreen .md-toolbar { position: sticky; top: 0; z-index: 29; }
 .max-doc-scope:fullscreen .md-page { min-height: 0; }
 
+/* Max Show — header vermelho (identidade PowerPoint) e esconde em fullscreen */
+.max-show-scope { --md-header-bg: #b7472a; --md-btn-active-fg: #b7472a; }
+.max-show-scope .md-savebtn { color: #b7472a !important; }
+.max-show-scope:fullscreen .md-header { display: none !important; }
+
+/* Max Show — stage do canvas de PDF */
+.max-show-stage canvas { max-width: 100%; max-height: 100%; cursor: pointer; }
+.max-show-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  background: rgba(0,0,0,0.35); color: #fff;
+  width: 48px; height: 48px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s, background 0.2s;
+  border: none; cursor: pointer;
+}
+.max-show-nav:disabled { opacity: 0 !important; cursor: default; }
+.max-show-stage:hover .max-show-nav:not(:disabled) { opacity: 1; }
+.max-show-nav:hover { background: rgba(0,0,0,0.6); }
+.max-show-nav-left { left: 16px; }
+.max-show-nav-right { right: 16px; }
+.max-show-counter {
+  position: absolute; bottom: 16px; right: 16px;
+  background: rgba(0,0,0,0.5); color: #fff;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  opacity: 0; transition: opacity 0.2s;
+  pointer-events: none;
+}
+.max-show-stage:hover .max-show-counter { opacity: 1; }
+
 /* Fallback pra vendors antigos */
 .max-doc-scope:-webkit-full-screen,
 .max-plan-scope:-webkit-full-screen { width: 100vw; height: 100vh; }

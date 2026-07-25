@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
           // inflar o payload inicial da PWA de todo mundo — o chunk baixa
           // on-demand quando o aluno abre Max Planilhas (Runtime cache do
           // NetworkFirst do supabase-api não pega esse ativo estático).
-          globIgnores: ['**/vendor-univer-*.js', '**/vendor-univer-*.css'],
+          globIgnores: ['**/vendor-univer-*.js', '**/vendor-univer-*.css', '**/vendor-pdfjs-*.js', '**/pdf.worker*.js', '**/pdf.worker*.mjs'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -71,6 +71,7 @@ export default defineConfig(({ mode }) => {
             // Max Work — Univer (docs + planilhas) em chunk lazy proprio.
             // So baixa quando o aluno abre Max Docs ou Max Planilhas.
             'vendor-univer': ['@univerjs/presets', '@univerjs/preset-sheets-core', '@univerjs/preset-docs-core'],
+            'vendor-pdfjs': ['pdfjs-dist'],
           },
         },
       },

@@ -51,6 +51,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   const confirm = useConfirm();
   const [tab, setTab] = useState<'ativos' | 'lixeira'>('ativos');
   const [shows, setShows] = useState<Show[]>([]);
+  const [autores, setAutores] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('edit');
@@ -66,10 +67,20 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
     if (error) {
       showToast?.(`Erro ao carregar apresentações: ${error.message}`, 'error');
     } else {
-      setShows((data ?? []) as Show[]);
+      const rows = (data ?? []) as Show[];
+      setShows(rows);
+      const ids = [...new Set(rows.map(r => r.user_id).filter(id => id && id !== profile?.id))];
+      if (ids.length) {
+        const { data: profs } = await supabase.from('user_profiles').select('id,nome').in('id', ids);
+        const map: Record<string, string> = {};
+        (profs ?? []).forEach((p: any) => { if (p?.id && p?.nome) map[p.id] = p.nome; });
+        setAutores(map);
+      } else {
+        setAutores({});
+      }
     }
     setLoading(false);
-  }, [tab, showToast]);
+  }, [tab, showToast, profile?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -266,7 +277,7 @@ const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner }: {
                 <div className="text-sm font-semibold text-gray-200 truncate">{s.titulo || 'Sem título'}</div>
                 <div className="text-[11px] text-gray-500">
                   {`PDF • ${fmtBytes(s.arquivo_tamanho)} • Enviado ${fmt(s.updated_at)}`}
-                  {showOwner && ` • autor: ${s.user_id.slice(0, 8)}`}
+                  {showOwner && ` • autor: ${autores[s.user_id] ?? s.user_id.slice(0, 8)}`}
                 </div>
               </div>
             </div>
@@ -309,7 +320,7 @@ const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, sho
                   <div className="text-sm font-semibold text-gray-300 truncate line-through">{s.titulo || 'Sem título'}</div>
                   <div className="text-[11px] text-gray-500">
                     Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${s.user_id.slice(0, 8)}`}
+                    {showOwner && ` • autor: ${autores[s.user_id] ?? s.user_id.slice(0, 8)}`}
                   </div>
                 </div>
               </div>

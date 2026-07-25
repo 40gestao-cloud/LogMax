@@ -39,6 +39,7 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
   const confirm = useConfirm();
   const [tab, setTab] = useState<'ativos' | 'lixeira'>('ativos');
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [autores, setAutores] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('edit');
@@ -55,10 +56,20 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
     if (error) {
       showToast?.(`Erro ao carregar documentos: ${error.message}`, 'error');
     } else {
-      setDocs((data ?? []) as Doc[]);
+      const rows = (data ?? []) as Doc[];
+      setDocs(rows);
+      const ids = [...new Set(rows.map(r => r.user_id).filter(id => id && id !== profile?.id))];
+      if (ids.length) {
+        const { data: profs } = await supabase.from('user_profiles').select('id,nome').in('id', ids);
+        const map: Record<string, string> = {};
+        (profs ?? []).forEach((p: any) => { if (p?.id && p?.nome) map[p.id] = p.nome; });
+        setAutores(map);
+      } else {
+        setAutores({});
+      }
     }
     setLoading(false);
-  }, [tab, showToast]);
+  }, [tab, showToast, profile?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -225,7 +236,7 @@ const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdi
                 <div className="text-sm font-semibold text-gray-200 truncate">{d.titulo || 'Sem título'}</div>
                 <div className="text-[11px] text-gray-500">
                   Editado {fmt(d.updated_at)}
-                  {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+                  {showOwner && ` • autor: ${autores[d.user_id] ?? d.user_id.slice(0, 8)}`}
                 </div>
               </div>
             </div>
@@ -280,7 +291,7 @@ const TrashSection = ({ titulo, docs, onRestore, onDeleteForever, emptyMsg, show
                   <div className="text-sm font-semibold text-gray-300 truncate line-through">{d.titulo || 'Sem título'}</div>
                   <div className="text-[11px] text-gray-500">
                     Excluído há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+                    {showOwner && ` • autor: ${autores[d.user_id] ?? d.user_id.slice(0, 8)}`}
                   </div>
                 </div>
               </div>
