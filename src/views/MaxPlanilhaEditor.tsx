@@ -64,6 +64,28 @@ export const MaxPlanilhaEditor = ({ planilhaId, mode = 'edit', onClose, showToas
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  // PWA instalada tem manifest com orientation=portrait — trava rotacao.
+  // No editor de planilha destravamos pra permitir horizontal, e re-travamos
+  // ao sair. Em browser normal a chamada eh no-op (unlock nao existe).
+  useEffect(() => {
+    const so: any = (screen as any).orientation;
+    try { so?.unlock?.(); } catch { /* ignore — precisa fullscreen em alguns browsers */ }
+    return () => { try { so?.lock?.('portrait'); } catch { /* ignore */ } };
+  }, []);
+
+  // Fortune-sheet nao observa resize do container por conta propria — cutucamos
+  // via window resize event sintetico apos orientationchange pra ele recalcular
+  // a grade quando o dispositivo gira.
+  useEffect(() => {
+    const onRotate = () => {
+      // duas passadas: uma imediata + uma apos o browser terminar o reflow (~250ms).
+      window.dispatchEvent(new Event('resize'));
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+    };
+    window.addEventListener('orientationchange', onRotate);
+    return () => window.removeEventListener('orientationchange', onRotate);
+  }, []);
+
   const toggleFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else rootRef.current?.requestFullscreen?.().catch(() => showToast?.('Tela cheia não disponível.', 'error'));

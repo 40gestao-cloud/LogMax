@@ -1085,7 +1085,6 @@ function LogMaxAppInner() {
                   <button onClick={handleSignOut} className="hover:text-red-500 transition-colors cursor-pointer">Sair</button>
                 </div>
               </div>
-              <button onClick={handleSignOut} className="sm:hidden text-[10px] font-bold text-gray-500 hover:text-red-500 transition-colors">Sair</button>
             </div>
           </div>
         </header>

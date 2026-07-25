@@ -145,17 +145,17 @@ export const MaxDocsView = ({ showToast, profile }: any) => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-100 flex items-center gap-2">
-            <FileText size={22} className="text-accent" /> Max Docs
+    <div className="p-3 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black text-gray-100 flex items-center gap-2">
+            <FileText size={22} className="text-accent shrink-0" /> Max Docs
           </h1>
           <p className="text-xs text-gray-500 mt-1">Elabore relatórios com formatação estilo Word.</p>
         </div>
         {tab === 'ativos' && (
-          <button onClick={criar} className="neu-button-accent px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
-            <Plus size={16} /> Novo documento
+          <button onClick={criar} className="neu-button-accent px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap self-start sm:self-auto">
+            <Plus size={16} /> <span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo documento</span>
           </button>
         )}
       </div>
@@ -222,16 +222,18 @@ const Section = ({ titulo, docs, onAbrir, onDelete, onBaixar, busyExport, canEdi
     ) : (
       <ul className="flex flex-col gap-2">
         {docs.map(d => (
-          <li key={d.id} className="neu-flat rounded-xl px-4 py-3 flex items-center gap-3">
-            <FileText size={18} className="text-accent shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-gray-200 truncate">{d.titulo || 'Sem título'}</div>
-              <div className="text-[11px] text-gray-500">
-                Editado {fmt(d.updated_at)}
-                {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+          <li key={d.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <FileText size={18} className="text-accent shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-200 truncate">{d.titulo || 'Sem título'}</div>
+                <div className="text-[11px] text-gray-500">
+                  Editado {fmt(d.updated_at)}
+                  {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
               <button onClick={() => onAbrir(d.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir apenas para leitura">
                 <Eye size={13} /> Abrir
               </button>
@@ -275,16 +277,18 @@ const TrashSection = ({ titulo, docs, onRestore, onDeleteForever, emptyMsg, show
           const dias = d.deleted_at ? diasAtras(d.deleted_at) : 0;
           const restam = Math.max(0, PURGE_DAYS - dias);
           return (
-            <li key={d.id} className="neu-flat rounded-xl px-4 py-3 flex items-center gap-3 opacity-70">
-              <FileText size={18} className="text-gray-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-300 truncate line-through">{d.titulo || 'Sem título'}</div>
-                <div className="text-[11px] text-gray-500">
-                  Excluído há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                  {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+            <li key={d.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 opacity-70">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileText size={18} className="text-gray-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-300 truncate line-through">{d.titulo || 'Sem título'}</div>
+                  <div className="text-[11px] text-gray-500">
+                    Excluído há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
+                    {showOwner && ` • autor: ${d.user_id.slice(0, 8)}`}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
                 <button onClick={() => onRestore(d.id)} className="btn-shimmer btn-shimmer--glass-green" title="Restaurar">
                   <RotateCcw size={13} /> Restaurar
                 </button>

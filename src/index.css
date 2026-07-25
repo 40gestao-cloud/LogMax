@@ -359,12 +359,20 @@
 
 /* ── Body ── */
 html, body {
-  /* App estático: sem pull-to-refresh, sem rubber-band bounce em iOS/Android.
-     overscroll-behavior corta o efeito de "tela se mexendo" ao chegar nas pontas. */
+  /* App estatico: sem pull-to-refresh, sem rubber-band bounce em iOS/Android,
+     sem pan horizontal na raiz (view nao "quebra" pro lado quando o dedo
+     desliza). Containers internos que precisam scroll horizontal (tabelas,
+     PDV, ribbons) declaram `.h-scroll` ou usam `.overflow-x-auto` e ganham
+     touch-action de volta via regra abaixo. */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: auto;
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
+  overflow-x: hidden;
 }
+
+/* Restaura pan-x em containers que declaram overflow horizontal proprio —
+   sem isso, o touch-action pan-y da raiz bloquearia o swipe deles. */
+.overflow-x-auto, .overflow-x-scroll, .overflow-auto { touch-action: pan-x pan-y; }
 
 body {
   background-color: var(--color-bg-base);
@@ -976,6 +984,11 @@ html.theme-switching *::after {
   background-color: var(--color-scrollbar-hover);
 }
 
+/* <main> tem overflow-y-auto — no CSS quando um eixo eh auto e o outro
+   visible, o visible vira auto na pratica, entao qualquer filho que
+   passe da largura habilita scroll horizontal + rubber-band no touch
+   ("view balancando"). Forcamos overflow-x hidden + contain no bounce. */
+.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contain; }
 .main-scrollbar::-webkit-scrollbar       { width: 8px; }
 .main-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .main-scrollbar::-webkit-scrollbar-thumb {
@@ -2035,4 +2048,62 @@ html.theme-switching *::after {
   .max-plan-scope .max-plan-header .md-savebtn { padding: 6px 8px !important; font-size: 11px; }
   .max-plan-scope .max-plan-header .md-savebtn > svg + * { display: none; }
   .max-plan-scope .md-ribbon { min-height: 76px !important; padding: 2px 4px 0 !important; }
+}
+
+
+/* ================================================================
+   Max Docs / Max Planilhas — tela cheia (Fullscreen API)
+   Sem regras proprias, o :fullscreen roda com padding/height default
+   do browser e header/save podem sumir. Forcamos viewport 100% +
+   safe-area padding + header sticky pra manter Salvar acessivel.
+   ================================================================ */
+.max-doc-scope:fullscreen,
+.max-plan-scope:fullscreen {
+  width: 100vw; height: 100vh; overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.max-doc-scope:fullscreen .md-header,
+.max-plan-scope:fullscreen .max-plan-header { position: sticky; top: 0; z-index: 30; }
+.max-doc-scope:fullscreen .md-toolbar { position: sticky; top: 0; z-index: 29; }
+.max-doc-scope:fullscreen .md-page { min-height: 0; }
+
+/* Fallback pra vendors antigos */
+.max-doc-scope:-webkit-full-screen,
+.max-plan-scope:-webkit-full-screen { width: 100vw; height: 100vh; }
+
+/* ================================================================
+   Max Planilhas / Max Docs — landscape mobile (rotação horizontal)
+   Altura escassa (<= 500px) e largura media (<= 900px): compacta
+   ribbon pra sobrar altura pra grade/papel.
+   ================================================================ */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  /* Max Planilhas */
+  .max-plan-scope .max-plan-header { padding: 4px 8px !important; }
+  .max-plan-scope .md-ribbon { min-height: 46px !important; padding: 2px 4px 0 !important; }
+  .max-plan-scope .md-group { padding: 1px 4px !important; }
+  .max-plan-scope .md-group-label { display: none; }
+  .max-plan-scope .md-group-row1, .max-plan-scope .md-group-row2 { min-height: 20px; }
+  .max-plan-scope .md-group-divider { margin: 2px 2px !important; }
+  .max-plan-scope .md-toolbtn { min-width: 22px !important; height: 22px !important; padding: 0 3px !important; }
+  .max-plan-scope .md-colorbtn { width: 24px !important; height: 22px !important; }
+  .max-plan-scope .md-select { height: 20px !important; font-size: 10px !important; }
+  .max-plan-scope .md-select-font, .max-plan-scope .md-select-numfmt { width: 78px !important; }
+  .max-plan-scope .md-select-size { width: 38px !important; }
+
+  /* Max Docs */
+  .max-doc-scope .md-header { padding: 4px 8px !important; }
+  .max-doc-scope .md-ribbon { min-height: 60px !important; padding: 2px 4px 0 !important; }
+  .max-doc-scope .md-group { padding: 1px 4px !important; }
+  .max-doc-scope .md-group-label { display: none; }
+  .max-doc-scope .md-group-row1, .max-doc-scope .md-group-row2 { min-height: 22px; }
+  .max-doc-scope .md-group-divider { margin: 2px 2px !important; }
+  .max-doc-scope .md-toolbtn { min-width: 22px !important; height: 22px !important; padding: 0 3px !important; }
+  .max-doc-scope .md-colorbtn { width: 24px !important; height: 22px !important; }
+  .max-doc-scope .md-select { height: 20px !important; font-size: 10px !important; }
+  .max-doc-scope .md-style-card { min-width: 52px !important; height: 38px !important; }
+  .max-doc-scope .md-page { padding: 6px 4px !important; }
+  .max-doc-scope .md-paper .ProseMirror { padding: 16px 12px !important; }
 }

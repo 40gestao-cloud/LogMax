@@ -142,17 +142,17 @@ export const MaxPlanilhasView = ({ showToast, profile }: any) => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-100 flex items-center gap-2">
-            <Sheet size={22} className="text-accent" /> Max Planilhas
+    <div className="p-3 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black text-gray-100 flex items-center gap-2">
+            <Sheet size={22} className="text-accent shrink-0" /> Max Planilhas
           </h1>
           <p className="text-xs text-gray-500 mt-1">Monte planilhas estilo Excel com fórmulas e formatação.</p>
         </div>
         {tab === 'ativos' && (
-          <button onClick={criar} className="neu-button-accent px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
-            <Plus size={16} /> Nova planilha
+          <button onClick={criar} className="neu-button-accent px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap self-start sm:self-auto">
+            <Plus size={16} /> <span className="sm:hidden">Nova</span><span className="hidden sm:inline">Nova planilha</span>
           </button>
         )}
       </div>
@@ -218,16 +218,18 @@ const Section = ({ titulo, items, onAbrir, onDelete, onBaixar, busyExport, canEd
     ) : (
       <ul className="flex flex-col gap-2">
         {items.map(p => (
-          <li key={p.id} className="neu-flat rounded-xl px-4 py-3 flex items-center gap-3">
-            <Sheet size={18} className="text-accent shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-gray-200 truncate">{p.titulo || 'Sem título'}</div>
-              <div className="text-[11px] text-gray-500">
-                Editado {fmt(p.updated_at)}
-                {showOwner && ` • autor: ${p.user_id.slice(0, 8)}`}
+          <li key={p.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Sheet size={18} className="text-accent shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-200 truncate">{p.titulo || 'Sem título'}</div>
+                <div className="text-[11px] text-gray-500">
+                  Editado {fmt(p.updated_at)}
+                  {showOwner && ` • autor: ${p.user_id.slice(0, 8)}`}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
               <button onClick={() => onAbrir(p.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir apenas para leitura">
                 <Eye size={13} /> Abrir
               </button>
@@ -267,16 +269,18 @@ const TrashSection = ({ titulo, items, onRestore, onDeleteForever, emptyMsg, sho
           const dias = p.deleted_at ? diasAtras(p.deleted_at) : 0;
           const restam = Math.max(0, PURGE_DAYS - dias);
           return (
-            <li key={p.id} className="neu-flat rounded-xl px-4 py-3 flex items-center gap-3 opacity-70">
-              <Sheet size={18} className="text-gray-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-300 truncate line-through">{p.titulo || 'Sem título'}</div>
-                <div className="text-[11px] text-gray-500">
-                  Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                  {showOwner && ` • autor: ${p.user_id.slice(0, 8)}`}
+            <li key={p.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 opacity-70">
+              <div className="flex items-center gap-3 min-w-0">
+                <Sheet size={18} className="text-gray-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-300 truncate line-through">{p.titulo || 'Sem título'}</div>
+                  <div className="text-[11px] text-gray-500">
+                    Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
+                    {showOwner && ` • autor: ${p.user_id.slice(0, 8)}`}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
                 <button onClick={() => onRestore(p.id)} className="btn-shimmer btn-shimmer--glass-green" title="Restaurar">
                   <RotateCcw size={13} /> Restaurar
                 </button>
