@@ -262,18 +262,15 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
   // ─── Export PDF / Excel ─────────────────────────────────────────────────
   // Exporta o que está visível (mês filtrado + escopo de visibilidade do user).
   const tipoLabel = (t: string) => t === 'entrada' ? 'Entrada' : t === 'retorno' ? 'Retorno' : 'Saída';
-  const buildRows = (forExcel: boolean) =>
+  const buildRows = () =>
     registrosVisiveis.map((r: any) => {
       const dt = new Date(r.registrado_em);
       const data = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Rio_Branco' });
       const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' });
       const prof = userMap[r.user_id];
-      const base = canSeeAll
+      return canSeeAll
         ? [prof?.nome ?? '—', prof?.email ?? r.user_id.slice(0, 8), data, hora, tipoLabel(r.tipo), r.status]
         : [data, hora, tipoLabel(r.tipo), r.status];
-      // forExcel reservado caso futuramente queiramos tipos numéricos diferenciados (atualmente todas as colunas são texto)
-      void forExcel;
-      return base;
     });
 
   const colunas = canSeeAll
@@ -283,8 +280,8 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
   const filename = `logmax-ponto-${filtroMes}`;
   const titulo = `Histórico de Ponto — ${filtroMes}`;
 
-  const handleExportPDF = () => exportToPDF(titulo, colunas, buildRows(false), filename);
-  const handleExportExcel = () => exportToExcel('Ponto', colunas, buildRows(true), filename);
+  const handleExportPDF = () => exportToPDF(titulo, colunas, buildRows(), filename);
+  const handleExportExcel = () => exportToExcel('Ponto', colunas, buildRows(), filename);
 
   return (
     <div className="flex flex-col gap-5">

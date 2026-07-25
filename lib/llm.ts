@@ -236,183 +236,144 @@ async function callOpenRouterOnce(
 }
 
 // ─────────────────────────────────────────────
-// Orquestração: Gemini → OpenRouter
+// Orquestração: Gemini → Groq → OpenRouter
 // ─────────────────────────────────────────────
 
-export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> {
-  const geminiKey     = process.env.GEMINI_API_KEY?.trim();
-  const groqKey       = process.env.GROQ_API_KEY?.trim();
-  const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  const geminiModel   = (process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
-  const groqModelsEnv = (process.env.GROQ_MODELS || '')
-    .split(',').map(s => s.trim()).filter(Boolean);
-  const groqModels = groqModelsEnv.length > 0 ? groqModelsEnv : GROQ_DEFAULT_MODELS;
-  const openrouterModels = (process.env.OPENROUTER_MODELS || '')
-    .split(',').map(s => s.trim()).filter(Boolean);
-  const orModels = openrouterModels.length > 0 ? openrouterModels : OPENROUTER_DEFAULT_MODELS;
+// Parse env var CSV, fallback pro default se vazio.
+function envList(name: string, fallback: string[]): string[] {
+  const parsed = (process.env[name] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
 
-  // ─── 1. Gemini com retry em 503/429 ──────────────────────────
-  let lastGeminiStatus = 0;
-  let lastGeminiMsg: string | undefined;
-  // Resposta parcial do Gemini truncada por MAX_TOKENS em modo JSON:
-  // guardada como último recurso. Preferimos tentar Groq/OpenRouter (que
-  // têm budget/contabilidade próprios e sem overhead de "thinking") e só
-  // caímos nela se todos os fallbacks falharem.
-  let stashedGemini: LLMResult | null = null;
-  if (geminiKey) {
-    for (let i = 0; i <= RETRY_DELAYS_MS.length; i++) {
-      try {
-        const { status, data } = await callGeminiOnce(req, geminiModel, geminiKey);
+type GeminiOutcome =
+  | { kind: 'ok'; result: LLMResult }
+  | { kind: 'stash'; result: LLMResult }        // MAX_TOKENS em jsonMode: guarda pra ultimo recurso
+  | { kind: 'skip'; lastStatus: number }         // vai pro fallback
+  | { kind: 'fail'; result: LLMResult };         // SAFETY/RECITATION — nao adianta tentar outros
 
-        if (status >= 200 && status < 300) {
-          const text: string =
-            data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
-          const finish = data?.candidates?.[0]?.finishReason;
+// Uma tentativa Gemini + parse. Sem retry loop — o caller decide.
+async function attemptGemini(req: LLMRequest, model: string, apiKey: string, log: Logger): Promise<GeminiOutcome | { kind: 'retry'; status: number }> {
+  try {
+    const { status, data } = await callGeminiOnce(req, model, apiKey);
+    if (status >= 200 && status < 300) {
+      const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
+      const finish = data?.candidates?.[0]?.finishReason;
 
-          // SAFETY/RECITATION com texto vazio é decisão do modelo — não
-          // tentar fallback porque outros provedores provavelmente farão o
-          // mesmo. Já MAX_TOKENS com texto parcial é considerado sucesso
-          // (endpoint decide se parseou JSON ou não).
-          if (!text.trim() && (finish === 'SAFETY' || finish === 'RECITATION')) {
-            return failResult(
-              502,
-              finish === 'SAFETY'
-                ? 'A IA recusou gerar a resposta (filtro de segurança).'
-                : 'A IA detectou conteúdo protegido. Reformule e tente novamente.',
-              finish,
-            );
-          }
-
-          // Texto vazio sem motivo claro → tenta fallback.
-          if (!text.trim()) {
-            log.warn('gemini.empty_no_finish', { finish, model: geminiModel });
-            break;
-          }
-
-          // Truncado por MAX_TOKENS em modo JSON: o JSON quase certamente
-          // está cortado e não parseia. Guarda como último recurso e vai
-          // pros fallbacks, que podem entregar o JSON completo.
-          if (finish === 'MAX_TOKENS' && req.jsonMode) {
-            log.warn('gemini.truncated_json', { model: geminiModel });
-            stashedGemini = okResult(text, 'gemini', geminiModel, finish, data);
-            break;
-          }
-
-          return okResult(text, 'gemini', geminiModel, finish, data);
-        }
-
-        lastGeminiStatus = status;
-        lastGeminiMsg = data?.error?.message;
-
-        const isAuthErr  = status === 400 || status === 401 || status === 403;
-        const isOverload = status === 503 || status === 429;
-
-        // Erro de auth: chave inválida. Vai direto pro fallback (OpenRouter
-        // pode ter chave OK) sem queimar retries.
-        if (isAuthErr) {
-          log.warn('gemini.auth_error', { status, msg: lastGeminiMsg });
-          break;
-        }
-
-        // Sobrecarga transitória: retry com backoff.
-        if (isOverload && i < RETRY_DELAYS_MS.length) {
-          log.warn('gemini.retry', { status, attempt: i + 1 });
-          await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[i]));
-          continue;
-        }
-
-        // Esgotou retries ou outro erro (5xx, 4xx) → cai pro fallback.
-        log.warn('gemini.failed', { status, msg: lastGeminiMsg });
-        break;
-      } catch (err: any) {
-        log.warn('gemini.exception', { error: err?.message });
-        break;
+      if (!text.trim() && (finish === 'SAFETY' || finish === 'RECITATION')) {
+        return { kind: 'fail', result: failResult(
+          502,
+          finish === 'SAFETY'
+            ? 'A IA recusou gerar a resposta (filtro de segurança).'
+            : 'A IA detectou conteúdo protegido. Reformule e tente novamente.',
+          finish,
+        )};
       }
-    }
-  }
-
-  // ─── 2. Tier 2: Groq (LPU rápida, free tier alto) ────────────
-  // Itera modelos sequencialmente. 429 num modelo = tenta o próximo
-  // (cota Groq é por modelo). 4xx permanente = sai.
-  if (groqKey) {
-    let lastGroqStatus = 0;
-    for (const model of groqModels) {
-      try {
-        const { status, data } = await callGroqOnce(req, model, groqKey);
-        lastGroqStatus = status;
-
-        if (status >= 200 && status < 300) {
-          const text: string = data?.choices?.[0]?.message?.content ?? '';
-          const finish = data?.choices?.[0]?.finish_reason;
-          if (text.trim()) {
-            log.info('groq.ok', { model, finish });
-            return okResult(text, 'groq', model, finish);
-          }
-          log.warn('groq.empty', { model, finish });
-          continue;
-        }
-
-        log.warn('groq.failed', {
-          model, status, msg: data?.error?.message ?? data?.message,
-        });
-        // Auth/permissão: sai (vai pro OpenRouter).
-        if (status === 401 || status === 403) break;
-        // Rate-limit naquele modelo específico: tenta próximo.
-        if (status === 429) continue;
-        // 4xx genérico: provavelmente erro permanente (modelo deprecado etc.).
-        if (status >= 400 && status < 500) continue;
-        // 5xx: também tenta próximo modelo.
-      } catch (err: any) {
-        log.warn('groq.exception', { model, error: err?.message });
-        // Erro de rede: tenta próximo.
-        continue;
+      if (!text.trim()) {
+        log.warn('gemini.empty_no_finish', { finish, model });
+        return { kind: 'skip', lastStatus: status };
       }
+      if (finish === 'MAX_TOKENS' && req.jsonMode) {
+        log.warn('gemini.truncated_json', { model });
+        return { kind: 'stash', result: okResult(text, 'gemini', model, finish, data) };
+      }
+      return { kind: 'ok', result: okResult(text, 'gemini', model, finish, data) };
     }
-    log.warn('groq.exhausted', { lastGroqStatus });
+    // Nao-2xx: caller decide retry vs skip.
+    return { kind: 'retry', status };
+  } catch (err: any) {
+    log.warn('gemini.exception', { error: err?.message });
+    return { kind: 'skip', lastStatus: 0 };
   }
+}
 
-  // ─── 3. Tier 3: OpenRouter com cadeia de modelos ─────────────
-  if (openrouterKey) {
+// Loop de retry do Gemini (503/429 com backoff). Retorna resultado final ou
+// stashed pra fallback.
+async function runGemini(req: LLMRequest, model: string, apiKey: string, log: Logger): Promise<{ outcome: GeminiOutcome; lastStatus: number; lastMsg?: string }> {
+  let lastStatus = 0;
+  let lastMsg: string | undefined;
+  for (let i = 0; i <= RETRY_DELAYS_MS.length; i++) {
+    const r = await attemptGemini(req, model, apiKey, log);
+    if (r.kind !== 'retry') {
+      if (r.kind === 'skip') lastStatus = r.lastStatus;
+      return { outcome: r as GeminiOutcome, lastStatus, lastMsg };
+    }
+    lastStatus = r.status;
+    const isAuth = r.status === 400 || r.status === 401 || r.status === 403;
+    const isOverload = r.status === 503 || r.status === 429;
+    if (isAuth) {
+      log.warn('gemini.auth_error', { status: r.status });
+      return { outcome: { kind: 'skip', lastStatus: r.status }, lastStatus, lastMsg };
+    }
+    if (isOverload && i < RETRY_DELAYS_MS.length) {
+      log.warn('gemini.retry', { status: r.status, attempt: i + 1 });
+      await new Promise(res => setTimeout(res, RETRY_DELAYS_MS[i]));
+      continue;
+    }
+    log.warn('gemini.failed', { status: r.status });
+    return { outcome: { kind: 'skip', lastStatus: r.status }, lastStatus, lastMsg };
+  }
+  return { outcome: { kind: 'skip', lastStatus }, lastStatus, lastMsg };
+}
+
+// Groq: itera modelos, 429/5xx tenta proximo, 401/403 aborta.
+async function runGroq(req: LLMRequest, models: string[], apiKey: string, log: Logger): Promise<LLMResult | null> {
+  let lastStatus = 0;
+  for (const model of models) {
     try {
-      const { status, data } = await callOpenRouterOnce(req, orModels, openrouterKey);
-
+      const { status, data } = await callGroqOnce(req, model, apiKey);
+      lastStatus = status;
       if (status >= 200 && status < 300) {
         const text: string = data?.choices?.[0]?.message?.content ?? '';
         const finish = data?.choices?.[0]?.finish_reason;
-        const modelUsed = data?.model ?? orModels[0] ?? 'openrouter';
-
         if (text.trim()) {
-          log.info('openrouter.ok', { modelUsed, finish });
-          return okResult(text, 'openrouter', modelUsed, finish);
+          log.info('groq.ok', { model, finish });
+          return okResult(text, 'groq', model, finish);
         }
-        log.warn('openrouter.empty', { finish, modelUsed });
-      } else {
-        log.warn('openrouter.failed', {
-          status, msg: data?.error?.message ?? data?.message,
-        });
+        log.warn('groq.empty', { model, finish });
+        continue;
       }
+      log.warn('groq.failed', { model, status, msg: data?.error?.message ?? data?.message });
+      if (status === 401 || status === 403) break;
+      // 429 / 4xx / 5xx: tenta proximo modelo.
     } catch (err: any) {
-      log.error('openrouter.exception', err);
+      log.warn('groq.exception', { model, error: err?.message });
     }
   }
+  log.warn('groq.exhausted', { lastStatus });
+  return null;
+}
 
-  // ─── 4. Todos os provedores falharam ─────────────────────────
-  // Último recurso: se o Gemini truncou em JSON e nenhum fallback entregou,
-  // devolve o parcial. O endpoint tenta parsear (extractJsonBlock recupera
-  // blocos parciais) e, se falhar, mostra a mensagem de MAX_TOKENS.
-  if (stashedGemini) {
-    log.warn('llm.fallback_to_truncated_gemini', { model: geminiModel });
-    return stashedGemini;
+// OpenRouter: uma unica chamada com array de models (failover interno).
+async function runOpenRouter(req: LLMRequest, models: string[], apiKey: string, log: Logger): Promise<LLMResult | null> {
+  try {
+    const { status, data } = await callOpenRouterOnce(req, models, apiKey);
+    if (status >= 200 && status < 300) {
+      const text: string = data?.choices?.[0]?.message?.content ?? '';
+      const finish = data?.choices?.[0]?.finish_reason;
+      const modelUsed = data?.model ?? models[0] ?? 'openrouter';
+      if (text.trim()) {
+        log.info('openrouter.ok', { modelUsed, finish });
+        return okResult(text, 'openrouter', modelUsed, finish);
+      }
+      log.warn('openrouter.empty', { finish, modelUsed });
+      return null;
+    }
+    log.warn('openrouter.failed', { status, msg: data?.error?.message ?? data?.message });
+    return null;
+  } catch (err: any) {
+    log.error('openrouter.exception', err);
+    return null;
   }
+}
 
-  const noKeys = !geminiKey && !groqKey && !openrouterKey;
-  if (noKeys) {
-    return failResult(500, 'Nenhum provedor de IA configurado no servidor.');
-  }
-
-  // Mensagem específica pro caso mais comum: Gemini sobrecarregado +
-  // nenhum fallback configurado.
-  if (!groqKey && !openrouterKey && (lastGeminiStatus === 503 || lastGeminiStatus === 429)) {
+// Constroi a mensagem de falha final quando nenhum provedor entregou.
+function buildFinalFailure(
+  hasAnyKey: boolean,
+  onlyGeminiKey: boolean,
+  lastGeminiStatus: number,
+): LLMResult {
+  if (!hasAnyKey) return failResult(500, 'Nenhum provedor de IA configurado no servidor.');
+  if (onlyGeminiKey && (lastGeminiStatus === 503 || lastGeminiStatus === 429)) {
     return failResult(
       lastGeminiStatus,
       lastGeminiStatus === 503
@@ -420,16 +381,51 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
         : 'Limite de uso da IA atingido. Tente novamente em alguns minutos.',
     );
   }
-
   if (lastGeminiStatus === 400 || lastGeminiStatus === 401 || lastGeminiStatus === 403) {
-    return failResult(
-      502,
-      'Chave da IA inválida. Verifique GEMINI_API_KEY/GROQ_API_KEY/OPENROUTER_API_KEY no Vercel.',
-    );
+    return failResult(502, 'Chave da IA inválida. Verifique GEMINI_API_KEY/GROQ_API_KEY/OPENROUTER_API_KEY no Vercel.');
+  }
+  return failResult(503, 'Todos os provedores de IA estão indisponíveis no momento. Tente em alguns minutos.');
+}
+
+export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> {
+  const geminiKey     = process.env.GEMINI_API_KEY?.trim();
+  const groqKey       = process.env.GROQ_API_KEY?.trim();
+  const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  const geminiModel   = (process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
+  const groqModels    = envList('GROQ_MODELS', GROQ_DEFAULT_MODELS);
+  const orModels      = envList('OPENROUTER_MODELS', OPENROUTER_DEFAULT_MODELS);
+
+  // Resposta parcial do Gemini truncada por MAX_TOKENS em modo JSON: usada
+  // como ultimo recurso se todos os fallbacks falharem (endpoint tenta
+  // parsear parcial via extractJsonBlock).
+  let stashedGemini: LLMResult | null = null;
+  let lastGeminiStatus = 0;
+
+  if (geminiKey) {
+    const { outcome, lastStatus } = await runGemini(req, geminiModel, geminiKey, log);
+    lastGeminiStatus = lastStatus;
+    if (outcome.kind === 'ok' || outcome.kind === 'fail') return outcome.result;
+    if (outcome.kind === 'stash') stashedGemini = outcome.result;
   }
 
-  return failResult(
-    503,
-    'Todos os provedores de IA estão indisponíveis no momento. Tente em alguns minutos.',
+  if (groqKey) {
+    const r = await runGroq(req, groqModels, groqKey, log);
+    if (r) return r;
+  }
+
+  if (openrouterKey) {
+    const r = await runOpenRouter(req, orModels, openrouterKey, log);
+    if (r) return r;
+  }
+
+  if (stashedGemini) {
+    log.warn('llm.fallback_to_truncated_gemini', { model: geminiModel });
+    return stashedGemini;
+  }
+
+  return buildFinalFailure(
+    Boolean(geminiKey || groqKey || openrouterKey),
+    Boolean(geminiKey && !groqKey && !openrouterKey),
+    lastGeminiStatus,
   );
 }
