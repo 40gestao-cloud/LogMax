@@ -25,7 +25,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  FileText, Sheet, Briefcase,
+  FileText, Sheet, Briefcase, Presentation,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -120,6 +120,7 @@ const HubView                              = lazy(() => import('./views/SessoesG
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
 const MaxDocsView                          = lazy(() => import('./views/MaxDocsView').then(m => ({ default: m.MaxDocsView })));
 const MaxPlanilhasView                     = lazy(() => import('./views/MaxPlanilhasView').then(m => ({ default: m.MaxPlanilhasView })));
+const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -255,11 +256,12 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             Max Docs (Tiptap) e Max Planilhas (Fortune-sheet). Aberto pra
             todo mundo; cada aluno edita só o próprio material; docente
             (admin/CEO/conselheiro) enxerga todos via RLS. Aula-aware. */}
-        {(aulaAllow('max-work-docs') || aulaAllow('max-work-planilhas')) && (() => {
+        {(aulaAllow('max-work-docs') || aulaAllow('max-work-planilhas') || aulaAllow('max-work-show')) && (() => {
           const isOpen = openModules['max-work'];
           const subs: { view: string; label: string; Icon: any }[] = [
-            ...(aulaAllow('max-work-docs')      ? [{ view: 'max-work-docs',      label: 'Max Docs',      Icon: FileText }] : []),
-            ...(aulaAllow('max-work-planilhas') ? [{ view: 'max-work-planilhas', label: 'Max Planilhas', Icon: Sheet    }] : []),
+            ...(aulaAllow('max-work-docs')      ? [{ view: 'max-work-docs',      label: 'Max Docs',      Icon: FileText     }] : []),
+            ...(aulaAllow('max-work-planilhas') ? [{ view: 'max-work-planilhas', label: 'Max Planilhas', Icon: Sheet        }] : []),
+            ...(aulaAllow('max-work-show')     ? [{ view: 'max-work-show',     label: 'Max Show',      Icon: Presentation }] : []),
           ];
           return (
             <div className="flex flex-col">
@@ -950,6 +952,7 @@ function LogMaxAppInner() {
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       case 'max-work-docs':                return <MaxDocsView showToast={st} profile={profile} />;
       case 'max-work-planilhas':           return <MaxPlanilhasView showToast={st} profile={profile} />;
+      case 'max-work-show':               return <MaxShowsView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

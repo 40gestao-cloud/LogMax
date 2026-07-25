@@ -60,7 +60,7 @@ export const AULA_SUBMENUS: Record<string, string[]> = {
   vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Cliente Especial', 'Tarefas'],
   marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário', 'Vitrine Pública', 'Tarefas'],
   ti:         ['Chamados', 'Desenvolvimento com IA'],
-  'max-work': ['Docs', 'Planilhas'],
+  'max-work': ['Docs', 'Planilhas', 'Show'],
 };
 
 /** Reproduz o cálculo de viewId dos submenus feito em App.tsx.SidebarNav. */
@@ -103,6 +103,7 @@ const VIEW_TO_MODULO_OVERRIDE: Record<string, string> = {
   // mas queremos que caiam sob 'max-work'. Override explícito abaixo.
   'max-work-docs':       'max-work',
   'max-work-planilhas':  'max-work',
+  'max-work-show':       'max-work',
 };
 
 /** Retorna o id do módulo a ser checado, ou null se a view é sempre liberada. */
