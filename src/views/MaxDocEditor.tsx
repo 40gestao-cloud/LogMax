@@ -26,19 +26,38 @@ type Props = {
   profile?: any;
 };
 
-// Documento minimo IDocumentData — Univer preenche o resto no createUniverDoc.
-// dataStream: '\r\n' = 1 paragrafo vazio + fim da secao.
+// Documento minimo IDocumentData. Espelha getEmptySnapshot() do @univerjs/core:
+// os containers TOP-LEVEL (tableSource/drawings/headers/footers/settings) e os
+// arrays do body (textRuns/customBlocks/tables/customRanges/customDecorations)
+// precisam existir mesmo vazios — mutations JSONX inserem neles via path fixo
+// (insertOp(["tableSource", id], ...), insertChildMut em textRuns, etc.). Se
+// faltar qualquer container, Bold/Italico/Cor/Ctrl+Z/Inserir tabela quebram
+// silenciosamente com "Cannot insert into missing item" e a ribbon inteira
+// vira noop. documentFlavor: 2 = MODERN (Word-like).
 const emptyDocument = () => ({
   id: `doc_${Date.now()}`,
   locale: LocaleType.PT_BR,
+  tableSource: {},
+  drawings: {},
+  drawingsOrder: [],
+  headers: {},
+  footers: {},
+  settings: {},
   body: {
     dataStream: '\r\n',
-    paragraphs: [{ startIndex: 0 }],
+    textRuns: [],
+    paragraphs: [{ startIndex: 0, paragraphStyle: {} }],
     sectionBreaks: [{ startIndex: 1 }],
+    customBlocks: [],
+    tables: [],
+    customRanges: [],
+    customDecorations: [],
   },
   documentStyle: {
     pageSize: { width: 794, height: 1123 },
     marginTop: 72, marginBottom: 72, marginLeft: 90, marginRight: 90,
+    documentFlavor: 2,
+    paragraphLineGapDefault: 0,
   },
 });
 
@@ -46,6 +65,37 @@ const emptyDocument = () => ({
 // isUniverDocument() garante fallback pra empty ao inves de crashar.
 const isUniverDocument = (v: any): boolean => {
   return !!(v && typeof v === 'object' && !Array.isArray(v) && typeof v.id === 'string' && v.body && typeof v.body.dataStream === 'string');
+};
+
+// Docs salvos antes de arrumar emptyDocument() ficaram sem textRuns/customBlocks/
+// tables/customRanges/customDecorations. Sem esses arrays, JSONX quebra ao aplicar
+// mutations de formatacao — precisa backfill no load.
+const normalizeDocument = (doc: any) => {
+  const body = doc.body || {};
+  return {
+    ...doc,
+    tableSource: doc.tableSource ?? {},
+    drawings: doc.drawings ?? {},
+    drawingsOrder: doc.drawingsOrder ?? [],
+    headers: doc.headers ?? {},
+    footers: doc.footers ?? {},
+    settings: doc.settings ?? {},
+    body: {
+      ...body,
+      textRuns: body.textRuns ?? [],
+      paragraphs: body.paragraphs ?? [{ startIndex: 0, paragraphStyle: {} }],
+      sectionBreaks: body.sectionBreaks ?? [{ startIndex: 1 }],
+      customBlocks: body.customBlocks ?? [],
+      tables: body.tables ?? [],
+      customRanges: body.customRanges ?? [],
+      customDecorations: body.customDecorations ?? [],
+    },
+    documentStyle: {
+      documentFlavor: 2,
+      paragraphLineGapDefault: 0,
+      ...(doc.documentStyle || {}),
+    },
+  };
 };
 
 export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile }: Props) => {
@@ -64,6 +114,11 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
   const univerAPIRef = useRef<any>(null);
   const docRef = useRef<any>(null);
   const saveTimer = useRef<number | null>(null);
+  // StrictMode dev: mount → cleanup → mount no mesmo tick. Adiamos o dispose
+  // 1 tick e cancelamos se um remount chegar antes — evita a) "Attempted to
+  // synchronously unmount a root while React was already rendering" e b)
+  // dois Univer no mesmo container brigando pelo command service.
+  const pendingDispose = useRef<number | null>(null);
   const lastSerialized = useRef<string>('');
   const lastTituloSaved = useRef<string>('');
   const currentIdRef = useRef<string>(docId);
@@ -247,7 +302,11 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
   }, [salvar, readOnly]);
 
   useEffect(() => {
+    // Cancela dispose pendente do cleanup anterior (StrictMode dev double-mount).
+    if (pendingDispose.current) { window.clearTimeout(pendingDispose.current); pendingDispose.current = null; }
     let disposed = false;
+    // Se remount cancelou o dispose e o Univer segue vivo, reaproveita.
+    if (univerRef.current) { setReady(true); return; }
     (async () => {
       const draft = docId === '__draft__';
       let loaded: any = null;
@@ -258,6 +317,7 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
           .select('titulo,conteudo,user_id')
           .eq('id', docId)
           .maybeSingle();
+        if (disposed) return;
         if (error || !data) {
           showToast?.('Não foi possível abrir o documento.', 'error');
           onClose();
@@ -272,6 +332,7 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
 
       const container = containerRef.current;
       if (!container) return;
+      if (univerRef.current) return; // outro mount ganhou a corrida
 
       const { univer, univerAPI } = createUniver({
         locale: LocaleType.PT_BR,
@@ -279,16 +340,30 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
         presets: [ UniverDocsCorePreset({ container }) ],
       });
 
-      const snap = draft ? emptyDocument() : (isUniverDocument(loaded.conteudo) ? loaded.conteudo : emptyDocument());
-      const doc = univerAPI.createUniverDoc(snap);
-      lastSerialized.current = JSON.stringify(doc.getSnapshot());
-
+      // Setar refs ANTES do createUniverDoc pra qualquer cleanup subsequente
+      // conseguir dispose(). Se o mount foi cancelado no meio, aborta e libera.
       univerRef.current = univer;
       univerAPIRef.current = univerAPI;
+      if (disposed) { try { univer.dispose(); } catch { /* ignore */ } univerRef.current = null; univerAPIRef.current = null; return; }
+
+      const snap = draft ? emptyDocument() : (isUniverDocument(loaded.conteudo) ? normalizeDocument(loaded.conteudo) : emptyDocument());
+      const doc = univerAPI.createUniverDoc(snap);
+      lastSerialized.current = JSON.stringify(doc.getSnapshot());
       docRef.current = doc;
 
       if (!readOnly) {
         univerAPI.addEvent(univerAPI.Event.CommandExecuted, () => scheduleSave());
+      }
+
+      // Word-like: cursor no inicio do doc apos mount pra que Bold/Italico/Cor
+      // clicados antes de digitar (a) fiquem HABILITADOS (Univer desabilita
+      // botao inline-format quando textRange==0 via disableMenuWhenNoDocRange)
+      // e (b) escrevam no style cache do proximo insert. Sem isso, botoes
+      // ficam "mortos" ate o usuario clicar no doc — nao e o padrao Word.
+      // setSelection e o metodo publico do FDocument que chama addDocRanges
+      // do render service (posiciona cursor visivel de verdade).
+      if (!readOnly) {
+        setTimeout(() => { try { doc.setSelection(0, 0); } catch { /* ignore */ } }, 100);
       }
 
       setReady(true);
@@ -298,10 +373,26 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
       // Draft abandonado NAO persiste (Word/Excel style).
       if (!isDraftRef.current) salvarRef.current(true);
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
-      try { univerRef.current?.dispose(); } catch { /* ignore */ }
-      univerRef.current = null;
-      univerAPIRef.current = null;
-      docRef.current = null;
+      // Univer usa um React root proprio; dispose() chama root.unmount() sync.
+      // Rodar isso durante o commit do pai (StrictMode dev double-mount, ou
+      // qualquer unmount durante render) gera "Attempted to synchronously
+      // unmount a root while React was already rendering". Adiar 1 tick sai
+      // do render em andamento.
+      const u = univerRef.current;
+      if (!u) return;
+      // NAO limpa univerRef aqui — deixa o remount cancelar o dispose e
+      // reaproveitar a mesma instancia. Se ninguem cancelar em 0ms, dispose.
+      pendingDispose.current = window.setTimeout(() => {
+        pendingDispose.current = null;
+        try { u.dispose(); } catch { /* ignore */ }
+        univerRef.current = null;
+        univerAPIRef.current = null;
+        docRef.current = null;
+        // Univer monta popup-portal + theme wrapper direto em document.body;
+        // dispose() nem sempre remove esses orfaos (ex: paragraph drag handle
+        // "T"), entao limpamos manual pra nao vazarem em outras telas.
+        document.querySelectorAll('.univer-popup-portal, .univer-theme-css-variables').forEach(el => el.remove());
+      }, 0);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
@@ -360,6 +451,11 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
           className="flex-1 bg-transparent text-lg font-bold focus:outline-none px-2"
         />
         <div className="md-status text-xs flex items-center gap-2">
+          {!readOnly && (
+            <span className="hidden md:inline italic opacity-70" title="Formatacao inline (negrito, italico, cor, tamanho) so se aplica em texto ja digitado e selecionado.">
+              Digite primeiro, depois selecione pra formatar
+            </span>
+          )}
           {readOnly && <span className="px-2 py-0.5 rounded bg-yellow-400/30 text-yellow-100 font-bold">Somente leitura</span>}
           {isDraft && !saving && !savedAt && <span className="px-2 py-0.5 rounded bg-white/20 text-white">Não salvo</span>}
           {saving ? <span>Salvando…</span> : savedAt ? (

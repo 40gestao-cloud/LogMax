@@ -64,14 +64,18 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-motion': ['motion/react'],
-            'vendor-supabase': ['@supabase/supabase-js'],
-            // Max Work — Univer (docs + planilhas) em chunk lazy proprio.
-            // So baixa quando o aluno abre Max Docs ou Max Planilhas.
-            'vendor-univer': ['@univerjs/presets', '@univerjs/preset-sheets-core', '@univerjs/preset-docs-core'],
-            'vendor-pdfjs': ['pdfjs-dist'],
+          manualChunks(id) {
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
+            if (id.includes('node_modules/motion/')) return 'vendor-motion';
+            if (id.includes('node_modules/@supabase/')) return 'vendor-supabase';
+            // Max Work — TODO @univerjs/* precisa cair no MESMO chunk. Splittar
+            // por sub-package (docs, docs-ui, core, ui...) faz Rollup criar
+            // singletons duplicados quando MaxDocEditor importa direto de
+            // '@univerjs/docs' alem do preset — o command service da ribbon
+            // fica num Univer, o doc no outro, e Bold/Italic/Ctrl+Z/Inserir
+            // tabela viram noop.
+            if (id.includes('node_modules/@univerjs/') || id.includes('node_modules/@univerjs-pro/')) return 'vendor-univer';
+            if (id.includes('node_modules/pdfjs-dist')) return 'vendor-pdfjs';
           },
         },
       },
