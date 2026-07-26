@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Star } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isConselheiro } from '../lib/rbac';
@@ -72,7 +72,6 @@ const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
 export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
-  const { session } = useAuth();
   const confirm = useConfirm();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
   // Votação restrita a CEO + conselheiros (alinha com RLS voto_write).
@@ -234,12 +233,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   }, [votos, contagemVotos]);
 
   const gerarAnalise = async () => {
-    if (!competicaoAtual || !session?.access_token) return;
+    if (!competicaoAtual) return;
+    const jwt = await freshToken();
+    if (!jwt) { showToast?.('Sessão expirada.', 'error'); return; }
     setGerandoAnalise(true);
     try {
       const resp = await fetch('/api/ai-competicao', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
         body: JSON.stringify({ competicao_id: competicaoAtual.id }),
       });
       const data = await resp.json();

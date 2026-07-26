@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from './useAuth';
+import { freshToken } from '../lib/authFetch';
 import type { AIContextSnapshot } from '../contexts/AIAssistantContext';
 
 export type ChatSource = { uri: string; title: string };
@@ -63,7 +63,6 @@ type Options = {
  * resolvido server-side pelo endpoint (não passamos no body).
  */
 export function useGeminiChat(opts?: Options) {
-  const { session } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setLoading]  = useState(false);
   const [error, setError]        = useState<string | null>(null);
@@ -104,11 +103,12 @@ export function useGeminiChat(opts?: Options) {
     });
 
     try {
+      const jwt = await freshToken();
       const res = await fetch('/api/ai-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token ?? ''}`,
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
         },
         body: JSON.stringify({ messages: payloadMessages }),
       });
@@ -136,7 +136,7 @@ export function useGeminiChat(opts?: Options) {
     } finally {
       setLoading(false);
     }
-  }, [messages, isLoading, session?.access_token, opts?.getContextSnapshot]);
+  }, [messages, isLoading, opts?.getContextSnapshot]);
 
   return { messages, isLoading, error, send, reset };
 }

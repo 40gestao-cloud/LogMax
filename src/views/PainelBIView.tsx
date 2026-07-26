@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { Sparkles, FileDown, Sheet, FileText, Loader2, Calendar, TrendingUp, TrendingDown, History, Clock, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { exportBIToPDF, exportBIToExcel, exportBIToWord, type BIDados } from '../lib/biExports';
 
@@ -86,7 +86,6 @@ type HistoricoRow = {
 };
 
 export const PainelBIView = ({ showToast, profile }: any) => {
-  const { session } = useAuth();
   const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
 
   const [preset, setPreset]   = useState<Preset>('mes');
@@ -125,14 +124,15 @@ export const PainelBIView = ({ showToast, profile }: any) => {
   useEffect(() => { if (podeAcessar) carregarHistorico(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [podeAcessar]);
 
   const gerarRelatorio = async () => {
-    if (!session?.access_token) { setErro('Sessão expirada — faça login novamente.'); return; }
+    const jwt = await freshToken();
+    if (!jwt) { setErro('Sessão expirada — faça login novamente.'); return; }
     if (!inicio || !fim || fim < inicio) { setErro('Período inválido.'); return; }
     setLoading(true);
     setErro(null);
     try {
       const resp = await fetch('/api/ai-bi', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
         body: JSON.stringify({ inicio, fim, setor }),
       });
       const data = await resp.json();

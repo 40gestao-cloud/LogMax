@@ -1,16 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, X, CheckCircle, AlertCircle } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from './ui';
 import { QRScanner } from './QRScanner';
+import { freshToken } from '../lib/authFetch';
 
 type ScanResult =
   | { ok: true; label: string; hora: string; status: string }
   | { ok: false; msg: string };
 
 export const PontoFAB = () => {
-  const { session } = useAuth();
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -30,7 +29,8 @@ export const PontoFAB = () => {
 
   const handleResult = useCallback(async (token: string) => {
     if (scanning) return;
-    if (!session?.access_token) {
+    const jwt = await freshToken();
+    if (!jwt) {
       setResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
       return;
     }
@@ -39,7 +39,7 @@ export const PontoFAB = () => {
     try {
       const res = await fetch('/api/register-ponto', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
         body: JSON.stringify({ method: 'qr', token }),
       });
       const json = await res.json();
@@ -50,7 +50,7 @@ export const PontoFAB = () => {
     } finally {
       setScanning(false);
     }
-  }, [scanning, session]);
+  }, [scanning]);
 
   return (
     <>

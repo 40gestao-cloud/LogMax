@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { CheckCircle, AlertCircle, Loader2, ExternalLink, Clock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { LoginScreen } from '../components/LoginScreen';
+import { freshToken } from '../lib/authFetch';
 
 type Result =
   | { ok: true; label: string; hora: string; status: string }
@@ -15,7 +16,7 @@ type Result =
 // - O token é o mesmo HMAC validado em api/register-ponto-qr.ts; janela curta
 //   de validade (já é responsabilidade do servidor).
 export function RegistroPontoExpressView() {
-  const { session, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [result, setResult] = useState<Result | null>(null);
   const [registrando, setRegistrando] = useState(false);
   // Evita registrar duas vezes em ambientes que re-renderizam (StrictMode em dev,
@@ -31,32 +32,36 @@ export function RegistroPontoExpressView() {
   })();
 
   useEffect(() => {
-    if (!isAuthenticated || !session?.access_token || !token) return;
+    if (!isAuthenticated || !token) return;
     if (disparado.current) return;
     disparado.current = true;
 
     setRegistrando(true);
     setResult(null);
 
-    fetch('/api/register-ponto', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ method: 'qr', token }),
-    })
-      .then(async res => {
+    (async () => {
+      const jwt = await freshToken();
+      if (!jwt) {
+        setResult({ ok: false, msg: 'Sessão expirada. Faça login novamente.' });
+        setRegistrando(false);
+        return;
+      }
+      try {
+        const res = await fetch('/api/register-ponto', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+          body: JSON.stringify({ method: 'qr', token }),
+        });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setResult({ ok: false, msg: json.error ?? `Erro ao registrar ponto (HTTP ${res.status}).` });
-        } else {
-          setResult({ ok: true, label: json.label, hora: json.hora, status: json.status });
-        }
-      })
-      .catch(() => setResult({ ok: false, msg: 'Erro de conexão. Verifique sua internet.' }))
-      .finally(() => setRegistrando(false));
-  }, [isAuthenticated, session?.access_token, token]);
+        if (!res.ok) setResult({ ok: false, msg: json.error ?? `Erro ao registrar ponto (HTTP ${res.status}).` });
+        else setResult({ ok: true, label: json.label, hora: json.hora, status: json.status });
+      } catch {
+        setResult({ ok: false, msg: 'Erro de conexão. Verifique sua internet.' });
+      } finally {
+        setRegistrando(false);
+      }
+    })();
+  }, [isAuthenticated, token]);
 
   if (!token) {
     return (

@@ -6,7 +6,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const CANAIS = [
@@ -96,7 +96,6 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
 };
 
 const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
-  const { session } = useAuth();
   const confirm = useConfirm();
   const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview', { filial });
   const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview', { filial });
@@ -230,11 +229,12 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
     };
     setLegendaModal({ payload, legendas: null, loading: true, erro: null });
     try {
+      const jwt = await freshToken();
       const resp = await fetch('/api/ai-legenda', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token ?? ''}`,
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
         },
         body: JSON.stringify(payload),
       });

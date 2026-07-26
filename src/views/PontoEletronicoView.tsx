@@ -8,6 +8,7 @@ import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -58,12 +59,14 @@ const QRGenerator = () => {
     // recebe 401 e pinta o erro (e a corrida com o fetch autenticado faz o
     // erro persistir mesmo quando o segundo fetch sucede).
     if (!session?.access_token) return;
+    const jwt = await freshToken();
+    if (!jwt) return;
     setRefreshing(true);
     setError(null);
     try {
       const cp = type ?? selected;
       const res = await fetch(`/api/qr-token?checkpoint=${cp}`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Authorization': `Bearer ${jwt}` },
       });
       if (!res.ok) {
         // Preserva o motivo real (403/500/payload do servidor) para diagnóstico.
@@ -417,7 +420,6 @@ const HistoricoPonto = ({ profile, showToast }: { profile: UserProfile; showToas
 type ScanResult = { ok: true; label: string; hora: string; status: string } | { ok: false; msg: string };
 
 const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
-  const { session } = useAuth();
   const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
   const [filtroData, setFiltroData] = useState('');
@@ -456,7 +458,8 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
       setScanResult({ ok: false, msg: 'Código deve ter 6 dígitos.' });
       return;
     }
-    if (!session?.access_token) {
+    const jwt = await freshToken();
+    if (!jwt) {
       setScanResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
       return;
     }
@@ -465,7 +468,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     try {
       const res = await fetch('/api/register-ponto', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
         body: JSON.stringify({ method: 'codigo', codigo }),
       });
       const json = await res.json();
@@ -486,7 +489,8 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
 
   const handleQRResult = useCallback(async (scanned: string) => {
     if (scanning) return;
-    if (!session?.access_token) {
+    const jwt = await freshToken();
+    if (!jwt) {
       setScanResult({ ok: false, msg: 'Sessão expirou. Faça login novamente.' });
       setShowScanner(false);
       return;
@@ -505,7 +509,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     try {
       const res = await fetch('/api/register-ponto', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
         body: JSON.stringify({ method: 'qr', token }),
       });
       const json = await res.json();
@@ -520,7 +524,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     } finally {
       setScanning(false);
     }
-  }, [scanning, session]);
+  }, [scanning]);
 
   if (loadingP || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 

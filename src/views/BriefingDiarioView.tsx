@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Loader2, Lock, Calendar, CheckCircle2, X, Edit3, History, ListTodo, AlertTriangle, Send, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { FILIAIS } from '../components/FilialSelector';
@@ -87,7 +87,6 @@ const dataMaisDias = (iso: string, dias: number): string => {
 };
 
 export const BriefingDiarioView = ({ showToast, profile }: any) => {
-  const { session } = useAuth();
   const confirm = useConfirm();
   const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
@@ -161,7 +160,8 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
   useEffect(() => { if (podeAcessar) carregarHistorico(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [podeAcessar]);
 
   const gerar = async (forcar = false) => {
-    if (!session?.access_token) { setErro('Sessão expirada.'); return; }
+    const jwt = await freshToken();
+    if (!jwt) { setErro('Sessão expirada.'); return; }
     setLoading(true);
     setErro(null);
 
@@ -177,7 +177,7 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
     try {
       const resp = await fetch('/api/ai-briefing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
         body: JSON.stringify({ data: dataRef, janela_dias: janelaDias }),
       });
       const data = await resp.json();

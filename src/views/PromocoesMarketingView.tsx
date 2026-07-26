@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
@@ -144,7 +144,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     aplicarNaDescricao: boolean; // true quando vem do form (botão "usar" preenche `form.descricao`)
   }>(null);
   const [legendaCopiada, setLegendaCopiada] = useState<number | null>(null);
-  const { session } = useAuth();
 
   // Publicar/editar arte é privilégio de Marketing (gerente/colaborador) e
   // admin/CEO. Financeiro consegue ler `marketing_promocoes` (e abrir esta
@@ -415,11 +414,12 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     setLegendaModal({ payload, legendas: null, loading: true, erro: null, aplicarNaDescricao: !!origem.doForm });
 
     try {
+      const jwt = await freshToken();
       const resp = await fetch('/api/ai-legenda', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          Authorization:   `Bearer ${session?.access_token ?? ''}`,
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
         },
         body: JSON.stringify(payload),
       });

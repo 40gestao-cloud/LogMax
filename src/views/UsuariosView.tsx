@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -55,7 +55,6 @@ const filiaisParaRole = (role: string): readonly string[] =>
   role === 'colaborador' || role === 'gerente' ? FILIAIS_GERENTE : (FILIAIS_HOLDING as readonly string[]);
 
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
-  const { session } = useAuth();
   // Modo filial (filialAtiva setado — inclui gerente/colaborador, sempre
   // travados na própria unidade) só mostra Admin/CEO/Conselheiro (globais)
   // + gerente/colaborador da filial ativa. Modo Matriz (filialAtiva null,
@@ -307,12 +306,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   };
 
   const handleDelete = async (userId: string) => {
-    if (!session?.access_token) { showToast('Sessão expirada.', 'error'); return; }
+    const token = await freshToken();
+    if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); return; }
     setDeleting(true);
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ action: 'delete', userId }),
       });
       const json = await res.json();
@@ -331,7 +331,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (!form.nome || !form.email || !form.password) {
       showToast('Nome, e-mail e senha são obrigatórios.', 'error'); return;
     }
-    if (!session?.access_token) { showToast('Sessão expirada. Faça login novamente.', 'error'); return; }
+    const token = await freshToken();
+    if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); return; }
 
     setSaving(true);
     try {
@@ -344,7 +345,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         : basePayload;
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ action: 'create', ...payload }),
       });
       const json = await res.json();
@@ -419,7 +420,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (editForm.password && editForm.password.length < 6) {
       showToast('Senha deve ter ao menos 6 caracteres.', 'error'); return;
     }
-    if (!session?.access_token) { showToast('Sessão expirada.', 'error'); return; }
+    const token = await freshToken();
+    if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); return; }
 
     setEditSaving(true);
     try {
@@ -452,7 +454,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ action: 'update', ...payload }),
       });
       const json = await res.json();
