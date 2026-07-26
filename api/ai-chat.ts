@@ -59,7 +59,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'IA não configurada no servidor. Adicione GEMINI_API_KEY (e/ou GROQ_API_KEY / OPENROUTER_API_KEY) nas env vars do Vercel.' });
     }
 
-    const { messages } = (req.body ?? {}) as { messages?: ChatMessage[] };
+    const { messages, maxOutputTokens: reqMaxTokens } = (req.body ?? {}) as {
+      messages?: ChatMessage[];
+      maxOutputTokens?: number;
+    };
+    // Cap opcional: default 1024 (chat curto), teto 4096 pra geração long-form
+    // (MaxDocs "Gerar e inserir"). Bounded pra evitar abuso de custo.
+    const maxOutputTokens = Math.min(
+      Math.max(Number.isFinite(reqMaxTokens) ? (reqMaxTokens as number) : 1024, 256),
+      4096,
+    );
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages é obrigatório (array não vazio).' });
     }
@@ -88,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       systemPrompt: buildSystemPrompt(user.setor, user.role),
       messages:     llmMessages,
       temperature:  0.6,
-      maxOutputTokens: 1024,
+      maxOutputTokens,
       topP:         0.95,
       geminiTools:  [{ google_search: {} }],
     }, log);

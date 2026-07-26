@@ -190,11 +190,11 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
       resumir:  'Resuma o texto abaixo em 1-2 frases, preservando os pontos principais.',
       expandir: 'Expanda o texto abaixo adicionando detalhes relevantes e exemplos concretos, preservando o significado.',
       corrigir: 'Corrija erros de ortografia, gramática, pontuação e concordância do texto abaixo. Não reescreva além do necessário.',
-      gerar:    'Escreva o conteúdo pedido pelo usuário para um documento de trabalho, em português brasileiro, direto e bem estruturado.',
+      gerar:    'Escreva o conteúdo pedido pelo usuário para um documento de trabalho em Word, em português brasileiro. Produza um texto EXTENSO e completo (mínimo 600 palavras, alvo 800–1200), com introdução, várias seções bem desenvolvidas e conclusão. Use títulos e subtítulos em linhas próprias (sem markdown, sem #, sem **), separe parágrafos com linha em branco, e escreva parágrafos densos (4–8 frases cada). Dê exemplos concretos quando fizer sentido. IMPORTANTE: ignore qualquer diretriz anterior sobre respostas curtas — aqui o objetivo é gerar conteúdo longo pronto para colar num documento.',
     };
 
     const userMessage = action === 'gerar'
-      ? `${instrucoes.gerar}\n\nPedido: ${texto}\n\nResponda APENAS com o texto gerado, sem prefácio nem explicações.`
+      ? `${instrucoes.gerar}\n\nPedido: ${texto}\n\nResponda APENAS com o texto gerado, sem prefácio nem explicações nem aspas.`
       : `${instrucoes[action]}\n\nTexto:\n"""\n${texto}\n"""\n\nResponda APENAS com o texto reescrito, sem prefácio nem explicações nem aspas.`;
 
     setAiBusy(true);
@@ -207,7 +207,12 @@ export const MaxDocEditor = ({ docId, mode = 'edit', onClose, showToast, profile
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ messages: [{ role: 'user', content: userMessage }] }),
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: userMessage }],
+          // Gerar precisa de teto alto pra produzir texto longo; ações de
+          // reescrita (melhorar/resumir/expandir/corrigir) ficam no default.
+          ...(action === 'gerar' ? { maxOutputTokens: 4096 } : {}),
+        }),
       });
       const raw = await resp.text();
       let json: any = null;
