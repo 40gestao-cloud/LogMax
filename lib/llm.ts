@@ -1,21 +1,23 @@
 import type { Logger } from './log.js';
 
 // Camada unificada de chamada a LLMs com fallback automático em cascata:
-//   1. Gemini (primário) com retry em 503/429.
-//   2. Groq (tier 2) — LPU rápida, free tier alto (~14k req/dia).
-//   3. OpenRouter (tier 3) — agrega ~50 provedores, free tier baixo.
+//   1. Gemini (primário) com retry em 503/429. Google Search grounding.
+//   2. Cerebras (tier 2) — Wafer-scale, LLaMA 3.3 70B em <1s.
+//   3. Mistral (tier 3) — bom PT-BR nativo, JSON mode confiável.
+//   4. Groq (tier 4) — LPU rápida, free tier alto (~14k req/dia).
+//   5. OpenRouter (tier 5) — agrega ~50 provedores, free tier baixo.
 //
 // Ordem escolhida pela combinação custo/qualidade/velocidade:
-//   - Gemini primeiro: quota free maior, qualidade alta, Google Search
-//     grounding em ai-chat.
-//   - Groq segundo: free tier ~14k req/dia (vs 50/dia/modelo no OR), e
-//     LPU é ~3x mais rápido que GPU. Cai aqui quando Gemini está fora.
-//   - OpenRouter por último: backup do backup, cobertura ampla mas
-//     limites baixos.
+//   - Gemini primeiro: quota free maior, qualidade alta, grounding.
+//   - Cerebras segundo: velocidade absurda (<1s), rate limit generoso.
+//   - Mistral terceiro: qualidade em PT-BR, JSON mode robusto.
+//   - Groq quarto: free tier alto, LPU rapida — recurso quando os 3 acima
+//     furam.
+//   - OpenRouter ultimo: backup do backup, cobertura ampla mas limites
+//     baixos por modelo.
 //
-// Os 3 provedores são OpenAI-compatíveis (Groq e OpenRouter expõem
-// /chat/completions) ou são adaptados na hora (Gemini usa formato
-// próprio em toGeminiContents).
+// Todos sao OpenAI-compativel (Cerebras/Mistral/Groq/OpenRouter expoem
+// /chat/completions) exceto Gemini, adaptado em toGeminiContents.
 //
 // Os 4 endpoints de IA (ai-briefing, ai-bi, ai-chat, ai-legenda) usam
 // esta camada. ai-chat passa `geminiTools` pra ativar Google Search no
@@ -23,6 +25,20 @@ import type { Logger } from './log.js';
 // resposta.
 
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+
+// Cadeia Cerebras (free tier). Wafer-scale = <1s pra 70B.
+// Override via CEREBRAS_MODELS (CSV). Catalogo em inference.cerebras.ai.
+const CEREBRAS_DEFAULT_MODELS = [
+  'llama-3.3-70b',     // 70B, qualidade alta, ~1000 tok/s
+  'llama3.1-8b',       // 8B, ultimo recurso ultra-rapido
+];
+
+// Cadeia Mistral (free tier). Bom PT-BR nativo.
+// Override via MISTRAL_MODELS (CSV). Catalogo em docs.mistral.ai/getting-started/models.
+const MISTRAL_DEFAULT_MODELS = [
+  'mistral-small-latest',   // 22B, free tier, ótimo em PT-BR
+  'open-mistral-nemo',      // 12B, backup mais leve
+];
 
 // Cadeia Groq (free tier). Tenta na ordem; se 429/erro, vai pro próximo.
 // Override via GROQ_MODELS (CSV). Lista válida em console.groq.com.
@@ -73,7 +89,7 @@ export type LLMRequest = {
 // projeto não roda em strict mode, e isso quebra narrowing automático
 // com `if (!llm.ok)`. Campos opcionais ficam undefined no caminho que
 // não os usa.
-export type LLMProvider = 'gemini' | 'groq' | 'openrouter';
+export type LLMProvider = 'gemini' | 'cerebras' | 'mistral' | 'groq' | 'openrouter';
 
 export type LLMResult = {
   ok: boolean;
@@ -177,13 +193,15 @@ async function callGeminiOnce(
   return { status: resp.status, data };
 }
 
-async function callGroqOnce(
+// Chamada OpenAI-compat generica. Cerebras/Mistral/Groq compartilham corpo
+// identico — muda so o endpoint e (opcionalmente) headers extras.
+async function callOpenAICompatOnce(
   req: LLMRequest,
   model: string,
   apiKey: string,
+  endpoint: string,
 ): Promise<{ status: number; data: any }> {
   const body = {
-    // Groq não suporta array `models` como OpenRouter — um modelo por chamada.
     model,
     messages: toOpenAIMessages(req),
     temperature: req.temperature     ?? 0.7,
@@ -192,7 +210,7 @@ async function callGroqOnce(
     ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
   };
 
-  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const resp = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
@@ -203,6 +221,15 @@ async function callGroqOnce(
   const data = await resp.json() as any;
   return { status: resp.status, data };
 }
+
+const callCerebrasOnce = (req: LLMRequest, model: string, apiKey: string) =>
+  callOpenAICompatOnce(req, model, apiKey, 'https://api.cerebras.ai/v1/chat/completions');
+
+const callMistralOnce = (req: LLMRequest, model: string, apiKey: string) =>
+  callOpenAICompatOnce(req, model, apiKey, 'https://api.mistral.ai/v1/chat/completions');
+
+const callGroqOnce = (req: LLMRequest, model: string, apiKey: string) =>
+  callOpenAICompatOnce(req, model, apiKey, 'https://api.groq.com/openai/v1/chat/completions');
 
 async function callOpenRouterOnce(
   req: LLMRequest,
@@ -236,7 +263,7 @@ async function callOpenRouterOnce(
 }
 
 // ─────────────────────────────────────────────
-// Orquestração: Gemini → Groq → OpenRouter
+// Orquestração: Gemini → Cerebras → Mistral → Groq → OpenRouter
 // ─────────────────────────────────────────────
 
 // Parse env var CSV, fallback pro default se vazio.
@@ -315,33 +342,49 @@ async function runGemini(req: LLMRequest, model: string, apiKey: string, log: Lo
   return { outcome: { kind: 'skip', lastStatus }, lastStatus, lastMsg };
 }
 
-// Groq: itera modelos, 429/5xx tenta proximo, 401/403 aborta.
-async function runGroq(req: LLMRequest, models: string[], apiKey: string, log: Logger): Promise<LLMResult | null> {
+// Runner OpenAI-compat generico. Itera modelos: 2xx com texto → ok; 401/403
+// aborta (chave invalida); resto tenta proximo modelo.
+async function runOpenAICompat(
+  provider: LLMProvider,
+  callOnce: (req: LLMRequest, model: string, apiKey: string) => Promise<{ status: number; data: any }>,
+  req: LLMRequest,
+  models: string[],
+  apiKey: string,
+  log: Logger,
+): Promise<LLMResult | null> {
   let lastStatus = 0;
   for (const model of models) {
     try {
-      const { status, data } = await callGroqOnce(req, model, apiKey);
+      const { status, data } = await callOnce(req, model, apiKey);
       lastStatus = status;
       if (status >= 200 && status < 300) {
         const text: string = data?.choices?.[0]?.message?.content ?? '';
         const finish = data?.choices?.[0]?.finish_reason;
         if (text.trim()) {
-          log.info('groq.ok', { model, finish });
-          return okResult(text, 'groq', model, finish);
+          log.info(`${provider}.ok`, { model, finish });
+          return okResult(text, provider, model, finish);
         }
-        log.warn('groq.empty', { model, finish });
+        log.warn(`${provider}.empty`, { model, finish });
         continue;
       }
-      log.warn('groq.failed', { model, status, msg: data?.error?.message ?? data?.message });
+      log.warn(`${provider}.failed`, { model, status, msg: data?.error?.message ?? data?.message });
       if (status === 401 || status === 403) break;
-      // 429 / 4xx / 5xx: tenta proximo modelo.
     } catch (err: any) {
-      log.warn('groq.exception', { model, error: err?.message });
+      log.warn(`${provider}.exception`, { model, error: err?.message });
     }
   }
-  log.warn('groq.exhausted', { lastStatus });
+  log.warn(`${provider}.exhausted`, { lastStatus });
   return null;
 }
+
+const runCerebras = (req: LLMRequest, models: string[], apiKey: string, log: Logger) =>
+  runOpenAICompat('cerebras', callCerebrasOnce, req, models, apiKey, log);
+
+const runMistral = (req: LLMRequest, models: string[], apiKey: string, log: Logger) =>
+  runOpenAICompat('mistral', callMistralOnce, req, models, apiKey, log);
+
+const runGroq = (req: LLMRequest, models: string[], apiKey: string, log: Logger) =>
+  runOpenAICompat('groq', callGroqOnce, req, models, apiKey, log);
 
 // OpenRouter: uma unica chamada com array de models (failover interno).
 async function runOpenRouter(req: LLMRequest, models: string[], apiKey: string, log: Logger): Promise<LLMResult | null> {
@@ -377,23 +420,27 @@ function buildFinalFailure(
     return failResult(
       lastGeminiStatus,
       lastGeminiStatus === 503
-        ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo. (Configure GROQ_API_KEY ou OPENROUTER_API_KEY para fallback automático.)'
+        ? 'Modelo de IA está com alta demanda agora. Aguarde 1-2 minutos e tente de novo. (Configure CEREBRAS_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY ou OPENROUTER_API_KEY para fallback automático.)'
         : 'Limite de uso da IA atingido. Tente novamente em alguns minutos.',
     );
   }
   if (lastGeminiStatus === 400 || lastGeminiStatus === 401 || lastGeminiStatus === 403) {
-    return failResult(502, 'Chave da IA inválida. Verifique GEMINI_API_KEY/GROQ_API_KEY/OPENROUTER_API_KEY no Vercel.');
+    return failResult(502, 'Chave da IA inválida. Verifique GEMINI_API_KEY/CEREBRAS_API_KEY/MISTRAL_API_KEY/GROQ_API_KEY/OPENROUTER_API_KEY no Vercel.');
   }
   return failResult(503, 'Todos os provedores de IA estão indisponíveis no momento. Tente em alguns minutos.');
 }
 
 export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> {
   const geminiKey     = process.env.GEMINI_API_KEY?.trim();
+  const cerebrasKey   = process.env.CEREBRAS_API_KEY?.trim();
+  const mistralKey    = process.env.MISTRAL_API_KEY?.trim();
   const groqKey       = process.env.GROQ_API_KEY?.trim();
   const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
   const geminiModel   = (process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
-  const groqModels    = envList('GROQ_MODELS', GROQ_DEFAULT_MODELS);
-  const orModels      = envList('OPENROUTER_MODELS', OPENROUTER_DEFAULT_MODELS);
+  const cerebrasModels = envList('CEREBRAS_MODELS', CEREBRAS_DEFAULT_MODELS);
+  const mistralModels  = envList('MISTRAL_MODELS',  MISTRAL_DEFAULT_MODELS);
+  const groqModels     = envList('GROQ_MODELS',     GROQ_DEFAULT_MODELS);
+  const orModels       = envList('OPENROUTER_MODELS', OPENROUTER_DEFAULT_MODELS);
 
   // Resposta parcial do Gemini truncada por MAX_TOKENS em modo JSON: usada
   // como ultimo recurso se todos os fallbacks falharem (endpoint tenta
@@ -406,6 +453,16 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
     lastGeminiStatus = lastStatus;
     if (outcome.kind === 'ok' || outcome.kind === 'fail') return outcome.result;
     if (outcome.kind === 'stash') stashedGemini = outcome.result;
+  }
+
+  if (cerebrasKey) {
+    const r = await runCerebras(req, cerebrasModels, cerebrasKey, log);
+    if (r) return r;
+  }
+
+  if (mistralKey) {
+    const r = await runMistral(req, mistralModels, mistralKey, log);
+    if (r) return r;
   }
 
   if (groqKey) {
@@ -423,9 +480,7 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
     return stashedGemini;
   }
 
-  return buildFinalFailure(
-    Boolean(geminiKey || groqKey || openrouterKey),
-    Boolean(geminiKey && !groqKey && !openrouterKey),
-    lastGeminiStatus,
-  );
+  const hasAnyKey = Boolean(geminiKey || cerebrasKey || mistralKey || groqKey || openrouterKey);
+  const onlyGemini = Boolean(geminiKey && !cerebrasKey && !mistralKey && !groqKey && !openrouterKey);
+  return buildFinalFailure(hasAnyKey, onlyGemini, lastGeminiStatus);
 }
