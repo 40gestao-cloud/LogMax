@@ -3,6 +3,7 @@
 // Tarefas da Matriz por filial do participante. Mesmo padrão dos outros
 // exports do projeto: jsPDF + autoTable em dynamic import pra não inflar
 // o bundle.
+import { entregarPdf, type PdfDestino } from './maxShowUpload';
 
 const fmtDataBR = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '—');
 
@@ -42,6 +43,9 @@ export async function exportCompeticaoResultadoPDF(
   podio: PodioLinhaPDF[],
   votos: VotoPDF[],
   filename: string,
+  destino: PdfDestino = 'download',
+  profile?: { id: string } | null,
+  showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
 ) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
@@ -201,5 +205,5 @@ export async function exportCompeticaoResultadoPDF(
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
 
-  doc.save(`${filename}.pdf`);
+  await entregarPdf(doc, filename, destino, profile, showToast, `Competição — ${competicao.nome}`);
 }

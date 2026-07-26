@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Loader2, FileDown, FileSpreadsheet, BarChart3, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
@@ -37,7 +37,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
-  const [exportando, setExportando] = useState<'pdf' | 'excel' | null>(null);
+  const [exportando, setExportando] = useState<'pdf' | 'excel' | 'maxshow' | null>(null);
 
   useEffect(() => {
     let cancelou = false;
@@ -84,17 +84,19 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
   const nomeArquivo = `central-avaliacao-${competicao.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`;
 
-  const baixarPDF = async () => {
-    setExportando('pdf');
+  const gerarPDF = async (destino: 'download' | 'maxshow') => {
+    setExportando(destino === 'maxshow' ? 'maxshow' : 'pdf');
     try {
       const rel = await buscarRelatorioCentralAvaliacao(competicao);
-      await exportCentralAvaliacaoPDF(rel, nomeArquivo);
+      await exportCentralAvaliacaoPDF(rel, nomeArquivo, destino, profile, showToast);
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
     } finally {
       setExportando(null);
     }
   };
+  const baixarPDF = () => gerarPDF('download');
+  const enviarMaxShow = () => gerarPDF('maxshow');
 
   const baixarExcel = async () => {
     setExportando('excel');
@@ -130,6 +132,15 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
             >
               {exportando === 'pdf' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
               PDF
+            </button>
+            <button
+              onClick={enviarMaxShow}
+              disabled={exportando !== null}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+              title="Enviar consolidado ao Max Show pra apresentar"
+            >
+              {exportando === 'maxshow' ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
+              Max Show
             </button>
             <button
               onClick={baixarExcel}

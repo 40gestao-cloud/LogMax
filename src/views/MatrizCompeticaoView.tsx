@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Star } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -431,7 +431,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     );
   }
 
-  const baixarPdfResultado = async () => {
+  const gerarPdfResultado = async (destino: 'download' | 'maxshow') => {
     if (!placar || !competicaoAtual) return;
     setBaixandoPdf(true);
     try {
@@ -447,6 +447,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         podio.map(p => ({ filial: p.filial, media: p.media, n: p.n })),
         votos,
         `competicao-${competicaoAtual.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`,
+        destino,
+        profile,
+        showToast,
       );
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
@@ -454,6 +457,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       setBaixandoPdf(false);
     }
   };
+  const baixarPdfResultado = () => gerarPdfResultado('download');
+  const enviarPdfAoMaxShow = () => gerarPdfResultado('maxshow');
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
@@ -529,6 +534,15 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     >
                       {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
                       Baixar PDF
+                    </button>
+                    <button
+                      onClick={enviarPdfAoMaxShow}
+                      disabled={baixandoPdf}
+                      className="btn-shimmer btn-shimmer--glass-black"
+                      title="Enviar PDF direto ao Max Show pra apresentar em tela cheia"
+                    >
+                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
+                      Enviar ao Max Show
                     </button>
                     <span
                       className={`btn-shimmer ${placar.competicao.status === 'em_andamento' ? 'btn-shimmer--glass-green' : 'btn-shimmer--glass-yellow'}`}

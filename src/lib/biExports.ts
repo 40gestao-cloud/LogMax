@@ -9,6 +9,7 @@
 //     1 aba por filial com vendas/ticket detalhados.
 //   • Word: lib docx (nova). Converte títulos H1/H2/H3 + parágrafos +
 //     listas do Markdown em estilos nativos do Word.
+import { entregarPdf, type PdfDestino } from './maxShowUpload';
 
 const formatBRL = (n: number) =>
   Number(n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -58,7 +59,14 @@ const markdownToPdfBlocks = (md: string): { type: 'h1' | 'h2' | 'h3' | 'li' | 'p
   return blocks;
 };
 
-export async function exportBIToPDF(dados: BIDados, markdown: string, filename: string) {
+export async function exportBIToPDF(
+  dados: BIDados,
+  markdown: string,
+  filename: string,
+  destino: PdfDestino = 'download',
+  profile?: { id: string } | null,
+  showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
+) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -170,7 +178,7 @@ export async function exportBIToPDF(dados: BIDados, markdown: string, filename: 
     }
   }
 
-  doc.save(`${filename}.pdf`);
+  await entregarPdf(doc, filename, destino, profile, showToast, `Painel BI — ${formatDate(dados.periodo.inicio)} a ${formatDate(dados.periodo.fim)}`);
 }
 
 // ─────────────────────────────────────────────────────────────────

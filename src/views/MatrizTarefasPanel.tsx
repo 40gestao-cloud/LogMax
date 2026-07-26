@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  GraduationCap, Cpu, Presentation, Plus, X, Trash2, Loader2,
+  GraduationCap, Cpu, Presentation, Handshake, Plus, X, Trash2, Loader2,
   Star, MessageSquare, ChevronRight, ArrowLeft, Check, Users,
   UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock, Sparkles,
 } from 'lucide-react';
@@ -82,7 +82,7 @@ const TIPOS: TipoConfig[] = [
     id: 'tarefa_treinamento_vendas',
     label: 'Vendas e Atendimento',
     hint: 'Criar atividade, definir participantes por filial e nota 0-10 do conselho.',
-    icon: GraduationCap,
+    icon: Handshake,
     glow: 'bg-blue-500/25', iconBg: 'bg-blue-500/10', iconRing: 'ring-blue-500/25', iconColor: 'text-blue-400',
     novoLabel: 'Nova atividade de Vendas e Atendimento',
   },

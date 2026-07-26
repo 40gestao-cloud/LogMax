@@ -8,6 +8,7 @@
 // telas (cada uma mantém sua própria cópia de OP_FILIAIS/FILIAL_COLOR etc.).
 
 import { supabase, ENDPOINT_TABLE_MAP } from './supabase';
+import { entregarPdf, type PdfDestino } from './maxShowUpload';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
@@ -97,7 +98,7 @@ export type RelatorioTipo = { id: string; label: string; creative: boolean; iten
 export type RelatorioGrupo = { id: string; label: string; tipos: RelatorioTipo[] };
 
 export type RelatorioParticipante = { nome: string; filial: string; media: number | null; comentarios: string[] };
-export type RelatorioTarefa = { nome: string; data: string; participantes: RelatorioParticipante[] };
+export type RelatorioTarefa = { nome: string; descricao: string | null; data: string; participantes: RelatorioParticipante[] };
 export type RelatorioTarefaTipo = { id: string; label: string; tarefas: RelatorioTarefa[] };
 
 export type CentralRelatorio = {
@@ -162,7 +163,7 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
 
   const { data: tarefasRaw } = await supabase
     .from('matriz_tarefas')
-    .select('id,tipo,nome,data')
+    .select('id,tipo,nome,descricao,data')
     .eq('competicao_id', competicao.id)
     .eq('ativo', true)
     .order('data', { ascending: false });
@@ -195,7 +196,7 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
               comentarios: avs.filter(a => (a.comentario ?? '').trim()).map(a => a.comentario),
             };
           });
-        return { nome: t.nome, data: t.data, participantes };
+        return { nome: t.nome, descricao: t.descricao ?? null, data: t.data, participantes };
       });
     return { id: tt.id, label: tt.label, tarefas };
   });
@@ -216,7 +217,13 @@ const fmtMedia = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 // PDF
 // ─────────────────────────────────────────────────────────────────
 
-export async function exportCentralAvaliacaoPDF(rel: CentralRelatorio, filename: string) {
+export async function exportCentralAvaliacaoPDF(
+  rel: CentralRelatorio,
+  filename: string,
+  destino: PdfDestino = 'download',
+  profile?: { id: string } | null,
+  showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
+) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -307,6 +314,19 @@ export async function exportCentralAvaliacaoPDF(rel: CentralRelatorio, filename:
         doc.text(`${tt.label} — ${tarefa.nome} (${fmtDataBR(tarefa.data)})`, margin, cursorY);
         cursorY += 5;
 
+        if (tarefa.descricao && tarefa.descricao.trim()) {
+          doc.setFontSize(8.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(80, 80, 80);
+          const linhas = doc.splitTextToSize(tarefa.descricao.trim(), pageWidth - margin * 2);
+          for (const l of linhas) {
+            ensureSpace(5);
+            doc.text(l, margin, cursorY);
+            cursorY += 4;
+          }
+          cursorY += 1;
+        }
+
         autoTable(doc, {
           startY: cursorY,
           head: [['Participante', 'Filial', 'Nota média', 'Comentários']],
@@ -333,7 +353,7 @@ export async function exportCentralAvaliacaoPDF(rel: CentralRelatorio, filename:
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
 
-  doc.save(`${filename}.pdf`);
+  await entregarPdf(doc, filename, destino, profile, showToast, `Central de Avaliação — ${rel.competicaoNome}`);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -413,6 +433,7 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
   wsTarefas.columns = [
     { header: 'Tipo',         key: 'tipo',         width: 24 },
     { header: 'Tarefa',       key: 'tarefa',       width: 30 },
+    { header: 'Descrição',    key: 'descricao',    width: 50 },
     { header: 'Data',         key: 'data',         width: 12 },
     { header: 'Participante', key: 'participante', width: 26 },
     { header: 'Filial',       key: 'filial',       width: 14 },
@@ -427,6 +448,7 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
         wsTarefas.addRow({
           tipo: tt.label,
           tarefa: tarefa.nome,
+          descricao: tarefa.descricao ?? '',
           data: fmtDataBR(tarefa.data),
           participante: p.nome,
           filial: p.filial,

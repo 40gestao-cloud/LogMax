@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Building2, Image as ImageIcon, Upload, Loader2, Award, Crown, Briefcase, Users, MessageCircle, Trophy, ClipboardCheck, type LucideIcon } from 'lucide-react';
+import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, BarChart3, ChevronDown, ChevronRight, Pencil, Trash2, FileDown, Presentation, Building2, Image as ImageIcon, Upload, Loader2, Award, Crown, Briefcase, Users, MessageCircle, Trophy, ClipboardCheck, type LucideIcon } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
@@ -1179,7 +1179,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     };
   }, [podeVerConsolidado, cicloConsolidadoId, avaliacoes, criterios, users, ciclos]);
 
-  const handleExportarCicloPDF = async () => {
+  const handleExportarCicloPDF = async (destino: 'download' | 'maxshow' = 'download') => {
     const ciclo = ciclos.find(c => c.id === cicloConsolidadoId);
     if (!ciclo || !consolidado) return;
     setExportandoPDF(true);
@@ -1190,8 +1190,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         { totalAvaliacoes: consolidado.totalAvaliacoes, totalAvaliados: consolidado.totalAvaliados, mediaCiclo: consolidado.mediaCiclo, grupos: consolidado.grupos },
         criterios.map(c => ({ avaliacao_id: c.avaliacao_id, categoria: c.categoria, criterio: c.criterio, nota: c.nota })),
         `avaliacoes-${slug}`,
+        destino,
+        profile,
+        showToast,
       );
-      showToast?.('PDF do ciclo gerado.', 'success');
+      if (destino === 'download') showToast?.('PDF do ciclo gerado.', 'success');
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
     } finally {
@@ -1199,7 +1202,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     }
   };
 
-  const handleExportarAvaliacaoIndividualPDF = async (av: Avaliacao) => {
+  const handleExportarAvaliacaoIndividualPDF = async (av: Avaliacao, destino: 'download' | 'maxshow' = 'download') => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);
     const avaliador = users.find(u => u.id === av.avaliador_id);
     const avaliadoNome = av.avaliada_filial ?? users.find(u => u.id === av.avaliado_id)?.nome ?? '—';
@@ -1220,8 +1223,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             .map(c => ({ avaliacao_id: c.avaliacao_id, categoria: c.categoria, criterio: c.criterio, nota: c.nota })),
         },
         `avaliacao-${slug}`,
+        destino,
+        profile,
+        showToast,
       );
-      showToast?.('PDF gerado.', 'success');
+      if (destino === 'download') showToast?.('PDF gerado.', 'success');
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
     }
@@ -1397,11 +1403,19 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 ))}
               </select>
               <NeuButtonAccent
-                onClick={handleExportarCicloPDF}
+                onClick={() => handleExportarCicloPDF('download')}
                 isLoading={exportandoPDF}
                 disabled={!consolidado || consolidado.totalAvaliacoes === 0}
               >
                 <FileDown size={14} /> PDF
+              </NeuButtonAccent>
+              <NeuButtonAccent
+                onClick={() => handleExportarCicloPDF('maxshow')}
+                isLoading={exportandoPDF}
+                disabled={!consolidado || consolidado.totalAvaliacoes === 0}
+                title="Enviar consolidado ao Max Show pra apresentar"
+              >
+                <Presentation size={14} /> Max Show
               </NeuButtonAccent>
             </div>
           </div>

@@ -8,6 +8,7 @@
 //       - tabela de avaliados com média
 //       - subseção por avaliado: avaliadores, médias e observação
 //   • Critérios detalhados (categoria + nota) quando disponíveis
+import { entregarPdf, type PdfDestino } from './maxShowUpload';
 
 const CATEGORIA_LABEL: Record<string, string> = {
   tecnica: 'Técnicas',
@@ -83,6 +84,9 @@ export async function exportAvaliacoesCicloPDF(
   consolidado: ConsolidadoPDF,
   criterios: CriterioPDF[],
   filename: string,
+  destino: PdfDestino = 'download',
+  profile?: { id: string } | null,
+  showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
 ) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
@@ -285,7 +289,7 @@ export async function exportAvaliacoesCicloPDF(
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
 
-  doc.save(`${filename}.pdf`);
+  await entregarPdf(doc, filename, destino, profile, showToast, `Avaliações — Ciclo ${ciclo.nome}`);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -304,7 +308,13 @@ export type AvaliacaoIndividualPDF = {
   criterios: CriterioPDF[];
 };
 
-export async function exportAvaliacaoIndividualPDF(av: AvaliacaoIndividualPDF, filename: string) {
+export async function exportAvaliacaoIndividualPDF(
+  av: AvaliacaoIndividualPDF,
+  filename: string,
+  destino: PdfDestino = 'download',
+  profile?: { id: string } | null,
+  showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
+) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -409,5 +419,5 @@ export async function exportAvaliacaoIndividualPDF(av: AvaliacaoIndividualPDF, f
     }
   }
 
-  doc.save(`${filename}.pdf`);
+  await entregarPdf(doc, filename, destino, profile, showToast, `Avaliação — ${av.avaliadoNome} (${av.cicloNome})`);
 }

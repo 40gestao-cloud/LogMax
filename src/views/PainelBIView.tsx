@@ -2,7 +2,7 @@ import { isConselheiro } from '../lib/rbac';
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { Sparkles, FileDown, Sheet, FileText, Loader2, Calendar, TrendingUp, TrendingDown, History, Clock, Lock } from 'lucide-react';
+import { Sparkles, FileDown, Sheet, FileText, Presentation, Loader2, Calendar, TrendingUp, TrendingDown, History, Clock, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -197,13 +197,16 @@ export const PainelBIView = ({ showToast, profile }: any) => {
     [inicio, fim],
   );
 
-  const handleExport = async (formato: 'pdf' | 'excel' | 'word') => {
+  const handleExport = async (formato: 'pdf' | 'excel' | 'word' | 'maxshow') => {
     if (!relatorio) return;
     try {
-      if (formato === 'pdf')   await exportBIToPDF(relatorio.dados, relatorio.markdown, baseFilename);
-      if (formato === 'excel') await exportBIToExcel(relatorio.dados, baseFilename);
-      if (formato === 'word')  await exportBIToWord(relatorio.dados, relatorio.markdown, baseFilename);
-      showToast?.(`Download ${formato.toUpperCase()} iniciado.`, 'success');
+      if (formato === 'pdf')     await exportBIToPDF(relatorio.dados, relatorio.markdown, baseFilename);
+      if (formato === 'maxshow') await exportBIToPDF(relatorio.dados, relatorio.markdown, baseFilename, 'maxshow', profile, showToast);
+      if (formato === 'excel')   await exportBIToExcel(relatorio.dados, baseFilename);
+      if (formato === 'word')    await exportBIToWord(relatorio.dados, relatorio.markdown, baseFilename);
+      if (formato === 'pdf' || formato === 'excel' || formato === 'word') {
+        showToast?.(`Download ${formato.toUpperCase()} iniciado.`, 'success');
+      }
     } catch (err: any) {
       showToast?.(`Erro ao exportar: ${err?.message ?? '—'}`, 'error');
     }
@@ -355,6 +358,11 @@ export const PainelBIView = ({ showToast, profile }: any) => {
             <button onClick={() => handleExport('word')}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest border border-white/10 hover:border-accent/40 rounded-lg px-3 py-2 text-gray-300 hover:text-accent transition-colors">
               <FileText size={12} />Word
+            </button>
+            <button onClick={() => handleExport('maxshow')}
+              title="Enviar PDF do painel ao Max Show pra apresentar em tela cheia"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest border border-white/10 hover:border-accent/40 rounded-lg px-3 py-2 text-gray-300 hover:text-accent transition-colors">
+              <Presentation size={12} />Max Show
             </button>
           </div>
           <button onClick={() => setShowHistorico(s => !s)}
