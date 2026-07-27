@@ -2142,6 +2142,30 @@ html.theme-switching *::after {
 }
 .max-show-stage:hover .max-show-counter { opacity: 1; }
 
+/* Pill flutuante de zoom — bottom-left, visível também em fullscreen (Apresentar). */
+.max-show-zoombar {
+  position: absolute; bottom: 16px; left: 16px;
+  display: flex; align-items: center; gap: 2px;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(8px);
+  padding: 4px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  opacity: 0; transition: opacity 0.2s;
+  z-index: 5;
+}
+.max-show-stage:hover .max-show-zoombar,
+.max-show-scope:fullscreen .max-show-zoombar { opacity: 1; }
+.max-show-zoombar button {
+  background: transparent; border: none; color: #fff;
+  padding: 6px 8px; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; min-width: 28px;
+  transition: background 0.15s;
+}
+.max-show-zoombar button:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.max-show-zoombar button:disabled { opacity: 0.35; cursor: default; }
+.max-show-zoombar-label { min-width: 44px !important; }
+.max-show-zoombar-reset { color: var(--color-accent) !important; }
+
 /* Fallback pra vendors antigos */
 .max-doc-scope:-webkit-full-screen,
 .max-plan-scope:-webkit-full-screen { width: 100vw; height: 100vh; }

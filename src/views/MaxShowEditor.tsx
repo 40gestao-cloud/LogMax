@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // =================================================================
@@ -190,6 +190,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   }, [next, prev, numPages, zoomIn, zoomOut, zoomReset]);
 
   // Ctrl+wheel amplia/reduz (comportamento familiar de leitor PDF).
+  // Sem Ctrl e ampliado: roda faz pan vertical (browser default no overflow-auto).
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -202,6 +203,45 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     return () => el.removeEventListener('wheel', onWheel);
   }, [zoomIn, zoomOut]);
 
+  // Drag-to-pan quando ampliado (mouse). Sem isso o usuário precisaria
+  // usar a scrollbar/roda pra ver os cantos.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || zoom <= 1) return;
+    let dragging = false;
+    let startX = 0, startY = 0, startL = 0, startT = 0;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      // Se clicou num botão (setas de navegação, pill), deixa o botão agir.
+      if ((e.target as HTMLElement)?.closest('button, a')) return;
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      startL = el.scrollLeft; startT = el.scrollTop;
+      el.style.cursor = 'grabbing';
+      e.preventDefault();
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      el.scrollLeft = startL - (e.clientX - startX);
+      el.scrollTop  = startT - (e.clientY - startY);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = 'grab';
+    };
+    el.style.cursor = 'grab';
+    el.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      el.style.cursor = '';
+      el.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [zoom]);
+
   return (
     <div ref={rootRef} className="max-doc-scope max-doc-light max-show-scope flex flex-col h-full">
       <div className="md-header flex items-center gap-2 px-4 py-3 shrink-0">
@@ -212,22 +252,6 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
         <div className="flex-1 text-lg font-bold px-2 truncate flex items-center gap-2 min-w-0">
           <span className="truncate">{titulo || pdfNome || 'Apresentação'}</span>
           <span className="text-xs font-normal opacity-70 shrink-0 hidden sm:inline">PDF importado</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs disabled:opacity-40" title="Diminuir zoom (−)">
-            <ZoomOut size={13} />
-          </button>
-          <button onClick={zoomReset} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs min-w-[46px] text-center" title="Ajustar (0)">
-            {Math.round(zoom * 100)}%
-          </button>
-          <button onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs disabled:opacity-40" title="Aumentar zoom (+)">
-            <ZoomIn size={13} />
-          </button>
-          {zoom !== 1 && (
-            <button onClick={zoomReset} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs" title="Voltar ao encaixe (0)">
-              <Maximize size={13} />
-            </button>
-          )}
         </div>
         {pdfUrl && (
           <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1" title="Abrir em nova aba">
@@ -247,7 +271,18 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
           <div className="text-gray-400 text-sm">Carregando apresentação…</div>
         ) : (
           <>
-            <canvas ref={canvasRef} className="block shadow-2xl mx-auto" onClick={zoom === 1 ? next : undefined} style={{ cursor: zoom === 1 ? 'pointer' : 'default' }} />
+            <canvas
+              ref={canvasRef}
+              className="block shadow-2xl mx-auto"
+              onClick={zoom === 1 ? next : undefined}
+              style={{
+                cursor: zoom === 1 ? 'pointer' : 'inherit',
+                // Anula o max-width/max-height: 100% do CSS quando ampliado —
+                // sem isso o canvas fica travado no tamanho do stage.
+                maxWidth: zoom > 1 ? 'none' : undefined,
+                maxHeight: zoom > 1 ? 'none' : undefined,
+              }}
+            />
             <button
               type="button"
               onClick={prev}
@@ -268,6 +303,25 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
             </button>
             <div className="max-show-counter">
               {pageNum} / {numPages || '…'}
+            </div>
+            {/* Pill de zoom — fica dentro do stage (dentro do root), então
+                sobrevive no fullscreen quando o header some. Bottom-left
+                pra não colidir com o counter (bottom-right). */}
+            <div className="max-show-zoombar">
+              <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN} title="Diminuir zoom (−)" aria-label="Diminuir zoom">
+                <ZoomOut size={14} />
+              </button>
+              <button type="button" onClick={zoomReset} title="Resetar zoom (0)" aria-label="Resetar zoom" className="max-show-zoombar-label">
+                {Math.round(zoom * 100)}%
+              </button>
+              <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX} title="Aumentar zoom (+)" aria-label="Aumentar zoom">
+                <ZoomIn size={14} />
+              </button>
+              {zoom !== 1 && (
+                <button type="button" onClick={zoomReset} title="Voltar ao encaixe" aria-label="Voltar ao encaixe" className="max-show-zoombar-reset">
+                  <RotateCcw size={13} />
+                </button>
+              )}
             </div>
           </>
         )}
