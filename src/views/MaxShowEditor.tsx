@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // =================================================================
@@ -33,6 +33,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [zoom, setZoom] = useState(1); // 1 = fit-to-stage; > 1 amplia e o stage vira scrollavel
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -112,7 +113,8 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     const stageW = stage.clientWidth;
     const stageH = stage.clientHeight;
     if (stageW < 10 || stageH < 10) return;
-    const scale = Math.min(stageW / viewport1.width, stageH / viewport1.height);
+    const fitScale = Math.min(stageW / viewport1.width, stageH / viewport1.height);
+    const scale = fitScale * zoom;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const viewport = page.getViewport({ scale: scale * dpr });
 
@@ -126,7 +128,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     const task = page.render({ canvasContext: ctx, viewport, canvas });
     renderTaskRef.current = task;
     try { await task.promise; } catch { /* cancelado */ }
-  }, [pageNum]);
+  }, [pageNum, zoom]);
 
   useEffect(() => { renderPage(); }, [renderPage, numPages, isFullscreen]);
 
@@ -151,9 +153,15 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     else rootRef.current?.requestFullscreen?.().catch(() => showToastRef.current?.('Tela cheia não disponível.', 'error'));
   };
 
+  // Zoom
+  const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_STEP = 0.25;
+  const zoomIn  = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2))), []);
+  const zoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2))), []);
+  const zoomReset = useCallback(() => setZoom(1), []);
+
   // Navegacao — setas, PageUp/Down, Space, Home/End (passador de slides usa Page/Arrow)
-  const next = useCallback(() => setPageNum(p => Math.min(p + 1, numPages || p)), [numPages]);
-  const prev = useCallback(() => setPageNum(p => Math.max(p - 1, 1)), []);
+  const next = useCallback(() => { setPageNum(p => Math.min(p + 1, numPages || p)); setZoom(1); }, [numPages]);
+  const prev = useCallback(() => { setPageNum(p => Math.max(p - 1, 1)); setZoom(1); }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -169,11 +177,30 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
         e.preventDefault(); setPageNum(1);
       } else if (e.key === 'End') {
         e.preventDefault(); if (numPages) setPageNum(numPages);
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault(); zoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault(); zoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault(); zoomReset();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev, numPages]);
+  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset]);
+
+  // Ctrl+wheel amplia/reduz (comportamento familiar de leitor PDF).
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      if (e.deltaY < 0) zoomIn(); else zoomOut();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomIn, zoomOut]);
 
   return (
     <div ref={rootRef} className="max-doc-scope max-doc-light max-show-scope flex flex-col h-full">
@@ -186,6 +213,22 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
           <span className="truncate">{titulo || pdfNome || 'Apresentação'}</span>
           <span className="text-xs font-normal opacity-70 shrink-0 hidden sm:inline">PDF importado</span>
         </div>
+        <div className="flex items-center gap-1">
+          <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs disabled:opacity-40" title="Diminuir zoom (−)">
+            <ZoomOut size={13} />
+          </button>
+          <button onClick={zoomReset} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs min-w-[46px] text-center" title="Ajustar (0)">
+            {Math.round(zoom * 100)}%
+          </button>
+          <button onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs disabled:opacity-40" title="Aumentar zoom (+)">
+            <ZoomIn size={13} />
+          </button>
+          {zoom !== 1 && (
+            <button onClick={zoomReset} className="md-headerbtn px-2 py-1.5 rounded-lg text-xs" title="Voltar ao encaixe (0)">
+              <Maximize size={13} />
+            </button>
+          )}
+        </div>
         {pdfUrl && (
           <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1" title="Abrir em nova aba">
             <ExternalLink size={13} /> <span className="hidden sm:inline">Nova aba</span>
@@ -196,12 +239,15 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
         </button>
       </div>
 
-      <div ref={stageRef} className="max-show-stage flex-1 min-h-0 bg-black flex items-center justify-center relative select-none">
+      <div
+        ref={stageRef}
+        className={`max-show-stage flex-1 min-h-0 bg-black relative select-none ${zoom > 1 ? 'overflow-auto' : 'overflow-hidden flex items-center justify-center'}`}
+      >
         {loading ? (
           <div className="text-gray-400 text-sm">Carregando apresentação…</div>
         ) : (
           <>
-            <canvas ref={canvasRef} className="block shadow-2xl" onClick={next} />
+            <canvas ref={canvasRef} className="block shadow-2xl mx-auto" onClick={zoom === 1 ? next : undefined} style={{ cursor: zoom === 1 ? 'pointer' : 'default' }} />
             <button
               type="button"
               onClick={prev}

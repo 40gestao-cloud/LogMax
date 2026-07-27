@@ -33,6 +33,7 @@ import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { AuditoriaProvider } from './contexts/AuditoriaContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
+import { PromptProvider } from './contexts/PromptContext';
 
 // --- lazy views ---
 const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
@@ -1154,8 +1155,10 @@ export default function LogMaxApp() {
     <ThemeProvider>
       <FilialProvider>
         <ConfirmProvider>
-          <PwaUpdatePrompt />
-          <LogMaxAppInner />
+          <PromptProvider>
+            <PwaUpdatePrompt />
+            <LogMaxAppInner />
+          </PromptProvider>
         </ConfirmProvider>
       </FilialProvider>
     </ThemeProvider>

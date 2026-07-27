@@ -8,6 +8,7 @@
 
 import type jsPDF from 'jspdf';
 import { supabase } from './supabase';
+import { appPrompt } from '../contexts/PromptContext';
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 
@@ -43,7 +44,13 @@ export async function enviarPdfAoMaxShow(
     return false;
   }
 
-  const titulo = window.prompt('Título da apresentação no Max Show:', defaultTitle)?.trim();
+  const titulo = (await appPrompt({
+    message: 'Título da apresentação no Max Show:',
+    defaultValue: defaultTitle,
+    placeholder: 'Ex.: Painel BI — julho',
+    confirmLabel: 'Enviar',
+    maxLength: 120,
+  }))?.trim();
   if (!titulo) return false;
 
   const blob = doc.output('blob') as Blob;
