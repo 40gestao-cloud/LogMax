@@ -40,6 +40,10 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pdfRef = useRef<PdfDoc | null>(null);
   const renderTaskRef = useRef<any>(null);
+  // Fit-scale calculado uma vez com o palco vazio (sem scrollbar). Fixa
+  // o tamanho "100%" pra evitar feedback: scrollbar aparece -> stage
+  // shrinks -> renderPage -> canvas encolhe -> scrollbar some -> ...
+  const baseFitRef = useRef<{ scale: number; page: number } | null>(null);
   // Refs pra callbacks — evita que os useEffects abaixo reexecutem quando
   // o pai recria showToast/onClose a cada render (recarregaria o PDF).
   const showToastRef = useRef(showToast);
@@ -110,10 +114,20 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
 
     const page = await doc.getPage(pageNum);
     const viewport1 = page.getViewport({ scale: 1 });
-    const stageW = stage.clientWidth;
-    const stageH = stage.clientHeight;
-    if (stageW < 10 || stageH < 10) return;
-    const fitScale = Math.min(stageW / viewport1.width, stageH / viewport1.height);
+    // Só re-mede o palco quando ainda não tem base ou quando trocou de
+    // página. Zoom NUNCA re-mede — usa a base fixa. Isso quebra o loop
+    // scrollbar-aparece/some que apagava o canvas em zooms baixos.
+    const cached = baseFitRef.current;
+    let fitScale: number;
+    if (cached && cached.page === pageNum) {
+      fitScale = cached.scale;
+    } else {
+      const stageW = stage.clientWidth;
+      const stageH = stage.clientHeight;
+      if (stageW < 10 || stageH < 10) return;
+      fitScale = Math.min(stageW / viewport1.width, stageH / viewport1.height);
+      baseFitRef.current = { scale: fitScale, page: pageNum };
+    }
     const scale = fitScale * zoom;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const viewport = page.getViewport({ scale: scale * dpr });
@@ -132,14 +146,17 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
 
   useEffect(() => { renderPage(); }, [renderPage, numPages, isFullscreen]);
 
-  // Re-renderiza em resize
+  // Re-renderiza em resize da janela (window), não do stage — resize do
+  // stage também dispara com scrollbar aparecendo/sumindo, causando loop.
+  // Ao redimensionar a janela, invalida o base pra remedir no próximo render.
   useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => renderPage());
-    ro.observe(el);
-    return () => ro.disconnect();
+    const onResize = () => { baseFitRef.current = null; renderPage(); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [renderPage]);
+
+  // Ao trocar de página ou entrar/sair de fullscreen, invalida o base.
+  useEffect(() => { baseFitRef.current = null; }, [isFullscreen]);
 
   // Fullscreen
   useEffect(() => {
