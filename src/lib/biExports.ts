@@ -11,6 +11,19 @@
 //     listas do Markdown em estilos nativos do Word.
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
 
+// Paleta Premium LogMax — preto puro + dourado + branco.
+// Sincroniza com o tema Premium do app (ver project_theme_premium).
+const GOLD:      [number, number, number] = [212, 175, 55];  // #D4AF37
+const GOLD_DARK: [number, number, number] = [180, 145, 30];  // #B4911E hover/emphasis
+const BLACK:     [number, number, number] = [10, 10, 10];    // #0A0A0A
+const GRAY_INK:  [number, number, number] = [40, 40, 40];
+const GRAY_MID:  [number, number, number] = [110, 110, 110];
+const GRAY_SOFT: [number, number, number] = [190, 190, 190];
+const GOLD_TINT: [number, number, number] = [252, 248, 235]; // bg alternado das tabelas
+const GOLD_HEX      = 'FFD4AF37';
+const BLACK_HEX     = 'FF0A0A0A';
+const GOLD_TINT_HEX = 'FFFCF8EB';
+
 const formatBRL = (n: number) =>
   Number(n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -79,26 +92,31 @@ export async function exportBIToPDF(
   const margin = 14;
   const textWidth = pageWidth - margin * 2;
 
-  // ─── Cabeçalho corporativo (mesma identidade dos outros exports) ──
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, pageWidth, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
+  // ─── Cabeçalho premium (preto + dourado, corpo branco) ───────────
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  // Filete dourado abaixo da faixa — assinatura visual do tema.
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Painel de Inteligência Estratégica', margin, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`Período: ${formatDate(dados.periodo.inicio)} a ${formatDate(dados.periodo.fim)}`, margin, 29);
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text('PAINEL DE INTELIGÊNCIA ESTRATÉGICA', margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(`Período: ${formatDate(dados.periodo.inicio)} a ${formatDate(dados.periodo.fim)}`, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date(dados.gerado_em).toLocaleString('pt-BR')}`, pageWidth - margin, 29, { align: 'right' });
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(`Gerado em: ${new Date(dados.gerado_em).toLocaleString('pt-BR')}`, pageWidth - margin, 27, { align: 'right' });
 
-  // ─── KPIs em grid (4 colunas) ─────────────────────────────────────
-  let cursorY = 42;
+  // ─── KPIs em grid (4 colunas) — rótulo cinza, valor dourado ──────
+  let cursorY = 44;
   const kpis = [
     { label: 'Faturamento',  value: formatBRL(dados.vendas?.total_faturamento ?? 0) },
     { label: 'Variação',     value: formatPct(dados.vendas?.variacao_faturamento_pct ?? null) },
@@ -107,20 +125,21 @@ export async function exportBIToPDF(
   ];
   const colW = textWidth / 4;
   doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY_MID);
   for (let i = 0; i < kpis.length; i++) {
     const x = margin + i * colW;
     doc.text(kpis[i].label.toUpperCase(), x, cursorY);
   }
-  cursorY += 5;
-  doc.setFontSize(11);
+  cursorY += 5.5;
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...GOLD_DARK);
   for (let i = 0; i < kpis.length; i++) {
     const x = margin + i * colW;
     doc.text(kpis[i].value, x, cursorY);
   }
-  cursorY += 8;
+  cursorY += 9;
 
   // ─── Tabela: Vendas por filial ────────────────────────────────────
   const porFilial: any[] = dados.vendas?.por_filial ?? [];
@@ -135,35 +154,39 @@ export async function exportBIToPDF(
         formatBRL(f.ticket_medio),
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
-      alternateRowStyles: { fillColor: [245, 247, 245] },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+      alternateRowStyles: { fillColor: GOLD_TINT },
       margin: { left: margin, right: margin },
     });
     cursorY = (doc as any).lastAutoTable.finalY + 8;
   }
 
   // ─── Análise IA (markdown como texto formatado) ──────────────────
-  doc.setFontSize(11);
-  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(12);
+  doc.setTextColor(...BLACK);
   doc.setFont('helvetica', 'bold');
   doc.text('Análise Executiva', margin, cursorY);
-  cursorY += 6;
+  // Sublinhado dourado curto sob o título — remete ao filete do header.
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.6);
+  doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
+  cursorY += 8;
 
   const blocks = markdownToPdfBlocks(markdown);
   for (const block of blocks) {
     if (cursorY > pageHeight - 20) { doc.addPage(); cursorY = 20; }
     switch (block.type) {
       case 'h1':
-        doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GOLD_DARK);
         doc.text(block.text, margin, cursorY); cursorY += 7;
         break;
       case 'h2':
-        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40);
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...BLACK);
         doc.text(block.text, margin, cursorY); cursorY += 6;
         break;
       case 'h3':
-        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GRAY_INK);
         doc.text(block.text, margin, cursorY); cursorY += 5;
         break;
       case 'li':
@@ -180,6 +203,20 @@ export async function exportBIToPDF(
     }
   }
 
+  // ─── Rodapé em cada página: filete dourado + n° página ───────────
+  const totalPages = (doc as any).internal.getNumberOfPages?.() ?? 1;
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.line(margin, pageHeight - 8, pageWidth - margin, pageHeight - 8);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...GRAY_MID);
+    doc.text('LogMax • Painel BI', margin, pageHeight - 4);
+    doc.text(`${p} / ${totalPages}`, pageWidth - margin, pageHeight - 4, { align: 'right' });
+  }
+
   await entregarPdf(doc, filename, destino, profile, showToast, `Painel BI — ${formatDate(dados.periodo.inicio)} a ${formatDate(dados.periodo.fim)}`);
 }
 
@@ -193,26 +230,28 @@ export async function exportBIToExcel(dados: BIDados, filename: string) {
   wb.creator = 'LogMax BI';
   wb.created = new Date();
 
-  const accent = 'FF10B981'; // emerald-500
-  const headerFill: any = { type: 'pattern', pattern: 'solid', fgColor: { argb: accent } };
-  const headerFont: any = { bold: true, color: { argb: 'FF0A0A0A' } };
+  // Paleta Excel — cabeçalho preto com texto dourado (premium).
+  const headerFill: any = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLACK_HEX } };
+  const headerFont: any = { bold: true, color: { argb: GOLD_HEX } };
+  const zebraFill: any  = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD_TINT_HEX } };
 
   // ── Aba: Resumo ─────────────────────────────────────────────────
   const resumo = wb.addWorksheet('Resumo');
   resumo.columns = [{ width: 38 }, { width: 22 }, { width: 22 }];
-  resumo.addRow(['LogMax — Painel BI']).font = { size: 16, bold: true, color: { argb: accent } };
+  resumo.addRow(['LogMax — Painel BI']).font = { size: 16, bold: true, color: { argb: GOLD_HEX } };
   resumo.addRow([`Período: ${formatDate(dados.periodo.inicio)} a ${formatDate(dados.periodo.fim)} (${dados.periodo.dias} dias)`]);
   resumo.addRow([`Gerado em: ${new Date(dados.gerado_em).toLocaleString('pt-BR')}`]);
   resumo.addRow([]);
 
   const addSecao = (titulo: string, linhas: [string, any, any?][]) => {
     const r = resumo.addRow([titulo]);
-    r.font = { bold: true, size: 12, color: { argb: accent } };
+    r.font = { bold: true, size: 12, color: { argb: BLACK_HEX } };
     resumo.addRow(['Indicador', 'Valor', 'Comparativo']).font = headerFont;
     resumo.lastRow!.eachCell(c => { c.fill = headerFill; });
-    for (const [label, valor, comp] of linhas) {
-      resumo.addRow([label, valor, comp ?? '—']);
-    }
+    linhas.forEach(([label, valor, comp], i) => {
+      const row = resumo.addRow([label, valor, comp ?? '—']);
+      if (i % 2 === 1) row.eachCell(c => { c.fill = zebraFill; });
+    });
     resumo.addRow([]);
   };
 
