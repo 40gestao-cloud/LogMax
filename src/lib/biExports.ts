@@ -72,8 +72,10 @@ export async function exportBIToPDF(
     import('jspdf-autotable'),
   ]);
 
-  const doc = new jsPDF();
+  // Paisagem A4 — casa com o palco 16:9 do Max Show e evita PDF letterboxed.
+  const doc = new jsPDF({ orientation: 'landscape' });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const textWidth = pageWidth - margin * 2;
 
@@ -150,7 +152,7 @@ export async function exportBIToPDF(
 
   const blocks = markdownToPdfBlocks(markdown);
   for (const block of blocks) {
-    if (cursorY > 270) { doc.addPage(); cursorY = 20; }
+    if (cursorY > pageHeight - 20) { doc.addPage(); cursorY = 20; }
     switch (block.type) {
       case 'h1':
         doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
@@ -169,7 +171,7 @@ export async function exportBIToPDF(
         doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 50, 50);
         const lines = doc.splitTextToSize(block.text, textWidth);
         for (const l of lines) {
-          if (cursorY > 280) { doc.addPage(); cursorY = 20; }
+          if (cursorY > pageHeight - 12) { doc.addPage(); cursorY = 20; }
           doc.text(l, margin, cursorY); cursorY += 4.5;
         }
         cursorY += 1;
