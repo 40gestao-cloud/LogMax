@@ -51,8 +51,6 @@ export async function enviarPdfAoMaxShow(
     showToast?.(`PDF muito grande (${(blob.size / 1024 / 1024).toFixed(1)} MB, máx 15 MB).`, 'error');
     return false;
   }
-  const paginas = (doc as any).internal.getNumberOfPages?.() ?? null;
-
   const safeTitle = titulo.replace(/[^\w.-]+/g, '_').slice(0, 80);
   const arquivoNome = `${safeTitle}.pdf`;
   const path = `${profile.id}/${Date.now()}_${arquivoNome}`;
@@ -70,11 +68,9 @@ export async function enviarPdfAoMaxShow(
   const { error: insErr } = await supabase.from('max_shows').insert({
     user_id: profile.id,
     titulo,
-    tipo: 'pdf',
     arquivo_url: pub.publicUrl,
     arquivo_nome: arquivoNome,
     arquivo_tamanho: blob.size,
-    arquivo_paginas: paginas,
   });
   if (insErr) {
     await supabase.storage.from('max-show-anexos').remove([path]);
