@@ -371,8 +371,14 @@ html, body {
 }
 
 /* Restaura pan-x em containers que declaram overflow horizontal proprio —
-   sem isso, o touch-action pan-y da raiz bloquearia o swipe deles. */
-.overflow-x-auto, .overflow-x-scroll, .overflow-auto { touch-action: pan-x pan-y; }
+   sem isso, o touch-action pan-y da raiz bloquearia o swipe deles. Cobre
+   utilities Tailwind + qualquer container com `style={{overflow: 'auto|scroll'}}`
+   inline (safe: touch-action so afeta scroll real, no-op em overflow hidden). */
+.overflow-x-auto, .overflow-x-scroll, .overflow-auto,
+[style*="overflow:auto"], [style*="overflow: auto"],
+[style*="overflow:scroll"], [style*="overflow: scroll"],
+[style*="overflow-x:auto"], [style*="overflow-x: auto"],
+[style*="overflow-x:scroll"], [style*="overflow-x: scroll"] { touch-action: pan-x pan-y; }
 
 body {
   background-color: var(--color-bg-base);
@@ -975,7 +981,7 @@ html.theme-switching *::after {
    visible, o visible vira auto na pratica, entao qualquer filho que
    passe da largura habilita scroll horizontal + rubber-band no touch
    ("view balancando"). Forcamos overflow-x hidden + contain no bounce. */
-.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contain; }
+main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contain; }
 .main-scrollbar::-webkit-scrollbar       { width: 8px; }
 .main-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .main-scrollbar::-webkit-scrollbar-thumb {
