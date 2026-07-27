@@ -429,9 +429,9 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             return (
                               <div key={label} className="relative">
                                 <button onClick={() => { navigate(viewId); onClose?.(); }}
-                                  className={`w-full nav-subitem flex items-center justify-between text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
+                                  className={`w-full nav-subitem flex items-center justify-between gap-2 text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 text-left ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
                                   style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
-                                  <span>{label}</span>
+                                  <span className="flex-1 min-w-0 text-left">{label}</span>
                                   {(badges?.[viewId] ?? 0) > 0 && (
                                     <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
                                       {badges[viewId] > 9 ? '9+' : badges[viewId]}
