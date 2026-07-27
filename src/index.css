@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+/* ── Montserrat (subset latin, self-hosted em /public/fonts) ──
+   Substitui a Inter/system stack anterior. Vem antes de qualquer
+   outra regra pra ficar disponível assim que o CSS carrega.
+   font-display: swap evita FOIT — texto renderiza com fallback
+   até a Montserrat baixar. */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/montserrat-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal; font-weight: 500; font-display: swap;
+  src: url('/fonts/montserrat-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal; font-weight: 600; font-display: swap;
+  src: url('/fonts/montserrat-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal; font-weight: 700; font-display: swap;
+  src: url('/fonts/montserrat-700.woff2') format('woff2');
+}
+
 @theme {
   --color-bg-base: #000000;
   --color-bg-dark: #1A1305;
@@ -383,7 +409,7 @@ html, body {
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Montserrat', 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
 

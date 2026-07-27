@@ -319,23 +319,59 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — hero cards com baseline temporal explícita */}
       {relatorio && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-          {kpis.map(k => (
-            <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">{k.label}</p>
-              <p className="text-xl font-black text-gray-100 tabular-nums">{k.value}</p>
-              {k.delta && (
-                <p className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${
-                  k.deltaIsPositive ? 'text-accent' : 'text-red-400'
-                }`}>
-                  {k.deltaIsPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                  {k.delta}
-                </p>
+        <div className="shrink-0">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Panorama</p>
+            <p className="text-[10px] text-gray-500 tracking-wide">
+              {fmtDataBR(relatorio.dados.periodo.inicio)} – {fmtDataBR(relatorio.dados.periodo.fim)}
+              {relatorio.dados.periodo_anterior && (
+                <span className="ml-2 text-gray-600">
+                  · vs. <span className="text-gray-400">
+                    {fmtDataBR(relatorio.dados.periodo_anterior.inicio)}–{fmtDataBR(relatorio.dados.periodo_anterior.fim)}
+                  </span>
+                </span>
               )}
-            </div>
-          ))}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpis.map((k, i) => (
+              <div
+                key={k.label}
+                className={`relative overflow-hidden rounded-2xl p-5 border transition-colors ${
+                  i === 0
+                    ? 'border-accent/25 bg-gradient-to-br from-accent/[0.06] to-transparent'
+                    : 'neu-flat border-white/5'
+                }`}
+              >
+                {i === 0 && (
+                  <span className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-accent to-transparent opacity-60" />
+                )}
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{k.label}</p>
+                <p className={`text-3xl font-bold tabular-nums mt-2 mb-2 leading-none ${
+                  i === 0 ? 'text-accent' : 'text-gray-100'
+                }`}>
+                  {k.value}
+                </p>
+                {k.delta && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tabular-nums ${
+                      k.deltaIsPositive
+                        ? 'bg-emerald-500/12 text-emerald-400'
+                        : 'bg-red-500/12 text-red-400'
+                    }`}>
+                      {k.deltaIsPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                      {k.delta}
+                    </span>
+                    <span className="text-[10px] text-gray-500 tracking-wide">
+                      vs. período anterior
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
