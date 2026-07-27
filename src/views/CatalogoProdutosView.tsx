@@ -81,7 +81,10 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, categoriaFiltro]);
 
   const { data, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/produtosview',
+    // Lê pela view mascarada: preco_custo vem NULL para quem não é
+    // financeiro/marketing/logística (migração 262). O gate visual
+    // `podeVerCusto` abaixo continua valendo — agora com respaldo no servidor.
+    '/api/produtoscomcustoview',
     filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
     false,
     {

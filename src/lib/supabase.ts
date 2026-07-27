@@ -25,6 +25,12 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/crmview-clientes':             'clientes',
   '/api/crmview-fornecedores':         'fornecedores',
   '/api/produtosview':                 'produtos',
+  // Leitura de produtos COM custo. `produtos_com_custo` é uma view
+  // security_invoker que faz LEFT JOIN em produtos_custo (migração 262): quem
+  // não passa na RLS de custo recebe preco_custo = NULL em vez de erro.
+  // Use este endpoint só para LER; escrita continua em '/api/produtosview'
+  // (view não aceita INSERT/UPDATE) + upsert em produtos_custo.
+  '/api/produtoscomcustoview':         'produtos_com_custo',
   '/api/servicosview':                 'servicos',
   '/api/centroscustoview':             'centros_custo',
   '/api/projetosview':                 'projetos',
@@ -43,7 +49,8 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/expedicao':                    'expedicao',
   '/api/movimentacoesestoqueview':     'movimentacoes_estoque',
   '/api/saldosestoqueview':            'produtos',
-  '/api/patrimonioview':               'produtos',
+  // Patrimônio exibe valor de custo do bem — lê pela view mascarada.
+  '/api/patrimonioview':               'produtos_com_custo',
   '/api/inventariosestoqueview':       'inventarios',
   '/api/vencimentosestoqueview':       'vencimentos_estoque',
   '/api/contasreceberview':            'contas_receber',
@@ -111,7 +118,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
 // Tabelas fora deste set continuam com hard delete (auditoria, cascades,
 // transações efêmeras como pix_pendentes).
 export const TABLES_WITH_ATIVO = new Set<string>([
-  'filiais', 'clientes', 'fornecedores', 'produtos', 'servicos',
+  'filiais', 'clientes', 'fornecedores', 'produtos', 'produtos_com_custo', 'servicos',
   'centros_custo', 'projetos', 'condicoes_pagamento', 'classificacoes_auxiliares',
   'formas_pagamento', 'cargos', 'departamentos', 'beneficios',
   'caixa_bancos', 'funcionarios',

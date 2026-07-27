@@ -79,7 +79,8 @@ const OrcamentosViewInner = ({
     { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  // View mascarada: usa custo para margem do orçamento (migr. 262).
+  const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
 
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');

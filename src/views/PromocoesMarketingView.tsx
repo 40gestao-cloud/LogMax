@@ -112,7 +112,8 @@ function SearchableSelect({ value, onChange, items, placeholder }: {
 const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: promocoesAll, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview', { filial });
   const confirm = useConfirm();
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  // View mascarada: precisa do custo para calcular margem da promoção (migr. 262).
+  const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
   const { data: servicos } = useFetchData<any>('/api/servicosview', { filial });
   const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview', { filial });
   const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', { filial }, true);

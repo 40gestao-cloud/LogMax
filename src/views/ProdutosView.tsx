@@ -21,6 +21,24 @@ import {
   PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { supabase } from '../lib/supabase';
+
+/**
+ * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
+ * `produtos` tem SELECT aberto a todo authenticated, então a coluna não podia
+ * continuar lá. Leitura vem pela view `produtos_com_custo`; a escrita é este
+ * upsert, feito depois do produto existir (a FK exige o produto_id).
+ */
+async function salvarPrecoCusto(produtoId: string, valor: number): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('produtos_custo')
+    .upsert(
+      { produto_id: produtoId, preco_custo: valor, updated_at: new Date().toISOString() },
+      { onConflict: 'produto_id' },
+    );
+  if (error) throw new Error(`Produto salvo, mas o preço de custo não foi gravado: ${error.message}`);
+}
 
 const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
 
@@ -122,7 +140,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   );
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
-    '/api/produtosview',
+    // Leitura pela view mascarada (migr. 262). Escrita segue em
+    // '/api/produtosview' + salvarPrecoCusto() — view não aceita INSERT/UPDATE.
+    '/api/produtoscomcustoview',
     { filial },
     false,
     {
@@ -342,11 +362,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
       // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
       const isPatrimonio = extras.tipo === 'patrimonio';
+      const custoValor   = extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : 0;
       const basePayload = {
         ...form,
         preco:                  parseBRL(form.preco),
         categoria:              extras.categoria,
-        preco_custo:            extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : null,
+        // preco_custo saiu daqui: vai para produtos_custo via salvarPrecoCusto().
         estoque_minimo:         extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
         unidade:                extras.unidade || 'UN',
         ean:                    extras.ean,
@@ -385,7 +406,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
-        setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...basePayload }) : d));
+        await salvarPrecoCusto(editItem.id, custoValor);
+        // `updated` vem de `produtos` e não traz preco_custo — reinjeta o valor
+        // salvo para a grade refletir a edição sem esperar um reload.
+        setData((prev: any[]) => prev.map(d =>
+          d.id === editItem.id
+            ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoValor }
+            : d));
         // Best-effort cleanup: se alguma imagem foi trocada ou removida,
         // apaga a antiga do bucket. Falha aqui não bloqueia o sucesso do UPDATE.
         imagensAnteriores.forEach((urlAntiga, i) => {
@@ -401,6 +428,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
         const saved = await dbInsert<any>('/api/produtosview', insertPayload);
         const novoId = saved?.id;
+        if (novoId) await salvarPrecoCusto(novoId, custoValor);
         const hoje = todayBR();
         let saldoFinal = 0;
         if (novoId && estoqueInicial > 0) {
@@ -441,8 +469,8 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             showToast('Produto criado, mas quantidade comprada não foi registrada. Verifique movimentações.', 'error', true);
           }
         }
-        if (saved) saved.estoque = saldoFinal;
-        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal }, ...data]);
+        if (saved) { saved.estoque = saldoFinal; saved.preco_custo = custoValor; }
+        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoValor }, ...data]);
         showToast('Produto criado com sucesso!', 'success', true);
       }
       closeForm();

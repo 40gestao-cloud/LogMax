@@ -149,7 +149,8 @@ function AbaCampanhas({ showToast, filial }: any) {
   // itens_campanha não tem coluna filial própria — escopo é derivado
   // via campanha_id (só carregamos itens das campanhas já filtradas).
   const { data: todosItens, setData: setItens } = useFetchData<any>('itens_campanha');
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  // View mascarada: Financeiro aprova promoção olhando a margem (migr. 262).
+  const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
 
   const [motivos,    setMotivos]    = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
