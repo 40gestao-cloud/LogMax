@@ -19,6 +19,7 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
+import { normalizarBusca, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -345,14 +346,16 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica
   // fora — PDV opera só nas 3 unidades operacionais.
   const produtosPorFilial = produtosAtivos.filter((p: any) => p.filial === filialFiltro);
-  const searchLower = search.toLowerCase();
-  const filtered = produtosPorFilial.filter((p: any) => {
-    if (categoriaFiltro) {
-      const cat = String(p.categoria ?? '').toLowerCase();
-      if (!cat.includes(categoriaFiltro.toLowerCase())) return false;
-    }
-    return [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(searchLower));
+  // Categoria continua por substring (é filtro de gaveta, não digitação livre).
+  const produtosPorCategoria = produtosPorFilial.filter((p: any) => {
+    if (!categoriaFiltro) return true;
+    return String(p.categoria ?? '').toLowerCase().includes(categoriaFiltro.toLowerCase());
   });
+  // Busca textual por PREFIXO e acento-insensível (lib/produtoBusca.ts). Antes
+  // era `.includes()` sem normalizar: "ca" trazia ma[ca]rrão junto com café, e
+  // "café" digitado não achava "CAFE" cadastrado. Busca vazia mantém a ordem
+  // original da grade — buscarProdutos só reordena quando há termo.
+  const filtered = buscarProdutos(produtosPorCategoria, search, produtosPorCategoria.length);
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
   const descontoNum = parseBRL(desconto);
@@ -482,8 +485,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       String(p.codigo ?? '').trim().toLowerCase() === termoLower
     );
     if (!match) {
+      // Prefixo em vez de substring: com o `.includes()` antigo, um termo curto
+      // casava vários produtos, virava ambíguo e caía no "não encontrado".
       const partial = produtosPorFilial.filter((p: any) =>
-        [p.nome, p.codigo, p.ean].some((v: any) => v?.toString().toLowerCase().includes(termoLower))
+        produtoCasa(p, normalizarBusca(termo), termo)
       );
       if (partial.length === 1) match = partial[0];
     }

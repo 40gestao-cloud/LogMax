@@ -14,6 +14,7 @@ import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
+import { normalizarBusca as norm, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -61,11 +62,9 @@ function trapTab(e: React.KeyboardEvent, container: HTMLElement | null) {
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
 
-// Normaliza string pra busca: lowercase + remove acentos (ã→a, é→e, etc).
-// Sem isso, "feijão" digitado não casa com produto "FEIJAO" e vice-versa.
-// Regex via constructor pra evitar qualquer dúvida de encoding do arquivo.
-const ACCENT_REGEX = new RegExp('[\\u0300-\\u036f]', 'g');
-const norm = (s: any) => String(s ?? '').normalize('NFD').replace(ACCENT_REGEX, '').toLowerCase();
+// Busca de produto (prefixo, acento-insensível) vive em lib/produtoBusca.ts —
+// compartilhada com PDVView.tsx. `norm` segue em uso aqui para outras buscas
+// da tela, como a de clientes.
 
 interface PDVViewSupermaxProps {
   showToast?: (msg: string, kind?: string, persist?: boolean) => void;
@@ -392,11 +391,9 @@ export const PDVViewSupermax = ({
       norm(p.codigo) === lower
     );
     if (!match) {
-      const partial = produtosDisponiveis.filter((p: any) =>
-        norm(p.nome).includes(lower) ||
-        norm(p.codigo).includes(lower) ||
-        String(p.ean ?? '').includes(codigoBuscar)
-      );
+      // Busca por prefixo: com o `.includes()` antigo, "ca" casava café E
+      // macarrão, virava ambíguo e caía no "não encontrado". Agora resolve.
+      const partial = produtosDisponiveis.filter((p: any) => produtoCasa(p, lower, codigoBuscar));
       if (partial.length === 1) match = partial[0];
     }
     if (!match) {
@@ -411,16 +408,10 @@ export const PDVViewSupermax = ({
   }, [produtosDisponiveis, addToCart]);
 
   // Busca completa (modal F8) — sem cap de 2 chars; lista 50 primeiros se vazio.
-  const filteredSearch = useMemo(() => {
-    const t = norm(searchTerm.trim());
-    if (!t) return produtosDisponiveis.slice(0, 50);
-    const ean = searchTerm.trim();
-    return produtosDisponiveis.filter((p: any) =>
-      norm(p.nome).includes(t) ||
-      norm(p.codigo).includes(t) ||
-      String(p.ean ?? '').includes(ean)
-    ).slice(0, 50);
-  }, [searchTerm, produtosDisponiveis]);
+  const filteredSearch = useMemo(
+    () => buscarProdutos(produtosDisponiveis, searchTerm, 50),
+    [searchTerm, produtosDisponiveis],
+  );
 
   // Reseta seleção do search modal ao abrir / quando lista muda
   useEffect(() => {
@@ -428,16 +419,10 @@ export const PDVViewSupermax = ({
   }, [searchModalOpen, filteredSearch.length]);
 
   // Consulta de preço — mesma filtragem da busca F8, listagem só leitura.
-  const filteredPriceQuery = useMemo(() => {
-    const t = norm(priceQueryTerm.trim());
-    if (!t) return produtosDisponiveis.slice(0, 50);
-    const ean = priceQueryTerm.trim();
-    return produtosDisponiveis.filter((p: any) =>
-      norm(p.nome).includes(t) ||
-      norm(p.codigo).includes(t) ||
-      String(p.ean ?? '').includes(ean)
-    ).slice(0, 50);
-  }, [priceQueryTerm, produtosDisponiveis]);
+  const filteredPriceQuery = useMemo(
+    () => buscarProdutos(produtosDisponiveis, priceQueryTerm, 50),
+    [priceQueryTerm, produtosDisponiveis],
+  );
 
   useEffect(() => {
     if (priceQueryOpen) setPriceQueryIdx(filteredPriceQuery.length > 0 ? 0 : -1);
@@ -449,12 +434,7 @@ export const PDVViewSupermax = ({
     const t = norm(code.trim());
     if (!t || t.length < 2) return [];
     if (/^[\d.,]+\s*[*xX×]/.test(code)) return [];
-    const ean = code.trim();
-    return produtosDisponiveis.filter((p: any) =>
-      norm(p.nome).includes(t) ||
-      norm(p.codigo).includes(t) ||
-      String(p.ean ?? '').includes(ean)
-    ).slice(0, 8);
+    return buscarProdutos(produtosDisponiveis, code, 8);
   }, [code, produtosDisponiveis]);
 
   // Mantém suggestionIdx coerente com a lista. Antes o onChange setava
