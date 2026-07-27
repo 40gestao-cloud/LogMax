@@ -4,6 +4,7 @@
 // exports do projeto: jsPDF + autoTable em dynamic import pra não inflar
 // o bundle.
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
+import { GOLD, GOLD_DARK, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 
 const fmtDataBR = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '—');
 
@@ -58,25 +59,28 @@ export async function exportCompeticaoResultadoPDF(
   const margin = 14;
   const textWidth = pageWidth - margin * 2;
 
-  // ─── Cabeçalho corporativo (mesma identidade dos outros exports) ──
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, pageWidth, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
+  // ─── Cabeçalho premium ────────────────────────────────────────────
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Competição entre Filiais — Resultado', margin, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`${competicao.nome}`, margin, 29);
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text('COMPETIÇÃO ENTRE FILIAIS — RESULTADO', margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(`${competicao.nome}`, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 29, { align: 'right' });
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 27, { align: 'right' });
 
-  let cursorY = 42;
+  let cursorY = 44;
 
   const statusLabel = competicao.status === 'em_andamento'
     ? 'Em andamento'
@@ -85,7 +89,7 @@ export async function exportCompeticaoResultadoPDF(
     : 'Encerrada';
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(...GRAY_INK);
   doc.text(
     `Período: ${fmtDataBR(competicao.data_inicio)} a ${fmtDataBR(competicao.data_fim)}   ·   Status: ${statusLabel}`,
     margin, cursorY,
@@ -95,9 +99,12 @@ export async function exportCompeticaoResultadoPDF(
   // ─── Pódio ──────────────────────────────────────────────────────
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...BLACK);
   doc.text('Pódio', margin, cursorY);
-  cursorY += 6;
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.6);
+  doc.line(margin, cursorY + 1.5, margin + 20, cursorY + 1.5);
+  cursorY += 7;
 
   autoTable(doc, {
     startY: cursorY,
@@ -109,9 +116,9 @@ export async function exportCompeticaoResultadoPDF(
       p.n === 0 ? '—' : (p.media / 10).toFixed(1),
     ]),
     theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
-    alternateRowStyles: { fillColor: [245, 247, 245] },
+    headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
+    alternateRowStyles: { fillColor: GOLD_TINT },
     columnStyles: { 3: { halign: 'center', fontStyle: 'bold' } },
     margin: { left: margin, right: margin },
   });
@@ -126,15 +133,18 @@ export async function exportCompeticaoResultadoPDF(
     ensureSpace(20);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text('Votação do conselho', margin, cursorY);
-    cursorY += 6;
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
+    cursorY += 7;
 
     const aceita = votos.filter(v => v.voto === 'aceita').length;
     const rejeita = votos.filter(v => v.voto === 'rejeita').length;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
+    doc.setTextColor(...GRAY_INK);
     doc.text(`Aceita: ${aceita}   ·   Rejeita: ${rejeita}   ·   Total de votos: ${votos.length}`, margin, cursorY);
     cursorY += 6;
 
@@ -147,9 +157,9 @@ export async function exportCompeticaoResultadoPDF(
         v.comentario ?? '—',
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [50, 50, 50], fontSize: 8.5 },
-      alternateRowStyles: { fillColor: [245, 247, 245] },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 8.5 },
+      alternateRowStyles: { fillColor: GOLD_TINT },
       margin: { left: margin, right: margin },
     });
     cursorY = (doc as any).lastAutoTable.finalY + 8;
@@ -160,12 +170,15 @@ export async function exportCompeticaoResultadoPDF(
     ensureSpace(16);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text('Vencedora declarada', margin, cursorY);
-    cursorY += 7;
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
+    cursorY += 8;
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 30, 30);
+    doc.setTextColor(...GOLD_DARK);
     doc.text(`🏆 ${competicao.vencedora}`, margin, cursorY);
     cursorY += 10;
   }
@@ -175,9 +188,12 @@ export async function exportCompeticaoResultadoPDF(
     ensureSpace(16);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text('Análise IA', margin, cursorY);
-    cursorY += 6;
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 22, cursorY + 1.5);
+    cursorY += 7;
 
     const blocks = markdownToPlainBlocks(competicao.analise_ia);
     for (const b of blocks) {
@@ -198,9 +214,12 @@ export async function exportCompeticaoResultadoPDF(
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(7);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(...GRAY_MID);
     doc.text(`LogMax · Competição entre Filiais · ${competicao.nome}`, margin, pageHeight - 8);
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }

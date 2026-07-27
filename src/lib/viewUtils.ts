@@ -1,4 +1,30 @@
 import { useState, type KeyboardEvent } from 'react';
+import { GOLD, GOLD_DARK, BLACK, GRAY_INK, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
+
+// Header premium reutilizado por todos os PDFs deste arquivo: faixa preta
+// 30mm + filete dourado + LogMax dourado, subtítulo caps prateado e uma
+// linha de contexto. pageWidth default = A4 retrato (210mm).
+function drawPdfHeader(doc: any, subtitle: string, contextLine: string, rightMeta: string, pageWidth = 210) {
+  const margin = 14;
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text(subtitle.toUpperCase(), margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(contextLine, margin, 27);
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(rightMeta, pageWidth - margin, 27, { align: 'right' });
+}
 
 export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency' | 'textarea'; options?: string[]; required?: boolean; placeholder?: string; fullWidth?: boolean };
 
@@ -114,32 +140,16 @@ export async function exportToPDF(title: string, columns: string[], rows: any[][
 
   const doc = new jsPDF();
 
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, 210, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', 14, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Relatório Operacional', 14, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(title, 14, 29);
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  const now = new Date().toLocaleString('pt-BR');
-  doc.text(`Gerado em: ${now}`, 210 - 14, 29, { align: 'right' });
+  drawPdfHeader(doc, 'Relatório Operacional', title, `Gerado em: ${new Date().toLocaleString('pt-BR')}`);
 
   autoTable(doc, {
-    startY: 38,
+    startY: 40,
     head: [columns],
     body: rows,
     theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
-    alternateRowStyles: { fillColor: [245, 247, 245] },
+    headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+    alternateRowStyles: { fillColor: GOLD_TINT },
   });
 
   doc.save(`${filename}.pdf`);
@@ -161,31 +171,19 @@ export async function exportToPDFAgrupado(title: string, columns: string[], grup
 
   const doc = new jsPDF();
 
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, 210, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', 14, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Relatório Operacional', 14, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(title, 14, 29);
+  drawPdfHeader(doc, 'Relatório Operacional', title, `Gerado em: ${new Date().toLocaleString('pt-BR')}`);
 
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
-
-  let cursorY = 40;
+  let cursorY = 42;
   for (const grupo of grupos) {
     if (grupo.rows.length === 0) continue;
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text(grupo.titulo, 14, cursorY);
-    cursorY += 4;
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(14, cursorY + 1.5, 14 + 22, cursorY + 1.5);
+    cursorY += 5;
     autoTable(doc, {
       startY: cursorY,
       head: [columns],
@@ -235,23 +233,8 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
 
   const doc = new jsPDF();
 
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, 210, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', 14, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Recibo de Venda', 14, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`Venda #${venda.shortId}`, 14, 29);
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
+  drawPdfHeader(doc, 'Recibo de Venda', `Venda #${venda.shortId}`, `Emitido em: ${new Date().toLocaleString('pt-BR')}`);
   const emissao = `${venda.data}${venda.hora ? ' ' + venda.hora : ''}`;
-  doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
 
   // Bloco de cabeçalho da venda
   doc.setTextColor(60, 60, 60);
@@ -284,14 +267,14 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
       fmtBR(Number(it.subtotal)),
     ]),
     theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { textColor: [60, 60, 60], fontSize: 9 },
+    headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
     columnStyles: {
       1: { halign: 'right' },
       2: { halign: 'right' },
       3: { halign: 'right' },
     },
-    alternateRowStyles: { fillColor: [245, 247, 245] },
+    alternateRowStyles: { fillColor: GOLD_TINT },
   });
 
   let cursorY = (doc as any).lastAutoTable.finalY + 8;
@@ -309,7 +292,7 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
   }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...GOLD_DARK);
   doc.text('TOTAL', 140, cursorY);
   doc.text(fmtBR(venda.total), 196, cursorY, { align: 'right' });
   cursorY += 8;
@@ -366,23 +349,8 @@ export async function gerarNotaEmitidaPDF(nota: NotaEmitida) {
   const numeroFmt = String(nota.numero).padStart(6, '0');
   const titulo = TITULO_POR_TIPO[nota.tipo] ?? 'Documento';
 
-  // Cabeçalho preto com faixa do accent
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, 210, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', 14, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text(titulo, 14, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`${nota.tipo} · Nº ${numeroFmt} / Série ${nota.serie}`, 14, 29);
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+  // Cabeçalho premium (preto + filete dourado)
+  drawPdfHeader(doc, titulo, `${nota.tipo} · Nº ${numeroFmt} / Série ${nota.serie}`, `Emitido em: ${new Date().toLocaleString('pt-BR')}`);
 
   // Bloco de dados
   doc.setTextColor(60, 60, 60);
@@ -424,7 +392,7 @@ export async function gerarNotaEmitidaPDF(nota: NotaEmitida) {
   doc.setTextColor(120, 120, 120);
   doc.text('VALOR TOTAL', 14, y + 4);
   doc.setFontSize(20);
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...GOLD_DARK);
   doc.text(
     `R$ ${nota.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     196, y + 6, { align: 'right' }

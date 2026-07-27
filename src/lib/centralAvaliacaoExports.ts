@@ -9,6 +9,7 @@
 
 import { supabase, ENDPOINT_TABLE_MAP } from './supabase';
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
+import { GOLD, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
@@ -234,24 +235,28 @@ export async function exportCentralAvaliacaoPDF(
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
 
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, pageWidth, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
+  // ─── Cabeçalho premium ────────────────────────────────────────────
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Central de Avaliação — Matriz', margin, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`${rel.competicaoNome}  ·  ${fmtDataBR(rel.dataInicio)} a ${fmtDataBR(rel.dataFim)}`, margin, 29);
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text('CENTRAL DE AVALIAÇÃO — MATRIZ', margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(`${rel.competicaoNome}  ·  ${fmtDataBR(rel.dataInicio)} a ${fmtDataBR(rel.dataFim)}`, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 29, { align: 'right' });
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 27, { align: 'right' });
 
-  let cursorY = 42;
+  let cursorY = 44;
   const ensureSpace = (needed: number) => {
     if (cursorY + needed > pageHeight - 15) { doc.addPage(); cursorY = 20; }
   };
@@ -260,8 +265,11 @@ export async function exportCentralAvaliacaoPDF(
   ensureSpace(10);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...BLACK);
   doc.text('Dados das Filiais', margin, cursorY);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.6);
+  doc.line(margin, cursorY + 1.5, margin + 34, cursorY + 1.5);
   cursorY += 8;
 
   for (const grupo of rel.grupos) {
@@ -270,7 +278,7 @@ export async function exportCentralAvaliacaoPDF(
       ensureSpace(16);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(40, 40, 40);
+      doc.setTextColor(...GRAY_INK);
       doc.text(`${grupo.label} — ${tipo.label}`, margin, cursorY);
       cursorY += 5;
 
@@ -283,9 +291,9 @@ export async function exportCentralAvaliacaoPDF(
           ? [it.filial, it.descricao, fmtMedia(it.media), it.comentarios.join(' | ') || '—']
           : [it.filial, it.descricao, String(it.aprovados), String(it.reprovados), it.comentarios.join(' | ') || '—']),
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 8 },
-        bodyStyles: { textColor: [60, 60, 60], fontSize: 7.5 },
-        alternateRowStyles: { fillColor: [245, 247, 245] },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 7.5 },
+        alternateRowStyles: { fillColor: GOLD_TINT },
         margin: { left: margin, right: margin },
         columnStyles: tipo.creative
           ? { 2: { halign: 'center' } }
@@ -301,8 +309,11 @@ export async function exportCentralAvaliacaoPDF(
     ensureSpace(14);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text('Tarefas da Matriz', margin, cursorY);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
     cursorY += 8;
 
     for (const tt of rel.tarefaTipos) {
@@ -317,7 +328,7 @@ export async function exportCentralAvaliacaoPDF(
         if (tarefa.descricao && tarefa.descricao.trim()) {
           doc.setFontSize(8.5);
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(80, 80, 80);
+          doc.setTextColor(...GRAY_INK);
           const linhas = doc.splitTextToSize(tarefa.descricao.trim(), pageWidth - margin * 2);
           for (const l of linhas) {
             ensureSpace(5);
@@ -332,9 +343,9 @@ export async function exportCentralAvaliacaoPDF(
           head: [['Participante', 'Filial', 'Nota média', 'Comentários']],
           body: tarefa.participantes.map(p => [p.nome, p.filial, fmtMedia(p.media), p.comentarios.join(' | ') || '—']),
           theme: 'grid',
-          headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 8 },
-          bodyStyles: { textColor: [60, 60, 60], fontSize: 7.5 },
-          alternateRowStyles: { fillColor: [245, 247, 245] },
+          headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 8 },
+          bodyStyles: { textColor: GRAY_INK, fontSize: 7.5 },
+          alternateRowStyles: { fillColor: GOLD_TINT },
           margin: { left: margin, right: margin },
           columnStyles: { 2: { halign: 'center' } },
         });
@@ -346,9 +357,12 @@ export async function exportCentralAvaliacaoPDF(
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(7);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(...GRAY_MID);
     doc.text(`LogMax · Central de Avaliação · ${rel.competicaoNome}`, margin, pageHeight - 8);
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
@@ -366,9 +380,9 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
   wb.creator = 'LogMax';
   wb.created = new Date();
 
-  const accent = 'FF10B981';
-  const headerFill: any = { type: 'pattern', pattern: 'solid', fgColor: { argb: accent } };
-  const headerFont: any = { bold: true, color: { argb: 'FF0A0A0A' } };
+  const headerFill: any = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0A0A0A' } };
+  const headerFont: any = { bold: true, color: { argb: 'FFD4AF37' } };
+  const accent = 'FFD4AF37'; // usado no título do resumo abaixo
 
   // ── Resumo ───────────────────────────────────────────────────────
   const resumo = wb.addWorksheet('Resumo');

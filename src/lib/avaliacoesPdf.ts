@@ -9,6 +9,7 @@
 //       - subseção por avaliado: avaliadores, médias e observação
 //   • Critérios detalhados (categoria + nota) quando disponíveis
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
+import { GOLD, GOLD_DARK, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 
 const CATEGORIA_LABEL: Record<string, string> = {
   tecnica: 'Técnicas',
@@ -99,29 +100,32 @@ export async function exportAvaliacoesCicloPDF(
   const margin = 14;
   const textWidth = pageWidth - margin * 2;
 
-  // ─── Cabeçalho corporativo ────────────────────────────────────────
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, pageWidth, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
+  // ─── Cabeçalho premium (preto + dourado) ─────────────────────────
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Avaliações de Desempenho — Ciclo', margin, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`Ciclo: ${ciclo.nome}`, margin, 29);
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text('AVALIAÇÕES DE DESEMPENHO — CICLO', margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(`Ciclo: ${ciclo.nome}`, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 29, { align: 'right' });
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 27, { align: 'right' });
 
   // ─── Linha de metadados do ciclo ─────────────────────────────────
-  let cursorY = 42;
+  let cursorY = 44;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(...GRAY_INK);
   const metaLinha = `Período: ${fmtData(ciclo.data_inicio)} a ${fmtData(ciclo.data_fim)}   ·   Status: ${ciclo.status}   ·   Feedback anônimo: ${ciclo.feedback_anonimo ? 'Sim' : 'Não'}`;
   doc.text(metaLinha, margin, cursorY);
   cursorY += 8;
@@ -134,14 +138,14 @@ export async function exportAvaliacoesCicloPDF(
   ];
   const colW = textWidth / kpis.length;
   doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
+  doc.setTextColor(...GRAY_MID);
   for (let i = 0; i < kpis.length; i++) {
     doc.text(kpis[i].label.toUpperCase(), margin + i * colW, cursorY);
   }
   cursorY += 5;
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...GOLD_DARK);
   for (let i = 0; i < kpis.length; i++) {
     doc.text(kpis[i].value, margin + i * colW, cursorY);
   }
@@ -170,8 +174,11 @@ export async function exportAvaliacoesCicloPDF(
     ensureSpace(20);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text(grupo.label, margin, cursorY);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
     cursorY += 5;
 
     doc.setFontSize(8);
@@ -201,9 +208,9 @@ export async function exportAvaliacoesCicloPDF(
         l.mediaGeral.toFixed(1),
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
-      alternateRowStyles: { fillColor: [245, 247, 245] },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
+      alternateRowStyles: { fillColor: GOLD_TINT },
       columnStyles: {
         2: { halign: 'center' },
         3: { halign: 'center', fontStyle: 'bold' },
@@ -278,9 +285,12 @@ export async function exportAvaliacoesCicloPDF(
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(7);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(...GRAY_MID);
     doc.text(
       `LogMax · Avaliações · Ciclo ${ciclo.nome}`,
       margin,
@@ -325,30 +335,33 @@ export async function exportAvaliacaoIndividualPDF(
   const margin = 14;
   const textWidth = pageWidth - margin * 2;
 
-  // Cabeçalho
-  doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, pageWidth, 32, 'F');
-  doc.setTextColor(16, 185, 129);
-  doc.setFontSize(18);
+  // Cabeçalho premium
+  doc.setFillColor(...BLACK);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 30, pageWidth, 1.2, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Avaliação de Desempenho', margin, 21);
-  doc.setFontSize(11);
-  doc.setTextColor(220, 220, 220);
-  doc.text(`Ciclo: ${av.cicloNome}`, margin, 29);
+  doc.text('LogMax', margin, 15);
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_SOFT);
+  doc.setFont('helvetica', 'normal');
+  doc.text('AVALIAÇÃO DE DESEMPENHO', margin, 21);
+  doc.setFontSize(10);
+  doc.setTextColor(240, 240, 240);
+  doc.text(`Ciclo: ${av.cicloNome}`, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 29, { align: 'right' });
+  doc.setTextColor(...GRAY_SOFT);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 27, { align: 'right' });
 
   let cursorY = 44;
 
   // Bloco de identificação
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(...GRAY_INK);
   const ident = [
     `Avaliado: ${av.avaliadoNome}`,
     `Avaliador: ${av.avaliadorNome}`,
@@ -366,12 +379,12 @@ export async function exportAvaliacaoIndividualPDF(
     : av.criterios.reduce((s, c) => s + c.nota, 0) / av.criterios.length;
   cursorY += 4;
   doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
+  doc.setTextColor(...GRAY_MID);
   doc.text('MÉDIA GERAL', margin, cursorY);
   cursorY += 5;
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
+  doc.setTextColor(...GOLD_DARK);
   doc.text(media.toFixed(1), margin, cursorY);
   cursorY += 10;
 
@@ -392,9 +405,9 @@ export async function exportAvaliacaoIndividualPDF(
       head: [['Categoria', 'Critério', 'Nota']],
       body,
       theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
-      alternateRowStyles: { fillColor: [245, 247, 245] },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
+      alternateRowStyles: { fillColor: GOLD_TINT },
       columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
       margin: { left: margin, right: margin },
     });
@@ -405,8 +418,11 @@ export async function exportAvaliacaoIndividualPDF(
   if (av.observacao) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(...BLACK);
     doc.text('Observação do avaliador', margin, cursorY);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(margin, cursorY + 1.5, margin + 28, cursorY + 1.5);
     cursorY += 6;
 
     doc.setFontSize(9);

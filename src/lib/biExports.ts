@@ -10,19 +10,10 @@
 //   • Word: lib docx (nova). Converte títulos H1/H2/H3 + parágrafos +
 //     listas do Markdown em estilos nativos do Word.
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
-
-// Paleta Premium LogMax — preto puro + dourado + branco.
-// Sincroniza com o tema Premium do app (ver project_theme_premium).
-const GOLD:      [number, number, number] = [212, 175, 55];  // #D4AF37
-const GOLD_DARK: [number, number, number] = [180, 145, 30];  // #B4911E hover/emphasis
-const BLACK:     [number, number, number] = [10, 10, 10];    // #0A0A0A
-const GRAY_INK:  [number, number, number] = [40, 40, 40];
-const GRAY_MID:  [number, number, number] = [110, 110, 110];
-const GRAY_SOFT: [number, number, number] = [190, 190, 190];
-const GOLD_TINT: [number, number, number] = [252, 248, 235]; // bg alternado das tabelas
-const GOLD_HEX      = 'FFD4AF37';
-const BLACK_HEX     = 'FF0A0A0A';
-const GOLD_TINT_HEX = 'FFFCF8EB';
+import {
+  GOLD, GOLD_DARK, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT,
+  GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX,
+} from './pdfPalette';
 
 const formatBRL = (n: number) =>
   Number(n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
