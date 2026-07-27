@@ -143,7 +143,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // Leitura pela view mascarada (migr. 262). Escrita segue em
     // '/api/produtosview' + salvarPrecoCusto() — view não aceita INSERT/UPDATE.
     '/api/produtoscomcustoview',
-    { filial },
+    // Patrimônio não entra em Cadastros > Produtos: esses itens são geridos em
+    // Financeiro > Patrimônio, que lê a mesma tabela com `tipo: 'patrimonio'`.
+    // O filtro é server-side de propósito — se fosse `.filter()` no array,
+    // totalCount e a paginação continuariam contando os 19 itens escondidos.
+    { filial, tipo: { neq: 'patrimonio' } },
     false,
     {
       page,
@@ -153,6 +157,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       ascending: false,
     }
   );
+  // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
+  // listagem é paginada no servidor, então um item escolhido na página 1 some
+  // de `data` ao navegar para a página 2 — sem o snapshot não dá para gerar a
+  // etiqueta dele no fim. É isso que permite "pesquisar, marcar, pesquisar de
+  // novo, marcar mais" e baixar tudo de uma vez.
+  const [selecionados, setSelecionados] = useState<Map<string, any>>(new Map());
+
+  const toggleSelecionado = (item: any) => {
+    setSelecionados(prev => {
+      const next = new Map(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.set(item.id, item);
+      return next;
+    });
+  };
+
   const [isSaving, setIsSaving]   = useState(false);
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<any | null>(null);
@@ -251,6 +271,49 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     }
   };
   const handleExportExcel = () => exportToExcel('Produtos', exportCols, exportRows(), 'logmax-produtos');
+
+  // PDF só de etiquetas. Sem seleção, sai a página atual da listagem (o
+  // comportamento antigo do botão PDF); com seleção, saem exatamente os itens
+  // marcados, inclusive os de páginas/buscas anteriores.
+  const handleExportEtiquetas = async () => {
+    const alvo = selecionados.size > 0 ? Array.from(selecionados.values()) : filtered;
+    if (alvo.length === 0) {
+      showToast('Nada para gerar etiqueta.', 'error', true);
+      return;
+    }
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const desenhadas = drawEtiquetasGridOnDoc(
+        doc,
+        alvo.map((p: any) => ({
+          nome:   p.nome,
+          ean:    p.ean,
+          codigo: p.codigo,
+          preco:  p.preco != null ? parseNum(p.preco) : null,
+        })),
+        {
+          titulo: selecionados.size > 0
+            ? `Etiquetas EAN-13 — ${alvo.length} selecionado(s)`
+            : 'Etiquetas EAN-13 — Produtos',
+        },
+      );
+      // drawEtiquetasGridOnDoc descarta quem não tem EAN-13 válido e devolve
+      // quantas desenhou. Zero = PDF em branco; avisa em vez de baixar vazio.
+      if (desenhadas === 0) {
+        showToast('Nenhum dos itens tem EAN-13 válido para etiqueta.', 'error', true);
+        return;
+      }
+      doc.save(selecionados.size > 0 ? 'logmax-etiquetas-selecao.pdf' : 'logmax-etiquetas.pdf');
+      if (desenhadas < alvo.length) {
+        showToast(`${desenhadas} etiqueta(s) gerada(s). ${alvo.length - desenhadas} sem EAN-13 válido.`, 'info', true);
+      } else {
+        showToast(`${desenhadas} etiqueta(s) gerada(s).`, 'success', true);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao gerar etiquetas.', 'error', true);
+    }
+  };
 
   const openEdit = (item: any) => {
     setEditItem(item);
@@ -543,6 +606,21 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           {data.length > 0 && (
             <>
+              <ExportButton
+                label={selecionados.size > 0 ? `Etiquetas (${selecionados.size})` : 'Etiquetas'}
+                onClick={handleExportEtiquetas}
+                icon={Barcode}
+              />
+              {selecionados.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelecionados(new Map())}
+                  className="text-[11px] text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors"
+                  title="Desmarcar todos os produtos selecionados"
+                >
+                  limpar seleção
+                </button>
+              )}
               <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />
               <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
             </>
@@ -977,6 +1055,27 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             <table className="w-full text-left border-collapse md:min-w-[900px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-4 font-bold px-4 w-10">
+                    <input
+                      type="checkbox"
+                      className="accent-emerald-500 cursor-pointer"
+                      title="Selecionar todos desta página"
+                      checked={filtered.length > 0 && filtered.every((p: any) => selecionados.has(p.id))}
+                      onChange={e => {
+                        const marcar = e.target.checked;
+                        setSelecionados(prev => {
+                          const next = new Map(prev);
+                          // Só mexe nos itens da página atual — o que foi
+                          // marcado em outra busca/página continua marcado.
+                          filtered.forEach((p: any) => {
+                            if (marcar) next.set(p.id, p);
+                            else next.delete(p.id);
+                          });
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
                   <th className="pb-4 font-bold px-4 w-14">Foto</th>
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Código</th>
                   <th className="pb-4 font-bold px-4">Nome</th>
@@ -998,7 +1097,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     const baixoEstoque = estMin > 0 && estAtual <= estMin;
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${selecionados.has(item.id) ? 'bg-emerald-500/5' : ''}`}>
+                        <td className="py-4 px-4">
+                          <input
+                            type="checkbox"
+                            className="accent-emerald-500 cursor-pointer"
+                            checked={selecionados.has(item.id)}
+                            onChange={() => toggleSelecionado(item)}
+                            title="Selecionar para etiqueta"
+                          />
+                        </td>
                         <td className="py-4 px-4">
                           <ProdutoThumb url={item.imagem_url} size="xs" alt={item.nome} />
                         </td>

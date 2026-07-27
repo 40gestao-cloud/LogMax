@@ -77,7 +77,17 @@ export function useFetchData<T = any>(
       }
       if (extraFilter) {
         for (const [col, val] of Object.entries(extraFilter)) {
-          q = Array.isArray(val) ? q.in(col, val) : q.eq(col, val);
+          // Array  -> IN (...)          ex.: { status: ['Ativo', 'Pausado'] }
+          // { neq } -> <> valor          ex.: { tipo: { neq: 'patrimonio' } }
+          // escalar -> = valor           ex.: { filial: 'SuperMax' }
+          // O caso `neq` precisa ser resolvido no servidor (e não filtrando o
+          // array já carregado) senão `totalCount` e a paginação passam a
+          // contar linhas que a tela não mostra.
+          if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'neq' in (val as object)) {
+            q = q.neq(col, (val as { neq: unknown }).neq);
+          } else {
+            q = Array.isArray(val) ? q.in(col, val) : q.eq(col, val);
+          }
         }
       }
       if (hasSearch) {

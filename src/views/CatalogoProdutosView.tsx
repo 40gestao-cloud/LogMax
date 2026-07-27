@@ -122,9 +122,15 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
     [data, categoriaFiltro]
   );
 
+  // Categorias do filtro saem só dos itens que o catálogo realmente mostra —
+  // senão categoria exclusiva de patrimônio aparece no dropdown e, ao ser
+  // escolhida, devolve lista vazia (o filtro de tipo acima já removeu os itens).
   const categorias = useMemo(() => {
     const set = new Set<string>();
-    data.forEach((p: any) => { if (p.categoria) set.add(p.categoria); });
+    data.forEach((p: any) => {
+      if (p.tipo === 'patrimonio') return;
+      if (p.categoria) set.add(p.categoria);
+    });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [data]);
 
