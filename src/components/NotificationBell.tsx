@@ -161,8 +161,9 @@ export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
                     // ti_chamado segue o setor de origem: ícone + cor do setor
                     // (com a bicolor azul/laranja sob o tema Acessibilidade).
                     // Pra um chamado de Vendas, o sino mostra o ícone de
-                    // Vendas em vez do Monitor genérico — fica visualmente
-                    // alinhado com os cards da tela /ti-chamados.
+                    // Vendas em vez do Monitor genérico. A tela de Chamados
+                    // saiu em 2026-07-27; isto fica para as notificações
+                    // históricas ainda gravadas nas turmas.
                     const setorOrigem = n.tipo === 'ti_chamado' && n.origem_setor
                       ? getSetor(n.origem_setor)
                       : null;

@@ -103,9 +103,6 @@ const BADGE_DEFS: BadgeDef[] = [
   // não duplicamos aqui pra não inflar dois badges com a mesma fila.
 
   // ─── TI ───────────────────────────────────────────────────────────────────
-  // RLS de ti_chamados já filtra pelo setor responsável — count só conta o
-  // que o usuário pode ver.
-  { viewId: 'ti-chamados',             modulo: 'ti', table: 'ti_chamados',         filters: { status: 'Aberto' } },
   // Desenvolvimento com IA: badge conta treinamentos ainda por acontecer.
   { viewId: 'ti-desenvolvimentocomia', modulo: 'ti', table: 'desenvolvimentos_ia', filters: { status: 'Agendado' } },
 

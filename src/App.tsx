@@ -104,7 +104,6 @@ const AprovacoesConteudoMarketingView      = lazy(() => import('./views/Aprovaco
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const RegistroPontoExpressView             = lazy(() => import('./views/RegistroPontoExpressView').then(m => ({ default: m.RegistroPontoExpressView })));
-const TIView                               = lazy(() => import('./views/TIView').then(m => ({ default: m.TIView })));
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
@@ -187,7 +186,10 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'ti', label: 'TI & Suporte', icon: Monitor,
-    submenus: ['Chamados', 'Desenvolvimento com IA'],
+    // Chamados removido em 2026-07-27: o fluxo de abertura de chamado saiu de
+    // operação (tabela zerada nas 4 turmas). O módulo continua vivo por causa
+    // de Desenvolvimento com IA, onde a agenda de tarefas segue sendo criada.
+    submenus: ['Desenvolvimento com IA'],
   },
 ];
 
@@ -942,7 +944,6 @@ function LogMaxAppInner() {
       // Rota antiga 'metas' redireciona pra Demandas > Metas Estratégicas.
       case 'metas':                        return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
-      case 'ti-chamados':                  return <TIView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
