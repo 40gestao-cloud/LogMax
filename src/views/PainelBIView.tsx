@@ -199,11 +199,14 @@ export const PainelBIView = ({ showToast, profile }: any) => {
 
   const handleExport = async (formato: 'pdf' | 'excel' | 'word' | 'maxshow') => {
     if (!relatorio) return;
+    // dados_json do RPC não tem gerado_em — injeta a partir do relatorio
+    // pra o "Gerado em: ..." dos exports não sair como Invalid Date.
+    const dadosComTimestamp = { ...relatorio.dados, gerado_em: relatorio.gerado_em };
     try {
-      if (formato === 'pdf')     await exportBIToPDF(relatorio.dados, relatorio.markdown, baseFilename);
-      if (formato === 'maxshow') await exportBIToPDF(relatorio.dados, relatorio.markdown, baseFilename, 'maxshow', profile, showToast);
-      if (formato === 'excel')   await exportBIToExcel(relatorio.dados, baseFilename);
-      if (formato === 'word')    await exportBIToWord(relatorio.dados, relatorio.markdown, baseFilename);
+      if (formato === 'pdf')     await exportBIToPDF(dadosComTimestamp, relatorio.markdown, baseFilename);
+      if (formato === 'maxshow') await exportBIToPDF(dadosComTimestamp, relatorio.markdown, baseFilename, 'maxshow', profile, showToast);
+      if (formato === 'excel')   await exportBIToExcel(dadosComTimestamp, baseFilename);
+      if (formato === 'word')    await exportBIToWord(dadosComTimestamp, relatorio.markdown, baseFilename);
       if (formato === 'pdf' || formato === 'excel' || formato === 'word') {
         showToast?.(`Download ${formato.toUpperCase()} iniciado.`, 'success');
       }
