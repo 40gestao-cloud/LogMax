@@ -176,19 +176,36 @@ Maior volume de escrita do app.
 
 Contas a Pagar/Receber e Controle de Caixa já foram (migr. 267). Ficaram:
 
-- [ ] **Duplicatas — o mais suspeito do app.** É um `GenericCRUDView`.
-      Duplicata que não gera conta a receber/pagar é um formulário com nome de
-      instrumento financeiro. Mesma forma do Inventário. (P2)
-- [ ] **Patrimônio** — deprecia? dá baixa? ou é lista de bens? (P2)
-- [ ] **Integração bancária** — concilia ou só exibe? (P2)
-- [ ] **Notas Emitidas / Recibos de Vendas** — vinculam à venda real ou são
-      documentos soltos? (P2)
-- [ ] **Capital** — `origem='emprestimo'` fura o bloqueio de capital estourado
-      (por design). A parcela do empréstimo é criada de fato? Alguém aprova o
-      empréstimo? (P7, P5)
-- [ ] **Alçadas** — agora é a regra única (migr. 267). Confirmar que toda
-      filial tem linha ativa; sem ela o limite é infinito e o Financeiro decide
-      tudo.
+- [x] **Duplicatas — confirmado: é formulário.** `GenericCRUDView` puro, 6
+      campos digitados. "A Receber" não gera conta a receber, "Paga" não move
+      caixa, e `Vencida` é escolhido a mão em vez de derivar do vencimento. A
+      tabela não tem `filial` — é global entre unidades. Zero registros nas 4
+      turmas: ninguém nunca usou. **Decisão de produto pendente** (implementar
+      esbarra na trava de features até 2026-09-13; a alternativa é tirar do
+      menu preservando a tabela, como foi feito com Votações).
+- [x] **Integração bancária — mesma forma.** Registra importações digitadas
+      (banco, arquivo, data, nº de registros, status). Não importa nem concilia
+      nada; o "Saldo Total" vem de `caixa_bancos`. Zero registros. Mesma
+      decisão de produto.
+- [x] ~~**Patrimônio**~~ — é cadastro de bens (`produtos.tipo='patrimonio'`,
+      19 itens) com número, responsável e localização, em tela read-only. Não
+      deprecia nem dá baixa — e também não promete isso. Sem achado.
+- [x] ~~**Notas Emitidas**~~ — 17 notas, todas com `venda_id` e
+      `conta_receber_id` preenchidos e válidos. Vínculo real. Sem achado.
+- [x] **Capital — `aprovar_emprestimo` e `negar_emprestimo` não tinham RBAC
+      nenhum.** SECURITY DEFINER, executáveis por qualquer `authenticated`. O
+      único `auth_` no corpo era `auth.uid()`, para registrar quem aprovou —
+      não para decidir se podia. Como taxa de juros e número de parcelas são
+      parâmetros, qualquer colaborador aprovava o próprio empréstimo com a taxa
+      que quisesse, injetando capital pelo caminho que fura o bloqueio de
+      capital estourado. Migr. 277. Zero empréstimos até hoje.
+- [x] ~~**Alçadas**~~ — as 3 filiais ativas têm alçada e capital. Sem achado.
+- [x] **Caixa e Notas: cinco RPCs passavam por cima da própria RLS.**
+      `fechar_caixa_conferido`, `solicitar_fechamento_caixa`, `suspender_caixa`,
+      `registrar_movimentacao_caixa` (sangria/suprimento) e `emitir_nota` são
+      SECURITY DEFINER sem guard. As tabelas têm policy correta — e SECURITY
+      DEFINER não se submete a RLS. Migr. 278 leva a régua das policies para
+      triggers.
 
 ---
 
