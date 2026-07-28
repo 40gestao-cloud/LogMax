@@ -77,14 +77,22 @@ export function useFetchData<T = any>(
       }
       if (extraFilter) {
         for (const [col, val] of Object.entries(extraFilter)) {
-          // Array  -> IN (...)          ex.: { status: ['Ativo', 'Pausado'] }
-          // { neq } -> <> valor          ex.: { tipo: { neq: 'patrimonio' } }
-          // escalar -> = valor           ex.: { filial: 'SuperMax' }
-          // O caso `neq` precisa ser resolvido no servidor (e não filtrando o
-          // array já carregado) senão `totalCount` e a paginação passam a
-          // contar linhas que a tela não mostra.
+          // Array          -> IN (...)   ex.: { status: ['Ativo', 'Pausado'] }
+          // { neq }        -> <> valor   ex.: { tipo: { neq: 'patrimonio' } }
+          // { gte?, lte? } -> intervalo  ex.: { vencimento: { gte: 'a', lte: 'b' } }
+          // escalar        -> = valor    ex.: { filial: 'SuperMax' }
+          // Todos precisam ser resolvidos no servidor (e não filtrando o array
+          // já carregado) senão `totalCount` e a paginação passam a contar
+          // linhas que a tela não mostra.
           if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'neq' in (val as object)) {
             q = q.neq(col, (val as { neq: unknown }).neq);
+          } else if (
+            val !== null && typeof val === 'object' && !Array.isArray(val) &&
+            ('gte' in (val as object) || 'lte' in (val as object))
+          ) {
+            const range = val as { gte?: unknown; lte?: unknown };
+            if (range.gte !== undefined) q = q.gte(col, range.gte);
+            if (range.lte !== undefined) q = q.lte(col, range.lte);
           } else {
             q = Array.isArray(val) ? q.in(col, val) : q.eq(col, val);
           }

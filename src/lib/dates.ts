@@ -26,6 +26,41 @@ export function daysAgoBR(dias: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+export type PeriodoFiltro = '' | 'hoje' | 'semana' | 'mes';
+
+/**
+ * Intervalo [inicio, fim] em `YYYY-MM-DD` para os filtros de período das telas
+ * financeiras, ancorado no fuso do Acre. Semana começa na segunda.
+ *
+ * Existe porque ContasPagar/ContasReceber montavam isto com
+ * `new Date().toISOString()`: em UTC-5 o dia virava às 19h locais, então das
+ * 19h à meia-noite o filtro "Hoje" escondia o que vencia hoje.
+ */
+export function periodoRangeBR(periodo: PeriodoFiltro): { inicio: string; fim: string } | null {
+  if (!periodo) return null;
+  const hojeStr = todayBR();
+  if (periodo === 'hoje') return { inicio: hojeStr, fim: hojeStr };
+
+  const [y, m, d] = hojeStr.split('-').map(Number);
+  const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+
+  if (periodo === 'semana') {
+    // UTC puro: a data já veio resolvida no fuso do Acre, aqui é só aritmética.
+    const base = new Date(Date.UTC(y, m - 1, d));
+    const dow = base.getUTCDay();
+    const segunda = new Date(base);
+    segunda.setUTCDate(base.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+    const domingo = new Date(segunda);
+    domingo.setUTCDate(segunda.getUTCDate() + 6);
+    return { inicio: iso(segunda), fim: iso(domingo) };
+  }
+
+  return {
+    inicio: iso(new Date(Date.UTC(y, m - 1, 1))),
+    fim:    iso(new Date(Date.UTC(y, m, 0))),
+  };
+}
+
 const FMT_DATETIME = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Rio_Branco',
   day:    '2-digit',

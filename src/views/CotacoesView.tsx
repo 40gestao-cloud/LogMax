@@ -118,32 +118,32 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
     return () => { cancelled = true; };
   }, [filial]);
 
-  // Retorna quem pode decidir esta cotação específica.
+  // Quem decide esta cotação. REGRA ÚNICA: o valor manda.
+  //
+  // Antes havia dois sistemas em paralelo — a alçada por valor e uma régua por
+  // role — com um terceiro caminho de fallback quando `alcadas_compra` não
+  // respondia (`return podeDecidir`, que liberava praticamente todo mundo).
+  // Três respostas possíveis para "quem aprova isto?" é o que faz um controle
+  // deixar de ser controle. Agora: alçada não configurada = limite infinito =
+  // Financeiro decide. Um caminho só.
+  const limiteEfetivo = alcadaLimite ?? Number.POSITIVE_INFINITY;
+
   const podeDecidirCotacao = (cot: any): boolean => {
-    // Admin/CEO/conselheiro sempre — override total.
+    // Admin/CEO/conselheiro: override total. É a saída quando não há outro
+    // aprovador possível na filial.
     if (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile)) return true;
-    // Segregação de funções: quem cadastrou a proposta não a aprova. Sem isto,
-    // em cotação de alta alçada o gerente era simultaneamente o único criador
-    // possível e o único aprovador — escolhia o fornecedor e aprovava a si
-    // mesmo. Admin/CEO acima seguem como saída quando não há outro aprovador.
+    // Segregação de funções: quem cadastrou a proposta não a aprova.
     if (cot.criado_por && cot.criado_por === profile.id) return false;
-    // Sem alçada configurada → fallback pro comportamento antigo.
-    if (alcadaLimite === null) return podeDecidir;
-    const valor = Number(cot.valor_total ?? 0);
-    if (valor <= alcadaLimite) {
-      // Baixa alçada → Financeiro.
-      return isFinanceiro;
-    }
-    // Alta alçada → Gerente da filial (só ele).
-    return profile.role === 'gerente';
+    return Number(cot.valor_total ?? 0) <= limiteEfetivo
+      ? isFinanceiro               // dentro da alçada → Financeiro
+      : profile.role === 'gerente'; // acima da alçada → Gerente da filial
   };
 
-  const alcadaLabel = (cot: any): { label: string; color: string } => {
-    if (alcadaLimite === null) return { label: 'Financeiro', color: 'text-cyan-300 border-cyan-400/20' };
-    const valor = Number(cot.valor_total ?? 0);
-    if (valor <= alcadaLimite) return { label: 'Financeiro', color: 'text-cyan-300 border-cyan-400/20' };
-    return { label: 'Gerente/CEO', color: 'text-amber-300 border-amber-400/20' };
-  };
+  const alcadaLabel = (cot: any): { label: string; color: string } => (
+    Number(cot.valor_total ?? 0) <= limiteEfetivo
+      ? { label: 'Financeiro',  color: 'text-cyan-300 border-cyan-400/20' }
+      : { label: 'Gerente/CEO', color: 'text-amber-300 border-amber-400/20' }
+  );
 
   // IDs de cotações que já têm pedido gerado.
   const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());

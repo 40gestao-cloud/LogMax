@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
-import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -27,10 +27,15 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
     };
   });
 
+  // "Aprovar Pedido" saiu (migr. 267). Era um gate de mentira: sem nenhum
+  // RBAC — qualquer um que enxergasse o módulo Compras clicava — e aprovando
+  // pela terceira vez algo que a chefia já aprovou na requisição e o
+  // Financeiro na cotação. Sua única função real era gerar a Conta a Pagar,
+  // que agora nasce junto com o pedido, dentro da mesma transação.
+  //
   // "Em Entrega" → "Recebido" deixou de ser manual aqui: o pedido é fechado
   // automaticamente pelo RecebimentosView quando todos os itens forem confirmados.
   const STATUS_FLOW: Record<string, { next: string; label: string }> = {
-    'Pendente': { next: 'Aprovado',   label: 'Aprovar Pedido' },
     'Aprovado': { next: 'Em Entrega', label: 'Marcar Em Entrega' },
   };
 
@@ -39,54 +44,9 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
     if (!flow) return;
     setProcessing(pedido.id);
     try {
-      // Idempotência: se for aprovação, verifica se já há Conta a Pagar para este pedido
-      // ANTES de avançar o status (evita duplicação em race / clique duplo / realtime).
-      if (pedido.status === 'Pendente' && supabase) {
-        const { data: existentes } = await supabase
-          .from('contas_pagar')
-          .select('id')
-          .eq('pedido_id', pedido.id)
-          .eq('ativo', true)
-          .limit(1);
-        if (existentes && existentes.length > 0) {
-          showToast('Este pedido já possui Conta a Pagar registada.', 'info', true);
-          setProcessing(null);
-          return;
-        }
-      }
-
-      // A Conta a Pagar vem ANTES de avançar o status, de propósito. Na ordem
-      // inversa, se o insert falhasse — e ele é cross-setor, um usuário de
-      // Compras escrevendo numa tabela do Financeiro — o pedido já estaria
-      // 'Aprovado', o STATUS_FLOW passaria a oferecer só "Marcar Em Entrega" e
-      // o botão que gera a conta sumiria pra sempre: compra seguindo pro
-      // recebimento sem nenhum lançamento financeiro.
-      // Agora, se falhar, nada mudou e dá pra tentar de novo.
-      if (pedido.status === 'Pendente') {
-        // +30 dias se não houver prazo_entrega definido — garante que a conta tem vencimento.
-        const vencimento = pedido.prazo_entrega
-          || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-        const itemDesc = pedido.item_descricao ?? pedido.req?.item ?? 'Compra';
-        await dbInsert('/api/contaspagarview', {
-          fornecedor_id: pedido.fornecedor_id,
-          descricao: `Pedido #${pedido.id.slice(-6).toUpperCase()} — ${itemDesc}`,
-          valor: pedido.valor_total,
-          vencimento,
-          status: 'Pendente',
-          pedido_id: pedido.id,
-          filial: pedido.filial ?? filial,
-        });
-      }
-
       const updated = await dbUpdate('/api/pedidosview', pedido.id, { status: flow.next });
       setData((prev: any[]) => prev.map(p => p.id === pedido.id ? (updated ?? { ...p, status: flow.next }) : p));
-
-      showToast(
-        pedido.status === 'Pendente'
-          ? 'Pedido aprovado! Conta a Pagar gerada.'
-          : `Pedido ${flow.next.toLowerCase()}!`,
-        'success', true
-      );
+      showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
     } catch (err: any) {
       showToast(`Erro ao atualizar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {

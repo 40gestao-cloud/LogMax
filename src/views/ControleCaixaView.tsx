@@ -262,22 +262,23 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
           <button
             onClick={async () => {
               if (!supabase) return;
-              if (!await confirm(`Reabrir este caixa de ${filial}? O operador poderá voltar a vender e o fechamento anterior será descartado.`)) return;
+              // Reabrir descarta o fechamento — inclusive uma falta de caixa.
+              // A RPC `reabrir_caixa` (migr. 267) copia os valores descartados
+              // para `controle_caixa_reaberturas` antes de limpar e exige
+              // motivo. Antes isto era um UPDATE direto: a divergência sumia
+              // sem rastro de quem apagou nem de quanto era.
+              const motivo = window.prompt(
+                `Reabrir o caixa de ${filial}?\n\nO fechamento atual será descartado e registrado na auditoria.\nDescreva o motivo:`
+              );
+              if (motivo === null) return;
               setSaving(true);
-              const { error } = await supabase.from('controle_caixa').update({
-                status: 'Aberto',
-                valor_fechamento: null,
-                valor_esperado: null,
-                diferenca: null,
-                tipo_diferenca: null,
-                fechado_por: null,
-                fechado_por_nome: null,
-                fechado_em: null,
-                origem_fechamento: null,
-              }).eq('id', caixa.id);
+              const { error } = await supabase.rpc('reabrir_caixa', {
+                p_caixa_id: caixa.id,
+                p_motivo:   motivo,
+              });
               setSaving(false);
               if (error) { showToast(`Erro ao reabrir: ${error.message}`, 'error'); return; }
-              showToast(`Caixa de ${filial} reaberto.`, 'info');
+              showToast(`Caixa de ${filial} reaberto — registrado na auditoria.`, 'info');
               onChanged();
             }}
             disabled={saving}
@@ -541,22 +542,22 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
   const handleReabrir = async (h: any) => {
     if (!supabase) return;
-    if (!await confirm(`Reabrir esta sessão de ${h.filial}? O fechamento anterior será descartado.`)) return;
+    // Mesma RPC do card. Esta versão era ainda pior que a de lá: mantinha
+    // `valor_fechamento`/`diferenca` preenchidos num caixa 'Aberto', estado
+    // que nenhuma outra parte do código espera.
+    const motivo = window.prompt(
+      `Reabrir a sessão de ${h.filial}?\n\nO fechamento atual será descartado e registrado na auditoria.\nDescreva o motivo:`
+    );
+    if (motivo === null) return;
     try {
-      const { error } = await supabase
-        .from('controle_caixa')
-        .update({
-          status: 'Aberto',
-          fechado_por: null,
-          fechado_por_nome: null,
-          fechado_em: null,
-          origem_fechamento: null,
-        })
-        .eq('id', h.id);
+      const { error } = await supabase.rpc('reabrir_caixa', {
+        p_caixa_id: h.id,
+        p_motivo:   motivo,
+      });
       if (error) throw error;
       await refresh();
       await reload();
-      showToast('Caixa reaberto.', 'success');
+      showToast('Caixa reaberto — registrado na auditoria.', 'success');
     } catch (err: any) {
       showToast(`Erro ao reabrir: ${err?.message ?? 'verifique o console'}`, 'error');
     }

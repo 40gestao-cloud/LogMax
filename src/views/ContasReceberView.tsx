@@ -12,6 +12,7 @@ import { FILIAL_DEFAULT } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
+import { periodoRangeBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
@@ -24,27 +25,15 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   useEffect(() => { setPage(0); }, [debouncedSearch, periodoFiltro]);
 
   // Realtime: vendas Fiado de outros caixas geram contas a receber — esta view actualiza-se sozinha (#21).
-  const periodoRange = (() => {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().slice(0, 10);
-    if (periodoFiltro === 'hoje') return { inicio: hojeStr, fim: hojeStr };
-    if (periodoFiltro === 'semana') {
-      const day = hoje.getDay();
-      const monday = new Date(hoje);
-      monday.setDate(hoje.getDate() - (day === 0 ? 6 : day - 1));
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      return { inicio: monday.toISOString().slice(0, 10), fim: sunday.toISOString().slice(0, 10) };
-    }
-    if (periodoFiltro === 'mes') {
-      const first = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      const last = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-      return { inicio: first.toISOString().slice(0, 10), fim: last.toISOString().slice(0, 10) };
-    }
-    return null;
-  })();
+  // Fuso do Acre (UTC-5). Com `new Date().toISOString()` o dia virava às 19h
+  // locais e o filtro "Hoje" mostrava o vencimento de amanhã.
+  const periodoRange = periodoRangeBR(periodoFiltro);
 
-  const extraFilter = { filial };
+  // Recorte de período resolvido no SERVIDOR — filtrar as 50 linhas da página
+  // fazia a lista discordar do total agregado exibido no topo.
+  const extraFilter = periodoRange
+    ? { filial, vencimento: { gte: periodoRange.inicio, lte: periodoRange.fim } }
+    : { filial };
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     '/api/contasreceberview', extraFilter, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
@@ -75,7 +64,11 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    supabase.from('contas_receber').select('valor, vencimento, status').eq('status', 'Aberto').eq('ativo', true)
+    // Era `.eq('status','Aberto')` — status que nenhuma escrita produz (as
+    // contas nascem 'Pendente'), então o card ficava eternamente em R$ 0,00.
+    // Faltava também o recorte por filial: somava a holding inteira.
+    supabase.from('contas_receber').select('valor, vencimento, status')
+      .eq('status', 'Pendente').eq('ativo', true).eq('filial', filial)
       .then(({ data: rows }) => {
         if (cancelled) return;
         // Soma valor atualizado (com juros/multa pra vencidas) — total real esperado a receber.
@@ -86,7 +79,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
         setTotalAberto(total);
       });
     return () => { cancelled = true; };
-  }, [data, jurosCfg]);
+  }, [data, jurosCfg, filial]);
 
   const enriched = data.map((c: any) => ({
     ...c,
@@ -94,13 +87,10 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
     juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
 
-  const filtered = enriched.filter((c: any) => {
-    if (periodoRange) {
-      if (!c.vencimento) return false;
-      if (c.vencimento < periodoRange.inicio || c.vencimento > periodoRange.fim) return false;
-    }
-    return [c.descricao, c.status, c.cliente?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()));
-  });
+  // Período e busca já vêm filtrados do servidor. O filtro que existia aqui
+  // repetia o trabalho sobre a página atual e incluía `cliente?.nome`, que o
+  // servidor já havia descartado — buscar por cliente devolvia lista vazia.
+  const filtered = enriched;
 
   const exportCols = ['Empresa', 'Descrição', 'Cliente', 'Valor (R$)', 'Vencimento', 'Status'];
   const buildExportRows = (rows: any[]) => rows.map((c: any) => [
@@ -245,23 +235,34 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
     if (!recBankId) { showToast('Selecione a conta bancária de crédito.', 'error', true); return; }
     const banco = bancos.find((b: any) => b.id === recBankId);
     if (!banco) { showToast('Conta bancária não encontrada.', 'error', true); return; }
-    const breakdown = calcularJuros(conta.valor, conta.vencimento, conta.status, jurosCfg);
-    const valor = breakdown.total;  // valor atualizado (com juros + multa se vencido)
-    if (!(valor > 0)) { showToast('Valor da conta inválido.', 'error', true); return; }
+    if (!supabase) return;
     setRecSaving(true);
     try {
-      // O trigger sync_saldo_caixa_receber credita caixa_bancos.saldo
-      // automaticamente ao mudar o status pra Pago. Atualização otimista
-      // do state local só pra UI enquanto o próximo fetch valida.
-      const updated = await dbUpdate('/api/contasreceberview', conta.id, { status: 'Pago', banco_id: recBankId });
-      setData((prev: any[]) => prev.map(d => d.id === conta.id ? (updated ?? { ...d, status: 'Pago' }) : d));
+      // Juros/multa calculados e gravados pelo BANCO (RPC
+      // registrar_pagamento_conta, migr. 267). Antes o cliente calculava o
+      // total, anunciava "inclui juros" e gravava só status='Pago' — o trigger
+      // creditava o principal e o cliente pagava a menos sem ninguém notar.
+      const { data: breakdown, error } = await supabase.rpc('registrar_pagamento_conta', {
+        p_tipo:     'receber',
+        p_conta_id: conta.id,
+        p_banco_id: recBankId,
+      });
+      if (error) throw new Error(error.message);
+
+      const valor = Number((breakdown as any)?.total ?? 0);
+      const juros = Number((breakdown as any)?.juros ?? 0);
+      const multa = Number((breakdown as any)?.multa ?? 0);
+
+      setData((prev: any[]) => prev.map(d => d.id === conta.id
+        ? { ...d, status: 'Pago', banco_id: recBankId, valor_pago: valor, juros_pago: juros, multa_pago: multa }
+        : d));
       setBancos((prev: any[]) => prev.map((b: any) => b.id === recBankId
         ? { ...b, saldo: Number(b.saldo ?? 0) + valor }
         : b,
       ));
 
-      const msgJuros = breakdown.vencido && (breakdown.juros + breakdown.multa) > 0
-        ? ` (inclui R$ ${(breakdown.juros + breakdown.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
+      const msgJuros = (juros + multa) > 0
+        ? ` (inclui R$ ${(juros + multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
         : '';
       showToast(
         `Recebimento de R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} creditado em ${banco.banco ?? banco.conta}.`,
@@ -310,7 +311,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
           </div>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input type="text" placeholder="Buscar conta..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
+            <input type="text" placeholder="Buscar por descrição ou status..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <button onClick={handleExportPDF} disabled={isExporting} title="Exportar PDF — todas as contas" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300 disabled:opacity-50"><FileDown size={15} /> {isExporting ? '…' : 'PDF'}</button>
