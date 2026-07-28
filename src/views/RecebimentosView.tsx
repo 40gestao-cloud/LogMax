@@ -79,9 +79,13 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // subtraímos o que já está lá pra devolvê-lo ao teto).
   const maxPermitido = (pedidoId: string, qtdAtualDoItem = 0): number => {
     const s = saldos[pedidoId];
-    if (!s) return Infinity; // saldo indisponível → não bloqueia
+    // Falha FECHADA. Era `return Infinity` — se a view v_pedido_saldo não
+    // respondesse, o teto sumia e dava para receber qualquer quantidade contra
+    // o pedido. Um erro de rede não pode virar permissão.
+    if (!s) return NaN;
     return s.qtd_saldo + qtdAtualDoItem;
   };
+  const semSaldoConhecido = (max: number) => Number.isNaN(max);
   const produtosOrdenados = useMemo(() => {
     // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
     // Sem normalizar, `localeCompare` deixa itens com leading whitespace
@@ -108,11 +112,17 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       const qtd = Number(extras.qtd_recebida) || 0;
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
       const maxAceito = maxPermitido(form.pedido_id, 0);
+      if (semSaldoConhecido(maxAceito)) {
+        showToast('Não foi possível ler o saldo do pedido. Recarregue a tela antes de registrar.', 'error', true);
+        return;
+      }
       if (qtd > maxAceito) {
         showToast(`Excede o saldo do pedido — máximo ${maxAceito} unidades.`, 'error', true);
         return;
       }
-      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today };
+      // `filial` é obrigatório: a coluna é NOT NULL DEFAULT 'SuperMax', então
+      // sem isto todo recebimento da TechMax/MaxLook era gravado como SuperMax.
+      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today, filial };
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
       await reloadSaldos();
@@ -146,6 +156,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     // Defesa em profundidade — bloqueia se o pedido foi editado depois do
     // registro e agora o total ficou acima do pedido.
     const maxAceito = maxPermitido(item.pedido_id, qtdItem);
+    if (semSaldoConhecido(maxAceito)) {
+      showToast('Não foi possível ler o saldo do pedido. Recarregue a tela antes de confirmar.', 'error', true);
+      return;
+    }
     if (qtdItem > maxAceito) {
       showToast(`Recebimento excede o saldo do pedido — máximo ${maxAceito} unidades. Ajuste antes de confirmar.`, 'error', true);
       return;

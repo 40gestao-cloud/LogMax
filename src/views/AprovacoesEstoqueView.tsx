@@ -82,7 +82,11 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
     } catch {
       if (aprovUpdated) {
+        // Reverte AS DUAS pontas. Antes só a aprovação voltava para 'Pendente'
+        // e a requisição ficava 'Aprovado' — estado que a tela de aprovações
+        // não mostra e ninguém mais consegue destravar.
         try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
+        try { await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Pendente' }); } catch {}
       }
       showToast("Erro ao aprovar — rollback aplicado.", 'error', true);
     } finally {

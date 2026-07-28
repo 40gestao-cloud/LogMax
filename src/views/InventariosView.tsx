@@ -3,9 +3,10 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, Trash2, CheckCheck, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -18,24 +19,72 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ produto_id: '' });
-  const [extras, setExtras] = useState({ qtd_sistema: '', qtd_contada: '', status: 'Em Andamento' });
+  // `qtd_sistema` saiu do formulário: era digitado pelo mesmo operador que
+  // contava, então dava para "fechar" um inventário com 100 e 100 sem abrir o
+  // depósito. Agora o saldo é lido pelo banco no instante do fechamento
+  // (RPC fechar_inventario, migr. 268).
+  const [extras, setExtras] = useState({ qtd_contada: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+  const [fechando, setFechando] = useState<string | null>(null);
+
+  const saldoAtualDoForm = Number(produtos.find((p: any) => p.id === form.produto_id)?.estoque ?? 0);
 
   const enriched = data.map((i: any) => ({ ...i, prod: produtos.find((p: any) => p.id === i.produto_id) }));
   const filtered = enriched.filter((i: any) => [i.prod?.nome, i.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
-  const closeForm = () => { setShowForm(false); setForm({ produto_id: '' }); setExtras({ qtd_sistema: '', qtd_contada: '', status: 'Em Andamento' }); setErrors({}); };
+  const closeForm = () => { setShowForm(false); setForm({ produto_id: '' }); setExtras({ qtd_contada: '' }); setErrors({}); };
 
   const handleSave = async () => {
     if (!validate()) return;
+    const contada = Number(extras.qtd_contada);
+    if (!Number.isFinite(contada) || contada < 0) { showToast('Informe a quantidade contada.', 'error', true); return; }
     setIsSaving(true); showToast("Salvando...", 'info', false);
     try {
       const today = todayBR();
-      const payload = { ...form, qtd_sistema: Number(extras.qtd_sistema) || 0, qtd_contada: Number(extras.qtd_contada) || 0, status: extras.status, data: today, filial };
+      // Nasce 'Em Andamento': a contagem existe, mas só ajusta o estoque quando
+      // alguém fecha o inventário conscientemente.
+      const payload = { ...form, qtd_sistema: 0, qtd_contada: contada, status: 'Em Andamento', data: today, filial };
       const s = await dbInsert('/api/inventariosestoqueview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-      showToast("Inventário registrado!", 'success', true); closeForm();
-    } catch { showToast("Erro.", 'error', true); } finally { setIsSaving(false); }
+      showToast("Contagem registrada. Feche o inventário para ajustar o estoque.", 'success', true);
+      closeForm();
+    } catch (err: any) {
+      showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setIsSaving(false); }
+  };
+
+  // Fecha o inventário: o banco lê o saldo do sistema AGORA, compara com a
+  // contagem e gera o 'Ajuste +/−' da diferença. Antes o inventário só
+  // registrava a divergência e morria ali — era formulário, não inventário.
+  const handleFechar = async (item: any) => {
+    const contada = Number(item.qtd_contada ?? 0);
+    if (!await confirm(
+      `Fechar o inventário de ${item.prod?.nome ?? 'produto'}?\n\n` +
+      `A contagem registrada é ${contada}. O sistema vai comparar com o saldo atual e ` +
+      `lançar o ajuste da diferença no estoque.`
+    )) return;
+    setFechando(item.id);
+    try {
+      if (!supabase) throw new Error('Supabase não configurado');
+      const { data: res, error } = await supabase.rpc('fechar_inventario', {
+        p_inventario_id: item.id,
+        p_qtd_contada:   contada,
+      });
+      if (error) throw new Error(error.message);
+      const r = res as any;
+      const dif = Number(r?.diferenca ?? 0);
+      setData((prev: any[]) => prev.map(d => d.id === item.id
+        ? { ...d, qtd_sistema: r?.qtd_sistema, qtd_contada: r?.qtd_contada, diferenca: dif, status: 'Concluído' }
+        : d));
+      showToast(
+        dif === 0
+          ? 'Inventário fechado — contagem bateu com o sistema.'
+          : `Inventário fechado — ajuste de ${dif > 0 ? '+' : ''}${dif} un. lançado no estoque.`,
+        'success', true
+      );
+    } catch (err: any) {
+      showToast(`Erro ao fechar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setFechando(null); }
   };
 
   const handleDelete = async (id: string) => {
@@ -68,9 +117,14 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
               <h3 className="text-sm font-bold text-gray-200">Nova Contagem</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>{produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></FormField>
-                <FormField label="Qtd no Sistema"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_sistema} onChange={e => setExtras(x => ({ ...x, qtd_sistema: e.target.value }))} placeholder="0" /></FormField>
-                <FormField label="Qtd Contada"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
-                <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Em Andamento', 'Concluído', 'Cancelado'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
+                <FormField label="Qtd Contada *"><input type="number" min="0" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
+                {form.produto_id && (
+                  <div className="neu-pressed rounded-xl px-3 py-2 self-end">
+                    <div className="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Saldo atual no sistema</div>
+                    <div className="text-sm font-black text-gray-200 tabular-nums">{saldoAtualDoForm}</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">Só referência — o valor oficial é lido no fechamento.</div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -101,6 +155,16 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                            {item.status !== 'Concluído' && (
+                              <button
+                                onClick={() => handleFechar(item)}
+                                disabled={fechando === item.id}
+                                title="Fechar inventário e ajustar o estoque"
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors flex items-center gap-1 disabled:opacity-50">
+                                {fechando === item.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCheck size={11} />}
+                                Fechar
+                              </button>
+                            )}
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>

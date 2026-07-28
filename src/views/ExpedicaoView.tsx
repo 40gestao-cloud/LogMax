@@ -3,9 +3,10 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, Trash2, Truck, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -19,13 +20,14 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ produto_id: '' });
-  const [extras, setExtras] = useState({ requisicao_id: '', qtd_expedida: '', data_expedicao: '', status: 'Pendente' });
+  const [extras, setExtras] = useState({ requisicao_id: '', qtd_expedida: '', data_expedicao: '' });
+  const [expedindo, setExpedindo] = useState<string | null>(null);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const enriched = data.map((e: any) => ({ ...e, prod: produtos.find((p: any) => p.id === e.produto_id) }));
   const filtered = enriched.filter((e: any) => [e.prod?.nome, e.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
 
-  const closeForm = () => { setShowForm(false); setForm({ produto_id: '' }); setExtras({ requisicao_id: '', qtd_expedida: '', data_expedicao: '', status: 'Pendente' }); setErrors({}); };
+  const closeForm = () => { setShowForm(false); setForm({ produto_id: '' }); setExtras({ requisicao_id: '', qtd_expedida: '', data_expedicao: '' }); setErrors({}); };
 
   const handleSave = async () => {
     if (!validate()) return;
@@ -33,27 +35,37 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
     try {
       const today = todayBR();
       const qtd = Number(extras.qtd_expedida) || 0;
-      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: extras.status, filial };
+      // Nasce sempre 'Pendente'. A baixa de estoque acontece no botão Expedir,
+      // dentro da RPC `expedir` (migr. 268) — antes eram dois inserts soltos:
+      // se o segundo falhasse, ficava expedição 'Expedido' sem baixa nenhuma.
+      const payload = { ...form, requisicao_id: extras.requisicao_id || null, qtd_expedida: qtd, data_expedicao: extras.data_expedicao || today, status: 'Pendente', filial };
       const s = await dbInsert('/api/expedicao', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
-      if (extras.status === 'Expedido' && qtd > 0) {
-        await dbInsert('/api/movimentacoesestoqueview', {
-          produto_id: form.produto_id,
-          tipo: 'Saída',
-          qtd,
-          origem: 'Expedição',
-          destino: extras.requisicao_id
-            ? requisicoes.find((r: any) => r.id === extras.requisicao_id)?.destino || 'Expedido'
-            : 'Expedido',
-          data: today,
-          filial,
-        });
-        showToast("Expedição registrada e estoque baixado!", 'success', true);
-      } else {
-        showToast("Expedição registrada!", 'success', true);
-      }
+      showToast("Expedição registrada. Use o botão Expedir para baixar o estoque.", 'success', true);
       closeForm();
-    } catch { showToast("Erro.", 'error', true); } finally { setIsSaving(false); }
+    } catch (err: any) {
+      showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setIsSaving(false); }
+  };
+
+  // Baixa o estoque e marca 'Expedido' na mesma transação. Saldo insuficiente
+  // estoura no trigger e desfaz tudo — nada de truncar em zero.
+  const handleExpedir = async (item: any) => {
+    if (!await confirm(
+      `Expedir ${item.qtd_expedida} un. de ${item.prod?.nome ?? 'produto'}?\n\n` +
+      `A saída será lançada no estoque agora.`
+    )) return;
+    setExpedindo(item.id);
+    try {
+      if (!supabase) throw new Error('Supabase não configurado');
+      const { data: atualizada, error } = await supabase.rpc('expedir', { p_expedicao_id: item.id });
+      if (error) throw new Error(error.message);
+      const nova: any = Array.isArray(atualizada) ? atualizada[0] : atualizada;
+      setData((prev: any[]) => prev.map(d => d.id === item.id ? { ...d, ...nova } : d));
+      showToast('Expedido — estoque baixado.', 'success', true);
+    } catch (err: any) {
+      showToast(`Erro ao expedir: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setExpedindo(null); }
   };
 
   const handleDelete = async (id: string) => {
@@ -89,7 +101,6 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                 <FormField label="Requisição (opcional)"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.requisicao_id} onChange={e => setExtras(x => ({ ...x, requisicao_id: e.target.value }))}><option value="">Nenhuma</option>{requisicoes.filter((r: any) => r.status === 'Aprovado').map((r: any) => <option key={r.id} value={r.id}>{r.solicitante} — {r.destino}</option>)}</select></FormField>
                 <FormField label="Qtd Expedida"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_expedida} onChange={e => setExtras(x => ({ ...x, qtd_expedida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Data Expedição"><input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.data_expedicao} onChange={e => setExtras(x => ({ ...x, data_expedicao: e.target.value }))} /></FormField>
-                <FormField label="Status"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.status} onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>{['Pendente', 'Expedido', 'Cancelado'].map(s => <option key={s} value={s}>{s}</option>)}</select></FormField>
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -116,6 +127,16 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                          {item.status === 'Pendente' && (
+                            <button
+                              onClick={() => handleExpedir(item)}
+                              disabled={expedindo === item.id}
+                              title="Expedir e baixar o estoque"
+                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors flex items-center gap-1 disabled:opacity-50">
+                              {expedindo === item.id ? <Loader2 size={11} className="animate-spin" /> : <Truck size={11} />}
+                              Expedir
+                            </button>
+                          )}
                           <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>

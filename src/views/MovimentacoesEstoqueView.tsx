@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
-import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -33,30 +33,44 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
     const qtd = Number(extras.qtd) || 0;
     if (qtd <= 0) { showToast('Informe uma quantidade > 0.', 'error', true); return; }
 
-    if (form.tipo === 'Saída') {
-      const prod = produtos.find((p: any) => p.id === form.produto_id);
-      const saldo = Number(prod?.estoque ?? 0);
-      if (qtd > saldo) {
-        showToast(`Saldo insuficiente: estoque atual ${saldo} un. (saída solicitada: ${qtd}).`, 'error', true);
-        return;
-      }
+    // Aviso amigável antes de tentar. A recusa de verdade é do banco: o trigger
+    // (migr. 268) faz a transação inteira voltar atrás se o saldo ficaria
+    // negativo. Antes ele truncava em zero com GREATEST() e a movimentação
+    // registrava uma baixa que nunca aconteceu.
+    const saldoLocal = Number(produtos.find((p: any) => p.id === form.produto_id)?.estoque ?? 0);
+    if ((form.tipo === 'Saída' || form.tipo === 'Ajuste −') && qtd > saldoLocal) {
+      showToast(`Saldo insuficiente: estoque atual ${saldoLocal} un. (baixa solicitada: ${qtd}).`, 'error', true);
+      return;
     }
 
     setIsSaving(true);
     showToast("Registrando...", 'info', false);
     try {
-      const today = todayBR();
-      const payload = { ...form, qtd, origem: extras.origem, destino: extras.destino, data: today, filial };
-      const saved = await dbInsert('/api/movimentacoesestoqueview', payload);
-      setData([saved ?? { id: Date.now(), ...payload }, ...data]);
+      if (!supabase) throw new Error('Supabase não configurado');
+      const { data: saved, error } = await supabase.rpc('movimentar_estoque', {
+        p_produto_id: form.produto_id,
+        p_tipo:       form.tipo,
+        p_qtd:        qtd,
+        p_origem:     extras.origem || null,
+        p_destino:    extras.destino || null,
+        p_filial:     filial,
+      });
+      if (error) throw new Error(error.message);
+      const nova: any = Array.isArray(saved) ? saved[0] : saved;
+      setData([nova, ...data]);
       showToast("Movimentação registrada!", 'success', true);
       closeForm();
-    } catch { showToast("Erro ao registrar.", 'error', true); }
+    } catch (err: any) {
+      showToast(`Erro ao registrar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
     finally { setIsSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!await confirm('Inativar esta movimentação? O saldo de estoque NÃO é revertido automaticamente — faça um ajuste manual se necessário.')) return;
+    // O trigger agora reage a UPDATE/DELETE também, então inativar ESTORNA o
+    // saldo. Antes não revertia nada e o texto mandava "fazer ajuste manual" —
+    // usando justamente o Ajuste que somava quando devia subtrair.
+    if (!await confirm('Inativar esta movimentação? O efeito dela no saldo de estoque será estornado.')) return;
     try {
       await dbDelete('/api/movimentacoesestoqueview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
@@ -102,7 +116,10 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
                   <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.tipo ? 'border border-red-500/40' : ''}`}
                     value={form.tipo} onChange={e => { setForm(f => ({ ...f, tipo: e.target.value })); clearError('tipo'); }}>
                     <option value="">Selecione...</option>
-                    {['Entrada', 'Saída', 'Ajuste'].map(t => <option key={t} value={t}>{t}</option>)}
+                    {/* 'Ajuste' virou dois tipos com sinal (migr. 268). Sem
+                        sinal, o trigger caía no ELSE e SOMAVA — ajustar para
+                        corrigir contagem a menor aumentava o estoque. */}
+                    {['Entrada', 'Saída', 'Ajuste +', 'Ajuste −'].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Quantidade">
@@ -151,7 +168,11 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.prod?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'Entrada' ? 'bg-green-900/30 text-green-400' : item.tipo === 'Saída' ? 'bg-red-950/50 text-red-500' : 'bg-blue-900/30 text-blue-400'}`}>{item.tipo}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            item.tipo === 'Entrada' ? 'bg-green-900/30 text-green-400'
+                            : item.tipo === 'Saída' ? 'bg-red-950/50 text-red-500'
+                            : item.tipo === 'Ajuste −' ? 'bg-orange-900/30 text-orange-400'
+                            : 'bg-blue-900/30 text-blue-400'}`}>{item.tipo}</span>
                         </td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.origem || '—'}</td>
