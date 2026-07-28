@@ -395,47 +395,25 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         return;
       }
 
+      // Pendente → Processada: a conta a pagar nasce junto, na mesma transação
+      // (migr. 272). Antes eram duas escritas soltas — e quando a RLS de
+      // contas_pagar negava o insert (tela apontada para outra filial), a folha
+      // avançava mesmo assim e a despesa nunca chegava ao Financeiro.
+      if (next === 'Processada') {
+        if (!supabase) return;
+        const { data, error } = await supabase.rpc('processar_folha', { p_folha_id: f.id });
+        if (error) {
+          showToast(`Não foi possível processar a folha: ${error.message}`, 'error');
+          return;
+        }
+        const res = data as any;
+        setData(prev => prev.map(x => x.id === f.id ? { ...x, status: 'Processada' } : x));
+        showToast(`Folha processada — Conta a Pagar de R$ ${Number(res?.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} gerada em ${res?.filial ?? f.filial}.`, 'success');
+        return;
+      }
+
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
       setData(prev => prev.map(x => x.id === f.id ? { ...x, status: next } : x));
-
-      // Pendente → Processada: gera Conta a Pagar para o líquido do funcionário.
-      // Idempotência: marcador `[folha:${id}]` na descrição evita duplicados em race.
-      if (next === 'Processada') {
-        const liquido = Number(f.salario_liquido ?? (Number(f.salario_bruto || 0) - Number(f.descontos || 0)));
-        if (liquido > 0 && supabase) {
-          const marker = `[folha:${f.id}]`;
-          // O vínculo real é a coluna (migr. 269); o marcador ficou só como
-          // rótulo legível na descrição.
-          const { data: existentes } = await supabase
-            .from('contas_pagar')
-            .select('id')
-            .eq('folha_pagamento_id', f.id)
-            .limit(1);
-          if (!existentes || existentes.length === 0) {
-            const func = funcionarios.find(fn => fn.id === f.funcionario_id);
-            // Vencimento: dia 5 do mês seguinte ao de referência.
-            let vencimento: string | null = null;
-            if (f.mes_ref) {
-              const [ano, mes] = f.mes_ref.split('-').map(Number);
-              const proxMes = new Date(ano, mes, 5); // mes é 1-based em mes_ref, Date() é 0-based → +1 vira o próximo
-              vencimento = proxMes.toISOString().slice(0, 10);
-            }
-            try {
-              await dbInsert('/api/contaspagarview', {
-                descricao: `Folha ${f.mes_ref ?? ''} — ${func?.nome ?? 'Funcionário'} ${marker}`,
-                valor: liquido,
-                vencimento,
-                status: 'Pendente',
-                filial,
-                folha_pagamento_id: f.id,
-              });
-              showToast('Folha processada — Conta a Pagar gerada.', 'success');
-            } catch {
-              showToast('Folha processada, mas falhou ao gerar Conta a Pagar. Verifique manualmente.', 'error');
-            }
-          }
-        }
-      }
     } catch { showToast('Erro ao atualizar status.', 'error'); }
   };
 
