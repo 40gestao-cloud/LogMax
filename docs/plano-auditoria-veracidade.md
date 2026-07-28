@@ -1,0 +1,301 @@
+# Plano de Auditoria de Veracidade — LogMax
+
+> Criado em 2026-07-28, a partir dos 24 problemas encontrados nas auditorias de
+> Compras (migr. 266), Financeiro (267) e Estoque (268).
+
+## O critério
+
+Não é "tem bug". É:
+
+> **A tela promete um controle que o sistema executa?**
+
+O LogMax é didático, mas o fluxo tem que ser verdadeiro. Um módulo que exibe um
+número que ninguém cobra, ou um botão de aprovação que qualquer um clica, ensina
+a coisa errada — e é indistinguível de um sistema quebrado.
+
+---
+
+## Parte I — Os 13 padrões de mentira
+
+Cada um foi encontrado pelo menos uma vez em Compras, Financeiro ou Estoque.
+Servem de gabarito ao varrer os módulos restantes.
+
+| # | Padrão | Caso real |
+|---|---|---|
+| P1 | Tela calcula e anuncia um valor que o banco não grava | Juros/multa exibidos no pagamento, nunca cobrados |
+| P2 | Módulo que não fecha o ciclo que promete | Inventário registrava a divergência e não ajustava o saldo |
+| P3 | Filtro por status que nenhuma escrita produz | `Em Cotação`, `Recusada`, `Em Transporte`, `Aberto` |
+| P4 | Ciclo de vida que nunca fecha | Requisição eterna em `Aprovado` → compra duplicada |
+| P5 | Gate de aprovação sem RBAC ou redundante | "Aprovar Pedido": 3ª aprovação do mesmo gasto, sem RBAC |
+| P6 | Escritas em sequência sem transação | Conta a Pagar perdida; expedição sem baixa de estoque |
+| P7 | Guard que falha **aberto** | `return Infinity` no saldo do pedido; fallback da alçada |
+| P8 | `filial` ausente no payload + coluna `DEFAULT 'SuperMax'` | Sugestões de Compras; Recebimentos |
+| P9 | Paginação client-side fazendo total/filtro/cascata mentir | Cancelamento de concorrentes só via página 1 |
+| P10 | Sem segregação de funções | Gerente criava e aprovava a própria cotação |
+| P11 | Auditoria apagável sem rastro | Reabrir caixa zerava a divergência apurada |
+| P12 | Fuso UTC onde a regra é Acre (UTC−5) | Filtro "Hoje" mostrando amanhã depois das 19h |
+| P13 | Campo que deveria ser lido do sistema sendo digitado | `qtd_sistema` no inventário |
+
+**Regra de ouro derivada:** onde a regra de negócio mora só no React, o banco não
+a conhece — e alguém vai passar por fora. A correção quase sempre é mover a
+transição para uma RPC.
+
+---
+
+## Parte II — Sondas reutilizáveis
+
+Rodar **antes** de ler código. Foram elas que deram as provas materiais
+(a compra duplicada do Extrato de Tomate saiu da sonda 5).
+
+### S1 — Status morto
+Para cada tabela com coluna `status`: `SELECT status, count(*) ... GROUP BY 1`
+no banco, comparado com as strings literais nos `.tsx`. Diferença = filtro que
+nunca casa. *(Achou 4 casos.)*
+
+### S2 — Razão × saldo
+Toda tabela-livro contra o agregado que ela deveria explicar:
+movimentações × `produtos.estoque`, parcelas × conta, ponto × banco de horas,
+folha × crédito MaxBank.
+
+```sql
+WITH led AS (
+  SELECT produto_id, sum(mov_estoque_delta(tipo, qtd)) AS ledger
+    FROM movimentacoes_estoque WHERE COALESCE(ativo,true) GROUP BY 1)
+SELECT count(*) FILTER (WHERE p.estoque <> l.ledger) AS divergentes
+  FROM led l JOIN produtos p ON p.id = l.produto_id;
+```
+
+### S3 — Órfãos de fluxo
+`LEFT JOIN` do filho na tabela de aprovação, `WHERE aprovacao.id IS NULL`.
+*(Achou o furo do Sugestões de Compras.)*
+
+### S4 — Vazamento de filial
+`SELECT filho.filial, pai.filial, count(*) ... GROUP BY 1,2` — linhas onde os
+dois discordam denunciam payload sem `filial` + `DEFAULT`.
+
+### S5 — Duplicidade de efeito
+`GROUP BY <chave_de_negócio> HAVING count(*) > 1` na tabela de efeito
+(pedidos por requisição, contas por pedido, movimentações por recebimento).
+
+### S6 — Fim de linha e RLS aberta
+Registros parados no status terminal que nunca avançam; e
+`SELECT * FROM pg_policies WHERE qual = 'true'`.
+
+### S7 — Grep de transação
+`await` seguido de outro `await` com escrita no meio, sem RPC — todo P6 tem
+essa forma.
+
+---
+
+## Parte III — Ordem sugerida
+
+### Etapa 0 — Regressão do PDV × trigger novo `[URGENTE]`
+
+**Não é auditoria.** É verificar algo que mudou em 2026-07-28 e que ninguém
+ainda exerceu no browser.
+
+A migração 268 fez `fn_atualiza_estoque_produto` **lançar exceção** quando o
+saldo ficaria negativo, no lugar do `GREATEST(0, ...)` que truncava em silêncio.
+`criar_venda_pdv` insere em `movimentacoes_estoque` e passa por esse trigger.
+
+- [ ] `criar_venda_pdv` valida saldo **antes** de fechar a venda?
+- [ ] Se não valida: venda de produto com estoque desalinhado agora falha no
+      fim, onde antes passava. Corrigir com validação prévia e mensagem clara.
+- [ ] Rodar S2 (razão × saldo) logo após aplicar a 268 nas 4 turmas.
+      Em 2026-07-28 estava em 0 divergentes / 198 produtos.
+
+**Se for fazer só uma coisa desta lista, faça esta.**
+
+---
+
+### Etapa 1 — Sondas S1–S7 em todas as tabelas
+
+Melhor retorno da lista: são consultas SQL, não leitura de código, e devolvem
+**prova em dados** em vez de suspeita.
+
+- [ ] S1 em toda tabela com `status`
+- [ ] S2 em todo par livro/agregado
+- [ ] S3 em todo fluxo com tabela de aprovação
+- [ ] S4 em toda tabela com `filial NOT NULL DEFAULT`
+- [ ] S5 nas tabelas de efeito financeiro e de estoque
+- [ ] S6 (fim de linha + `pg_policies`)
+- [ ] S7 (grep de transação) em `src/views/`
+
+**Entrega:** lista de suspeitos, cada um com a consulta que o comprova.
+
+---
+
+### Etapa 2 — RH / Folha de Pagamento
+
+O risco mais alto do que sobrou.
+
+- [x] ~~**Vínculo folha↔conta é uma regex em texto livre.**~~ Fechado pela
+      migr. 269: `contas_pagar.folha_pagamento_id` com FK + backfill do
+      marcador. A descrição virou rótulo; `reverter_folha_maxbank` também
+      passou a ler a coluna.
+- [x] ~~**O crédito no MaxBank engole o próprio erro.**~~ Fechado pela migr.
+      269: credita primeiro e só então avança para `Paga`. Falha deixa a folha
+      em `Processada`, grava em `folha_credito_falhas` (sem policy de escrita)
+      e notifica o setor RH. Transição agora mora na RPC `pagar_folha`.
+      **Rodar a consulta 3 da verificação** — lista quem já ficou sem receber.
+- [ ] Quem processa a folha também aprova o pagamento dela? (P10)
+- [ ] Férias e Afastamentos escrevem `Justificado` no ponto — cancelar reverte? (P4)
+- [ ] Benefícios e split MaxBank batem com o valor pago? (S2)
+- [ ] Avaliações/PDI/Pesquisas: nota e plano influenciam algo, ou só arquivam? (P1)
+
+---
+
+### Etapa 3 — Vendas / PDV
+
+Maior volume de escrita do app.
+
+- [ ] Devolução de venda existe? Estorna estoque, caixa **e** conta a receber,
+      ou só muda status? (P2) — pendência #3 do controle de gestão
+- [ ] Fiado → `contas_receber` grava a `filial` certa? (P8)
+- [ ] Cupom aplicado desconta de verdade ou é decorativo? Validação é
+      server-side? (P1, P7)
+- [ ] Cliente Especial simulado por admin gera pedido real ou fantasma? (P5)
+- [ ] Orçamento → Pedido de Venda: o ciclo fecha, ou o orçamento fica eterno
+      em `Aprovado` como a requisição ficava? (P4)
+
+---
+
+### Etapa 4 — Financeiro: os submódulos não auditados
+
+Contas a Pagar/Receber e Controle de Caixa já foram (migr. 267). Ficaram:
+
+- [ ] **Duplicatas — o mais suspeito do app.** É um `GenericCRUDView`.
+      Duplicata que não gera conta a receber/pagar é um formulário com nome de
+      instrumento financeiro. Mesma forma do Inventário. (P2)
+- [ ] **Patrimônio** — deprecia? dá baixa? ou é lista de bens? (P2)
+- [ ] **Integração bancária** — concilia ou só exibe? (P2)
+- [ ] **Notas Emitidas / Recibos de Vendas** — vinculam à venda real ou são
+      documentos soltos? (P2)
+- [ ] **Capital** — `origem='emprestimo'` fura o bloqueio de capital estourado
+      (por design). A parcela do empréstimo é criada de fato? Alguém aprova o
+      empréstimo? (P7, P5)
+- [ ] **Alçadas** — agora é a regra única (migr. 267). Confirmar que toda
+      filial tem linha ativa; sem ela o limite é infinito e o Financeiro decide
+      tudo.
+
+---
+
+### Etapa 5 — Matriz e Competição
+
+Muita automação sem operador olhando: cron 03:10, cache de 1h do BI, IA que
+propõe pauta.
+
+- [ ] Ranking 3-2-1 × peso confere com os dados de origem, ou o placar é
+      narrativa? (S2)
+- [ ] Julgamento do conselho: CEO e conselheiros são pessoas distintas na
+      prática, ou o mesmo usuário acumula? (P10)
+- [ ] Avisos da Matriz: "Ciente" prova leitura ou só marca linha? (P1)
+- [ ] Briefing IA: tarefa aprovada vira tarefa real; o cascade de exclusão
+      preserva `Em Andamento`/`Concluído` como promete? (P4)
+- [ ] Central de Avaliação: nota 0-10 influencia o placar ou é enfeite? (P1)
+
+---
+
+### Etapa 6 — Marketing
+
+- [ ] Promoções: reversão por cron — o guard de ajuste manual segura mesmo? (P4)
+- [ ] Campanhas: ROI vem de venda real ou de campo digitado? (P13)
+- [ ] Cupons: validação server-side ou client-side? (P7)
+- [ ] Artes: nota 1-5★ influencia algo ou é enfeite? (P1)
+- [ ] Calendário editorial: status de post avança sozinho ou trava? (P4)
+
+---
+
+### Etapa 7 — TI, Max Work, Metas, Feedback
+
+Menor risco financeiro, mas:
+
+- [ ] **Metas** — folga concedida é debitada de algum saldo, ou é infinita? (S2)
+- [ ] Metas em 2 níveis: o tático consome o pool do estratégico de verdade?
+- [ ] TI Chamados: SLA existe ou é campo decorativo? (P1)
+- [ ] Feedback anônimo: é mesmo anônimo? (`autor_id` ausente na tabela **e**
+      nos logs)
+
+---
+
+### Etapa 8 — Matriz de autoridade (transversal)
+
+Responde diretamente a "quem aprova, quem lança". Pode correr em paralelo desde
+a Etapa 1.
+
+Uma tabela única, por transição de estado do app inteiro:
+
+| Transição | Quem lança | Quem aprova | Onde a regra é aplicada | Segregação? | Falha aberto? |
+|---|---|---|---|---|---|
+
+Preenchida a partir das **RPCs e policies** — não das telas. A tela é a versão
+que mente.
+
+O que ela expõe de imediato:
+
+- gates sem nenhum RBAC (como o "Aprovar Pedido" já removido);
+- transições onde lançador e aprovador podem ser a mesma pessoa;
+- regras que existem só no `.tsx` — candidatas a virar RPC;
+- **aprovações redundantes**, que é onde ainda dá para simplificar sem perder
+  controle.
+
+**Suspeita a confirmar:** o app tem ~14 telas de "Aprovações". Ao menos duas
+provavelmente são o mesmo gate com nomes diferentes.
+
+---
+
+## Parte IV — Pendências abertas do trabalho de 2026-07-28
+
+Não fazem parte da auditoria, mas estão em aberto:
+
+- [ ] **Compra duplicada do Extrato de Tomate** — segue intocada, agora por
+      falta de prova, não de aval (revisto em 2026-07-28).
+
+      Estado: pedidos `d7b200c4` (14/07) e `73ba7bb8` (20/07), ambos
+      `Recebido`; recebimentos `ccf04075` e `b1ea83de`, ambos `Concluído`;
+      contas `fe4540d5` e `380b7674`, ambas `Pago` (R$ 79,20 cada, Sicredi
+      `ac6225f2`); movimentações `739eb970` e `90736660`, 24 un cada. O produto
+      `b11fd6ac` tem 24 un em estoque — 48 entradas menos 24 vendidas no PDV.
+      Nenhum inventário desse produto existe no histórico.
+
+      Os dois recebimentos foram conferidos e fechados por alguém. Nada nos
+      dados sustenta que a segunda entrega não chegou; o que está provado é o
+      furo de processo, e esse a migr. 266 fechou. Estornar sem contagem
+      física seria registrar uma devolução que ninguém fez.
+
+      **Próximo passo:** contar o produto em Estoque → Inventário. Desde a
+      268 o fechamento gera o ajuste sozinho. O resultado decide:
+
+      - **Contagem = 24** → as duas entregas chegaram. Os dois pagamentos são
+        devidos e não há nada a estornar no sistema; a cobrança ao fornecedor,
+        se houver, é assunto do mundo real.
+      - **Contagem = 0** → a segunda entrega não existiu. Aí sim estorna-se o
+        conjunto, e o próprio inventário já terá corrigido o estoque:
+
+        ```sql
+        BEGIN;
+        UPDATE contas_pagar          SET ativo = false WHERE id = '380b7674-0716-47f8-9399-9a9c2dd92265';
+        UPDATE recebimentos          SET ativo = false WHERE id = 'b1ea83de-045d-4de3-94a3-f7f194ce99ed';
+        UPDATE pedidos               SET ativo = false WHERE id = '73ba7bb8-5e75-47e6-bf04-b1aeb608f168';
+        COMMIT;
+        ```
+
+        Inativar a conta paga devolve os R$ 79,20 ao Sicredi sozinho — o
+        trigger `sync_saldo_caixa_pagar` reage a `ativo` desde a migr. 267.
+        A movimentação `90736660` **não** entra na lista: o ajuste do
+        inventário já terá tirado as 24 un, e inativá-la tiraria de novo.
+- [ ] **23 requisições aprovadas e nunca cotadas** (07/07 a 20/07, 20 delas da
+      MaxLook, mesmo solicitante). Não é resíduo do ciclo quebrado — nenhuma
+      tem cotação ativa, e a 266 só deixou de fora quem não virou pedido. É
+      backlog de Compras: cotar ou cancelar, decisão do setor. A mais recente
+      é outra requisição de Extrato de Tomate, 24 un.
+- [ ] **Busca por fornecedor/cliente** em Contas a Pagar/Receber — removida
+      porque só funcionava dentro da página. Recuperável com uma RPC de busca.
+- [ ] **Busca por tipo/origem/destino** em Movimentações — removida pelo mesmo
+      motivo. Recuperável com `<select>` de tipo indo ao servidor.
+- [ ] **Recomendação 1** (mover as demais transições de estado para RPCs) —
+      parcialmente feita. As recomendações 2 (cortar a 3ª aprovação) e 3
+      (alçada única) já estão em produção.
+- [ ] **Testes não rodam localmente** (`tests/setup.ts` exige
+      `VITE_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`; falta `.env.test`).
+      Nenhuma das correções de 2026-07-28 tem cobertura automatizada.
