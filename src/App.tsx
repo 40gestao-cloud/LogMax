@@ -70,7 +70,6 @@ const GerenciamentoEstoqueView     = lazy(() => import('./views/GerenciamentoEst
 const RelatoriosFinanceirosView    = lazy(() => import('./views/RelatoriosFinanceirosView').then(m => ({ default: m.RelatoriosFinanceirosView })));
 const RecibosVendasView            = lazy(() => import('./views/RecibosVendasView').then(m => ({ default: m.RecibosVendasView })));
 const NotasEmitidasView            = lazy(() => import('./views/NotasEmitidasView').then(m => ({ default: m.NotasEmitidasView })));
-const IntegracaoBancariaView       = lazy(() => import('./views/IntegracaoBancariaView').then(m => ({ default: m.IntegracaoBancariaView })));
 const GerenciamentoFinanceiroView  = lazy(() => import('./views/GerenciamentoFinanceiroView').then(m => ({ default: m.GerenciamentoFinanceiroView })));
 const PatrimonioView               = lazy(() => import('./views/PatrimonioView').then(m => ({ default: m.PatrimonioView })));
 const FuncionariosView             = lazy(() => import('./views/FuncionariosView').then(m => ({ default: m.FuncionariosView })));
@@ -156,14 +155,17 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'financeiro', label: 'Financeiro', icon: DollarSign,
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Duplicatas',
+    // 'Duplicatas' e 'Integração bancária' saíram do menu em 2026-07-28
+    // (auditoria de veracidade): eram formulários que não geravam conta nem
+    // conciliavam nada. As tabelas seguem no banco, como nas votações.
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
       'Notas Emitidas',
-      'Capital', 'Integração bancária', 'Gerenciamento', 'Relatórios']
+      'Capital', 'Gerenciamento', 'Relatórios']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -887,12 +889,9 @@ function LogMaxAppInner() {
       case 'financeiro-controledecaixa':      return <ControleCaixaView showToast={st} profile={profile} />;
       case 'financeiro-contasareceber':       return <ContasReceberView showToast={st} />;
       case 'financeiro-contasapagar':         return <ContasPagarView showToast={st} />;
-      case 'financeiro-duplicatas':           return <GenericCRUDView showToast={st} title="Duplicatas" subtitle="Gerencie duplicatas a receber e a pagar." endpoint="/api/duplicatasview"
-        fields={[{ key: 'numero', label: 'Número', required: true, placeholder: 'Ex: DUP-001' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['A Receber', 'A Pagar'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'vencimento', label: 'Vencimento', type: 'date' }, { key: 'sacado', label: 'Sacado', placeholder: 'Ex: Empresa XYZ' }, { key: 'status', label: 'Status', type: 'select', options: ['Emitida', 'Paga', 'Vencida', 'Cancelada'] }]} />;
       case 'financeiro-patrimônio':           return <PatrimonioView showToast={st} />;
       case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} profile={profile} />;
       case 'financeiro-capital':               return <FilialCapitalView showToast={st} profile={profile} />;
-      case 'financeiro-integraçãobancária':        return <IntegracaoBancariaView showToast={st} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;

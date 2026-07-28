@@ -180,13 +180,15 @@ Contas a Pagar/Receber e Controle de Caixa já foram (migr. 267). Ficaram:
       campos digitados. "A Receber" não gera conta a receber, "Paga" não move
       caixa, e `Vencida` é escolhido a mão em vez de derivar do vencimento. A
       tabela não tem `filial` — é global entre unidades. Zero registros nas 4
-      turmas: ninguém nunca usou. **Decisão de produto pendente** (implementar
-      esbarra na trava de features até 2026-09-13; a alternativa é tirar do
-      menu preservando a tabela, como foi feito com Votações).
+      turmas: ninguém nunca usou. **Resolvido em 2026-07-28: fora do menu**,
+      tabela preservada, como nas votações. Implementar de verdade esbarraria
+      na trava de features até 2026-09-13.
 - [x] **Integração bancária — mesma forma.** Registra importações digitadas
       (banco, arquivo, data, nº de registros, status). Não importa nem concilia
-      nada; o "Saldo Total" vem de `caixa_bancos`. Zero registros. Mesma
-      decisão de produto.
+      nada; o "Saldo Total" vem de `caixa_bancos`. Zero registros. **Fora do
+      menu em 2026-07-28**, tabela preservada. `IntegracaoBancariaView.tsx`
+      continua no repositório, sem rota — o dia em que o módulo for feito de
+      verdade, a tela é o ponto de partida.
 - [x] ~~**Patrimônio**~~ — é cadastro de bens (`produtos.tipo='patrimonio'`,
       19 itens) com número, responsável e localização, em tela read-only. Não
       deprecia nem dá baixa — e também não promete isso. Sem achado.

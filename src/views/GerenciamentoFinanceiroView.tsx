@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Landmark, FileText, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
+import { Landmark, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, BancoThumb, FilialBadge } from '../components/ui';
@@ -40,15 +40,14 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   }
   const { filialAtiva } = useFilial();
   const ff = filialAtiva ? { filial: filialAtiva } : undefined;
-  // duplicatas e caixa_bancos não têm coluna filial — permanecem globais.
+  // caixa_bancos não tem coluna filial — permanece global.
   const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview', ff);
   const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview', ff);
-  const { data: duplicatas, isLoading: loadingDup } = useFetchData<any>('/api/duplicatasview');
   const { data: bancos, isLoading: loadingBan } = useFetchData<any>('/api/caixabancosview');
   const { data: clientes } = useFetchData<any>('/api/crmview-clientes', ff);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 
-  const isLoading = loadingRec || loadingPag || loadingDup || loadingBan;
+  const isLoading = loadingRec || loadingPag || loadingBan;
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   // Contas a receber
@@ -61,10 +60,6 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   const pagPago = pagar.filter((p: any) => p.status === 'Pago').length;
   const pagAtrasado = pagar.filter((p: any) => p.status === 'Atrasado').length;
 
-  // Duplicatas
-  const dupEmitida = duplicatas.filter((d: any) => d.status === 'Emitida').length;
-  const dupPaga = duplicatas.filter((d: any) => d.status === 'Paga').length;
-  const dupVencida = duplicatas.filter((d: any) => d.status === 'Vencida').length;
 
   // Bancos
   const bancosAtivos = bancos.filter((b: any) => b.status === 'Ativo');
@@ -107,15 +102,6 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
         { label: 'Pendentes', value: pagPendente, cls: pagPendente > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Pagos', value: pagPago, cls: 'text-green-400' },
         { label: 'Atrasados', value: pagAtrasado, cls: pagAtrasado > 0 ? 'text-red-500' : 'text-gray-500' },
-      ],
-    },
-    {
-      icon: FileText, label: 'Duplicatas', total: duplicatas.length,
-      color: 'bg-purple-900/40 text-purple-400',
-      breakdown: [
-        { label: 'Emitidas', value: dupEmitida, cls: dupEmitida > 0 ? 'text-yellow-400' : 'text-gray-500' },
-        { label: 'Pagas', value: dupPaga, cls: 'text-green-400' },
-        { label: 'Vencidas', value: dupVencida, cls: dupVencida > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {

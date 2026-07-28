@@ -5,7 +5,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
-type TabId = 'receber' | 'pagar' | 'duplicatas' | 'caixa';
+type TabId = 'receber' | 'pagar' | 'caixa';
 
 const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
@@ -16,7 +16,6 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
 
   const { data: receber,    isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview');
   const { data: pagar,      isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview');
-  const { data: duplicatas, isLoading: loadingDup } = useFetchData<any>('/api/duplicatasview');
   const { data: caixa,      isLoading: loadingCx } = useFetchData<any>('/api/caixabancosview');
   const { data: clientes }    = useFetchData<any>('/api/crmview');
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
@@ -25,7 +24,6 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
 
   const receberF    = receber.filter(byFilial);
   const pagarF      = pagar.filter(byFilial);
-  const duplicatasF = duplicatas.filter(byFilial);
   const caixaF      = caixa.filter(byFilial);
 
   const receberEnriched = receberF.map((r: any) => ({ ...r, cli: clientes.find((c: any) => c.id === r.cliente_id) }));
@@ -46,19 +44,17 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const s = search.toLowerCase();
   const filteredRec  = receberEnriched.filter((r: any) => [r.descricao, r.cli?.nome, r.status].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredPag  = pagarEnriched.filter((p: any) => [p.descricao, p.forn?.nome, p.status].some((v: any) => v?.toLowerCase().includes(s)));
-  const filteredDup  = duplicatasF.filter((d: any) => [d.numero, d.sacado, d.tipo, d.status].some((v: any) => v?.toLowerCase().includes(s)));
   const filteredCx   = caixaF.filter((c: any) => [c.conta, c.banco, c.tipo].some((v: any) => v?.toLowerCase().includes(s)));
 
   const isLoading = activeTab === 'receber' ? loadingRec : activeTab === 'pagar' ? loadingPag
-    : activeTab === 'duplicatas' ? loadingDup : loadingCx;
+    : loadingCx;
 
   const activeData = activeTab === 'receber' ? filteredRec : activeTab === 'pagar' ? filteredPag
-    : activeTab === 'duplicatas' ? filteredDup : filteredCx;
+    : filteredCx;
 
   const tabs = [
     { id: 'receber' as TabId,    label: 'A Receber',  icon: TrendingUp },
     { id: 'pagar' as TabId,      label: 'A Pagar',    icon: TrendingDown },
-    { id: 'duplicatas' as TabId, label: 'Duplicatas', icon: FileDown },
     { id: 'caixa' as TabId,      label: 'Caixa/Bancos', icon: Landmark },
   ];
 
@@ -71,10 +67,6 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
       exportToPDF('Contas a Pagar', ['Fornecedor', 'Descrição', 'Valor', 'Vencimento', 'Status'],
         filteredPag.map((p: any) => [p.forn?.nome ?? '—', p.descricao ?? '', `R$ ${Number(p.valor || 0).toFixed(2)}`, p.vencimento ?? '', p.status ?? '']),
         'logmax-contas-pagar');
-    } else if (activeTab === 'duplicatas') {
-      exportToPDF('Duplicatas', ['Número', 'Tipo', 'Sacado', 'Valor', 'Vencimento', 'Status'],
-        filteredDup.map((d: any) => [d.numero ?? '', d.tipo ?? '', d.sacado ?? '', `R$ ${Number(d.valor || 0).toFixed(2)}`, d.vencimento ?? '', d.status ?? '']),
-        'logmax-duplicatas');
     } else {
       exportToPDF('Caixa e Bancos', ['Conta', 'Banco', 'Agência', 'Saldo', 'Tipo', 'Status'],
         filteredCx.map((c: any) => [c.conta ?? '', c.banco ?? '', c.agencia ?? '', `R$ ${Number(c.saldo || 0).toFixed(2)}`, c.tipo ?? '', c.status ?? '']),
@@ -91,10 +83,6 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
       exportToExcel('A Pagar', ['Fornecedor', 'Descrição', 'Valor', 'Vencimento', 'Status'],
         filteredPag.map((p: any) => [p.forn?.nome ?? '—', p.descricao ?? '', Number(p.valor || 0), p.vencimento ?? '', p.status ?? '']),
         'logmax-contas-pagar');
-    } else if (activeTab === 'duplicatas') {
-      exportToExcel('Duplicatas', ['Número', 'Tipo', 'Sacado', 'Valor', 'Vencimento', 'Status'],
-        filteredDup.map((d: any) => [d.numero ?? '', d.tipo ?? '', d.sacado ?? '', Number(d.valor || 0), d.vencimento ?? '', d.status ?? '']),
-        'logmax-duplicatas');
     } else {
       exportToExcel('Caixa e Bancos', ['Conta', 'Banco', 'Agência', 'Saldo', 'Tipo', 'Status'],
         filteredCx.map((c: any) => [c.conta ?? '', c.banco ?? '', c.agencia ?? '', Number(c.saldo || 0), c.tipo ?? '', c.status ?? '']),
@@ -106,7 +94,7 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Relatórios Financeiros</h2>
-        <p className="text-sm text-gray-400 mt-1">Visão consolidada de contas, duplicatas e posição de caixa.</p>
+        <p className="text-sm text-gray-400 mt-1">Visão consolidada de contas e posição de caixa.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -190,29 +178,6 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
                         <td className="py-3 px-4 text-xs font-mono text-red-500 font-bold text-right">R$ {Number(p.valor || 0).toFixed(2)}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.vencimento ?? '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence></tbody>
-                </>
-              )}
-              {activeTab === 'duplicatas' && (
-                <>
-                  <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                    <th className="pb-4 font-bold px-4">Número</th><th className="pb-4 font-bold px-4 text-center">Tipo</th>
-                    <th className="pb-4 font-bold px-4">Sacado</th><th className="pb-4 font-bold px-4 text-right">Valor</th>
-                    <th className="pb-4 font-bold px-4">Vencimento</th><th className="pb-4 font-bold px-4 text-center">Status</th>
-                  </tr></thead>
-                  <tbody><AnimatePresence>
-                    {filteredDup.map((d: any) => (
-                      <motion.tr key={d.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-300">{d.numero ?? '—'}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${d.tipo === 'A Receber' ? 'bg-green-900/30 text-green-400' : 'bg-red-950/50 text-red-500'}`}>{d.tipo}</span>
-                        </td>
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">{d.sacado ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 font-bold text-right">R$ {Number(d.valor || 0).toFixed(2)}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-400">{d.vencimento ?? '—'}</td>
-                        <td className="py-3 px-4 text-center"><StatusBadge status={d.status} /></td>
                       </motion.tr>
                     ))}
                   </AnimatePresence></tbody>
