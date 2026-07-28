@@ -290,7 +290,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <User size={36} className="text-gray-600" />
-        <p className="text-sm text-gray-400">Apenas Admin, CEO ou Gerente de RH podem registrar frequência.</p>
+        <p className="text-sm text-gray-400">Apenas Admin, CEO, Conselheiro, Gerente ou setor de RH podem registrar frequência.</p>
       </div>
     );
   }
