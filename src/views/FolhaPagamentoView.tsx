@@ -293,7 +293,10 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
 
   const recomputarSaldos = async () => {
     if (!carteiraModal || !supabase) return;
-    if (!await confirm('Recalcular os 3 saldos desta carteira a partir das transações existentes? Útil pra zerar drift de testes antigos.')) return;
+    // O texto antigo prometia "zerar drift" e fazia o contrário: reescreve o
+    // saldo com a soma do extrato. Antes da migr. 271 isso zerava carteiras
+    // inteiras, porque o histórico anterior ao reset da 096 não existia mais.
+    if (!await confirm('Recalcular os 3 saldos desta carteira a partir do extrato?\n\nO saldo passa a ser exatamente a soma dos lançamentos listados. Se algum lançamento foi excluído, o saldo cai junto.')) return;
     try {
       const { error } = await supabase.rpc('recompute_saldos_maxbank', { p_conta_id: carteiraModal.contaId });
       if (error) throw error;
