@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
+import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { AuditoriaProvider } from './contexts/AuditoriaContext';
@@ -1111,6 +1112,11 @@ function LogMaxAppInner() {
           </ErrorBoundary>
         </div>
       </main>
+
+      {/* Aviso da Matriz: acompanha o usuário em qualquer tela até ele dar
+          Ciente. Oculto no Modo Aula pela mesma razão do sino — nada de
+          conteúdo fora da aula na sessão do aluno. */}
+      {!aulaFiltro && <AvisoMatrizFAB profile={profile} showToast={showToast} />}
     </div>
     </AuditoriaProvider>
     </AIAssistantProvider>

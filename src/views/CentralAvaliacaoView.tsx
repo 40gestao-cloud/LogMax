@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Star, Trophy, Target } from 'lucide-react';
+import { Star, Trophy, Target, Megaphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
@@ -7,13 +7,15 @@ import { LoadingSpinner } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { AvaliacoesView } from './AvaliacoesView';
 import { MatrizAvaliacoesView } from './MatrizAvaliacoesView';
+import { MatrizAvisosView } from './MatrizAvisosView';
 import { MetasView } from './MetasView';
 
-type Aba = 'padrao' | 'metas' | 'competicao';
+type Aba = 'padrao' | 'metas' | 'competicao' | 'avisos';
 
 // Central de Avaliação: Padrão (sempre) + Metas (só em Matriz — no modo filial
-// Metas migrou pra DemandasView) + Competição (só quando há competição ativa +
-// admin/CEO/conselheiro em modo Matriz).
+// Metas migrou pra DemandasView) + Avisos (Matriz, admin/CEO/conselheiro) +
+// Competição (só quando há competição ativa + admin/CEO/conselheiro em modo
+// Matriz).
 export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao' }: {
   profile: UserProfile;
   showToast: any;
@@ -21,7 +23,9 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
 }) {
   const { filialAtiva, escolheu } = useFilial();
   const modoMatriz = escolheu && filialAtiva === null;
-  const podeCompeticao = modoMatriz && (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile));
+  const ehConselho = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+  const podeCompeticao = modoMatriz && ehConselho;
+  const podeAvisos = modoMatriz && ehConselho;
 
   const [temCompeticao, setTemCompeticao] = useState(false);
   const [loading, setLoading] = useState(podeCompeticao);
@@ -71,12 +75,16 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
           <TabBtn active={aba === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
         )}
         <TabBtn active={aba === 'padrao'} onClick={() => setAba('padrao')} icon={<Star size={12} />} label="Padrão" />
+        {podeAvisos && (
+          <TabBtn active={aba === 'avisos'} onClick={() => setAba('avisos')} icon={<Megaphone size={12} className="text-amber-300" />} label="Avisos" />
+        )}
         {mostrarCompeticao && (
           <TabBtn active={aba === 'competicao'} onClick={() => setAba('competicao')} icon={<Trophy size={12} className="text-amber-300" />} label="Competição do Conselho" />
         )}
       </div>
       {aba === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
       {aba === 'metas'    && modoMatriz && <MetasView profile={profile} showToast={showToast} />}
+      {aba === 'avisos'   && podeAvisos && <MatrizAvisosView profile={profile} showToast={showToast} />}
       {aba === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
     </div>
   );
