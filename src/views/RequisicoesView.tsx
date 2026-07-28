@@ -214,6 +214,25 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const handleDelete = async (id: string) => {
     if (!await confirm('Excluir esta requisição?')) return;
     try {
+      // Soft delete não cascateia (FK ON DELETE só age em hard delete). Excluir
+      // uma requisição com cotação/pedido vivo deixava esses registros órfãos,
+      // exibindo "—" no lugar do item. Recusamos e mandamos cancelar antes.
+      if (supabase) {
+        const [{ data: cots }, { data: peds }] = await Promise.all([
+          supabase.from('cotacoes').select('id').eq('requisicao_id', id).eq('ativo', true)
+            .in('status', ['Aguardando Financeiro', 'Aprovado']).limit(1),
+          supabase.from('pedidos').select('id').eq('requisicao_id', id).eq('ativo', true).limit(1),
+        ]);
+        if ((peds ?? []).length > 0) {
+          showToast('Esta requisição já virou pedido. Inative o pedido antes de excluí-la.', 'error', true);
+          return;
+        }
+        if ((cots ?? []).length > 0) {
+          showToast('Existe cotação ativa para esta requisição. Cancele a cotação antes de excluí-la.', 'error', true);
+          return;
+        }
+      }
+
       await dbDelete('/api/requisicoesview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
       showToast("Requisição excluída.", 'success', true);

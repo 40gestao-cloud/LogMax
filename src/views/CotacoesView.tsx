@@ -61,7 +61,11 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   );
   const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
-  const { data: produtos } = useFetchData<any>('/api/produtosview');
+  // Lista SEM paginação, só para agrupar propostas concorrentes por requisição.
+  // `data` traz 50 linhas; usá-la para isso fazia o contador de propostas, o
+  // modal de comparação e o cancelamento automático ignorarem toda proposta
+  // que tivesse caído na página seguinte.
+  const { data: todasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -118,6 +122,11 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   const podeDecidirCotacao = (cot: any): boolean => {
     // Admin/CEO/conselheiro sempre — override total.
     if (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile)) return true;
+    // Segregação de funções: quem cadastrou a proposta não a aprova. Sem isto,
+    // em cotação de alta alçada o gerente era simultaneamente o único criador
+    // possível e o único aprovador — escolhia o fornecedor e aprovava a si
+    // mesmo. Admin/CEO acima seguem como saída quando não há outro aprovador.
+    if (cot.criado_por && cot.criado_por === profile.id) return false;
     // Sem alçada configurada → fallback pro comportamento antigo.
     if (alcadaLimite === null) return podeDecidir;
     const valor = Number(cot.valor_total ?? 0);
@@ -189,14 +198,18 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   // no modal de comparação, mas não contam pro aviso soft.
   const propostasPorRequisicao = useMemo(() => {
     const map = new Map<string, any[]>();
-    enriched.forEach((c: any) => {
+    todasCotacoes.forEach((c: any) => {
       if (!c.requisicao_id) return;
       const arr = map.get(c.requisicao_id) ?? [];
-      arr.push(c);
+      arr.push({
+        ...c,
+        req: requisicoes.find((r: any) => r.id === c.requisicao_id),
+        forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
+      });
       map.set(c.requisicao_id, arr);
     });
     return map;
-  }, [enriched]);
+  }, [todasCotacoes, requisicoes, fornecedores]);
   const contarVivos = (reqId: string) =>
     (propostasPorRequisicao.get(reqId) ?? []).filter((c: any) => STATUS_VIVOS.has(c.status)).length;
 
@@ -271,7 +284,9 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
         tipo:      'aprovacao_pendente',
         titulo:    'Nova cotação aguardando aprovação',
         mensagem:  `${reqItem} — ${fornNome} (R$ ${formatBRL(valorNum)})`,
-        link_view: 'compras-cotações',
+        // Destino do FINANCEIRO. Apontava para 'compras-cotações', módulo que
+        // SETOR_MODULES.financeiro não inclui — o clique no sino não abria nada.
+        link_view: 'financeiro-aprovaçõesdecotação',
         urgencia:  'Média',
         ref_id:    (saved as any)?.id,
       });
@@ -308,8 +323,10 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
       setData((prev: any[]) => prev.map(c => c.id === cot.id ? { ...c, ...updates } : c));
 
       // Aprovou → cancela as demais 'Aguardando Financeiro' da mesma requisição.
+      // Varre `todasCotacoes` (sem paginação) e não `data`: concorrente que
+      // caísse na página 2 ficava viva e podia ser aprovada depois.
       if (tipo === 'aprovar' && cot.requisicao_id) {
-        const concorrentes = data.filter((c: any) =>
+        const concorrentes = todasCotacoes.filter((c: any) =>
           c.id !== cot.id &&
           c.requisicao_id === cot.requisicao_id &&
           c.status === 'Aguardando Financeiro'

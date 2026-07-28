@@ -3,7 +3,8 @@ import { todayBR } from '../lib/dates';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ShoppingCart, AlertTriangle, X, Save } from 'lucide-react';
-import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
@@ -53,22 +54,28 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
     setIsSaving(true);
     showToast("Criando requisição...", 'info', false);
     try {
-      const today = todayBR();
-      await dbInsert('/api/requisicoesview', {
-        item: requestingItem.nome,
-        qtd: qtdNum,
-        urgencia,
-        solicitante,
-        status: 'Pendente',
-        data: today,
+      // Usa a MESMA RPC de RequisicoesView. O insert direto que estava aqui
+      // criava só a linha de `requisicoes` — a linha de `aprovacoes_compras`
+      // (que a RPC cria junto) ficava faltando, então a requisição nunca
+      // aparecia em Minhas Aprovações e travava em Pendente pra sempre.
+      // Também não mandava `filial`: o default da coluna é 'SuperMax', então
+      // sugestão da TechMax virava requisição da SuperMax.
+      if (!supabase) throw new Error('Supabase não configurado');
+      const { error } = await supabase.rpc('criar_requisicoes_compra_lote', {
+        p_itens:        [{ item: requestingItem.nome, qtd: qtdNum }],
+        p_solicitante:  solicitante,
+        p_urgencia:     urgencia,
+        p_centro_custo: '',
+        p_filial:       filial,
       });
-      showToast("Requisição criada!", 'success', true);
+      if (error) throw new Error(error.message);
+      showToast("Requisição criada e enviada para aprovação!", 'success', true);
       setRequestingItem(null);
       setQtdSolicitada('');
       setSolicitante('');
       setUrgencia('Normal');
-    } catch {
-      showToast("Erro ao criar requisição.", 'error', true);
+    } catch (err: any) {
+      showToast(`Erro ao criar requisição: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setIsSaving(false);
     }

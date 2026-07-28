@@ -46,6 +46,7 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
           .from('contas_pagar')
           .select('id')
           .eq('pedido_id', pedido.id)
+          .eq('ativo', true)
           .limit(1);
         if (existentes && existentes.length > 0) {
           showToast('Este pedido já possui Conta a Pagar registada.', 'info', true);
@@ -54,9 +55,13 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
         }
       }
 
-      const updated = await dbUpdate('/api/pedidosview', pedido.id, { status: flow.next });
-      setData((prev: any[]) => prev.map(p => p.id === pedido.id ? (updated ?? { ...p, status: flow.next }) : p));
-
+      // A Conta a Pagar vem ANTES de avançar o status, de propósito. Na ordem
+      // inversa, se o insert falhasse — e ele é cross-setor, um usuário de
+      // Compras escrevendo numa tabela do Financeiro — o pedido já estaria
+      // 'Aprovado', o STATUS_FLOW passaria a oferecer só "Marcar Em Entrega" e
+      // o botão que gera a conta sumiria pra sempre: compra seguindo pro
+      // recebimento sem nenhum lançamento financeiro.
+      // Agora, se falhar, nada mudou e dá pra tentar de novo.
       if (pedido.status === 'Pendente') {
         // +30 dias se não houver prazo_entrega definido — garante que a conta tem vencimento.
         const vencimento = pedido.prazo_entrega
@@ -71,12 +76,19 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
           pedido_id: pedido.id,
           filial: pedido.filial ?? filial,
         });
-        showToast('Pedido aprovado! Conta a Pagar gerada.', 'success', true);
-      } else {
-        showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
       }
-    } catch {
-      showToast("Erro ao atualizar pedido.", 'error', true);
+
+      const updated = await dbUpdate('/api/pedidosview', pedido.id, { status: flow.next });
+      setData((prev: any[]) => prev.map(p => p.id === pedido.id ? (updated ?? { ...p, status: flow.next }) : p));
+
+      showToast(
+        pedido.status === 'Pendente'
+          ? 'Pedido aprovado! Conta a Pagar gerada.'
+          : `Pedido ${flow.next.toLowerCase()}!`,
+        'success', true
+      );
+    } catch (err: any) {
+      showToast(`Erro ao atualizar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setProcessing(null);
     }
