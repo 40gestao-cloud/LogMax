@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6,25 +6,41 @@ import { Search, Plus, Save, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, Pagination } from '../components/ui';
+import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/movimentacoesestoqueview', { filial });
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+
+  // Paginação server-side. Esta tabela é append-only e só cresce — carregar
+  // tudo e filtrar no cliente já custava a base inteira a cada abertura.
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
+
+  // A busca é por PRODUTO e vale sobre a tabela toda, não só sobre a página:
+  // resolvemos os ids no catálogo (já carregado acima) e mandamos `IN (...)`
+  // para o servidor. `searchColumns` do hook só alcança colunas da própria
+  // tabela, e o nome do produto mora em `produtos`.
+  const produtoIds = useMemo(
+    () => idsDeProdutosPorTermo(produtos, debouncedSearch),
+    [produtos, debouncedSearch],
+  );
+  const extraFilter = debouncedSearch.trim() ? { filial, produto_id: produtoIds } : { filial };
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/movimentacoesestoqueview', extraFilter, false, { page },
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ produto_id: '', tipo: '' });
   const [extras, setExtras] = useState({ qtd: '', origem: '', destino: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
-  const [search, setSearch] = useState('');
 
-  const enriched = data.map((m: any) => ({ ...m, prod: produtos.find((p: any) => p.id === m.produto_id) }));
-  const filtered = enriched.filter((m: any) =>
-    [m.tipo, m.prod?.nome, m.origem, m.destino].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = data.map((m: any) => ({ ...m, prod: produtos.find((p: any) => p.id === m.produto_id) }));
 
   const closeForm = () => { setShowForm(false); setForm({ produto_id: '', tipo: '' }); setExtras({ qtd: '', origem: '', destino: '' }); setErrors({}); };
 
@@ -92,7 +108,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
+            <input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Movimentação</NeuButtonAccent>
@@ -190,6 +206,14 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalCount={totalCount}
+          isLoading={isLoading}
+          onPrev={() => setPage(p => Math.max(0, p - 1))}
+          onNext={() => setPage(p => p + 1)}
+          onReload={reload}
+        />
       </div>
     </motion.div>
   );

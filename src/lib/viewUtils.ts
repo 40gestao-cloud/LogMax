@@ -493,3 +493,26 @@ export async function exportToExcel(sheetName: string, columns: string[], rows: 
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * IDs dos produtos cujo nome / código / EAN casam com o termo buscado.
+ *
+ * Usado pelas telas de Estoque (Movimentações, Inventários, Expedição) para
+ * fazer a busca por produto valer SOBRE A TABELA INTEIRA e não só sobre a
+ * página carregada: o resultado vira `{ produto_id: [ids] }` no extraFilter,
+ * que o PostgREST resolve com `IN (...)`.
+ *
+ * Só funciona porque essas telas já carregam o catálogo completo da filial
+ * (`/api/produtosview` sem paginação) para montar os selects — não custa
+ * nenhuma query a mais.
+ *
+ * Termo vazio devolve `[]`; cabe a quem chama não aplicar o filtro nesse caso
+ * (um `IN ()` vazio não devolveria nada).
+ */
+export function idsDeProdutosPorTermo(produtos: any[], termo: string): string[] {
+  const q = termo.trim().toLowerCase();
+  if (!q) return [];
+  return (produtos ?? [])
+    .filter((p: any) => [p.nome, p.codigo, p.ean].some((v: any) => String(v ?? '').toLowerCase().includes(q)))
+    .map((p: any) => p.id);
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -7,25 +7,40 @@ import { Search, Plus, Save, Trash2, Truck, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/expedicao', { filial });
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  useEffect(() => { setPage(0); }, [debouncedSearch]);
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+
+  // Busca por produto resolvida contra o catálogo (já carregado acima) e
+  // enviada como `IN (...)`: vale sobre a tabela toda, não só sobre a página.
+  const produtoIds = useMemo(
+    () => idsDeProdutosPorTermo(produtos, debouncedSearch),
+    [produtos, debouncedSearch],
+  );
+  const extraFilter = debouncedSearch.trim() ? { filial, produto_id: produtoIds } : { filial };
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
+    '/api/expedicao', extraFilter, false, { page },
+  );
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ produto_id: '' });
   const [extras, setExtras] = useState({ requisicao_id: '', qtd_expedida: '', data_expedicao: '' });
   const [expedindo, setExpedindo] = useState<string | null>(null);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const enriched = data.map((e: any) => ({ ...e, prod: produtos.find((p: any) => p.id === e.produto_id) }));
-  const filtered = enriched.filter((e: any) => [e.prod?.nome, e.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())));
+  // Busca já resolvida no servidor (produto_id IN ...).
+  const filtered = enriched;
 
   const closeForm = () => { setShowForm(false); setForm({ produto_id: '' }); setExtras({ requisicao_id: '', qtd_expedida: '', data_expedicao: '' }); setErrors({}); };
 
@@ -86,7 +101,7 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Expedição — {filial}</h2><p className="text-sm text-gray-400 mt-1">Gerencie a saída e expedição de produtos do estoque.</p></div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
+          <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar produto..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Expedição</NeuButtonAccent>
         </div>
       </div>
@@ -147,6 +162,14 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalCount={totalCount}
+          isLoading={isLoading}
+          onPrev={() => setPage(p => Math.max(0, p - 1))}
+          onNext={() => setPage(p => p + 1)}
+          onReload={reload}
+        />
       </div>
     </motion.div>
   );
