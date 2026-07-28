@@ -224,8 +224,13 @@ propõe pauta.
       placar calculado em `placar_snapshot`. Nada é digitado.
 - [x] ~~Conselho: pessoas distintas?~~ Sim — a Matriz tem 5 pessoas: 1 CEO,
       3 conselheiros e 1 admin.
-- [x] ~~Central de Avaliação: nota influencia o placar?~~ Influencia — as
-      notas de tarefa entram em `notas_tarefas` no cálculo do placar.
+- [ ] **Central de Avaliação: só a nota de TAREFA influencia o placar.**
+      `calcular_placar_competicao` filtra `item_tipo LIKE 'tarefa\_%'`. A
+      Central dá nota 0-10 em arte, promoção e campanha também — essas não
+      entram em lugar nenhum do cálculo. O conselho avalia oito tipos de item
+      achando que está pontuando; cinco deles não movem o placar. **Decisão de
+      negócio:** incluir os demais tipos no cálculo, ou dizer na tela que só
+      tarefa pontua.
 - [x] ~~Briefing IA: o cascade preserva `Em Andamento`/`Concluído`?~~
       Preserva. `excluir_briefing_cascade` apaga apenas `status = 'Pendente'`
       em `tarefas` e `marketing_tarefas`, e é restrita a admin/CEO.
@@ -247,11 +252,26 @@ e o `placar_snapshot` deixa registrada qualquer divergência.
 
 ### Etapa 6 — Marketing
 
-- [ ] Promoções: reversão por cron — o guard de ajuste manual segura mesmo? (P4)
-- [ ] Campanhas: ROI vem de venda real ou de campo digitado? (P13)
-- [ ] Cupons: validação server-side ou client-side? (P7)
-- [ ] Artes: nota 1-5★ influencia algo ou é enfeite? (P1)
-- [ ] Calendário editorial: status de post avança sozinho ou trava? (P4)
+- [x] ~~Promoções: o guard de ajuste manual segura?~~ Segura. A restauração é
+      `UPDATE produtos SET preco = preco_atual WHERE preco = preco_promocional`
+      — preço mexido à mão não é sobrescrito. E a função já usa `acre_today()`.
+- [x] **Campanhas: o ROI vinha de coincidência de calendário.** A view somava
+      como receita da campanha toda venda concluída da filial na janela de
+      datas, com ou sem relação com ela; o card se chama "Receita Atribuída".
+      Duas campanhas simultâneas contavam a mesma venda. Somava-se a isso um
+      erro de precedência AND/OR (a perna do cupom aceitava venda cancelada) e
+      `created_at::date` em UTC. Migr. 280. Estrago atual zero — nenhuma
+      campanha coincidiu com vendas ainda.
+- [x] ~~Cupons: validação server-side?~~ Sim, verificado na Etapa 3, e
+      `criar_venda_pdv` incrementa `usos` na mesma transação.
+- [x] ~~Artes: nota 1-5★~~ — `dar_feedback_arte` valida faixa 1-5 e restringe a
+      gerente/admin/CEO. A nota fica registrada e visível, sem consequência
+      automática — que é o que a tela promete. Sem achado.
+- [x] ~~Calendário editorial~~ — status é manual, sem cron por trás; não trava
+      nem avança sozinho. Sem achado.
+
+Marketing está zerado no ERP e na contabilidade (sem artes, posts, cupons ou
+campanhas com venda), então esta etapa é auditoria de código, não de dados.
 
 ---
 
