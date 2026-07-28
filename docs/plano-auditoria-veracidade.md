@@ -149,14 +149,26 @@ O risco mais alto do que sobrou.
 
 Maior volume de escrita do app.
 
-- [ ] Devolução de venda existe? Estorna estoque, caixa **e** conta a receber,
-      ou só muda status? (P2) — pendência #3 do controle de gestão
-- [ ] Fiado → `contas_receber` grava a `filial` certa? (P8)
-- [ ] Cupom aplicado desconta de verdade ou é decorativo? Validação é
-      server-side? (P1, P7)
-- [ ] Cliente Especial simulado por admin gera pedido real ou fantasma? (P5)
-- [ ] Orçamento → Pedido de Venda: o ciclo fecha, ou o orçamento fica eterno
-      em `Aprovado` como a requisição ficava? (P4)
+- [x] ~~Devolução de venda existe?~~ Existe e é completa: `criar_devolucao_venda`
+      (migr. 203) devolve estoque, cancela conta a receber pendente ou cria
+      conta a pagar. **Mas o gate validava o parâmetro errado** — conferia
+      `auth_gerente_da(p_filial)`, valor enviado pelo cliente, sem nunca
+      comparar com `vendas.filial`. Fechado pela migr. 276, no trigger.
+- [x] ~~Fiado → `contas_receber` grava a `filial` certa?~~ A versão viva da
+      `criar_venda_pdv` grava. A **fóssil de 7 argumentos**, que ninguém tinha
+      dropado e seguia executável, não conhece filial. Migr. 274.
+- [x] ~~Cupom~~ — validação server-side rigorosa: existência, janela de
+      validade, filial, valor mínimo, limite de uso, recálculo do desconto e
+      recusa se o cliente enviou valor diferente do calculado. Sem achado.
+- [x] ~~Cliente Especial~~ — restrito a admin/CEO no menu, e a conversão exige
+      `status = 'Aprovado Cliente'`. Não gera pedido fantasma.
+- [x] ~~Orçamento → Pedido de Venda~~ — `converter_orcamento_em_pedido` fecha o
+      ciclo, é idempotente (devolve o pedido existente em vez de duplicar) e
+      usa a filial do orçamento. Sem achado.
+- [ ] **`contas_receber` não tem `venda_id`.** O vínculo com a venda é o short
+      id dentro da descrição — mesmo padrão de texto livre que a migr. 269
+      acabou de eliminar na folha. Backfill por descrição é frágil (6 chars);
+      vale a coluna daqui para frente. (P1)
 
 ---
 
