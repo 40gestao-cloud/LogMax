@@ -64,11 +64,13 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
-    // Era `.eq('status','Aberto')` — status que nenhuma escrita produz (as
-    // contas nascem 'Pendente'), então o card ficava eternamente em R$ 0,00.
-    // Faltava também o recorte por filial: somava a holding inteira.
+    // 'Aberto' é o vocabulário real desta tabela: é o DEFAULT da coluna, é o
+    // que `criar_venda_pdv` grava (fiado, cartão, parcelas) e é o que o insert
+    // desta tela usa. A correção anterior trocou para 'Pendente' — vocabulário
+    // de contas_pagar — e o card seguiu em R$ 0,00 por outro motivo. O recorte
+    // por filial, esse sim, faltava mesmo.
     supabase.from('contas_receber').select('valor, vencimento, status')
-      .eq('status', 'Pendente').eq('ativo', true).eq('filial', filial)
+      .eq('status', 'Aberto').eq('ativo', true).eq('filial', filial)
       .then(({ data: rows }) => {
         if (cancelled) return;
         // Soma valor atualizado (com juros/multa pra vencidas) — total real esperado a receber.

@@ -101,11 +101,17 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     if (!supabase) return;
     setRecreditandoId(f.id);
     try {
-      const { data, error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
+      // Mesma RPC da transição: credita, avança o status se ainda estiver em
+      // Processada e fecha a falha registrada em folha_credito_falhas.
+      const { data, error } = await supabase.rpc('pagar_folha', { p_folha_id: f.id });
+      const res = data as any;
       if (error) {
         showToast(`Falha ao re-creditar: ${parseCreditError(error.message)}`, 'error');
+      } else if (!res?.ok) {
+        showToast(`Falha ao re-creditar: ${parseCreditError(res?.erro ?? 'erro desconhecido')}`, 'error');
       } else {
-        const benef = Number((data as any)?.valor_beneficios ?? f.valor_beneficios ?? 0);
+        const benef = Number(res?.valor_beneficios ?? f.valor_beneficios ?? 0);
+        setData(prev => prev.map(x => x.id === f.id ? { ...x, status: 'Paga' } : x));
         showToast(
           benef > 0
             ? `Salário e R$ ${benef.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em benefícios creditados no MaxBank.`
@@ -360,26 +366,34 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     const next = statusNext(f.status);
     if (!next) return; // 'Paga' é estado terminal — sem reversão
     try {
+      // Processada → Paga é transição transacional: quem credita é a RPC
+      // `pagar_folha`, e o status só avança se o crédito passou (migr. 269).
+      // A tela não escreve mais 'Paga' por conta própria.
+      if (next === 'Paga') {
+        if (!supabase) return;
+        const { data, error } = await supabase.rpc('pagar_folha', { p_folha_id: f.id });
+        if (error) {
+          showToast(`Não foi possível pagar a folha: ${parseCreditError(error.message)}`, 'error');
+          return;
+        }
+        const res = data as any;
+        if (!res?.ok) {
+          showToast(`Folha continua em Processada — MaxBank não creditado: ${parseCreditError(res?.erro ?? 'erro desconhecido')}. Corrija o cadastro e use o botão ↺ na linha.`, 'error');
+          return;
+        }
+        setData(prev => prev.map(x => x.id === f.id ? { ...x, status: next } : x));
+        const benef = Number(res?.valor_beneficios ?? f.valor_beneficios ?? 0);
+        showToast(
+          benef > 0
+            ? `Folha paga — salário e R$ ${benef.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em benefícios creditados no MaxBank.`
+            : 'Folha paga — saldo do colaborador atualizado no MaxBank.',
+          'success',
+        );
+        return;
+      }
+
       await dbSetStatus('/api/folhapagamentoview', f.id, next);
       setData(prev => prev.map(x => x.id === f.id ? { ...x, status: next } : x));
-
-      // Processada → Paga: credita salário líquido na carteira MaxBank
-      // do colaborador. Idempotência via UNIQUE parcial em maxbank_transacoes
-      // (origem='folha_pagamento', origem_id=folha.id): chamar 2x é seguro.
-      if (next === 'Paga' && supabase) {
-        const { data, error } = await supabase.rpc('creditar_folha_maxbank', { p_folha_id: f.id });
-        if (error) {
-          console.error('[FolhaPagamento] erro ao creditar MaxBank:', error);
-          showToast(`Folha marcada como Paga, mas MaxBank não creditado: ${parseCreditError(error.message)}. Use o botão ↺ na linha para tentar novamente.`, 'error');
-        } else {
-          const benef = Number((data as any)?.valor_beneficios ?? f.valor_beneficios ?? 0);
-          if (benef > 0) {
-            showToast(`Folha paga — salário e R$ ${benef.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em benefícios creditados no MaxBank.`, 'success');
-          } else {
-            showToast('Folha paga — saldo do colaborador atualizado no MaxBank.', 'success');
-          }
-        }
-      }
 
       // Pendente → Processada: gera Conta a Pagar para o líquido do funcionário.
       // Idempotência: marcador `[folha:${id}]` na descrição evita duplicados em race.
@@ -387,10 +401,12 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         const liquido = Number(f.salario_liquido ?? (Number(f.salario_bruto || 0) - Number(f.descontos || 0)));
         if (liquido > 0 && supabase) {
           const marker = `[folha:${f.id}]`;
+          // O vínculo real é a coluna (migr. 269); o marcador ficou só como
+          // rótulo legível na descrição.
           const { data: existentes } = await supabase
             .from('contas_pagar')
             .select('id')
-            .like('descricao', `%${marker}%`)
+            .eq('folha_pagamento_id', f.id)
             .limit(1);
           if (!existentes || existentes.length === 0) {
             const func = funcionarios.find(fn => fn.id === f.funcionario_id);
@@ -408,6 +424,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                 vencimento,
                 status: 'Pendente',
                 filial,
+                folha_pagamento_id: f.id,
               });
               showToast('Folha processada — Conta a Pagar gerada.', 'success');
             } catch {
@@ -548,11 +565,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                               <Calculator size={12} />
                             </button>
                           )}
-                          {f.status === 'Paga' && (
+                          {(f.status === 'Paga' || f.status === 'Processada') && (
                             <button
                               onClick={() => handleRecreditar(f)}
                               disabled={recreditandoId === f.id}
-                              title="Re-creditar MaxBank (seguro repetir — idempotente)"
+                              title="Creditar MaxBank / tentar de novo (seguro repetir — idempotente)"
                               className="action-btn-edit disabled:opacity-50"
                             >
                               <RefreshCw size={12} />
