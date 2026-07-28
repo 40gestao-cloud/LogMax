@@ -11,7 +11,7 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAL_DEFAULT } from '../lib/filiais';
 import {
   validarImagemProduto,
   uploadImagemProduto,
@@ -153,7 +153,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       page,
       searchTerm: debouncedSearch,
       searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'],
-      orderBy: 'codigo',
+      // codigo_seq = parte numérica do código (coluna gerada, migr. 265).
+      // Ordenar pelo texto embaralhava a lista, porque o padding é
+      // inconsistente na base (ML-004 convive com ML-31) — e como a paginação
+      // é server-side, a ordem errada movia produtos entre páginas.
+      orderBy: 'codigo_seq',
       ascending: false,
     }
   );
@@ -191,23 +195,44 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [imagemUploading, setImagemUploading] = useState<number | null>(null);
   const imagemInputRefs = useRef<(HTMLInputElement | null)[]>(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
 
-  // Pesquisa é server-side. Ordem de exibição: agrupar por filial (ordem fixa
-  // de FILIAIS_HOLDING) e dentro de cada filial mostrar do código maior para
-  // o menor (último cadastrado primeiro). `numeric: true` trata ML-10 > ML-9
-  // corretamente mesmo sem zero-padding.
-  const filialRank = (f?: string) => {
-    const idx = (FILIAIS_HOLDING as readonly string[]).indexOf(f ?? '');
-    return idx === -1 ? FILIAIS_HOLDING.length : idx;
-  };
-  const filtered = [...data].sort((a: any, b: any) => {
-    const ra = filialRank(a.filial);
-    const rb = filialRank(b.filial);
-    if (ra !== rb) return ra - rb;
+  // Pesquisa e ordenação são server-side (codigo_seq DESC). Este sort só
+  // reaplica o mesmo critério na página recebida — mantém a ordem estável se
+  // um item for editado em memória. Não agrupa por filial: esta tela sempre
+  // opera dentro de UMA filial (Matriz cai em MatrizConsolidado).
+  const ordenarPorCodigoDesc = (rows: any[]) => [...rows].sort((a: any, b: any) => {
+    const sa = Number(a.codigo_seq ?? 0);
+    const sb = Number(b.codigo_seq ?? 0);
+    if (sa !== sb) return sb - sa;
     return String(b.codigo ?? '').localeCompare(String(a.codigo ?? ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
   });
+  const filtered = ordenarPorCodigoDesc(data);
+
+  // Exportação NÃO pode sair da página visível: `data` traz só 50 linhas
+  // (paginação server-side). Refaz a query com os mesmos filtros e sem range,
+  // igual ao padrão de ContasPagarView/ContasReceberView.
+  const fetchAllForExport = async (): Promise<any[]> => {
+    if (!supabase) return filtered;
+    let q = supabase
+      .from('produtos_com_custo')
+      .select('*')
+      .eq('ativo', true)
+      .eq('filial', filial)
+      .neq('tipo', 'patrimonio')
+      .order('codigo_seq', { ascending: false });
+    const termo = debouncedSearch.trim();
+    if (termo) {
+      // Mesmo escape do useFetchData: vírgula/parêntesis/asterisco têm
+      // significado especial no `or()` do PostgREST.
+      const safe = termo.replace(/[,()*]/g, ' ');
+      q = q.or(['nome', 'codigo', 'categoria', 'ean', 'fornecedor'].map(c => `${c}.ilike.%${safe}%`).join(','));
+    }
+    const { data: rows, error: err } = await q;
+    if (err) throw new Error(err.message);
+    return ordenarPorCodigoDesc(rows ?? []);
+  };
 
   const exportCols = ['Código', 'Nome', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Margem', 'Estoque', 'Est. Mín', 'EAN', 'Status'];
-  const exportRows = () => filtered.map((d: any) => {
+  const buildExportRows = (rows: any[]) => rows.map((d: any) => {
     const m = calcMargem(d.preco, d.preco_custo);
     return [
       d.codigo ?? '', d.nome ?? '', d.categoria ?? '', d.fornecedor ?? '',
@@ -222,6 +247,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // etiquetas EAN-13 escaneáveis ao final, uma para cada produto com EAN válido.
   const handleExportPDF = async () => {
     try {
+      const todos = await fetchAllForExport();
       const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
@@ -247,14 +273,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       autoTable(doc, {
         startY: 38,
         head: [exportCols],
-        body: exportRows(),
+        body: buildExportRows(todos),
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
         alternateRowStyles: { fillColor: [245, 247, 245] },
       });
 
-      const etiquetaInput = filtered.map((p: any) => ({
+      const etiquetaInput = todos.map((p: any) => ({
         nome:   p.nome,
         ean:    p.ean,
         codigo: p.codigo,
@@ -270,7 +296,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       showToast(err?.message || 'Falha ao gerar PDF.', 'error', true);
     }
   };
-  const handleExportExcel = () => exportToExcel('Produtos', exportCols, exportRows(), 'logmax-produtos');
+  const handleExportExcel = async () => {
+    try {
+      const todos = await fetchAllForExport();
+      exportToExcel('Produtos', exportCols, buildExportRows(todos), 'logmax-produtos');
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao gerar Excel.', 'error', true);
+    }
+  };
 
   // PDF só de etiquetas. Sem seleção, sai a página atual da listagem (o
   // comportamento antigo do botão PDF); com seleção, saem exatamente os itens
