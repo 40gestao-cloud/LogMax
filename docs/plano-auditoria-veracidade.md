@@ -216,14 +216,32 @@ Contas a Pagar/Receber e Controle de Caixa já foram (migr. 267). Ficaram:
 Muita automação sem operador olhando: cron 03:10, cache de 1h do BI, IA que
 propõe pauta.
 
-- [ ] Ranking 3-2-1 × peso confere com os dados de origem, ou o placar é
-      narrativa? (S2)
-- [ ] Julgamento do conselho: CEO e conselheiros são pessoas distintas na
-      prática, ou o mesmo usuário acumula? (P10)
-- [ ] Avisos da Matriz: "Ciente" prova leitura ou só marca linha? (P1)
-- [ ] Briefing IA: tarefa aprovada vira tarefa real; o cascade de exclusão
-      preserva `Em Andamento`/`Concluído` como promete? (P4)
-- [ ] Central de Avaliação: nota 0-10 influencia o placar ou é enfeite? (P1)
+- [x] ~~Ranking confere com os dados de origem?~~ Confere.
+      `calcular_placar_competicao` deriva das notas reais
+      (`avaliacoes_matriz` + `criterios_avaliacao`), exclui avaliações de
+      admin e só inclui os eixos subjetivos quando as 3 filiais têm avaliação
+      no período. `declarar_vencedora` exige ao menos um voto e congela o
+      placar calculado em `placar_snapshot`. Nada é digitado.
+- [x] ~~Conselho: pessoas distintas?~~ Sim — a Matriz tem 5 pessoas: 1 CEO,
+      3 conselheiros e 1 admin.
+- [x] ~~Central de Avaliação: nota influencia o placar?~~ Influencia — as
+      notas de tarefa entram em `notas_tarefas` no cálculo do placar.
+- [x] ~~Briefing IA: o cascade preserva `Em Andamento`/`Concluído`?~~
+      Preserva. `excluir_briefing_cascade` apaga apenas `status = 'Pendente'`
+      em `tarefas` e `marketing_tarefas`, e é restrita a admin/CEO.
+- [x] ~~Avisos da Matriz: "Ciente" prova leitura?~~ Prova o clique, com autor e
+      data — 15 confirmações de 15 pessoas distintas no aviso vigente, e a
+      policy exige `user_id = auth.uid()`, então ninguém confirma pelo outro.
+      É o que a palavra "Ciente" promete; não promete leitura.
+- [x] **Seis RPCs decidiam o dia em UTC** (P12), incluindo o cron das 03:10 —
+      que roda às 22:10 no Acre e expirava competição antes de o dia acabar.
+      Junto: devolução, conversão de orçamento, empréstimo, saldo de capital e
+      vitrine pública. Migr. 279.
+
+**Observação, não achado:** `declarar_vencedora` aceita a filial vencedora por
+parâmetro e não exige que coincida com o primeiro colocado do placar. É
+coerente com o desenho (o conselho é soberano, a IA e o placar são subsídio),
+e o `placar_snapshot` deixa registrada qualquer divergência.
 
 ---
 
