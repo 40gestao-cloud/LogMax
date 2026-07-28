@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Target, ClipboardList, Calendar, Users, Trophy,
+  Target, ClipboardList, Calendar, Users, Trophy, FileDown, Loader2,
   GraduationCap, Cpu, Presentation, UserCircle, DollarSign, Package, Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MetasView } from './MetasView';
+import { exportDemandasPDF, type DemandasRelatorio } from '../lib/demandasPdf';
 
 type Aba = 'metas' | 'conselho';
 
@@ -76,7 +78,12 @@ const TIPO_META: Record<string, { label: string; icon: LucideIcon; color: string
 
 const fmtData = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
 
-function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast }: {
+const rotuloStatus = (status: string) =>
+  status === 'em_andamento' ? 'Em andamento'
+    : status === 'aguardando_encerramento' ? 'Aguardando encerramento'
+    : 'Encerrada';
+
+function DemandasConselhoList({ profile, filial, showToast }: {
   profile: UserProfile;
   filial: string | null;
   showToast: any;
@@ -86,6 +93,12 @@ function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoP[]>([]);
+  const [exportando, setExportando] = useState(false);
+
+  // Gerente baixa o consolidado da própria filial; admin/CEO/conselheiro
+  // também, já que enxergam a tela toda. Colaborador só lê na tela.
+  const podeExportar = profile.role === 'gerente' || profile.role === 'admin'
+    || profile.role === 'ceo' || isConselheiro(profile);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -158,6 +171,57 @@ function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast
     return m;
   }, [avaliacoes]);
 
+  // Uma linha por card — a tela e o PDF consomem exatamente o mesmo cálculo,
+  // na mesma ordem (tarefas já vêm por data asc).
+  const cards = useMemo(() => tarefas.map(t => {
+    const parts = partPorTarefa[t.id] ?? [];
+    const meusParts = filial ? parts.filter(p => p.filial === filial) : [];
+    const outrosParts = filial ? parts.filter(p => p.filial !== filial) : parts;
+
+    // Média da filial ativa = média das médias dos participantes desta filial nesta tarefa.
+    const notasFilial = meusParts.map(p => notasPorParticipante[p.id]).filter((n): n is number => n != null);
+    const mediaFilial = notasFilial.length === 0 ? null
+      : notasFilial.reduce((s, n) => s + n, 0) / notasFilial.length;
+
+    const outrasFiliais = Object.entries(
+      outrosParts.reduce<Record<string, number>>((acc, p) => { acc[p.filial] = (acc[p.filial] ?? 0) + 1; return acc; }, {})
+    ).map(([f, total]) => ({ filial: f, total }));
+
+    return { tarefa: t, meusParts, outrosParts, mediaFilial, outrasFiliais };
+  }), [tarefas, partPorTarefa, notasPorParticipante, filial]);
+
+  const baixarPDF = async () => {
+    if (!comp) return;
+    setExportando(true);
+    try {
+      const rel: DemandasRelatorio = {
+        competicaoNome: comp.nome,
+        competicaoStatus: rotuloStatus(comp.status),
+        dataInicio: comp.data_inicio,
+        dataFim: comp.data_fim,
+        filial,
+        tarefas: cards.map(c => ({
+          tipoLabel: TIPO_META[c.tarefa.tipo]?.label ?? c.tarefa.tipo,
+          nome: c.tarefa.nome,
+          data: c.tarefa.data,
+          descricao: c.tarefa.descricao,
+          mediaFilial: c.mediaFilial,
+          participantes: c.meusParts.map(p => ({
+            nome: p.nome_snapshot,
+            media: notasPorParticipante[p.id] ?? null,
+          })),
+          outrasFiliais: c.outrasFiliais,
+        })),
+      };
+      const base = `demandas-conselho-${comp.nome}${filial ? `-${filial}` : ''}`;
+      await exportDemandasPDF(rel, base.trim().replace(/[^a-zA-Z0-9]+/g, '-'), 'download', profile, showToast);
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    } finally {
+      setExportando(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
   if (!comp) return (
     <div className="neu-flat rounded-3xl p-12 border border-white/5">
@@ -169,19 +233,32 @@ function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast
     <div className="flex flex-col gap-4">
       {/* Cabeçalho da competição atual */}
       <div className="neu-flat rounded-3xl p-6 border border-amber-500/20">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <Trophy size={14} className="text-amber-300" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Competição do Conselho</p>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
-            {comp.status === 'em_andamento' ? 'Em andamento'
-              : comp.status === 'aguardando_encerramento' ? 'Aguardando encerramento'
-              : 'Encerrada'}
-          </span>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <Trophy size={14} className="text-amber-300" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Competição do Conselho</p>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                {rotuloStatus(comp.status)}
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-gray-100">{comp.nome}</h3>
+            <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
+              <Calendar size={11} /> {fmtData(comp.data_inicio)} → {fmtData(comp.data_fim)}
+            </p>
+          </div>
+          {podeExportar && (
+            <button
+              onClick={baixarPDF}
+              disabled={exportando || tarefas.length === 0}
+              className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Baixar as demandas em PDF, com a descrição de cada tarefa"
+            >
+              {exportando ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+              PDF
+            </button>
+          )}
         </div>
-        <h3 className="text-lg font-black text-gray-100">{comp.nome}</h3>
-        <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
-          <Calendar size={11} /> {fmtData(comp.data_inicio)} → {fmtData(comp.data_fim)}
-        </p>
       </div>
 
       {/* Lista de tarefas */}
@@ -191,17 +268,9 @@ function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {tarefas.map(t => {
+          {cards.map(({ tarefa: t, meusParts, outrosParts, mediaFilial, outrasFiliais }) => {
             const meta = TIPO_META[t.tipo] ?? { label: t.tipo, icon: ClipboardList, color: 'text-gray-400' };
             const Icone = meta.icon;
-            const parts = partPorTarefa[t.id] ?? [];
-            const meusParts = filial ? parts.filter(p => p.filial === filial) : [];
-            const outrosParts = filial ? parts.filter(p => p.filial !== filial) : parts;
-
-            // Média da filial ativa = média das médias dos participantes desta filial nesta tarefa.
-            const notasFilial = meusParts.map(p => notasPorParticipante[p.id]).filter((n): n is number => n != null);
-            const mediaFilial = notasFilial.length === 0 ? null
-              : notasFilial.reduce((s, n) => s + n, 0) / notasFilial.length;
 
             return (
               <div key={t.id} className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
@@ -254,12 +323,10 @@ function DemandasConselhoList({ profile: _profile, filial, showToast: _showToast
                   <div className="pt-2 border-t border-white/5">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Outras filiais</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(
-                        outrosParts.reduce<Record<string, number>>((acc, p) => { acc[p.filial] = (acc[p.filial] ?? 0) + 1; return acc; }, {})
-                      ).map(([f, count]) => (
+                      {outrasFiliais.map(({ filial: f, total }) => (
                         <span key={f} className="flex items-center gap-1 text-[11px]">
                           <FilialBadge filial={f} />
-                          <span className="text-gray-500">×{count}</span>
+                          <span className="text-gray-500">×{total}</span>
                         </span>
                       ))}
                     </div>
