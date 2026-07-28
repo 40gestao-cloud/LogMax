@@ -3,7 +3,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus,
+  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
@@ -84,7 +84,12 @@ const getDaysInRange = (start: string, end: string): string[] => {
   return days;
 };
 
-const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+// Matriz entra como unidade registrável: os funcionários da holding também têm
+// frequência lançada, e é a partir daí que dá pra comparar o cumprimento das filiais.
+const FILIAIS_REG = ['Matriz', 'SuperMax', 'MaxLook', 'TechMax'] as const;
+
+// Funcionário sem filial definida é tratado como Matriz (FILIAL_DEFAULT).
+const filialDoFunc = (f: any): string => f?.filial ?? 'Matriz';
 
 const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   const { user } = useAuth();
@@ -123,7 +128,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? [])
       .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
-      .filter((f: any) => filialEfetiva === null || (f.filial ?? null) === filialEfetiva)
+      .filter((f: any) => filialEfetiva === null || filialDoFunc(f) === filialEfetiva)
       .sort((a: any, b: any) =>
         (a.nome ?? '').trim().localeCompare((b.nome ?? '').trim(), 'pt-BR', { sensitivity: 'base' })
       ),
@@ -133,7 +138,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   const funcIdsFilial = useMemo(
     () => new Set(
       (funcionarios ?? [])
-        .filter((f: any) => filialEfetiva === null || (f.filial ?? null) === filialEfetiva)
+        .filter((f: any) => filialEfetiva === null || filialDoFunc(f) === filialEfetiva)
         .map((f: any) => f.id)
     ),
     [funcionarios, filialEfetiva],
@@ -242,6 +247,45 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
     return getDaysInRange(startOfMonth(dataSelecionada), endOfMonth(dataSelecionada));
   }, [filtro, dataSelecionada]);
 
+  // Mapa de frequência sem recorte de filial — base do painel de cumprimento.
+  const freqMapGlobal = useMemo(() => {
+    const m = new Map<string, Frequencia>();
+    (frequencias ?? []).forEach(f => m.set(`${f.funcionario_id}|${f.data}`, f));
+    return m;
+  }, [frequencias]);
+
+  // Dias cobrados: só dias úteis (seg–sex) já passados ou hoje.
+  const diasCobrados = useMemo(
+    () => diasPeriodo.filter(d => {
+      if (d > today) return false;
+      const dow = new Date(d + 'T12:00:00').getDay();
+      return dow >= 1 && dow <= 5;
+    }),
+    [diasPeriodo, today],
+  );
+
+  // Cumprimento por unidade: quantos lançamentos existem vs. quantos deveriam existir.
+  const cumprimento = useMemo(() => {
+    const ativos = (funcionarios ?? []).filter((f: any) => (f.status ?? 'Ativo') === 'Ativo');
+    return FILIAIS_REG.map(unidade => {
+      const doUnidade = ativos.filter((f: any) => filialDoFunc(f) === unidade);
+      const esperado = doUnidade.length * diasCobrados.length;
+      let registrados = 0;
+      let ultimo: string | null = null;
+      doUnidade.forEach((f: any) => {
+        diasCobrados.forEach(d => {
+          const reg = freqMapGlobal.get(`${f.id}|${d}`);
+          if (reg) {
+            registrados++;
+            if (!ultimo || d > ultimo) ultimo = d;
+          }
+        });
+      });
+      const pct = esperado > 0 ? Math.round((registrados / esperado) * 100) : 0;
+      return { unidade, funcionarios: doUnidade.length, esperado, registrados, pct, ultimo };
+    });
+  }, [funcionarios, diasCobrados, freqMapGlobal]);
+
   if (!canEdit) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
@@ -266,7 +310,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
           {/* Filtro de filial — só no modo Matriz */}
           {filial === null && (
             <div className="flex items-center gap-1 rounded-xl border border-white/10 p-1 neu-flat">
-              {([null, ...FILIAIS_OP] as (string | null)[]).map(f => (
+              {([null, ...FILIAIS_REG] as (string | null)[]).map(f => (
                 <button
                   key={f ?? 'todas'}
                   onClick={() => setFilialFiltro(f)}
@@ -364,6 +408,58 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
           <div className="neu-flat rounded-2xl p-4 border border-white/5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Sem registro</div>
             <div className="text-2xl font-bold text-gray-400 tabular-nums">{statsForDate.semRegistro}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Cumprimento por unidade — só no modo Matriz */}
+      {filial === null && (
+        <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Building2 size={14} className="text-accent" />
+            <h3 className="text-sm font-bold text-gray-300">Cumprimento do Registro por Unidade</h3>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            {diasCobrados.length} dia(s) útil(eis) até hoje no período · esperado = funcionários ativos × dias úteis
+          </p>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[560px]">
+              <thead>
+                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="pb-3 font-bold px-3">Unidade</th>
+                  <th className="pb-3 font-bold px-3 text-center">Funcionários</th>
+                  <th className="pb-3 font-bold px-3 text-center">Registros</th>
+                  <th className="pb-3 font-bold px-3 text-center">Esperado</th>
+                  <th className="pb-3 font-bold px-3">Cobertura</th>
+                  <th className="pb-3 font-bold px-3 text-center">Último</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cumprimento.map(c => {
+                  const cor = c.pct >= 90 ? 'text-emerald-400' : c.pct >= 60 ? 'text-yellow-400' : 'text-red-400';
+                  const barra = c.pct >= 90 ? 'bg-emerald-400' : c.pct >= 60 ? 'bg-yellow-400' : 'bg-red-400';
+                  return (
+                    <tr key={c.unidade} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="py-2.5 px-3 text-sm font-semibold text-gray-200">{c.unidade}</td>
+                      <td className="py-2.5 px-3 text-xs text-gray-400 text-center tabular-nums">{c.funcionarios}</td>
+                      <td className="py-2.5 px-3 text-xs text-gray-300 text-center tabular-nums">{c.registrados}</td>
+                      <td className="py-2.5 px-3 text-xs text-gray-500 text-center tabular-nums">{c.esperado}</td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden min-w-[60px]">
+                            <div className={`h-full rounded-full ${barra}`} style={{ width: `${Math.min(c.pct, 100)}%` }} />
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums w-10 text-right ${cor}`}>{c.pct}%</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-[11px] font-mono text-gray-500 text-center tabular-nums">
+                        {c.ultimo ? fmtData(c.ultimo) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
