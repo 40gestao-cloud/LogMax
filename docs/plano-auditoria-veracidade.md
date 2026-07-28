@@ -224,13 +224,12 @@ propõe pauta.
       placar calculado em `placar_snapshot`. Nada é digitado.
 - [x] ~~Conselho: pessoas distintas?~~ Sim — a Matriz tem 5 pessoas: 1 CEO,
       3 conselheiros e 1 admin.
-- [ ] **Central de Avaliação: só a nota de TAREFA influencia o placar.**
-      `calcular_placar_competicao` filtra `item_tipo LIKE 'tarefa\_%'`. A
-      Central dá nota 0-10 em arte, promoção e campanha também — essas não
-      entram em lugar nenhum do cálculo. O conselho avalia oito tipos de item
-      achando que está pontuando; cinco deles não movem o placar. **Decisão de
-      negócio:** incluir os demais tipos no cálculo, ou dizer na tela que só
-      tarefa pontua.
+- [x] ~~Central de Avaliação: nota influencia o placar?~~ Influencia, e o
+      recorte está correto. `calcular_placar_competicao` filtra
+      `item_tipo LIKE 'tarefa\_%'` porque hoje o conselho **só** dá nota em
+      tarefa — `MatrizTarefasPanel` oferece os 7 tipos `tarefa_*` e mais
+      nenhum. A nota em arte/promoção/campanha saiu do produto; o que sobrou
+      no banco é resíduo de assinatura da RPC, não caminho vivo.
 - [x] ~~Briefing IA: o cascade preserva `Em Andamento`/`Concluído`?~~
       Preserva. `excluir_briefing_cascade` apaga apenas `status = 'Pendente'`
       em `tarefas` e `marketing_tarefas`, e é restrita a admin/CEO.
@@ -279,11 +278,28 @@ campanhas com venda), então esta etapa é auditoria de código, não de dados.
 
 Menor risco financeiro, mas:
 
-- [ ] **Metas** — folga concedida é debitada de algum saldo, ou é infinita? (S2)
-- [ ] Metas em 2 níveis: o tático consome o pool do estratégico de verdade?
-- [ ] TI Chamados: SLA existe ou é campo decorativo? (P1)
-- [ ] Feedback anônimo: é mesmo anônimo? (`autor_id` ausente na tabela **e**
-      nos logs)
+- [x] ~~**Metas** — folga concedida é debitada de algum saldo?~~ Não se aplica:
+      o sistema de folga saiu do produto.
+- [x] ~~Metas em 2 níveis: o tático consome o pool do estratégico?~~ Não se
+      aplica: o consumo de pool saiu do produto.
+- [x] ~~TI Chamados: SLA existe?~~ Não se aplica: o submenu saiu de operação em
+      2026-07-27 e a tabela está zerada nas 4 turmas. Nunca houve campo de SLA
+      em `ti_chamados` — não havia o que mentir.
+- [x] ~~Feedback anônimo: é mesmo anônimo?~~ É. `feedbacks_organizacao` não tem
+      `autor_id` nem `criado_por` — o anonimato é estrutural, não uma promessa
+      da tela. Nenhum trigger na tabela (o de auditoria não a alcança), não há
+      tabela de log no schema, e o DELETE está fechado com `USING (false)`:
+      nem admin apaga. Limite honesto: o log de request do PostgREST/Supabase
+      é infraestrutura e está fora do alcance do app.
+- [x] ~~Max Work~~ — `max_docs` e `max_planilhas` com RLS ligada e 4 policies
+      cada: dono lê/escreve o próprio, docente lê e apaga. INSERT e UPDATE
+      exigem `user_id = auth.uid()`, então ninguém escreve no documento alheio.
+      Sem achado.
+- [x] **Whitelist do Modo Aula estava fora de sincronia com o menu** nos dois
+      sentidos: sobravam `Tarefas` (6 módulos), `Vitrine Pública` e `Chamados`
+      — o professor liberava submenu que não existe; e faltavam `Alçadas`,
+      `Notas Emitidas` e `Devoluções` — que não podiam ser liberados e sumiam
+      da aula sem explicação. Sincronizada em 2026-07-28.
 
 ---
 

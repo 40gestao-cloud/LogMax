@@ -51,15 +51,15 @@ export const AULA_ROLES_ALVO: { id: string; label: string }[] = [
 // Se um dia adicionar/remover submenu lá, atualizar aqui também — testes
 // visuais na tela de Modo Aula deixam isso óbvio.
 export const AULA_SUBMENUS: Record<string, string[]> = {
-  empresa:    ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Tarefas'],
+  empresa:    ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos'],
   cadastros:  ['Categorias', 'Produtos', 'Fornecedores', 'Serviços'],
-  compras:    ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios', 'Tarefas'],
-  estoque:    ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios', 'Tarefas'],
-  financeiro: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Juros & Multa', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Pedidos de Venda', 'Recibos de Vendas', 'Capital', 'Gerenciamento', 'Relatórios', 'Tarefas'],
-  rh:         ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios', 'Tarefas'],
-  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Cliente Especial', 'Tarefas'],
-  marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário', 'Vitrine Pública', 'Tarefas'],
-  ti:         ['Chamados', 'Desenvolvimento com IA'],
+  compras:    ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios'],
+  estoque:    ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios'],
+  financeiro: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Juros & Multa', 'Alçadas', 'Notas Emitidas', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Pedidos de Venda', 'Recibos de Vendas', 'Capital', 'Gerenciamento', 'Relatórios'],
+  rh:         ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios'],
+  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Devoluções', 'Cliente Especial'],
+  marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário'],
+  ti:         ['Desenvolvimento com IA'],
   'max-work': ['Docs', 'Planilhas', 'Show'],
 };
 
