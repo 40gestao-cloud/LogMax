@@ -1,112 +1,50 @@
 // Exports (PDF + Excel) do consolidado da Central de Avaliação — Matriz.
-// Reúne "Dados das Filiais" (6 grupos) + "Tarefas da Matriz" (3 tipos) numa
-// única busca e gera os dois formatos. Mesmo padrão dos outros exports do
-// projeto: dynamic import das libs pesadas (jsPDF/autoTable, exceljs).
+// Espelha exatamente o que a tela mostra: os cards de "Tarefas da Matriz"
+// por tipo. A antiga seção "Dados das Filiais" (6 grupos vindos dos módulos
+// operacionais) saiu da Competição do Conselho e por isso saiu daqui também.
 //
-// A config de grupos/tipos é uma cópia da usada em MatrizAvaliacoesView.tsx
-// e MatrizTarefasPanel.tsx — mesma convenção já usada no projeto pra essas
-// telas (cada uma mantém sua própria cópia de OP_FILIAIS/FILIAL_COLOR etc.).
+// Ordem canônica = ordem dos cards em MatrizTarefasPanel.tsx (TIPOS) →
+// tarefas por data desc → participantes por filial (SuperMax, MaxLook,
+// TechMax) e alfabético dentro da filial. Mesmo padrão dos outros exports
+// do projeto: dynamic import das libs pesadas (jsPDF/autoTable, exceljs).
 
-import { supabase, ENDPOINT_TABLE_MAP } from './supabase';
+import { supabase } from './supabase';
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
 import { GOLD, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+const ORDEM_FILIAL = new Map(OP_FILIAIS.map((f, i) => [f as string, i] as const));
 
-type TipoCfg = { id: string; label: string; endpoint: string; descField: string[]; dateField: string; creative: boolean };
-type GrupoCfg = { id: string; label: string; tipos: TipoCfg[] };
-
-const GRUPOS: GrupoCfg[] = [
-  {
-    id: 'marketing', label: 'Marketing',
-    tipos: [
-      { id: 'arte',          label: 'Artes',         endpoint: '/api/marketingartesview',       descField: ['titulo','nome','descricao'], dateField: 'created_at',    creative: true },
-      { id: 'promocao',      label: 'Promoções',     endpoint: '/api/marketingpromocoesview',   descField: ['nome','titulo','descricao'], dateField: 'created_at',    creative: true },
-      { id: 'campanha',      label: 'Campanhas',     endpoint: '/api/marketingcampanhasview',   descField: ['nome','titulo','descricao'], dateField: 'created_at',    creative: true },
-      { id: 'redes_sociais', label: 'Redes Sociais', endpoint: '/api/metricasredessociaisview', descField: ['plataforma'],                dateField: 'data_registro', creative: true },
-    ],
-  },
-  {
-    id: 'vendas', label: 'Vendas',
-    tipos: [
-      { id: 'orcamento', label: 'Orçamentos', endpoint: '/api/orcamentosview', descField: ['cliente_nome','descricao','numero'], dateField: 'created_at', creative: false },
-    ],
-  },
-  {
-    id: 'compras', label: 'Compras',
-    tipos: [
-      { id: 'requisicao', label: 'Requisições', endpoint: '/api/requisicoesview', descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
-      { id: 'cotacao',    label: 'Cotações',    endpoint: '/api/cotacoesview',    descField: ['descricao','item','titulo'], dateField: 'created_at', creative: false },
-    ],
-  },
-  {
-    id: 'rh', label: 'RH',
-    tipos: [
-      { id: 'frequencia_trabalho',  label: 'Frequência de Trabalho', endpoint: '/api/frequenciatrabalhocomfilialview', descField: ['nome_funcionario','justificativa','status'], dateField: 'data',       creative: false },
-      { id: 'avaliacao_desempenho', label: 'Desempenho',             endpoint: '/api/avaliacoesview',                  descField: ['observacao','tipo'],                         dateField: 'created_at', creative: false },
-    ],
-  },
-  {
-    id: 'cadastros', label: 'Cadastros',
-    tipos: [
-      { id: 'cadastro_categoria',  label: 'Categorias',  endpoint: 'categorias_produto',          descField: ['nome','descricao'],                dateField: 'created_at', creative: false },
-      { id: 'cadastro_fornecedor', label: 'Fornecedores',endpoint: '/api/crmview-fornecedores',   descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
-      { id: 'cadastro_servico',    label: 'Serviços',    endpoint: '/api/servicosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-      { id: 'cadastro_produto',    label: 'Produtos',    endpoint: '/api/produtosview',           descField: ['nome','descricao','codigo'],       dateField: 'created_at', creative: false },
-      { id: 'cadastro_cliente',    label: 'Clientes',    endpoint: '/api/crmview-clientes',       descField: ['nome','razao_social','descricao'], dateField: 'created_at', creative: false },
-    ],
-  },
-  {
-    id: 'financeiro', label: 'Financeiro',
-    tipos: [
-      { id: 'conta_pagar',   label: 'Contas a Pagar',   endpoint: '/api/contaspagarview',   descField: ['descricao','fornecedor_nome','numero_documento'], dateField: 'created_at', creative: false },
-      { id: 'conta_receber', label: 'Contas a Receber', endpoint: '/api/contasreceberview', descField: ['descricao','cliente_nome','numero_documento'],    dateField: 'created_at', creative: false },
-    ],
-  },
-];
-
+// Espelha a ordem dos cards em MatrizTarefasPanel.tsx — não reordenar sem
+// reordenar lá também.
 const TAREFA_TIPOS = [
-  { id: 'tarefa_treinamento_vendas', label: 'Vendas e Atendimento' },
+  { id: 'tarefa_apresentacao',       label: 'Apresentação Profissional' },
   { id: 'tarefa_treinamento_ia',     label: 'Desenvolvimento com IA' },
   { id: 'tarefa_rh',                 label: 'Recursos Humanos' },
-  { id: 'tarefa_marketing',          label: 'Marketing' },
   { id: 'tarefa_financeiro',         label: 'Financeiro' },
   { id: 'tarefa_logistica',          label: 'Logística' },
-  { id: 'tarefa_apresentacao',       label: 'Apresentação Profissional' },
+  { id: 'tarefa_marketing',          label: 'Marketing' },
+  { id: 'tarefa_treinamento_vendas', label: 'Vendas e Atendimento' },
 ];
-
-function firstNonEmpty(row: any, fields: string[]): string {
-  for (const f of fields) {
-    const v = row?.[f];
-    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v);
-  }
-  return '—';
-}
 
 function media(notas: number[]): number | null {
   return notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
 }
 
-export type RelatorioItem = {
-  filial: string;
-  descricao: string;
-  aprovados: number;
-  reprovados: number;
-  media: number | null;
-  comentarios: string[];
-};
-export type RelatorioTipo = { id: string; label: string; creative: boolean; itens: RelatorioItem[] };
-export type RelatorioGrupo = { id: string; label: string; tipos: RelatorioTipo[] };
-
 export type RelatorioParticipante = { nome: string; filial: string; media: number | null; comentarios: string[] };
-export type RelatorioTarefa = { nome: string; descricao: string | null; data: string; participantes: RelatorioParticipante[] };
+export type RelatorioTarefa = {
+  nome: string;
+  descricao: string | null;
+  data: string;
+  status: 'aberta' | 'encerrada';
+  participantes: RelatorioParticipante[];
+};
 export type RelatorioTarefaTipo = { id: string; label: string; tarefas: RelatorioTarefa[] };
 
 export type CentralRelatorio = {
   competicaoNome: string;
   dataInicio: string;
   dataFim: string;
-  grupos: RelatorioGrupo[];
   tarefaTipos: RelatorioTarefaTipo[];
 };
 
@@ -129,42 +67,9 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
     avalsPorChave.set(key, list);
   }
 
-  const ini = competicao.data_inicio;
-  const fim = competicao.data_fim + 'T23:59:59.999';
-
-  const grupos: RelatorioGrupo[] = [];
-  for (const g of GRUPOS) {
-    const tipos: RelatorioTipo[] = [];
-    for (const t of g.tipos) {
-      const table = ENDPOINT_TABLE_MAP[t.endpoint] ?? t.endpoint;
-      const cols = Array.from(new Set(['id', 'filial', t.dateField, ...t.descField])).join(',');
-      const { data } = await supabase
-        .from(table)
-        .select(cols)
-        .in('filial', OP_FILIAIS as unknown as string[])
-        .gte(t.dateField, ini)
-        .lte(t.dateField, fim);
-      const rows = (data ?? []) as any[];
-      const itens: RelatorioItem[] = rows.map(r => {
-        const avs = avalsPorChave.get(`${t.id}:${r.id}`) ?? [];
-        const notas = avs.filter(a => a.nota != null).map(a => Number(a.nota));
-        return {
-          filial: r.filial,
-          descricao: firstNonEmpty(r, t.descField),
-          aprovados: avs.filter(a => a.decisao === 'Aprovado').length,
-          reprovados: avs.filter(a => a.decisao === 'Reprovado').length,
-          media: media(notas),
-          comentarios: avs.filter(a => (a.comentario ?? '').trim()).map(a => a.comentario),
-        };
-      });
-      tipos.push({ id: t.id, label: t.label, creative: t.creative, itens });
-    }
-    grupos.push({ id: g.id, label: g.label, tipos });
-  }
-
   const { data: tarefasRaw } = await supabase
     .from('matriz_tarefas')
-    .select('id,tipo,nome,descricao,data')
+    .select('id,tipo,nome,descricao,data,status')
     .eq('competicao_id', competicao.id)
     .eq('ativo', true)
     .order('data', { ascending: false });
@@ -196,8 +101,19 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
               media: media(notas),
               comentarios: avs.filter(a => (a.comentario ?? '').trim()).map(a => a.comentario),
             };
+          })
+          // Mesma ordem visual dos cards: bloco por filial, nomes alfabéticos.
+          .sort((a, b) => {
+            const df = (ORDEM_FILIAL.get(a.filial) ?? 99) - (ORDEM_FILIAL.get(b.filial) ?? 99);
+            return df !== 0 ? df : a.nome.localeCompare(b.nome, 'pt-BR');
           });
-        return { nome: t.nome, descricao: t.descricao ?? null, data: t.data, participantes };
+        return {
+          nome: t.nome,
+          descricao: t.descricao ?? null,
+          data: t.data,
+          status: (t.status ?? 'aberta') as 'aberta' | 'encerrada',
+          participantes,
+        };
       });
     return { id: tt.id, label: tt.label, tarefas };
   });
@@ -206,7 +122,6 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
     competicaoNome: competicao.nome,
     dataInicio: competicao.data_inicio,
     dataFim: competicao.data_fim,
-    grupos,
     tarefaTipos,
   };
 }
@@ -261,96 +176,94 @@ export async function exportCentralAvaliacaoPDF(
     if (cursorY + needed > pageHeight - 15) { doc.addPage(); cursorY = 20; }
   };
 
-  // ─── Dados das Filiais ──────────────────────────────────────────
-  ensureSpace(10);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...BLACK);
-  doc.text('Dados das Filiais', margin, cursorY);
-  doc.setDrawColor(...GOLD);
-  doc.setLineWidth(0.6);
-  doc.line(margin, cursorY + 1.5, margin + 34, cursorY + 1.5);
-  cursorY += 8;
+  const tiposComTarefas = rel.tarefaTipos.filter(tt => tt.tarefas.length > 0);
 
-  for (const grupo of rel.grupos) {
-    for (const tipo of grupo.tipos) {
-      if (tipo.itens.length === 0) continue;
-      ensureSpace(16);
+  if (tiposComTarefas.length === 0) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...GRAY_MID);
+    doc.text('Nenhuma tarefa cadastrada nesta competição.', margin, cursorY);
+  }
+
+  // ─── Tarefas da Matriz — um bloco por tipo, na ordem dos cards ────
+  for (const tt of tiposComTarefas) {
+    // Título do tipo = card da tela. Reserva espaço pra não deixar
+    // cabeçalho órfão no rodapé da página.
+    ensureSpace(26);
+    doc.setFillColor(...BLACK);
+    doc.rect(margin, cursorY - 5, pageWidth - margin * 2, 8, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GOLD);
+    doc.text(tt.label.toUpperCase(), margin + 2.5, cursorY);
+    doc.setFontSize(8);
+    doc.setTextColor(...GRAY_SOFT);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `${tt.tarefas.length} tarefa${tt.tarefas.length === 1 ? '' : 's'}`,
+      pageWidth - margin - 2.5, cursorY, { align: 'right' },
+    );
+    cursorY += 9;
+
+    for (const tarefa of tt.tarefas) {
+      ensureSpace(24);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...GRAY_INK);
-      doc.text(`${grupo.label} — ${tipo.label}`, margin, cursorY);
-      cursorY += 5;
+      doc.text(tarefa.nome, margin, cursorY);
+      cursorY += 4.5;
+
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...GRAY_MID);
+      const meta = [
+        fmtDataBR(tarefa.data),
+        `${tarefa.participantes.length} participante${tarefa.participantes.length === 1 ? '' : 's'}`,
+        tarefa.status === 'encerrada' ? 'Encerrada' : 'Aberta',
+      ].join('  ·  ');
+      doc.text(meta, margin, cursorY);
+      cursorY += 4.5;
+
+      if (tarefa.descricao && tarefa.descricao.trim()) {
+        doc.setFontSize(8.5);
+        doc.setTextColor(...GRAY_INK);
+        const linhas = doc.splitTextToSize(tarefa.descricao.trim(), pageWidth - margin * 2);
+        for (const l of linhas) {
+          ensureSpace(5);
+          doc.text(l, margin, cursorY);
+          cursorY += 4;
+        }
+        cursorY += 1;
+      }
+
+      if (tarefa.participantes.length === 0) {
+        ensureSpace(8);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(...GRAY_MID);
+        doc.text('Sem participantes.', margin, cursorY);
+        doc.setFont('helvetica', 'normal');
+        cursorY += 8;
+        continue;
+      }
 
       autoTable(doc, {
         startY: cursorY,
-        head: [tipo.creative
-          ? ['Filial', 'Item', 'Nota média', 'Comentários']
-          : ['Filial', 'Item', 'Aprovados', 'Reprovados', 'Comentários']],
-        body: tipo.itens.map(it => tipo.creative
-          ? [it.filial, it.descricao, fmtMedia(it.media), it.comentarios.join(' | ') || '—']
-          : [it.filial, it.descricao, String(it.aprovados), String(it.reprovados), it.comentarios.join(' | ') || '—']),
+        head: [['Filial', 'Participante', 'Nota média', 'Comentários']],
+        body: tarefa.participantes.map(p => [
+          p.filial, p.nome, fmtMedia(p.media), p.comentarios.join(' | ') || '—',
+        ]),
         theme: 'grid',
         headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 8 },
         bodyStyles: { textColor: GRAY_INK, fontSize: 7.5 },
         alternateRowStyles: { fillColor: GOLD_TINT },
         margin: { left: margin, right: margin },
-        columnStyles: tipo.creative
-          ? { 2: { halign: 'center' } }
-          : { 2: { halign: 'center' }, 3: { halign: 'center' } },
+        columnStyles: {
+          0: { cellWidth: 24 },
+          2: { cellWidth: 20, halign: 'center' },
+        },
       });
-      cursorY = (doc as any).lastAutoTable.finalY + 6;
-    }
-  }
-
-  // ─── Tarefas da Matriz ──────────────────────────────────────────
-  const temTarefas = rel.tarefaTipos.some(tt => tt.tarefas.length > 0);
-  if (temTarefas) {
-    ensureSpace(14);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...BLACK);
-    doc.text('Tarefas da Matriz', margin, cursorY);
-    doc.setDrawColor(...GOLD);
-    doc.setLineWidth(0.6);
-    doc.line(margin, cursorY + 1.5, margin + 32, cursorY + 1.5);
-    cursorY += 8;
-
-    for (const tt of rel.tarefaTipos) {
-      for (const tarefa of tt.tarefas) {
-        ensureSpace(16);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(40, 40, 40);
-        doc.text(`${tt.label} — ${tarefa.nome} (${fmtDataBR(tarefa.data)})`, margin, cursorY);
-        cursorY += 5;
-
-        if (tarefa.descricao && tarefa.descricao.trim()) {
-          doc.setFontSize(8.5);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(...GRAY_INK);
-          const linhas = doc.splitTextToSize(tarefa.descricao.trim(), pageWidth - margin * 2);
-          for (const l of linhas) {
-            ensureSpace(5);
-            doc.text(l, margin, cursorY);
-            cursorY += 4;
-          }
-          cursorY += 1;
-        }
-
-        autoTable(doc, {
-          startY: cursorY,
-          head: [['Participante', 'Filial', 'Nota média', 'Comentários']],
-          body: tarefa.participantes.map(p => [p.nome, p.filial, fmtMedia(p.media), p.comentarios.join(' | ') || '—']),
-          theme: 'grid',
-          headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 8 },
-          bodyStyles: { textColor: GRAY_INK, fontSize: 7.5 },
-          alternateRowStyles: { fillColor: GOLD_TINT },
-          margin: { left: margin, right: margin },
-          columnStyles: { 2: { halign: 'center' } },
-        });
-        cursorY = (doc as any).lastAutoTable.finalY + 6;
-      }
+      cursorY = (doc as any).lastAutoTable.finalY + 7;
     }
   }
 
@@ -392,54 +305,13 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
   resumo.addRow([`Período: ${fmtDataBR(rel.dataInicio)} a ${fmtDataBR(rel.dataFim)}`]);
   resumo.addRow([`Gerado em: ${new Date().toLocaleString('pt-BR')}`]);
   resumo.addRow([]);
-  resumo.addRow(['Grupo / Tipo', 'Itens', 'Aprovados', 'Reprovados']).font = headerFont;
-  resumo.lastRow!.eachCell(c => { c.fill = headerFill; });
-  for (const grupo of rel.grupos) {
-    for (const tipo of grupo.tipos) {
-      resumo.addRow([
-        `${grupo.label} — ${tipo.label}`,
-        tipo.itens.length,
-        tipo.itens.reduce((s, it) => s + it.aprovados, 0),
-        tipo.itens.reduce((s, it) => s + it.reprovados, 0),
-      ]);
-    }
-  }
-  resumo.addRow([]);
-  resumo.addRow(['Tarefas da Matriz', 'Tarefas', 'Participantes', '']).font = headerFont;
+  resumo.addRow(['Tipo de tarefa', 'Tarefas', 'Participantes', 'Notas lançadas']).font = headerFont;
   resumo.lastRow!.eachCell(c => { c.fill = headerFill; });
   for (const tt of rel.tarefaTipos) {
-    resumo.addRow([tt.label, tt.tarefas.length, tt.tarefas.reduce((s, t) => s + t.participantes.length, 0), '']);
-  }
-
-  // ── Dados das Filiais ────────────────────────────────────────────
-  const wsDados = wb.addWorksheet('Dados das Filiais');
-  wsDados.columns = [
-    { header: 'Grupo',       key: 'grupo',       width: 14 },
-    { header: 'Tipo',        key: 'tipo',        width: 22 },
-    { header: 'Filial',      key: 'filial',      width: 14 },
-    { header: 'Item',        key: 'item',        width: 40 },
-    { header: 'Aprovados',   key: 'aprovados',   width: 12 },
-    { header: 'Reprovados',  key: 'reprovados',  width: 12 },
-    { header: 'Nota média',  key: 'media',       width: 12 },
-    { header: 'Comentários', key: 'comentarios', width: 50 },
-  ];
-  wsDados.getRow(1).font = headerFont;
-  wsDados.getRow(1).eachCell(c => { c.fill = headerFill; });
-  for (const grupo of rel.grupos) {
-    for (const tipo of grupo.tipos) {
-      for (const it of tipo.itens) {
-        wsDados.addRow({
-          grupo: grupo.label,
-          tipo: tipo.label,
-          filial: it.filial,
-          item: it.descricao,
-          aprovados: it.aprovados,
-          reprovados: it.reprovados,
-          media: it.media != null ? Number(it.media.toFixed(1)) : null,
-          comentarios: it.comentarios.join(' | '),
-        });
-      }
-    }
+    const participantes = tt.tarefas.reduce((s, t) => s + t.participantes.length, 0);
+    const avaliados = tt.tarefas.reduce(
+      (s, t) => s + t.participantes.filter(p => p.media != null).length, 0);
+    resumo.addRow([tt.label, tt.tarefas.length, participantes, avaliados]);
   }
 
   // ── Tarefas da Matriz ────────────────────────────────────────────
@@ -449,8 +321,9 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
     { header: 'Tarefa',       key: 'tarefa',       width: 30 },
     { header: 'Descrição',    key: 'descricao',    width: 50 },
     { header: 'Data',         key: 'data',         width: 12 },
-    { header: 'Participante', key: 'participante', width: 26 },
+    { header: 'Status',       key: 'status',       width: 12 },
     { header: 'Filial',       key: 'filial',       width: 14 },
+    { header: 'Participante', key: 'participante', width: 26 },
     { header: 'Nota média',   key: 'media',        width: 12 },
     { header: 'Comentários',  key: 'comentarios',  width: 50 },
   ];
@@ -464,8 +337,9 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
           tarefa: tarefa.nome,
           descricao: tarefa.descricao ?? '',
           data: fmtDataBR(tarefa.data),
-          participante: p.nome,
+          status: tarefa.status === 'encerrada' ? 'Encerrada' : 'Aberta',
           filial: p.filial,
+          participante: p.nome,
           media: p.media != null ? Number(p.media.toFixed(1)) : null,
           comentarios: p.comentarios.join(' | '),
         });
