@@ -30,6 +30,120 @@ const fmtData = (str: string) => {
 // Quem opera caixa de QUALQUER filial: só admin, CEO e Conselheiro (modo Matriz).
 // Gerente e colaborador ficam travados na própria filial — gerente não cobre
 // outras unidades (regra de negócio).
+/**
+ * Modal de reabertura de caixa.
+ *
+ * Reabrir descarta o fechamento — inclusive uma falta de caixa. O ponto deste
+ * modal é o usuário VER o que está apagando antes de apagar: os valores
+ * descartados ficam na tela enquanto ele escreve o motivo. A RPC
+ * `reabrir_caixa` (migr. 267) copia tudo para `controle_caixa_reaberturas`
+ * antes de limpar e recusa motivo com menos de 5 caracteres — a validação
+ * daqui é só para o usuário não descobrir isso via mensagem de erro.
+ */
+const MOTIVO_MIN = 5;
+
+const ReaberturaModal = ({ caixa, saving, onClose, onConfirm }: {
+  caixa: any;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: (motivo: string) => void;
+}) => {
+  const [motivo, setMotivo] = useState('');
+  const motivoOk = motivo.trim().length >= MOTIVO_MIN;
+
+  const diferenca = Number(caixa?.diferenca ?? 0);
+  const tipoDif   = caixa?.tipo_diferenca ?? 'exato';
+  const temDif    = tipoDif === 'sobra' || tipoDif === 'falta';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={() => !saving && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        onClick={e => e.stopPropagation()}
+        className="neu-flat rounded-3xl p-6 border border-orange-500/30 w-full max-w-md flex flex-col gap-4"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-orange-500/15">
+              <RotateCcw size={18} className="text-orange-400" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-gray-200">Reabrir caixa</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                {caixa?.filial ?? '—'} · {caixa?.data ? fmtData(caixa.data) : '—'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} disabled={saving}
+            className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white shrink-0 disabled:opacity-50">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="rounded-xl px-3 py-2.5 border border-orange-500/20 bg-orange-500/[0.06]">
+          <p className="text-[11px] text-orange-200/90 leading-relaxed">
+            O fechamento abaixo será <b>descartado</b> e o operador poderá voltar a vender.
+            O registro fica salvo na auditoria com seu nome.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="neu-pressed rounded-lg px-2.5 py-2">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Esperado</div>
+            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(Number(caixa?.valor_esperado ?? 0))}</div>
+          </div>
+          <div className="neu-pressed rounded-lg px-2.5 py-2">
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Contado</div>
+            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(Number(caixa?.valor_fechamento ?? 0))}</div>
+          </div>
+          <div className={`neu-pressed rounded-lg px-2.5 py-2 col-span-2 ${temDif ? 'border border-red-500/20' : ''}`}>
+            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Diferença que será apagada</div>
+            <div className={`font-black tabular-nums ${tipoDif === 'exato' ? 'text-gray-200' : tipoDif === 'sobra' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {tipoDif === 'exato' ? 'Exato' : `${tipoDif === 'sobra' ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(diferenca))}`}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="reab-motivo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            Motivo da reabertura *
+          </label>
+          <textarea
+            id="reab-motivo" rows={3} autoFocus
+            value={motivo}
+            onChange={e => setMotivo(e.target.value)}
+            placeholder="Ex.: operador contou errado, refazer conferência com o gerente presente."
+            className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+          />
+          <span className={`text-[10px] ${motivoOk ? 'text-gray-600' : 'text-orange-300/80'}`}>
+            {motivoOk ? 'Ficará registrado na auditoria.' : `Mínimo de ${MOTIVO_MIN} caracteres.`}
+          </span>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={saving}
+            className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirm(motivo.trim())}
+            disabled={saving || !motivoOk}
+            className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-orange-200 bg-orange-900/40 border border-orange-500/30 hover:bg-orange-900/60 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+            <RotateCcw size={12} /> {saving ? 'Reabrindo…' : 'Reabrir caixa'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const podeOperarTodasFiliais = (profile: UserProfile | null | undefined): boolean =>
   profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
@@ -48,7 +162,22 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
   const [valorContado, setValorContado] = useState('');
   const [obsFechamento, setObsFechamento] = useState('');
   const [movs, setMovs] = useState<any[]>([]);
+  const [reabrindo, setReabrindo] = useState(false);
   const today = todayBR();
+
+  const handleReabrirCaixa = async (motivo: string) => {
+    if (!supabase) return;
+    setSaving(true);
+    const { error } = await supabase.rpc('reabrir_caixa', {
+      p_caixa_id: caixa.id,
+      p_motivo:   motivo,
+    });
+    setSaving(false);
+    if (error) { showToast(`Erro ao reabrir: ${error.message}`, 'error'); return; }
+    setReabrindo(false);
+    showToast(`Caixa de ${filial} reaberto — registrado na auditoria.`, 'info');
+    onChanged();
+  };
 
   // Lista de movimentações do caixa aberto (sangria/suprimento).
   useEffect(() => {
@@ -260,27 +389,7 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
 
         <div className="flex flex-wrap gap-2 justify-end">
           <button
-            onClick={async () => {
-              if (!supabase) return;
-              // Reabrir descarta o fechamento — inclusive uma falta de caixa.
-              // A RPC `reabrir_caixa` (migr. 267) copia os valores descartados
-              // para `controle_caixa_reaberturas` antes de limpar e exige
-              // motivo. Antes isto era um UPDATE direto: a divergência sumia
-              // sem rastro de quem apagou nem de quanto era.
-              const motivo = window.prompt(
-                `Reabrir o caixa de ${filial}?\n\nO fechamento atual será descartado e registrado na auditoria.\nDescreva o motivo:`
-              );
-              if (motivo === null) return;
-              setSaving(true);
-              const { error } = await supabase.rpc('reabrir_caixa', {
-                p_caixa_id: caixa.id,
-                p_motivo:   motivo,
-              });
-              setSaving(false);
-              if (error) { showToast(`Erro ao reabrir: ${error.message}`, 'error'); return; }
-              showToast(`Caixa de ${filial} reaberto — registrado na auditoria.`, 'info');
-              onChanged();
-            }}
+            onClick={() => setReabrindo(true)}
             disabled={saving}
             className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-orange-300 hover:text-orange-200 flex items-center gap-1.5 disabled:opacity-50">
             <RotateCcw size={11} /> Reabrir
@@ -292,6 +401,17 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
             <Lock size={11} /> {saving ? '…' : 'Confirmar fechamento'}
           </button>
         </div>
+
+        <AnimatePresence>
+          {reabrindo && (
+            <ReaberturaModal
+              caixa={caixa}
+              saving={saving}
+              onClose={() => setReabrindo(false)}
+              onConfirm={handleReabrirCaixa}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
     );
   }
@@ -540,26 +660,29 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
     return () => { cancelado = true; };
   }, [filiaisVisiveis.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleReabrir = async (h: any) => {
-    if (!supabase) return;
-    // Mesma RPC do card. Esta versão era ainda pior que a de lá: mantinha
-    // `valor_fechamento`/`diferenca` preenchidos num caixa 'Aberto', estado
-    // que nenhuma outra parte do código espera.
-    const motivo = window.prompt(
-      `Reabrir a sessão de ${h.filial}?\n\nO fechamento atual será descartado e registrado na auditoria.\nDescreva o motivo:`
-    );
-    if (motivo === null) return;
+  // Mesma RPC e mesmo modal do card. Esta versão era ainda pior que a de lá:
+  // mantinha `valor_fechamento`/`diferenca` preenchidos num caixa 'Aberto',
+  // estado que nenhuma outra parte do código espera.
+  const [reabrirAlvo, setReabrirAlvo] = useState<any | null>(null);
+  const [reabrindoHist, setReabrindoHist] = useState(false);
+
+  const handleReabrir = async (motivo: string) => {
+    if (!supabase || !reabrirAlvo) return;
+    setReabrindoHist(true);
     try {
       const { error } = await supabase.rpc('reabrir_caixa', {
-        p_caixa_id: h.id,
+        p_caixa_id: reabrirAlvo.id,
         p_motivo:   motivo,
       });
       if (error) throw error;
+      setReabrirAlvo(null);
       await refresh();
       await reload();
       showToast('Caixa reaberto — registrado na auditoria.', 'success');
     } catch (err: any) {
       showToast(`Erro ao reabrir: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setReabrindoHist(false);
     }
   };
 
@@ -724,7 +847,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                         <div className="flex justify-end gap-2">
                           <AuditoriaInspect criadoPor={h.criado_por} criadoEm={h.created_at} atualizadoPor={h.atualizado_por} atualizadoEm={h.updated_at} />
                           {podeReabrir && (
-                            <button onClick={() => handleReabrir(h)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
+                            <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
                           )}
                           <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
@@ -737,6 +860,17 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {reabrirAlvo && (
+          <ReaberturaModal
+            caixa={reabrirAlvo}
+            saving={reabrindoHist}
+            onClose={() => setReabrirAlvo(null)}
+            onConfirm={handleReabrir}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
