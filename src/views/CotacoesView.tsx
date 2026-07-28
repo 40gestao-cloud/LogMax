@@ -59,7 +59,7 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
     '/api/cotacoesview', { filial }, false,
     { page }
   );
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const { data: produtos } = useFetchData<any>('/api/produtosview');
   const [isSaving, setIsSaving] = useState(false);
@@ -351,50 +351,29 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   };
 
   // Compras: cria o pedido depois que o Financeiro aprovou.
-  const insertPedidoComSnapshot = async (cotacao: any) => {
-    const cotReq = requisicoes.find((r: any) => r.id === cotacao.requisicao_id);
-    const basePayload: any = {
-      cotacao_id: cotacao.id,
-      requisicao_id: cotacao.requisicao_id ?? null,
-      fornecedor_id: cotacao.fornecedor_id,
-      valor_total: cotacao.valor_total,
-      prazo_entrega: cotacao.prazo_entrega || null,
-      status: 'Pendente',
-      filial: cotacao.filial ?? filial,
-    };
-    const snapshotPayload = {
-      ...basePayload,
-      item_descricao: cotReq?.item ?? null,
-      item_qtd: cotReq?.qtd ?? null,
-    };
-    try {
-      return await dbInsert('/api/pedidosview', snapshotPayload);
-    } catch (e: any) {
-      if (/column .* does not exist/i.test(String(e?.message ?? ''))) {
-        return await dbInsert('/api/pedidosview', basePayload);
-      }
-      throw e;
-    }
-  };
-
+  //
+  // Tudo acontece dentro da RPC `gerar_pedido_de_cotacao` (migr. 266): ela checa
+  // duplicidade por cotação E por requisição, insere o pedido e baixa a
+  // requisição para 'Atendida' no mesmo COMMIT. Antes isso era insert solto no
+  // cliente com guard só por cotação — foi assim que uma requisição de 24
+  // unidades virou 2 pedidos e 2 contas a pagar em produção.
   const handleGerarPedido = async (cotacao: any) => {
+    if (!supabase) return;
     setGenerating(cotacao.id);
     try {
-      if (supabase) {
-        const { data: existentes } = await supabase
-          .from('pedidos')
-          .select('id')
-          .eq('cotacao_id', cotacao.id)
-          .limit(1);
-        if (existentes && existentes.length > 0) {
-          showToast('Esta cotação já tem pedido registrado.', 'info', true);
-          setGenerating(null);
-          return;
-        }
-      }
-      const pedido = await insertPedidoComSnapshot(cotacao);
+      const { data: pedido, error } = await supabase.rpc('gerar_pedido_de_cotacao', {
+        p_cotacao_id: cotacao.id,
+      });
+      if (error) throw new Error(error.message);
       setCotacoesComPedido(prev => new Set(prev).add(cotacao.id));
-      showToast(`Pedido #${(pedido as any)?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado.`, 'success', true);
+      // A requisição saiu de 'Aprovado' — tira do dropdown de Nova Cotação sem
+      // esperar o próximo fetch.
+      if (cotacao.requisicao_id) {
+        setRequisicoes((prev: any[]) =>
+          prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
+      }
+      const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
+      showToast(`Pedido #${novo?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {

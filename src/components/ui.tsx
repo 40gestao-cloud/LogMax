@@ -7,10 +7,10 @@ export const StatusBadge = ({ status }: { status: string }) => {
   let colorClass = 'text-gray-400';
   let style: React.CSSProperties = { background: 'var(--color-badge-neutral-bg)' };
 
-  if (['Aprovado','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
+  if (['Aprovado','Atendida','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
     colorClass = 'bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]';
     style = {};
-  } else if (['Em Cotação','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
+  } else if (['Em Cotação','Aguardando Financeiro','Em Entrega','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
     colorClass = 'bg-accent/10 text-accent';
     style = {};
   } else if (['Cancelado','Negado','Divergente','Atrasado'].includes(status)) {

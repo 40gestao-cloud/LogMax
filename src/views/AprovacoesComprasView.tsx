@@ -58,20 +58,45 @@ const AprovacoesComprasViewInner = ({ showToast, filial }: { showToast: ShowToas
       aprovUpdated = true;
       await dbUpdate('/api/requisicoesview', ap.requisicao_id, { status: 'Negado' });
 
-      // Cascata (#14): cancela cotações pendentes desta requisição que ficariam órfãs.
+      // Cascata (#14): cancela cotações vivas desta requisição que ficariam órfãs.
+      //
+      // Filtrava por 'Em Cotação' — status que a migração 031 aposentou (todas
+      // as linhas viraram 'Aguardando Financeiro' e nada mais escreve o antigo).
+      // O filtro nunca casava, então negar a requisição deixava as cotações
+      // vivas e o Financeiro podia aprovar cotação de requisição negada.
+      //
+      // 'Aprovado' também entra: só não cancelamos a que já virou pedido —
+      // aí existe compromisso com o fornecedor e quem desfaz é o Pedidos.
+      let canceladas = 0;
       if (supabase) {
         const { data: cotsAtivas } = await supabase
           .from('cotacoes')
           .select('id')
           .eq('requisicao_id', ap.requisicao_id)
-          .eq('status', 'Em Cotação');
+          .eq('ativo', true)
+          .in('status', ['Aguardando Financeiro', 'Aprovado']);
+        const { data: pedidos } = await supabase
+          .from('pedidos')
+          .select('cotacao_id')
+          .eq('requisicao_id', ap.requisicao_id)
+          .eq('ativo', true);
+        const comPedido = new Set((pedidos ?? []).map((p: any) => p.cotacao_id));
         for (const c of (cotsAtivas ?? [])) {
-          try { await dbUpdate('/api/cotacoesview', c.id, { status: 'Cancelado' }); } catch {}
+          if (comPedido.has(c.id)) continue;
+          try {
+            await dbUpdate('/api/cotacoesview', c.id, { status: 'Cancelado' });
+            canceladas++;
+          } catch {}
         }
       }
 
       setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
-      showToast("Requisição negada (cotações pendentes canceladas).", 'info', true);
+      showToast(
+        canceladas > 0
+          ? `Requisição negada (${canceladas} cotação(ões) cancelada(s)).`
+          : 'Requisição negada.',
+        'info', true
+      );
     } catch {
       if (aprovUpdated) {
         try { await dbUpdate('/api/minhasaprovacoesview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}

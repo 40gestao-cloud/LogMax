@@ -44,14 +44,19 @@ export const GerenciamentoComprasView = () => {
   const reqPendentes = requisicoes.filter((r: any) => r.status === 'Pendente').length;
   const reqAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado').length;
   const reqNegadas = requisicoes.filter((r: any) => r.status === 'Negado').length;
+  // 'Atendida' = já virou pedido (migr. 266). Sem este card as requisições
+  // sumiam de "Aprovadas" sem aparecer em lugar nenhum.
+  const reqAtendidas = requisicoes.filter((r: any) => r.status === 'Atendida').length;
 
-  const cotEmCotacao = cotacoes.filter((c: any) => c.status === 'Em Cotação').length;
+  // Status reais das tabelas — os antigos ('Em Cotação', 'Recusada',
+  // 'Em Transporte') nunca são escritos e deixavam os cards zerados.
+  const cotEmCotacao = cotacoes.filter((c: any) => c.status === 'Aguardando Financeiro').length;
   const cotAprovadas = cotacoes.filter((c: any) => c.status === 'Aprovado').length;
-  const cotRecusadas = cotacoes.filter((c: any) => c.status === 'Recusada').length;
+  const cotRecusadas = cotacoes.filter((c: any) => c.status === 'Negado').length;
 
   const pedPendentes = pedidos.filter((p: any) => p.status === 'Pendente').length;
   const pedAprovados = pedidos.filter((p: any) => p.status === 'Aprovado').length;
-  const pedTransporte = pedidos.filter((p: any) => p.status === 'Em Transporte').length;
+  const pedTransporte = pedidos.filter((p: any) => p.status === 'Em Entrega').length;
   const pedRecebidos = pedidos.filter((p: any) => p.status === 'Recebido').length;
 
   const recPendentes = recebimentos.filter((r: any) => r.status === 'Pendente').length;
@@ -69,6 +74,7 @@ export const GerenciamentoComprasView = () => {
       breakdown: [
         { label: 'Pendentes', value: reqPendentes, cls: reqPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: reqAprovadas, cls: 'text-green-400' },
+        { label: 'Atendidas', value: reqAtendidas, cls: reqAtendidas > 0 ? 'text-accent' : 'text-gray-500' },
         { label: 'Negadas', value: reqNegadas, cls: reqNegadas > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
@@ -76,9 +82,9 @@ export const GerenciamentoComprasView = () => {
       icon: BarChart2, label: 'Cotações', total: cotacoes.length,
       color: 'bg-purple-900/40 text-purple-400',
       breakdown: [
-        { label: 'Em Cotação', value: cotEmCotacao, cls: cotEmCotacao > 0 ? 'text-yellow-400' : 'text-gray-500' },
+        { label: 'Aguard. Financeiro', value: cotEmCotacao, cls: cotEmCotacao > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: cotAprovadas, cls: 'text-green-400' },
-        { label: 'Recusadas', value: cotRecusadas, cls: cotRecusadas > 0 ? 'text-red-500' : 'text-gray-500' },
+        { label: 'Negadas', value: cotRecusadas, cls: cotRecusadas > 0 ? 'text-red-500' : 'text-gray-500' },
       ],
     },
     {
@@ -86,7 +92,7 @@ export const GerenciamentoComprasView = () => {
       color: 'bg-accent/20 text-accent',
       breakdown: [
         { label: 'Pendentes', value: pedPendentes, cls: pedPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
-        { label: 'Em Transporte', value: pedTransporte, cls: pedTransporte > 0 ? 'text-blue-400' : 'text-gray-500' },
+        { label: 'Em Entrega', value: pedTransporte, cls: pedTransporte > 0 ? 'text-blue-400' : 'text-gray-500' },
         { label: 'Recebidos', value: pedRecebidos, cls: 'text-green-400' },
       ],
     },

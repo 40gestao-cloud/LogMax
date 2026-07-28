@@ -106,6 +106,30 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
         }
       }
       await dbDelete('/api/pedidosview', id);
+
+      // A requisição foi marcada 'Atendida' quando este pedido nasceu (migr. 266).
+      // Inativando o pedido ela precisa voltar a 'Aprovado', senão fica órfã:
+      // sem pedido e fora do dropdown de Nova Cotação, ou seja, impossível de
+      // reatender. Só volta se não sobrou nenhum outro pedido ativo dela.
+      const pedido = data.find((p: any) => p.id === id);
+      if (supabase && pedido?.requisicao_id) {
+        const { data: outros } = await supabase
+          .from('pedidos')
+          .select('id')
+          .eq('requisicao_id', pedido.requisicao_id)
+          .eq('ativo', true)
+          .neq('id', id)
+          .limit(1);
+        if (!outros || outros.length === 0) {
+          try {
+            await dbUpdate('/api/requisicoesview', pedido.requisicao_id, { status: 'Aprovado' });
+          } catch {
+            // Best-effort: o pedido já foi inativado e não vale abortar por isto.
+            // Admin consegue reabrir a requisição manualmente.
+          }
+        }
+      }
+
       setData((prev: any[]) => prev.filter(p => p.id !== id));
       showToast('Pedido inativado.', 'success', true);
     } catch (err: any) {
