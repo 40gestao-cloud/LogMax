@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { fmtInstrutores } from '../lib/viewUtils';
 
 type Funcionario = { id: string; nome: string; cargo?: string | null; status?: string | null };
 
@@ -306,12 +307,6 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       await dbSetStatus('/api/treinamentosview', t.id, next);
       setData((prev: any[]) => prev.map((x: any) => x.id === t.id ? { ...x, status: next } : x));
     } catch { showToast('Erro ao avançar status.', 'error'); }
-  };
-
-  const fmtInstrutores = (t: any): string => {
-    const arr: string[] = Array.isArray(t.instrutores) ? t.instrutores : [];
-    if (arr.length > 0) return arr.join(', ');
-    return t.instrutor ?? '—';
   };
 
   return (

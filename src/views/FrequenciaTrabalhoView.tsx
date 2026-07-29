@@ -3,34 +3,93 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2,
+  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck,
 } from 'lucide-react';
-import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
+import { PONTO_HORARIOS, PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 
-type StatusFreq = 'Presente' | 'Falta' | 'Presente com Atraso';
+// 'Justificado' não é opção de lançamento: chega de Afastamentos e a linha vira
+// somente-leitura. Está aqui porque a tela precisa EXIBIR o dia coberto — era
+// justamente não exibir que fazia Frequência mostrar Falta num dia que o ponto
+// já tinha justificado (migr. 289).
+type StatusFreq = 'Presente' | 'Falta' | 'Presente com Atraso' | 'Justificado';
 
 const STATUS_CONFIG: Record<StatusFreq, { icon: any; color: string; bg: string; border: string }> = {
   'Presente':           { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   'Falta':              { icon: XCircle,      color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/20' },
   'Presente com Atraso': { icon: Clock,        color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  border: 'border-yellow-500/20' },
+  'Justificado':        { icon: FileCheck,    color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  border: 'border-yellow-500/20' },
 };
 
+/** Só estes três se lançam à mão. */
 const STATUSES: StatusFreq[] = ['Presente', 'Falta', 'Presente com Atraso'];
 
+/**
+ * Uma linha de `ponto_eletronico` na forma que esta tela consome.
+ *
+ * A tela deixou de ter tabela própria na migr. 289 — presença virou dado único
+ * em ponto_eletronico, com dois modos de entrada (totem e este lançamento
+ * manual). O que resta aqui é tradução de vocabulário.
+ */
 type Frequencia = {
   id: string;
   funcionario_id: string;
-  nome_funcionario: string | null;
   data: string;
   status: StatusFreq;
   justificativa: string | null;
   registrado_por_nome: string | null;
   created_at: string;
+  entrada: string | null;
+  origem: string | null;
+  /** Dia coberto por afastamento: não se edita por aqui. */
+  bloqueado: boolean;
+};
+
+type PontoRow = {
+  id: string;
+  funcionario_id: string;
+  data: string;
+  status: string | null;
+  entrada: string | null;
+  observacao: string | null;
+  origem: string | null;
+  afastamento_id: string | null;
+  registrado_por_nome: string | null;
+  created_at: string;
+};
+
+/**
+ * Vocabulário do ponto → vocabulário da tela.
+ *
+ * Atraso não é status no banco: `recalcular_folha_do_ponto` deriva o desconto
+ * comparando `entrada` com o horário-alvo da turma. Então "Presente com
+ * Atraso" é 'Normal' com entrada depois do alvo — e a comparação lexicográfica
+ * de "HH:MM" basta.
+ */
+const pontoParaFrequencia = (p: PontoRow): Frequencia => {
+  let status: StatusFreq;
+  if (p.status === 'Falta') status = 'Falta';
+  else if (p.status === 'Justificado') status = 'Justificado';
+  else if (p.entrada && p.entrada > PONTO_HORARIOS.entrada) status = 'Presente com Atraso';
+  else status = 'Presente';
+
+  return {
+    id: p.id,
+    funcionario_id: p.funcionario_id,
+    data: p.data,
+    status,
+    justificativa: p.observacao,
+    registrado_por_nome: p.registrado_por_nome,
+    created_at: p.created_at,
+    entrada: p.entrada,
+    origem: p.origem,
+    bloqueado: !!p.afastamento_id,
+  };
 };
 
 type Funcionario = { id: string; nome: string; status: string | null; cargo: string | null; departamento: string | null; filial: string | null };
@@ -91,12 +150,13 @@ const FILIAIS_REG = ['Matriz', 'SuperMax', 'MaxLook', 'TechMax'] as const;
 // Funcionário sem filial definida é tratado como Matriz (FILIAL_DEFAULT).
 const filialDoFunc = (f: any): string => f?.filial ?? 'Matriz';
 
-const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
+const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: any) => {
   const { user } = useAuth();
-  // frequencia_trabalho e justificativas_falta não têm coluna `filial` (o
-  // escopo por filial vem do funcionário via join client-side). Passar
-  // { filial } aqui gerava 400 silencioso do PostgREST.
-  const { data: frequencias, isLoading, reload } = useFetchData<Frequencia>('/api/frequenciatrabalhoview');
+  // Presença agora vive em ponto_eletronico (migr. 289) — mesma tabela do
+  // totem. `ponto_eletronico` TEM coluna filial, e a RLS já a usa; o filtro
+  // client-side abaixo continua servindo ao seletor de unidade no modo Matriz.
+  const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview');
+  const frequencias = useMemo(() => (pontos ?? []).map(pontoParaFrequencia), [pontos]);
   // No modo Matriz (filial===null) carrega todos sem filtro
   const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>(
     '/api/funcionariosview',
@@ -113,8 +173,9 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
-  // Edições locais antes de salvar
-  const [edits, setEdits] = useState<Record<string, { status: StatusFreq; justificativa: string }>>({});
+  // Edições locais antes de salvar. `entrada` só é usada quando o status é
+  // 'Presente com Atraso' — é o horário que vira desconto na folha.
+  const [edits, setEdits] = useState<Record<string, { status: StatusFreq; justificativa: string; entrada: string }>>({});
 
   // Modal de histórico
   const [modalFunc, setModalFunc] = useState<Funcionario | null>(null);
@@ -162,10 +223,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
 
   const getEdit = (funcId: string) => edits[funcId];
 
-  const setEdit = (funcId: string, partial: Partial<{ status: StatusFreq; justificativa: string }>) => {
+  const setEdit = (funcId: string, partial: Partial<{ status: StatusFreq; justificativa: string; entrada: string }>) => {
     setEdits(prev => ({
       ...prev,
-      [funcId]: { status: 'Presente', justificativa: '', ...prev[funcId], ...partial },
+      [funcId]: { status: 'Presente', justificativa: '', entrada: '', ...prev[funcId], ...partial },
     }));
   };
 
@@ -174,55 +235,65 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
     const edit = edits[func.id];
     if (!edit) return;
 
-    const existing = getFreq(func.id, dataSelecionada);
+    // Atraso sem horário não é quantificável — e é exatamente o que a folha
+    // precisa para descontar. Pedir aqui evita gravar um rótulo que não vira
+    // nada, que era o defeito do modelo antigo.
+    if (edit.status === 'Presente com Atraso' && !edit.entrada) {
+      showToast('Informe o horário de entrada para registrar o atraso.', 'error');
+      return;
+    }
+
     const key = func.id;
     setSaving(prev => ({ ...prev, [key]: true }));
 
     try {
-      if (existing) {
-        await dbUpdate('/api/frequenciatrabalhoview', existing.id, {
-          status: edit.status,
-          justificativa: edit.justificativa.trim() || null,
-          registrado_por: user?.id,
-          registrado_por_nome: profile?.nome ?? user?.email ?? 'Usuário',
-        });
-      } else {
-        await dbInsert('/api/frequenciatrabalhoview', {
-          funcionario_id: func.id,
-          nome_funcionario: func.nome,
-          data: dataSelecionada,
-          status: edit.status,
-          justificativa: edit.justificativa.trim() || null,
-          registrado_por: user?.id,
-          registrado_por_nome: profile?.nome ?? user?.email ?? 'Usuário',
-        });
-      }
+      // 'Presente com Atraso' vai como Normal + entrada real; o desconto sai do
+      // recalcular_folha_do_ponto comparando com o horário-alvo da turma.
+      const statusPonto = edit.status === 'Falta' ? 'Falta' : 'Normal';
+      const entrada = edit.status === 'Falta'
+        ? null
+        : (edit.status === 'Presente com Atraso' ? edit.entrada : PONTO_HORARIOS.entrada);
+
+      const { error } = await supabase.rpc('registrar_ponto_manual', {
+        p_funcionario_id: func.id,
+        p_data:           dataSelecionada,
+        p_status:         statusPonto,
+        p_entrada:        entrada,
+        p_observacao:     edit.justificativa.trim() || null,
+        // Jornada da turma (migr. 290). Sem isso o dia gravaria a jornada
+        // padrão da manhã mesmo numa turma da tarde.
+        p_horas:          PONTO_JORNADA_HORAS,
+      });
+      if (error) throw error;
+
       setEdits(prev => { const n = { ...prev }; delete n[func.id]; return n; });
       await reload();
-      showToast(`Frequência de ${func.nome} salva.`, 'success');
+      showToast(`Presença de ${func.nome} registrada no ponto.`, 'success');
     } catch (err: any) {
-      if (err?.message?.includes('23505')) {
-        showToast('Já existe registro para este funcionário nesta data.', 'error');
-      } else {
-        showToast(`Erro: ${err?.message ?? '—'}`, 'error');
-      }
+      // A régua mora na RPC (migr. 289): dia de afastamento, filial alheia,
+      // data futura e falta de autoridade voltam com mensagem própria — engolir
+      // isso num erro genérico é o que faz a tela parecer quebrada.
+      showToast(err?.message ?? 'Erro ao registrar.', 'error', true);
     } finally {
       setSaving(prev => ({ ...prev, [key]: false }));
     }
-  }, [edits, dataSelecionada, canEdit, user, profile, reload, showToast, freqMap]);
+  }, [edits, dataSelecionada, canEdit, reload, showToast]);
 
   // Stats do dia
   const statsForDate = useMemo(() => {
     const total = funcionariosAtivos.length;
-    let presentes = 0, faltas = 0, atrasos = 0, semRegistro = 0;
+    // 'Justificado' entra num balde próprio: sem ele os dias de afastamento
+    // não apareciam em nenhum card e a soma não fechava com o total.
+    let presentes = 0, faltas = 0, atrasos = 0, justificados = 0, semRegistro = 0;
     funcionariosAtivos.forEach((f: any) => {
       const freq = getFreq(f.id, dataSelecionada);
       if (!freq) { semRegistro++; return; }
       if (freq.status === 'Presente') presentes++;
       else if (freq.status === 'Falta') faltas++;
       else if (freq.status === 'Presente com Atraso') atrasos++;
+      else if (freq.status === 'Justificado') justificados++;
     });
-    return { total, presentes, faltas, atrasos, semRegistro };
+    return { total, presentes, faltas, atrasos, justificados, semRegistro };
   }, [funcionariosAtivos, freqMap, dataSelecionada]);
 
   // Histórico do funcionário selecionado (modal)
@@ -300,11 +371,17 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-5 overflow-y-auto main-scrollbar pb-6">
 
-      {/* Título + filtros */}
+      {/* Título + filtros. Embutida como aba de Registro de Ponto, o cabeçalho
+          próprio vira ruído: o título já está na tela de cima. Só o cabeçalho
+          é condicional — lançamento, filtros e painéis seguem idênticos. */}
       <div className="shrink-0 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Frequência de Trabalho</h2>
-          <p className="text-sm text-gray-400 mt-1">Registre presença, falta ou atraso dos funcionários. Período: {periodoLabel}</p>
+          {!embedded && (
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Frequência de Trabalho</h2>
+          )}
+          <p className={`text-sm text-gray-400 ${embedded ? '' : 'mt-1'}`}>
+            Lançamento manual do <strong className="text-gray-300">ponto eletrônico</strong> — mesma base do totem, então falta lançada aqui desconta na folha. Período: {periodoLabel}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Filtro de filial — só no modo Matriz */}
@@ -392,7 +469,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
 
       {/* Resumo cards */}
       {filtro === 'dia' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
           <div className="neu-flat rounded-2xl p-4 border border-emerald-500/10">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Presentes</div>
             <div className="text-2xl font-bold text-emerald-400 tabular-nums">{statsForDate.presentes}</div>
@@ -404,6 +481,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
           <div className="neu-flat rounded-2xl p-4 border border-yellow-500/10">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Atrasos</div>
             <div className="text-2xl font-bold text-yellow-400 tabular-nums">{statsForDate.atrasos}</div>
+          </div>
+          <div className="neu-flat rounded-2xl p-4 border border-yellow-500/10">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Justificados</div>
+            <div className="text-2xl font-bold text-yellow-400 tabular-nums">{statsForDate.justificados}</div>
           </div>
           <div className="neu-flat rounded-2xl p-4 border border-white/5">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Sem registro</div>
@@ -499,8 +580,14 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
                   {filteredFuncs.map((func: Funcionario) => {
                     const freq = getFreq(func.id, dataSelecionada);
                     const edit = getEdit(func.id);
-                    const currentStatus: StatusFreq = edit?.status ?? freq?.status ?? 'Presente';
+                    const bloqueado = !!freq?.bloqueado;
+                    // Status já gravado como Justificado não é opção de lançamento:
+                    // cai em 'Presente' só para os botões terem um estado inicial
+                    // válido, e a coluna fica desabilitada logo abaixo.
+                    const freqStatus = freq?.status === 'Justificado' ? undefined : freq?.status;
+                    const currentStatus: StatusFreq = edit?.status ?? freqStatus ?? 'Presente';
                     const currentJust = edit?.justificativa ?? freq?.justificativa ?? '';
+                    const currentEntrada = edit?.entrada ?? freq?.entrada ?? '';
                     const isDirty = !!edit;
                     const isSaving = saving[func.id] ?? false;
                     const cfg = STATUS_CONFIG[currentStatus];
@@ -520,25 +607,45 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
                         )}
                         <td className="py-3 px-3 text-xs text-gray-500">{func.cargo ?? '—'}</td>
                         <td className="py-3 px-3">
-                          <div className="flex items-center justify-center gap-1">
-                            {STATUSES.map(s => {
-                              const sc = STATUS_CONFIG[s];
-                              const Ic = sc.icon;
-                              const active = currentStatus === s;
-                              const colorCls = s === 'Presente' ? 'freq-status-btn--presente' : s === 'Falta' ? 'freq-status-btn--falta' : 'freq-status-btn--atraso';
-                              return (
-                                <button
-                                  key={s}
-                                  onClick={() => setEdit(func.id, { status: s, justificativa: currentJust })}
-                                  title={s}
-                                  className={`freq-status-btn ${colorCls}${active ? ' freq-status-btn--active' : ''}`}
-                                >
-                                  <Ic size={14} />
-                                  <span className="hidden sm:inline">{s === 'Presente com Atraso' ? 'Atraso' : s}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {bloqueado ? (
+                            // Dia coberto por afastamento: a verdade é do módulo
+                            // Afastamentos. Antes as duas telas se contradiziam.
+                            <div className="flex items-center justify-center gap-1.5 text-yellow-400" title="Ajuste pelo módulo Afastamentos">
+                              <FileCheck size={13} />
+                              <span className="text-[11px] font-semibold">Afastamento</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <div className="flex items-center justify-center gap-1">
+                                {STATUSES.map(s => {
+                                  const sc = STATUS_CONFIG[s];
+                                  const Ic = sc.icon;
+                                  const active = currentStatus === s;
+                                  const colorCls = s === 'Presente' ? 'freq-status-btn--presente' : s === 'Falta' ? 'freq-status-btn--falta' : 'freq-status-btn--atraso';
+                                  return (
+                                    <button
+                                      key={s}
+                                      onClick={() => setEdit(func.id, { status: s, justificativa: currentJust, entrada: currentEntrada })}
+                                      title={s}
+                                      className={`freq-status-btn ${colorCls}${active ? ' freq-status-btn--active' : ''}`}
+                                    >
+                                      <Ic size={14} />
+                                      <span className="hidden sm:inline">{s === 'Presente com Atraso' ? 'Atraso' : s}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {currentStatus === 'Presente com Atraso' && (
+                                <input
+                                  type="time"
+                                  value={currentEntrada}
+                                  onChange={e => setEdit(func.id, { status: currentStatus, justificativa: currentJust, entrada: e.target.value })}
+                                  title={`Horário de entrada — alvo da turma: ${PONTO_HORARIOS.entrada}`}
+                                  className="neu-input px-2 py-1 rounded-lg text-xs font-mono tabular-nums w-24"
+                                />
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-center">
                           {freq ? (() => {
@@ -550,7 +657,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
                                   <Ic size={13} />
                                   <span className="text-[11px] font-semibold">{freq.status === 'Presente com Atraso' ? 'Atraso' : freq.status}</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 tabular-nums">{fmtHorario(freq.created_at)}</span>
+                                {/* Marcação do totem é o colaborador no horário;
+                                    manual é alguém afirmando por ele. A diferença
+                                    importa para conferir, então fica visível. */}
+                                <span className="text-[10px] font-mono text-gray-500 tabular-nums">
+                                  {freq.entrada ?? fmtHorario(freq.created_at)}
+                                  {freq.origem === 'manual' ? ' · manual' : freq.origem === 'totem' ? ' · totem' : ''}
+                                </span>
                               </div>
                             );
                           })() : <span className="text-gray-700 text-xs">—</span>}
@@ -559,17 +672,18 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
                           <input
                             type="text"
                             value={currentJust}
-                            onChange={e => setEdit(func.id, { status: currentStatus, justificativa: e.target.value })}
-                            placeholder="Justificativa (opcional)"
-                            className="neu-input w-full px-2 py-1.5 rounded-lg text-xs"
+                            disabled={bloqueado}
+                            onChange={e => setEdit(func.id, { status: currentStatus, justificativa: e.target.value, entrada: currentEntrada })}
+                            placeholder={bloqueado ? 'Motivo no módulo Afastamentos' : 'Observação (opcional)'}
+                            className="neu-input w-full px-2 py-1.5 rounded-lg text-xs disabled:opacity-50"
                           />
                         </td>
                         <td className="py-3 px-3 text-center">
                           <button
                             onClick={() => handleSave(func)}
-                            disabled={!isDirty || isSaving}
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto ${isDirty ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25' : 'border-white/5 text-gray-700'}`}
-                            title="Salvar"
+                            disabled={!isDirty || isSaving || bloqueado}
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto ${isDirty && !bloqueado ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25' : 'border-white/5 text-gray-700'}`}
+                            title={bloqueado ? 'Dia coberto por afastamento' : 'Salvar'}
                           >
                             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                           </button>
@@ -755,8 +869,16 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial }: any) => {
 };
 
 
-export const FrequenciaTrabalhoView = ({ showToast, profile }: any) => {
+/**
+ * Aba "Lançamento manual" de Registro de Ponto.
+ *
+ * Deixou de ser submenu próprio na reorganização de 2026-07-29 — depois da
+ * migr. 289 ela e o totem escrevem na mesma tabela, e dois itens de menu para
+ * dois modos de entrada do mesmo dado era a redundância que a auditoria achou.
+ * O lançamento em si não mudou nada: só o cabeçalho sabe que está embutido.
+ */
+export const FrequenciaTrabalhoView = ({ showToast, profile, embedded }: any) => {
   const { filialAtiva } = useFilial();
   // filialAtiva===null = modo Matriz → passa null para mostrar todas as filiais
-  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  return <FrequenciaTrabalhoViewInner showToast={showToast} profile={profile} filial={filialAtiva} embedded={embedded} />;
 };

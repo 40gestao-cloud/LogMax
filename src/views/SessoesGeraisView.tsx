@@ -98,8 +98,12 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
   {
     kind: 'group', id: 'rh-matriz', label: 'Recursos Humanos', icon: Users, color: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 text-blue-400',
     modulos: [
+      // 'Frequência de Trabalho' virou aba de Registro de Ponto (2026-07-29).
+      // O que a Matriz vinha buscar aqui é o painel de cumprimento por
+      // unidade, que mora na aba de lançamento manual — por isso a view abre
+      // direto nela quando não há filial ativa.
       { id: 'rh', label: 'RH', icon: Users, color: 'text-blue-400',
-        submenus: ['Frequência de Trabalho', 'Gerenciamento', 'Relatórios'] },
+        submenus: ['Registro de Ponto', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {

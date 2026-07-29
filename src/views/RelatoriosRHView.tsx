@@ -4,16 +4,22 @@ import { Search, FileDown, Sheet } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
-import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { exportToPDF, exportToExcel, fmtInstrutores } from '../lib/viewUtils';
 
 const TABS = ['Funcionários', 'Folha de Pagamento', 'Férias', 'Treinamentos'];
 
+// Os status de férias e cotação foram unificados no masculino
+// (Aprovado/Negado). O teste antigo procurava 'aprovada'/'negada' e nunca
+// casava — férias aprovada e negada saíam as duas em cinza neutro, que é
+// justamente a informação que a coluna existe pra dar. 'Processada' e
+// 'Em Andamento' ganham o azul que já usam nas telas de origem.
 const statusCls = (s: string) => {
   if (!s) return 'text-gray-500';
   const lower = s.toLowerCase();
-  if (lower.includes('ativo') || lower.includes('paga') || lower.includes('aprovada') || lower.includes('concluí')) return 'bg-green-900/30 text-green-400';
+  if (lower.includes('ativo') || lower.includes('paga') || lower.includes('aprovad') || lower.includes('concluí')) return 'bg-green-900/30 text-green-400';
+  if (lower.includes('processada') || lower.includes('em andamento')) return 'bg-blue-900/30 text-blue-400';
   if (lower.includes('pendente') || lower.includes('solicitada') || lower.includes('agendado')) return 'bg-yellow-900/30 text-yellow-400';
-  if (lower.includes('negada') || lower.includes('cancelado') || lower.includes('desligado')) return 'bg-red-950/50 text-red-500';
+  if (lower.includes('negad') || lower.includes('cancelado') || lower.includes('desligado')) return 'bg-red-950/50 text-red-500';
   return 'bg-gray-700/40 text-gray-400';
 };
 
@@ -57,7 +63,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
     [f.func?.nome, f.status, f.data_inicio].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
   const filteredTre = treinamentos.filter(byFilial).filter((t: any) =>
-    [t.nome, t.instrutor, t.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
+    [t.nome, fmtInstrutores(t), t.status].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
   // Totais da folha
@@ -77,9 +83,11 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
       cols: ['Funcionário', 'Início', 'Fim', 'Dias', 'Status'],
       rows: () => filteredFer.map((f: any) => [f.func?.nome ?? '—', f.data_inicio ?? '', f.data_fim ?? '', String(f.dias ?? 0), f.status ?? '']),
     },
+    // Sem coluna 'Vagas': legado da migr. 093, o form não escreve mais e a
+    // exportação saía com 0 em toda linha. Instrutores vêm do array.
     3: {
-      cols: ['Treinamento', 'Instrutor', 'Início', 'Fim', 'Vagas', 'Inscritos', 'Status'],
-      rows: () => filteredTre.map((t: any) => [t.nome ?? '', t.instrutor ?? '', t.data_inicio ?? '', t.data_fim ?? '', String(t.vagas ?? 0), String(t.inscritos ?? 0), t.status ?? '']),
+      cols: ['Treinamento', 'Instrutores', 'Início', 'Fim', 'Inscritos', 'Status'],
+      rows: () => filteredTre.map((t: any) => [t.nome ?? '', fmtInstrutores(t), t.data_inicio ?? '', t.data_fim ?? '', String(t.inscritos ?? 0), t.status ?? '']),
     },
   };
 
@@ -221,16 +229,15 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
                 <div className="overflow-x-auto main-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                      {['Treinamento', 'Instrutor', 'Início', 'Fim', 'Vagas', 'Inscritos', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
+                      {['Treinamento', 'Instrutores', 'Início', 'Fim', 'Inscritos', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
                     </tr></thead>
                     <tbody>
                       {filteredTre.map((t: any) => (
                         <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{t.nome ?? '—'}</td>
-                          <td className="py-3 px-4 text-xs text-gray-400">{t.instrutor ?? '—'}</td>
+                          <td className="py-3 px-4 text-xs text-gray-400">{fmtInstrutores(t)}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{t.data_inicio ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{t.data_fim ?? '—'}</td>
-                          <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{t.vagas ?? 0}</td>
                           <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{t.inscritos ?? 0}</td>
                           <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusCls(t.status)}`}>{t.status}</span></td>
                         </tr>

@@ -516,3 +516,17 @@ export function idsDeProdutosPorTermo(produtos: any[], termo: string): string[] 
     .filter((p: any) => [p.nome, p.codigo, p.ean].some((v: any) => String(v ?? '').toLowerCase().includes(q)))
     .map((p: any) => p.id);
 }
+
+/**
+ * Instrutores de um treinamento, como texto.
+ *
+ * Desde a migração 093 o form grava o array `instrutores`; a coluna `instrutor`
+ * (singular) ficou só por compat e recebe o primeiro nome. Quem lê pelo campo
+ * legado mostra um instrutor onde há três — por isso as três telas de RH
+ * (Treinamentos, Gerenciamento, Relatórios) passam por aqui.
+ */
+export const fmtInstrutores = (t: any): string => {
+  const arr: string[] = Array.isArray(t?.instrutores) ? t.instrutores : [];
+  if (arr.length > 0) return arr.join(', ');
+  return t?.instrutor ?? '—';
+};

@@ -3,8 +3,9 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
@@ -16,6 +17,12 @@ const MASK_FOR: Record<string, (v: string) => string> = {
   salario:  formatBRL,
 };
 
+// Sentinel de "Outro (digitar)", mesmo idioma de RequisicoesView. Cargo e
+// departamento continuam colunas `text` em funcionarios — o select escolhe do
+// catálogo, mas quem já estava gravado como texto livre continua válido e
+// reaparece aqui como "Outro". Por isso ligar os catálogos não exigiu migração.
+const OUTRO = '__outro__';
+
 const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '', filial });
 
 // Remove diacríticos e converte para minúsculas para sort consistente
@@ -24,6 +31,16 @@ const normSort = (s: string) =>
 
 const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', { filial }, false, { orderBy: 'nome', ascending: true });
+  const { data: cargos }        = useFetchData<any>('/api/cargosview', { filial });
+  const { data: departamentos } = useFetchData<any>('/api/departamentosview', { filial });
+  const { data: beneficios }    = useFetchData<any>('/api/beneficiosview', { filial });
+  const [beneficiosDe, setBeneficiosDe] = useState<{ id: string; nome: string } | null>(null);
+  // Só cargo/departamento ativos entram no select; inativo que já esteja
+  // gravado num funcionário continua aparecendo via fallback "Outro".
+  const cargosAtivos = (cargos ?? []).filter((c: any) => (c.status ?? 'Ativo') === 'Ativo');
+  const deptosAtivos = (departamentos ?? []).filter((d: any) => (d.status ?? 'Ativo') === 'Ativo');
+  const [cargoSel, setCargoSel] = useState('');
+  const [deptoSel, setDeptoSel] = useState('');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -71,7 +88,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       return an < bn ? -1 : an > bn ? 1 : 0;
     });
 
-  const openNew = () => { setForm(makeEmpty(filial)); setEditing(null); setShowForm(true); };
+  const openNew = () => { setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setEditing(null); setShowForm(true); };
   const openEdit = (f: any) => {
     setForm({
       ...f,
@@ -79,10 +96,43 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       telefone: f.telefone ? formatPhone(f.telefone) : '',
       salario:  f.salario  != null ? formatBRL(Number(f.salario)) : '',
     });
+    // Casa o texto gravado com o catálogo; sem match, cai em "Outro" e o valor
+    // histórico segue no input livre em vez de sumir na abertura do form.
+    const cargoMatch = cargosAtivos.find((c: any) => c.nome === f.cargo);
+    const deptoMatch = deptosAtivos.find((d: any) => d.nome === f.departamento);
+    setCargoSel(cargoMatch ? cargoMatch.id : (f.cargo ? OUTRO : ''));
+    setDeptoSel(deptoMatch ? deptoMatch.id : (f.departamento ? OUTRO : ''));
     setEditing(f);
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditing(null); setForm(makeEmpty(filial)); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
+
+  // Cargo traz o salário base junto — mas só preenche campo vazio ou zerado.
+  // Sobrescrever um salário já digitado transformaria "escolhi o cargo errado
+  // e voltei" em perda silenciosa de um valor negociado caso a caso.
+  const handleCargoChange = (value: string) => {
+    setCargoSel(value);
+    if (value === OUTRO || value === '') { setForm((p: any) => ({ ...p, cargo: '' })); return; }
+    const c = cargosAtivos.find((x: any) => x.id === value);
+    setForm((p: any) => {
+      const salarioAtual = parseBRL(p.salario);
+      const base = Number(c?.salario_base ?? 0);
+      return {
+        ...p,
+        cargo: c?.nome ?? '',
+        salario: (salarioAtual === 0 && base > 0) ? formatBRL(base) : p.salario,
+      };
+    });
+  };
+
+  const handleDeptoChange = (value: string) => {
+    setDeptoSel(value);
+    if (value === OUTRO || value === '') { setForm((p: any) => ({ ...p, departamento: '' })); return; }
+    const d = deptosAtivos.find((x: any) => x.id === value);
+    setForm((p: any) => ({ ...p, departamento: d?.nome ?? '' }));
+  };
+
+  const cargoEscolhido = cargosAtivos.find((c: any) => c.id === cargoSel);
 
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
@@ -237,8 +287,68 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 { label: 'CPF', k: 'cpf', type: 'text' },
                 { label: 'E-mail', k: 'email', type: 'text' },
                 { label: 'Telefone', k: 'telefone', type: 'text' },
-                { label: 'Cargo', k: 'cargo', type: 'text' },
-                { label: 'Departamento', k: 'departamento', type: 'text' },
+              ].map(({ label, k, type }) => {
+                const mask = MASK_FOR[k];
+                const isNumericMask = !!mask;
+                return (
+                  <div key={k} className="flex flex-col gap-1.5">
+                    <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                    <input
+                      id={`func-${k}`}
+                      type={type}
+                      inputMode={isNumericMask ? 'numeric' : undefined}
+                      value={form[k]}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const next = mask ? mask(raw) : raw;
+                        setForm((p: any) => ({ ...p, [k]: next }));
+                      }}
+                      className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Cargo — vem do catálogo de Cargos da unidade. */}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="func-cargo-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
+                <select id="func-cargo-sel" value={cargoSel} onChange={e => handleCargoChange(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Selecionar...</option>
+                  {cargosAtivos.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.nome}{c.nivel ? ` · ${c.nivel}` : ''}</option>
+                  ))}
+                  <option value={OUTRO}>Outro (digitar)</option>
+                </select>
+                {cargoSel === OUTRO && (
+                  <input id="func-cargo" type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
+                    onChange={e => setForm((p: any) => ({ ...p, cargo: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                )}
+                {cargoEscolhido && Number(cargoEscolhido.salario_base) > 0 && (
+                  <p className="text-[10px] text-gray-500">
+                    Base do cargo: <span className="font-mono text-gray-400">R$ {formatBRL(Number(cargoEscolhido.salario_base))}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Departamento — catálogo de Departamentos da unidade. */}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="func-depto-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Departamento</label>
+                <select id="func-depto-sel" value={deptoSel} onChange={e => handleDeptoChange(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Selecionar...</option>
+                  {deptosAtivos.map((d: any) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                  <option value={OUTRO}>Outro (digitar)</option>
+                </select>
+                {deptoSel === OUTRO && (
+                  <input id="func-departamento" type="text" value={form.departamento} placeholder="Departamento fora do catálogo"
+                    onChange={e => setForm((p: any) => ({ ...p, departamento: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                )}
+              </div>
+
+              {[
                 { label: 'Data de Admissão', k: 'data_admissao', type: 'date' },
                 { label: 'Data de Nascimento', k: 'data_nascimento', type: 'date' },
                 { label: 'Salário (R$)', k: 'salario', type: 'text' },
@@ -263,6 +373,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   </div>
                 );
               })}
+
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="func-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
                 <select id="func-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
@@ -323,6 +434,11 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end">
                           <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          <button onClick={() => setBeneficiosDe({ id: f.id, nome: f.nome ?? '—' })}
+                            title="Benefícios do funcionário"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-blue-400 transition-colors">
+                            <Gift size={12} />
+                          </button>
                           <button onClick={() => openEdit(f)} className="action-btn-edit"><Pencil size={12} /></button>
                           <button onClick={() => handleDelete(f.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
@@ -337,6 +453,17 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <input ref={photoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden" onChange={handlePhotoUpload} />
+
+      <AnimatePresence>
+        {beneficiosDe && (
+          <FuncionarioBeneficiosModal
+            funcionario={beneficiosDe}
+            beneficios={beneficios ?? []}
+            showToast={showToast}
+            onClose={() => setBeneficiosDe(null)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

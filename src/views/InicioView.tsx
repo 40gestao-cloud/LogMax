@@ -9,7 +9,6 @@ import { contarAvaliacoesPendentesMatriz, type ResumoAvaliacaoMatriz } from '../
 import { useFilial } from '../contexts/FilialContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { LoadingSpinner, FilialBadge } from '../components/ui';
-import { PontoFAB } from '../components/PontoFAB';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
@@ -143,7 +142,10 @@ export const InicioView = ({
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
-      {!isAdmin && <PontoFAB />}
+      {/* PontoFAB (scanner do totem) removido em 2026-07-29 junto com a aba
+          Totem: era a porta do colaborador para marcar o próprio ponto, e sem
+          o totem ela abria um scanner que não leva a lugar nenhum. O
+          componente segue no repositório para a volta ser só remontá-lo. */}
 
       {/* Header — saudação + data + badge da filial ativa. Substitui a
           entrada "fria" nos cards e dá contexto imediato de quem/quando/onde. */}

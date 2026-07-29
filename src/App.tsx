@@ -77,7 +77,6 @@ const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoVi
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
-const FrequenciaTrabalhoView       = lazy(() => import('./views/FrequenciaTrabalhoView').then(m => ({ default: m.FrequenciaTrabalhoView })));
 const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
@@ -208,7 +207,38 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
-    submenus: ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios']
+    // Os submenus com dado de remuneração ou de vida do colaborador levam
+    // `requireSetor: ['rh']`. Hoje isso não tira nada de ninguém — quem chega
+    // no módulo já é RH, gerente ou Matriz (ver SETOR_MODULES). É defesa em
+    // profundidade, e o precedente é concreto: 'gerencia' já foi adicionado à
+    // lista de setores com 'rh', e naquele dia os 13 submenus abriram juntos
+    // porque não havia régua nenhuma abaixo do módulo. Com o gate declarado,
+    // a próxima inclusão abre só o que for decidido abrir.
+    //
+    // `subPermitido` deixa admin/CEO/gerente passar por cima de requireSetor —
+    // gerente opera a filial inteira, inclusive a folha dela.
+    submenus: [
+      'Funcionários',
+      { label: 'Departamentos', requireSetor: ['rh'] },
+      { label: 'Cargos', requireSetor: ['rh'] },
+      // 'Ponto Eletrônico' + 'Frequência de Trabalho' viraram um submenu só
+      // (2026-07-29). Depois da migr. 289 os dois escreviam na mesma tabela:
+      // eram dois modos de entrada do mesmo dado, não duas coisas.
+      //
+      // Com o totem removido da UI no mesmo dia, o colaborador deixou de ter o
+      // que fazer aqui — marcar o próprio ponto era exatamente a função do
+      // totem. Por isso o submenu ganhou requireSetor: sem ele, o colaborador
+      // abriria uma tela com uma aba de lançamento que não pode usar.
+      { label: 'Registro de Ponto', requireSetor: ['rh'] },
+      'Férias',
+      { label: 'Afastamentos', requireSetor: ['rh'] },
+      { label: 'Folha de Pagamento', requireSetor: ['rh'] },
+      { label: 'Benefícios', requireSetor: ['rh'] },
+      'Treinamentos',
+      { label: 'Pesquisas', requireSetor: ['rh'] },
+      'Gerenciamento',
+      { label: 'Relatórios', requireSetor: ['rh'] },
+    ]
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
@@ -588,6 +618,9 @@ function LogMaxAppInner() {
         .replace(/^matriz-requerimentos$/,     'feedback-org')
         // Categorias saiu de Empresa → Cadastros (pré-requisito de Produto).
         .replace(/^empresa-categorias$/,       'cadastros-categorias')
+        // Ponto Eletrônico + Frequência de Trabalho → Registro de Ponto (abas).
+        .replace(/^rh-pontoeletrônico$/,        'rh-registrodeponto')
+        .replace(/^rh-frequênciadetrabalho$/,   'rh-registrodeponto')
         // Requisições saiu de Empresa e virou módulo próprio. Três nomes
         // antigos convergem: o original, o intermediário sem possessivo
         // (migr. 285) e a caixa de aprovação.
@@ -963,10 +996,9 @@ function LogMaxAppInner() {
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Analista de Sistemas' }, { key: 'nivel', label: 'Nível', type: 'select', options: ['Júnior', 'Pleno', 'Sênior', 'Gerência', 'Diretoria'] }, { key: 'salario_base', label: 'Salário Base (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} profile={profile} />;
-      case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
-      case 'rh-frequênciadetrabalho': return <FrequenciaTrabalhoView showToast={st} profile={profile} />;
+      case 'rh-registrodeponto':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
-      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Gerencie os benefícios oferecidos aos funcionários." endpoint="/api/beneficiosview" filialScoped
+      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Catálogo de benefícios da unidade. A atribuição por pessoa é feita em Funcionários." endpoint="/api/beneficiosview" filialScoped
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
       case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;

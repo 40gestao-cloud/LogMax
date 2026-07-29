@@ -5,6 +5,7 @@ import { Users, DollarSign, Palmtree, BookOpen, Clock, CalendarCheck } from 'luc
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner } from '../components/ui';
+import { fmtInstrutores } from '../lib/viewUtils';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
   <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-w-[130px]">
@@ -213,15 +214,21 @@ export const GerenciamentoRHView = () => {
               <p className="text-xs text-gray-600 text-center py-4">Nenhum treinamento agendado.</p>
             ) : (
               <div className="flex flex-col gap-3">
+                {/* `vagas` é coluna legada: o form não escreve desde a migr. 093,
+                    então "vagas - inscritos" pintava todo treinamento de vermelho
+                    como se estivesse lotado. Quem existe de verdade é `inscritos`,
+                    contado a partir de treinamento_inscricoes. */}
                 {proximosTreinamentos.map((t: any) => {
-                  const vagasLiv = Math.max(Number(t.vagas || 0) - Number(t.inscritos || 0), 0);
+                  const inscritos = Number(t.inscritos || 0);
                   return (
                     <div key={t.id} className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0">
                       <div>
                         <p className="text-sm font-semibold text-gray-200">{t.nome}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{t.instrutor ?? 'Sem instrutor'} · <span className="font-mono">{t.data_inicio}</span></p>
+                        <p className="text-xs text-gray-500 mt-0.5">{fmtInstrutores(t)} · <span className="font-mono">{t.data_inicio}</span></p>
                       </div>
-                      <span className={`text-xs font-bold font-mono ${vagasLiv === 0 ? 'text-red-500' : 'text-green-400'}`}>{vagasLiv} vagas</span>
+                      <span className={`text-xs font-bold font-mono ${inscritos === 0 ? 'text-gray-500' : 'text-green-400'}`}>
+                        {inscritos} inscrito{inscritos === 1 ? '' : 's'}
+                      </span>
                     </div>
                   );
                 })}

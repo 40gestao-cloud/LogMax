@@ -9,6 +9,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hook
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
+import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -16,8 +17,17 @@ import type { FolhaPagamento, Funcionario } from '../types/domain';
 
 type RecalcBreakdown = {
   valor_hora: number;
+  /** Jornada da turma, derivada de saída − entrada (migr. 290). */
+  jornada_diaria: number;
+  horas_mes: number;
   horas_atraso: number;
   horas_falta: number;
+  /**
+   * Horas de ausência que a Matriz perdoou (migr. 292). Ficam FORA de
+   * horas_falta e de descontos — só aparecem para mostrar quanto a aprovação
+   * poupou. Justificado sem afastamento aprovado entra em horas_falta.
+   */
+  horas_perdoadas: number;
   horas_extras: number;
   descontos: number;
   bonus_extra: number;
@@ -141,15 +151,32 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     }
   };
 
+  // Benefícios vêm do que a pessoa realmente tem atribuído (migr. 288), não de
+  // memória de quem digita. O valor é PROPOSTO, não imposto: o campo segue
+  // editável porque o que for gravado na folha é o que credita o MaxBank
+  // daquele mês, e mexer no catálogo depois não pode reescrever o passado.
+  const carregarBeneficios = async (funcionarioId: string) => {
+    if (!supabase || !funcionarioId) return;
+    const { data, error } = await supabase.rpc('beneficios_do_funcionario', { p_funcionario_id: funcionarioId });
+    if (error) { console.warn('[FolhaPagamento] benefícios:', error.message); return; }
+    setForm((p: any) => ({ ...p, valor_beneficios: formatBRL(Number(data ?? 0)) }));
+  };
+
+  const handleFuncionarioChange = (funcionarioId: string) => {
+    setForm((p: any) => ({ ...p, funcionario_id: funcionarioId }));
+    // Só propõe na criação. Em edição o valor já foi decidido para aquele mês.
+    if (!editId && funcionarioId) carregarBeneficios(funcionarioId);
+  };
+
   const handleSave = async () => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
     if (!editId) {
       const dup = folhas.some(x => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
       if (dup) { showToast('Já existe folha para este funcionário neste mês. Edite o registro existente.', 'error'); return; }
     }
-    const base = Number(form.salario_base || 0);
-    const desc = Number(form.descontos || 0);
-    const benef = Number(form.valor_beneficios || 0);
+    const base = parseBRL(form.salario_base);
+    const desc = parseBRL(form.descontos);
+    const benef = parseBRL(form.valor_beneficios);
     // salario_bruto inicial = base; recalc do ponto pode aumentar via hora extra.
     // valor_beneficios é separado — não entra em descontos nem no líquido.
     const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc, filial };
@@ -181,9 +208,9 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     setForm({
       funcionario_id:   f.funcionario_id ?? '',
       mes_ref:          f.mes_ref        ?? '',
-      salario_base:     base != null ? String(base) : '',
-      descontos:        f.descontos        != null ? String(f.descontos)        : '',
-      valor_beneficios: f.valor_beneficios != null ? String(f.valor_beneficios) : '',
+      salario_base:     base != null ? formatBRL(Number(base)) : '',
+      descontos:        f.descontos        != null ? formatBRL(Number(f.descontos))        : '',
+      valor_beneficios: f.valor_beneficios != null ? formatBRL(Number(f.valor_beneficios)) : '',
       status:           f.status        ?? 'Pendente',
     });
     setShowForm(true);
@@ -454,29 +481,41 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <select id="folha-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <select id="folha-funcionario" value={form.funcionario_id} onChange={e => handleFuncionarioChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
                   {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
                     <option key={f.id} value={f.id}>{f.nome}</option>
                   ))}
                 </select>
               </div>
+              {/* Campos de R$ usam text + formatBRL/parseBRL, não type="number" —
+                  é o padrão de moeda desta base, e o número cru aceitava ponto
+                  decimal onde o operador digita vírgula. */}
               {[
-                { label: 'Mês Ref. *', k: 'mes_ref', type: 'month' },
-                { label: 'Salário Base (R$)', k: 'salario_base', type: 'number' },
-                { label: 'Descontos (R$)', k: 'descontos', type: 'number' },
-                { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'number' },
-              ].map(({ label, k, type }) => (
+                { label: 'Mês Ref. *', k: 'mes_ref', type: 'month', money: false },
+                { label: 'Salário Base (R$)', k: 'salario_base', type: 'text', money: true },
+                { label: 'Descontos (R$)', k: 'descontos', type: 'text', money: true },
+                { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'text', money: true },
+              ].map(({ label, k, type, money }) => (
                 <div key={k} className="flex flex-col gap-1.5">
                   <label htmlFor={`folha-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input id={`folha-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                  <input id={`folha-${k}`} type={type} value={form[k]}
+                    inputMode={money ? 'numeric' : undefined}
+                    onChange={e => {
+                      const v = money ? formatBRL(e.target.value) : e.target.value;
+                      setForm((p: any) => ({ ...p, [k]: v }));
+                    }}
+                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${money ? 'font-mono tabular-nums' : ''}`} />
+                  {k === 'valor_beneficios' && !editId && form.funcionario_id && (
+                    <p className="text-[10px] text-gray-500">Somado dos benefícios atribuídos em Funcionários.</p>
+                  )}
                 </div>
               ))}
               <div className="flex flex-col gap-1.5">
                 {/* O "Líquido Estimado" é texto somente-leitura, sem input — usamos span por isso */}
                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</span>
                 <p className="neu-input rounded-xl px-3 py-2.5 text-sm text-green-400 font-mono font-bold">
-                  R$ {(Number(form.salario_base || 0) - Number(form.descontos || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {(parseBRL(form.salario_base) - parseBRL(form.descontos)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -591,10 +630,17 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
               </div>
 
               <div className="space-y-2.5 text-xs">
-                <Row label="Valor/hora (base ÷ 220)" value={`R$ ${recalcBreakdown.data.valor_hora.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                {/* O rótulo trazia "÷ 220" fixo, que era a jornada CLT. A base
+                    mensal agora vem da jornada real da turma (migr. 290). */}
+                <Row label={`Jornada diária (turma)`} value={`${(recalcBreakdown.data.jornada_diaria ?? 0).toFixed(2)} h`} muted />
+                <Row label={`Valor/hora (base ÷ ${(recalcBreakdown.data.horas_mes ?? 0).toFixed(2)})`} value={`R$ ${recalcBreakdown.data.valor_hora.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
                 <div className="border-t border-white/5 my-3" />
                 <Row label="Horas de atraso" value={`${recalcBreakdown.data.horas_atraso.toFixed(2)} h`} muted />
                 <Row label="Horas de falta" value={`${recalcBreakdown.data.horas_falta.toFixed(2)} h`} muted />
+                {/* Separado das faltas de propósito: é o que a aprovação da
+                    Matriz poupou. Sem essa linha, um afastamento aprovado e um
+                    negado dariam telas idênticas (migr. 292). */}
+                <Row label="Horas perdoadas (afastamento aprovado)" value={`${(recalcBreakdown.data.horas_perdoadas ?? 0).toFixed(2)} h`} colorClass="text-emerald-400" />
                 <Row label="Descontos totais" value={`- R$ ${recalcBreakdown.data.descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
                 <div className="border-t border-white/5 my-3" />
                 <Row label="Horas extras" value={`${recalcBreakdown.data.horas_extras.toFixed(2)} h`} muted />
