@@ -8,12 +8,8 @@
       "schedule": "5 3 * * *"
     },
     {
-      "path": "/api/cron?task=expirar-competicoes",
+      "path": "/api/cron?task=expirar-competicoes,limpar-ip-hash",
       "schedule": "10 3 * * *"
-    },
-    {
-      "path": "/api/cron?task=limpar-ip-hash",
-      "schedule": "15 3 * * *"
     }
   ]
 }

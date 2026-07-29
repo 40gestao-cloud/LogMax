@@ -6,6 +6,12 @@ import { createLogger } from '../lib/log.js';
 // (limite 12 no Hobby). Vercel Cron chama /api/cron?task=<nome> nos
 // horários definidos em vercel.json > crons.
 //
+// `task` aceita LISTA separada por vírgula, e isso não é conveniência: o plano
+// Hobby permite no máximo 2 cron jobs. Um terceiro item em vercel.json > crons
+// faz a Vercel RECUSAR o deploy inteiro — e o efeito é traiçoeiro, porque o
+// deploy anterior continua servindo e tudo parece no ar, só congelado numa
+// versão velha. Tarefa nova entra numa entrada existente, não numa nova.
+//
 // Tasks disponíveis:
 //   ?task=reverter-promocoes  → RPC reverter_promocoes_expiradas
 //   ?task=expirar-competicoes → RPC expirar_competicoes
@@ -38,10 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const rpc = TASKS[taskParam];
-    if (!rpc) {
+    const nomes = taskParam.split(',').map(s => s.trim()).filter(Boolean);
+    const desconhecida = nomes.find(n => !TASKS[n]);
+    if (nomes.length === 0 || desconhecida) {
       log.warn('task.unknown', { task: taskParam });
-      return res.status(400).json({ error: `Task desconhecida: ${taskParam}` });
+      return res.status(400).json({ error: `Task desconhecida: ${desconhecida ?? taskParam}` });
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -55,15 +62,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data, error } = await admin.rpc(rpc);
-    if (error) {
-      log.error('rpc.failed', error);
-      return res.status(500).json({ error: error.message });
+    // Uma task que falha não cancela as outras: são independentes, e perder a
+    // limpeza de retenção porque a reversão de promoção quebrou seria juntar
+    // dois problemas num só.
+    const resultados: Record<string, number> = {};
+    const falhas: Record<string, string> = {};
+
+    for (const nome of nomes) {
+      const { data, error } = await admin.rpc(TASKS[nome]);
+      if (error) {
+        log.error('rpc.failed', error, { task: nome });
+        falhas[nome] = error.message;
+        continue;
+      }
+      resultados[nome] = typeof data === 'number' ? data : 0;
     }
 
-    const total = typeof data === 'number' ? data : 0;
-    log.info('cron.ok', { task: taskParam, total });
-    return res.status(200).json({ success: true, task: taskParam, total });
+    if (Object.keys(falhas).length > 0) {
+      return res.status(500).json({ success: false, resultados, falhas });
+    }
+
+    log.info('cron.ok', { task: taskParam, resultados });
+    return res.status(200).json({ success: true, resultados });
   } catch (err) {
     log.error('handler.unhandled', err);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
