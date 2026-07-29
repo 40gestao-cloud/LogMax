@@ -245,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data: cfg } = await admin
         .from('loja_config')
-        .select('aberta, max_itens_pedido, max_valor_pedido, max_pedidos_hora')
+        .select('aberta, max_itens_pedido, max_valor_pedido, max_pedidos_hora, max_pedidos_hora_origem')
         .eq('filial', filial)
         .maybeSingle();
 
@@ -271,18 +271,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: `Máximo de ${cfg.max_itens_pedido} itens por pedido.` });
       }
 
-      // Enxurrada: conta pedidos da mesma origem na última hora.
+      // Enxurrada — DOIS tetos, porque são duas perguntas diferentes (migr. 300):
+      //
+      //   rede       → a turma inteira sai pelo mesmo IP da escola, então este
+      //                número é da sala. Folgado de propósito: apertar aqui
+      //                para conter uma pessoa para a aula toda.
+      //   dispositivo→ este sim é por pessoa, na prática. Curto.
+      //
+      // As mensagens são diferentes porque as saídas são diferentes: uma pede
+      // esperar, a outra é a loja dizendo que já tem pedido seu na fila.
       const ipHash = hashIp(req);
       const umaHoraAtras = new Date(Date.now() - 3600_000).toISOString();
-      const { count: recentes } = await admin
+
+      const { count: recentesRede } = await admin
         .from('pedidos_online')
         .select('id', { count: 'exact', head: true })
         .eq('ip_hash', ipHash)
         .gte('created_at', umaHoraAtras);
 
-      if ((recentes ?? 0) >= cfg.max_pedidos_hora) {
-        log.warn('checkout.rate_limited', { filial, recentes });
-        return res.status(429).json({ error: 'Muitos pedidos em pouco tempo. Tente mais tarde.' });
+      if ((recentesRede ?? 0) >= cfg.max_pedidos_hora) {
+        log.warn('checkout.rate_limited_rede', { filial, recentes: recentesRede });
+        return res.status(429).json({
+          error: 'A loja recebeu muitos pedidos desta rede na última hora. Tente de novo em alguns minutos.',
+        });
+      }
+
+      if (origemToken) {
+        const limiteOrigem = cfg.max_pedidos_hora_origem ?? 8;
+        const { count: recentesOrigem } = await admin
+          .from('pedidos_online')
+          .select('id', { count: 'exact', head: true })
+          .eq('origem_token', origemToken)
+          .gte('created_at', umaHoraAtras);
+
+        if ((recentesOrigem ?? 0) >= limiteOrigem) {
+          log.warn('checkout.rate_limited_origem', { filial, recentes: recentesOrigem });
+          return res.status(429).json({
+            error: `Você já fez ${recentesOrigem} pedidos na última hora. Espere a equipe atender os que estão na fila.`,
+          });
+        }
       }
 
       // Quantos pedidos vieram desta mesma origem nas últimas 24h, contando
