@@ -450,6 +450,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: 'Não foi possível registrar os itens.' });
       }
 
+      // Toca o sino do setor vendas DAQUELA filial (migr. 301). O realtime só
+      // ajuda quem está com a tela de Pedidos Online aberta; quem está no PDV
+      // ou no caixa não fica sabendo que tem comprador esperando.
+      //
+      // Falha aqui NÃO derruba o pedido: ele já está gravado, e devolver erro
+      // ao comprador porque um sino não tocou seria trocar o problema de lugar.
+      // Fica no log para quem for investigar "por que ninguém foi avisado".
+      const { error: errNotif } = await admin.rpc('notificar_setor', {
+        p_setor:     'vendas',
+        p_tipo:      'info',
+        p_titulo:    `Pedido novo na loja — ${pedido.codigo}`,
+        p_mensagem:  `${apelido} pediu ${itens.length} item(ns), ${totalFinal.toFixed(2).replace('.', ',')} em ${FORMAS_ACEITAS[formaKey]}. Confira em Vendas → Pedidos Online.`,
+        p_link_view: 'vendas-pedidosonline',
+        p_urgencia:  'Média',
+        p_ref_id:    pedido.id,
+        p_filial:    filial,
+      });
+      if (errNotif) log.warn('checkout.notificacao_falhou', { filial, erro: errNotif.message });
+
       log.info('checkout.pedido_criado', {
         filial, codigo: pedido.codigo, itens: itens.length, total_final: totalFinal,
         origem_24h: origem24h,
