@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, ExternalLink, Package, Search } from 'lucide-react';
+import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, ExternalLink, Package, Search, AlertTriangle, Settings } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { formatBRL, parseBRL } from '../lib/viewUtils';
 
 // Fila da loja pública. O pedido chega de fora sem virar venda — quem vende é
 // o aluno, aqui, e a venda nasce por `criar_venda_pdv` como qualquer outra
@@ -69,6 +70,8 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const [clienteId, setClienteId] = useState('');
   const [ignorarCupom, setIgnorarCupom] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [configAberta, setConfigAberta] = useState(false);
+  const [cfgForm, setCfgForm] = useState<Record<string, string>>({});
 
   const cfg = lojaCfg?.[0];
   const podeAbrirFechar = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
@@ -83,6 +86,42 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   }, [itens]);
 
   const clientesOpts = useMemo(() => groupCadastrosParaSelect(clientes ?? []), [clientes]);
+
+  /**
+   * Estoque que faltou desde que o pedido entrou na fila.
+   *
+   * O pedido NÃO reserva estoque — de propósito: reserva sem prazo entope o
+   * estoque com pedido que ninguém vai buscar. O preço disso é que a
+   * `criar_venda_pdv` pode recusar a venda inteira no clique do Confirmar.
+   *
+   * Então a conta é feita aqui, antes: o aluno abre a conversa com o comprador
+   * já sabendo o que negociar, em vez de descobrir no meio do atendimento.
+   *
+   * `produtos` vem sem paginação (o hook só pagina quando recebe `page`), então
+   * a comparação vê o catálogo inteiro da filial — se paginasse, produto fora
+   * da página viraria "sem estoque" falso.
+   */
+  const faltaEstoque = useMemo(() => {
+    const estoquePor = new Map<string, { nome: string; estoque: number }>();
+    for (const pr of produtos ?? []) {
+      estoquePor.set(pr.id, { nome: pr.nome, estoque: Number(pr.estoque ?? 0) });
+    }
+    const m = new Map<string, string[]>();
+    for (const p of pedidos) {
+      if (p.status !== 'Novo') continue;
+      const faltas: string[] = [];
+      for (const i of itensPorPedido.get(p.id) ?? []) {
+        const pr = estoquePor.get(i.produto_id);
+        // Produto sumiu do cadastro (inativado) ou não alcança a quantidade.
+        if (!pr) { faltas.push(`${i.nome_produto} (saiu do catálogo)`); continue; }
+        if (pr.estoque < Number(i.qtd)) {
+          faltas.push(`${pr.nome} (pediu ${Number(i.qtd)}, tem ${pr.estoque})`);
+        }
+      }
+      if (faltas.length) m.set(p.id, faltas);
+    }
+    return m;
+  }, [pedidos, itensPorPedido, produtos]);
 
   const novos      = pedidos.filter(p => p.status === 'Novo');
   const confirmados = pedidos.filter(p => p.status === 'Confirmado');
@@ -215,6 +254,59 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
     );
   };
 
+  /**
+   * Limites da loja. Existiam só como coluna: mudar a vazão de uma dinâmica
+   * exigia SQL Editor, no meio da aula. São cinco números e uma frase, todos
+   * de `loja_config` — e a régua de quem pode é a mesma do abrir/fechar
+   * (`loja_config_write`: gerente da filial, admin ou CEO).
+   */
+  const abrirConfig = () => {
+    if (!cfg) return;
+    setCfgForm({
+      mensagem_fechada:        cfg.mensagem_fechada ?? '',
+      max_itens_pedido:        String(cfg.max_itens_pedido ?? 20),
+      max_valor_pedido:        formatBRL(String(Number(cfg.max_valor_pedido ?? 0).toFixed(2))),
+      max_pedidos_hora:        String(cfg.max_pedidos_hora ?? 300),
+      max_pedidos_hora_origem: String(cfg.max_pedidos_hora_origem ?? 8),
+    });
+    setConfigAberta(true);
+  };
+
+  const salvarConfig = async () => {
+    const inteiro = (v: string, min: number, max: number) => {
+      const n = Number(String(v).replace(/\D/g, ''));
+      return Number.isFinite(n) && n >= min && n <= max ? n : null;
+    };
+    const itens  = inteiro(cfgForm.max_itens_pedido, 1, 999);
+    const hora   = inteiro(cfgForm.max_pedidos_hora, 1, 100000);
+    const origem = inteiro(cfgForm.max_pedidos_hora_origem, 1, 100000);
+    const valor  = parseBRL(cfgForm.max_valor_pedido ?? '');
+
+    // Valida aqui porque a coluna é NOT NULL sem CHECK: um zero passaria e a
+    // loja recusaria todo pedido com uma mensagem que não explica nada.
+    if (itens === null)  { showToast('Itens por pedido: use um número de 1 a 999.', 'error'); return; }
+    if (hora === null)   { showToast('Pedidos por hora (rede): use um número de 1 a 100000.', 'error'); return; }
+    if (origem === null) { showToast('Pedidos por hora (dispositivo): use um número de 1 a 100000.', 'error'); return; }
+    if (!(valor > 0))    { showToast('Valor máximo do pedido precisa ser maior que zero.', 'error'); return; }
+
+    setSalvando(true);
+    try {
+      const upd = await patchLojaCfg({
+        mensagem_fechada:        (cfgForm.mensagem_fechada ?? '').trim() || null,
+        max_itens_pedido:        itens,
+        max_valor_pedido:        valor,
+        max_pedidos_hora:        hora,
+        max_pedidos_hora_origem: origem,
+      });
+      setLojaCfg((prev: any[]) => prev.map((x: any) => x.filial === filial ? { ...x, ...upd } : x));
+      showToast('Limites da loja atualizados.', 'success');
+      setConfigAberta(false);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao salvar os limites.', 'error', true);
+    }
+    setSalvando(false);
+  };
+
   const definirUrl = async () => {
     if (!cfg) return;
     const atual = cfg.url_publica ?? '';
@@ -285,6 +377,12 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
             className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2">
             <Link2 size={13} />Copiar link
           </button>
+          {podeAbrirFechar && cfg && (
+            <button onClick={abrirConfig}
+              className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2">
+              <Settings size={13} />Limites
+            </button>
+          )}
           {podeAbrirFechar && cfg && (
             <NeuButtonAccent variant="" onClick={toggleLoja}>
               <Store size={14} />{cfg.aberta ? 'Fechar loja' : 'Abrir loja'}
@@ -407,6 +505,14 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                           claro, porque quem lê vai atender uma pessoa. Aba
                           anônima gera outro token, e a turma inteira pode
                           estar atrás do mesmo IP da escola. */}
+                      {faltaEstoque.has(p.id) && (
+                        <span
+                          title={`Estoque insuficiente agora: ${faltaEstoque.get(p.id)!.join(' · ')}.\n\nO pedido não reserva estoque, então isto mudou depois que ele entrou na fila. Confirmar assim será recusado — combine com o comprador antes.`}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/25">
+                          <AlertTriangle size={9} />sem estoque
+                        </span>
+                      )}
+
                       {Number(p.origem_pedidos_24h ?? 1) > 2 && (
                         <span
                           title={`Já vieram ${p.origem_pedidos_24h} pedidos desta mesma origem nas últimas 24h. É indício, não prova: pode ser a mesma pessoa comprando de novo, ou a rede da escola.`}
@@ -498,6 +604,84 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       </div>
 
       <AnimatePresence>
+        {configAberta && cfg && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !salvando && setConfigAberta(false)}>
+            <motion.div initial={{ scale: 0.96, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-md max-h-[90vh] overflow-y-auto main-scrollbar">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                  <Settings size={14} className="text-accent" />Limites da loja — {filial}
+                </h3>
+                <button onClick={() => setConfigAberta(false)} disabled={salvando}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              </div>
+
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label htmlFor="cfg-msg" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Mensagem com a loja fechada</label>
+                <input id="cfg-msg" type="text" maxLength={160} value={cfgForm.mensagem_fechada ?? ''}
+                  onChange={e => setCfgForm(f => ({ ...f, mensagem_fechada: e.target.value }))}
+                  placeholder="A loja está fechada no momento."
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                <p className="text-[10px] text-gray-500">É o que o visitante lê no lugar da vitrine. Em branco, usa o texto padrão.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cfg-itens" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Itens por pedido</label>
+                  <input id="cfg-itens" type="text" inputMode="numeric" value={cfgForm.max_itens_pedido ?? ''}
+                    onChange={e => setCfgForm(f => ({ ...f, max_itens_pedido: e.target.value.replace(/\D/g, '') }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cfg-valor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Valor máximo</label>
+                  <input id="cfg-valor" type="text" inputMode="numeric" value={cfgForm.max_valor_pedido ?? ''}
+                    onChange={e => setCfgForm(f => ({ ...f, max_valor_pedido: formatBRL(e.target.value) }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+              </div>
+
+              {/* Os dois tetos de vazão existem separados porque respondem
+                  perguntas diferentes (migr. 300), e o texto tem de dizer isso:
+                  quem apertar o de rede achando que aperta uma pessoa vai
+                  travar a turma inteira. */}
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cfg-hora" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedidos/hora por rede</label>
+                  <input id="cfg-hora" type="text" inputMode="numeric" value={cfgForm.max_pedidos_hora ?? ''}
+                    onChange={e => setCfgForm(f => ({ ...f, max_pedidos_hora: e.target.value.replace(/\D/g, '') }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cfg-origem" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedidos/hora por dispositivo</label>
+                  <input id="cfg-origem" type="text" inputMode="numeric" value={cfgForm.max_pedidos_hora_origem ?? ''}
+                    onChange={e => setCfgForm(f => ({ ...f, max_pedidos_hora_origem: e.target.value.replace(/\D/g, '') }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-500 leading-relaxed mb-5">
+                A turma toda costuma sair pela mesma internet, então o limite <strong className="text-gray-400">por rede</strong> é
+                da sala inteira — aperte-o e você trava todos. O de <strong className="text-gray-400">dispositivo</strong> é
+                o que segura uma pessoa sozinha despejando pedidos.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setConfigAberta(false)} disabled={salvando}
+                  className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
+                  Cancelar
+                </button>
+                <NeuButtonAccent variant="" onClick={salvarConfig} disabled={salvando}>
+                  {salvando ? 'Salvando...' : 'Salvar'}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {atendendo && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
@@ -521,6 +705,24 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                 <span className="text-gray-500">Preferiu {atendendo.forma_desejada}. Você registra a forma real.</span>
               </div>
               ); })()}
+
+              {/* O erro de estoque viria do banco no clique. Dito aqui, com o
+                  nome do produto e os números, o aluno tem o que negociar em
+                  vez de um "operação recusada". */}
+              {faltaEstoque.has(atendendo.id) && (
+                <div className="rounded-xl p-3 mb-4 border border-red-500/30 bg-red-500/5">
+                  <p className="text-[11px] font-bold text-red-400 flex items-center gap-1.5 mb-1">
+                    <AlertTriangle size={12} />Estoque insuficiente agora
+                  </p>
+                  <ul className="text-[11px] text-gray-400 leading-relaxed list-disc pl-4">
+                    {faltaEstoque.get(atendendo.id)!.map(f => <li key={f}>{f}</li>)}
+                  </ul>
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Confirmar assim vai ser recusado pelo banco — o pedido continua na fila.
+                    Combine com o comprador ou reponha o estoque antes.
+                  </p>
+                </div>
+              )}
 
               {/* Cupom expirado ou alterado depois do pedido faz a criar_venda_pdv
                   recusar a venda inteira, e sem esta saída o pedido ficava preso na
