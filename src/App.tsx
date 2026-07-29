@@ -29,6 +29,7 @@ import {
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
+import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { AuditoriaProvider } from './contexts/AuditoriaContext';
@@ -1210,6 +1211,11 @@ function LogMaxAppInner() {
           Ciente. Oculto no Modo Aula pela mesma razão do sino — nada de
           conteúdo fora da aula na sessão do aluno. */}
       {!aulaFiltro && <AvisoMatrizFAB profile={profile} showToast={showToast} />}
+
+      {/* Pedido da loja online: some da fila quando vira venda ou é cancelado,
+          então não há botão de "já vi" — dar ciência sem atender deixaria o
+          comprador esperando. Oculto no Modo Aula pela mesma razão dos outros. */}
+      {!aulaFiltro && <PedidoOnlineFAB profile={profile} onNavigate={navigate} />}
     </div>
     </AuditoriaProvider>
     </AIAssistantProvider>
