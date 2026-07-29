@@ -9,6 +9,7 @@ import { createLogger } from '../lib/log.js';
 // Tasks disponíveis:
 //   ?task=reverter-promocoes  → RPC reverter_promocoes_expiradas
 //   ?task=expirar-competicoes → RPC expirar_competicoes
+//   ?task=limpar-ip-hash      → RPC limpar_ip_hash_pedidos_online
 //
 // Cada task chama uma RPC idempotente que retorna nº de linhas
 // afetadas.
@@ -16,6 +17,10 @@ import { createLogger } from '../lib/log.js';
 const TASKS: Record<string, string> = {
   'reverter-promocoes':  'reverter_promocoes_expiradas',
   'expirar-competicoes': 'expirar_competicoes',
+  // Retenção: o hash de origem do pedido serve para contar pedidos numa janela
+  // de uma hora. Depois de 30 dias não responde mais pergunta nenhuma, e dado
+  // guardado sem finalidade é o oposto do que a LGPD pede (arts. 15 e 16).
+  'limpar-ip-hash':      'limpar_ip_hash_pedidos_online',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -40,6 +40,7 @@ type Pedido = {
   atendente_nome: string | null; atendido_em: string | null;
   motivo_cancelamento: string | null;
   cupom_ignorado: boolean | null;
+  origem_pedidos_24h: number | null;
   indicacao: string | null; created_at: string;
 };
 
@@ -401,6 +402,18 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                       <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[p.status] ?? STATUS_CLS['Novo']}`}>
                         {p.status}
                       </span>
+
+                      {/* Indício, não acusação — e o texto precisa deixar isso
+                          claro, porque quem lê vai atender uma pessoa. Aba
+                          anônima gera outro token, e a turma inteira pode
+                          estar atrás do mesmo IP da escola. */}
+                      {Number(p.origem_pedidos_24h ?? 1) > 2 && (
+                        <span
+                          title={`Já vieram ${p.origem_pedidos_24h} pedidos desta mesma origem nas últimas 24h. É indício, não prova: pode ser a mesma pessoa comprando de novo, ou a rede da escola.`}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                          {p.origem_pedidos_24h}º da mesma origem
+                        </span>
+                      )}
 
                       <div className="flex-1 min-w-[140px]">
                         <p className="text-sm font-semibold text-gray-200 truncate">{p.comprador_apelido}</p>

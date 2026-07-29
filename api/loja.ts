@@ -29,7 +29,20 @@ const FORMAS_ACEITAS: Record<string, string> = {
 const MAX_APELIDO = 40;
 const MAX_QTD_ITEM = 99;
 
-/** Só o suficiente para contar pedidos por janela. O IP cru nunca é gravado. */
+/**
+ * Janela do contador de origem mostrado a quem atende. Não é limite: é
+ * indício. O limite de vazão é `max_pedidos_hora`, por rede.
+ */
+const JANELA_ORIGEM_MS = 24 * 3600_000;
+
+/**
+ * Só o suficiente para contar pedidos por janela. O IP cru nunca é gravado.
+ *
+ * CUIDADO ao tratar isto como identidade de pessoa: a turma toda sai pela
+ * mesma internet da escola, então 20 alunos compartilham um hash. Serve para
+ * vazão (`max_pedidos_hora`), não para dizer "foi o mesmo comprador" — para
+ * isso existe o `origem_token`, que é por dispositivo.
+ */
 function hashIp(req: VercelRequest): string {
   const fwd = req.headers['x-forwarded-for'];
   const ip = (Array.isArray(fwd) ? fwd[0] : fwd || '').split(',')[0].trim() || 'sem-ip';
@@ -204,6 +217,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const cupomCodigo = typeof body.cupom === 'string' ? body.cupom.trim().toUpperCase() : '';
       const indicacao = typeof body.indicacao === 'string' ? body.indicacao.trim().slice(0, 40) : null;
       const requestId = isUuid(body.request_id) ? body.request_id : null;
+      // UUID aleatório que a página guarda no localStorage. Distingue
+      // dispositivos atrás do mesmo IP da escola. Só aceita formato de UUID:
+      // string arbitrária do cliente não vira coluna nossa.
+      const origemToken = isUuid(body.origem_token) ? body.origem_token : null;
 
       if (!filial) return res.status(400).json({ error: 'Filial não informada.' });
       if (!apelido) return res.status(400).json({ error: 'Informe como quer ser chamado.' });
@@ -266,6 +283,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if ((recentes ?? 0) >= cfg.max_pedidos_hora) {
         log.warn('checkout.rate_limited', { filial, recentes });
         return res.status(429).json({ error: 'Muitos pedidos em pouco tempo. Tente mais tarde.' });
+      }
+
+      // Quantos pedidos vieram desta mesma origem nas últimas 24h, contando
+      // este. Vai gravado no pedido como indício para quem atende — NÃO barra
+      // nada: numa sala inteira atrás do mesmo IP, barrar por origem trancaria
+      // a turma. Sem token (localStorage bloqueado), cai no hash de rede, que
+      // é grosseiro e por isso não vira acusação na tela.
+      let origem24h = 1;
+      {
+        const desde = new Date(Date.now() - JANELA_ORIGEM_MS).toISOString();
+        const q = admin
+          .from('pedidos_online')
+          .select('id', { count: 'exact', head: true })
+          .eq('filial', filial)
+          .gte('created_at', desde);
+        const { count } = origemToken
+          ? await q.eq('origem_token', origemToken)
+          : await q.eq('ip_hash', ipHash);
+        origem24h = (count ?? 0) + 1;
       }
 
       // O preço vem daqui, nunca do navegador.
@@ -365,6 +401,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           indicacao,
           request_id:        requestId,
           ip_hash:           ipHash,
+          origem_token:      origemToken,
+          origem_pedidos_24h: origem24h,
         })
         .select('id, codigo')
         .single();
@@ -387,6 +425,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       log.info('checkout.pedido_criado', {
         filial, codigo: pedido.codigo, itens: itens.length, total_final: totalFinal,
+        origem_24h: origem24h,
       });
 
       return res.status(201).json({
