@@ -9,7 +9,6 @@ import { SETOR_MODULES } from './lib/sectorAccess';
 import {
   SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS,
 } from './views/SessoesGeraisView';
-import { MATRIZ_ALLOWED_SUBMENUS, MATRIZ_MODULES } from './lib/matrizMenu';
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
@@ -43,7 +42,7 @@ const FiliaisView             = lazy(() => import('./views/FiliaisView').then(m 
 const CRMView                 = lazy(() => import('./views/CRMView').then(m => ({ default: m.CRMView })));
 const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
 const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
-const MinhasRequisicoesView   = lazy(() => import('./views/MinhasRequisicoesView').then(m => ({ default: m.MinhasRequisicoesView })));
+const RequisicoesSetorView    = lazy(() => import('./views/RequisicoesSetorView').then(m => ({ default: m.RequisicoesSetorView })));
 const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
 const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
 const ConfigJurosView         = lazy(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
@@ -131,16 +130,31 @@ const MaxShowsView                         = lazy(() => import('./views/MaxShows
 type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[] };
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
-    // 'Minhas Requisições' mora aqui, e não em Compras, de propósito: Empresa
-    // é o único módulo que todo setor enxerga, e na empresa quem abre a
-    // requisição é a área que precisa do item (migr. 283). Compras recebe,
-    // cota e executa — a visão completa da filial segue em Compras.
+    // Empresa é parametrização: filiais, formas e condições de pagamento,
+    // projetos. Dado de referência que se configura uma vez.
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Minhas Requisições',
-      // A decisão sobre gasto é do gerente, não de Compras — por isso a caixa
-      // de aprovação mora aqui, ao lado de "Minhas Requisições": um lugar só
-      // para as duas pontas pessoais do fluxo (o que eu pedi, o que espera
-      // minha decisão). O submenu é role-gated: quem não decide não vê.
+    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos']
+  },
+  {
+    // Módulo próprio desde 2026-07-28. Requisições morava dentro de Empresa
+    // por conveniência — era o único módulo que todo setor enxergava —, mas
+    // Empresa é parametrização e requisição é trabalho transacional do dia.
+    // Um colaborador tinha de abrir um menu chamado "Empresa" para pedir
+    // papel A4; o nome não dizia nada sobre o que se faz ali.
+    //
+    // Aqui as duas pontas do fluxo ficam juntas e nomeadas pelo que são:
+    // 'Do Setor' é o que a área pediu (escopo de setor, migr. 285 — a
+    // requisição pertence a quem precisa do item, não a quem a digitou), e
+    // 'Aprovações' é a caixa de decisão do gerente, role-gated: quem não
+    // decide não vê. Compras e Estoque seguem com as filas de execução nos
+    // próprios módulos ('Requisições Recebidas') — mesmo documento, outro
+    // recorte.
+    //
+    // Visível a todo setor via SETOR_MODULES. Em Matriz não aparece porque
+    // nenhum módulo operacional aparece (visibleModulesBase = [] lá; o menu
+    // da holding são os 3 hubs), e é o certo — requisição é da filial.
+    id: 'requisicoes', label: 'Requisições', icon: ClipboardList,
+    submenus: ['Do Setor',
       { label: 'Aprovações', requireRole: ['gerente', 'admin', 'ceo'] }]
   },
   {
@@ -159,14 +173,22 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // confere a mercadoria é o Estoque, senão quem emite o pedido confirma a
     // própria entrega (migr. 284).
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições Recebidas', 'Cotações', 'Pedidos',
+    // 'Requisições de Compra', e não 'Requisições Recebidas': Estoque tinha um
+    // submenu com esse nome idêntico apontando para outro documento
+    // (`requisicoes_estoque`). Mesmo rótulo em dois módulos apagava justamente
+    // a distinção que a aula quer ensinar — requisição de compra é uma coisa,
+    // requisição de almoxarifado é outra.
+    submenus: ['Requisições de Compra', 'Cotações', 'Pedidos',
       'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios']
   },
   {
     // Recebimentos veio de Compras (migr. 284): conferir e dar entrada é do
     // almoxarifado. É essa conferência que libera o pagamento no Financeiro.
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Requisições Recebidas', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
+    // 'Requisições de Material' (conferir/corrigir) x 'Liberar Requisições'
+    // (dar baixa). São etapas diferentes do mesmo documento, e o nome antigo
+    // — 'Requisições Recebidas' — colidia com o submenu de Compras.
+    submenus: ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
       'Gerenciamento', 'Relatórios']
   },
@@ -190,9 +212,14 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
   },
   {
     id: 'vendas', label: 'Vendas', icon: ShoppingBag,
+    // 'Cliente Especial' NÃO entra aqui: é decisão de holding e já vive em
+    // Matriz (Sessões Gerais → Governança). A filial faz o orçamento; quem
+    // marca o cliente como especial — e recebe esse orçamento — é a Matriz.
+    // Ter o submenu nos dois lugares duplicava a mesma tela e sugeria que a
+    // filial decidia algo que não é dela. A rota 'vendas-clienteespecial'
+    // continua existindo, servindo o hub da Matriz.
     submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas',
-      { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] },
-      { label: 'Cliente Especial', requireRole: ['admin', 'ceo'] }],
+      { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] }],
   },
   {
     // Vitrine Pública saiu daqui em 2026-07-24 — passou a ser controlada
@@ -560,7 +587,17 @@ function LogMaxAppInner() {
         .replace(/^requerimentos$/,            'feedback-org')
         .replace(/^matriz-requerimentos$/,     'feedback-org')
         // Categorias saiu de Empresa → Cadastros (pré-requisito de Produto).
-        .replace(/^empresa-categorias$/,       'cadastros-categorias');
+        .replace(/^empresa-categorias$/,       'cadastros-categorias')
+        // Requisições saiu de Empresa e virou módulo próprio. Três nomes
+        // antigos convergem: o original, o intermediário sem possessivo
+        // (migr. 285) e a caixa de aprovação.
+        .replace(/^empresa-minhasrequisições$/, 'requisicoes-dosetor')
+        .replace(/^empresa-requisições$/,       'requisicoes-dosetor')
+        .replace(/^empresa-aprovações$/,        'requisicoes-aprovações')
+        // 'Requisições Recebidas' existia com nome idêntico em Compras e em
+        // Estoque, para documentos diferentes. Cada um ganhou o nome do seu.
+        .replace(/^compras-requisiçõesrecebidas$/, 'compras-requisiçõesdecompra')
+        .replace(/^estoque-requisiçõesrecebidas$/, 'estoque-requisiçõesdematerial');
       return migrado;
     } catch { return 'inicio'; }
   });
@@ -876,7 +913,7 @@ function LogMaxAppInner() {
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
-      case 'empresa-minhasrequisições':       return <MinhasRequisicoesView showToast={st} profile={profile} />;
+      case 'requisicoes-dosetor':             return <RequisicoesSetorView showToast={st} profile={profile} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
@@ -886,11 +923,11 @@ function LogMaxAppInner() {
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'compras-requisiçõesrecebidas':    return <RequisicoesView showToast={st} />;
-      case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} />;
+      case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} />;
+      case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
-      case 'empresa-aprovações':              return <AprovacoesComprasView showToast={st} profile={profile} />;
+      case 'requisicoes-aprovações':          return <AprovacoesComprasView showToast={st} profile={profile} />;
 
       case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} profile={profile} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
@@ -898,7 +935,7 @@ function LogMaxAppInner() {
       case 'relatorio-vendas':                return <RelatoriosVendasView showToast={st} />;
       case 'estoque-liberarrequisições':      return <AprovacoesEstoqueView showToast={st} profile={profile} />;
       case 'estoque-recebimentos':            return <RecebimentosView showToast={st} />;
-      case 'estoque-requisiçõesrecebidas':    return <RequisicoesEstoqueView showToast={st} />;
+      case 'estoque-requisiçõesdematerial':   return <RequisicoesEstoqueView showToast={st} />;
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
       case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;
@@ -912,7 +949,7 @@ function LogMaxAppInner() {
       case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} profile={profile} />;
       case 'financeiro-capital':               return <FilialCapitalView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
-      case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} />;
+      case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
       case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
       case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView profile={profile} />;
@@ -941,10 +978,10 @@ function LogMaxAppInner() {
       case 'vendas-devoluções':            return <DevolucoesView showToast={st} profile={profile} />;
       case 'financeiro-alçadas':           return <AlcadasView showToast={st} profile={profile} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
-      case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} />;
+      case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} mode="vendas" />;
       case 'vendas-clienteespecial':       return <ClienteEspecialView showToast={st} profile={profile} />;
-      case 'estoque-pedidosdevenda':       return <PedidosVendaView showToast={st} profile={profile} />;
-      case 'financeiro-pedidosdevenda':    return <PedidosVendaView showToast={st} profile={profile} />;
+      case 'estoque-pedidosdevenda':       return <PedidosVendaView showToast={st} profile={profile} mode="estoque" />;
+      case 'financeiro-pedidosdevenda':    return <PedidosVendaView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdeorçamento': return <OrcamentosView showToast={st} profile={profile} mode="financeiro" />;
       case 'marketing-redessociais':        return <MetricasRedesSociaisView showToast={st} profile={profile} />;
       case 'marketing-campanhas':          return <CampanhasMarketingView showToast={st} profile={profile} />;
@@ -1016,9 +1053,9 @@ function LogMaxAppInner() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
               className="fixed inset-0 bg-black/60 z-40 lg:hidden" />
-            <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
+            <motion.aside initial={{ x: -288 }} animate={{ x: 0 }} exit={{ x: -288 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed top-0 left-0 w-64 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat sidebar-dark lg:hidden">
+              className="fixed top-0 left-0 w-72 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat sidebar-dark lg:hidden">
               <SidebarNav
                 activeView={activeView} navigate={navigate}
                 openModules={openModules} toggleModule={toggleModule}
@@ -1033,7 +1070,7 @@ function LogMaxAppInner() {
       </AnimatePresence>
 
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-64 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative">
+      <aside className="hidden lg:flex w-72 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative">
         <SidebarNav
           activeView={activeView} navigate={navigate}
           openModules={openModules} toggleModule={toggleModule}

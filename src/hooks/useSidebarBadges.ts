@@ -27,6 +27,13 @@ type BadgeDef = {
   modulo: string;
   table: string;
   filters: Record<string, string>;
+  // Colunas que precisam estar vazias (`.is(col, null)`) e valores a excluir
+  // (`.neq`). Existem porque nem toda fila se define por um status: "pedido a
+  // separar" é `separado_em IS NULL`, e contar por status daria número
+  // diferente do que a tela mostra — badge e lista têm de responder à mesma
+  // pergunta, senão a bolinha vira mentira.
+  isNull?: string[];
+  neq?: Record<string, string>;
   select?: string;
   listenTables?: string[];
   // Coluna de filial na `table` (ou embedded via inner-join no `select`).
@@ -38,20 +45,23 @@ type BadgeDef = {
 
 const BADGE_DEFS: BadgeDef[] = [
   // ─── Compras ──────────────────────────────────────────────────────────────
-  { viewId: 'compras-requisiçõesrecebidas', modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'compras-requisiçõesdecompra', modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' } },
+
+  // ─── Requisições ──────────────────────────────────────────────────────────
+  // Caixa de decisão do gerente. Mora no módulo Requisições desde que ele
+  // deixou de ser submenu de Empresa.
   {
-    viewId: 'empresa-aprovações',
-    modulo: 'empresa',
+    viewId: 'requisicoes-aprovações',
+    modulo: 'requisicoes',
     table: 'aprovacoes_compras',
     filters: { status: 'Pendente', 'requisicoes.ativo': 'true', 'requisicoes.status': 'Pendente' },
     select: '*,requisicoes!inner(id)',
     listenTables: ['aprovacoes_compras', 'requisicoes'],
     filialColumn: 'filial',
   },
-  { viewId: 'compras-tarefas',          modulo: 'compras',    table: 'tarefas',              filters: { modulo: 'compras', status: 'Pendente' } },
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
   {
@@ -63,20 +73,17 @@ const BADGE_DEFS: BadgeDef[] = [
     listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
     filialColumn: 'filial',
   },
-  { viewId: 'estoque-requisiçõesrecebidas', modulo: 'estoque', table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'estoque-requisiçõesdematerial', modulo: 'estoque', table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' } },
-  { viewId: 'estoque-tarefas',          modulo: 'estoque',    table: 'tarefas',              filters: { modulo: 'estoque', status: 'Pendente' } },
 
   // ─── Financeiro ───────────────────────────────────────────────────────────
   { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
   { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' } },
-  // Pedidos de Venda chega no Financeiro pra registrar pagamento. Conta
-  // 'Aguardando Separação' como proxy de "pedido aberto" (visível também antes
-  // da logística separar, porque cliente pode pagar primeiro).
-  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: { status: 'Aguardando Separação' }, filialColumn: 'filial' },
-  { viewId: 'financeiro-tarefas',                modulo: 'financeiro', table: 'tarefas',             filters: { modulo: 'financeiro', status: 'Pendente' } },
+  // Pedidos de Venda chega no Financeiro pra registrar pagamento: conta o que
+  // ainda não foi recebido. Mesmo recorte que PedidosVendaView mode="financeiro".
+  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: {}, isNull: ['pago_em'], neq: { status: 'Cancelado' }, filialColumn: 'filial' },
 
   // ─── Metas (top-level, não faz parte de módulo — usa 'all' para passar no gate) ─
   // Badge = metas estratégicas ativas visíveis (RLS já limita ao setor).
@@ -85,16 +92,17 @@ const BADGE_DEFS: BadgeDef[] = [
 
   // ─── RH ───────────────────────────────────────────────────────────────────
   { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' } },
-  { viewId: 'rh-tarefas', modulo: 'rh', table: 'tarefas', filters: { modulo: 'rh', status: 'Pendente' } },
 
   // ─── Estoque (extra) ──────────────────────────────────────────────────────
-  // Pedidos de Venda recém-chegados aguardando logística separar.
-  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: { status: 'Aguardando Separação' }, filialColumn: 'filial' },
+  // Pedidos aguardando a logística separar. Mesmo recorte que
+  // PedidosVendaView mode="estoque".
+  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: {}, isNull: ['separado_em'], neq: { status: 'Cancelado' }, filialColumn: 'filial' },
 
   // ─── Vendas ───────────────────────────────────────────────────────────────
   { viewId: 'vendas-orçamentos',     modulo: 'vendas', table: 'orcamentos', filters: { status: 'Aprovado Financeiro' }, filialColumn: 'filial' },
-  { viewId: 'vendas-clienteespecial', modulo: 'vendas', table: 'orcamentos', filters: { status: 'Enviado ao Cliente' }, filialColumn: 'filial' },
-  { viewId: 'vendas-tarefas',         modulo: 'vendas', table: 'tarefas',    filters: { modulo: 'vendas', status: 'Pendente' } },
+  // 'vendas-clienteespecial' saiu daqui junto com o submenu: Cliente Especial
+  // é tela da Matriz, e em Matriz a sidebar não lista módulos operacionais —
+  // o badge não tinha onde aparecer.
 
   // ─── Marketing ────────────────────────────────────────────────────────────
   { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
@@ -106,8 +114,14 @@ const BADGE_DEFS: BadgeDef[] = [
   // Desenvolvimento com IA: badge conta treinamentos ainda por acontecer.
   { viewId: 'ti-desenvolvimentocomia', modulo: 'ti', table: 'desenvolvimentos_ia', filters: { status: 'Agendado' } },
 
-  // ─── Empresa (cadastro base, só Tarefas tem fluxo de pendência) ───────────
-  { viewId: 'empresa-tarefas', modulo: 'empresa', table: 'tarefas', filters: { modulo: 'empresa', status: 'Pendente' } },
+  // Empresa não tem badge: virou só parametrização (filiais, formas e
+  // condições de pagamento, projetos), e parametrização não tem fila.
+  //
+  // Havia aqui 6 entries `*-tarefas` (compras/estoque/financeiro/rh/vendas/
+  // empresa) apontando para submenus 'Tarefas' que não existem mais em módulo
+  // nenhum — sem rota, sem entrada de menu. O gate abaixo é por módulo, não
+  // por submenu existente, então elas seguiam disparando count + realtime a
+  // cada sessão para pintar bolinha em item invisível. Removidas 2026-07-28.
 ];
 
 /**
@@ -187,6 +201,12 @@ export function useSidebarBadges(
         }
         for (const [col, val] of Object.entries(def.filters)) {
           q = q.eq(col, val);
+        }
+        for (const col of def.isNull ?? []) {
+          q = q.is(col, null);
+        }
+        for (const [col, val] of Object.entries(def.neq ?? {})) {
+          q = q.neq(col, val);
         }
         // Filial-aware: em modo filial, só conta pendências da filial ativa.
         // Em modo Matriz (filialAtiva=null), vê tudo.

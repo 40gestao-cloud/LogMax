@@ -6,21 +6,27 @@
 // ("o botão aparece e falha"), mas se alguém digitar o `activeView` direto
 // no console, a RLS continua barrando.
 //
-// 'empresa' é cadastro base (filiais, clientes, produtos, fornecedores...)
-// e fica disponível para todos os setores. Os demais seguem o recorte
-// funcional de cada setor.
+// 'empresa' é cadastro base (filiais, formas e condições de pagamento,
+// projetos) e fica disponível para todos os setores. Os demais seguem o
+// recorte funcional de cada setor.
+//
+// 'requisicoes' também é de todos, e por um motivo diferente: pedir o que a
+// área precisa não é atribuição de um setor, é rotina de todos eles. Enquanto
+// morava dentro de 'empresa' isso vinha de carona; agora que é módulo próprio,
+// precisa estar em cada lista — se faltar em uma, aquele setor perde a porta
+// de entrada do fluxo de compra inteiro.
 export const SETOR_MODULES: Record<string, string[]> = {
-  all:        ['empresa', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
-  logistica:  ['empresa', 'cadastros', 'estoque', 'compras', 'ti'],
-  vendas:     ['empresa', 'vendas', 'ti'],
-  financeiro: ['empresa', 'financeiro', 'ti'],
-  rh:         ['empresa', 'rh', 'ti'],
-  marketing:  ['empresa', 'marketing', 'ti'],
-  ti:         ['empresa', 'ti'],
+  all:        ['empresa', 'requisicoes', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
+  logistica:  ['empresa', 'requisicoes', 'cadastros', 'estoque', 'compras', 'ti'],
+  vendas:     ['empresa', 'requisicoes', 'vendas', 'ti'],
+  financeiro: ['empresa', 'requisicoes', 'financeiro', 'ti'],
+  rh:         ['empresa', 'requisicoes', 'rh', 'ti'],
+  marketing:  ['empresa', 'requisicoes', 'marketing', 'ti'],
+  ti:         ['empresa', 'requisicoes', 'ti'],
   // Gerência: setor do cargo gerente (antes só existia o role, sem setor
   // próprio). Vê tudo da própria filial — mesma abrangência de 'all', mas
   // sem ser role global. O acesso real (RLS) vem de setores_extras com os
   // 6 setores operacionais, preenchido automaticamente pelo backend
   // (api/create-user.ts, api/update-user.ts) sempre que setor='gerencia'.
-  gerencia:   ['empresa', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
+  gerencia:   ['empresa', 'requisicoes', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
 };

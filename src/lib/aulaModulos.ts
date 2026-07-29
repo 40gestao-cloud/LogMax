@@ -20,6 +20,7 @@ export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'feedback-org',      label: 'Feedback & Requerimentos', grupo: 'Geral' },
   { id: 'metas',             label: 'Metas',            grupo: 'Geral' },
   { id: 'empresa',           label: 'Empresa',          grupo: 'Operacional' },
+  { id: 'requisicoes',       label: 'Requisições',      grupo: 'Operacional' },
   { id: 'cadastros',         label: 'Cadastros',        grupo: 'Logística' },
   { id: 'compras',           label: 'Compras',          grupo: 'Logística' },
   { id: 'estoque',           label: 'Estoque',          grupo: 'Logística' },
@@ -51,13 +52,14 @@ export const AULA_ROLES_ALVO: { id: string; label: string }[] = [
 // Se um dia adicionar/remover submenu lá, atualizar aqui também — testes
 // visuais na tela de Modo Aula deixam isso óbvio.
 export const AULA_SUBMENUS: Record<string, string[]> = {
-  empresa:    ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Minhas Requisições', 'Aprovações'],
+  empresa:     ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos'],
+  requisicoes: ['Do Setor', 'Aprovações'],
   cadastros:  ['Categorias', 'Produtos', 'Fornecedores', 'Serviços'],
-  compras:    ['Requisições Recebidas', 'Cotações', 'Pedidos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios'],
-  estoque:    ['Requisições Recebidas', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios'],
+  compras:    ['Requisições de Compra', 'Cotações', 'Pedidos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios'],
+  estoque:    ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios'],
   financeiro: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Juros & Multa', 'Alçadas', 'Notas Emitidas', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Pedidos de Venda', 'Recibos de Vendas', 'Capital', 'Gerenciamento', 'Relatórios'],
   rh:         ['Funcionários', 'Departamentos', 'Cargos', 'Ponto Eletrônico', 'Frequência de Trabalho', 'Férias', 'Afastamentos', 'Folha de Pagamento', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios'],
-  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Devoluções', 'Cliente Especial'],
+  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas', 'Devoluções'],
   marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário'],
   ti:         ['Desenvolvimento com IA'],
   'max-work': ['Docs', 'Planilhas', 'Show'],
@@ -68,13 +70,41 @@ export function aulaSubmenuId(modId: string, label: string): string {
   return `${modId}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
 }
 
+// Submenus que mudaram de nome ou de módulo: a config gravada no banco guarda
+// o viewId antigo, e a tela ficaria invisível na turma cujo professor já
+// montou a whitelist — o mesmo bug que a 26fc1bc consertou. Traduzir na
+// leitura é mais seguro que migrar a coluna: não depende de rodar SQL em 4
+// projetos, e não quebra se um deles ficar para trás.
+const AULA_SUBMENU_ALIAS: Record<string, string> = {
+  // Requisições saiu de Empresa e virou módulo próprio (2026-07-28).
+  'empresa-minhasrequisições': 'requisicoes-dosetor',
+  'empresa-requisições':       'requisicoes-dosetor',
+  'empresa-aprovações':        'requisicoes-aprovações',
+  // 'Requisições Recebidas' era o mesmo rótulo em Compras e Estoque.
+  'compras-requisiçõesrecebidas': 'compras-requisiçõesdecompra',
+  'estoque-requisiçõesrecebidas': 'estoque-requisiçõesdematerial',
+};
+
+// Módulos que se desmembraram: quem liberou o módulo antigo liberou junto o
+// que morava dentro dele. Sem esta herança, toda turma com 'empresa' na
+// whitelist perderia Requisições de uma vez — a trava esconderia um módulo
+// que o professor tinha, de fato, liberado.
+//
+// Só concede, nunca tira: se 'requisicoes' já está na config, isto não faz
+// diferença nenhuma.
+const AULA_MODULO_HERDADO: Record<string, string> = {
+  requisicoes: 'empresa',
+};
+
 /**
  * Retorna a whitelist de submenus deste módulo (viewIds), ou null se o
  * módulo não tem restrição (= todos os submenus liberados).
  */
 export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[] | null {
   const prefixo = `${modId}-`;
-  const items = config.submenus_ativos.filter(s => s.startsWith(prefixo));
+  const items = config.submenus_ativos
+    .map(s => AULA_SUBMENU_ALIAS[s] ?? s)
+    .filter(s => s.startsWith(prefixo));
   return items.length > 0 ? items : null;
 }
 
@@ -134,7 +164,10 @@ export function aulaPermiteView(
   if (!aulaFiltraUsuario(config, profile)) return true;
   const mod = aulaViewModuloId(view);
   if (mod === null) return true;
-  if (!config.modulos_ativos.includes(mod)) return false;
+  const herdado = AULA_MODULO_HERDADO[mod];
+  const moduloAtivo = config.modulos_ativos.includes(mod)
+    || (herdado !== undefined && config.modulos_ativos.includes(herdado));
+  if (!moduloAtivo) return false;
   // Módulo permitido. Se há whitelist de submenu pra esse módulo, view precisa
   // estar nela. Se view === mod (top-level standalone), sempre libera.
   if (view === mod) return true;

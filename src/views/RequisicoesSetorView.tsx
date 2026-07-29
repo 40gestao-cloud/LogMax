@@ -17,6 +17,14 @@ import type { UserProfile } from '../hooks/useUserProfile';
 // Financeiro. Esta tela mora em Empresa porque é o único módulo que todo setor
 // enxerga, e é a **única** porta de criação — Compras também pede por aqui.
 //
+// O escopo é o **setor**, não o usuário (migr. 285). A requisição pertence à
+// área que precisa do item: o centro de custo é dela, o orçamento é dela, a
+// necessidade é dela. Quem digitou é autor, não dono. Escopar por autor fazia
+// dois colegas do mesmo setor pedirem a mesma coisa sem se enxergar, e sumia
+// com o pedido quando quem abriu entrava de férias. Por isso a lista não
+// filtra por `criado_por` — RLS entrega o que o setor pediu, dentro da filial,
+// e a coluna Solicitante diz quem foi.
+//
 // Os campos seguem o que uma requisição de compra tem no mercado: quem pediu,
 // de que setor, para qual centro de custo, por quê, para quando, e a lista de
 // itens com quantidade e unidade. Solicitante e setor não são digitados: vêm
@@ -45,12 +53,15 @@ const UNIDADES = ['un', 'cx', 'pct', 'kg', 'g', 'L', 'mL', 'm', 'm²', 'sv'];
 
 const linhaVazia = () => ({ item: '', qtd: '1', unidade: 'un' });
 
-const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+  // Sem filtro por autor: o recorte é o setor, e quem faz esse recorte é a
+  // RLS (migr. 285). Repetir o filtro aqui reintroduziria pela tela o mesmo
+  // buraco que a migração fechou no banco.
   const { data, setData, isLoading } = useFetchData<any>(
-    '/api/requisicoesview', { filial, criado_por: profile.id }, true,
+    '/api/requisicoesview', { filial }, true,
   );
   const { data: reqEstoque, setData: setReqEstoque, isLoading: loadingEst } = useFetchData<any>(
-    '/api/requisicoesestoqueview', { filial, criado_por: profile.id }, true,
+    '/api/requisicoesestoqueview', { filial }, true,
   );
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
@@ -85,14 +96,14 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
     [produtos],
   );
 
-  // Uma lista só, como o solicitante enxerga: "o que eu pedi". O tipo vira
-  // rótulo, e não duas telas que ele teria de lembrar de visitar.
+  // Uma lista só, como o setor enxerga: "o que a gente pediu". O tipo vira
+  // rótulo, e não duas telas que alguém teria de lembrar de visitar.
   const pedidos = useMemo(() => {
     const compras = data.map((r: any) => ({
       id: r.id, tipo: 'compra' as TipoReq, item: r.item, qtd: r.qtd, unidade: r.unidade,
       complemento: r.centro_custo, prazo: r.data_necessidade, urgencia: r.urgencia ?? 'Normal',
       abertura: r.data ?? (r.created_at ?? '').slice(0, 10), status: r.status,
-      justificativa: r.justificativa,
+      justificativa: r.justificativa, solicitante: r.solicitante,
     }));
     const materiais = reqEstoque.map((r: any) => ({
       id: r.id, tipo: 'estoque' as TipoReq,
@@ -100,7 +111,7 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
       qtd: r.qtd, unidade: 'un',
       complemento: r.destino, prazo: null, urgencia: 'Normal',
       abertura: (r.created_at ?? '').slice(0, 10), status: r.status,
-      justificativa: null,
+      justificativa: null, solicitante: r.solicitante,
     }));
     return [...compras, ...materiais].sort((a, b) => String(b.abertura).localeCompare(String(a.abertura)));
   }, [data, reqEstoque, produtos]);
@@ -201,9 +212,9 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Minhas Requisições — {filial}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Peça o que o seu setor precisa: material que já existe sai do Estoque; o que falta vai para Compras cotar, e o gerente decide.
+            O que o seu setor pediu. Material que já existe sai do Estoque; o que falta vai para Compras cotar, e o gerente decide.
           </p>
         </div>
         {!showForm && (
@@ -415,13 +426,13 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
       </AnimatePresence>
 
       {(isLoading || loadingEst) ? <LoadingSpinner /> : pedidos.length === 0 ? (
-        <EmptyState message="Você ainda não abriu nenhum pedido" />
+        <EmptyState message="O seu setor ainda não abriu nenhum pedido" />
       ) : (
         <div className="neu-flat rounded-2xl border border-white/5 overflow-x-auto">
-          <table className="w-full min-w-[680px]">
+          <table className="w-full min-w-[780px]">
             <thead>
               <tr className="border-b border-white/5">
-                {['Item', 'Tipo', 'Qtd', 'Necessário até', 'Urgência', 'Aberto em', 'Situação'].map(h => (
+                {['Item', 'Tipo', 'Solicitante', 'Qtd', 'Necessário até', 'Urgência', 'Aberto em', 'Situação'].map(h => (
                   <th key={h} className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">{h}</th>
                 ))}
               </tr>
@@ -449,6 +460,12 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
                         {r.tipo === 'estoque' ? 'Estoque' : 'Compra'}
                       </span>
                     </td>
+                    {/* Quem pediu. Vira informação útil justamente porque a
+                        lista é do setor: sem esta coluna, "quem foi?" viraria
+                        pergunta de corredor. */}
+                    <td className="py-3 px-4 text-xs text-gray-300 capitalize">
+                      {r.solicitante ?? '—'}
+                    </td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-300">{r.qtd} {r.unidade ?? ''}</td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-400">{r.prazo ?? '—'}</td>
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
@@ -457,7 +474,7 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
                   </tr>
                   {detalhe === r.id && r.justificativa && (
                     <tr className="border-b border-white/5">
-                      <td colSpan={7} className="py-3 px-4">
+                      <td colSpan={8} className="py-3 px-4">
                         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa</span>
                         <span className="text-xs text-gray-300">{r.justificativa}</span>
                       </td>
@@ -473,8 +490,8 @@ const MinhasRequisicoesViewInner = ({ showToast, profile, filial }: { showToast:
   );
 };
 
-export const MinhasRequisicoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+export const RequisicoesSetorView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <MinhasRequisicoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  return <RequisicoesSetorViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };
