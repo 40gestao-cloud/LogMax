@@ -114,11 +114,22 @@ export function authorize(
 /**
  * CORS allow-list — substitui CORS '*' por origens explícitas.
  * Devolve true se a request OPTIONS foi tratada e o handler deve sair.
+ *
+ * `extraOrigins` existe para as lojas públicas, que vivem em projeto Vercel
+ * separado e por isso chamam a API cross-origin. Elas entram SÓ no endpoint
+ * que precisa (`api/loja.ts`), e não na allow-list global: os outros
+ * endpoints exigem Bearer JWT, mas não há motivo para anunciar que aceitam
+ * request de um domínio que nunca vai ter um token válido.
  */
-export function applyCors(req: VercelRequest, res: VercelResponse): boolean {
+export function applyCors(
+  req: VercelRequest,
+  res: VercelResponse,
+  extraOrigins?: string[],
+): boolean {
   const allowed = [
     process.env.VITE_APP_URL,                     // domínio principal de prod (configurar em Vercel)
     'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', // dev
+    ...(extraOrigins ?? []),
   ].filter(Boolean);
 
   const origin = req.headers.origin;

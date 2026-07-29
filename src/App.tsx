@@ -90,6 +90,7 @@ const UsuariosView                 = lazy(() => import('./views/UsuariosView').t
 const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
 const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 const DevolucoesView                       = lazy(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
+const PedidosOnlineView                    = lazy(() => import('./views/PedidosOnlineView').then(m => ({ default: m.PedidosOnlineView })));
 const AlcadasView                          = lazy(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
@@ -248,7 +249,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // Ter o submenu nos dois lugares duplicava a mesma tela e sugeria que a
     // filial decidia algo que não é dela. A rota 'vendas-clienteespecial'
     // continua existindo, servindo o hub da Matriz.
-    submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Histórico de Vendas',
+    submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Pedidos Online', 'Histórico de Vendas',
       { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] }],
   },
   {
@@ -1008,6 +1009,7 @@ function LogMaxAppInner() {
       case 'vendas-clientes':               return <CRMView type="clientes" showToast={st} />;
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'vendas-devoluções':            return <DevolucoesView showToast={st} profile={profile} />;
+      case 'vendas-pedidosonline':          return <PedidosOnlineView showToast={st} profile={profile} />;
       case 'financeiro-alçadas':           return <AlcadasView showToast={st} profile={profile} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
       case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} mode="vendas" />;

@@ -112,6 +112,9 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/avaliacoesview':              'avaliacoes',
   '/api/frequenciatrabalhocomfilialview': 'frequencia_trabalho_com_filial',
   '/api/funcionariobeneficiosview':   'funcionario_beneficios',
+  '/api/pedidosonlineview':           'pedidos_online',
+  '/api/pedidosonlineitensview':      'pedidos_online_itens',
+  '/api/lojaconfigview':              'loja_config',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
@@ -134,6 +137,9 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'marketing_campanhas', 'marketing_cupons', 'marketing_calendario',
   'treinamento_inscricoes', 'afastamentos', 'frequencia_trabalho', 'frequencia_trabalho_com_filial',
   'funcionario_beneficios',
+  // `loja_config` fica de fora de propósito: é uma linha fixa por filial, não
+  // um cadastro que se apaga, e não tem coluna `ativo`.
+  'pedidos_online',
   'relatorios_bi', 'briefings_diarios',
   'tarefas',
   'desenvolvimentos_ia',
