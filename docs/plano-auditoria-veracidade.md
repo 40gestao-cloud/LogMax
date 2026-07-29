@@ -418,9 +418,17 @@ sistema tinha setor fazendo o que não é dele:
 
 - [x] **Quem precisa é quem pede.** Requisição de compra e de material saíram
       do monopólio de `compras`/`logistica`: qualquer setor abre pela porta
-      única **Empresa → Minhas Requisições** (Empresa é o módulo que todos
-      enxergam), presa à própria filial. Compras e Estoque perderam a tela de
-      criação — as deles viraram fila: *Requisições Recebidas*.
+      única **Requisições → Do Setor**, presa à própria filial. Compras e
+      Estoque perderam a tela de criação — as deles viraram fila:
+      *Requisições Recebidas*.
+- [x] **A requisição é do setor, não de quem a digitou** (migr. 285). A 283/284
+      gravavam `setor_solicitante` e liam por `criado_por = auth.uid()` —
+      guardavam o setor e filtravam pelo indivíduo. Na empresa o dono é a área:
+      o centro de custo é dela, o orçamento é dela. Escopar por autor fazia
+      dois colegas do mesmo setor pedirem a mesma coisa sem se enxergar, e
+      sumia com o pedido quando quem abriu entrava de férias. SELECT passou a
+      ser por setor + filial (multi-setor via `auth_user_setores()`), a tela
+      perdeu o possessivo do nome e ganhou coluna *Solicitante*.
 - [x] **A requisição virou uma requisição.** Ganhou solicitante e setor
       derivados do usuário autenticado (campo de texto livre para autoria é a
       porta da requisição fantasma), **justificativa obrigatória**, data de
@@ -428,9 +436,11 @@ sistema tinha setor fazendo o que não é dele:
       pede descreve a necessidade; casar com o catálogo é trabalho de Compras
       na cotação.
 - [x] **Compras não aprova — e a caixa de aprovação mudou de módulo.** Virou
-      **Empresa → Aprovações**, ao lado de Minhas Requisições: as duas pontas
-      pessoais do fluxo no mesmo lugar, com o submenu restrito a gerente/
-      admin/CEO.
+      **Requisições → Aprovações**, ao lado de *Do Setor*: as duas pontas do
+      fluxo no mesmo lugar, com o submenu restrito a gerente/admin/CEO.
+      Requisições virou módulo próprio, abaixo de Empresa — Empresa é
+      parametrização, requisição é trabalho do dia, e o aluno não tinha por
+      que procurar "pedir papel A4" dentro de um menu chamado Empresa.
 - [x] **Quem compra não recebe.** `recebimentos` perdeu `compras` e ficou com
       Estoque + gerente; o submenu Recebimentos saiu de Compras e foi para
       Estoque. Trigger: quem emitiu o pedido não fecha o próprio recebimento

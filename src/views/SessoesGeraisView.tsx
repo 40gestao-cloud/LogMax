@@ -57,7 +57,11 @@ const subPermitido = (s: SubmenuLike, profile: UserProfile | null) => {
 
 // ── Configurações dos 3 hubs (todos usados só em modo Matriz) ─────────────
 // Submenus reduzidos (Gerenciamento/Relatórios/Comparativos).
-// Mantém em sync com MATRIZ_ALLOWED_SUBMENUS de lib/matrizMenu.ts.
+//
+// Esta lista É o menu da Matriz — não há outra a manter em sync. Havia um
+// lib/matrizMenu.ts com um mapa MATRIZ_ALLOWED_SUBMENUS que ninguém lia
+// (App.tsx importava sem usar) e que já apontava para submenu extinto;
+// removido em 2026-07-29 para não haver duas fontes, uma delas falsa.
 export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
   {
     // Formas/Condições/Projetos/Tarefas são filialScoped (todas têm coluna

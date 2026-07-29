@@ -11,7 +11,12 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
-const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+// A tela é alcançável por três portas de menu — Vendas, Estoque e Financeiro
+// — e até aqui as três abriam a lista inteira, idêntica. Cada módulo tem uma
+// pergunta diferente a fazer ao mesmo documento, e é isso que `mode` recorta:
+// Estoque quer o que falta separar, Financeiro o que falta receber, Vendas
+// acompanha o pedido do início ao fim.
+const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'vendas' | 'estoque' | 'financeiro' }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
@@ -25,10 +30,32 @@ const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any;
   const isVendas     = hasSetor(profile, 'vendas');
   const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
-  const enriched = data.map((p: any) => ({
+  const todos = data.map((p: any) => ({
     ...p,
     cliente: clientes.find((c: any) => c.id === p.cliente_id),
   }));
+
+  // O recorte espelha exatamente a ação que cada módulo pode executar mais
+  // abaixo (podeSeparar / podePagar): a fila mostra o que há para fazer ali,
+  // não o arquivo inteiro. Cancelado sai das filas — não há o que separar nem
+  // receber —, mas segue visível em Vendas, que acompanha o ciclo todo.
+  const enriched = mode === 'estoque'
+    ? todos.filter((p: any) => !p.separado_em && p.status !== 'Cancelado')
+    : mode === 'financeiro'
+      ? todos.filter((p: any) => !p.pago_em && p.status !== 'Cancelado')
+      : todos;
+
+  const tituloModo =
+    mode === 'estoque'    ? 'Pedidos a Separar'
+    : mode === 'financeiro' ? 'Pedidos a Receber'
+    : 'Pedidos de Venda';
+
+  const subtituloModo =
+    mode === 'estoque'
+      ? 'Pedidos aprovados pelo cliente aguardando separação no almoxarifado.'
+    : mode === 'financeiro'
+      ? 'Pedidos aprovados pelo cliente com recebimento ainda em aberto.'
+      : 'Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.';
 
   // Status final 'Concluído' é atribuído pela ação que completar o par
   // (separar quando já pago, ou pagar quando já separado). Antes disso o
@@ -96,15 +123,17 @@ const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any;
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Venda — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.
-          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{tituloModo} — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">{subtituloModo}</p>
         </div>
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
-        <EmptyState message="Nenhum pedido de venda. Quando um cliente aprovar uma proposta, ele aparece aqui." />
+        <EmptyState message={
+          mode === 'estoque'      ? 'Nada a separar. Pedidos aprovados pelo cliente aparecem aqui.'
+          : mode === 'financeiro' ? 'Nada a receber. Pedidos com pagamento em aberto aparecem aqui.'
+          : 'Nenhum pedido de venda. Quando um cliente aprovar uma proposta, ele aparece aqui.'
+        } />
       ) : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
           <div className="overflow-auto main-scrollbar flex-1">
@@ -206,8 +235,8 @@ const PedidosVendaViewInner = ({ showToast, profile, filial }: { showToast: any;
   );
 };
 
-export const PedidosVendaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+export const PedidosVendaView = ({ showToast, profile, mode }: { showToast: any; profile: UserProfile; mode?: 'vendas' | 'estoque' | 'financeiro' }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  return <PedidosVendaViewInner showToast={showToast} profile={profile} filial={filialAtiva} mode={mode} />;
 };

@@ -75,7 +75,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // produtoSel = id do produto escolhido no dropdown, ITEM_OUTRO ou '' (nenhum).
   // form.item = texto final que vai pra BD (nome do produto ou texto livre).
   // Só o modo edição vive aqui: a criação saiu desta tela (migr. 283) e mora
-  // em Empresa → Minhas Requisições, onde qualquer setor pede o que precisa.
+  // em Requisições → Do Setor, onde qualquer setor pede o que precisa.
   // Compras recebe a fila e executa — não pede para si por uma porta própria.
   const [produtoSel, setProdutoSel] = useState<string>('');
   const [form, setForm] = useState({ item: '' });
@@ -120,7 +120,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
   };
 
   // Só edição de requisição já existente. A criação mora em
-  // Empresa → Minhas Requisições.
+  // Requisições → Do Setor.
   const handleSave = async () => {
     if (!validate() || !editItem) return;
     setIsSaving(true);
@@ -182,7 +182,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Fila da filial. Quem pede é a área que precisa, em Empresa → Minhas Requisições; aqui Compras confere, corrige e leva para cotação.</p>
+          <p className="text-sm text-gray-400 mt-1">Fila da filial. Quem pede é a área que precisa, em Requisições → Do Setor; aqui Compras confere, corrige e leva para cotação.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">

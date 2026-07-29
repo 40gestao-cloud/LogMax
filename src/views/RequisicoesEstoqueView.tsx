@@ -30,7 +30,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
   const openEdit = (item: any) => { setEditItem(item); setForm({ produto_id: item.produto_id ?? '' }); setExtras({ qtd: String(item.qtd ?? 1), destino: item.destino ?? '' }); setErrors({}); };
 
   // Só edição. A criação saiu desta tela (migr. 284) e mora em
-  // Empresa → Minhas Requisições: quem precisa do material é quem pede, e o
+  // Requisições → Do Setor: quem precisa do material é quem pede, e o
   // Estoque atende. O almoxarife corrigindo quantidade continua valendo.
   const handleSave = async () => {
     if (!validate() || !editItem) return;
@@ -68,8 +68,12 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições Recebidas — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Material que as áreas pediram do almoxarifado. Quem pede abre em Empresa → Minhas Requisições; aqui o Estoque confere e libera.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Material — {filial}</h2>
+          {/* Esta tela NÃO libera — só confere e corrige. A baixa acontece em
+              Estoque → Liberar Requisições. O texto antigo prometia "confere e
+              libera" e mandava o almoxarife embora achando que tinha atendido
+              o pedido. */}
+          <p className="text-sm text-gray-400 mt-1">Material que as áreas pediram do almoxarifado. Quem pede abre em Requisições → Do Setor; aqui o Estoque confere e corrige a quantidade. A baixa é em Liberar Requisições.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>

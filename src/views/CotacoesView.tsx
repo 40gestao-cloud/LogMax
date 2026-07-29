@@ -46,7 +46,17 @@ async function notificarSetor(args: {
   }
 }
 
-const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+// `mode` existe pelo mesmo motivo que existe em OrcamentosView: a tela é
+// alcançável por duas portas de menu — Compras → Cotações e Financeiro →
+// Aprovações de Cotação — e sem o modo as duas abriam exatamente a mesma
+// coisa. Para colaborador passava despercebido (cada setor só enxerga a sua
+// porta), mas admin, CEO e gerente veem as duas entradas e caíam no mesmo
+// lugar, com o menu prometendo ferramentas diferentes.
+//
+// 'financeiro' é a fila de decisão: só o que está aguardando o Financeiro, sem
+// o formulário de coleta. 'compras' (default) é a bancada de trabalho inteira.
+const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'compras' | 'financeiro' }) => {
+  const modoFinanceiro = mode === 'financeiro';
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -228,16 +238,21 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   }, [propostasDoModal]);
 
   const enrichedFiltered = useMemo(() => {
+    // Na porta do Financeiro a tela é caixa de entrada, não catálogo: mostra
+    // só o que espera decisão dele — o mesmo status que alimenta o badge.
+    const base = modoFinanceiro
+      ? enriched.filter((c: any) => c.status === 'Aguardando Financeiro')
+      : enriched;
     const q = debouncedSearch.trim().toLowerCase();
-    if (!q) return enriched;
-    return enriched.filter((c: any) => {
+    if (!q) return base;
+    return base.filter((c: any) => {
       const item = String(c.req?.item ?? '').toLowerCase();
       const forn = String(c.forn?.nome ?? '').toLowerCase();
       const status = String(c.status ?? '').toLowerCase();
       const obs = String(c.observacao ?? '').toLowerCase();
       return item.includes(q) || forn.includes(q) || status.includes(q) || obs.includes(q);
     });
-  }, [enriched, debouncedSearch]);
+  }, [enriched, debouncedSearch, modoFinanceiro]);
 
   const closeForm = () => {
     setShowForm(false);
@@ -426,10 +441,12 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cotações — {filial}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
+            {modoFinanceiro ? 'Aprovações de Cotação' : 'Cotações'} — {filial}
+          </h2>
           <p className="text-sm text-gray-400 mt-1">
-            {isFinanceiro && !isCompras
-              ? 'Aprove ou reprove cotações enviadas pelo setor de Compras.'
+            {modoFinanceiro
+              ? 'Cotações que o setor de Compras enviou e aguardam a sua decisão.'
               : 'Colete propostas de fornecedores; após aprovação do Financeiro, gere o pedido.'}
           </p>
         </div>
@@ -444,7 +461,7 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          {isCompras && (
+          {isCompras && !modoFinanceiro && (
             <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
               <Plus size={16} /> Nova Cotação
             </NeuButtonAccent>
@@ -453,7 +470,7 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
       </div>
 
       <AnimatePresence>
-        {showForm && isCompras && (
+        {showForm && isCompras && !modoFinanceiro && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Cotação</h3>
@@ -813,8 +830,8 @@ const CotacoesViewInner = ({ showToast, profile, filial }: { showToast: any; pro
   );
 };
 
-export const CotacoesView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+export const CotacoesView = ({ showToast, profile, mode }: { showToast: any; profile: UserProfile; mode?: 'compras' | 'financeiro' }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} mode={mode} />;
 };
