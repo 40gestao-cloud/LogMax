@@ -1544,6 +1544,30 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
     box-shadow 0.22s ease,
     background-color 0.18s ease;
   border: 1px solid transparent;
+  /* Rótulo nunca quebra linha. Sem isto, label longo ("Recursos Humanos",
+     "Central de Avaliação", "Condições de pagamento") quebrava em duas
+     linhas dentro do flex; como o botão é justify-between por causa do
+     chevron, o texto quebrado ficava com aparência de centralizado e
+     desalinhado em relação aos vizinhos. Some com o problema na raiz, para
+     qualquer label — inclusive os que ainda não existem. */
+  white-space: nowrap;
+}
+
+/* O flex interno precisa poder encolher, senão `nowrap` vira overflow em vez
+   de reticências: filho de flex tem min-width:auto por padrão e se recusa a
+   ficar menor que o conteúdo. */
+.nav-item > div {
+  min-width: 0;
+}
+
+.nav-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ícone e chevron mantêm o tamanho — quem cede espaço é o texto. */
+.nav-item svg {
+  flex-shrink: 0;
 }
 
 .nav-item:hover:not(.is-active) {

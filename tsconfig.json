@@ -22,6 +22,10 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["vite/client"]
-  }
+    "types": ["vite/client"],
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo"
+  },
+  "include": ["src", "api", "lib", "tests", "*.config.ts"],
+  "exclude": ["node_modules", "dist", "dev-dist", ".vercel"]
 }

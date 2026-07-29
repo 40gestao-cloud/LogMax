@@ -4,6 +4,7 @@ import { Search, FileDown, Sheet, TrendingUp, TrendingDown, Landmark } from 'luc
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
+import { useFilial } from '../contexts/FilialContext';
 
 type TabId = 'receber' | 'pagar' | 'caixa';
 
@@ -14,13 +15,28 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const [search, setSearch] = useState('');
   const [filialFiltro, setFilialFiltro] = useState('');
 
-  const { data: receber,    isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview');
-  const { data: pagar,      isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview');
-  const { data: caixa,      isLoading: loadingCx } = useFetchData<any>('/api/caixabancosview');
-  const { data: clientes }    = useFetchData<any>('/api/crmview');
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores');
+  // Estar numa filial é o filtro — não uma sugestão que um segundo seletor
+  // pode ignorar. Esta tela buscava tudo e oferecia um dropdown próprio com
+  // "Todas as filiais" como default; para admin/CEO/gerente, que a RLS não
+  // escopa, o resultado era ver as 3 unidades somadas com SuperMax
+  // selecionado no topo. As quatro tabelas abaixo têm coluna `filial`
+  // (migr. 053, 157, 017), então o recorte vai na query.
+  //
+  // O dropdown sobrevive só em Matriz (filialAtiva === null), onde consolidar
+  // é justamente o ponto e não há filial ativa para herdar.
+  const { filialAtiva } = useFilial();
+  const ff = filialAtiva ? { filial: filialAtiva } : undefined;
 
-  const byFilial = (x: any) => !filialFiltro || !x.filial || x.filial === filialFiltro;
+  const { data: receber,    isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview', ff);
+  const { data: pagar,      isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview', ff);
+  const { data: caixa,      isLoading: loadingCx } = useFetchData<any>('/api/caixabancosview', ff);
+  const { data: clientes }    = useFetchData<any>('/api/crmview', ff);
+  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
+
+  // Em filial a query já recortou; o dropdown nem aparece. Em Matriz ele
+  // vale, e linhas sem filial (legado) seguem passando para não sumirem do
+  // consolidado.
+  const byFilial = (x: any) => !!filialAtiva || !filialFiltro || !x.filial || x.filial === filialFiltro;
 
   const receberF    = receber.filter(byFilial);
   const pagarF      = pagar.filter(byFilial);
@@ -120,11 +136,13 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
           })}
         </div>
         <div className="flex gap-3 items-center flex-wrap">
-          <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
-            className="neu-input rounded-xl px-3 py-2 text-sm">
-            <option value="">Todas as filiais</option>
-            {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          {!filialAtiva && (
+            <select value={filialFiltro} onChange={e => setFilialFiltro(e.target.value)}
+              className="neu-input rounded-xl px-3 py-2 text-sm">
+              <option value="">Todas as filiais</option>
+              {FILIAIS_REL.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          )}
           {activeData.length > 0 && (
             <>
               <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />
