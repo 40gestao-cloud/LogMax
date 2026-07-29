@@ -114,13 +114,20 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     ],
   },
   {
-    // Marketing na Matriz — institucional da holding. A Vitrine Pública é
-    // uma só (tela de login única), então quem controla é a Matriz. Em
-    // filial o submenu não aparece mais (removido do menuModules em App.tsx).
+    // Marketing na Matriz — institucional da holding. A vitrine da tela de
+    // login é uma só, então quem controla é a Matriz. Em filial o submenu
+    // não aparece mais (removido do menuModules em App.tsx).
+    //
+    // O rótulo diz "Tela de Login" desde 2026-07-29 porque "Vitrine Pública"
+    // colidia com a "Vitrine da loja" de Vendas → Pedidos Online: alguém
+    // publicou produto aqui esperando que ele aparecesse na loja online da
+    // filial, e ficou horas sem entender por que nada acontecia. São duas
+    // perguntas diferentes (`vitrine_publica` × `loja_online`, migr. 294) e
+    // agora cada tela diz no título qual delas responde.
     kind: 'group', id: 'marketing-matriz', label: 'Marketing', icon: Megaphone, color: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 text-pink-400',
     modulos: [
       { id: 'marketing', label: 'Marketing', icon: Store, color: 'text-pink-400',
-        submenus: ['Vitrine Pública'] },
+        submenus: ['Vitrine da Tela de Login'] },
     ],
   },
   // Leaf — vai direto pro Relatório de Vendas (Orçamentos/Pedidos/Histórico

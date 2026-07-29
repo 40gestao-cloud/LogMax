@@ -73,8 +73,12 @@ export const VitrinePublicaView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="shrink-0 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Vitrine Pública</h2>
-          <p className="text-sm text-gray-400 mt-1">Escolha quais artes e produtos passam no carrossel da tela de login.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Vitrine da Tela de Login</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Escolha quais artes e produtos passam no carrossel da tela de login.
+            <span className="text-gray-500"> Não é a loja online da filial — para publicar produto lá,
+            use Vendas → Pedidos Online.</span>
+          </p>
         </div>
         <div className="neu-pressed px-4 py-2 rounded-xl text-xs">
           <span className="text-gray-500 uppercase tracking-widest font-bold">Na vitrine</span>

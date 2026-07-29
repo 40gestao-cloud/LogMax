@@ -1022,6 +1022,10 @@ function LogMaxAppInner() {
       case 'marketing-promoções':          return <PromocoesMarketingView showToast={st} profile={profile} />;
       case 'marketing-cupons':             return <CuponsMarketingView showToast={st} profile={profile} />;
       case 'marketing-calendário':         return <CalendarioEditorialView showToast={st} profile={profile} />;
+      // Rota mudou junto com o rótulo (slug vem do label). A antiga fica de
+      // alias: `activeView` vive no sessionStorage, e quem estivesse nessa
+      // tela no momento do deploy cairia num switch sem case ao recarregar.
+      case 'marketing-vitrinedateladelogin':
       case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;

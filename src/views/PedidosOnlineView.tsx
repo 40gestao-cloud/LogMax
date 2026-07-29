@@ -276,7 +276,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
           <div className="flex items-center gap-3 text-left">
             <Package size={16} className="text-accent shrink-0" />
             <div>
-              <p className="text-sm font-bold text-gray-200">Vitrine da loja</p>
+              <p className="text-sm font-bold text-gray-200">Publicar na loja online</p>
               <p className="text-[11px] text-gray-500">
                 {publicados.length} de {(produtos ?? []).length} produto(s) publicado(s)
                 {semEstoque > 0 && <span className="text-yellow-400"> · {semEstoque} sem estoque (não aparece)</span>}
@@ -291,7 +291,8 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
             <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
               Produto novo cadastrado no LogMax <strong className="text-gray-400">não entra na loja sozinho</strong> —
               publique aqui. Ele só aparece para o público se estiver publicado, ativo e com estoque acima de zero.
-              Esta chave é da filial e é diferente da Vitrine Pública da Matriz, que alimenta a tela de login.
+              Esta chave é da filial e não tem relação com a <strong className="text-gray-400">Vitrine da Tela
+              de Login</strong>, que é da Matriz e alimenta o carrossel do login.
             </p>
 
             <div className="relative mb-3">
