@@ -39,8 +39,14 @@ type Pedido = {
   status: string; venda_id: string | null;
   atendente_nome: string | null; atendido_em: string | null;
   motivo_cancelamento: string | null;
+  cupom_ignorado: boolean | null;
   indicacao: string | null; created_at: string;
 };
+
+// Formas que deixam conta a receber em aberto — sem cliente, a cobrança fica
+// sem devedor. A RPC também barra (migr. 296); aqui é só para não deixar o
+// aluno descobrir isso por mensagem de erro.
+const EXIGE_CLIENTE = ['Fiado', 'Cartão Crédito'];
 
 const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const confirm = useConfirm();
@@ -60,6 +66,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const [forma, setForma] = useState<string>('PIX');
   const [parcelas, setParcelas] = useState(1);
   const [clienteId, setClienteId] = useState('');
+  const [ignorarCupom, setIgnorarCupom] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
   const cfg = lojaCfg?.[0];
@@ -103,10 +110,17 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
     setForma(p.forma_desejada === 'Boleto' ? 'Fiado' : (p.forma_desejada === 'Cartão' ? 'Cartão Crédito' : 'PIX'));
     setParcelas(1);
     setClienteId('');
+    setIgnorarCupom(false);
   };
 
   const confirmarPedido = async () => {
     if (!atendendo || !supabase) return;
+
+    if (EXIGE_CLIENTE.includes(forma) && !clienteId) {
+      showToast(`${forma} gera conta a receber em aberto — escolha o cliente.`, 'error');
+      return;
+    }
+
     setSalvando(true);
     try {
       const { data, error } = await supabase.rpc('confirmar_pedido_online', {
@@ -114,9 +128,12 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
         p_forma_pagamento: forma,
         p_cliente_id:      clienteId || null,
         p_parcelas:        forma === 'Cartão Crédito' ? parcelas : 1,
+        p_ignorar_cupom:   ignorarCupom,
       });
       if (error) throw error;
-      showToast(`Pedido ${atendendo.codigo} virou venda — estoque, conta a receber e nota já saíram.`, 'success');
+      showToast(ignorarCupom
+        ? `Pedido ${atendendo.codigo} virou venda pelo valor cheio — o cupom não foi aplicado.`
+        : `Pedido ${atendendo.codigo} virou venda — estoque, conta a receber e nota já saíram.`, 'success');
       setAtendendo(null);
       await reload();
       void data;
@@ -422,9 +439,17 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                           </tbody>
                         </table>
                         {Number(p.cupom_desconto) > 0 && (
-                          <p className="text-[11px] text-emerald-400 mt-2 text-right">
-                            Cupom {p.cupom_codigo}: −{brl(p.cupom_desconto)} sobre {brl(p.total)}
-                          </p>
+                          p.cupom_ignorado ? (
+                            // O pedido guarda o que foi prometido; a venda diz o que
+                            // foi cobrado. Sem esta linha a diferença viraria mistério.
+                            <p className="text-[11px] text-yellow-400 mt-2 text-right">
+                              Cupom {p.cupom_codigo} não foi aplicado — venda fechada por {brl(p.total)}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-emerald-400 mt-2 text-right">
+                              Cupom {p.cupom_codigo}: −{brl(p.cupom_desconto)} sobre {brl(p.total)}
+                            </p>
+                          )
                         )}
                       </div>
                     )}
@@ -452,11 +477,31 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
               </div>
 
+              {(() => { const t = ignorarCupom ? Number(atendendo.total) : Number(atendendo.total_final); return (
               <div className="neu-pressed rounded-xl p-3 text-xs text-gray-300 mb-4 leading-relaxed">
-                <strong className="text-gray-100">{atendendo.comprador_apelido}</strong> — {brl(atendendo.total_final)}
+                <strong className="text-gray-100">{atendendo.comprador_apelido}</strong> — {brl(t)}
+                {ignorarCupom && <span className="text-yellow-400"> (valor cheio, sem o cupom)</span>}
                 <br />
                 <span className="text-gray-500">Preferiu {atendendo.forma_desejada}. Você registra a forma real.</span>
               </div>
+              ); })()}
+
+              {/* Cupom expirado ou alterado depois do pedido faz a criar_venda_pdv
+                  recusar a venda inteira, e sem esta saída o pedido ficava preso na
+                  fila — só dava para cancelar. Cobrar o valor cheio é decisão de
+                  quem atende, então o valor aparece antes do clique. */}
+              {Number(atendendo.cupom_desconto) > 0 && (
+                <label className="flex items-start gap-2.5 neu-pressed rounded-xl p-3 mb-4 cursor-pointer">
+                  <input type="checkbox" checked={ignorarCupom} className="mt-0.5 accent-current"
+                    onChange={e => setIgnorarCupom(e.target.checked)} />
+                  <span className="text-[11px] text-gray-400 leading-relaxed">
+                    <span className="text-gray-200 font-bold">Fechar sem o cupom {atendendo.cupom_codigo}</span><br />
+                    Marque se o cupom expirou ou mudou desde o pedido. A venda sai por{' '}
+                    <span className="text-gray-200 font-bold">{brl(atendendo.total)}</span> em vez de{' '}
+                    {brl(atendendo.total_final)} — combine com o comprador antes.
+                  </span>
+                </label>
+              )}
 
               <div className="flex flex-col gap-1.5 mb-4">
                 <label htmlFor="po-forma" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Forma de pagamento *</label>
@@ -472,17 +517,23 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   <select id="po-parc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm">
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                      <option key={n} value={n}>{n}× de {brl(Number(atendendo.total_final) / n)}</option>
+                      <option key={n} value={n}>
+                        {n}× de {brl(Number(ignorarCupom ? atendendo.total : atendendo.total_final) / n)}
+                      </option>
                     ))}
                   </select>
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5 mb-4">
-                <label htmlFor="po-cli" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cliente (opcional)</label>
+                <label htmlFor="po-cli" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  {EXIGE_CLIENTE.includes(forma) ? 'Cliente *' : 'Cliente (opcional)'}
+                </label>
                 <select id="po-cli" value={clienteId} onChange={e => setClienteId(e.target.value)}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Sem cliente cadastrado</option>
+                  <option value="">
+                    {EXIGE_CLIENTE.includes(forma) ? 'Escolha o cliente…' : 'Sem cliente cadastrado'}
+                  </option>
                   {clientesOpts.map((g: any) => (
                     <optgroup key={g.label} label={g.label}>
                       {g.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -495,6 +546,10 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                 Confirmar cria a venda pelo mesmo caminho do PDV: baixa estoque, gera conta a receber
                 e emite a nota. Se algum item tiver ficado sem estoque desde o pedido, a operação é
                 recusada inteira e o pedido continua na fila.
+                {EXIGE_CLIENTE.includes(forma) && (
+                  <> <span className="text-yellow-400">{forma} deixa a conta em aberto, por isso o cliente
+                  é obrigatório: sem ele a cobrança fica sem devedor.</span></>
+                )}
               </p>
 
               <div className="flex justify-end gap-2">
@@ -502,7 +557,8 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
                   Cancelar
                 </button>
-                <NeuButtonAccent variant="" onClick={confirmarPedido} disabled={salvando}>
+                <NeuButtonAccent variant="" onClick={confirmarPedido}
+                  disabled={salvando || (EXIGE_CLIENTE.includes(forma) && !clienteId)}>
                   {salvando ? 'Fechando...' : 'Confirmar venda'}
                 </NeuButtonAccent>
               </div>
