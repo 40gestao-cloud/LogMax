@@ -303,29 +303,103 @@ Menor risco financeiro, mas:
 
 ---
 
-### Etapa 8 — Matriz de autoridade (transversal)
+### Etapa 8 — Matriz de autoridade (transversal) `[LEVANTADA 2026-07-28]`
 
-Responde diretamente a "quem aprova, quem lança". Pode correr em paralelo desde
-a Etapa 1.
+Levantada **do banco**: `pg_proc` (guard de cada RPC), `pg_policies` (regra de
+cada tabela) e `pg_trigger` (o que a policy não alcança). A tela não entrou na
+conta — ela é a versão que mente.
 
-Uma tabela única, por transição de estado do app inteiro:
+Legenda de "onde": **RPC** = `SECURITY DEFINER` com guard próprio; **RLS** =
+a regra é a policy da tabela; **trigger** = guard em `BEFORE`, alcança quem
+escreve direto.
 
-| Transição | Quem lança | Quem aprova | Onde a regra é aplicada | Segregação? | Falha aberto? |
+| Transição | Quem lança | Quem decide | Onde | Segregação | Falha aberto |
 |---|---|---|---|---|---|
+| Requisição de compra → `Pendente` | compras, logística (`criar_requisicao_compra`) | — | RPC + RLS `INSERT true` | n/a | INSERT direto aceita qualquer filial |
+| Requisição → `Aprovado`/`Negado` | compras ou gerente da filial | mesmo conjunto | **só RLS**, 2 `UPDATE` do `.tsx` sem transação (P6) | **não** — quem pede aprova | não |
+| Cotação → `Aguardando Financeiro` | compras, logística, gerente | — | RLS | n/a | não |
+| Cotação → `Aprovado` | financeiro ou gerente da filial | idem | RLS + trigger `cotacoes_unica_aprovada` | **não** — gerente cria e aprova | não |
+| Cotação → Pedido | compras, logística (`gerar_pedido_de_cotacao`) | — | RPC + `auth_pode_filial` | n/a | não |
+| Recebimento → baixa de estoque | estoque, logística (`movimentar_estoque`) | — | RPC + trigger `fn_atualiza_estoque_produto` | n/a | não |
+| Expedição → `Expedido` | estoque, logística (`expedir`) | — | RPC + `auth_pode_filial` | n/a | não |
+| Inventário → ajuste | estoque, logística (`fechar_inventario`) | — | RPC + `auth_pode_filial` | contagem é o próprio setor | não |
+| Venda PDV | vendas, financeiro (`criar_venda_pdv`) | — | RPC | n/a | não |
+| Devolução de venda | gerente da filial **da venda** ou admin | idem | RPC + trigger `devolucao_valida_filial_da_venda` (migr. 276) | não | não |
+| Orçamento → `Aprovado` | vendas, financeiro ou gerente | idem | RLS | **não** | não |
+| Orçamento → Pedido de venda | vendas, financeiro (`converter_orcamento_em_pedido`) | — | RPC, idempotente | n/a | não |
+| Conta a pagar → `Pago` | financeiro ou gerente da filial | idem | RPC `registrar_pagamento_conta` **e** RLS; triggers `sync_saldo_caixa_pagar` + `bloqueia_conta_pagar_estourado` | **não** | não |
+| Caixa → `Aguardando Conferência` / `Fechado` | operador do caixa (`solicitar_fechamento_caixa`) | gerente/financeiro (`confirmar_fechamento_caixa`) | RPC + trigger `controle_caixa_guard` (migr. 278) | **sim** | não |
+| Caixa → reaberto | gerente da filial (`reabrir_caixa`) | idem | RPC + trigger | não | não |
+| Sangria/suprimento | operador (`registrar_movimentacao_caixa`) | — | RPC + trigger `movimentacao_caixa_guard` | n/a | não |
+| Nota emitida | financeiro/vendas da filial (`emitir_nota`) | — | RPC + trigger `nota_emitida_guard` | n/a | não |
+| Empréstimo entre filiais → `Pendente` | gerente/admin/CEO da filial | — | RLS | n/a | não |
+| Empréstimo → `Aprovado`/`Negado` | — | admin/CEO (`aprovar_emprestimo`) | RPC `_assert_capital_holding` (migr. 277) | **agora sim** (281) | **era sim** — ver achados |
+| Folha → `Processada` | RH da filial (`processar_folha`) | — | RPC `_assert_rpc('rh')` | n/a | não |
+| Folha → `Paga` + crédito MaxBank | RH da filial (`pagar_folha`) | — | RPC | **não** — mesmo gate do processar | **era sim** — ver achados |
+| Reverter folha / apagar lançamento MaxBank | admin, CEO ou RH | idem | RPC `_maxbank_pode_reverter` | não | não |
+| Férias → `Aprovado` | colaborador pede (`Solicitada`) | RH ou gerente da filial | RLS `ferias_rh_all` | **não** — RH aprova as próprias | não |
+| Afastamento → ponto `Justificado` | RH (`aplicar_afastamento_no_ponto`) | — | RPC; reversão por trigger | n/a | **sim** — ver achados |
+| Requerimento → decisão | qualquer um (`criado_por = uid`) | admin, CEO, conselheiro, gerente-conselheiro | RLS | sim | não |
+| Meta estratégica → publicada / tática → aprovada | admin/CEO cria | gerente/admin (`aprovar_tarefa_tatica`) | RPC | sim | não |
+| Meta/tarefa → `Concluida` | o próprio colaborador alvo | gestor aprova depois | RPC (`colaborador_id = auth.uid()`) | sim | não |
+| Promoção → `Aprovada` | marketing (`marketing_promocoes`) | financeiro ou gerente | RLS | sim | não |
+| Arte → nota 1-5★ | marketing publica | gerente/admin/CEO (`dar_feedback_arte`) | RPC | sim | não |
+| Avaliação da Matriz / declarar vencedora | conselho (`avaliar_item_matriz`) | CEO/admin (`declarar_vencedora`) | RPC + `_assert_matriz_admin` | sim | não |
+| Aviso da Matriz / "Ciente" | admin da Matriz (`criar_aviso_matriz`) | cada pessoa por si (`dar_ciencia_aviso`) | RPC + RLS `user_id = auth.uid()` | sim | não |
+| Briefing IA → tarefas | IA propõe | admin/CEO aprova item a item | RPC | sim | não |
 
-Preenchida a partir das **RPCs e policies** — não das telas. A tela é a versão
-que mente.
+#### Achados desta etapa (fechados pela migr. 281)
 
-O que ela expõe de imediato:
+- [x] **`_folha_creditar_e_avancar` e `creditar_folha_maxbank` tinham EXECUTE
+      para `anon`.** Nenhuma das duas tem RBAC — o gate mora em `pagar_folha`.
+      Com a anon key (que é pública, vai no bundle) dava para creditar a
+      carteira e levar a folha a `Paga` sem ser do RH. `pagar_folha` e
+      `processar_folha` também estavam abertas a `anon`; nelas o
+      `_assert_rpc('rh')` barra, mas o grant não tinha razão de existir.
+- [x] **`reverter_afastamento_no_ponto`: `SECURITY DEFINER`, zero guard,
+      EXECUTE para `anon` e `authenticated`.** Apaga linhas de
+      `ponto_eletronico` e restaura status a partir de um uuid de afastamento.
+      Nenhuma tela a chama — só os dois triggers de `afastamentos`, que rodam
+      como owner. Revogada.
+- [x] **`_assert_capital_holding` falhava aberto** (P7): `auth.uid() IS NULL`
+      dava `RETURN` em silêncio em vez de barrar. Não era explorável hoje
+      (as RPCs de empréstimo não têm grant para `anon`), mas é o guard de toda
+      a alçada de capital.
+- [x] **Policy de `emprestimos_filial` mais larga que a RPC.** O `UPDATE`
+      aceitava conselheiro e gerente-conselheiro; a RPC exige admin/CEO. Como
+      nenhuma tela faz `UPDATE` direto nessa tabela, era só superfície: um
+      gerente-conselheiro aprovava o próprio empréstimo por fora da
+      `aprovar_emprestimo`. Policy alinhada a admin/CEO.
+- [x] **Empréstimo: solicitante podia ser o aprovador.** Admin e CEO também
+      podem solicitar (policy de INSERT), então o par coincidia. Agora
+      `_assert_nao_e_o_solicitante` barra nos dois lados (aprovar e negar).
 
-- gates sem nenhum RBAC (como o "Aprovar Pedido" já removido);
-- transições onde lançador e aprovador podem ser a mesma pessoa;
-- regras que existem só no `.tsx` — candidatas a virar RPC;
-- **aprovações redundantes**, que é onde ainda dá para simplificar sem perder
-  controle.
+#### Decisões de processo pendentes (não são bug, são escolha)
 
-**Suspeita a confirmar:** o app tem ~14 telas de "Aprovações". Ao menos duas
-provavelmente são o mesmo gate com nomes diferentes.
+Quatro transições deixam lançador e decisor no mesmo conjunto. Em turma pequena
+isso às vezes é o desenho — por isso não mexi:
+
+- [ ] **Folha:** `processar_folha` e `pagar_folha` pedem o mesmo `rh` + filial.
+      Quem processa paga. (Item aberto da Etapa 2, agora confirmado no banco.)
+- [ ] **Requisição de compra:** o setor `compras` cria e o setor `compras`
+      aprova. E a aprovação são dois `UPDATE` soltos do `.tsx` com rollback
+      best-effort (P6) — candidata natural a virar RPC (Recomendação 1).
+- [ ] **Cotação:** o gerente da filial pode criar e aprovar a própria.
+- [ ] **Férias:** `ferias_rh_all` não exclui a própria linha — quem é do RH
+      aprova as próprias férias.
+
+#### Outras superfícies largas mapeadas
+
+- [ ] `requisicoes` e `requisicoes_estoque` têm `INSERT` com `WITH CHECK true`:
+      não checam filial nem setor. O caminho da tela passa por RPC com guard;
+      o `INSERT` direto, não. Fechar com `auth_pode_filial(filial)`.
+- [ ] `aprovacoes_compras.compras_insert` só exige `status = 'Pendente'` —
+      qualquer autenticado cria a linha de aprovação de qualquer filial.
+
+**Suspeita das ~14 telas de Aprovações: descartada.** São gates distintos —
+compras, estoque, conteúdo de marketing, promoção no financeiro, orçamento,
+requerimento, férias, capital, metas. A redundância que existia (3ª aprovação
+do mesmo gasto) já tinha sido cortada.
 
 ---
 
