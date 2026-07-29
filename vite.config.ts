@@ -37,8 +37,20 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
+        // Service worker DESLIGADO em dev por padrão.
+        //
+        // Com `enabled: true`, o workbox registra o SW no `vite dev` e passa a
+        // interceptar cada request do servidor — e em dev o Vite serve um
+        // módulo por arquivo, não os chunks empacotados. São milhares de
+        // requests atravessando o SW, mais a revalidação do NetworkFirst do
+        // supabase-api por cima. O sintoma é o dev server engasgando em
+        // qualquer tela, enquanto a produção (onde o bundle é empacotado) vai
+        // bem — que é exatamente a assimetria relatada.
+        //
+        // Produção não muda nada: `devOptions` só vale para `vite dev`. Para
+        // testar banner de atualização/offline, rode com VITE_PWA_DEV=true.
         devOptions: {
-          enabled: true,
+          enabled: env.VITE_PWA_DEV === 'true',
         },
       }),
       // Gera bundle-stats.html (project root, fora de /dist) com treemap do
