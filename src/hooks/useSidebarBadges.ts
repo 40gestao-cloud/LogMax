@@ -38,13 +38,13 @@ type BadgeDef = {
 
 const BADGE_DEFS: BadgeDef[] = [
   // ─── Compras ──────────────────────────────────────────────────────────────
-  { viewId: 'compras-requisições',      modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'compras-requisiçõesrecebidas', modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  { viewId: 'compras-recebimentos',     modulo: 'compras',    table: 'recebimentos',         filters: { status: 'Pendente' } },
+  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' } },
   {
-    viewId: 'compras-minhasaprovações',
-    modulo: 'compras',
+    viewId: 'empresa-aprovações',
+    modulo: 'empresa',
     table: 'aprovacoes_compras',
     filters: { status: 'Pendente', 'requisicoes.ativo': 'true', 'requisicoes.status': 'Pendente' },
     select: '*,requisicoes!inner(id)',
@@ -55,7 +55,7 @@ const BADGE_DEFS: BadgeDef[] = [
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
   {
-    viewId: 'estoque-minhasaprovações',
+    viewId: 'estoque-liberarrequisições',
     modulo: 'estoque',
     table: 'aprovacoes_estoque',
     filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
@@ -63,7 +63,7 @@ const BADGE_DEFS: BadgeDef[] = [
     listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
     filialColumn: 'filial',
   },
-  { viewId: 'estoque-requisições',      modulo: 'estoque',    table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  { viewId: 'estoque-requisiçõesrecebidas', modulo: 'estoque', table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' } },
   { viewId: 'estoque-tarefas',          modulo: 'estoque',    table: 'tarefas',              filters: { modulo: 'estoque', status: 'Pendente' } },
 

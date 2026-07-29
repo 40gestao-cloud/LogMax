@@ -122,6 +122,13 @@ export interface Requisicao {
   ativo?: boolean;
   /** Quem abriu a requisição — quem abre não aprova (migr. 282). */
   criado_por?: string | null;
+  /** Setor de quem abriu, derivado do perfil no servidor (migr. 283). */
+  setor_solicitante?: string | null;
+  /** Por que a empresa precisa do item — o que o gerente lê para decidir. */
+  justificativa?: string | null;
+  /** Para quando o item é necessário. */
+  data_necessidade?: string | null;
+  unidade?: string | null;
   created_at?: string;
 }
 

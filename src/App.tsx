@@ -43,6 +43,7 @@ const FiliaisView             = lazy(() => import('./views/FiliaisView').then(m 
 const CRMView                 = lazy(() => import('./views/CRMView').then(m => ({ default: m.CRMView })));
 const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
 const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
+const MinhasRequisicoesView   = lazy(() => import('./views/MinhasRequisicoesView').then(m => ({ default: m.MinhasRequisicoesView })));
 const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
 const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
 const ConfigJurosView         = lazy(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
@@ -130,8 +131,17 @@ const MaxShowsView                         = lazy(() => import('./views/MaxShows
 type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[] };
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
+    // 'Minhas Requisições' mora aqui, e não em Compras, de propósito: Empresa
+    // é o único módulo que todo setor enxerga, e na empresa quem abre a
+    // requisição é a área que precisa do item (migr. 283). Compras recebe,
+    // cota e executa — a visão completa da filial segue em Compras.
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos']
+    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos', 'Minhas Requisições',
+      // A decisão sobre gasto é do gerente, não de Compras — por isso a caixa
+      // de aprovação mora aqui, ao lado de "Minhas Requisições": um lugar só
+      // para as duas pontas pessoais do fluxo (o que eu pedi, o que espera
+      // minha decisão). O submenu é role-gated: quem não decide não vê.
+      { label: 'Aprovações', requireRole: ['gerente', 'admin', 'ceo'] }]
   },
   {
     // Cadastros operacionais — Produtos, Categorias, Fornecedores e Serviços.
@@ -144,12 +154,19 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     submenus: ['Categorias', 'Produtos', 'Fornecedores', 'Serviços']
   },
   {
+    // Compras compra: cota, emite pedido e lança a nota. NÃO aprova (a
+    // decisão da requisição é do gerente, migr. 282) e NÃO recebe — quem
+    // confere a mercadoria é o Estoque, senão quem emite o pedido confirma a
+    // própria entrega (migr. 284).
     id: 'compras', label: 'Compras', icon: ShoppingCart,
-    submenus: ['Requisições', 'Cotações', 'Pedidos', 'Minhas aprovações', 'Recebimentos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios']
+    submenus: ['Requisições Recebidas', 'Cotações', 'Pedidos',
+      'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios']
   },
   {
+    // Recebimentos veio de Compras (migr. 284): conferir e dar entrada é do
+    // almoxarifado. É essa conferência que libera o pagamento no Financeiro.
     id: 'estoque', label: 'Estoque', icon: Package,
-    submenus: ['Requisições', 'Minhas Aprovações', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
+    submenus: ['Requisições Recebidas', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
       'Gerenciamento', 'Relatórios']
   },
@@ -859,6 +876,7 @@ function LogMaxAppInner() {
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
+      case 'empresa-minhasrequisições':       return <MinhasRequisicoesView showToast={st} profile={profile} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
@@ -868,18 +886,19 @@ function LogMaxAppInner() {
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'compras-requisições':             return <RequisicoesView showToast={st} />;
+      case 'compras-requisiçõesrecebidas':    return <RequisicoesView showToast={st} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
-      case 'compras-minhasaprovações':        return <AprovacoesComprasView showToast={st} profile={profile} />;
-      case 'compras-recebimentos':            return <RecebimentosView showToast={st} />;
-      case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} />;
+      case 'empresa-aprovações':              return <AprovacoesComprasView showToast={st} profile={profile} />;
+
+      case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} profile={profile} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
       case 'compras-relatórios':              return <RelatoriosComprasView showToast={st} />;
       case 'relatorio-vendas':                return <RelatoriosVendasView showToast={st} />;
-      case 'estoque-minhasaprovações':        return <AprovacoesEstoqueView showToast={st} />;
-      case 'estoque-requisições':             return <RequisicoesEstoqueView showToast={st} />;
+      case 'estoque-liberarrequisições':      return <AprovacoesEstoqueView showToast={st} profile={profile} />;
+      case 'estoque-recebimentos':            return <RecebimentosView showToast={st} />;
+      case 'estoque-requisiçõesrecebidas':    return <RequisicoesEstoqueView showToast={st} />;
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
       case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;

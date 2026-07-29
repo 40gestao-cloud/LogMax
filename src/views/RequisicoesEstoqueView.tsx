@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -15,10 +15,9 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ produto_id: '', solicitante: '' });
+  const [form, setForm] = useState({ produto_id: '' });
   const [extras, setExtras] = useState({ qtd: '1', destino: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -27,35 +26,21 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
     [r.solicitante, r.status, r.destino, r.prod?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const closeForm = () => { setShowForm(false); setEditItem(null); setForm({ produto_id: '', solicitante: '' }); setExtras({ qtd: '1', destino: '' }); setErrors({}); };
-  const openEdit = (item: any) => { setEditItem(item); setForm({ produto_id: item.produto_id ?? '', solicitante: item.solicitante ?? '' }); setExtras({ qtd: String(item.qtd ?? 1), destino: item.destino ?? '' }); setErrors({}); setShowForm(false); };
+  const closeForm = () => { setEditItem(null); setForm({ produto_id: '' }); setExtras({ qtd: '1', destino: '' }); setErrors({}); };
+  const openEdit = (item: any) => { setEditItem(item); setForm({ produto_id: item.produto_id ?? '' }); setExtras({ qtd: String(item.qtd ?? 1), destino: item.destino ?? '' }); setErrors({}); };
 
+  // Só edição. A criação saiu desta tela (migr. 284) e mora em
+  // Empresa → Minhas Requisições: quem precisa do material é quem pede, e o
+  // Estoque atende. O almoxarife corrigindo quantidade continua valendo.
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate() || !editItem) return;
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      if (editItem) {
-        const payload = { ...form, qtd: Number(extras.qtd) || 1, destino: extras.destino };
-        const updated = await dbUpdate('/api/requisicoesestoqueview', editItem.id, payload);
-        setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
-        showToast("Requisição atualizada!", 'success', true);
-      } else {
-        // RPC transacional: cria requisicao_estoque + aprovacao_estoque
-        // pendente atomicamente. Ver migration 20260619c — substitui o par
-        // de dbInserts que podia deixar aprovação órfã se a 2ª batesse em RLS.
-        if (!supabase) throw new Error('Supabase não configurado');
-        const { data: saved, error: rpcErr } = await supabase.rpc('criar_requisicao_estoque', {
-          p_produto_id:  form.produto_id,
-          p_solicitante: form.solicitante,
-          p_qtd:         Number(extras.qtd) || 1,
-          p_destino:     extras.destino,
-          p_filial:      filial,
-        });
-        if (rpcErr) throw new Error(rpcErr.message);
-        setData([saved ?? { id: Date.now(), ...form, status: 'Pendente' }, ...data]);
-        showToast("Requisição criada!", 'success', true);
-      }
+      const payload = { ...form, qtd: Number(extras.qtd) || 1, destino: extras.destino };
+      const updated = await dbUpdate('/api/requisicoesestoqueview', editItem.id, payload);
+      setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
+      showToast("Requisição atualizada!", 'success', true);
       closeForm();
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
@@ -77,25 +62,24 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
     }
   };
 
-  const isFormOpen = showForm || !!editItem;
+  const isFormOpen = !!editItem;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Estoque — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Solicitações de retirada e movimentação de produtos.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições Recebidas — {filial}</h2>
+          <p className="text-sm text-gray-400 mt-1">Material que as áreas pediram do almoxarifado. Quem pede abre em Empresa → Minhas Requisições; aqui o Estoque confere e libera.</p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova Requisição</NeuButtonAccent>
         </div>
       </div>
       <AnimatePresence>
         {isFormOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Requisição' : 'Nova Requisição'}</h3>
+              <h3 className="text-sm font-bold text-gray-200">Editar Requisição</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField label="Produto *" error={errors.produto_id}>
                   <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}>
@@ -103,8 +87,13 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
                     {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                 </FormField>
-                <FormField label="Solicitante *" error={errors.solicitante}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.solicitante ? 'border border-red-500/40' : ''}`} value={form.solicitante} onChange={e => { setForm(f => ({ ...f, solicitante: e.target.value })); clearError('solicitante'); }} placeholder="Ex: João Silva" />
+                <FormField label="Solicitante">
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                    {editItem?.solicitante ?? '—'}
+                    {editItem?.setor_solicitante && (
+                      <span className="text-[10px] text-gray-500 ml-2 uppercase tracking-widest">{editItem.setor_solicitante}</span>
+                    )}
+                  </div>
                 </FormField>
                 <FormField label="Quantidade">
                   <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} placeholder="1" />
@@ -115,7 +104,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Atualizar</NeuButtonAccent>
               </div>
             </div>
           </motion.div>

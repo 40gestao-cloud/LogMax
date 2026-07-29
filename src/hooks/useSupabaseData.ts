@@ -80,12 +80,15 @@ export function useFetchData<T = any>(
           // Array          -> IN (...)   ex.: { status: ['Ativo', 'Pausado'] }
           // { neq }        -> <> valor   ex.: { tipo: { neq: 'patrimonio' } }
           // { gte?, lte? } -> intervalo  ex.: { vencimento: { gte: 'a', lte: 'b' } }
+          // { notNull }    -> IS NOT NULL ex.: { folha_pagamento_id: { notNull: true } }
           // escalar        -> = valor    ex.: { filial: 'SuperMax' }
           // Todos precisam ser resolvidos no servidor (e não filtrando o array
           // já carregado) senão `totalCount` e a paginação passam a contar
           // linhas que a tela não mostra.
           if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'neq' in (val as object)) {
             q = q.neq(col, (val as { neq: unknown }).neq);
+          } else if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'notNull' in (val as object)) {
+            q = (val as { notNull: boolean }).notNull ? q.not(col, 'is', null) : q.is(col, null);
           } else if (
             val !== null && typeof val === 'object' && !Array.isArray(val) &&
             ('gte' in (val as object) || 'lte' in (val as object))

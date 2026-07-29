@@ -411,12 +411,41 @@ construção. A régua adotada é a de empresa pequena de verdade:
 - [x] `aprovacoes_compras.compras_insert` só exigia `status = 'Pendente'`:
       qualquer autenticado criava linha de aprovação de qualquer filial.
 
-**Meia pendência assumida:** a recomendação incluía abrir a *abertura* de
-requisição a qualquer setor (na empresa real quem pede é a área que precisa).
-Não foi feito: o menu é por módulo, não por submenu, e dar `compras` inteiro a
-vendas/RH/marketing seria redesenhar a árvore de módulos de todos os setores.
-A autoridade — que era o furo — está fechada; a abertura fica como mudança de
-menu, a decidir.
+#### Cada setor no seu papel (migr. 283 e 284)
+
+A régua vertical resolveu *quem decide*. Faltava *quem faz o quê* — e aí o
+sistema tinha setor fazendo o que não é dele:
+
+- [x] **Quem precisa é quem pede.** Requisição de compra e de material saíram
+      do monopólio de `compras`/`logistica`: qualquer setor abre pela porta
+      única **Empresa → Minhas Requisições** (Empresa é o módulo que todos
+      enxergam), presa à própria filial. Compras e Estoque perderam a tela de
+      criação — as deles viraram fila: *Requisições Recebidas*.
+- [x] **A requisição virou uma requisição.** Ganhou solicitante e setor
+      derivados do usuário autenticado (campo de texto livre para autoria é a
+      porta da requisição fantasma), **justificativa obrigatória**, data de
+      necessidade, unidade e centro de custo. O item é **texto livre**: quem
+      pede descreve a necessidade; casar com o catálogo é trabalho de Compras
+      na cotação.
+- [x] **Compras não aprova — e a caixa de aprovação mudou de módulo.** Virou
+      **Empresa → Aprovações**, ao lado de Minhas Requisições: as duas pontas
+      pessoais do fluxo no mesmo lugar, com o submenu restrito a gerente/
+      admin/CEO.
+- [x] **Quem compra não recebe.** `recebimentos` perdeu `compras` e ficou com
+      Estoque + gerente; o submenu Recebimentos saiu de Compras e foi para
+      Estoque. Trigger: quem emitiu o pedido não fecha o próprio recebimento
+      (com uma pessoa acumulando os dois papéis na filial, o fechamento exige
+      o gerente).
+- [x] **Three-way match.** Conta a pagar com `pedido_id` só vira `Pago` se
+      existir recebimento `Concluído`. Era o controle que faltava no caso do
+      Extrato de Tomate.
+- [x] **Estoque decide o que é dele:** liberar a saída do material (*Liberar
+      Requisições*), e não mais com quem pediu aprovando o próprio pedido.
+- [x] **Bug de travessia:** *Sugestões de Compras* chamava a RPC de lote sem a
+      justificativa que a 283 passou a exigir — ia quebrar na primeira
+      reposição. Agora a justificativa sai dos próprios dados (saldo atual ×
+      estoque mínimo), que é a verdade do ponto de pedido, e o campo
+      "solicitante" digitado saiu da tela.
 
 **Suspeita das ~14 telas de Aprovações: descartada.** São gates distintos —
 compras, estoque, conteúdo de marketing, promoção no financeiro, orçamento,

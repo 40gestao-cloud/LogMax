@@ -8,14 +8,13 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
-const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
+const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
   const { data: produtos, isLoading } = useFetchData<any>('/api/produtosview', { filial });
   const [search, setSearch] = useState('');
   const [filtroMode, setFiltroMode] = useState<'todos' | 'zerados'>('todos');
   const [requestingItem, setRequestingItem] = useState<any | null>(null);
   const [qtdSolicitada, setQtdSolicitada] = useState<string>('');
   const [urgencia, setUrgencia] = useState('Normal');
-  const [solicitante, setSolicitante] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const openSolicitar = (p: any) => {
@@ -61,18 +60,31 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
       // Também não mandava `filial`: o default da coluna é 'SuperMax', então
       // sugestão da TechMax virava requisição da SuperMax.
       if (!supabase) throw new Error('Supabase não configurado');
+      // A justificativa não é digitada aqui de propósito: ela É o motivo da
+      // reposição, e o motivo está nos dados (saldo atual × estoque mínimo).
+      // Pedir para o comprador redigitar isso só produziria "reposição" como
+      // texto — a migr. 283 exige justificativa justamente para o gerente ter
+      // o que ler antes de aprovar.
+      const saldoAtual = Number(requestingItem.estoque ?? 0);
+      const minimo     = limiteMin(requestingItem);
+      const justificativa = saldoAtual === 0
+        ? `Reposição automática: ${requestingItem.nome} está ZERADO em ${filial} (estoque mínimo ${minimo} ${requestingItem.unidade ?? 'un'}). Sem saldo para atender a operação.`
+        : `Reposição automática: saldo atual ${saldoAtual} ${requestingItem.unidade ?? 'un'} contra estoque mínimo de ${minimo} em ${filial}. Ponto de pedido atingido.`;
+
       const { error } = await supabase.rpc('criar_requisicoes_compra_lote', {
-        p_itens:        [{ item: requestingItem.nome, qtd: qtdNum }],
-        p_solicitante:  solicitante,
+        p_itens:        [{ item: requestingItem.nome, qtd: qtdNum, unidade: requestingItem.unidade ?? 'un' }],
+        p_solicitante:  '',
         p_urgencia:     urgencia,
         p_centro_custo: '',
         p_filial:       filial,
+        p_justificativa: justificativa,
+        // Reposição não tem data contratada: o prazo sai da cotação.
+        p_data_necessidade: null,
       });
       if (error) throw new Error(error.message);
       showToast("Requisição criada e enviada para aprovação!", 'success', true);
       setRequestingItem(null);
       setQtdSolicitada('');
-      setSolicitante('');
       setUrgencia('Normal');
     } catch (err: any) {
       showToast(`Erro ao criar requisição: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -163,9 +175,12 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
                     {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
+                {/* Solicitante saiu do formulário (migr. 283): quem pede é
+                    quem está logado, e o banco grava isso. Campo de texto
+                    livre para autoria é a porta da requisição fantasma. */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="sug-solicitante" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Solicitante</label>
-                  <input id="sug-solicitante" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Seu nome..." value={solicitante} onChange={e => setSolicitante(e.target.value)} />
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Solicitante</span>
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">{profile?.nome ?? 'Você'}</div>
                 </div>
               </div>
               <div className="flex gap-3 justify-end">
@@ -268,8 +283,8 @@ const SugestoesComprasViewInner = ({ showToast, filial }: any) => {
 };
 
 
-export const SugestoesComprasView = ({ showToast }: any) => {
+export const SugestoesComprasView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <SugestoesComprasViewInner showToast={showToast} filial={filialAtiva} />;
+  return <SugestoesComprasViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

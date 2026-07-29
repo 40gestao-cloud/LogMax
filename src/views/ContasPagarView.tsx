@@ -20,9 +20,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [periodoFiltro, setPeriodoFiltro] = useState<'' | 'hoje' | 'semana' | 'mes'>('');
+  const [soFolha, setSoFolha] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, periodoFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, periodoFiltro, soFolha]);
 
   // Realtime: pedidos aprovados / folhas processadas geram contas a pagar — actualiza-se sozinha (#21).
   //
@@ -34,9 +35,16 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // O recorte de período vai para o SERVIDOR. Filtrar `data` no cliente pegava
   // só as 50 linhas da página — e como o card "Total pendente" vem de RPC
   // agregada, o total e a lista discordavam na mesma tela.
-  const extraFilter = periodoRange
-    ? { filial, vencimento: { gte: periodoRange.inicio, lte: periodoRange.fim } }
-    : { filial };
+  // Origem 'folha': o pagamento da folha acontece AQUI, não na tela de Folha
+  // de Pagamento (migr. 282). O RH fecha em 'Processada' e o Financeiro paga a
+  // conta — o trigger `conta_pagar_avancar_folha_e_creditar` leva a folha a
+  // 'Paga' e credita o MaxBank na mesma transação. O filtro existe para o
+  // Financeiro achar essas contas sem caçar por texto na descrição.
+  const extraFilter = {
+    filial,
+    ...(periodoRange ? { vencimento: { gte: periodoRange.inicio, lte: periodoRange.fim } } : {}),
+    ...(soFolha ? { folha_pagamento_id: { notNull: true } } : {}),
+  };
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/contaspagarview', extraFilter, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
@@ -314,6 +322,13 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setSoFolha(v => !v)}
+            title="Contas geradas pela Folha de Pagamento. Pagar aqui credita o MaxBank do colaborador e fecha a folha."
+            className={`py-2 px-3 rounded-xl text-xs font-bold transition-colors ${soFolha ? 'bg-accent/20 text-accent border border-accent/30' : 'neu-button text-gray-500 hover:text-gray-300'}`}
+          >
+            Folha
+          </button>
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar por descrição ou status..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -386,6 +401,12 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           {item.descricao}
+                          {item.folha_pagamento_id && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 align-middle"
+                              title="Origem: Folha de Pagamento. O pagamento credita o MaxBank do colaborador e fecha a folha.">
+                              Folha
+                            </span>
+                          )}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.forn?.nome ?? '—'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>

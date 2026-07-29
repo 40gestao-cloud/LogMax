@@ -127,17 +127,29 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                       <div className="px-5 pb-5 flex flex-col gap-4 border-t border-white/5 pt-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
+                            { label: 'Solicitante', val: req.solicitante || '—' },
+                            { label: 'Setor', val: req.setor_solicitante || '—' },
                             { label: 'Centro de Custo', val: req.centro_custo || '—' },
                             { label: 'Urgência', val: req.urgencia ?? 'Normal' },
-                            { label: 'Quantidade', val: String(req.qtd) },
-                            { label: 'Data Criação', val: req.data ?? '—' },
+                            { label: 'Quantidade', val: `${req.qtd} ${req.unidade ?? ''}`.trim() },
+                            { label: 'Necessário até', val: req.data_necessidade ?? '—' },
+                            { label: 'Aberta em', val: req.data ?? '—' },
                           ].map(({ label, val }) => (
                             <div key={label} className="neu-pressed p-3 rounded-xl">
                               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{label}</span>
-                              <span className="text-xs text-gray-200 font-semibold">{val}</span>
+                              <span className="text-xs text-gray-200 font-semibold capitalize">{val}</span>
                             </div>
                           ))}
                         </div>
+
+                        {/* A justificativa é o que se lê para decidir — por isso
+                            vem antes dos botões, não escondida num tooltip. */}
+                        {req.justificativa && (
+                          <div className="neu-pressed p-3 rounded-xl">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa do solicitante</span>
+                            <span className="text-xs text-gray-200">{req.justificativa}</span>
+                          </div>
+                        )}
                         {!podeDecidir(ap) ? (
                           <div className="neu-pressed p-3 rounded-xl text-xs text-gray-400">
                             {ap.req.criado_por === profile.id
