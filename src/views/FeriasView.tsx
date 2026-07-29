@@ -6,6 +6,8 @@ import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import type { UserProfile } from '../hooks/useUserProfile';
+import { isConselheiro } from '../lib/rbac';
 
 const statusCls = (s: string) => {
   if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
@@ -17,7 +19,7 @@ const statusCls = (s: string) => {
 
 const EMPTY: any = { funcionario_id: '', data_inicio: '', data_fim: '', dias: '30', status: 'Solicitada' };
 
-const FeriasViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   const { data: ferias, setData, isLoading: loadingF } = useFetchData<any>('/api/feriasview', { filial });
   const confirm = useConfirm();
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
@@ -101,8 +103,22 @@ const FeriasViewInner = ({ showToast, filial }: { showToast: any; filial: Filial
       await dbSetStatus('/api/feriasview', id, status);
       setData((prev: any[]) => prev.map((f: any) => f.id === id ? { ...f, status } : f));
       showToast(`Status atualizado para ${status}.`, 'success');
-    } catch { showToast('Erro.', 'error'); }
+    } catch (err: any) {
+      // A régua de autoridade mora no trigger (migr. 282): férias de gerente
+      // sobem para a Matriz, férias de quem é do RH vão para o gerente da
+      // filial, e ninguém decide as próprias. A mensagem do banco explica qual
+      // das três barrou — engolir isso num 'Erro.' seco é o que fazia a tela
+      // parecer quebrada.
+      showToast(err?.message ?? 'Erro.', 'error', true);
+    }
   };
+
+  // Espelho da régua do trigger para o caso que dá para saber na tela: a
+  // própria linha. Os outros dois casos chegam como mensagem do banco.
+  const isMatriz = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+  const ehTitular = (f: any) =>
+    !!f.func?.user_profile_id && f.func.user_profile_id === profile.id;
+  const podeDecidir = (f: any) => isMatriz || !ehTitular(f);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -203,7 +219,12 @@ const FeriasViewInner = ({ showToast, filial }: { showToast: any; filial: Filial
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end items-center">
-                          {f.status === 'Solicitada' && (
+                          {f.status === 'Solicitada' && !podeDecidir(f) && (
+                            <span className="text-[10px] text-gray-500 italic mr-1" title="Ninguém decide as próprias férias">
+                              aguarda o nível acima
+                            </span>
+                          )}
+                          {f.status === 'Solicitada' && podeDecidir(f) && (
                             <>
                               <button onClick={() => setStatus(f.id, 'Aprovado')}
                                 className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-accent transition-colors" title="Aprovar">
@@ -239,8 +260,8 @@ const FeriasViewInner = ({ showToast, filial }: { showToast: any; filial: Filial
   );
 };
 
-export const FeriasView = ({ showToast }: any) => {
+export const FeriasView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <FeriasViewInner showToast={showToast} filial={filialAtiva} />;
+  return <FeriasViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

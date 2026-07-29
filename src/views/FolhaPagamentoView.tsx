@@ -29,17 +29,23 @@ type RecalcBreakdown = {
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
 
-const statusNext = (s: string): string | null =>
-  s === 'Pendente' ? 'Processada' : s === 'Processada' ? 'Paga' : null;
+// Segregação de funções (migr. 282): o RH fecha a folha, o Financeiro paga.
+// `pagar_folha` agora exige setor financeiro — e o caminho canônico do
+// pagamento é Contas a Pagar, onde o trigger leva a folha a 'Paga' e credita o
+// MaxBank sozinho. Para quem é só do RH, 'Processada' é o fim da linha aqui.
+const statusNext = (s: string, podePagar: boolean): string | null =>
+  s === 'Pendente' ? 'Processada' : (s === 'Processada' && podePagar) ? 'Paga' : null;
 
-const statusNextLabel = (s: string): string | null =>
-  s === 'Pendente' ? 'Processar' : s === 'Processada' ? 'Pagar' : null;
+const statusNextLabel = (s: string, podePagar: boolean): string | null =>
+  s === 'Pendente' ? 'Processar' : (s === 'Processada' && podePagar) ? 'Pagar' : null;
 
-const statusNextTitle = (s: string): string =>
+const statusNextTitle = (s: string, podePagar: boolean): string =>
   s === 'Pendente'
     ? 'Clique para processar a folha (gera Conta a Pagar do líquido).'
     : s === 'Processada'
-    ? 'Clique para marcar como Paga e creditar salário + benefícios na carteira MaxBank do colaborador.'
+    ? podePagar
+      ? 'Clique para marcar como Paga e creditar salário + benefícios na carteira MaxBank do colaborador.'
+      : 'Quem paga é o Financeiro, em Contas a Pagar — a folha vira Paga e credita o MaxBank sozinha.'
     : 'Folha já paga.';
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
@@ -59,6 +65,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
   const [recreditandoId, setRecreditandoId] = useState<string | null>(null);
   const confirm = useConfirm();
+
+  // Quem paga é o Financeiro (migr. 282). Gerente e Matriz também passam pelo
+  // `auth_in_setor` do banco, então a tela segue a mesma régua.
+  const podePagar = hasSetor(profile, 'financeiro')
+    || profile.role === 'gerente' || profile.role === 'admin' || profile.role === 'ceo';
 
   // Modal admin: carteira MaxBank do colaborador (saldos + extrato + excluir).
   // Aberto a partir de cada linha de folha — admin/CEO/RH usa pra limpar
@@ -366,7 +377,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   };
 
   const handleStatusCycle = async (f: any) => {
-    const next = statusNext(f.status);
+    const next = statusNext(f.status, podePagar);
     if (!next) return; // 'Paga' é estado terminal — sem reversão
     try {
       // Processada → Paga é transição transacional: quem credita é a RPC
@@ -522,14 +533,14 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                       <td className="py-3 px-4 text-center">
                         <button
                           onClick={() => handleStatusCycle(f)}
-                          disabled={!statusNext(f.status)}
-                          title={statusNextTitle(f.status)}
+                          disabled={!statusNext(f.status, podePagar)}
+                          title={statusNextTitle(f.status, podePagar)}
                           className={`flex items-center gap-1.5 mx-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase hover:opacity-80 disabled:cursor-default ${statusCls(f.status)}`}
                         >
                           {f.status === 'Paga' ? <CheckCircle size={11} /> : f.status === 'Processada' ? <DollarSign size={11} /> : <Clock size={11} />}
                           {f.status}
-                          {statusNextLabel(f.status) && (
-                            <span className="text-gray-500 font-semibold normal-case">→ {statusNextLabel(f.status)}</span>
+                          {statusNextLabel(f.status, podePagar) && (
+                            <span className="text-gray-500 font-semibold normal-case">→ {statusNextLabel(f.status, podePagar)}</span>
                           )}
                         </button>
                       </td>
@@ -546,7 +557,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                               <Calculator size={12} />
                             </button>
                           )}
-                          {(f.status === 'Paga' || f.status === 'Processada') && (
+                          {(f.status === 'Paga' || f.status === 'Processada') && podePagar && (
                             <button
                               onClick={() => handleRecreditar(f)}
                               disabled={recreditandoId === f.id}

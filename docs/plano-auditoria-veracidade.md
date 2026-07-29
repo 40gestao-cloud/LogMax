@@ -374,27 +374,49 @@ escreve direto.
       podem solicitar (policy de INSERT), então o par coincidia. Agora
       `_assert_nao_e_o_solicitante` barra nos dois lados (aprovar e negar).
 
-#### Decisões de processo pendentes (não são bug, são escolha)
+#### Segregação de funções — a régua vertical (migr. 282)
 
-Quatro transições deixam lançador e decisor no mesmo conjunto. Em turma pequena
-isso às vezes é o desenho — por isso não mexi:
+Quatro transições deixavam lançador e decisor no mesmo conjunto. O dado que
+decidiu o desenho: **cada filial tem uma pessoa por setor**. Não existe "outro
+analista do mesmo setor" para conferir — segregação horizontal é impossível por
+construção. A régua adotada é a de empresa pequena de verdade:
 
-- [ ] **Folha:** `processar_folha` e `pagar_folha` pedem o mesmo `rh` + filial.
-      Quem processa paga. (Item aberto da Etapa 2, agora confirmado no banco.)
-- [ ] **Requisição de compra:** o setor `compras` cria e o setor `compras`
-      aprova. E a aprovação são dois `UPDATE` soltos do `.tsx` com rollback
-      best-effort (P6) — candidata natural a virar RPC (Recomendação 1).
-- [ ] **Cotação:** o gerente da filial pode criar e aprovar a própria.
-- [ ] **Férias:** `ferias_rh_all` não exclui a própria linha — quem é do RH
-      aprova as próprias férias.
+> colaborador lança → gerente decide; gerente lança → Matriz decide; ninguém
+> decide sobre si mesmo; acima da alçada, sobe um nível.
 
-#### Outras superfícies largas mapeadas
+- [x] **Folha:** RH fecha (`processar_folha`, que gera a conta a pagar), o
+      Financeiro paga. `pagar_folha` saiu de `_assert_rpc('rh')` para
+      `('financeiro')`, e o caminho canônico virou Contas a Pagar — o trigger
+      `conta_pagar_avancar_folha_e_creditar` leva a folha a `Paga` e credita o
+      MaxBank sozinho. Para quem é só do RH, a tela agora para em `Processada`
+      e diz por quê.
+- [x] **Requisição de compra:** estava invertido — Compras criava e Compras
+      aprovava. A decisão passou ao gerente da filial (ou Matriz), nunca ao
+      autor, com trigger `requisicao_decisao_guard`. E os dois `UPDATE` soltos
+      do `.tsx` com rollback best-effort (P6) viraram
+      `decidir_requisicao_compra`: aprovação, requisição e cascata de cotações
+      numa transação só.
+- [x] **Cotação:** a régua certa já existia — mas só no React (alçada por valor
+      + "quem cadastrou não aprova"). Virou trigger `cotacao_decisao_guard`,
+      que espelha a tela: dentro da alçada decide o Financeiro, acima decide o
+      gerente, Matriz sempre pode, autor nunca.
+- [x] **Férias:** trigger `ferias_decisao_guard` — ninguém aprova as próprias;
+      férias de quem é do RH vão ao gerente da filial; férias de gerente sobem
+      à Matriz.
 
-- [ ] `requisicoes` e `requisicoes_estoque` têm `INSERT` com `WITH CHECK true`:
-      não checam filial nem setor. O caminho da tela passa por RPC com guard;
-      o `INSERT` direto, não. Fechar com `auth_pode_filial(filial)`.
-- [ ] `aprovacoes_compras.compras_insert` só exige `status = 'Pendente'` —
-      qualquer autenticado cria a linha de aprovação de qualquer filial.
+#### Outras superfícies largas (fechadas na 282)
+
+- [x] `requisicoes` e `requisicoes_estoque` tinham `INSERT` com
+      `WITH CHECK true` — nem filial, nem setor. Agora `auth_pode_filial(filial)`.
+- [x] `aprovacoes_compras.compras_insert` só exigia `status = 'Pendente'`:
+      qualquer autenticado criava linha de aprovação de qualquer filial.
+
+**Meia pendência assumida:** a recomendação incluía abrir a *abertura* de
+requisição a qualquer setor (na empresa real quem pede é a área que precisa).
+Não foi feito: o menu é por módulo, não por submenu, e dar `compras` inteiro a
+vendas/RH/marketing seria redesenhar a árvore de módulos de todos os setores.
+A autoridade — que era o furo — está fechada; a abertura fica como mudança de
+menu, a decidir.
 
 **Suspeita das ~14 telas de Aprovações: descartada.** São gates distintos —
 compras, estoque, conteúdo de marketing, promoção no financeiro, orçamento,

@@ -120,6 +120,8 @@ export interface Requisicao {
   filial?: string | null;
   data?: string | null;
   ativo?: boolean;
+  /** Quem abriu a requisição — quem abre não aprova (migr. 282). */
+  criado_por?: string | null;
   created_at?: string;
 }
 

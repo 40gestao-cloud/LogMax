@@ -872,7 +872,7 @@ function LogMaxAppInner() {
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
-      case 'compras-minhasaprovações':        return <AprovacoesComprasView showToast={st} />;
+      case 'compras-minhasaprovações':        return <AprovacoesComprasView showToast={st} profile={profile} />;
       case 'compras-recebimentos':            return <RecebimentosView showToast={st} />;
       case 'compras-sugestõesdecompras':       return <SugestoesComprasView showToast={st} />;
       case 'compras-gerenciamento':            return <GerenciamentoComprasView />;
@@ -906,7 +906,7 @@ function LogMaxAppInner() {
       case 'rh-cargos':           return <GenericCRUDView showToast={st} title="Cargos" subtitle="Gerencie os cargos e níveis salariais." endpoint="/api/cargosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Analista de Sistemas' }, { key: 'nivel', label: 'Nível', type: 'select', options: ['Júnior', 'Pleno', 'Sênior', 'Gerência', 'Diretoria'] }, { key: 'salario_base', label: 'Salário Base (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
-      case 'rh-férias':           return <FeriasView showToast={st} />;
+      case 'rh-férias':           return <FeriasView showToast={st} profile={profile} />;
       case 'rh-pontoeletrônico':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-frequênciadetrabalho': return <FrequenciaTrabalhoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
