@@ -114,6 +114,12 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/funcionariobeneficiosview':   'funcionario_beneficios',
   '/api/pedidosonlineview':           'pedidos_online',
   '/api/pedidosonlineitensview':      'pedidos_online_itens',
+  // ATENÇÃO: `loja_config` é chaveada por `filial` e NÃO tem coluna `id`.
+  // Serve para o useFetchData ler, mas `dbUpdate`/`dbDelete` filtram por
+  // `.eq('id', …)` e falham com "column loja_config.id does not exist".
+  // Para escrever, use um update direto por `filial` (vide PedidosOnlineView).
+  // Mesma pegadinha em: configuracoes, filial_caixa_config, produtos_custo,
+  // redes_sociais_links.
   '/api/lojaconfigview':              'loja_config',
 };
 

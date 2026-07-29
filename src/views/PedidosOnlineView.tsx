@@ -87,6 +87,29 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const confirmados = pedidos.filter(p => p.status === 'Confirmado');
   const emFila     = novos.reduce((s, p) => s + Number(p.total_final ?? 0), 0);
 
+  /**
+   * `loja_config` é uma linha por filial e a chave primária É a filial — não
+   * existe coluna `id`. `dbUpdate` filtra por `.eq('id', …)` sempre, então
+   * usá-lo aqui devolvia `column loja_config.id does not exist` e a loja não
+   * abria de jeito nenhum.
+   *
+   * `maybeSingle` em vez de `single`: quando a RLS recusa, o UPDATE não é erro
+   * — volta zero linha. Sem isso a mensagem seria sobre JSON, e não sobre
+   * permissão, que é a informação de que quem clicou precisa.
+   */
+  const patchLojaCfg = async (patch: Record<string, any>) => {
+    if (!supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase
+      .from('loja_config')
+      .update(patch)
+      .eq('filial', filial)
+      .select()
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Sem permissão para alterar a loja desta filial (só gerente da filial, admin ou CEO).');
+    return data;
+  };
+
   const toggleLoja = async () => {
     if (!cfg) return;
     const novo = !cfg.aberta;
@@ -94,11 +117,11 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       'Abrir a loja pública da ' + filial + '?\n\nO link passa a aceitar pedidos de qualquer pessoa que o receba. ' +
       'Feche quando a dinâmica terminar.')) return;
     try {
-      const upd = await dbUpdate('/api/lojaconfigview', cfg.filial, { aberta: novo } as any);
-      setLojaCfg((prev: any[]) => prev.map((x: any) => x.filial === cfg.filial ? { ...x, ...(upd ?? { aberta: novo }) } : x));
+      const upd = await patchLojaCfg({ aberta: novo });
+      setLojaCfg((prev: any[]) => prev.map((x: any) => x.filial === cfg.filial ? { ...x, ...upd } : x));
       showToast(novo ? 'Loja aberta — o link já aceita pedidos.' : 'Loja fechada.', 'success');
     } catch (err: any) {
-      showToast(`Erro: ${err?.message ?? '—'}`, 'error');
+      showToast(`Erro: ${err?.message ?? '—'}`, 'error', true);
     }
   };
 
@@ -207,9 +230,9 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       return;
     }
     try {
-      const upd = await dbUpdate('/api/lojaconfigview', cfg.filial, { url_publica: limpa || null } as any);
+      const upd = await patchLojaCfg({ url_publica: limpa || null });
       setLojaCfg((prev: any[]) => prev.map((x: any) =>
-        x.filial === cfg.filial ? { ...x, ...(upd ?? { url_publica: limpa || null }) } : x));
+        x.filial === cfg.filial ? { ...x, ...upd } : x));
       showToast(limpa ? 'Endereço atualizado.' : 'Endereço removido.', 'success');
     } catch (err: any) {
       showToast(err?.message ?? 'Erro ao salvar o endereço.', 'error', true);
