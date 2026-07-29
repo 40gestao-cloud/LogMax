@@ -23,7 +23,11 @@ const STATUS_CLS: Record<string, string> = {
 
 // Formas que `criar_venda_pdv` conhece. A preferência declarada na loja é só
 // um palpite do comprador — quem fecha escolhe a real.
-const FORMAS_VENDA = ['Dinheiro', 'Pix', 'Cartão Débito', 'Cartão Crédito', 'Fiado'] as const;
+// 'PIX' em caixa alta, igual ao PDV (`FORMAS` em PDVView) — é a MESMA coluna
+// `vendas.forma_pagamento`, e ela não tem CHECK. Escrever 'Pix' aqui não daria
+// erro nenhum: passaria a existir duas formas de pagamento com o mesmo nome no
+// histórico, nos recibos e em qualquer agrupamento por forma.
+const FORMAS_VENDA = ['Dinheiro', 'PIX', 'Cartão Débito', 'Cartão Crédito', 'Fiado'] as const;
 
 const brl = (v: any) => Number(v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -53,7 +57,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const [buscaProd, setBuscaProd] = useState('');
   const [publicando, setPublicando] = useState<string | null>(null);
   const [atendendo, setAtendendo] = useState<Pedido | null>(null);
-  const [forma, setForma] = useState<string>('Pix');
+  const [forma, setForma] = useState<string>('PIX');
   const [parcelas, setParcelas] = useState(1);
   const [clienteId, setClienteId] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -96,7 +100,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
     // A preferência do comprador entra pré-selecionada quando existe forma
     // equivalente na venda; 'Boleto' não existe no PDV e cai em Fiado, que é
     // o que ele significa na prática (recebimento a prazo).
-    setForma(p.forma_desejada === 'Boleto' ? 'Fiado' : (p.forma_desejada === 'Cartão' ? 'Cartão Crédito' : 'Pix'));
+    setForma(p.forma_desejada === 'Boleto' ? 'Fiado' : (p.forma_desejada === 'Cartão' ? 'Cartão Crédito' : 'PIX'));
     setParcelas(1);
     setClienteId('');
   };
