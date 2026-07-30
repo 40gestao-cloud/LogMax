@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronDown, X, FileDown, Sheet, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, X, FileDown, Sheet, Trash2, Store } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -31,6 +31,8 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
   // Antes carregava `itens_venda` inteira — escala mal com vendas diárias acumuladas.
   const [itens, setItens] = useState<any[]>([]);
   const [loadingI, setLoadingI] = useState(false);
+  /** venda_id → código do pedido online que a originou. */
+  const [origemOnline, setOrigemOnline] = useState<Map<string, string>>(new Map());
   const vendaIdsKey = vendas.map((v: any) => v.id).join(',');
   useEffect(() => {
     if (!supabase || vendas.length === 0) {
@@ -46,6 +48,22 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
         setItens(rows ?? []);
         setLoadingI(false);
       });
+
+    // Origem: a venda vinda da loja não se distingue de uma do balcão — as
+    // duas nascem do mesmo `criar_venda_pdv` e a tabela `vendas` não guarda
+    // procedência. Quem sabe é `pedidos_online.venda_id`, então a marca vem de
+    // lá, só para os ids da página.
+    //
+    // Falha silenciosa de propósito: a RLS de `pedidos_online` pede
+    // `auth_opera_loja` (vendas/marketing/gerente), que o Financeiro não
+    // satisfaz. Para ele a consulta volta vazia e a lista fica sem o selo —
+    // que é melhor que um erro numa tela que já carregou o essencial.
+    supabase.from('pedidos_online').select('codigo, venda_id').in('venda_id', ids)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setOrigemOnline(new Map((rows ?? []).map((r: any) => [r.venda_id, r.codigo])));
+      });
+
     return () => { cancelled = true; };
   }, [vendaIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -238,8 +256,23 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
                         <p className="text-[10px] text-gray-600 mt-0.5">{(v.created_at ?? '').slice(0, 10)}</p>
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-200">{v.cliente?.nome ?? 'Venda balcão'}</p>
-                        <p className="text-xs text-gray-500">{v.forma_pagamento} · {v.itens?.length ?? 0} {v.itens?.length === 1 ? 'item' : 'itens'}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-gray-200">
+                            {v.cliente?.nome ?? (origemOnline.has(v.id) ? 'Pedido online' : 'Venda balcão')}
+                          </p>
+                          {origemOnline.has(v.id) && (
+                            <span
+                              title={`Originada do pedido online ${origemOnline.get(v.id)}`}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/25"
+                            >
+                              <Store size={9} />loja online
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {v.forma_pagamento} · {v.itens?.length ?? 0} {v.itens?.length === 1 ? 'item' : 'itens'}
+                          {origemOnline.has(v.id) && <> · <span className="font-mono">{origemOnline.get(v.id)}</span></>}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">

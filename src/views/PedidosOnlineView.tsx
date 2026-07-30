@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, ExternalLink, Package, Search, AlertTriangle, Settings } from 'lucide-react';
+import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, ExternalLink, Package, Search, AlertTriangle, Settings, Trash2 } from 'lucide-react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
-import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -73,8 +73,13 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const [configAberta, setConfigAberta] = useState(false);
   const [cfgForm, setCfgForm] = useState<Record<string, string>>({});
 
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+
   const cfg = lojaCfg?.[0];
   const podeAbrirFechar = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
+  // Excluir é da Matriz: some com registro, e gerente já tem 'Cancelar' — que
+  // preserva o histórico e é o caminho certo para pedido real desistido.
+  const podeExcluir = profile?.role === 'admin' || profile?.role === 'ceo';
 
   const itensPorPedido = useMemo(() => {
     const m = new Map<string, any[]>();
@@ -221,6 +226,38 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       showToast('Pedido cancelado.', 'success');
     } catch (err: any) {
       showToast(err?.message ?? 'Erro ao cancelar.', 'error', true);
+    }
+  };
+
+  /**
+   * Excluir pedido — existe para varrer pedido de teste, que a loja produz
+   * bastante enquanto a turma experimenta o fluxo.
+   *
+   * Soft delete: `pedidos_online` está em TABLES_WITH_ATIVO, então some da
+   * tela e continua no banco. Os itens não têm coluna `ativo`, mas também não
+   * aparecem sozinhos — a tela só os alcança pelo pedido —, então não viram
+   * órfão visível (ver feedback_soft_delete_cascade).
+   *
+   * Confirmado exige aviso mais duro: a venda, o estoque baixado e a conta a
+   * receber são registros próprios e NÃO somem junto. Apagar o pedido some com
+   * o rastro de onde a venda nasceu, não com a venda.
+   */
+  const excluirPedido = async (p: Pedido) => {
+    const virouVenda = p.status === 'Confirmado' && !!p.venda_id;
+    const aviso = virouVenda
+      ? `Excluir o pedido ${p.codigo}?\n\nATENÇÃO: ele já virou venda. A venda, a baixa de estoque e a conta a receber CONTINUAM existindo — só o pedido sai da lista.\n\nPara desfazer o efeito financeiro, use Devoluções.`
+      : `Excluir o pedido ${p.codigo} de ${p.comprador_apelido}?\n\nSai da lista. Nada mais é afetado.`;
+    if (!await confirm(aviso)) return;
+
+    setExcluindo(p.id);
+    try {
+      await dbDelete('/api/pedidosonlineview', p.id);
+      setData((prev: any[]) => prev.filter((x: any) => x.id !== p.id));
+      showToast(`Pedido ${p.codigo} excluído.`, 'success');
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao excluir.', 'error', true);
+    } finally {
+      setExcluindo(null);
     }
   };
 
@@ -555,6 +592,19 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                         <span className="text-[10px] text-gray-500 max-w-[220px] truncate" title={p.motivo_cancelamento}>
                           {p.motivo_cancelamento}
                         </span>
+                      )}
+
+                      {/* Vale para qualquer status: pedido de teste também é
+                          atendido e confirmado enquanto a turma experimenta. */}
+                      {podeExcluir && (
+                        <button
+                          onClick={() => excluirPedido(p)}
+                          disabled={excluindo === p.id}
+                          title="Excluir pedido (some da lista)"
+                          className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-600 border border-white/5 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition disabled:opacity-40"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       )}
                     </div>
 
