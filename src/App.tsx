@@ -24,7 +24,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  FileText, Sheet, Briefcase, Presentation,
+  Presentation,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -119,8 +119,6 @@ const MatrizCapitalView                    = lazy(() => import('./views/MatrizCa
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
-const MaxDocsView                          = lazy(() => import('./views/MaxDocsView').then(m => ({ default: m.MaxDocsView })));
-const MaxPlanilhasView                     = lazy(() => import('./views/MaxPlanilhasView').then(m => ({ default: m.MaxPlanilhasView })));
 const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 
 // --- menu ---
@@ -333,54 +331,19 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <GraduationCap size={18} /><span>Modo Aula</span>
           </button>
         )}
-        {/* Max Work: módulo didático de produção do aluno. Colapsável no
-            mesmo padrão dos módulos operacionais, com dois submódulos —
-            Max Docs (Tiptap) e Max Planilhas (Fortune-sheet). Aberto pra
-            todo mundo; cada aluno edita só o próprio material; docente
+        {/* Max Show: era o submódulo "Show" do módulo Max Work, que também tinha
+            Max Docs e Max Planilhas. Os dois saíram em 2026-07-29 — cinco dias no
+            ar, zero documento e zero planilha criados nas 4 turmas, e levavam 157 MB
+            de @univerjs no node_modules mais um bug recorrente de singleton
+            duplicado. Sobrando um só, módulo colapsável com um item dentro era
+            cerimônia sem conteúdo: virou item de primeiro nível.
+            Aberto pra todo mundo; cada aluno edita só o próprio material; docente
             (admin/CEO/conselheiro) enxerga todos via RLS. Aula-aware. */}
-        {(aulaAllow('max-work-docs') || aulaAllow('max-work-planilhas') || aulaAllow('max-work-show')) && (() => {
-          const isOpen = openModules['max-work'];
-          const subs: { view: string; label: string; Icon: any }[] = [
-            ...(aulaAllow('max-work-docs')      ? [{ view: 'max-work-docs',      label: 'Max Docs',      Icon: FileText     }] : []),
-            ...(aulaAllow('max-work-planilhas') ? [{ view: 'max-work-planilhas', label: 'Max Planilhas', Icon: Sheet        }] : []),
-            ...(aulaAllow('max-work-show')     ? [{ view: 'max-work-show',     label: 'Max Show',      Icon: Presentation }] : []),
-          ];
-          return (
-            <div className="flex flex-col">
-              <button
-                onClick={() => toggleModule('max-work')}
-                className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-semibold ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Briefcase size={18} className={isOpen ? 'text-accent' : ''} />
-                  <span>Max Work</span>
-                </div>
-                <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-accent' : 'text-gray-500'}`} />
-              </button>
-              <AnimatePresence>
-                {isOpen && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-col overflow-hidden">
-                    <div className="flex flex-col pt-2 pb-1">
-                      {subs.map(({ view, label, Icon }) => {
-                        const isActive = activeView === view;
-                        return (
-                          <button
-                            key={view}
-                            onClick={() => { navigate(view); onClose?.(); }}
-                            className={`nav-subitem flex items-center gap-2 text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 ${isActive ? 'is-active font-bold bg-white/5 text-accent border-accent' : 'text-gray-200 border-transparent'}`}
-                          >
-                            <Icon size={13} />
-                            <span>{label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })()}
+        {aulaAllow('max-show') && (
+          <button onClick={() => { navigate('max-show'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'max-show' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Presentation size={18} /><span>Max Show</span>
+          </button>
+        )}
         {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
         {aulaAllow('catalogo-produtos') && (
           <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -1047,9 +1010,11 @@ function LogMaxAppInner() {
       case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
-      case 'max-work-docs':                return <MaxDocsView showToast={st} profile={profile} />;
-      case 'max-work-planilhas':           return <MaxPlanilhasView showToast={st} profile={profile} />;
-      case 'max-work-show':               return <MaxShowsView showToast={st} profile={profile} />;
+      // Rota mudou com o rótulo. A antiga fica de alias porque `activeView` vive
+      // no sessionStorage: quem estivesse no Max Show no momento do deploy
+      // recarregaria num switch sem case. Vide o mesmo caso na Vitrine.
+      case 'max-work-show':
+      case 'max-show':                     return <MaxShowsView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

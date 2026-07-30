@@ -29,7 +29,7 @@ export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'vendas',            label: 'Vendas',           grupo: 'Comercial' },
   { id: 'marketing',         label: 'Marketing',        grupo: 'Comercial' },
   { id: 'ti',                label: 'TI & Suporte',     grupo: 'Tecnologia' },
-  { id: 'max-work',          label: 'Max Work',         grupo: 'Didático' },
+  { id: 'max-show',          label: 'Max Show',         grupo: 'Didático' },
 ];
 
 export const AULA_PRESETS: { nome: string; modulos: string[] }[] = [
@@ -62,7 +62,8 @@ export const AULA_SUBMENUS: Record<string, string[]> = {
   vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Pedidos Online', 'Histórico de Vendas', 'Devoluções'],
   marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário'],
   ti:         ['Desenvolvimento com IA'],
-  'max-work': ['Docs', 'Planilhas', 'Show'],
+  // `max-show` fica FORA daqui de propósito: virou view top-level sem submenu, e
+  // módulo sem submenu não entra em AULA_SUBMENUS — a whitelist é por submenu.
 };
 
 /** Reproduz o cálculo de viewId dos submenus feito em App.tsx.SidebarNav. */
@@ -134,11 +135,11 @@ const VIEW_TO_MODULO_OVERRIDE: Record<string, string> = {
   // Aliases pra views top-level que pertencem a um módulo
   'artes-promocionais': 'marketing',
   'minhas-pesquisas':   'rh',
-  // max-work-docs / max-work-planilhas seguem regra padrão: split('-')[0]='max',
-  // mas queremos que caiam sob 'max-work'. Override explícito abaixo.
-  'max-work-docs':       'max-work',
-  'max-work-planilhas':  'max-work',
-  'max-work-show':       'max-work',
+  // A regra padrão faria split('-')[0]='max', que não é módulo nenhum — daí o
+  // override. A rota antiga fica mapeada junto porque `activeView` vive no
+  // sessionStorage e sobrevive ao deploy.
+  'max-show':      'max-show',
+  'max-work-show': 'max-show',
 };
 
 /** Retorna o id do módulo a ser checado, ou null se a view é sempre liberada. */

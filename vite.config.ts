@@ -21,11 +21,14 @@ export default defineConfig(({ mode }) => {
           // json incluído para precachear manifest.json e simulador-manifest.json
           // (segundo PWA do /simulador-pagamento — vide SimuladorPagamentoView).
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,json}'],
-          // Max Planilhas usa Univer (~2-3 MB). Excluir do precache pra não
-          // inflar o payload inicial da PWA de todo mundo — o chunk baixa
-          // on-demand quando o aluno abre Max Planilhas (Runtime cache do
-          // NetworkFirst do supabase-api não pega esse ativo estático).
-          globIgnores: ['**/vendor-univer-*.js', '**/vendor-univer-*.css', '**/vendor-pdfjs-*.js', '**/pdf.worker*.js', '**/pdf.worker*.mjs'],
+          // pdf.js é pesado e só serve quando alguém abre um PDF. Fora do
+          // precache para não inflar o payload inicial da PWA de todo mundo — o
+          // chunk baixa on-demand (o NetworkFirst do supabase-api não pega
+          // ativo estático).
+          //
+          // As entradas de `vendor-univer-*` saíram em 2026-07-29 com Max Docs e
+          // Max Planilhas; sem os dois módulos, nenhum chunk desse nome nasce.
+          globIgnores: ['**/vendor-pdfjs-*.js', '**/pdf.worker*.js', '**/pdf.worker*.mjs'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -80,13 +83,13 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
             if (id.includes('node_modules/motion/')) return 'vendor-motion';
             if (id.includes('node_modules/@supabase/')) return 'vendor-supabase';
-            // Max Work — TODO @univerjs/* precisa cair no MESMO chunk. Splittar
-            // por sub-package (docs, docs-ui, core, ui...) faz Rollup criar
-            // singletons duplicados quando MaxDocEditor importa direto de
-            // '@univerjs/docs' alem do preset — o command service da ribbon
-            // fica num Univer, o doc no outro, e Bold/Italic/Ctrl+Z/Inserir
-            // tabela viram noop.
-            if (id.includes('node_modules/@univerjs/') || id.includes('node_modules/@univerjs-pro/')) return 'vendor-univer';
+            // O chunk `vendor-univer` saiu em 2026-07-29 junto com Max Docs e Max
+            // Planilhas. Se o Univer voltar algum dia: TODO @univerjs/* precisa
+            // cair no MESMO chunk. Separar por sub-package (docs, docs-ui, core,
+            // ui...) faz o Rollup criar singletons duplicados quando um editor
+            // importa direto de '@univerjs/docs' além do preset — o command
+            // service da ribbon fica num Univer, o documento no outro, e Bold,
+            // Itálico, Ctrl+Z e Inserir tabela viram noop.
             if (id.includes('node_modules/pdfjs-dist')) return 'vendor-pdfjs';
           },
         },
