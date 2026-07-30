@@ -21,8 +21,19 @@
 --      nasce com afastamento_id NULL — então o trigger de reversão da 273 não a
 --      alcança e o módulo Afastamentos segue dono do que é dele.
 --
--- Efeito na folha: nenhum código novo. 'Justificado' já vale zero desconto
--- desde a 064/129, e a aderência dos painéis (158/240) já o exclui da conta.
+-- EFEITO NA FOLHA — leia antes de supor: a justificada lançada aqui NÃO perdoa
+-- o desconto. A migr. 292 amarrou o perdão à aprovação da Matriz, e um dia
+-- 'Justificado' sem afastamento_id cai no ramo que desconta como falta cheia.
+-- É intencional: perdoar falta continua sendo decisão de admin/CEO via
+-- Afastamentos, e abrir exceção aqui reabriria exatamente a fresta que a 292
+-- fechou (quem lança decide o próprio desconto).
+--
+-- O que este status entrega, então: o dia deixa de ser 'Falta' seca e passa a
+-- carregar o motivo declarado, visível na tela e no histórico. Se a intenção
+-- for zerar o desconto, o caminho é Afastamentos com aprovação.
+--
+-- Nos painéis (158/240) a aderência já exclui 'Justificado' da conta — lá o
+-- efeito é imediato, diferente da folha.
 --
 -- IDEMPOTENTE. Aplicar nos 4 projetos de turma.
 

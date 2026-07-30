@@ -600,7 +600,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     <th className="pb-3 font-bold px-3">Cargo</th>
                     <th className="pb-3 font-bold px-3 text-center">Status</th>
                     <th className="pb-3 font-bold px-3 text-center">Registro</th>
-                    <th className="pb-3 font-bold px-3">Justificativa</th>
+                    <th className="pb-3 font-bold px-3 text-center w-20">Justificativa</th>
                     <th className="pb-3 font-bold px-3 text-center w-20">Ação</th>
                   </tr>
                 </thead>
@@ -643,7 +643,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-1.5">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
+                              <div className="flex flex-nowrap items-center justify-center gap-1">
                                 {STATUSES.map(s => {
                                   const sc = STATUS_CONFIG[s];
                                   const Ic = sc.icon;
@@ -660,7 +660,9 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                                           setJustModal({ func, texto: '' });
                                         }
                                       }}
-                                      title={s}
+                                      title={s === 'Justificado'
+                                        ? 'Falta justificada — registra o motivo. O desconto na folha só é perdoado por afastamento aprovado pela Matriz.'
+                                        : s}
                                       className={`freq-status-btn ${colorCls}${active ? ' freq-status-btn--active' : ''}`}
                                     >
                                       <Ic size={14} />
@@ -702,24 +704,22 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             );
                           })() : <span className="text-gray-700 text-xs">—</span>}
                         </td>
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 text-center">
+                          {/* Ícone do tamanho do botão Salvar: o texto do motivo
+                              mora no modal, não na linha. O preenchido se
+                              distingue pelo accent. */}
                           <button
                             type="button"
                             disabled={bloqueado}
                             onClick={() => setJustModal({ func, texto: currentJust })}
                             title={bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
-                            className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto disabled:opacity-40 disabled:cursor-not-allowed ${
                               currentJust
-                                ? 'bg-accent/10 border-accent/25 text-gray-200 hover:bg-accent/20'
-                                : 'border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/20'
+                                ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25'
+                                : 'border-white/5 text-gray-600 hover:text-gray-300 hover:border-white/20'
                             }`}
                           >
-                            <MessageSquarePlus size={13} className="shrink-0" />
-                            <span className="truncate">
-                              {bloqueado
-                                ? 'Motivo no módulo Afastamentos'
-                                : (currentJust || 'Justificativa')}
-                            </span>
+                            <MessageSquarePlus size={14} />
                           </button>
                         </td>
                         <td className="py-3 px-3 text-center">
