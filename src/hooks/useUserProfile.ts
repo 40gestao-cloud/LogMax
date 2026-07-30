@@ -21,6 +21,12 @@ export interface UserProfile {
   pode_acessar_usuarios?: boolean;
   /** Gerente com acesso de conselheiro (visão global). */
   is_conselheiro?: boolean;
+  /**
+   * Vínculo encerrado (migr. 307). Preenchido, as funções de RBAC do banco
+   * deixam de reconhecer o perfil — o acesso continua, a escrita não. Aqui
+   * serve só para a UI avisar; quem barra de verdade é a RLS.
+   */
+  desligado_em?: string | null;
 }
 
 export function useUserProfile() {

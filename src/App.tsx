@@ -12,6 +12,7 @@ import {
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
+import { DesligamentoAviso } from './components/DesligamentoAviso';
 import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
@@ -78,6 +79,7 @@ const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoVi
 const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
 const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
 const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
+const DesligamentosView            = lazy(() => import('./views/DesligamentosView').then(m => ({ default: m.DesligamentosView })));
 const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
@@ -232,6 +234,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Registro de Ponto', requireSetor: ['rh'] },
       'Férias',
       { label: 'Afastamentos', requireSetor: ['rh'] },
+      // Registrar é de admin/CEO (migr. 307), mas o RH processa a rescisão e
+      // acompanha — por isso o gate é o do módulo, não o da decisão.
+      { label: 'Desligamento', requireSetor: ['rh'] },
       { label: 'Folha de Pagamento', requireSetor: ['rh'] },
       { label: 'Benefícios', requireSetor: ['rh'] },
       'Treinamentos',
@@ -963,6 +968,7 @@ function LogMaxAppInner() {
       case 'rh-férias':           return <FeriasView showToast={st} profile={profile} />;
       case 'rh-registrodeponto':  return <PontoEletronicoView showToast={st} profile={profile} />;
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
+      case 'rh-desligamento':    return <DesligamentosView showToast={st} profile={profile} />;
       case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Catálogo de benefícios da unidade. A atribuição por pessoa é feita em Funcionários." endpoint="/api/beneficiosview" filialScoped
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
@@ -1042,6 +1048,9 @@ function LogMaxAppInner() {
     <AuditoriaProvider>
     <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
+      {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
+          (migr. 307). Ver o comentário no próprio componente. */}
+      <DesligamentoAviso profile={profile} />
       <PerfilFotoModal
         open={perfilFotoOpen}
         profile={profile}

@@ -81,6 +81,8 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/pdiitensview':                 'pdi_itens',
   '/api/treinamentoinscricoesview':    'treinamento_inscricoes',
   '/api/afastamentosview':             'afastamentos',
+  '/api/demissoesview':                'demissoes',
+  '/api/rescisoesview':                'rescisoes',
   '/api/frequenciatrabalhoview':       'frequencia_trabalho',
   '/api/relatoriosbiview':             'relatorios_bi',
   '/api/briefingsdiariosview':         'briefings_diarios',
@@ -142,6 +144,9 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'marketing_promocoes', 'marketing_tarefas',
   'marketing_campanhas', 'marketing_cupons', 'marketing_calendario',
   'treinamento_inscricoes', 'afastamentos', 'frequencia_trabalho', 'frequencia_trabalho_com_filial',
+  // Readmissão inativa a linha em vez de apagar — a tela de Desligamento pede
+  // includeInactive para conseguir mostrar o histórico de readmitidos.
+  'demissoes', 'rescisoes',
   'funcionario_beneficios',
   // `loja_config` fica de fora de propósito: é uma linha fixa por filial, não
   // um cadastro que se apaga, e não tem coluna `ativo`.
