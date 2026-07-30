@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data: cfg } = await admin
         .from('loja_config')
-        .select('aberta, mensagem_fechada, max_itens_pedido, max_valor_pedido')
+        .select('aberta, mensagem_fechada, max_itens_pedido, max_valor_pedido, aviso_checkout')
         .eq('filial', filial)
         .maybeSingle();
 
@@ -151,6 +151,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         aberta: true,
         max_itens: cfg.max_itens_pedido,
         max_valor: Number(cfg.max_valor_pedido),
+        // Aviso de conduta do checkout (migr. 310). Vem daqui, e não do código
+        // da loja, para mudar a frase sem redeployar 12 páginas. `null`
+        // esconde — a página deve tratar ausência, não assumir texto.
+        aviso_checkout: cfg.aviso_checkout ?? null,
         produtos: (produtos ?? []).map((p: any) => ({
           id:        p.id,
           nome:      p.nome,
@@ -435,6 +439,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .single();
 
       if (errPedido || !pedido) {
+        // P0001 é regra de negócio levantada por trigger — hoje o filtro de
+        // apelido da migr. 309. A mensagem já vem escrita para o comprador
+        // ler ("Escolha outro nome..."), e engolir isso num 500 genérico
+        // deixaria ele sem saber que basta trocar o nome.
+        //
+        // Só P0001: erro de constraint, FK ou permissão continua virando 500
+        // com mensagem neutra, para não vazar formato de tabela na loja.
+        if (errPedido?.code === 'P0001' && errPedido.message) {
+          log.info('checkout.rejeitado_por_regra', { motivo: errPedido.message });
+          return res.status(400).json({ error: errPedido.message });
+        }
         log.error('checkout.insert_failed', errPedido);
         return res.status(500).json({ error: 'Não foi possível registrar o pedido.' });
       }
