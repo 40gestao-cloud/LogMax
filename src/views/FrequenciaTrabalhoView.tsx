@@ -13,21 +13,37 @@ import { todayBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 
-// 'Justificado' não é opção de lançamento: chega de Afastamentos e a linha vira
-// somente-leitura. Está aqui porque a tela precisa EXIBIR o dia coberto — era
-// justamente não exibir que fazia Frequência mostrar Falta num dia que o ponto
-// já tinha justificado (migr. 289).
+// 'Justificado' cobre dois caminhos: o afastamento aprovado (linha somente-
+// leitura, com afastamento_id) e a falta justificada lançada aqui à mão
+// (migr. 303). O primeiro continua sendo verdade do módulo Afastamentos — só
+// ele bloqueia a linha.
 type StatusFreq = 'Presente' | 'Falta' | 'Presente com Atraso' | 'Justificado';
 
 const STATUS_CONFIG: Record<StatusFreq, { icon: any; color: string; bg: string; border: string }> = {
   'Presente':           { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   'Falta':              { icon: XCircle,      color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/20' },
   'Presente com Atraso': { icon: Clock,        color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  border: 'border-yellow-500/20' },
-  'Justificado':        { icon: FileCheck,    color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  border: 'border-yellow-500/20' },
+  // Azul: separa visualmente de Atraso (amarelo), que antes dividia a mesma cor.
+  'Justificado':        { icon: FileCheck,    color: 'text-blue-400',    bg: 'bg-blue-500/10',    border: 'border-blue-500/20' },
 };
 
-/** Só estes três se lançam à mão. */
-const STATUSES: StatusFreq[] = ['Presente', 'Falta', 'Presente com Atraso'];
+/** Rótulos curtos dos botões — o nome do banco é longo demais para a coluna. */
+const STATUS_LABEL: Record<StatusFreq, string> = {
+  'Presente': 'Presente',
+  'Falta': 'Falta',
+  'Presente com Atraso': 'Atraso',
+  'Justificado': 'Justificada',
+};
+
+const STATUS_BTN_CLASS: Record<StatusFreq, string> = {
+  'Presente': 'freq-status-btn--presente',
+  'Falta': 'freq-status-btn--falta',
+  'Presente com Atraso': 'freq-status-btn--atraso',
+  'Justificado': 'freq-status-btn--justificada',
+};
+
+/** Os quatro que se lançam à mão. */
+const STATUSES: StatusFreq[] = ['Presente', 'Falta', 'Presente com Atraso', 'Justificado'];
 
 /**
  * Uma linha de `ponto_eletronico` na forma que esta tela consome.
@@ -180,6 +196,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   // Modal de histórico
   const [modalFunc, setModalFunc] = useState<Funcionario | null>(null);
 
+  // Modal de justificativa: a coluna virou botão porque o input de uma linha
+  // não cabia um motivo escrito de verdade — digitava-se três palavras e olhe lá.
+  const [justModal, setJustModal] = useState<{ func: Funcionario; texto: string } | null>(null);
+
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || isConselheiro(profile);
 
   // No modo filial: filtra pela filial ativa.
@@ -243,14 +263,22 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       return;
     }
 
+    // Falta justificada sem motivo é falta com nome bonito: a RPC recusa
+    // (migr. 303) e aqui a recusa chega antes do round-trip.
+    if (edit.status === 'Justificado' && !edit.justificativa.trim()) {
+      showToast('Escreva a justificativa antes de salvar a falta justificada.', 'error');
+      return;
+    }
+
     const key = func.id;
     setSaving(prev => ({ ...prev, [key]: true }));
 
     try {
       // 'Presente com Atraso' vai como Normal + entrada real; o desconto sai do
       // recalcular_folha_do_ponto comparando com o horário-alvo da turma.
-      const statusPonto = edit.status === 'Falta' ? 'Falta' : 'Normal';
-      const entrada = edit.status === 'Falta'
+      // 'Justificado' vai como está: a folha já o trata como zero desconto.
+      const statusPonto = edit.status === 'Falta' || edit.status === 'Justificado' ? edit.status : 'Normal';
+      const entrada = edit.status === 'Falta' || edit.status === 'Justificado'
         ? null
         : (edit.status === 'Presente com Atraso' ? edit.entrada : PONTO_HORARIOS.entrada);
 
@@ -581,10 +609,9 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     const freq = getFreq(func.id, dataSelecionada);
                     const edit = getEdit(func.id);
                     const bloqueado = !!freq?.bloqueado;
-                    // Status já gravado como Justificado não é opção de lançamento:
-                    // cai em 'Presente' só para os botões terem um estado inicial
-                    // válido, e a coluna fica desabilitada logo abaixo.
-                    const freqStatus = freq?.status === 'Justificado' ? undefined : freq?.status;
+                    // Justificado vindo de afastamento (bloqueado) não vira estado
+                    // de botão — a coluna inteira fica somente-leitura logo abaixo.
+                    const freqStatus = bloqueado ? undefined : freq?.status;
                     const currentStatus: StatusFreq = edit?.status ?? freqStatus ?? 'Presente';
                     const currentJust = edit?.justificativa ?? freq?.justificativa ?? '';
                     const currentEntrada = edit?.entrada ?? freq?.entrada ?? '';
@@ -616,21 +643,28 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-1.5">
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex flex-wrap items-center justify-center gap-1">
                                 {STATUSES.map(s => {
                                   const sc = STATUS_CONFIG[s];
                                   const Ic = sc.icon;
                                   const active = currentStatus === s;
-                                  const colorCls = s === 'Presente' ? 'freq-status-btn--presente' : s === 'Falta' ? 'freq-status-btn--falta' : 'freq-status-btn--atraso';
+                                  const colorCls = STATUS_BTN_CLASS[s];
                                   return (
                                     <button
                                       key={s}
-                                      onClick={() => setEdit(func.id, { status: s, justificativa: currentJust, entrada: currentEntrada })}
+                                      onClick={() => {
+                                        setEdit(func.id, { status: s, justificativa: currentJust, entrada: currentEntrada });
+                                        // Justificada exige motivo: abrir o modal aqui
+                                        // poupa o clique extra na coluna ao lado.
+                                        if (s === 'Justificado' && !currentJust.trim()) {
+                                          setJustModal({ func, texto: '' });
+                                        }
+                                      }}
                                       title={s}
                                       className={`freq-status-btn ${colorCls}${active ? ' freq-status-btn--active' : ''}`}
                                     >
                                       <Ic size={14} />
-                                      <span className="hidden sm:inline">{s === 'Presente com Atraso' ? 'Atraso' : s}</span>
+                                      <span className="hidden sm:inline">{STATUS_LABEL[s]}</span>
                                     </button>
                                   );
                                 })}
@@ -655,7 +689,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                               <div className="flex flex-col items-center gap-0.5">
                                 <div className={`flex items-center gap-1 ${cfg.color}`}>
                                   <Ic size={13} />
-                                  <span className="text-[11px] font-semibold">{freq.status === 'Presente com Atraso' ? 'Atraso' : freq.status}</span>
+                                  <span className="text-[11px] font-semibold">{STATUS_LABEL[freq.status]}</span>
                                 </div>
                                 {/* Marcação do totem é o colaborador no horário;
                                     manual é alguém afirmando por ele. A diferença
@@ -669,14 +703,24 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                           })() : <span className="text-gray-700 text-xs">—</span>}
                         </td>
                         <td className="py-3 px-3">
-                          <input
-                            type="text"
-                            value={currentJust}
+                          <button
+                            type="button"
                             disabled={bloqueado}
-                            onChange={e => setEdit(func.id, { status: currentStatus, justificativa: e.target.value, entrada: currentEntrada })}
-                            placeholder={bloqueado ? 'Motivo no módulo Afastamentos' : 'Observação (opcional)'}
-                            className="neu-input w-full px-2 py-1.5 rounded-lg text-xs disabled:opacity-50"
-                          />
+                            onClick={() => setJustModal({ func, texto: currentJust })}
+                            title={bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
+                            className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                              currentJust
+                                ? 'bg-accent/10 border-accent/25 text-gray-200 hover:bg-accent/20'
+                                : 'border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/20'
+                            }`}
+                          >
+                            <MessageSquarePlus size={13} className="shrink-0" />
+                            <span className="truncate">
+                              {bloqueado
+                                ? 'Motivo no módulo Afastamentos'
+                                : (currentJust || 'Justificativa')}
+                            </span>
+                          </button>
                         </td>
                         <td className="py-3 px-3 text-center">
                           <button
@@ -793,6 +837,70 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
         </div>
       )}
 
+      {/* Modal de justificativa — grava só no rascunho local; quem persiste
+          continua sendo o botão Salvar da linha. */}
+      <AnimatePresence>
+        {justModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => setJustModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-lg w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-accent">Justificativa</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {justModal.func.nome} · {fmtData(dataSelecionada)}
+                  </p>
+                </div>
+                <button onClick={() => setJustModal(null)} className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-200">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <textarea
+                autoFocus
+                rows={5}
+                value={justModal.texto}
+                onChange={e => setJustModal(m => (m ? { ...m, texto: e.target.value } : m))}
+                placeholder="Descreva o motivo (atestado, convocação, problema de transporte…)"
+                className="neu-input w-full px-3 py-2.5 rounded-xl text-sm resize-none"
+              />
+
+              <div className="flex items-center justify-end gap-2 mt-5">
+                <button
+                  onClick={() => setJustModal(null)}
+                  className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    const alvo = justModal.func.id;
+                    const freq = getFreq(alvo, dataSelecionada);
+                    setEdit(alvo, {
+                      status: edits[alvo]?.status ?? (freq?.bloqueado ? 'Presente' : freq?.status) ?? 'Presente',
+                      justificativa: justModal.texto,
+                      entrada: edits[alvo]?.entrada ?? freq?.entrada ?? '',
+                    });
+                    setJustModal(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 transition"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Modal histórico do funcionário */}
       <AnimatePresence>
         {modalFunc && (
@@ -820,8 +928,8 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
               </div>
 
               {/* Resumo rápido */}
-              <div className="grid grid-cols-3 gap-3 mb-4 shrink-0">
-                {(['Presente', 'Falta', 'Presente com Atraso'] as StatusFreq[]).map(s => {
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 shrink-0">
+                {(['Presente', 'Falta', 'Presente com Atraso', 'Justificado'] as StatusFreq[]).map(s => {
                   const count = historicoFunc.filter(f => f.status === s).length;
                   const cfg = STATUS_CONFIG[s];
                   const Ic = cfg.icon;
@@ -829,7 +937,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     <div key={s} className={`rounded-xl p-3 border ${cfg.bg} ${cfg.border}`}>
                       <div className="flex items-center gap-2">
                         <Ic size={14} className={cfg.color} />
-                        <span className={`text-xs font-bold ${cfg.color}`}>{s}</span>
+                        <span className={`text-xs font-bold ${cfg.color}`}>{STATUS_LABEL[s]}</span>
                       </div>
                       <div className={`text-xl font-bold tabular-nums mt-1 ${cfg.color}`}>{count}</div>
                     </div>
