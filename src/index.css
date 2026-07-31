@@ -337,6 +337,48 @@
   }
 }
 
+/* ── Autofill do Chrome ──
+   O Chrome pinta campo autopreenchido com um branco (#E8F0FE) via UA
+   stylesheet e ignora `background`, então o input do login e qualquer campo
+   que o navegador reconheça (e-mail, nome, endereço…) apareciam brancos com
+   texto quase ilegível nos dois temas.
+
+   `background-color` não resolve: só o `box-shadow` inset cobre a pintura do
+   UA, e só `-webkit-text-fill-color` vence a cor do texto. A transition de
+   9999s é o truque padrão pra segurar a cor no instante em que o Chrome
+   reaplica o realce ao focar/submeter.
+
+   Fora do @layer de propósito: dentro dele a cascata de camadas deixaria a
+   regra abaixo das utilitárias e o realce voltaria.
+
+   Ligado às variáveis de tema, então acompanha dark/light/premium e também o
+   escopo claro do PDV (.pdv-filial-light), que redefine as mesmas vars. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg-base) inset !important;
+  box-shadow: 0 0 0 1000px var(--color-bg-base) inset !important;
+  caret-color: var(--color-text-primary);
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* O inset acima sobrescreve o box-shadow do .neu-input, inclusive o anel de
+   foco. Repõe o anel para o campo autopreenchido não perder o feedback. */
+.neu-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg-base) inset,
+                      0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg-base) inset,
+              0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+}
+
 /* ── Calendar/date picker indicator ──
    No dark mode (default), o ícone nativo do <input type="date"> renderiza
    preto e fica quase invisível. Usamos mask-image com SVG + background-color
