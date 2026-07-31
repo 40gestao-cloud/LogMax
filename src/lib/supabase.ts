@@ -123,6 +123,10 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   // Mesma pegadinha em: configuracoes, filial_caixa_config, produtos_custo,
   // redes_sociais_links.
   '/api/lojaconfigview':              'loja_config',
+  '/api/vagasview':                   'vagas',
+  '/api/candidaturasview':            'candidaturas',
+  '/api/candidaturaetapasview':       'candidatura_etapas',
+  '/api/movimentacoescarreiraview':   'movimentacoes_carreira',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
@@ -161,4 +165,5 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'metas_estrategicas', 'tarefas_taticas',
   'justificativas_falta',
   'metricas_redes_sociais',
+  'vagas', 'candidaturas', 'movimentacoes_carreira',
 ]);

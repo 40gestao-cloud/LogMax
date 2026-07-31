@@ -103,7 +103,11 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
       // unidade, que mora na aba de lançamento manual — por isso a view abre
       // direto nela quando não há filial ativa.
       { id: 'rh', label: 'RH', icon: Users, color: 'text-blue-400',
-        submenus: ['Registro de Ponto', 'Gerenciamento', 'Relatórios'] },
+        // 'Recrutamento e Seleção' abre a mesma view da filial (migrs. 311/312):
+        // sem filial ativa ela mostra a fila de aprovação de headcount das 3
+        // unidades e deixa abrir/conduzir o processo interno inter-filiais,
+        // que é movimentação entre unidades — só a Matriz pode.
+        submenus: ['Registro de Ponto', 'Recrutamento e Seleção', 'Gerenciamento', 'Relatórios'] },
     ],
   },
   {
