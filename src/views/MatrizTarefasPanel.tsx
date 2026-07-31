@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react';
 import {
   GraduationCap, Cpu, Presentation, Handshake, Plus, X, Trash2, Loader2,
-  Star, MessageSquare, ChevronRight, ArrowLeft, Check, Users,
+  Star, MessageSquare, ChevronRight, ChevronDown, ArrowLeft, Check, Users,
   UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock, Sparkles,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -478,6 +478,9 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
     return m;
   }, [participantes]);
   const encerrada = tarefa.status === 'encerrada';
+  // Descrição fica em 2 linhas até o conselheiro clicar. Pauta longa empurrava
+  // a grade de participantes pra fora da tela quando havia várias tarefas.
+  const [expandido, setExpandido] = useState(false);
 
   return (
     <div className={`neu-flat rounded-2xl border p-4 flex flex-col gap-3 ${encerrada ? 'border-gray-500/25 opacity-95' : 'border-accent/10'}`}>
@@ -493,8 +496,27 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
               {encerrada ? <><Lock size={9} /> Encerrada</> : <><Unlock size={9} /> Aberta</>}
             </span>
           </span>
-          <h4 className="text-base font-black text-gray-100">{tarefa.nome}</h4>
-          {tarefa.descricao && <p className="text-xs text-gray-400 leading-snug">{tarefa.descricao}</p>}
+          {tarefa.descricao ? (
+            <button
+              type="button"
+              onClick={() => setExpandido(v => !v)}
+              title={expandido ? 'Recolher descrição' : 'Clique para ler a descrição inteira'}
+              className="group text-left flex flex-col gap-1 min-w-0"
+            >
+              <h4 className="text-base font-black text-gray-100 flex items-center gap-1.5">
+                {tarefa.nome}
+                <ChevronDown
+                  size={13}
+                  className={`shrink-0 text-gray-500 group-hover:text-accent transition-all ${expandido ? 'rotate-180 text-accent' : ''}`}
+                />
+              </h4>
+              <p className={`text-xs text-gray-400 leading-snug whitespace-pre-wrap ${expandido ? '' : 'line-clamp-2'}`}>
+                {tarefa.descricao}
+              </p>
+            </button>
+          ) : (
+            <h4 className="text-base font-black text-gray-100">{tarefa.nome}</h4>
+          )}
         </div>
         {podeGerenciar && (
           <div className="flex items-center gap-1.5 flex-wrap">
