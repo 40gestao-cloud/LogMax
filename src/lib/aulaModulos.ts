@@ -150,6 +150,40 @@ export function aulaViewModuloId(view: string): string | null {
   return view.split('-')[0];
 }
 
+// Módulo da sidebar → setores que ele exige na RLS. ESPELHA
+// `aula_setores_do_modulo()` da migr. 317: se mudar aqui, mudar lá, senão a
+// UI libera um botão que o banco recusa (ou o contrário).
+//
+// Módulos abertos a todo setor (empresa, requisicoes) e views sem setor próprio
+// (dashboard, metas, catálogo, avaliações, feedback-org, usuarios, max-show)
+// não concedem nada — já são acessíveis sem setor específico.
+export const AULA_MODULO_SETORES: Record<string, string[]> = {
+  cadastros:  ['logistica', 'compras'],
+  compras:    ['compras', 'logistica'],
+  estoque:    ['logistica', 'estoque'],
+  financeiro: ['financeiro'],
+  rh:         ['rh'],
+  vendas:     ['vendas'],
+  marketing:  ['marketing'],
+  ti:         ['ti'],
+};
+
+/**
+ * Setores que a aula concede a este usuário agora. Vazio quando a aula está
+ * desligada ou o role não está no alvo — aí `hasSetor` volta ao normal.
+ */
+export function aulaSetoresConcedidos(
+  config: AulaConfig,
+  profile: Pick<UserProfile, 'role'> | null | undefined,
+): string[] {
+  if (!aulaFiltraUsuario(config, profile)) return [];
+  const setores = new Set<string>();
+  for (const mod of config.modulos_ativos) {
+    for (const s of AULA_MODULO_SETORES[mod] ?? []) setores.add(s);
+  }
+  return Array.from(setores);
+}
+
 /** True quando este usuário DEVE ser filtrado pela config atual. */
 export function aulaFiltraUsuario(
   config: AulaConfig,

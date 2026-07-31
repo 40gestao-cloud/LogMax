@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
-import { hasSetor, allSetores, isConselheiro } from './lib/rbac';
+import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useAulaConfig } from './hooks/useAulaConfig';
-import { aulaFiltraUsuario, aulaPermiteView } from './lib/aulaModulos';
+import { aulaFiltraUsuario, aulaPermiteView, aulaSetoresConcedidos } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import {
   SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS,
@@ -284,10 +284,15 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
 
 // Helpers: extrai label e checa RBAC granular do submenu.
 const subLabel = (s: SubmenuItem): string => typeof s === 'string' ? s : s.label;
-const subPermitido = (s: SubmenuItem, profile: any): boolean => {
+// `aulaAberta` = Modo Aula filtrando este usuário. Nesse caso a whitelist da
+// aula substitui o recorte por setor (migr. 317 concede o setor na RLS junto),
+// senão o aluno de vendas veria o módulo RH da aula pela metade. `requireRole`
+// continua valendo: aula não promove colaborador a aprovador.
+const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false): boolean => {
   if (typeof s === 'string') return true;
   if (s.requireRole && !s.requireRole.includes(profile?.role)) return false;
   if (s.requireSetor) {
+    if (aulaAberta) return true;
     // admin/CEO/gerente sempre passam (gerente vê tudo da própria filial —
     // RLS confina via auth_gerente_da, ver 20260713i_gerente_ve_tudo_da_filial_v2).
     if (profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') return true;
@@ -297,7 +302,7 @@ const subPermitido = (s: SubmenuItem, profile: any): boolean => {
   return true;
 };
 
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -473,7 +478,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                       <div className="flex flex-col pt-2 pb-1">
                         {mod.submenus
                           .filter((sub: any) => {
-                            if (!subPermitido(sub, profile)) return false;
+                            if (!subPermitido(sub, profile, aulaFiltro)) return false;
                             const label = subLabel(sub);
                             const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
                             return aulaAllow(viewId);
@@ -706,6 +711,12 @@ function LogMaxAppInner() {
   const badges = useSidebarBadges(profile, filialAtiva);
   const { config: aulaConfig } = useAulaConfig();
 
+  // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
+  // corpo do render (não em efeito) porque as views chamam `hasSetor` durante o
+  // próprio render — um useEffect chegaria um frame atrasado e a primeira
+  // pintura sairia com o gate antigo.
+  setAulaSetoresConcedidos(aulaSetoresConcedidos(aulaConfig, profile));
+
   // Atualiza o guard que navigate/goBack consultam. Assim clique em card da
   // Início, favorito ou botão Voltar que aponte pra view bloqueada é
   // silenciosamente ignorado — não há flash da view tentando montar.
@@ -890,8 +901,15 @@ function LogMaxAppInner() {
   // roles configurados (admin é sempre isento pra não travar quem administra).
   const aulaFiltro = aulaFiltraUsuario(aulaConfig, profile);
   const aulaAllow = (viewId: string) => !aulaFiltro || aulaPermiteView(aulaConfig, profile, viewId);
+  // A whitelist da aula SUBSTITUI o recorte por setor — não intersecta com ele.
+  // Enquanto era interseção (`visibleModulesBase.filter(...)`), uma aula de
+  // Cadastros/Compras/Estoque deixava todo aluno que não fosse de logística com
+  // conjunto vazio: só Início na sidebar, que foi o bug relatado em 2026-07-31.
+  // A migr. 317 concede os setores correspondentes na RLS, então o que aparece
+  // aqui também abre de verdade. Matriz segue fora (lá o menu são os 3 hubs) e
+  // TI segue escondido em filial, como para todo mundo.
   const visibleModules = aulaFiltro
-    ? visibleModulesBase.filter(m => aulaConfig.modulos_ativos.includes(m.id))
+    ? (matrizMode ? [] : menuModules.filter(m => m.id !== 'ti' && aulaConfig.modulos_ativos.includes(m.id)))
     : visibleModulesBase;
 
   const renderContent = () => {
@@ -1083,7 +1101,7 @@ function LogMaxAppInner() {
                 handleSignOut={handleSignOut} onClose={() => setMobileMenuOpen(false)}
                 visibleModules={visibleModules} profile={profile} badges={badges}
                 matrizMode={matrizMode}
-                aulaAllow={aulaAllow}
+                aulaAllow={aulaAllow} aulaFiltro={aulaFiltro}
               />
             </motion.aside>
           </>
@@ -1098,7 +1116,7 @@ function LogMaxAppInner() {
           handleSignOut={handleSignOut}
           visibleModules={visibleModules} profile={profile} badges={badges}
           matrizMode={matrizMode}
-          aulaAllow={aulaAllow}
+          aulaAllow={aulaAllow} aulaFiltro={aulaFiltro}
         />
       </aside>
 

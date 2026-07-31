@@ -17,6 +17,22 @@ export function isConselheiro(
   return profile.role === 'conselheiro' || (profile.role === 'gerente' && profile.is_conselheiro === true);
 }
 
+// --- Modo Aula: setores concedidos temporariamente ---
+// Enquanto a aula está ativa, o aluno opera os módulos da whitelist mesmo fora
+// do setor dele — e a RLS concede o mesmo (migr. 317, `auth_aula_setores()`).
+// Sem espelhar isso aqui, o módulo abriria mas as ~25 views que fazem
+// `hasSetor(profile, 'X')` para liberar botão/aba continuariam em modo leitura.
+//
+// Registry de módulo em vez de parâmetro porque `hasSetor` é chamado de dezenas
+// de views que não conhecem a config da aula. App.tsx mantém isto em dia a cada
+// render (o realtime de aula_config dispara um), e a lista é [] com aula
+// desligada — fora da aula o comportamento é idêntico ao de antes.
+let aulaSetoresConcedidos: string[] = [];
+
+export function setAulaSetoresConcedidos(setores: string[]): void {
+  aulaSetoresConcedidos = setores;
+}
+
 /**
  * Acesso de leitura/escrita: o usuário pertence (primário ou extra) a `setor`?
  * Admin/CEO/Conselheiro ('all') sempre passam.
@@ -34,7 +50,8 @@ export function hasSetor(
   if (isConselheiro(profile)) return true;
   if (profile.setor === 'all') return true;
   if (profile.setor === setor) return true;
-  return (profile.setores_extras ?? []).includes(setor);
+  if ((profile.setores_extras ?? []).includes(setor)) return true;
+  return aulaSetoresConcedidos.includes(setor);
 }
 
 /** Versão variádica: true se o usuário pertence a *qualquer* um dos setores. */
