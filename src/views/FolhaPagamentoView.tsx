@@ -34,6 +34,21 @@ type RecalcBreakdown = {
   salario_base: number;
   salario_bruto: number;
   salario_liquido: number;
+  /**
+   * Encargos (migr. 319). A folha era `bruto − faltas`, sem INSS, IRRF nem
+   * FGTS — menos realista que a própria rescisão. Opcionais no tipo porque a
+   * RPC antiga não devolvia estes campos: enquanto a migration não roda na
+   * turma, a tela some com as linhas em vez de mostrar NaN.
+   */
+  desconto_faltas?: number;
+  base_inss?: number;
+  desconto_inss?: number;
+  desconto_irrf?: number;
+  /** Depósito do empregador: fora do líquido, base do FGTS real na fase 3. */
+  fgts_deposito?: number;
+  dependentes?: number;
+  competencia?: string;
+  vigencia_tabela?: string;
 };
 
 const statusCls = (s: string) =>
@@ -395,6 +410,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         horas_atraso:    breakdown.horas_atraso,
         horas_falta:     breakdown.horas_falta,
         horas_extras:    breakdown.horas_extras,
+        desconto_faltas: breakdown.desconto_faltas,
+        base_inss:       breakdown.base_inss,
+        desconto_inss:   breakdown.desconto_inss,
+        desconto_irrf:   breakdown.desconto_irrf,
+        fgts_deposito:   breakdown.fgts_deposito,
       } : x));
       const func = funcionarios.find(fn => fn.id === f.funcionario_id);
       setRecalcBreakdown({ folhaNome: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`, data: breakdown });
@@ -641,14 +661,48 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                     Matriz poupou. Sem essa linha, um afastamento aprovado e um
                     negado dariam telas idênticas (migr. 292). */}
                 <Row label="Horas perdoadas (afastamento aprovado)" value={`${(recalcBreakdown.data.horas_perdoadas ?? 0).toFixed(2)} h`} colorClass="text-emerald-400" />
-                <Row label="Descontos totais" value={`- R$ ${recalcBreakdown.data.descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
                 <div className="border-t border-white/5 my-3" />
                 <Row label="Horas extras" value={`${recalcBreakdown.data.horas_extras.toFixed(2)} h`} muted />
                 <Row label="Bônus hora extra (×1,5)" value={`+ R$ ${recalcBreakdown.data.bonus_extra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-blue-400" />
                 <div className="border-t border-white/5 my-3" />
                 <Row label="Salário base" value={`R$ ${recalcBreakdown.data.salario_base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} muted />
                 <Row label="Bruto efetivo (base + extra)" value={`R$ ${recalcBreakdown.data.salario_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+
+                {/* Encargos (migr. 319). Só aparecem quando a RPC já devolve os
+                    campos — turma sem a migration aplicada segue vendo a tela
+                    antiga, sem linha vazia nem NaN. */}
+                {recalcBreakdown.data.desconto_inss !== undefined && (
+                  <>
+                    <div className="border-t border-white/5 my-3" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">Descontos</p>
+                    <Row label="Faltas e atrasos" value={`- R$ ${(recalcBreakdown.data.desconto_faltas ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                    {/* Base própria: falta reduz a remuneração do mês, e é sobre
+                        a remuneração efetiva que INSS e FGTS incidem. */}
+                    <Row label="Base de INSS (bruto − faltas)" value={`R$ ${(recalcBreakdown.data.base_inss ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} muted />
+                    <Row label="INSS" value={`- R$ ${(recalcBreakdown.data.desconto_inss ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                    <Row
+                      label={`IRRF${(recalcBreakdown.data.dependentes ?? 0) > 0 ? ` (${recalcBreakdown.data.dependentes} dependente${recalcBreakdown.data.dependentes === 1 ? '' : 's'})` : ''}`}
+                      value={`- R$ ${(recalcBreakdown.data.desconto_irrf ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      colorClass="text-red-400"
+                    />
+                  </>
+                )}
+
+                <Row label="Descontos totais" value={`- R$ ${recalcBreakdown.data.descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" bold />
                 <Row label="Líquido final" value={`R$ ${recalcBreakdown.data.salario_liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-green-400" bold />
+
+                {recalcBreakdown.data.fgts_deposito !== undefined && (
+                  <>
+                    <div className="border-t border-white/5 my-3" />
+                    {/* FGTS não entra no líquido: é depósito do empregador, não
+                        desconto do trabalhador — mesmo tratamento da rescisão. */}
+                    <Row label="FGTS depositado (empregador)" value={`R$ ${(recalcBreakdown.data.fgts_deposito ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-blue-400" />
+                    <p className="text-[10px] text-gray-600 leading-relaxed pt-1">
+                      Fora do líquido — quem deposita é a empresa. Tabelas de INSS e IRRF da vigência{' '}
+                      {recalcBreakdown.data.vigencia_tabela ?? '—'}, escolhida pela competência da folha.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="flex justify-end mt-6">

@@ -23,7 +23,7 @@ const MASK_FOR: Record<string, (v: string) => string> = {
 // reaparece aqui como "Outro". Por isso ligar os catálogos não exigiu migração.
 const OUTRO = '__outro__';
 
-const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', status: 'Ativo', foto_url: '', filial });
+const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', dependentes: 0, status: 'Ativo', foto_url: '', filial });
 
 // Remove diacríticos e converte para minúsculas para sort consistente
 const normSort = (s: string) =>
@@ -97,6 +97,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       cpf:      f.cpf      ? formatCPF(f.cpf)        : '',
       telefone: f.telefone ? formatPhone(f.telefone) : '',
       salario:  f.salario  != null ? formatBRL(Number(f.salario)) : '',
+      dependentes: f.dependentes ?? 0,
     });
     // Casa o texto gravado com o catálogo; sem match, cai em "Outro" e o valor
     // histórico segue no input livre em vez de sumir na abertura do form.
@@ -136,11 +137,22 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const cargoEscolhido = cargosAtivos.find((c: any) => c.id === cargoSel);
 
+  // A coluna `dependentes` chega com a migr. 319. Enquanto a turma não aplicou,
+  // esconder o campo é mais seguro que mostrá-lo: mandar coluna inexistente no
+  // payload faz o PostgREST recusar o INSERT inteiro (PGRST204) e o cadastro de
+  // funcionário pararia de funcionar por causa de um campo acessório.
+  const temDependentes = funcionarios.some((f: any) => 'dependentes' in f);
+
   const handleSave = async () => {
     if (!form.nome) { showToast('Nome é obrigatório.', 'error'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, salario: parseBRL(form.salario) };
+      const payload: any = { ...form, salario: parseBRL(form.salario) };
+      if (temDependentes) {
+        payload.dependentes = Math.max(parseInt(String(form.dependentes ?? 0), 10) || 0, 0);
+      } else {
+        delete payload.dependentes;
+      }
       if (editing) {
         const updated = await dbUpdate('/api/funcionariosview', editing.id, payload);
         setData((prev: any[]) => prev.map((f: any) => f.id === editing.id ? { ...f, ...updated } : f));
@@ -354,6 +366,13 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 { label: 'Data de Admissão', k: 'data_admissao', type: 'date' },
                 { label: 'Data de Nascimento', k: 'data_nascimento', type: 'date' },
                 { label: 'Salário (R$)', k: 'salario', type: 'text' },
+                // Dedução do IRRF na folha e na rescisão (migr. 319). Só produz
+                // efeito quando a vigência cadastrada em `rh_parametros` tiver
+                // `deducao_dependente` preenchida — a vigência-piso vem zerada
+                // de propósito, para a migration não mudar número nenhum.
+                ...(temDependentes
+                  ? [{ label: 'Dependentes (IRRF)', k: 'dependentes', type: 'number' }]
+                  : []),
               ].map(({ label, k, type }) => {
                 const mask = MASK_FOR[k];
                 const isNumericMask = !!mask;

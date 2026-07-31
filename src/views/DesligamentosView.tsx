@@ -722,6 +722,14 @@ function Demonstrativo({ r }: { r: any }) {
         FGTS depositado no período: {brl(r.fgts_depositado)} — valor simulado, sacado na Caixa e fora do
         líquido acima. A multa, essa sim, é paga pela empresa e já está somada.
       </p>
+      {/* Vigência vem da migr. 319: as faixas saem de `rh_faixas` pela data do
+          desligamento, não mais escritas no corpo da função. */}
+      {r.vigencia_tabela && (
+        <p className="text-[10px] text-gray-600 leading-relaxed">
+          Tabelas de INSS e IRRF da vigência {r.vigencia_tabela}, escolhida pela data do desligamento
+          {(r.dependentes ?? 0) > 0 ? ` · ${r.dependentes} dependente(s) deduzido(s) no IRRF` : ''}.
+        </p>
+      )}
     </div>
   );
 }
