@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, FileText } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -51,6 +51,17 @@ type RecalcBreakdown = {
   vigencia_tabela?: string;
 };
 
+/** Linha do holerite (migr. 320). `informativa` não entra em nenhum total. */
+type Rubrica = {
+  id: string;
+  codigo: string;
+  descricao: string;
+  tipo: 'provento' | 'desconto' | 'informativa';
+  referencia: string | null;
+  valor: number;
+  ordem: number;
+};
+
 const statusCls = (s: string) =>
   s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
 
@@ -90,6 +101,10 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [recalcBreakdown, setRecalcBreakdown] = useState<{ folhaNome: string; data: RecalcBreakdown } | null>(null);
+  // Holerite montado a partir de `folha_rubricas` (migr. 320). As rubricas são
+  // a fonte: os totais de `folha_pagamento` são derivados delas no recálculo.
+  const [holeriteLoading, setHoleriteLoading] = useState<string | null>(null);
+  const [holerite, setHolerite] = useState<{ titulo: string; folha: any; rubricas: Rubrica[] } | null>(null);
   const [recalcLoading, setRecalcLoading] = useState<string | null>(null);
   const [recreditandoId, setRecreditandoId] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -427,6 +442,37 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     }
   };
 
+  const abrirHolerite = async (f: any) => {
+    if (!supabase) return;
+    setHoleriteLoading(f.id);
+    try {
+      const { data, error } = await supabase
+        .from('folha_rubricas')
+        .select('id,codigo,descricao,tipo,referencia,valor,ordem')
+        .eq('folha_id', f.id)
+        .order('ordem', { ascending: true });
+      if (error) throw error;
+      const func = funcionarios.find(fn => fn.id === f.funcionario_id);
+      setHolerite({
+        titulo: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`,
+        folha: f,
+        rubricas: (data ?? []) as Rubrica[],
+      });
+    } catch (err: any) {
+      // Turma sem a migr. 320 não tem a tabela: avisa em vez de abrir vazio.
+      const msg = err?.message ?? String(err);
+      console.error('[FolhaPagamento] erro ao abrir holerite:', err);
+      showToast(
+        /folha_rubricas/i.test(msg)
+          ? 'Holerite indisponível: a migração 320 ainda não foi aplicada nesta turma.'
+          : `Erro ao abrir holerite: ${msg}`,
+        'error',
+      );
+    } finally {
+      setHoleriteLoading(null);
+    }
+  };
+
   const handleStatusCycle = async (f: any) => {
     const next = statusNext(f.status);
     if (!next) return; // 'Paga' é estado terminal — sem reversão
@@ -588,6 +634,14 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          <button
+                            onClick={() => abrirHolerite(f)}
+                            disabled={holeriteLoading === f.id}
+                            title="Ver holerite (rubricas)"
+                            className="action-btn-edit disabled:opacity-50"
+                          >
+                            <FileText size={12} />
+                          </button>
                           {f.status === 'Pendente' && (
                             <button
                               onClick={() => handleRecalcular(f)}
@@ -707,6 +761,88 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
 
               <div className="flex justify-end mt-6">
                 <NeuButtonAccent variant="" onClick={() => setRecalcBreakdown(null)}>Fechar</NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Holerite ─────────────────────────────────────────────────────
+          Documento em vez de três números. As rubricas vêm da tabela, não de
+          um cálculo paralelo do frontend — se o holerite não fechar com o
+          líquido, o erro está no recálculo e aparece aqui. */}
+      <AnimatePresence>
+        {holerite && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setHolerite(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-lg w-full my-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-accent">Holerite</h3>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{holerite.titulo}</p>
+                </div>
+                <button onClick={() => setHolerite(null)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              </div>
+
+              {holerite.rubricas.length === 0 ? (
+                <EmptyState message="Sem rubricas. Recalcule a folha do ponto para gerá-las." />
+              ) : (
+                <>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 text-[9px] text-gray-500 uppercase tracking-widest">
+                        <th className="pb-2 font-bold pr-2">Cód.</th>
+                        <th className="pb-2 font-bold pr-2">Descrição</th>
+                        <th className="pb-2 font-bold pr-2 text-right">Ref.</th>
+                        <th className="pb-2 font-bold text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holerite.rubricas.map(r => (
+                        <tr key={r.id} className="border-b border-white/5">
+                          <td className="py-1.5 pr-2 text-[10px] font-mono text-gray-600">{r.codigo}</td>
+                          <td className="py-1.5 pr-2 text-xs text-gray-300">
+                            {r.descricao}
+                            {r.tipo === 'informativa' && (
+                              <span className="ml-1.5 text-[9px] uppercase tracking-widest text-gray-600">informativa</span>
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-2 text-[10px] font-mono text-gray-500 text-right">{r.referencia ?? '—'}</td>
+                          <td className={`py-1.5 text-xs font-mono tabular-nums text-right ${
+                            r.tipo === 'provento' ? 'text-gray-200'
+                              : r.tipo === 'desconto' ? 'text-red-400'
+                              : 'text-blue-400'
+                          }`}>
+                            {r.tipo === 'desconto' ? '- ' : ''}
+                            R$ {Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="space-y-2 text-xs mt-4 pt-3 border-t border-white/10">
+                    <Row label="Total de proventos" value={`R$ ${holerite.rubricas.filter(r => r.tipo === 'provento').reduce((s, r) => s + Number(r.valor), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                    <Row label="Total de descontos" value={`- R$ ${holerite.rubricas.filter(r => r.tipo === 'desconto').reduce((s, r) => s + Number(r.valor), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                    <Row label="Líquido" value={`R$ ${Number(holerite.folha.salario_liquido ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-green-400" bold />
+                  </div>
+
+                  <p className="text-[10px] text-gray-600 leading-relaxed pt-3">
+                    Rubricas marcadas como informativas ficam fora dos dois totais — o FGTS é depósito da
+                    empresa, não desconto do trabalhador. Benefícios são pagos à parte e não entram aqui.
+                  </p>
+                </>
+              )}
+
+              <div className="flex justify-end mt-5">
+                <NeuButtonAccent variant="" onClick={() => setHolerite(null)}>Fechar</NeuButtonAccent>
               </div>
             </motion.div>
           </motion.div>
