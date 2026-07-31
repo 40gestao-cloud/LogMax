@@ -46,6 +46,37 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
     try {
       const updated = await dbUpdate('/api/pedidosview', pedido.id, { status: flow.next });
       setData((prev: any[]) => prev.map(p => p.id === pedido.id ? (updated ?? { ...p, status: flow.next }) : p));
+
+      // "Em Entrega" é o único aviso que o Estoque tem de que a carga está a
+      // caminho. Sem isto ninguém no almoxarifado sabia que havia recebimento
+      // pra registrar — o pedido simplesmente mudava de cor numa tela de
+      // Compras que o setor de Estoque nem abre.
+      //
+      // Setor 'logistica' porque é dele que o módulo Estoque pende
+      // (SETOR_MODULES.logistica) — não existe setor 'estoque'.
+      if (flow.next === 'Em Entrega' && supabase) {
+        const item = pedido.item_descricao ?? pedido.req?.item ?? '';
+        const forn = fornecedores.find((f: any) => f.id === pedido.fornecedor_id)?.nome;
+        const { error: notifErr } = await supabase.rpc('notificar_setor', {
+          p_setor:     'logistica',
+          p_tipo:      'info',
+          p_titulo:    `Carga a caminho — Pedido #${String(pedido.id).slice(-6).toUpperCase()}`,
+          p_mensagem:  [
+            item ? `Item: ${item}.` : null,
+            pedido.item_qtd ? `Qtd: ${pedido.item_qtd}.` : null,
+            forn ? `Fornecedor: ${forn}.` : null,
+            'Registre a chegada em Estoque > Recebimentos.',
+          ].filter(Boolean).join(' '),
+          p_link_view: 'estoque-recebimentos',
+          p_urgencia:  'Média',
+          p_ref_id:    pedido.id,
+          p_filial:    filial,
+        });
+        // Best-effort: o pedido já avançou, e falha de notificação não pode
+        // desfazer isso nem travar a tela.
+        if (notifErr) console.warn('[Pedidos] notificar_setor(logistica):', notifErr.message);
+      }
+
       showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
     } catch (err: any) {
       showToast(`Erro ao atualizar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
