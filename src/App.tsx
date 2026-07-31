@@ -30,6 +30,7 @@ import {
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
+import { ConviteVagaFAB } from './components/ConviteVagaFAB';
 import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
@@ -1197,6 +1198,10 @@ function LogMaxAppInner() {
           então não há botão de "já vi" — dar ciência sem atender deixaria o
           comprador esperando. Oculto no Modo Aula pela mesma razão dos outros. */}
       {!aulaFiltro && <PedidoOnlineFAB profile={profile} onNavigate={navigate} />}
+
+      {/* Convocação para vaga interna: nominal, então só aparece para quem o RH
+          chamou. Mesmo motivo dos outros para sumir no Modo Aula. */}
+      {!aulaFiltro && <ConviteVagaFAB profile={profile} showToast={showToast} />}
     </div>
     </AuditoriaProvider>
     </AIAssistantProvider>

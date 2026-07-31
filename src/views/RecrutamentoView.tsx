@@ -4,12 +4,12 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Briefcase, Plus, X, Users, CheckCircle, XCircle, ChevronDown, ChevronRight,
-  UserPlus, ArrowRight, Loader2, Ban, AlertTriangle, KeyRound,
+  UserPlus, ArrowRight, Loader2, Ban, AlertTriangle, KeyRound, Send, Paperclip,
 } from 'lucide-react';
 import { freshToken } from '../lib/authFetch';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { todayBR } from '../lib/dates';
@@ -43,6 +43,13 @@ const VAGA_STATUS_CLS: Record<string, string> = {
   'Cancelada':         'bg-gray-500/10 text-gray-500 border-gray-500/20',
 };
 
+const CONVITE_CLS: Record<string, string> = {
+  'Pendente':  'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
+  'Aceito':    'bg-green-500/10 text-green-400 border-green-500/20',
+  'Recusado':  'bg-red-500/10 text-red-500 border-red-500/20',
+  'Cancelado': 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+};
+
 const ETAPA_CLS: Record<string, string> = {
   'Triagem':    'bg-gray-500/10 text-gray-400',
   'Entrevista': 'bg-blue-500/10 text-blue-400',
@@ -61,6 +68,20 @@ const Badge = ({ label, cls }: { label: string; cls?: string }) => (
 
 const brl = (n: any) =>
   `R$ ${Number(n ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Vazio de seção — uma linha, não o `EmptyState` de p-10.
+ *
+ * Esta tela tem três listas que passam a maior parte do tempo vazias (fila de
+ * decisão, decididas, vagas). Três caixas tracejadas gigantes empurravam o que
+ * importa para fora da dobra; aqui o vazio ocupa o tamanho da informação que
+ * ele carrega.
+ */
+const Vazio = ({ message }: { message: string }) => (
+  <p className="text-xs text-gray-600 px-1 py-3">{message}</p>
+);
+
+type Aba = 'vagas' | 'pendentes' | 'decididas';
 
 // ════════════════════════════════════════════════════════════════════════════
 // PENDÊNCIA DE ACESSO — usada na filial E na Matriz
@@ -179,6 +200,9 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   // unidade vê a própria, admin/CEO veem todas). É isso que faz o mesmo hook
   // servir a vaga de escopo Filial e a Interfilial sem um segundo fetch.
   const { data: funcionarios, reload: reloadFunc } = useFetchData<any>('/api/funcionariosview');
+  // Convocações (migr. 314). Sem extraFilter pelo mesmo motivo das etapas: a
+  // RLS já confina, e em Matriz o escopo é a rede toda.
+  const { data: convites, reload: reloadConvites } = useFetchData<any>('/api/vagaconvitesview');
   // Incrementado após cada promoção para o bloco de pendências se recarregar.
   const [movNonce, setMovNonce] = useState(0);
 
@@ -217,6 +241,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const [deptoSel, setDeptoSel] = useState('');
   const [salvandoVaga, setSalvandoVaga] = useState(false);
 
+  const [aba, setAba] = useState<Aba>('vagas');
   const [expandido, setExpandido] = useState<string | null>(null);
   const [candForm, setCandForm] = useState<Record<string, any>>({});
   const [acaoId, setAcaoId] = useState<string | null>(null);
@@ -224,6 +249,9 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const [salarioContratacao, setSalarioContratacao] = useState('');
   const [dataAdmissao, setDataAdmissao] = useState(todayBR());
   const [historicoDe, setHistoricoDe] = useState<string | null>(null);
+  const [convocarDe, setConvocarDe] = useState<any | null>(null);
+  const [convocarSel, setConvocarSel] = useState<Set<string>>(new Set());
+  const [convocarPrazo, setConvocarPrazo] = useState('');
   const [criarAcessoDe, setCriarAcessoDe] = useState<any | null>(null);
   const [acessoForm, setAcessoForm] = useState({ nome: '', email: '', password: '', role: 'colaborador', setor: 'vendas' });
 
@@ -353,6 +381,77 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
     setAcaoId(null);
   };
 
+  const convitesDe = (vagaId: string) =>
+    (convites ?? []).filter((c: any) => c.vaga_id === vagaId);
+
+  /**
+   * Convoca os selecionados.
+   *
+   * O prazo é uma data, gravada como fim do dia no fuso do Acre (UTC-5, sem
+   * DST — [[project_timezone_acre]]). Mandar a data crua faria o convite
+   * vencer à meia-noite UTC, que aqui é 19h do dia anterior.
+   */
+  const handleConvocar = async () => {
+    if (!supabase || !convocarDe) return;
+    if (convocarSel.size === 0) { showToast('Selecione quem convocar.', 'error'); return; }
+    if (!convocarPrazo)         { showToast('Defina o prazo para responder.', 'error'); return; }
+    setAcaoId(convocarDe.id);
+    try {
+      const { data, error } = await supabase.rpc('convocar_para_vaga', {
+        p_vaga_id: convocarDe.id,
+        p_funcionario_ids: Array.from(convocarSel),
+        p_prazo: `${convocarPrazo}T23:59:59-05:00`,
+      });
+      if (error) throw error;
+
+      const res = data as any;
+      const recusados = (res?.recusados ?? []) as any[];
+      showToast(
+        `${res?.convocados ?? 0} convocado(s).` +
+        (recusados.length
+          ? ` Fora: ${recusados.map(r => `${r.nome ?? 'funcionário'} (${r.motivo})`).join(' · ')}`
+          : ''),
+        recusados.length ? 'info' : 'success',
+        recusados.length > 0,
+      );
+      setConvocarDe(null);
+      setConvocarSel(new Set());
+      await reloadConvites();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao convocar.', 'error', true);
+    }
+    setAcaoId(null);
+  };
+
+  const handleCancelarConvite = async (c: any) => {
+    if (!supabase) return;
+    if (!await confirm(`Cancelar a convocação de ${c.nome_snapshot}?`)) return;
+    setAcaoId(c.id);
+    try {
+      const { error } = await supabase.rpc('cancelar_convite_vaga', { p_convite_id: c.id });
+      if (error) throw error;
+      showToast('Convocação cancelada.', 'success');
+      await reloadConvites();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao cancelar convocação.', 'error', true);
+    }
+    setAcaoId(null);
+  };
+
+  /**
+   * Abre o currículo. O bucket é privado, então a URL é assinada na hora e
+   * vale 60s — guardar link de currículo em lugar nenhum é o ponto.
+   */
+  const abrirCurriculo = async (path: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase.storage.from('curriculos').createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      showToast(error?.message ?? 'Não foi possível abrir o currículo.', 'error', true);
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  };
+
   /**
    * Cria o login do recém-contratado.
    *
@@ -459,12 +558,27 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const vagasAtivas = (vagas ?? []).slice().sort((a: any, b: any) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+  const nPendentes = vagasAtivas.filter((v: any) => v.status === 'Aguardando Matriz').length;
+  const nDecididas = vagasAtivas.length - nPendentes;
+
   const kpis = [
-    { label: 'Aguardando Matriz', value: vagasAtivas.filter((v: any) => v.status === 'Aguardando Matriz').length },
+    { label: 'Aguardando Matriz', value: nPendentes },
     { label: 'Aprovadas',         value: vagasAtivas.filter((v: any) => v.status === 'Aprovada').length },
     { label: 'Candidatos ativos', value: (candidaturas ?? []).filter((c: any) => !['Contratado', 'Promovido', 'Reprovado'].includes(c.etapa)).length },
     { label: 'Preenchidas',       value: vagasAtivas.filter((v: any) => v.status === 'Preenchida').length },
   ];
+
+  // As três listas da Matriz dividem a mesma área em vez de empilhar. A aba
+  // inicial é Vagas (a lista completa, que serve nas duas pontas); a fila de
+  // decisão é o que trava o resto, então o contador dela vai destacado — quem
+  // abre a tela vê que há algo a decidir sem precisar rolar nem trocar de aba.
+  const abas: { k: Aba; label: string; count: number }[] = emMatriz
+    ? [
+        { k: 'vagas',     label: 'Vagas',              count: vagasAtivas.length },
+        { k: 'pendentes', label: 'Aguardando decisão', count: nPendentes },
+        { k: 'decididas', label: 'Decididas',          count: nDecididas },
+      ]
+    : [];
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -479,16 +593,10 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
               : 'Peça headcount, acompanhe a aprovação da Matriz e conduza o funil até contratar.'}
           </p>
         </div>
-        {podeOperar && !showForm && (
+        {podeOperar && (
           <NeuButtonAccent onClick={() => setShowForm(true)}><Plus size={16} />Abrir vaga</NeuButtonAccent>
         )}
       </div>
-
-      {/* Fila de aprovação: só existe em Matriz, e vem antes de tudo porque é
-          o que trava o resto — vaga não aprovada não recebe candidato. */}
-      {emMatriz && (
-        <FilaAprovacaoMatriz showToast={showToast} profile={profile} vagas={vagas} reload={reloadVagas} />
-      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {kpis.map(k => (
@@ -501,10 +609,16 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
 
       <PendenciasAcesso showToast={showToast} podeAjustar={podeInterfilial} nonce={movNonce} />
 
+      {/* Nova vaga é modal, não bloco na tela: o formulário abria no meio da
+          página e o botão que o chama fica no topo, então quem clicava não via
+          nada acontecer sem rolar. */}
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-2xl p-5 border border-white/5 overflow-hidden shrink-0">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+            onClick={closeForm}>
+          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} onClick={e => e.stopPropagation()}
+            className="neu-flat rounded-2xl p-5 sm:p-6 w-full max-w-3xl my-auto border border-white/10">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2"><Briefcase size={16} className="text-accent" />Nova vaga</h3>
               <button onClick={closeForm} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
@@ -616,12 +730,38 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
               <NeuButtonAccent onClick={handleAbrirVaga} isLoading={salvandoVaga}>Enviar para aprovação</NeuButtonAccent>
             </div>
           </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col gap-3">
+      {emMatriz && (
+        <div className="flex flex-wrap gap-2 shrink-0 border-b border-white/5 pb-px">
+          {abas.map(a => (
+            <button key={a.k} onClick={() => setAba(a.k)}
+              className={`px-4 py-2.5 rounded-t-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 border-b-2 transition-colors ${
+                aba === a.k
+                  ? 'text-accent border-accent bg-accent/[0.06]'
+                  : 'text-gray-500 border-transparent hover:text-gray-300'}`}>
+              {a.k === 'pendentes' && <Users size={13} />}
+              {a.label}
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums ${
+                a.k === 'pendentes' && a.count > 0
+                  ? 'bg-yellow-400/15 text-yellow-400'
+                  : 'bg-white/5 text-gray-500'}`}>
+                {a.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {emMatriz && aba !== 'vagas' && (
+        <FilaAprovacaoMatriz secao={aba} showToast={showToast} profile={profile} vagas={vagas} reload={reloadVagas} />
+      )}
+
+      <div className={`flex-1 flex-col gap-3 ${aba === 'vagas' ? 'flex' : 'hidden'}`}>
         {vagasAtivas.length === 0 ? (
-          <EmptyState message="Nenhuma vaga registrada ainda." />
+          <Vazio message="Nenhuma vaga registrada ainda. Use “Abrir vaga” para pedir headcount." />
         ) : vagasAtivas.map((v: any) => {
           const cands = candidaturasDe(v.id);
           const aberto = expandido === v.id;
@@ -668,10 +808,64 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                         </div>
                       )}
 
+                      {/* Convocação (migr. 314) — é o que faz o funcionário
+                          ficar sabendo da vaga. Vem antes da inscrição direta
+                          de propósito: inscrever alguém sem convocar é o
+                          atalho, não o caminho. */}
+                      {v.status === 'Aprovada' && podeOperar && v.tipo === 'Interna' && (() => {
+                        const cvs = convitesDe(v.id);
+                        const pend = cvs.filter((c: any) => c.status === 'Pendente');
+                        return (
+                          <div className="neu-pressed rounded-xl p-4 flex flex-col gap-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <p className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                                <Send size={14} className="text-indigo-400" />
+                                Convocação{cvs.length > 0 ? ` — ${pend.length} aguardando resposta` : ''}
+                              </p>
+                              <button onClick={() => {
+                                setConvocarDe(v);
+                                setConvocarSel(new Set());
+                                const d = new Date(Date.now() + 7 * 864e5);
+                                setConvocarPrazo(d.toISOString().slice(0, 10));
+                              }}
+                                className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-indigo-300 border border-indigo-400/30 hover:bg-indigo-400/10 flex items-center gap-1.5">
+                                <Send size={12} /> Convocar funcionários
+                              </button>
+                            </div>
+                            {cvs.length === 0 ? (
+                              <p className="text-[11px] text-gray-600">
+                                Ninguém foi convocado ainda — enquanto isso, esta vaga é invisível para os funcionários.
+                              </p>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                {cvs.map((c: any) => (
+                                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                    <span className="text-gray-300">
+                                      {c.nome_snapshot}
+                                      <span className="text-gray-600"> · prazo {String(c.prazo).slice(8, 10)}/{String(c.prazo).slice(5, 7)}</span>
+                                    </span>
+                                    <span className="flex items-center gap-2">
+                                      <Badge label={c.status} cls={CONVITE_CLS[c.status]} />
+                                      {c.status === 'Pendente' && (
+                                        <button onClick={() => handleCancelarConvite(c)} disabled={acaoId === c.id}
+                                          className="text-gray-600 hover:text-red-400 disabled:opacity-50">
+                                          <Ban size={12} />
+                                        </button>
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {v.status === 'Aprovada' && podeOperar && v.tipo === 'Interna' && (
                         <div className="neu-pressed rounded-xl p-4 flex flex-col gap-3">
                           <p className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
                             <UserPlus size={14} className="text-accent" />Inscrever candidato interno
+                            <span className="font-normal text-gray-600">— sem convocar</span>
                           </p>
                           {(() => {
                             // Escopo Filial: só a unidade da vaga. Interfilial: a rede
@@ -773,6 +967,17 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                                   <a href={c.link_curriculo} target="_blank" rel="noopener noreferrer"
                                     className="text-[11px] text-accent hover:brightness-110">Currículo</a>
                                 )}
+                                {/* Anexo do bucket privado: abre por URL
+                                    assinada, não por href fixo. */}
+                                {c.curriculo_path && (
+                                  <button onClick={() => abrirCurriculo(c.curriculo_path)}
+                                    className="text-[11px] text-accent hover:brightness-110 flex items-center gap-1">
+                                    <Paperclip size={11} /> Currículo (PDF)
+                                  </button>
+                                )}
+                                {c.origem === 'Autocandidatura' && (
+                                  <span className="text-[10px] text-indigo-400/80 block">Candidatou-se por conta própria</span>
+                                )}
                                 {historicoDe === c.id && (
                                   <div className="mt-2 flex flex-col gap-1 border-l border-white/10 pl-3">
                                     {historicoDeCandidatura(c.id).map((h: any) => (
@@ -840,6 +1045,95 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
           );
         })}
       </div>
+
+      {/* Convocação em lote. A RPC devolve quem entrou e quem ficou de fora
+          com o motivo, em vez de abortar tudo no primeiro inelegível. */}
+      <AnimatePresence>
+        {convocarDe && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setConvocarDe(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-2xl p-6 w-full max-w-lg max-h-[85vh] flex flex-col border border-white/10">
+              <h3 className="text-lg font-bold text-gray-100 mb-1">Convocar para {convocarDe.cargo}</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Quem for convocado passa a enxergar esta vaga, anexa currículo e decide se concorre.
+                Você é avisado no sino quando alguém responde.
+              </p>
+
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Prazo para responder</label>
+                <input type="date" value={convocarPrazo} min={todayBR()}
+                  onChange={e => setConvocarPrazo(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+
+              <div className="flex-1 overflow-y-auto main-scrollbar flex flex-col gap-1.5 -mx-1 px-1">
+                {(() => {
+                  const jaNoFunil = new Set(
+                    candidaturasDe(convocarDe.id).map((c: any) => c.funcionario_origem_id).filter(Boolean));
+                  const jaConvocados = new Set(
+                    convitesDe(convocarDe.id).filter((c: any) => c.ativo).map((c: any) => c.funcionario_id));
+                  const elegiveis = (funcionarios ?? [])
+                    .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
+                    .filter((f: any) => convocarDe.escopo === 'Interfilial' || f.filial === convocarDe.filial)
+                    .filter((f: any) => !jaNoFunil.has(f.id) && !jaConvocados.has(f.id))
+                    .sort((a: any, b: any) => (a.nome ?? '').localeCompare((b.nome ?? ''), 'pt-BR', { sensitivity: 'base' }));
+
+                  if (elegiveis.length === 0) {
+                    return <p className="text-xs text-gray-600 py-3">Ninguém elegível sobrou para convocar nesta vaga.</p>;
+                  }
+
+                  const atende = (f: any) => {
+                    if (!convocarDe.nota_minima) return true;
+                    const m = desempenho[f.id]?.media;
+                    return m != null && Number(m) >= Number(convocarDe.nota_minima);
+                  };
+
+                  return elegiveis.map((f: any) => {
+                    const d = desempenho[f.id];
+                    const ok = atende(f);
+                    const semAcesso = !f.user_profile_id;
+                    // Sem login não há FAB — a RPC recusa, e a tela diz por quê
+                    // antes de o RH marcar e levar erro.
+                    const bloqueado = !ok || semAcesso;
+                    return (
+                      <label key={f.id}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border text-xs ${
+                          bloqueado ? 'border-white/5 opacity-50' : 'border-white/5 hover:border-accent/30 cursor-pointer'}`}>
+                        <input type="checkbox" disabled={bloqueado}
+                          checked={convocarSel.has(f.id)}
+                          onChange={e => setConvocarSel(prev => {
+                            const n = new Set(prev);
+                            if (e.target.checked) n.add(f.id); else n.delete(f.id);
+                            return n;
+                          })}
+                          className="accent-[var(--color-accent)] w-4 h-4 shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="text-gray-200 font-semibold">{f.nome}</span>
+                          <span className="text-gray-500"> — {f.cargo || 'sem cargo'}</span>
+                          {convocarDe.escopo === 'Interfilial' && <span className="text-gray-600"> ({f.filial})</span>}
+                        </span>
+                        <span className="text-[10px] text-gray-500 shrink-0 text-right">
+                          {d?.media != null ? `★ ${Number(d.media).toFixed(1)}` : 'sem avaliação'}
+                          {semAcesso && <span className="block text-yellow-500/80">sem login</span>}
+                          {!ok && !semAcesso && <span className="block text-red-500/80">não atende</span>}
+                        </span>
+                      </label>
+                    );
+                  });
+                })()}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-5 shrink-0">
+                <button onClick={() => setConvocarDe(null)} className="text-sm text-gray-400 hover:text-gray-300 px-4">Cancelar</button>
+                <NeuButtonAccent onClick={handleConvocar} isLoading={acaoId === convocarDe.id} disabled={convocarSel.size === 0}>
+                  Convocar {convocarSel.size > 0 ? `(${convocarSel.size})` : ''}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {criarAcessoDe && (
@@ -1011,7 +1305,8 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
 // já carregou, e um segundo fetch faria as duas divergirem entre reloads.
 // ════════════════════════════════════════════════════════════════════════════
 
-const FilaAprovacaoMatriz = ({ showToast, profile, vagas, reload }: {
+const FilaAprovacaoMatriz = ({ secao, showToast, profile, vagas, reload }: {
+  secao: 'pendentes' | 'decididas';
   showToast: any; profile: UserProfile; vagas: any[]; reload: () => Promise<any> | void;
 }) => {
   const confirm = useConfirm();
@@ -1061,12 +1356,12 @@ const FilaAprovacaoMatriz = ({ showToast, profile, vagas, reload }: {
 
   return (
     <div className="flex flex-col gap-6 shrink-0">
-      <div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Users size={14} /> Aguardando decisão ({pendentes.length})
-        </p>
+      {/* O título de cada seção é a própria aba — repeti-lo aqui era a metade
+          do peso visual que fazia a tela parecer três telas empilhadas. */}
+      {secao === 'pendentes' && (
+        <div>
         {pendentes.length === 0 ? (
-          <EmptyState message="Nenhuma vaga aguardando aprovação." />
+          <Vazio message="Nenhuma vaga aguardando aprovação." />
         ) : (
           <div className="flex flex-col gap-2">
             {pendentes.map((v: any) => (
@@ -1101,12 +1396,13 @@ const FilaAprovacaoMatriz = ({ showToast, profile, vagas, reload }: {
             ))}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
-      <div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Decididas recentemente</p>
+      {secao === 'decididas' && (
+        <div>
         {decididas.length === 0 ? (
-          <EmptyState message="Nenhuma decisão registrada ainda." />
+          <Vazio message="Nenhuma decisão registrada ainda." />
         ) : (
           <div className="flex flex-col gap-2">
             {decididas.map((v: any) => (
@@ -1120,7 +1416,8 @@ const FilaAprovacaoMatriz = ({ showToast, profile, vagas, reload }: {
             ))}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {negarDe && (

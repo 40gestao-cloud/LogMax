@@ -127,6 +127,10 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/candidaturasview':            'candidaturas',
   '/api/candidaturaetapasview':       'candidatura_etapas',
   '/api/movimentacoescarreiraview':   'movimentacoes_carreira',
+  // Fora de TABLES_WITH_ATIVO de propósito: responder marca `ativo = false`
+  // para liberar o índice único e permitir reconvocação, mas o RH precisa
+  // continuar vendo quem aceitou e quem recusou.
+  '/api/vagaconvitesview':            'vaga_convites',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
