@@ -754,8 +754,9 @@ NOTIFY pgrst, 'reload schema';
 -- Verificação
 --
 --   -- Seed reproduz as faixas antigas (esperado: iguais aos da 306):
---   SELECT rh_calc_inss(3000, '2024-06-01') AS inss,   -- 254.35
---          rh_calc_irrf(3000, '2024-06-01', 0) AS irrf;
+--   -- Conferido nas 4 turmas em 31/07/2026: inss = 253.41
+--   SELECT rh_calc_inss(3000, CURRENT_DATE) AS inss,
+--          rh_calc_irrf(3000 - rh_calc_inss(3000, CURRENT_DATE), CURRENT_DATE, 0) AS irrf;
 --
 --   -- Vigência escolhida pela competência:
 --   SELECT rh_vigencia_em('2024-03-01'), rh_vigencia_em(CURRENT_DATE);
