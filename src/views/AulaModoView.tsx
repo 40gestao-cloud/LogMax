@@ -170,6 +170,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
         <p className="text-[11px] text-gray-500">
           Admin nunca é filtrado (pra não travar você mesmo). Escolha quais roles seguem a whitelist.
+          «Conselheiro» vale para a role pura; quem é gerente com o selo de conselheiro entra por «Gerente».
         </p>
         <div className="flex flex-wrap gap-2">
           {AULA_ROLES_ALVO.map(r => {
@@ -179,6 +180,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                 key={r.id}
                 type="button"
                 onClick={() => toggleRole(r.id)}
+                title={r.hint}
                 className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all
                   ${active
                     ? 'bg-accent/15 text-accent border-accent/30'

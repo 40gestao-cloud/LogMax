@@ -42,10 +42,15 @@ export const AULA_PRESETS: { nome: string; modulos: string[] }[] = [
   { nome: 'Só Início',    modulos: [] },
 ];
 
-export const AULA_ROLES_ALVO: { id: string; label: string }[] = [
+// `id` é comparado direto com `user_profiles.role` — tanto aqui no front
+// (`aulaFiltraUsuario`) quanto na RLS da migr. 317. Por isso 'conselheiro'
+// alcança só quem tem a role pura: o gerente com `is_conselheiro = true`
+// segue caindo pela linha 'gerente', que é a role dele no banco.
+export const AULA_ROLES_ALVO: { id: string; label: string; hint?: string }[] = [
   { id: 'colaborador', label: 'Colaborador' },
   { id: 'gerente',     label: 'Gerente' },
   { id: 'ceo',         label: 'CEO' },
+  { id: 'conselheiro', label: 'Conselheiro', hint: 'Só a role pura — gerente-conselheiro entra por "Gerente".' },
 ];
 
 // Espelha exatamente os labels de `menuModules[*].submenus` em App.tsx.
