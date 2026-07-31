@@ -497,6 +497,17 @@ function FilialCapitalCard({
               <span>Gasto: {BRL(saldo.despesas_pagas)} ({pctGasto.toFixed(0)}%)</span>
               {saldo.reserva_pct > 0 && <span>Reserva: {BRL(saldo.reserva_valor)}</span>}
             </div>
+            {/* A receita aparece aqui só para leitura: quem vende bem e mesmo
+                assim vê o saldo cair achava que a DRE discordava do card. Ela
+                NÃO entra no saldo livre — capital é aporte menos despesa. */}
+            <div className="flex justify-between text-[10px] mt-1 pt-1 border-t border-white/5">
+              <span className="text-gray-500">
+                Receita no período: <span className="text-green-400 font-bold tabular-nums">{BRL(saldo.receitas_pagas)}</span>
+              </span>
+              <span className="text-gray-600" title="O capital é aporte − despesas. A receita entra no caixa da filial e aparece na DRE, mas não aumenta o capital.">
+                não entra no saldo livre
+              </span>
+            </div>
             {bloqueado && (
               <p className="text-[11px] text-red-400 mt-2 flex items-center gap-1">
                 <AlertTriangle size={10} /> Capital estourado — novos lançamentos bloqueados.
@@ -560,13 +571,21 @@ function FilialCapitalCard({
 }
 
 // ── Tab: DRE ──────────────────────────────────────────────────────────────
-function TabDRE({ saldos }: { saldos: Record<Filial, SaldoFilial | null> }) {
+function TabDRE({ saldos, semConfig }: { saldos: Record<Filial, SaldoFilial | null>; semConfig: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="neu-flat rounded-2xl p-4 border border-accent/10 flex items-start gap-2 text-xs text-gray-400">
         <Info size={13} className="shrink-0 text-accent mt-0.5" />
-        DRE calculado dentro do período configurado. Receita = contas recebidas + PDV.
-        Despesa = contas pagas. Resultado = Receita − Despesa.
+        {semConfig
+          ? <span>
+              <b className="text-yellow-400">Sem período configurado</b> — a DRE está somando TODO o histórico,
+              não só o período em Config. Receita = contas a receber quitadas (as vendas do PDV entram pela conta
+              que elas geram). Despesa = contas pagas. Resultado = Receita − Despesa.
+            </span>
+          : <span>
+              DRE calculado dentro do período configurado. Receita = contas a receber quitadas (as vendas do PDV
+              entram pela conta que elas geram). Despesa = contas pagas. Resultado = Receita − Despesa.
+            </span>}
       </div>
       {FILIAIS.map(filial => {
         const s = saldos[filial];
@@ -577,7 +596,12 @@ function TabDRE({ saldos }: { saldos: Record<Filial, SaldoFilial | null> }) {
             <div className={`${cor.bg} px-5 py-3 flex items-center gap-2`}>
               <Landmark size={14} className={cor.accent} />
               <span className={`text-sm font-black uppercase tracking-widest ${cor.accent}`}>{filial}</span>
-              {s?.data_inicio && (
+              {/* Sem config a RPC devolve `data_inicio = CURRENT_DATE` e não
+                  filtra nada — imprimir a data de hoje aqui fazia a tela
+                  prometer um recorte que ela não aplicou. */}
+              {semConfig ? (
+                <span className="ml-auto text-[10px] text-gray-600">todo o histórico</span>
+              ) : s?.data_inicio && (
                 <span className="ml-auto text-[10px] text-gray-500">
                   {fmtDate(s.data_inicio)}{s.data_fim ? ` → ${fmtDate(s.data_fim)}` : ' → hoje'}
                 </span>
@@ -1351,7 +1375,7 @@ export function MatrizCapitalView({
         </div>
       )}
 
-      {tab === 'dre' && <TabDRE saldos={saldos} />}
+      {tab === 'dre' && <TabDRE saldos={saldos} semConfig={!configAtiva} />}
 
       {tab === 'prestacao' && <TabPrestacaoContas notas={notasRecebidas} saldos={saldos} />}
 
