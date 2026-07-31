@@ -29,7 +29,9 @@ const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone:
 const normSort = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+// `filial` é string, não `FilialOp`: além das 3 unidades operacionais a tela
+// também abre o quadro da 'Matriz', que não é uma filial de operação.
+const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp | 'Matriz' }) => {
   const { data: funcionarios, setData, isLoading } = useFetchData<any>('/api/funcionariosview', { filial }, false, { orderBy: 'nome', ascending: true });
   const { data: cargos }        = useFetchData<any>('/api/cargosview', { filial });
   const { data: departamentos } = useFetchData<any>('/api/departamentosview', { filial });
@@ -469,6 +471,9 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 };
 
 export const FuncionariosView = ({ showToast }: any) => {
-  const { filialAtiva: filial } = useFilial();
-  return <FuncionariosViewInner showToast={showToast} filial={filial} />;
+  const { filialAtiva } = useFilial();
+  // Em modo Matriz (`filialAtiva === null`) a tela abre o quadro da própria
+  // holding. Os cargos de CEO e Conselheiro são lotados lá desde sempre — o que
+  // faltava era não esconder essas linhas de quem opera a Matriz (migr. 315).
+  return <FuncionariosViewInner showToast={showToast} filial={filialAtiva ?? 'Matriz'} />;
 };

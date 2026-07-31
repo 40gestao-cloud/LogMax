@@ -113,18 +113,30 @@ const PendenciasAcesso = ({ showToast, podeAjustar, nonce }: {
       if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); setAcaoId(null); return; }
 
       // O acesso vai por /api/users (service_role); a RPC só CONFERE depois.
+      //
+      // Filial e role vão no MESMO request de propósito: a API recusa filial
+      // 'Matriz' para colaborador e gerente, então mandar a unidade primeiro e
+      // o nível depois falharia na primeira metade (migr. 315).
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ action: 'update', userId: m.user_profile_id, filial: m.filial_nova }),
+        body: JSON.stringify({
+          action: 'update',
+          userId: m.user_profile_id,
+          filial: m.filial_nova,
+          ...(m.role_nova ? { role: m.role_nova } : {}),
+        }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Erro ao mover o acesso.');
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao ajustar o acesso.');
 
       const { error } = await supabase.rpc('marcar_acesso_ajustado', { p_movimentacao_id: m.id });
       if (error) throw error;
 
-      showToast(`Acesso de ${m.nome_funcionario} movido para ${m.filial_nova}.`, 'success');
+      showToast(
+        `Acesso de ${m.nome_funcionario} ajustado${m.role_nova ? ` para ${m.role_nova}` : ''} em ${m.filial_nova}.`,
+        'success',
+      );
       await reload();
     } catch (err: any) {
       showToast(err?.message ?? 'Erro ao ajustar acesso.', 'error', true);
@@ -140,14 +152,19 @@ const PendenciasAcesso = ({ showToast, podeAjustar, nonce }: {
       {pendencias.map((m: any) => (
         <div key={m.id} className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] text-gray-400">
-            <span className="text-gray-200 font-semibold">{m.nome_funcionario}</span> passou para {m.filial_nova},
-            mas o login continua em {m.filial_anterior}.
+            <span className="text-gray-200 font-semibold">{m.nome_funcionario}</span>
+            {m.filial_anterior !== m.filial_nova
+              ? ` passou para ${m.filial_nova}, mas o login continua em ${m.filial_anterior}`
+              : ` agora é ${m.cargo_novo}`}
+            {m.role_nova
+              ? `${m.filial_anterior !== m.filial_nova ? ' e' : ', mas'} o nível de acesso ainda é ${m.role_anterior ?? 'nenhum'} (deveria ser ${m.role_nova})`
+              : ''}.
           </p>
           {podeAjustar && (
             <button onClick={() => ajustar(m)} disabled={acaoId === m.id}
               className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-yellow-400 border border-yellow-400/20 hover:bg-yellow-400/10 flex items-center gap-1.5 disabled:opacity-50">
               {acaoId === m.id ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
-              Mover acesso para {m.filial_nova}
+              {m.role_nova ? `Ajustar acesso para ${m.role_nova}` : `Mover acesso para ${m.filial_nova}`}
             </button>
           )}
         </div>
@@ -163,10 +180,26 @@ const PendenciasAcesso = ({ showToast, podeAjustar, nonce }: {
 const EMPTY_VAGA = {
   cargo: '', departamento: '', quantidade: '1', salario_min: '', salario_max: '',
   justificativa: '', tipo: 'Externa', escopo: 'Filial', filialDestino: '', nota_minima: '',
+  role_alvo: '',
 };
+
+// Rótulos do nível de acesso. O par válido de `role_alvo` × unidade é o mesmo
+// CHECK da migr. 315: holding na Matriz, operacional nas unidades.
+const ROLES_MATRIZ = [
+  { v: 'ceo',         label: 'CEO' },
+  { v: 'conselheiro', label: 'Conselheiro' },
+];
+const ROLES_UNIDADE = [
+  { v: 'gerente',     label: 'Gerente da unidade' },
+  { v: 'colaborador', label: 'Colaborador' },
+];
 const EMPTY_CAND = { nome: '', cpf: '', email: '', telefone: '', link_curriculo: '' };
 
 const UNIDADES: FilialOp[] = ['SuperMax', 'MaxLook', 'TechMax'];
+
+// A Matriz também é destino de vaga (migr. 315). Não é `FilialOp` — é a
+// holding —, então entra como string à parte no seletor.
+const DESTINO_MATRIZ = 'Matriz';
 
 /**
  * Uma tela só para os dois contextos.
@@ -256,8 +289,11 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const [acessoForm, setAcessoForm] = useState({ nome: '', email: '', password: '', role: 'colaborador', setor: 'vendas' });
 
   // A unidade da vaga: fixa quando se opera dentro de uma filial, escolhida no
-  // formulário quando é a Matriz abrindo.
-  const filialAlvo: FilialOp | null = emMatriz ? ((form.filialDestino || null) as FilialOp | null) : filial;
+  // formulário quando é a Matriz abrindo. Tipada como string porque 'Matriz'
+  // não é uma `FilialOp` — é a holding, e desde a 315 também recebe vaga.
+  const filialAlvo: string | null = emMatriz ? (form.filialDestino || null) : filial;
+  const destinoMatriz = filialAlvo === DESTINO_MATRIZ;
+  const rolesDisponiveis = destinoMatriz ? ROLES_MATRIZ : ROLES_UNIDADE;
 
   // Em Matriz os catálogos vêm das 3 unidades juntos, e aqui eles NÃO são
   // filtrados pela unidade de destino: `cargos`/`departamentos` têm coluna
@@ -294,6 +330,18 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
     if (!filialAlvo)                { showToast('Escolha a unidade de destino.', 'error'); return; }
     if (!form.cargo.trim())         { showToast('Selecione ou informe o cargo.', 'error'); return; }
     if (!form.justificativa.trim()) { showToast('Justifique o pedido de headcount.', 'error'); return; }
+    // Espelha o CHECK da 315 antes de bater no banco: vaga de holding busca
+    // candidato nas unidades, então escopo Filial não faz sentido nela.
+    if (destinoMatriz && form.tipo !== 'Interna') {
+      showToast('Vaga da Matriz é processo interno — a holding promove de dentro da rede.', 'error');
+      return;
+    }
+    // Sem nível de acesso, o login não consegue seguir o cadastro para a
+    // Matriz e a pendência nasceria impossível de fechar.
+    if (destinoMatriz && !form.role_alvo) {
+      showToast('Escolha o nível de acesso (CEO ou Conselheiro) para uma vaga da Matriz.', 'error');
+      return;
+    }
     setSalvandoVaga(true);
     try {
       // Duas RPCs distintas em vez de uma com parâmetros opcionais: o
@@ -311,8 +359,10 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
       const { error } = form.tipo === 'Interna'
         ? await supabase.rpc('abrir_vaga_interna', {
             ...base,
-            p_escopo:      form.escopo,
+            // Matriz sempre puxa das unidades — a 315 recusa escopo Filial lá.
+            p_escopo:      destinoMatriz ? 'Interfilial' : form.escopo,
             p_nota_minima: form.nota_minima ? Number(form.nota_minima) : null,
+            p_role_alvo:   form.role_alvo || null,
           })
         : await supabase.rpc('abrir_vaga', base);
       if (error) throw error;
@@ -628,21 +678,39 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade de destino</label>
                   <select value={form.filialDestino}
-                    onChange={e => { setForm(p => ({ ...p, filialDestino: e.target.value, cargo: '', departamento: '' })); setCargoSel(''); setDeptoSel(''); }}
+                    onChange={e => {
+                      const dest = e.target.value;
+                      setForm(p => ({
+                        ...p, filialDestino: dest, cargo: '', departamento: '',
+                        // Vaga da Matriz é sempre interna e busca na rede toda.
+                        tipo:  dest === DESTINO_MATRIZ ? 'Interna' : p.tipo,
+                        escopo: dest === DESTINO_MATRIZ ? 'Interfilial' : p.escopo,
+                        // O par role × unidade tem CHECK no banco: trocar o
+                        // destino invalida a role escolhida antes.
+                        role_alvo: '',
+                      }));
+                      setCargoSel(''); setDeptoSel('');
+                    }}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm">
                     <option value="">Selecionar...</option>
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    {/* Vaga de cargo da holding (CEO, Conselheiro). Só admin/CEO
+                        abre — é a mesma régua do escopo Interfilial. */}
+                    {podeInterfilial && <option value={DESTINO_MATRIZ}>Matriz (holding)</option>}
                   </select>
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo</label>
                 <select value={form.tipo}
-                  onChange={e => setForm(p => ({ ...p, tipo: e.target.value, escopo: 'Filial' }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  onChange={e => setForm(p => ({ ...p, tipo: e.target.value, escopo: 'Filial', role_alvo: '' }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={destinoMatriz}>
                   <option value="Externa">Externa — contrata de fora</option>
                   <option value="Interna">Interna — promove quem já está aqui</option>
                 </select>
+                {destinoMatriz && (
+                  <p className="text-[10px] text-gray-600">Cargo da holding é sucessão: promove quem já está na rede.</p>
+                )}
               </div>
               {form.tipo === 'Interna' && (
                 <div className="flex flex-col gap-1.5">
@@ -663,14 +731,40 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
               {form.tipo === 'Interna' && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Escopo</label>
-                  <select value={form.escopo} onChange={e => setForm(p => ({ ...p, escopo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={!podeInterfilial}>
+                  <select value={destinoMatriz ? 'Interfilial' : form.escopo}
+                    onChange={e => setForm(p => ({ ...p, escopo: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={!podeInterfilial || destinoMatriz}>
                     <option value="Filial">Só desta unidade</option>
                     <option value="Interfilial">Toda a rede (inter-filiais)</option>
                   </select>
                   {!podeInterfilial && (
                     <p className="text-[10px] text-gray-600">Buscar candidato em outra unidade é decisão da Matriz.</p>
                   )}
+                  {destinoMatriz && (
+                    <p className="text-[10px] text-gray-600">Vaga da Matriz busca em toda a rede — os candidatos vêm das unidades.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Nível de acesso (RBAC), separado do cargo de RH de propósito.
+                  `user_profiles.role` não muda por promoção — a trava da migr.
+                  258 barra qualquer caminho fora do service_role, e está certa.
+                  Declarar aqui é o que faz a pendência de acesso aparecer
+                  depois, em vez de a pessoa ficar com cargo novo e poder velho. */}
+              {form.tipo === 'Interna' && podeInterfilial && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nível de acesso</label>
+                  <select value={form.role_alvo}
+                    onChange={e => setForm(p => ({ ...p, role_alvo: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                    <option value="">Não altera o acesso</option>
+                    {rolesDisponiveis.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}
+                  </select>
+                  <p className="text-[10px] text-gray-600 leading-relaxed">
+                    {destinoMatriz
+                      ? 'Cargo da holding exige nível de acesso — sem ele o login não pode ir para a Matriz.'
+                      : 'Diferente do cargo. Ao efetivar, o ajuste do login aparece como pendência aqui em cima.'}
+                  </p>
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
@@ -784,6 +878,10 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                   {v.tipo === 'Interna' && (
                     <Badge label={v.escopo === 'Interfilial' ? 'Interna · rede' : 'Interna'}
                       cls="bg-indigo-500/10 text-indigo-400 border-indigo-500/20" />
+                  )}
+                  {v.role_alvo && (
+                    <Badge label={`acesso ${v.role_alvo}`}
+                      cls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20" />
                   )}
                   <Badge label={v.status} cls={VAGA_STATUS_CLS[v.status]} />
                 </div>
@@ -1256,6 +1354,15 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                         Transferência entre unidades: o cadastro de RH muda agora, mas o
                         <strong> login continua em {atual?.filial}</strong> até ser ajustado em Usuários.
                         A pendência aparece aqui em cima assim que você confirmar.
+                      </p>
+                    )}
+
+                    {/* Mesma conversa para o nível de acesso: cargo muda agora,
+                        poder só depois do ajuste — a 258 não deixa ser aqui. */}
+                    {interna && vagaDaCand?.role_alvo && (
+                      <p className="text-[11px] text-yellow-400 mb-4 leading-relaxed">
+                        Esta vaga concede o nível <strong>{vagaDaCand.role_alvo}</strong>. O cargo muda agora;
+                        o acesso vira pendência e só passa a valer depois de ajustado em Usuários.
                       </p>
                     )}
 
