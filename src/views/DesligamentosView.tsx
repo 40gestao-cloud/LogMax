@@ -80,6 +80,13 @@ type Rescisao = {
   desconto_inss: number;
   desconto_irrf: number;
   desconto_aviso: number;
+  /** Fase 3 (migr. 321) — histórico da folha + acertos de fidelidade. */
+  media_variaveis?: number;
+  ferias_periodos_dobro?: number;
+  data_projetada?: string | null;
+  fgts_origem?: 'real' | 'simulado';
+  desconto_inss_13?: number;
+  desconto_irrf_13?: number;
   total_bruto: number;
   total_descontos: number;
   total_liquido: number;
@@ -690,16 +697,34 @@ function Demonstrativo({ r }: { r: any }) {
   return (
     <div className="space-y-2 text-xs">
       <Linha label="Salário base" value={brl(r.salario_base)} muted />
+      {/* Média de variáveis (migr. 321): horas extras dos últimos 12 meses.
+          Sem esta linha, férias e 13º não reconciliariam com o salário base. */}
+      {Number(r.media_variaveis) > 0 && (
+        <>
+          <Linha label="Média de variáveis (12 meses)" value={brl(r.media_variaveis)} colorClass="text-blue-400" />
+          <Linha label="Remuneração (base + média)" value={brl(Number(r.salario_base) + Number(r.media_variaveis))} />
+        </>
+      )}
       {r.meses_trabalhados != null && (
         <Linha label="Tempo de casa" value={`${r.meses_trabalhados} meses`} muted />
       )}
       {r.dias_aviso > 0 && <Linha label="Dias de aviso prévio" value={`${r.dias_aviso} dias`} muted />}
+      {/* Aviso indenizado integra o tempo de serviço: a saída projeta e pode
+          render mais um avo de 13º e de férias (art. 487 §1º). */}
+      {r.data_projetada && r.data_projetada !== r.data_desligamento && (
+        <Linha label="Saída projetada pelo aviso" value={fmtData(r.data_projetada)} colorClass="text-blue-400" />
+      )}
 
       <div className="border-t border-white/5 my-3" />
       <Linha label="Saldo de salário" value={brl(r.saldo_salario)} />
       <Linha label="Aviso prévio" value={brl(r.aviso_previo_valor)} />
       <Linha label="13º proporcional" value={brl(r.decimo_terceiro)} />
-      <Linha label="Férias vencidas" value={brl(r.ferias_vencidas)} />
+      <Linha
+        label={Number(r.ferias_periodos_dobro) > 0
+          ? `Férias vencidas (${r.ferias_periodos_dobro} período(s) em dobro)`
+          : 'Férias vencidas'}
+        value={brl(r.ferias_vencidas)}
+      />
       <Linha label="Férias proporcionais" value={brl(r.ferias_proporcionais)} />
       <Linha label="1/3 constitucional" value={brl(r.terco_ferias)} />
       <Linha label="Multa do FGTS" value={brl(r.multa_fgts)} colorClass="text-blue-400" />
@@ -708,6 +733,15 @@ function Demonstrativo({ r }: { r: any }) {
       <div className="border-t border-white/5 my-3" />
       <Linha label="INSS" value={`- ${brl(r.desconto_inss)}`} colorClass="text-red-400" />
       <Linha label="IRRF" value={`- ${brl(r.desconto_irrf)}`} colorClass="text-red-400" />
+      {/* 13º tem tributação exclusiva na fonte: base própria, INSS e IRRF
+          próprios. Mostrar a parcela dele explica por que o total não bate
+          com uma conta feita sobre saldo + 13º somados. */}
+      {(Number(r.desconto_inss_13) > 0 || Number(r.desconto_irrf_13) > 0) && (
+        <p className="text-[10px] text-gray-600 leading-relaxed">
+          Do total acima, {brl(r.desconto_inss_13)} de INSS e {brl(r.desconto_irrf_13)} de IRRF incidiram
+          sobre o 13º, em base separada do saldo de salário (tributação exclusiva na fonte).
+        </p>
+      )}
       {Number(r.desconto_aviso) > 0 && (
         <Linha label="Aviso não cumprido" value={`- ${brl(r.desconto_aviso)}`} colorClass="text-red-400" />
       )}
@@ -718,9 +752,16 @@ function Demonstrativo({ r }: { r: any }) {
 
       {/* FGTS não entra no líquido: é saque na Caixa, não pagamento da empresa.
           Mostrar sem somar evita a leitura de que o valor está faltando. */}
+      {/* `fgts_origem` = 'real' quando somado das competências da folha
+          (migr. 321); 'simulado' é o fallback da 306, para funcionário sem
+          folha recalculada. Dizer qual foi evita a pergunta "esse número veio
+          de onde?" seis meses depois. */}
       <p className="text-[10px] text-gray-600 leading-relaxed pt-2">
-        FGTS depositado no período: {brl(r.fgts_depositado)} — valor simulado, sacado na Caixa e fora do
-        líquido acima. A multa, essa sim, é paga pela empresa e já está somada.
+        FGTS depositado no período: {brl(r.fgts_depositado)} —{' '}
+        {r.fgts_origem === 'real'
+          ? 'somado das competências da folha'
+          : 'valor simulado (sem folha recalculada para este colaborador)'}
+        , sacado na Caixa e fora do líquido acima. A multa, essa sim, é paga pela empresa e já está somada.
       </p>
       {/* Vigência vem da migr. 319: as faixas saem de `rh_faixas` pela data do
           desligamento, não mais escritas no corpo da função. */}
