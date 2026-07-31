@@ -41,6 +41,8 @@ type RecalcBreakdown = {
    * turma, a tela some com as linhas em vez de mostrar NaN.
    */
   desconto_faltas?: number;
+  /** Lançamento manual preservado pelo recálculo (migr. 322). */
+  desconto_manual?: number;
   base_inss?: number;
   desconto_inss?: number;
   desconto_irrf?: number;
@@ -192,6 +194,31 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     setForm((p: any) => ({ ...p, valor_beneficios: formatBRL(Number(data ?? 0)) }));
   };
 
+  // A coluna chega com a migr. 322. Enquanto a turma não aplicou, mandá-la no
+  // payload faz o PostgREST recusar o INSERT inteiro (PGRST204) e o registro
+  // de folha pararia de funcionar — o mesmo cuidado do campo Dependentes.
+  //
+  // Lista vazia (turma nova) assume que a coluna EXISTE: `some` devolveria
+  // false e a primeira folha nasceria sem `desconto_manual`, ressuscitando o
+  // bug que a 322 fecha. Se a migração não estiver lá, o save cai no PGRST204
+  // e repete sem o campo — ver `salvarFolha`.
+  const temDescontoManual = folhas.length === 0 || folhas.some((f: any) => 'desconto_manual' in f);
+
+  // Folha que já passou pelo recálculo tem totais DERIVADOS das rubricas
+  // (migr. 320). Reescrevê-los a partir do formulário apagaria INSS, IRRF e
+  // faltas e deixaria o holerite divergindo do líquido.
+  const foiRecalculada = (f: any) =>
+    Number(f?.base_inss ?? 0) > 0
+    || Number(f?.desconto_faltas ?? 0) > 0
+    || Number(f?.desconto_inss ?? 0) > 0
+    || Number(f?.desconto_irrf ?? 0) > 0
+    || Number(f?.fgts_deposito ?? 0) > 0;
+
+  const colunaManualAusente = (err: any) => {
+    const msg = String(err?.message ?? err ?? '');
+    return /desconto_manual/i.test(msg) && /(schema cache|column|coluna|PGRST204)/i.test(msg);
+  };
+
   const handleFuncionarioChange = (funcionarioId: string) => {
     setForm((p: any) => ({ ...p, funcionario_id: funcionarioId }));
     // Só propõe na criação. Em edição o valor já foi decidido para aquele mês.
@@ -209,21 +236,63 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     const benef = parseBRL(form.valor_beneficios);
     // salario_bruto inicial = base; recalc do ponto pode aumentar via hora extra.
     // valor_beneficios é separado — não entra em descontos nem no líquido.
-    const payload = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc, filial };
+    const legado = { ...form, salario_base: base, salario_bruto: base, descontos: desc, valor_beneficios: benef, salario_liquido: base - desc, filial };
+    const original = editId ? folhas.find((x: any) => x.id === editId) : null;
+    // Só vale proteger os totais derivados quando o desconto manual tem coluna
+    // própria: sem a 322 o campo do formulário AINDA é o total, e omitir os
+    // agregados tiraria do usuário a única forma de editá-lo.
+    const preservarTotais = !!original && temDescontoManual && foiRecalculada(original);
+
+    const payload: any = { ...legado };
+    // `desconto_manual` (migr. 322) guarda o lançamento à mão em coluna
+    // própria. Sem ele, o recálculo — que deriva `descontos` das rubricas
+    // desde a 320 — apagava este valor sem avisar.
+    if (temDescontoManual) payload.desconto_manual = desc;
+    else delete payload.desconto_manual;
+    if (preservarTotais) {
+      // Quem manda nos três agregados é o recálculo, disparado logo abaixo.
+      delete payload.salario_bruto;
+      delete payload.descontos;
+      delete payload.salario_liquido;
+    }
+
+    const persistir = async (p: any) => editId
+      ? await dbUpdate('/api/folhapagamentoview', editId, p)
+      : await dbInsert('/api/folhapagamentoview', p);
+
     setSaving(true);
     try {
+      let saved: any;
+      try {
+        saved = await persistir(payload);
+      } catch (err: any) {
+        // Turma sem a 322: repete no formato antigo em vez de bloquear o
+        // cadastro de folha inteiro.
+        if (payload.desconto_manual === undefined || !colunaManualAusente(err)) throw err;
+        console.warn('[FolhaPagamento] sem coluna desconto_manual (migr. 322 pendente) — salvando no formato antigo.');
+        saved = await persistir(legado);
+      }
       if (editId) {
-        const updated = await dbUpdate('/api/folhapagamentoview', editId, payload);
-        setData(prev => prev.map(f => f.id === editId ? { ...f, ...(updated ?? payload) } : f));
+        setData(prev => prev.map(f => f.id === editId ? { ...f, ...(saved ?? payload) } : f));
         showToast('Folha atualizada.', 'success');
       } else {
-        const rec = await dbInsert('/api/folhapagamentoview', payload);
-          setData(prev => [rec as FolhaPagamento, ...prev]);
+        setData(prev => [saved as FolhaPagamento, ...prev]);
         showToast('Folha registrada.', 'success');
       }
       setForm(EMPTY);
       setShowForm(false);
       setEditId(null);
+      if (preservarTotais && original) {
+        // Vale o status que ficou gravado: se a edição já promoveu a folha
+        // para Processada, a RPC recusaria e o toast explicaria melhor.
+        if ((payload.status ?? original.status) === 'Pendente') {
+          // Rubricas e agregados são refeitos com o novo salário/desconto. Sem
+          // isso a folha ficaria com totais de antes da edição.
+          await handleRecalcular({ ...original, ...payload, id: editId });
+        } else {
+          showToast('Folha já processada: os totais e o holerite só mudam quando ela voltar para Pendente e for recalculada.', 'info');
+        }
+      }
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[FolhaPagamento] erro ao salvar:', err);
@@ -239,7 +308,13 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       funcionario_id:   f.funcionario_id ?? '',
       mes_ref:          f.mes_ref        ?? '',
       salario_base:     base != null ? formatBRL(Number(base)) : '',
-      descontos:        f.descontos        != null ? formatBRL(Number(f.descontos))        : '',
+      // Depois de um recálculo, `descontos` é o TOTAL (faltas + INSS + IRRF +
+      // manual). Trazer esse total para o campo faria o próximo save gravá-lo
+      // inteiro como lançamento manual, contando os encargos duas vezes — por
+      // isso o campo edita `desconto_manual`, que é só a parcela à mão.
+      descontos:        temDescontoManual
+        ? (Number(f.desconto_manual ?? 0) > 0 ? formatBRL(Number(f.desconto_manual)) : '')
+        : (f.descontos != null ? formatBRL(Number(f.descontos)) : ''),
       valor_beneficios: f.valor_beneficios != null ? formatBRL(Number(f.valor_beneficios)) : '',
       status:           f.status        ?? 'Pendente',
     });
@@ -426,6 +501,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         horas_falta:     breakdown.horas_falta,
         horas_extras:    breakdown.horas_extras,
         desconto_faltas: breakdown.desconto_faltas,
+        desconto_manual: breakdown.desconto_manual,
         base_inss:       breakdown.base_inss,
         desconto_inss:   breakdown.desconto_inss,
         desconto_irrf:   breakdown.desconto_irrf,
@@ -560,7 +636,9 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
               {[
                 { label: 'Mês Ref. *', k: 'mes_ref', type: 'month', money: false },
                 { label: 'Salário Base (R$)', k: 'salario_base', type: 'text', money: true },
-                { label: 'Descontos (R$)', k: 'descontos', type: 'text', money: true },
+                // "manuais" no rótulo porque INSS, IRRF e faltas entram
+                // sozinhos pelo recálculo — este campo é só o que se lança à mão.
+                { label: 'Descontos manuais (R$)', k: 'descontos', type: 'text', money: true },
                 { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'text', money: true },
               ].map(({ label, k, type, money }) => (
                 <div key={k} className="flex flex-col gap-1.5">
@@ -730,6 +808,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                     <div className="border-t border-white/5 my-3" />
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">Descontos</p>
                     <Row label="Faltas e atrasos" value={`- R$ ${(recalcBreakdown.data.desconto_faltas ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                    {/* Preservado pelo recálculo desde a migr. 322 — antes ele
+                        era apagado, porque nenhuma rubrica o representava. */}
+                    {(recalcBreakdown.data.desconto_manual ?? 0) > 0 && (
+                      <Row label="Descontos manuais (lançados no form)" value={`- R$ ${(recalcBreakdown.data.desconto_manual ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} colorClass="text-red-400" />
+                    )}
                     {/* Base própria: falta reduz a remuneração do mês, e é sobre
                         a remuneração efetiva que INSS e FGTS incidem. */}
                     <Row label="Base de INSS (bruto − faltas)" value={`R$ ${(recalcBreakdown.data.base_inss ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} muted />
