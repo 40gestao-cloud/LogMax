@@ -77,7 +77,7 @@ type AtributoDef = {
   label: string;
   placeholder?: string;
   req?: boolean;
-  type?: 'text' | 'select' | 'bool';
+  type?: 'text' | 'select' | 'bool' | 'textarea';
   options?: readonly string[];
   wide?: boolean; // ocupa linha inteira no grid
 };
@@ -100,6 +100,11 @@ const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
     { key: 'camera',        label: 'Câmera',          placeholder: 'Ex: 12 MP + 12 MP' },
     { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365', type: 'text' },
     { key: 'requer_imei',   label: 'Requer IMEI/Serial no fechamento', type: 'bool', wide: true },
+    // Eletrônico raramente cabe nos campos fixos: acessório que acompanha,
+    // estado de seminovo, restrição de operadora, condição da assistência.
+    // Campo livre no fim da ficha em vez de mais seis colunas fixas.
+    { key: 'informacoes_adicionais', label: 'Informações adicionais', type: 'textarea', wide: true,
+      placeholder: 'Ex: acompanha carregador e capa; aparelho de vitrine com pequena marca na traseira; garantia de bateria não coberta.' },
   ],
   SuperMax: [],
 };
@@ -797,6 +802,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                                 className="accent-accent w-4 h-4" />
                               <span className="text-xs font-bold text-gray-200">{d.label}</span>
                             </label>
+                          );
+                        }
+                        if (d.type === 'textarea') {
+                          return (
+                            <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                              <FormField label={d.label} error={err}>
+                                <textarea rows={3}
+                                  className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${err ? 'border border-red-500/40' : ''}`}
+                                  value={String(val)} onChange={e => setAtr(e.target.value)}
+                                  placeholder={d.placeholder} />
+                              </FormField>
+                            </div>
                           );
                         }
                         if (d.type === 'select' && d.options) {

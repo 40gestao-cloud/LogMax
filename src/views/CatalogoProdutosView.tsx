@@ -41,6 +41,7 @@ const ATRIBUTO_LABEL: Record<string, string> = {
   camera: 'Câmera',
   garantia_dias: 'Garantia (dias)',
   requer_imei: 'Requer IMEI/Serial',
+  informacoes_adicionais: 'Informações adicionais',
 };
 const formatAtributoValor = (v: any): string => {
   if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
@@ -387,7 +388,19 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {Object.entries(selecionado.atributos)
                       .filter(([, v]) => v !== null && v !== undefined && v !== '')
-                      .map(([k, v]) => (
+                      // Texto livre ocupa a linha inteira e não é truncado — a
+                      // célula de 1/3 cortaria justamente a informação que só
+                      // existe porque não coube nos campos fixos.
+                      .map(([k, v]) => k === 'informacoes_adicionais' ? (
+                        <div key={k} className="col-span-full flex flex-col gap-0.5">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                            {ATRIBUTO_LABEL[k] ?? k.replace(/_/g, ' ')}
+                          </span>
+                          <span className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
+                            {formatAtributoValor(v)}
+                          </span>
+                        </div>
+                      ) : (
                         <div key={k} className="flex flex-col gap-0.5">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                             {ATRIBUTO_LABEL[k] ?? k.replace(/_/g, ' ')}
