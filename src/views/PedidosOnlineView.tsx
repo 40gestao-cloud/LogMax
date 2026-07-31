@@ -7,6 +7,7 @@ import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 
@@ -52,6 +53,10 @@ const EXIGE_CLIENTE = ['Fiado', 'Cartão Crédito'];
 
 const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const confirm = useConfirm();
+  // O `window.prompt` do navegador quebra a identidade visual e ainda anuncia
+  // o domínio da Vercel no topo da caixa. O PromptProvider já existia para
+  // isto — a tela é que não usava.
+  const prompt = usePrompt();
   const { data: pedidos, setData, isLoading, reload } =
     useFetchData<Pedido>('/api/pedidosonlineview', { filial }, true);
   const { data: itens } = useFetchData<any>('/api/pedidosonlineitensview', undefined, true);
@@ -215,7 +220,13 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   };
 
   const cancelarPedido = async (p: Pedido) => {
-    const motivo = window.prompt(`Cancelar o pedido ${p.codigo} de ${p.comprador_apelido}?\n\nMotivo (fica registrado):`);
+    const motivo = await prompt({
+      message: `Cancelar o pedido ${p.codigo} de ${p.comprador_apelido}?\n\nMotivo (fica registrado):`,
+      placeholder: 'Ex.: sem estoque, comprador desistiu',
+      confirmLabel: 'Cancelar pedido',
+      cancelLabel: 'Voltar',
+      maxLength: 200,
+    });
     if (motivo == null) return;
     if (!motivo.trim()) { showToast('Informe o motivo.', 'error'); return; }
     if (!supabase) return;
@@ -347,12 +358,16 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const definirUrl = async () => {
     if (!cfg) return;
     const atual = cfg.url_publica ?? '';
-    const nova = window.prompt(
-      'Endereço público da loja da ' + filial + ':\n\n' +
-      'É a URL do projeto Vercel da loja — ex.: https://maxlook-loja.vercel.app\n' +
-      'Ela também precisa estar na env LOJA_ORIGINS deste LogMax.',
-      atual,
-    );
+    const nova = await prompt({
+      message:
+        `Endereço público da loja da ${filial}:\n\n` +
+        'É a URL do projeto Vercel da loja — ex.: https://maxlook-loja.vercel.app\n' +
+        'Ela também precisa estar na env LOJA_ORIGINS deste LogMax.',
+      defaultValue: atual,
+      placeholder: 'https://…',
+      confirmLabel: 'Salvar',
+      maxLength: 200,
+    });
     if (nova == null) return;
     const limpa = nova.trim().replace(/\/+$/, '');
     if (limpa && !/^https?:\/\//i.test(limpa)) {
