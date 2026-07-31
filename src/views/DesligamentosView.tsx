@@ -5,6 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   UserMinus, X, Calculator, RotateCcw, FileText, Loader2, AlertTriangle, DollarSign, CheckCircle, Clock,
+  Check, Ban, Send, Hourglass,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -125,9 +126,14 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
   const [acaoId, setAcaoId] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<{ nome: string; r: any } | null>(null);
 
-  // Desligar é decisão da Matriz (migr. 307) — a mesma régua da 292.
-  const podeDesligar = profile?.role === 'admin' || profile?.role === 'ceo';
-  const podeProcessar = hasSetor(profile, 'rh') || podeDesligar;
+  // A decisão continua sendo da Matriz (migr. 307), mas a instrução do
+  // processo passou a ser da filial (migr. 318): RH ou gerência montam a
+  // solicitação — colaborador, tipo, data, aviso, motivo — e admin/CEO
+  // aprovam ou recusam. Sem isso o aluno de RH nunca operava a tela.
+  const podeDecidir = profile?.role === 'admin' || profile?.role === 'ceo';
+  const podeSolicitar = !podeDecidir && (hasSetor(profile, 'rh') || profile?.role === 'gerente');
+  const podeMontarProcesso = podeDecidir || podeSolicitar;
+  const podeProcessar = hasSetor(profile, 'rh') || podeDecidir;
 
   const desligadosIds = useMemo(
     () => new Set((demissoes ?? []).filter((d: any) => d.ativo).map((d: any) => d.funcionario_id)),
@@ -197,38 +203,92 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
     const liquido = preview ? brl(preview.total_liquido) : 'a calcular';
 
     const ok = await confirm(
-      `Desligar ${nome}?\n\n` +
-      `Tipo: ${form.tipo}\n` +
-      `Rescisão líquida: ${liquido}\n\n` +
-      `O acesso à plataforma continua, mas ele não poderá mais lançar nem editar nada. ` +
-      `A ação é reversível pela readmissão.`
+      podeDecidir
+        ? `Desligar ${nome}?\n\n` +
+          `Tipo: ${form.tipo}\n` +
+          `Rescisão líquida: ${liquido}\n\n` +
+          `O acesso à plataforma continua, mas ele não poderá mais lançar nem editar nada. ` +
+          `A ação é reversível pela readmissão.`
+        : `Enviar a solicitação de desligamento de ${nome} para a Matriz?\n\n` +
+          `Tipo: ${form.tipo}\n` +
+          `Rescisão estimada: ${liquido}\n\n` +
+          `Nada acontece com ${nome} até admin ou CEO aprovarem: ele continua ativo e com acesso normal.`
     );
     if (!ok) return;
 
     setSalvando(true);
     try {
-      const { data, error } = await supabase.rpc('demitir_funcionario', {
-        p_funcionario_id: form.funcionario_id,
-        p_tipo:           form.tipo,
-        p_motivo:         form.motivo.trim(),
-        p_data:           form.data_desligamento,
-        p_aviso_previo:   form.aviso_previo,
-      });
+      // Mesma tela, dois caminhos: Matriz efetiva na hora, filial instrui e
+      // espera. O RPC de solicitação não toca em funcionário nem em acesso.
+      const { data, error } = podeDecidir
+        ? await supabase.rpc('demitir_funcionario', {
+            p_funcionario_id: form.funcionario_id,
+            p_tipo:           form.tipo,
+            p_motivo:         form.motivo.trim(),
+            p_data:           form.data_desligamento,
+            p_aviso_previo:   form.aviso_previo,
+          })
+        : await supabase.rpc('solicitar_desligamento', {
+            p_funcionario_id: form.funcionario_id,
+            p_tipo:           form.tipo,
+            p_motivo:         form.motivo.trim(),
+            p_data:           form.data_desligamento,
+            p_aviso_previo:   form.aviso_previo,
+          });
       if (error) throw error;
 
       const res = data as any;
-      showToast(
-        `${res?.funcionario ?? nome} desligado.` +
-        (res?.acesso_cortado ? ' O acesso foi encerrado.' : ' (sem login vinculado — só o registro em RH)'),
-        'success',
-      );
+      if (podeDecidir) {
+        showToast(
+          `${res?.funcionario ?? nome} desligado.` +
+          (res?.acesso_cortado ? ' O acesso foi encerrado.' : ' (sem login vinculado — só o registro em RH)'),
+          'success',
+        );
+      } else {
+        showToast(`Solicitação enviada. ${res?.funcionario ?? nome} segue ativo até a Matriz decidir.`, 'success');
+      }
       setForm({ ...EMPTY, data_desligamento: todayBR() });
       setPreview(null);
       await Promise.all([reloadDem(), reloadResc(), reloadFunc()]);
     } catch (err: any) {
-      showToast(err?.message ?? 'Erro ao desligar.', 'error', true);
+      showToast(err?.message ?? 'Erro ao registrar.', 'error', true);
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const handleDecidir = async (d: any, aprovar: boolean) => {
+    if (!supabase) return;
+    const ok = await confirm(
+      aprovar
+        ? `Aprovar o desligamento de ${d.nome_funcionario}?\n\n` +
+          `Solicitado por ${d.solicitado_por_nome ?? d.filial}.\n` +
+          `A rescisão é calculada e gravada agora, e o acesso dele é encerrado.`
+        : `Recusar o desligamento de ${d.nome_funcionario}?\n\n` +
+          `A solicitação é encerrada e ${d.nome_funcionario} continua ativo, sem nenhum efeito.`
+    );
+    if (!ok) return;
+
+    setAcaoId(d.id);
+    try {
+      const { data, error } = await supabase.rpc('decidir_desligamento', {
+        p_demissao_id: d.id,
+        p_aprovar:     aprovar,
+      });
+      if (error) throw error;
+      const res = data as any;
+      showToast(
+        aprovar
+          ? `${res?.funcionario ?? d.nome_funcionario} desligado.` +
+            (res?.acesso_cortado ? ' O acesso foi encerrado.' : ' (sem login vinculado)')
+          : 'Solicitação recusada.',
+        'success',
+      );
+      await Promise.all([reloadDem(), reloadResc(), reloadFunc()]);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao decidir.', 'error', true);
+    } finally {
+      setAcaoId(null);
     }
   };
 
@@ -275,8 +335,13 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
 
   if (loadingFn || loadingD) return <LoadingSpinner />;
 
-  const ativas = (demissoes ?? []).filter((d: any) => d.ativo);
-  const historico = (demissoes ?? []).filter((d: any) => !d.ativo);
+  // `status` só existe a partir da migr. 318. Enquanto ela não roda na turma a
+  // coluna vem undefined — tratamos como 'Aprovado' para a tela não esvaziar.
+  const statusDe = (d: any) => d.status ?? 'Aprovado';
+  const pendentes = (demissoes ?? []).filter((d: any) => d.ativo && statusDe(d) === 'Solicitado');
+  const ativas = (demissoes ?? []).filter((d: any) => d.ativo && statusDe(d) === 'Aprovado');
+  const readmitidos = (demissoes ?? []).filter((d: any) => !d.ativo && statusDe(d) !== 'Recusado');
+  const recusados = (demissoes ?? []).filter((d: any) => !d.ativo && statusDe(d) === 'Recusado');
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
@@ -288,12 +353,19 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
       </div>
 
       {/* ── Formulário ─────────────────────────────────────────────────── */}
-      {podeDesligar ? (
+      {podeMontarProcesso ? (
         <div className="neu-flat rounded-3xl p-5 sm:p-6 border border-white/5">
-          <div className="flex items-center gap-2 mb-5">
+          <div className="flex items-center gap-2 mb-2">
             <UserMinus size={16} className="text-accent" />
-            <h3 className="text-sm font-bold text-gray-300">Registrar desligamento</h3>
+            <h3 className="text-sm font-bold text-gray-300">
+              {podeDecidir ? 'Registrar desligamento' : 'Solicitar desligamento'}
+            </h3>
           </div>
+          <p className="text-[11px] text-gray-500 mb-5 leading-relaxed">
+            {podeDecidir
+              ? 'Como Matriz, o registro é efetivado na hora — sem passar pela fila de aprovação.'
+              : 'A unidade monta o processo e a Matriz decide. Até a aprovação de admin/CEO nada muda para o colaborador: ele segue ativo e com acesso normal.'}
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -385,7 +457,11 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
 
           <div className="flex justify-end mt-5">
             <NeuButtonAccent variant="" onClick={handleDesligar} disabled={salvando || !form.funcionario_id || !form.motivo.trim()}>
-              {salvando ? 'Registrando…' : 'Registrar desligamento'}
+              {salvando
+                ? (podeDecidir ? 'Registrando…' : 'Enviando…')
+                : podeDecidir
+                  ? 'Registrar desligamento'
+                  : <><Send size={13} /> Enviar para aprovação da Matriz</>}
             </NeuButtonAccent>
           </div>
         </div>
@@ -393,9 +469,65 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
         <div className="neu-flat rounded-2xl p-4 border border-white/5 flex items-start gap-3">
           <AlertTriangle size={15} className="text-yellow-400 shrink-0 mt-0.5" />
           <p className="text-xs text-gray-400 leading-relaxed">
-            Só admin ou CEO registram desligamento — a mesma régua de quem lança não decide que vale para
-            afastamentos e compras. Você pode acompanhar e processar as rescisões abaixo.
+            O processo de desligamento é montado pelo RH ou pela gerência da unidade e decidido por admin/CEO —
+            a mesma régua de "quem instrui não decide" que vale para afastamentos e compras. Você pode
+            acompanhar e processar as rescisões abaixo.
           </p>
+        </div>
+      )}
+
+      {/* ── Fila de aprovação ──────────────────────────────────────────── */}
+      {pendentes.length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 sm:p-6 border border-yellow-400/20">
+          <div className="flex items-center gap-2 mb-1">
+            <Hourglass size={15} className="text-yellow-400" />
+            <h3 className="text-sm font-bold text-gray-300">Aguardando decisão da Matriz</h3>
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
+              {pendentes.length}
+            </span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            {podeDecidir
+              ? 'Aprovar calcula e grava a rescisão e encerra o acesso. Recusar encerra a solicitação sem nenhum efeito.'
+              : 'Enquanto está aqui, o colaborador segue ativo e com acesso normal.'}
+          </p>
+          <div className="flex flex-col gap-2">
+            {pendentes.map((d: any) => {
+              const busy = acaoId === d.id;
+              return (
+                <div key={d.id} className="rounded-2xl border border-white/5 bg-white/[0.02] p-3 flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-200">{d.nome_funcionario ?? '—'}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TIPO_BADGE[d.tipo] ?? ''}`}>{d.tipo}</span>
+                      <span className="text-[10px] font-mono text-gray-500">{fmtData(d.data_desligamento)}</span>
+                      <span className="text-[10px] text-gray-500">aviso: {d.aviso_previo}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1 leading-snug">{d.motivo}</p>
+                    <p className="text-[10px] text-gray-600 mt-1">
+                      Solicitado por {d.solicitado_por_nome ?? '—'} · {d.filial}
+                    </p>
+                  </div>
+                  {podeDecidir && (
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleDecidir(d, true)} disabled={busy}
+                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30 hover:ring-emerald-500 flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={12} />} Aprovar
+                      </button>
+                      <button
+                        onClick={() => handleDecidir(d, false)} disabled={busy}
+                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-red-300 ring-1 ring-red-500/30 hover:ring-red-500 flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Ban size={12} /> Recusar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -456,7 +588,7 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
                               {busy ? <Loader2 size={12} className="animate-spin" /> : <DollarSign size={12} />}
                             </button>
                           )}
-                          {podeDesligar && (
+                          {podeDecidir && (
                             <button onClick={() => handleReadmitir(d)} disabled={busy} title="Readmitir" className="action-btn-success disabled:opacity-50">
                               <RotateCcw size={12} />
                             </button>
@@ -471,13 +603,29 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
           </div>
         )}
 
-        {historico.length > 0 && (
+        {readmitidos.length > 0 && (
           <div className="mt-6 pt-4 border-t border-white/5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Readmitidos</p>
             <div className="flex flex-col gap-1">
-              {historico.map((d: any) => (
+              {readmitidos.map((d: any) => (
                 <div key={d.id} className="flex items-center gap-3 text-xs text-gray-500 px-2 py-1.5 rounded-lg hover:bg-white/5">
                   <RotateCcw size={11} className="text-emerald-500 shrink-0" />
+                  <span className="text-gray-400 font-semibold">{d.nome_funcionario}</span>
+                  <span className="font-mono">{fmtData(d.data_desligamento)}</span>
+                  <span className="truncate flex-1">{d.observacao ?? d.motivo}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recusados.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-white/5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Solicitações recusadas</p>
+            <div className="flex flex-col gap-1">
+              {recusados.map((d: any) => (
+                <div key={d.id} className="flex items-center gap-3 text-xs text-gray-500 px-2 py-1.5 rounded-lg hover:bg-white/5">
+                  <Ban size={11} className="text-red-500 shrink-0" />
                   <span className="text-gray-400 font-semibold">{d.nome_funcionario}</span>
                   <span className="font-mono">{fmtData(d.data_desligamento)}</span>
                   <span className="truncate flex-1">{d.observacao ?? d.motivo}</span>
@@ -490,6 +638,10 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
 
       <div className="neu-flat rounded-2xl p-4 border border-white/5">
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">O que o desligamento faz</p>
+        <p className="text-xs text-gray-400 leading-relaxed mb-2">
+          A unidade instrui o processo (RH ou gerência) e a Matriz decide (admin/CEO). Solicitação pendente não
+          tem efeito nenhum: o colaborador segue ativo. Tudo abaixo só acontece na aprovação.
+        </p>
         <p className="text-xs text-gray-400 leading-relaxed">
           O acesso não é revogado: o colaborador continua entrando e vê um aviso de encerramento de vínculo.
           O que ele perde é a escrita — as funções de RBAC deixam de reconhecer o perfil, então nenhuma tela

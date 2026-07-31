@@ -236,8 +236,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Registro de Ponto', requireSetor: ['rh'] },
       'Férias',
       { label: 'Afastamentos', requireSetor: ['rh'] },
-      // Registrar é de admin/CEO (migr. 307), mas o RH processa a rescisão e
-      // acompanha — por isso o gate é o do módulo, não o da decisão.
+      // RH/gerência da unidade instruem o processo e admin/CEO decidem
+      // (migr. 318 — a 307 deixava tudo na Matriz). Gate do módulo, não da
+      // decisão: `subPermitido` já deixa gerente passar por requireSetor.
       { label: 'Desligamento', requireSetor: ['rh'] },
       // Abrir vaga é do RH da filial; aprovar o headcount é só admin/CEO
       // (migrs. 311/312) — mesma régua de Desligamento. A view é uma só: sem
