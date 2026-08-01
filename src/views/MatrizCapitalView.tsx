@@ -70,10 +70,18 @@ type Banco = { id: string; banco: string; conta: string; tipo: string };
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type Filial = typeof FILIAIS[number];
 
-const FILIAL_COLOR: Record<Filial, { accent: string; ring: string; bg: string }> = {
+// A holding entrou no mapa de capital em 2026-08-01 (migr. 323). Ela NÃO é a
+// quarta filial: continua fora de `FILIAIS`, e por isso fora do consolidado,
+// do ranking e da competição. O que ela ganhou foi capital próprio — de onde
+// saem a folha da diretoria e o custo corporativo antes do rateio.
+const UNIDADES = [...FILIAIS, 'Matriz'] as const;
+type UnidadeCapital = typeof UNIDADES[number];
+
+const FILIAL_COLOR: Record<UnidadeCapital, { accent: string; ring: string; bg: string }> = {
   SuperMax: { accent: 'text-sky-400',    ring: 'ring-sky-500/30',    bg: 'bg-sky-500/10' },
   MaxLook:  { accent: 'text-amber-300',  ring: 'ring-amber-400/30',  bg: 'bg-amber-400/10' },
   TechMax:  { accent: 'text-orange-400', ring: 'ring-orange-500/30', bg: 'bg-orange-500/10' },
+  Matriz:   { accent: 'text-yellow-400', ring: 'ring-yellow-500/30', bg: 'bg-yellow-500/10' },
 };
 
 const BRL = (v: number) =>
@@ -121,7 +129,7 @@ function HealthBar({ saldo, total }: { saldo: number; total: number }) {
 function ModalCapital({
   filial, onClose, onSaved, showToast, profile,
 }: {
-  filial: Filial; onClose: () => void; onSaved: () => void;
+  filial: UnidadeCapital; onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void; profile: UserProfile | null;
 }) {
   const [valorStr, setValorStr] = useState('');
@@ -159,7 +167,9 @@ function ModalCapital({
       >
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-100">Novo Aporte de Capital</h2>
+            <h2 className="text-base font-bold text-gray-100">
+              {filial === 'Matriz' ? 'Capital Próprio da Holding' : 'Novo Aporte de Capital'}
+            </h2>
             <span className={`text-xs font-bold ${cor.accent}`}>{filial}</span>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors"><X size={18} /></button>
@@ -181,7 +191,9 @@ function ModalCapital({
           <textarea
             value={observacao} onChange={e => setObservacao(e.target.value)} rows={2}
             className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
-            placeholder="Ex.: Capital social inicial, reinvestimento..."
+            placeholder={filial === 'Matriz'
+              ? 'Ex.: Capital social dos sócios, reserva de lucros retida...'
+              : 'Ex.: Capital social inicial, reinvestimento...'}
           />
         </div>
         <NeuButtonAccent onClick={handleSalvar} isLoading={saving}>Registrar Capital</NeuButtonAccent>
@@ -439,8 +451,8 @@ function ModalConfig({
 function FilialCapitalCard({
   filial, registros, saldo, profile, onNovo, onExcluir,
 }: {
-  filial: Filial; registros: CapitalRow[]; saldo: SaldoFilial | null;
-  profile: UserProfile | null; onNovo: (f: Filial) => void; onExcluir: (id: string, filial: string) => void;
+  filial: UnidadeCapital; registros: CapitalRow[]; saldo: SaldoFilial | null;
+  profile: UserProfile | null; onNovo: (f: UnidadeCapital) => void; onExcluir: (id: string, filial: string) => void;
 }) {
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const cor = FILIAL_COLOR[filial];
@@ -571,7 +583,7 @@ function FilialCapitalCard({
 }
 
 // ── Tab: DRE ──────────────────────────────────────────────────────────────
-function TabDRE({ saldos, semConfig }: { saldos: Record<Filial, SaldoFilial | null>; semConfig: boolean }) {
+function TabDRE({ saldos, semConfig }: { saldos: Record<UnidadeCapital, SaldoFilial | null>; semConfig: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="neu-flat rounded-2xl p-4 border border-accent/10 flex items-start gap-2 text-xs text-gray-400">
@@ -587,7 +599,11 @@ function TabDRE({ saldos, semConfig }: { saldos: Record<Filial, SaldoFilial | nu
               entram pela conta que elas geram). Despesa = contas pagas. Resultado = Receita − Despesa.
             </span>}
       </div>
-      {FILIAIS.map(filial => {
+      {/* A Matriz entra na lista: a DRE dela é o custo corporativo contra o
+          que o rateio recupera das unidades. Resultado perto de zero é o
+          esperado numa holding que só recupera custo — sobra grande significa
+          que ela está cobrando mais do que gasta. */}
+      {UNIDADES.map(filial => {
         const s = saldos[filial];
         const cor = FILIAL_COLOR[filial];
         const resultado = s ? (s.receitas_pagas - s.despesas_pagas) : 0;
@@ -740,7 +756,8 @@ function TabEmprestimos({
 }
 
 // ── Ranking de saúde ──────────────────────────────────────────────────────
-function RankingCard({ saldos }: { saldos: Record<Filial, SaldoFilial | null> }) {
+// Só as 3 operacionais: a holding não compete com quem ela administra.
+function RankingCard({ saldos }: { saldos: Record<UnidadeCapital, SaldoFilial | null> }) {
   const ranked = [...FILIAIS].sort((a, b) => {
     const sa = saldos[a]?.saldo_livre ?? 0;
     const sb = saldos[b]?.saldo_livre ?? 0;
@@ -786,7 +803,7 @@ function TabPrestacaoContas({
   notas, saldos,
 }: {
   notas: NotaRecebida[];
-  saldos: Record<Filial, SaldoFilial | null>;
+  saldos: Record<UnidadeCapital, SaldoFilial | null>;
 }) {
   // Agrupa notas por filial × categoria. Só entram capital_origem=true e ativas
   // (o useFetchData já filtra ativo; o filtro capital_origem foi passado no
@@ -1239,10 +1256,10 @@ export function MatrizCapitalView({
   showToast: (msg: string, t?: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>('geral');
-  const [modalFilial, setModalFilial] = useState<Filial | null>(null);
+  const [modalFilial, setModalFilial] = useState<UnidadeCapital | null>(null);
   const [modalConfig, setModalConfig] = useState(false);
-  const [saldos, setSaldos] = useState<Record<Filial, SaldoFilial | null>>({
-    SuperMax: null, MaxLook: null, TechMax: null,
+  const [saldos, setSaldos] = useState<Record<UnidadeCapital, SaldoFilial | null>>({
+    SuperMax: null, MaxLook: null, TechMax: null, Matriz: null,
   });
   const confirm = useConfirm();
 
@@ -1257,17 +1274,17 @@ export function MatrizCapitalView({
   const taxaPadrao = configAtiva?.taxa_juros_padrao ?? 0;
 
   const porFilial = useMemo(() => {
-    const map: Record<Filial, CapitalRow[]> = { SuperMax: [], MaxLook: [], TechMax: [] };
+    const map: Record<UnidadeCapital, CapitalRow[]> = { SuperMax: [], MaxLook: [], TechMax: [], Matriz: [] };
     for (const r of registros) {
-      if (r.filial in map) map[r.filial as Filial].push(r);
+      if (r.filial in map) map[r.filial as UnidadeCapital].push(r);
     }
     return map;
   }, [registros]);
 
   const carregarSaldos = useCallback(async () => {
     if (!supabase) return;
-    const results: Record<Filial, SaldoFilial | null> = { SuperMax: null, MaxLook: null, TechMax: null };
-    await Promise.all(FILIAIS.map(async f => {
+    const results: Record<UnidadeCapital, SaldoFilial | null> = { SuperMax: null, MaxLook: null, TechMax: null, Matriz: null };
+    await Promise.all(UNIDADES.map(async f => {
       const { data, error } = await supabase.rpc('calcular_saldo_capital', { p_filial: f });
       if (!error && data?.[0]) results[f] = data[0];
     }));
@@ -1362,15 +1379,36 @@ export function MatrizCapitalView({
           {isLoading ? (
             <LoadingSpinner />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {FILIAIS.map(f => (
-                <FilialCapitalCard
-                  key={f} filial={f} registros={porFilial[f]}
-                  saldo={saldos[f]} profile={profile}
-                  onNovo={setModalFilial} onExcluir={handleExcluir}
-                />
-              ))}
-            </div>
+            <>
+              {/* Holding em faixa própria, antes das operações e fora do grid
+                  de 3: somá-la ao consolidado contaria o mesmo dinheiro duas
+                  vezes assim que o rateio começasse a circular entre as duas
+                  pontas. Quem lê a tela precisa ver que são camadas
+                  diferentes, não quatro lojas. */}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Holding</span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+              <FilialCapitalCard
+                filial="Matriz" registros={porFilial.Matriz}
+                saldo={saldos.Matriz} profile={profile}
+                onNovo={setModalFilial} onExcluir={handleExcluir}
+              />
+
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Operações</span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {FILIAIS.map(f => (
+                  <FilialCapitalCard
+                    key={f} filial={f} registros={porFilial[f]}
+                    saldo={saldos[f]} profile={profile}
+                    onNovo={setModalFilial} onExcluir={handleExcluir}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

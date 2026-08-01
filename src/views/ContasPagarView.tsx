@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { FilialOp } from '../components/FilialSelector';
+import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
@@ -15,7 +15,9 @@ import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros'
 import { periodoRangeBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+// `filial` inclui 'Matriz': a holding tem despesa própria — a folha da
+// diretoria e o custo corporativo — e precisava de uma tela para pagá-la.
+const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: FilialSelectorValue }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -493,6 +495,9 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
 };
 
 export const ContasPagarView = ({ showToast }: any) => {
-  const { filialAtiva: filial } = useFilial();
-  return <ContasPagarViewInner showToast={showToast} filial={filial} />;
+  const { filialAtiva } = useFilial();
+  // Sem filial ativa é modo Matriz. Antes o `null` descia até um
+  // `.eq('filial', null)` e a tela abria vazia — as contas da holding
+  // (default 'Matriz' desde a migr. 053) nunca tiveram quem as visse.
+  return <ContasPagarViewInner showToast={showToast} filial={filialAtiva ?? 'Matriz'} />;
 };

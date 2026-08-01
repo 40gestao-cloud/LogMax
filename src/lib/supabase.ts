@@ -131,6 +131,10 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   // para liberar o índice único e permitir reconvocação, mas o RH precisa
   // continuar vendo quem aceitou e quem recusou.
   '/api/vagaconvitesview':            'vaga_convites',
+  // Rateio administrativo da Matriz (migr. 323). A escrita é só por RPC;
+  // estes dois entram no mapa apenas para o useFetchData conseguir ler.
+  'rateio_administrativo':            'rateio_administrativo',
+  'rateio_administrativo_itens':      'rateio_administrativo_itens',
 };
 
 // Tabelas com coluna `ativo BOOLEAN` (soft delete). useFetchData filtra
@@ -156,6 +160,10 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   // includeInactive para conseguir mostrar o histórico de readmitidos.
   'demissoes', 'rescisoes',
   'funcionario_beneficios',
+  // Reverter um rateio inativa a linha; sem isto a competência revertida
+  // continuaria listada como fechada. Os itens ficam de fora: só são lidos
+  // através do pai, que já saiu da lista.
+  'rateio_administrativo',
   // `loja_config` fica de fora de propósito: é uma linha fixa por filial, não
   // um cadastro que se apaga, e não tem coluna `ativo`.
   'pedidos_online',

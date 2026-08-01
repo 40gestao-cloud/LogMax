@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { FilialOp } from '../components/FilialSelector';
+import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
@@ -15,7 +15,9 @@ import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros'
 import { periodoRangeBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+// `filial` inclui 'Matriz': o rateio administrativo (migr. 323) gera uma conta
+// a receber da holding contra cada unidade, e ela precisa de onde ser cobrada.
+const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial: FilialSelectorValue }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -469,6 +471,8 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
 };
 
 export const ContasReceberView = ({ showToast }: any) => {
-  const { filialAtiva: filial } = useFilial();
-  return <ContasReceberViewInner showToast={showToast} filial={filial} />;
+  const { filialAtiva } = useFilial();
+  // Sem filial ativa é modo Matriz — mesma correção da ContasPagarView: o
+  // `null` virava `.eq('filial', null)` e escondia tudo o que é da holding.
+  return <ContasReceberViewInner showToast={showToast} filial={filialAtiva ?? 'Matriz'} />;
 };

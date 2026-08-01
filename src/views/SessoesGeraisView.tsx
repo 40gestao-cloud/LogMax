@@ -89,10 +89,20 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     ],
   },
   {
+    // Contas a pagar/receber entram aqui em 2026-08-01: a Matriz sempre teve
+    // lançamentos próprios — `contas_pagar`/`contas_receber` nascem com
+    // `filial = 'Matriz'` por DEFAULT desde a migr. 053 — e nunca teve tela
+    // para eles. A holding paga a folha da diretoria e cobra das unidades o
+    // rateio do custo corporativo; sem estes dois submenus, os dois lados do
+    // par intercompany ficavam invisíveis.
     kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400',
     modulos: [
       { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-purple-400',
-        submenus: ['Alçadas', 'Gerenciamento', 'Relatórios'] },
+        submenus: [
+          'Contas a pagar', 'Contas a receber',
+          { label: 'Rateio Administrativo', requireRole: ['admin', 'ceo', 'conselheiro'] },
+          'Alçadas', 'Gerenciamento', 'Relatórios',
+        ] },
     ],
   },
   {
@@ -107,7 +117,25 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
         // sem filial ativa ela mostra a fila de aprovação de headcount das 3
         // unidades e deixa abrir/conduzir o processo interno inter-filiais,
         // que é movimentação entre unidades — só a Matriz pode.
-        submenus: ['Registro de Ponto', 'Recrutamento e Seleção', 'Gerenciamento', 'Relatórios'] },
+        //
+        // 'Funcionários' e 'Folha de Pagamento' entram em 2026-08-01. A Matriz
+        // é o empregador de admin, CEO e conselheiro — os cargos de holding
+        // sempre foram lotados nela (migr. 315) —, mas a folha só existia
+        // dentro de uma filial. Na prática a diretoria trabalhava de graça: sem
+        // folha não há conta a pagar, sem conta a pagar não há custo
+        // corporativo, e sem custo corporativo não há o que ratear.
+        //
+        // Cargos e Departamentos vêm junto porque as duas telas passaram a ser
+        // escopadas por unidade no mesmo dia: sem elas aqui, o cargo da
+        // diretoria não teria onde ser cadastrado e o salário-base não
+        // apareceria no formulário de Funcionários da Matriz.
+        submenus: [
+          'Funcionários',
+          { label: 'Departamentos', requireSetor: ['rh'] },
+          { label: 'Cargos', requireSetor: ['rh'] },
+          { label: 'Folha de Pagamento', requireSetor: ['rh'] },
+          'Registro de Ponto', 'Recrutamento e Seleção', 'Gerenciamento', 'Relatórios',
+        ] },
     ],
   },
   {

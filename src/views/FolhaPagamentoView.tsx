@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { todayBR } from '../lib/dates';
-import type { FilialOp } from '../components/FilialSelector';
+import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, FileText } from 'lucide-react';
@@ -91,7 +91,11 @@ const statusNextTitle = (s: string): string =>
 
 const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', descontos: '', valor_beneficios: '', status: 'Pendente' };
 
-const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+// `filial` é FilialSelectorValue e não FilialOp: a folha da Matriz existe e é
+// o que remunera admin, CEO e conselheiro. `processar_folha` (migr. 272) já lê
+// a filial da própria folha, então a conta a pagar nasce na holding sem
+// nenhuma mudança no banco.
+const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialSelectorValue }) => {
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
@@ -1030,8 +1034,10 @@ export const FolhaPagamentoView = ({ showToast, profile }: { showToast: any; pro
       </div>
     );
   }
-  if (!filialAtiva) return null;
-  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  // Sem filial ativa é modo Matriz — abre a folha da holding, do mesmo jeito
+  // que FuncionariosView abre o quadro dela. Antes esta tela devolvia `null` e
+  // a diretoria simplesmente não recebia: não havia onde lançar a folha.
+  return <FolhaPagamentoViewInner showToast={showToast} profile={profile} filial={filialAtiva ?? 'Matriz'} />;
 };
 
 function Row({ label, value, colorClass, muted, bold }: {

@@ -121,6 +121,7 @@ const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCo
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
+const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
 const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
@@ -977,6 +978,9 @@ function LogMaxAppInner() {
       case 'financeiro-patrimônio':           return <PatrimonioView showToast={st} />;
       case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} profile={profile} />;
       case 'financeiro-capital':               return <FilialCapitalView showToast={st} profile={profile} />;
+      // Só no hub da Matriz (migr. 323): distribui o custo da holding entre as
+      // 3 unidades e gera o par conta a pagar (filial) / conta a receber (Matriz).
+      case 'financeiro-rateioadministrativo':  return <RateioAdministrativoView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
@@ -986,9 +990,14 @@ function LogMaxAppInner() {
       case 'financeiro-recibosdevendas':          return <RecibosVendasView showToast={st} profile={profile} />;
       case 'financeiro-notasemitidas':            return <NotasEmitidasView showToast={st} profile={profile} />;
       case 'rh-funcionários':     return <FuncionariosView showToast={st} />;
-      case 'rh-departamentos':    return <GenericCRUDView showToast={st} title="Departamentos" subtitle="Gerencie os departamentos da empresa." endpoint="/api/departamentosview"
+      // filialScoped + permiteMatriz desde 2026-08-01: a coluna `filial` existe
+      // desde a migr. 145, mas a tela ignorava — gravava tudo no default
+      // 'SuperMax' enquanto FuncionariosView filtrava pela unidade ativa, e o
+      // cargo criado na MaxLook nunca reaparecia no select de lá. `permiteMatriz`
+      // porque a holding também emprega: CEO e conselheiro têm cargo.
+      case 'rh-departamentos':    return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Departamentos" subtitle="Estrutura departamental desta unidade." endpoint="/api/departamentosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Tecnologia da Informação' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'rh-cargos':           return <GenericCRUDView showToast={st} title="Cargos" subtitle="Gerencie os cargos e níveis salariais." endpoint="/api/cargosview"
+      case 'rh-cargos':           return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Cargos" subtitle="Cargos e faixas salariais desta unidade." endpoint="/api/cargosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Analista de Sistemas' }, { key: 'nivel', label: 'Nível', type: 'select', options: ['Júnior', 'Pleno', 'Sênior', 'Gerência', 'Diretoria'] }, { key: 'salario_base', label: 'Salário Base (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} profile={profile} />;

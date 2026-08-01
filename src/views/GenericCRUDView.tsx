@@ -8,16 +8,30 @@ import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtil
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
 
-export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false }: {
+export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false, permiteMatriz = false }: {
   title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
   /** Cada filial só vê/edita os próprios registros; Matriz vê o consolidado (só leitura). */
   filialScoped?: boolean;
+  /**
+   * Trata a Matriz como uma unidade própria em vez de consolidado read-only:
+   * a tela filtra e escreve `filial = 'Matriz'`.
+   *
+   * Opt-in, e não o padrão, porque as duas leituras são legítimas e dependem
+   * do catálogo. Categoria, Projeto e Condição de Pagamento são coisas da
+   * operação — a holding olha as três unidades e não cria as suas. Já cargo e
+   * departamento a Matriz TEM: é ela quem emprega CEO, conselheiro e diretor,
+   * e sem isto o cargo deles não teria onde ser cadastrado.
+   */
+  permiteMatriz?: boolean;
 }) => {
   const confirm = useConfirm();
   const { filialAtiva } = useFilial();
-  // Fora de filialScoped, filialAtiva é ignorado — comportamento global de sempre.
-  const canWrite = !filialScoped || !!filialAtiva;
-  const { data, setData, isLoading } = useFetchData<any>(endpoint, filialScoped && filialAtiva ? { filial: filialAtiva } : undefined);
+  // Unidade que a tela está editando. `null` = consolidado read-only (modo
+  // Matriz sem permiteMatriz). Fora de filialScoped, filialAtiva é ignorado —
+  // comportamento global de sempre.
+  const escopo = filialScoped ? (filialAtiva ?? (permiteMatriz ? 'Matriz' : null)) : null;
+  const canWrite = !filialScoped || !!escopo;
+  const { data, setData, isLoading } = useFetchData<any>(endpoint, escopo ? { filial: escopo } : undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -70,7 +84,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
       );
       const payload = editItem
         ? parsed
-        : { ...parsed, status: (parsed.status as string) || defaultStatus, ...(filialScoped ? { filial: filialAtiva } : {}) };
+        : { ...parsed, status: (parsed.status as string) || defaultStatus, ...(filialScoped ? { filial: escopo } : {}) };
       if (editItem) {
         const updated = await dbUpdate(endpoint, editItem.id, payload);
         setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
@@ -107,10 +121,10 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}{filialScoped ? (filialAtiva ? ` — ${filialAtiva}` : ' — Consolidado') : ''}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}{filialScoped ? (escopo ? ` — ${escopo}` : ' — Consolidado') : ''}</h2>
           <p className="text-sm text-gray-400 mt-1">
             {subtitle}
-            {filialScoped && !filialAtiva && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
+            {filialScoped && !escopo && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
           </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto flex-wrap">
@@ -189,13 +203,13 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 {fields.map(f => <th key={f.key} className="pb-4 font-bold px-4">{f.label}</th>)}
-                {filialScoped && !filialAtiva && <th className="pb-4 font-bold px-4">Filial</th>}
+                {filialScoped && !escopo && <th className="pb-4 font-bold px-4">Filial</th>}
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={fields.length + (filialScoped && !filialAtiva ? 2 : 1)}><LoadingSpinner /></td></tr>)
-                : filtered.length === 0 ? (<tr><td colSpan={fields.length + (filialScoped && !filialAtiva ? 2 : 1)}><EmptyState /></td></tr>)
+              {isLoading ? (<tr><td colSpan={fields.length + (filialScoped && !escopo ? 2 : 1)}><LoadingSpinner /></td></tr>)
+                : filtered.length === 0 ? (<tr><td colSpan={fields.length + (filialScoped && !escopo ? 2 : 1)}><EmptyState /></td></tr>)
                 : (
                   <AnimatePresence>
                     {filtered.map((item: any) => (
@@ -222,7 +236,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                             </td>
                           );
                         })}
-                        {filialScoped && !filialAtiva && (
+                        {filialScoped && !escopo && (
                           <td className="py-4 px-4"><FilialBadge filial={item.filial} /></td>
                         )}
                         <td className="py-4 px-4 text-right">
