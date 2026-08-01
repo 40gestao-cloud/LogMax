@@ -176,15 +176,21 @@ COMMENT ON TABLE public.rateio_administrativo IS
 ALTER TABLE public.rateio_administrativo       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rateio_administrativo_itens ENABLE ROW LEVEL SECURITY;
 
+-- `auth_in_setor('financeiro')` já cobre admin, CEO e conselheiro por dentro
+-- (auth_in_setor começa com auth_is_admin). O `OR` do gerente é escrito à mão
+-- de propósito: existe um helper `auth_in_setor_ou_gerente` na migr. 185, mas
+-- ele NÃO está presente em nenhum dos 4 projetos — a 187 refez as policies com
+-- `auth_gerente_da` e o helper nunca chegou a existir em produção. Usá-lo aqui
+-- faria esta migração abortar inteira com "function does not exist".
 DROP POLICY IF EXISTS rateio_select ON public.rateio_administrativo;
 CREATE POLICY rateio_select ON public.rateio_administrativo
   FOR SELECT TO authenticated
-  USING (public.auth_in_setor_ou_gerente('financeiro'));
+  USING (public.auth_in_setor('financeiro') OR public.auth_user_role() = 'gerente');
 
 DROP POLICY IF EXISTS rateio_itens_select ON public.rateio_administrativo_itens;
 CREATE POLICY rateio_itens_select ON public.rateio_administrativo_itens
   FOR SELECT TO authenticated
-  USING (public.auth_in_setor_ou_gerente('financeiro'));
+  USING (public.auth_in_setor('financeiro') OR public.auth_user_role() = 'gerente');
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- PARTE 5 — APURAÇÃO (só lê, não escreve)
@@ -417,22 +423,31 @@ BEGIN
   FOR it IN SELECT * FROM jsonb_array_elements(v_apuracao -> 'itens')
   LOOP
     v_valor := (it ->> 'valor')::numeric;
+    v_cp_id := NULL;
+    v_cr_id := NULL;
 
-    INSERT INTO public.contas_pagar
-      (descricao, valor, vencimento, status, filial, origem)
-    VALUES (
-      'Rateio administrativo ' || p_competencia || ' — Matriz',
-      v_valor, v_venc, 'Pendente', it ->> 'filial', 'rateio'
-    )
-    RETURNING id INTO v_cp_id;
+    -- Cota zero não vira lançamento. Acontece de verdade: no critério de
+    -- receita, a unidade que não recebeu nada no mês absorve 0% — e emitir uma
+    -- conta a pagar de R$ 0,00 encheria o Financeiro dela de lixo que não dá
+    -- para pagar nem baixar. O item do rateio é gravado do mesmo jeito, com o
+    -- percentual, para o fechamento continuar explicando as três unidades.
+    IF v_valor > 0 THEN
+      INSERT INTO public.contas_pagar
+        (descricao, valor, vencimento, status, filial, origem)
+      VALUES (
+        'Rateio administrativo ' || p_competencia || ' — Matriz',
+        v_valor, v_venc, 'Pendente', it ->> 'filial', 'rateio'
+      )
+      RETURNING id INTO v_cp_id;
 
-    INSERT INTO public.contas_receber
-      (descricao, valor, vencimento, status, filial, origem)
-    VALUES (
-      'Rateio administrativo ' || p_competencia || ' — ' || (it ->> 'filial'),
-      v_valor, v_venc, 'Aberto', 'Matriz', 'rateio'
-    )
-    RETURNING id INTO v_cr_id;
+      INSERT INTO public.contas_receber
+        (descricao, valor, vencimento, status, filial, origem)
+      VALUES (
+        'Rateio administrativo ' || p_competencia || ' — ' || (it ->> 'filial'),
+        v_valor, v_venc, 'Aberto', 'Matriz', 'rateio'
+      )
+      RETURNING id INTO v_cr_id;
+    END IF;
 
     INSERT INTO public.rateio_administrativo_itens
       (rateio_id, filial, base_direcionador, percentual, valor, conta_pagar_id, conta_receber_id)
