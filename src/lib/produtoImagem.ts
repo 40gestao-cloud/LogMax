@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { resizeImage, extFromMime, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './imageResize';
+import { resizeImage, extFromMime, lerDimensoesImagem, MAX_INPUT_BYTES, MAX_INPUT_LABEL } from './imageResize';
 
 export const PRODUTO_IMAGEM_BUCKET = 'produto-imagens';
 // Teto bruto de entrada (compatibilidade com imports antigos). Depois do
@@ -41,6 +41,22 @@ export function validarImagemProduto(file: File): ValidacaoImagem {
     };
   }
   return { ok: true, motivo: '', ext: ALLOWED_EXT.has(rawExt) ? rawExt : 'jpg' };
+}
+
+// Abaixo desse menor lado (px) a foto aparece esticada no card do Catálogo e
+// principalmente na Vitrine Pública. Não bloqueia o upload — só avisa, porque
+// o resize nunca amplia: pixel que não veio na origem não tem como aparecer.
+export const PRODUTO_IMAGEM_RES_MINIMA = 600;
+export const PRODUTO_IMAGEM_RES_IDEAL = 1000;
+
+// Devolve o texto do aviso de baixa resolução, ou null se a imagem estiver boa
+// (ou se não der pra ler as dimensões — nesse caso não atrapalha o upload).
+export async function avaliarResolucaoImagem(file: File): Promise<string | null> {
+  const dim = await lerDimensoesImagem(file);
+  if (!dim) return null;
+  const menorLado = Math.min(dim.width, dim.height);
+  if (menorLado >= PRODUTO_IMAGEM_RES_MINIMA) return null;
+  return `Imagem de ${dim.width}×${dim.height} px — resolução baixa. Ela vai aparecer borrada no Catálogo e na Vitrine; o ideal é pelo menos ${PRODUTO_IMAGEM_RES_IDEAL} px no menor lado.`;
 }
 
 // Extrai o "caminho dentro do bucket" de uma URL pública. Retorna null se a

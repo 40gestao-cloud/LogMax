@@ -15,6 +15,8 @@ import { FILIAL_DEFAULT } from '../lib/filiais';
 import {
   validarImagemProduto,
   uploadImagemProduto,
+  avaliarResolucaoImagem,
+  PRODUTO_IMAGEM_RES_IDEAL,
   removerImagemAntiga,
   PRODUTO_IMAGEM_ACCEPT,
   PRODUTO_IMAGEM_OUTPUT_MAX_LABEL,
@@ -198,6 +200,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [imagens, setImagens] = useState<string[]>(() => Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
   const [imagensAnteriores, setImagensAnteriores] = useState<string[]>(() => Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
   const [imagemUploading, setImagemUploading] = useState<number | null>(null);
+  // Aviso de resolução baixa por slot (não bloqueia o upload — só explica por
+  // que aquela foto vai sair borrada na Vitrine).
+  const [imagensAviso, setImagensAviso] = useState<(string | null)[]>(() => Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
   const imagemInputRefs = useRef<(HTMLInputElement | null)[]>(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
 
   // Pesquisa e ordenação são server-side (codigo_seq DESC). Este sort só
@@ -384,6 +389,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     const imagensItem = [item.imagem_url ?? '', item.imagem_url_2 ?? '', item.imagem_url_3 ?? ''];
     setImagens(imagensItem);
     setImagensAnteriores(imagensItem);
+    setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setShowForm(false);
   };
@@ -395,13 +401,15 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setExtras({ ...EMPTY_EXTRAS, filial });
     setImagens(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
     setImagensAnteriores(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
+    setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setExtrasErrors({});
     imagemInputRefs.current.forEach(ref => { if (ref) ref.value = ''; });
   };
 
-  // Upload de imagem: validação rigorosa (formato + 100 KB) ANTES do POST.
-  // Se aceito, faz upload para o bucket e guarda a URL pública no slot.
+  // Upload de imagem: valida formato/tamanho bruto ANTES de decodificar.
+  // Se aceito, faz upload para o bucket e guarda a URL pública no slot;
+  // resolução baixa não bloqueia, só rende um aviso no slot.
   const handleImagemChange = async (slotIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -413,9 +421,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     }
     setImagemUploading(slotIdx);
     try {
+      const aviso = await avaliarResolucaoImagem(file);
       const url = await uploadImagemProduto(file, editItem?.id, slotIdx + 1);
       setImagens(prev => prev.map((u, i) => i === slotIdx ? url : u));
-      showToast('Imagem carregada!', 'success', true);
+      setImagensAviso(prev => prev.map((a, i) => i === slotIdx ? aviso : a));
+      showToast(aviso ? 'Imagem carregada — mas a resolução é baixa.' : 'Imagem carregada!', aviso ? 'info' : 'success', true);
     } catch (err: any) {
       console.error('[Produtos] erro upload imagem:', err);
       showToast(err?.message ?? 'Falha ao enviar imagem.', 'error', true);
@@ -427,6 +437,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
 
   const handleRemoverImagem = (slotIdx: number) => {
     setImagens(prev => prev.map((u, i) => i === slotIdx ? '' : u));
+    setImagensAviso(prev => prev.map((a, i) => i === slotIdx ? null : a));
   };
 
   const handleSave = async () => {
@@ -880,13 +891,21 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           </button>
                         )}
                       </div>
+                      {imagensAviso[slotIdx] && (
+                        <p className="text-[10px] text-amber-400/90 leading-snug text-center flex items-start gap-1">
+                          <AlertTriangle size={11} className="shrink-0 mt-px" />
+                          <span>{imagensAviso[slotIdx]}</span>
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
                 <p className="text-[11px] text-gray-500 leading-snug mt-2">
                   Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> — cada foto é comprimida
                   automaticamente para WebP até <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_OUTPUT_MAX_LABEL}</span>,
-                  então pode enviar direto da câmera. A capa é a que aparece no PDV, Catálogo e vitrine; sem imagem, o produto exibe um ícone padrão.
+                  então pode enviar direto da câmera. Use imagens de pelo menos{' '}
+                  <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_RES_IDEAL} px</span> no menor lado: miniatura
+                  baixada da web fica borrada, porque o sistema reduz mas nunca amplia. A capa é a que aparece no PDV, Catálogo e vitrine; sem imagem, o produto exibe um ícone padrão.
                 </p>
               </div>
 

@@ -39,6 +39,29 @@ const DEFAULTS: Required<Omit<ResizeOptions, 'maxBytes'>> = {
 const isSvg = (file: File): boolean =>
   file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
 
+// Formatos que os buckets de imagem já aceitam direto — se o arquivo original
+// for um desses e já couber no box e no teto de bytes, não vale a pena gastar
+// um segundo encode lossy em cima dele (vide `resizeImage`).
+const PASS_THROUGH_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
+/**
+ * Lê largura/altura do arquivo sem escrever nada. Usado pra avisar o usuário
+ * quando ele escolhe uma miniatura (tipo imagem puxada de busca do Google),
+ * que é a causa real de foto borrada — o resize nunca amplia.
+ * Devolve null se o arquivo não for decodificável (ou for SVG, que é vetor).
+ */
+export async function lerDimensoesImagem(file: File): Promise<{ width: number; height: number } | null> {
+  if (isSvg(file)) return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const dim = { width: bitmap.width, height: bitmap.height };
+    bitmap.close?.();
+    return dim;
+  } catch {
+    return null;
+  }
+}
+
 export function extFromMime(mime: string): string {
   if (mime === 'image/webp') return 'webp';
   if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg';
@@ -118,6 +141,21 @@ export async function resizeImage(file: File, opts?: ResizeOptions): Promise<Fil
   }
 
   try {
+    // Curto-circuito: original já está dentro do box, já é um formato que o
+    // bucket aceita e já cabe no teto de bytes. Re-encodar aqui só somaria
+    // perda lossy sem ganhar nada — devolve o arquivo intacto.
+    // Só vale quando `maxBytes` foi informado; sem teto não há garantia de
+    // que o arquivo original caiba no bucket.
+    if (
+      maxBytes &&
+      file.size <= maxBytes &&
+      bitmap.width <= maxWidth &&
+      bitmap.height <= maxHeight &&
+      PASS_THROUGH_MIME.has(file.type)
+    ) {
+      return file;
+    }
+
     const baseW = Math.round(bitmap.width * Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1));
     const baseH = Math.round(bitmap.height * Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1));
 
