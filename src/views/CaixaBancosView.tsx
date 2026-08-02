@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet, ArrowLeftRight } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb } from '../components/ui';
@@ -11,6 +11,7 @@ import {
   uploadLogoBanco,
   validarLogoBanco,
 } from '../lib/bancoLogo';
+import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
@@ -102,6 +103,15 @@ export const CaixaBancosView = ({
   const [imagemUploading, setImagemUploading] = useState(false);
   const [togglingFilial, setTogglingFilial] = useState<string | null>(null);
   const imagemInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Transferência interna (migr. 328). Sem ela o dinheiro entra na unidade
+  // pelo aporte e não sai do lugar — era o campo "Saldo" que fazia esse
+  // remanejamento antes da 327.
+  const [showTransf, setShowTransf] = useState(false);
+  const [transfOrigem, setTransfOrigem] = useState('');
+  const [transfDestino, setTransfDestino] = useState('');
+  const [transfValor, setTransfValor] = useState('');
+  const [transfSaving, setTransfSaving] = useState(false);
 
   // Config de bloqueio da filial ativa (modo filial)
   const configFilialAtiva = filialAtiva
@@ -258,6 +268,52 @@ export const CaixaBancosView = ({
     }
   };
 
+  // Destino só entre contas da mesma unidade — a RPC recusa o resto, aqui é
+  // só pra não oferecer o que vai dar erro. `IS DISTINCT FROM` do lado do
+  // banco vira esta comparação com `??` porque a filial global é null.
+  const contaOrigem = dataAll.find((b: any) => b.id === transfOrigem);
+  const destinosPossiveis = dataAll.filter((b: any) =>
+    b.id !== transfOrigem
+    && b.ativo !== false && b.status !== 'Inativo'
+    && contaOrigem && (b.filial ?? null) === (contaOrigem.filial ?? null),
+  );
+  const contasTransferiveis = dataAll.filter((b: any) => b.ativo !== false && b.status !== 'Inativo');
+  const saldoOrigem = Number(contaOrigem?.saldo ?? 0);
+  const transfValorNum = parseBRL(transfValor);
+  const transfSemSaldo = !!transfOrigem && transfValorNum > saldoOrigem;
+
+  const closeTransf = () => {
+    setShowTransf(false);
+    setTransfOrigem(''); setTransfDestino(''); setTransfValor('');
+  };
+
+  const handleTransferir = async () => {
+    if (!supabase) return;
+    if (!transfOrigem || !transfDestino) { showToast('Escolha origem e destino.', 'error', true); return; }
+    if (transfValorNum <= 0) { showToast('Informe um valor maior que zero.', 'error', true); return; }
+    setTransfSaving(true);
+    try {
+      const { data: res, error } = await supabase.rpc('transferir_entre_contas', {
+        p_origem_id: transfOrigem,
+        p_destino_id: transfDestino,
+        p_valor: transfValorNum,
+      });
+      if (error) throw new Error(error.message);
+      setData((prev: any[]) => prev.map((b: any) => {
+        if (b.id === transfOrigem)  return { ...b, saldo: Number(b.saldo ?? 0) - transfValorNum };
+        if (b.id === transfDestino) return { ...b, saldo: Number(b.saldo ?? 0) + transfValorNum };
+        return b;
+      }));
+      const r = res as any;
+      showToast(`R$ ${transfValorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de ${r?.origem ?? 'origem'} para ${r?.destino ?? 'destino'}.`, 'success', true);
+      closeTransf();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao transferir.', 'error', true);
+    } finally {
+      setTransfSaving(false);
+    }
+  };
+
   const handleToggleBloqueio = async (filial: string, atual: boolean) => {
     if (!supabase) return;
     setTogglingFilial(filial);
@@ -398,12 +454,92 @@ export const CaixaBancosView = ({
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           {canEdit && (
-            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-              <Plus size={16} /> Nova
-            </NeuButtonAccent>
+            <>
+              <button
+                onClick={() => { closeForm(); setShowTransf(v => !v); }}
+                className="neu-button py-2.5 px-4 rounded-xl text-sm font-bold flex items-center gap-2 hover:text-accent transition-colors whitespace-nowrap"
+              >
+                <ArrowLeftRight size={15} /> Transferir
+              </button>
+              <NeuButtonAccent onClick={() => { closeTransf(); closeForm(); setShowForm(v => !v); }}>
+                <Plus size={16} /> Nova
+              </NeuButtonAccent>
+            </>
           )}
         </div>
       </div>
+
+      {/* Transferência interna — remaneja dinheiro entre contas da MESMA
+          unidade. Entre unidades é aporte ou empréstimo, cada um com sua
+          alçada, e a RPC recusa a tentativa. */}
+      <AnimatePresence>
+        {showTransf && canEdit && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="neu-flat rounded-2xl p-6 border border-accent/20 flex flex-col gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                  <ArrowLeftRight size={14} className="text-accent" /> Transferir entre contas
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Move dinheiro entre contas da mesma unidade — do banco pro caixa físico, por exemplo.
+                  Para mandar dinheiro de uma unidade pra outra, use aporte ou empréstimo em Capital.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField label="Sai de *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={transfOrigem}
+                    onChange={e => { setTransfOrigem(e.target.value); setTransfDestino(''); }}>
+                    <option value="">Selecione...</option>
+                    {contasTransferiveis.map((b: any) => (
+                      <option key={b.id} value={b.id}>
+                        {(b.banco ?? b.conta)}{matrizMode ? ` (${b.filial ?? 'Global'})` : ''} · {fmtBRL(Number(b.saldo ?? 0))}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Entra em *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={transfDestino} onChange={e => setTransfDestino(e.target.value)}
+                    disabled={!transfOrigem}>
+                    <option value="">{transfOrigem ? 'Selecione...' : 'Escolha a origem primeiro'}</option>
+                    {destinosPossiveis.map((b: any) => (
+                      <option key={b.id} value={b.id}>{b.banco ?? b.conta} — {b.conta}</option>
+                    ))}
+                  </select>
+                  {!!transfOrigem && destinosPossiveis.length === 0 && (
+                    <span className="text-[10px] text-yellow-400 mt-1">
+                      Esta unidade só tem uma conta ativa. Cadastre outra para poder remanejar.
+                    </span>
+                  )}
+                </FormField>
+                <FormField label="Valor (R$) *">
+                  <input type="text" inputMode="numeric"
+                    className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                    value={transfValor}
+                    onChange={e => setTransfValor(formatBRL(e.target.value))}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="0,00" />
+                  {transfSemSaldo && (
+                    <span className="text-[10px] text-red-400 mt-1">
+                      Saldo insuficiente: a conta tem {fmtBRL(saldoOrigem)}.
+                    </span>
+                  )}
+                </FormField>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button onClick={closeTransf} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+                <NeuButtonAccent onClick={handleTransferir} isLoading={transfSaving}
+                  disabled={transfSemSaldo || !transfOrigem || !transfDestino}>
+                  <ArrowLeftRight size={14} /> Transferir
+                </NeuButtonAccent>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Formulário */}
       <AnimatePresence>
