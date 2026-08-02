@@ -60,7 +60,9 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const { data: pedidos, setData, isLoading, reload } =
     useFetchData<Pedido>('/api/pedidosonlineview', { filial }, true);
   const { data: itens } = useFetchData<any>('/api/pedidosonlineitensview', undefined, true);
-  const { data: clientes } = useFetchData<any>('/api/clientesview', { filial });
+  // '/api/crmview', não '/api/clientesview': esse segundo nome nunca existiu
+  // no ENDPOINT_TABLE_MAP, então a lista de clientes vinha sempre vazia.
+  const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
   const { data: produtos, setData: setProdutos } = useFetchData<any>('/api/produtosview', { filial });
   const { data: lojaCfg, setData: setLojaCfg } =
     useFetchData<any>('/api/lojaconfigview', { filial }, true, { orderBy: 'filial', ascending: true });

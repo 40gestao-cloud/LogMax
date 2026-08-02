@@ -108,6 +108,21 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   'subcategorias_produto':            'subcategorias_produto',
   'itens_campanha':                   'itens_campanha',
   'capital_filial':                   'capital_filial',
+  // As quatro abaixo faltavam desde que Capital foi criado (migr. 155). Sem a
+  // chave, `useFetchData` cai no `if (!table)`, loga um warn no console e
+  // devolve `[]` — a tela não quebra, só fica vazia. Consequências que
+  // ninguém tinha ligado à causa: a Matriz nunca viu pedido de empréstimo
+  // (logo, nunca teve o que aprovar), a filial nunca viu as próprias
+  // parcelas, o modal de aporte não listava banco, e a taxa de juros padrão
+  // e a reserva mínima apareciam sempre zeradas.
+  'emprestimos_filial':               'emprestimos_filial',
+  'parcelas_emprestimo':              'parcelas_emprestimo',
+  'capital_config':                   'capital_config',
+  'caixa_bancos':                     'caixa_bancos',
+  // Sem `created_at`: quem ler esta tabela precisa passar
+  // `{ orderBy: 'filial' }`, senão o PostgREST devolve 400 e a tela fica
+  // vazia do mesmo jeito, agora por outro motivo.
+  'filial_caixa_config':              'filial_caixa_config',
   'requerimentos':                    'requerimentos',
   '/api/avaliacoesmatrizview':        'avaliacoes_matriz',
   '/api/competicoesmatrizview':       'competicoes_matriz',

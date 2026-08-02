@@ -88,8 +88,10 @@ export const CaixaBancosView = ({
   const extraFilter = filialFiltro ? { filial: filialFiltro } : undefined;
 
   const { data: dataAll, setData, isLoading } = useFetchData<any>(ENDPOINT, extraFilter);
+  // `orderBy: 'filial'` porque a tabela não tem `created_at` — o default do
+  // hook devolveria 400 e o painel de bloqueio ficaria vazio de novo.
   const { data: configs = [], reload: reloadConfigs } = useFetchData<FilialCaixaConfig>(
-    'filial_caixa_config', undefined, false,
+    'filial_caixa_config', undefined, false, { orderBy: 'filial', ascending: true },
   );
 
   const [search, setSearch] = useState('');

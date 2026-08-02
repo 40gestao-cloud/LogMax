@@ -55,7 +55,14 @@ export function useFetchData<T = any>(
 
   const load = useCallback(async () => {
     if (!table) {
-      console.warn(`[useFetchData] Tabela não mapeada para "${endpoint}"`);
+      // Antes isto só logava um warn e devolvia lista vazia. O resultado é
+      // uma tela que abre bonita e sem dado nenhum — indistinguível de "não
+      // há registros" — e o defeito sobrevive meses. Aconteceu com seis
+      // endpoints de Capital e Pedidos Online. Agora popula `error`, que as
+      // telas já sabem exibir.
+      const msg = `Tabela não mapeada para "${endpoint}" — adicione a chave em ENDPOINT_TABLE_MAP (src/lib/supabase.ts).`;
+      console.error(`[useFetchData] ${msg}`);
+      setError(msg);
       setLoading(false);
       return;
     }
