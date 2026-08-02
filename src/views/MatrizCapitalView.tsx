@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, NeuButtonAccent, FormField } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { isConselheiro } from '../lib/rbac';
+import { bancoDaUnidade } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 
@@ -65,7 +65,7 @@ type Emprestimo = {
   created_at: string;
 };
 
-type Banco = { id: string; banco: string; conta: string; tipo: string };
+type Banco = { id: string; banco: string; conta: string; tipo: string; filial: string | null; saldo: number | null };
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type Filial = typeof FILIAIS[number];
@@ -97,9 +97,16 @@ const fmtDateTime = (iso: string) =>
     timeZone: 'America/Rio_Branco',
   });
 
+// Conselheiro saiu das duas funções em 2026-08-01 (migr. 326). Registrar
+// aporte e aprovar empréstimo deixaram de ser "gravar um número" e passaram a
+// TRANSFERIR dinheiro entre contas — ato executivo, não de conselho.
+//
+// No caso de `podeAprovar` isso conserta um botão que já estava morto: o
+// `_assert_capital_holding` do banco sempre exigiu admin/CEO, então o
+// conselheiro via "Analisar", clicava e tomava erro de permissão.
 function podeCriar(p: UserProfile | null) {
   if (!p) return false;
-  return p.role === 'admin' || p.role === 'ceo' || isConselheiro(p);
+  return p.role === 'admin' || p.role === 'ceo';
 }
 function podeExcluir(p: UserProfile | null) {
   if (!p) return false;
@@ -107,7 +114,7 @@ function podeExcluir(p: UserProfile | null) {
 }
 function podeAprovar(p: UserProfile | null) {
   if (!p) return false;
-  return p.role === 'admin' || p.role === 'ceo' || isConselheiro(p);
+  return p.role === 'admin' || p.role === 'ceo';
 }
 function podeConfigurar(p: UserProfile | null) {
   if (!p) return false;
@@ -127,30 +134,53 @@ function HealthBar({ saldo, total }: { saldo: number; total: number }) {
 
 // ── Modal: Novo aporte ─────────────────────────────────────────────────────
 function ModalCapital({
-  filial, onClose, onSaved, showToast, profile,
+  filial, bancos, onClose, onSaved, showToast,
 }: {
-  filial: UnidadeCapital; onClose: () => void; onSaved: () => void;
+  filial: UnidadeCapital; bancos: Banco[]; onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void; profile: UserProfile | null;
 }) {
   const [valorStr, setValorStr] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [origemId, setOrigemId] = useState('');
+  const [destinoId, setDestinoId] = useState('');
   const [saving, setSaving] = useState(false);
   const cor = FILIAL_COLOR[filial];
+
+  // Capital próprio da holding é dinheiro dos SÓCIOS entrando: não sai de
+  // conta nenhuma do grupo, só escolhe onde entra. Aporte pra unidade é
+  // transferência — sai de uma conta da Matriz e entra numa da filial.
+  const isCapitalProprio = filial === 'Matriz';
+  const contasMatriz = bancos.filter(b => b.filial === 'Matriz');
+  const contasDestino = bancos.filter(b => bancoDaUnidade(b, filial));
+  const saldoOrigem = Number(contasMatriz.find(b => b.id === origemId)?.saldo ?? 0);
+  const valorNum = parseBRL(valorStr);
+  const semSaldo = !isCapitalProprio && !!origemId && valorNum > saldoOrigem;
 
   const handleSalvar = async () => {
     if (!supabase) return;
     const valor = parseBRL(valorStr);
     if (valor <= 0) { showToast('Informe um valor válido.', 'error'); return; }
+    if (!destinoId) { showToast('Escolha a conta de destino.', 'error'); return; }
+    if (!isCapitalProprio && !origemId) { showToast('Escolha a conta da Matriz de origem.', 'error'); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from('capital_filial').insert({
-        filial, valor,
-        registrado_por: profile?.id ?? null,
-        registrado_por_nome: profile?.nome ?? null,
-        observacao: observacao.trim() || null,
+      // RPC, não INSERT: é ela que debita a origem, credita o destino e grava
+      // o capital na mesma transação (migr. 326). A policy de INSERT direto
+      // em `capital_filial` foi removida justamente pra não haver atalho.
+      const { error } = await supabase.rpc('registrar_aporte_capital', {
+        p_filial: filial,
+        p_valor: valor,
+        p_banco_destino_id: destinoId,
+        p_banco_origem_id: isCapitalProprio ? null : origemId,
+        p_observacao: observacao.trim() || null,
       });
       if (error) throw error;
-      showToast(`Capital registrado para ${filial}.`, 'success');
+      showToast(
+        isCapitalProprio
+          ? 'Capital próprio da holding registrado.'
+          : `Aporte de ${BRL(valor)} transferido para ${filial}.`,
+        'success',
+      );
       onSaved(); onClose();
     } catch (err: any) {
       showToast(err.message ?? 'Erro ao salvar.', 'error');
@@ -196,7 +226,59 @@ function ModalCapital({
               : 'Ex.: Capital social inicial, reinvestimento...'}
           />
         </div>
-        <NeuButtonAccent onClick={handleSalvar} isLoading={saving}>Registrar Capital</NeuButtonAccent>
+
+        {/* Origem — só no aporte pra unidade. O capital próprio entra de fora
+            do grupo, então não tem conta de origem interna. */}
+        {!isCapitalProprio && (
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
+            <select
+              value={origemId} onChange={e => setOrigemId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasMatriz.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
+                </option>
+              ))}
+            </select>
+            {contasMatriz.length === 0 && (
+              <span className="text-[10px] text-yellow-400">
+                A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos e registre o capital próprio antes de aportar.
+              </span>
+            )}
+            {semSaldo && (
+              <span className="text-[10px] text-red-400">
+                Saldo insuficiente: a conta tem {BRL(saldoOrigem)}.
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Entra na conta ({filial}) *
+          </label>
+          <select
+            value={destinoId} onChange={e => setDestinoId(e.target.value)}
+            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+          >
+            <option value="">Selecione...</option>
+            {contasDestino.map(b => (
+              <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
+            ))}
+          </select>
+          {contasDestino.length === 0 && (
+            <span className="text-[10px] text-yellow-400">
+              {filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes.
+            </span>
+          )}
+        </div>
+
+        <NeuButtonAccent onClick={handleSalvar} isLoading={saving} disabled={semSaldo}>
+          {isCapitalProprio ? 'Registrar Capital' : 'Transferir Aporte'}
+        </NeuButtonAccent>
       </motion.div>
     </div>
   );
@@ -211,6 +293,7 @@ function ModalAprovarEmprestimo({
   showToast: (msg: string, t?: string) => void;
 }) {
   const [bancoId, setBancoId] = useState('');
+  const [origemId, setOrigemId] = useState('');
   const [taxa, setTaxa] = useState(String(taxaPadrao));
   const [parcelas, setParcelas] = useState(String(emp.num_parcelas));
   const [justResp, setJustResp] = useState('');
@@ -218,11 +301,23 @@ function ModalAprovarEmprestimo({
 
   const valorComJuros = emp.valor * (1 + (parseFloat(taxa) || 0) / 100);
   const valorParcela = valorComJuros / (parseInt(parcelas) || 1);
-  const bancoCont = bancos.find(b => b.id === bancoId);
+  // `aprovar_emprestimo` CREDITA o banco escolhido: é a conta onde o dinheiro
+  // do empréstimo cai, ou seja, uma conta da filial que pediu — não da Matriz.
+  // Desde que a holding passou a ter caixa próprio (migr. 325) essa lista
+  // precisava filtrar, senão dava pra aprovar um empréstimo pra SuperMax e
+  // creditar o caixa da Matriz.
+  const bancosDaFilial = bancos.filter(b => bancoDaUnidade(b, emp.filial));
+  const bancoCont = bancosDaFilial.find(b => b.id === bancoId);
+  // O principal sai do caixa da holding (migr. 326) — antes era creditado na
+  // filial sem sair de lugar nenhum.
+  const contasMatriz = bancos.filter(b => b.filial === 'Matriz');
+  const saldoOrigem = Number(contasMatriz.find(b => b.id === origemId)?.saldo ?? 0);
+  const semSaldo = !!origemId && emp.valor > saldoOrigem;
 
   const aprovar = async () => {
     if (!supabase) return;
-    if (!bancoId) { showToast('Selecione um banco.', 'error'); return; }
+    if (!bancoId) { showToast('Selecione a conta de destino.', 'error'); return; }
+    if (!origemId) { showToast('Selecione a conta da Matriz de onde sai o valor.', 'error'); return; }
     setSaving(true);
     try {
       const { error } = await supabase.rpc('aprovar_emprestimo', {
@@ -232,9 +327,10 @@ function ModalAprovarEmprestimo({
         p_taxa_juros: parseFloat(taxa) || 0,
         p_num_parcelas: parseInt(parcelas) || 1,
         p_justificativa_resp: justResp.trim() || null,
+        p_banco_origem_id: origemId,
       });
       if (error) throw error;
-      showToast('Empréstimo aprovado. Parcelas geradas.', 'success');
+      showToast('Empréstimo aprovado. Valor transferido e parcelas geradas.', 'success');
       onSaved(); onClose();
     } catch (err: any) {
       showToast(err.message ?? 'Erro.', 'error');
@@ -298,16 +394,48 @@ function ModalAprovarEmprestimo({
         {/* Configurar aprovação */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Banco *</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
+            <select
+              value={origemId} onChange={e => setOrigemId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasMatriz.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
+                </option>
+              ))}
+            </select>
+            {contasMatriz.length === 0 && (
+              <span className="text-[10px] text-yellow-400">
+                A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aprovar.
+              </span>
+            )}
+            {semSaldo && (
+              <span className="text-[10px] text-red-400">
+                Saldo insuficiente: a conta tem {BRL(saldoOrigem)} e o empréstimo é de {BRL(emp.valor)}.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {emp.filial} que recebe o valor</span>
+            </label>
             <select
               value={bancoId} onChange={e => setBancoId(e.target.value)}
               className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
             >
               <option value="">Selecione...</option>
-              {bancos.map(b => (
+              {bancosDaFilial.map(b => (
                 <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
               ))}
             </select>
+            {bancosDaFilial.length === 0 && (
+              <span className="text-[10px] text-yellow-400">
+                {emp.filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aprovar.
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -352,7 +480,7 @@ function ModalAprovarEmprestimo({
           >
             <XCircle size={15} /> Negar
           </button>
-          <NeuButtonAccent onClick={aprovar} isLoading={saving} className="flex-1">
+          <NeuButtonAccent onClick={aprovar} isLoading={saving} disabled={semSaldo} className="flex-1">
             <CheckCircle size={15} /> Aprovar
           </NeuButtonAccent>
         </div>
@@ -1266,7 +1394,10 @@ export function MatrizCapitalView({
   const { data: registros = [], isLoading, reload } = useFetchData<CapitalRow>('capital_filial', undefined, false);
   const { data: emprestimos = [], reload: reloadEmp } = useFetchData<Emprestimo>('emprestimos_filial', undefined, false);
   const { data: configs = [] } = useFetchData<CapitalConfig>('capital_config', undefined, false);
-  const { data: bancos = [] } = useFetchData<Banco>('caixa_bancos', { status: 'Ativo' }, false);
+  // `reload` importa desde a migr. 326: aporte e empréstimo mexem no saldo das
+  // contas, e o select de origem mostra esse saldo. Sem recarregar, o segundo
+  // aporte da sessão seria decidido olhando o saldo de antes do primeiro.
+  const { data: bancos = [], reload: reloadBancos } = useFetchData<Banco>('caixa_bancos', { status: 'Ativo' }, false);
   const { data: notasRecebidas = [] } = useFetchData<NotaRecebida>('/api/notasrecebidasview', { capital_origem: true }, false);
   const { data: notasEmitidas = [] } = useFetchData<NotaEmitidaMatriz>('/api/notasemitidasview', undefined, false);
 
@@ -1423,7 +1554,7 @@ export function MatrizCapitalView({
         <TabEmprestimos
           emprestimos={emprestimos} bancos={bancos} taxaPadrao={taxaPadrao}
           profile={profile}
-          onReload={() => { reloadEmp(); carregarSaldos(); }}
+          onReload={() => { reloadEmp(); carregarSaldos(); reloadBancos(); }}
           showToast={showToast}
         />
       )}
@@ -1474,9 +1605,9 @@ export function MatrizCapitalView({
       <AnimatePresence>
         {modalFilial && (
           <ModalCapital
-            filial={modalFilial} profile={profile}
+            filial={modalFilial} bancos={bancos} profile={profile}
             onClose={() => setModalFilial(null)}
-            onSaved={() => { reload(); carregarSaldos(); }}
+            onSaved={() => { reload(); carregarSaldos(); reloadBancos(); }}
             showToast={showToast}
           />
         )}

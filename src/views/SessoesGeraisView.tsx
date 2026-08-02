@@ -98,8 +98,13 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'financeiro-matriz', label: 'Financeiro', icon: DollarSign, color: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400',
     modulos: [
       { id: 'financeiro', label: 'Financeiro', icon: DollarSign, color: 'text-purple-400',
+        // 'Caixa / Bancos' entra em 2026-08-01, junto com a convenção
+        // `caixa_bancos.filial = 'Matriz'` (migr. 325). Sem ele a holding
+        // tinha conta a pagar e capital próprio mas nenhuma conta de onde
+        // debitar — o seletor de origem da baixa só oferecia caixa das
+        // unidades, e pagar a folha da diretoria saía do bolso da filial.
         submenus: [
-          'Contas a pagar', 'Contas a receber',
+          'Contas a pagar', 'Contas a receber', 'Caixa / Bancos',
           { label: 'Rateio Administrativo', requireRole: ['admin', 'ceo', 'conselheiro'] },
           'Alçadas', 'Gerenciamento', 'Relatórios',
         ] },

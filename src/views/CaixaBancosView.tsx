@@ -4,7 +4,6 @@ import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb } from '../components/ui';
-import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import {
   BANCO_LOGO_ACCEPT,
   BANCO_LOGO_MAX_LABEL,
@@ -15,6 +14,7 @@ import {
 import { useConfirm } from '../contexts/ConfirmContext';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
+import { bancoDaUnidade } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const ENDPOINT = '/api/caixabancosview';
@@ -22,11 +22,13 @@ const TIPOS = ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'];
 const STATUS_OPCOES = ['Ativo', 'Inativo'];
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
+// Sem `saldo`: ele não é campo de formulário desde a migr. 327 — só se move
+// por lançamento (aporte, empréstimo, conta paga ou recebida). O privilégio
+// de coluna no banco recusa qualquer INSERT/UPDATE que o mencione.
 interface FormState {
   conta: string;
   banco: string;
   agencia: string;
-  saldo: string;
   tipo: string;
   status: string;
   filial: string;
@@ -37,10 +39,10 @@ const EMPTY_FORM: FormState = {
   conta: '',
   banco: '',
   agencia: '',
-  saldo: '',
   tipo: TIPOS[0],
   status: STATUS_OPCOES[0],
-  filial: '',
+  // Só usado em modo Matriz — em modo filial a unidade vem da filial ativa.
+  filial: 'Matriz',
   is_reserva: false,
 };
 
@@ -76,6 +78,10 @@ export const CaixaBancosView = ({
   const matrizMode = !filialAtiva;
   const confirm = useConfirm();
 
+  // Unidade dona das contas nesta sessão. Sem filial ativa é a holding, que
+  // desde a migr. 325 tem caixa/banco próprio gravado com filial='Matriz'.
+  const unidade = filialAtiva ?? 'Matriz';
+
   // Em modo filial filtramos pelo filial do usuário
   const filialFiltro = filialAtiva ?? undefined;
   const extraFilter = filialFiltro ? { filial: filialFiltro } : undefined;
@@ -103,33 +109,36 @@ export const CaixaBancosView = ({
     : null;
   const bloqueado = configFilialAtiva?.bloqueado ?? false;
 
-  // Em modo filial, filtramos no frontend também (RLS já filtra, mas garante)
+  // Em modo filial, filtramos no frontend também (RLS já filtra, mas garante).
+  // Em modo Matriz a tabela mostra tudo — é a visão consolidada da holding —,
+  // mas o resumo de capital abaixo olha só o que é da própria Matriz.
   const data = matrizMode
     ? dataAll
-    : dataAll.filter((i: any) => i.filial === filialAtiva || i.filial == null);
+    : dataAll.filter((i: any) => bancoDaUnidade(i, unidade));
+  const dataUnidade = dataAll.filter((i: any) => bancoDaUnidade(i, unidade));
 
-  // Saldo capital da filial ativa — só carrega em modo filial. Usa a mesma
-  // RPC que a FilialCapitalView pra evitar cálculo divergente.
+  // Saldo capital da unidade. Usa a mesma RPC que a FilialCapitalView pra
+  // evitar cálculo divergente — e ela aceita 'Matriz' desde a migr. 323, então
+  // a holding também vê quanto do capital próprio já está distribuído.
   const [saldoCapital, setSaldoCapital] = useState<SaldoCapital | null>(null);
   useEffect(() => {
-    if (!supabase || matrizMode || !filialAtiva) { setSaldoCapital(null); return; }
+    if (!supabase) { setSaldoCapital(null); return; }
     let cancelled = false;
-    supabase.rpc('calcular_saldo_capital', { p_filial: filialAtiva }).then(({ data, error }) => {
+    supabase.rpc('calcular_saldo_capital', { p_filial: unidade }).then(({ data, error }) => {
       if (cancelled) return;
       if (!error && data?.[0]) setSaldoCapital(data[0]);
       else setSaldoCapital(null);
     });
     return () => { cancelled = true; };
-  }, [filialAtiva, matrizMode]);
+  }, [unidade]);
 
-  // Só contas ativas contam pro resumo (soft-delete respeitado). Em modo filial
-  // usa `data` já filtrado; em modo Matriz não mostra o card.
-  const distribuidoTotal = matrizMode
-    ? 0
-    : data.filter((i: any) => i.ativo !== false && i.status !== 'Inativo').reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
-  const reservaTotal = matrizMode
-    ? 0
-    : data.filter((i: any) => i.is_reserva && i.ativo !== false && i.status !== 'Inativo').reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
+  // Só contas ativas contam pro resumo (soft-delete respeitado), e só as da
+  // unidade — em modo Matriz a tabela lista as três filiais junto.
+  const ativasDaUnidade = dataUnidade.filter((i: any) => i.ativo !== false && i.status !== 'Inativo');
+  const distribuidoTotal = ativasDaUnidade.reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
+  const reservaTotal = ativasDaUnidade
+    .filter((i: any) => i.is_reserva)
+    .reduce((s: number, i: any) => s + Number(i.saldo ?? 0), 0);
   const disponivelOperacao = distribuidoTotal - reservaTotal;
   const capitalTotal = saldoCapital?.capital_total ?? 0;
   const sobraDistribuir = capitalTotal - distribuidoTotal;
@@ -156,7 +165,6 @@ export const CaixaBancosView = ({
       conta: String(item.conta ?? ''),
       banco: String(item.banco ?? ''),
       agencia: String(item.agencia ?? ''),
-      saldo: item.saldo != null && item.saldo !== '' ? formatBRL(Number(item.saldo)) : '',
       tipo: item.tipo ?? TIPOS[0],
       status: item.status ?? STATUS_OPCOES[0],
       filial: item.filial ?? '',
@@ -201,14 +209,17 @@ export const CaixaBancosView = ({
     if (!validate()) return;
     setIsSaving(true);
 
-    // Filial do registro: em modo filial usa a filial ativa; em modo Matriz usa o campo do form
+    // Filial do registro: em modo filial usa a filial ativa; em modo Matriz usa
+    // o campo do form. String vazia só sobrevive ao editar uma conta legada
+    // (filial NULL = global, de antes da coluna existir) — nesse caso a conta
+    // continua global em vez de ser silenciosamente adotada pela holding, o
+    // que a esconderia das filiais que a usam hoje. Ver migr. 325.
     const filialRegistro = matrizMode ? (form.filial || null) : filialAtiva;
 
     const payload: Record<string, any> = {
       conta: form.conta,
       banco: form.banco || null,
       agencia: form.agencia || null,
-      saldo: form.saldo !== '' ? parseBRL(form.saldo) : 0,
       tipo: form.tipo || null,
       status: form.status || 'Ativo',
       imagem_url: imagemUrl || null,
@@ -262,7 +273,10 @@ export const CaixaBancosView = ({
     setTogglingFilial(null);
   };
 
-  const canEdit = podeGerenciar(profile) || !bloqueado;
+  // Em modo Matriz a policy `caixa_bancos_insert` (migr. 196) só deixa passar
+  // admin/CEO — conselheiro chega na tela mas o INSERT voltaria como erro de
+  // RLS. Melhor não oferecer o botão do que oferecer e falhar.
+  const canEdit = matrizMode ? podeGerenciar(profile) : (podeGerenciar(profile) || !bloqueado);
   const isFormOpen = showForm || !!editItem;
 
   return (
@@ -313,12 +327,12 @@ export const CaixaBancosView = ({
       {/* Card resumo — só em modo filial. Confronta o Capital Total aportado
           pela Matriz com o que já foi distribuido nas contas e o que está
           em reserva. Zerado se a Matriz ainda nao aportou nada. */}
-      {!matrizMode && saldoCapital && capitalTotal > 0 && (
+      {saldoCapital && capitalTotal > 0 && (
         <div className="neu-flat rounded-2xl border border-accent/20 p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <Landmark size={14} className="text-accent" />
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Distribuição do Capital — {filialAtiva}
+              Distribuição do Capital — {unidade}
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -355,12 +369,14 @@ export const CaixaBancosView = ({
           </div>
         </div>
       )}
-      {!matrizMode && saldoCapital && capitalTotal === 0 && (
+      {saldoCapital && capitalTotal === 0 && (
         <div className="neu-flat rounded-2xl border border-white/5 p-4 flex items-start gap-3 text-xs text-gray-500">
           <Landmark size={14} className="text-gray-600 shrink-0 mt-0.5" />
           <span>
-            Nenhum capital aportado pela Matriz pra <span className="text-gray-300 font-semibold">{filialAtiva}</span> ainda —
-            peça ao admin/CEO pra registrar o capital inicial em <span className="text-accent font-semibold">Matriz → Capital</span> pra ver a distribuição aqui.
+            {matrizMode
+              ? <>A Matriz ainda não tem capital próprio registrado — lance o aporte da holding em <span className="text-accent font-semibold">Capital</span> pra ver aqui quanto dele já está nas contas.</>
+              : <>Nenhum capital aportado pela Matriz pra <span className="text-gray-300 font-semibold">{filialAtiva}</span> ainda —
+                  peça ao admin/CEO pra registrar o capital inicial em <span className="text-accent font-semibold">Matriz → Capital</span> pra ver a distribuição aqui.</>}
           </span>
         </div>
       )}
@@ -370,7 +386,9 @@ export const CaixaBancosView = ({
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Caixa / Bancos</h2>
           <p className="text-sm text-gray-400 mt-1">
-            {matrizMode ? 'Gerencie contas de todas as filiais.' : `Contas de ${filialAtiva}.`}
+            {matrizMode
+              ? 'Contas da holding e das três unidades. O que você criar aqui nasce na unidade escolhida no formulário.'
+              : `Contas de ${filialAtiva}.`}
           </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -393,6 +411,11 @@ export const CaixaBancosView = ({
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta'}</h3>
+              <p className="text-[11px] text-gray-500 leading-snug -mt-2">
+                O saldo não se digita: conta nova nasce em R$ 0,00 e o valor só entra por
+                lançamento — aporte de capital, empréstimo ou conta a receber paga. Sai por
+                conta a pagar paga.
+              </p>
 
               <div className="flex items-start gap-4 flex-wrap">
                 <BancoThumb url={imagemUrl} size="lg" alt={form.banco || 'Banco'} />
@@ -435,13 +458,6 @@ export const CaixaBancosView = ({
                   <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={form.agencia} onChange={e => setForm(s => ({ ...s, agencia: e.target.value }))} placeholder="Ex: 0001" />
                 </FormField>
-                <FormField label="Saldo (R$)">
-                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                    value={form.saldo}
-                    onChange={e => setForm(s => ({ ...s, saldo: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown}
-                    placeholder="0,00" />
-                </FormField>
                 <FormField label="Tipo">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={form.tipo} onChange={e => setForm(s => ({ ...s, tipo: e.target.value }))}>
@@ -454,13 +470,17 @@ export const CaixaBancosView = ({
                     {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </FormField>
-                {/* Selector de filial: só aparece em modo Matriz */}
+                {/* Selector de unidade: só aparece em modo Matriz */}
                 {matrizMode && (
-                  <FormField label="Filial (deixe vazio para Matriz/global)">
+                  <FormField label="Unidade dona da conta">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={form.filial} onChange={e => setForm(s => ({ ...s, filial: e.target.value }))}>
-                      <option value="">— Matriz (visível a todos) —</option>
+                      <option value="Matriz">Matriz (holding)</option>
                       {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
+                      {/* Só some quem já é global: conta anterior à coluna filial. */}
+                      {editItem && !editItem.filial && (
+                        <option value="">Global (legado — visível a todas)</option>
+                      )}
                     </select>
                   </FormField>
                 )}
@@ -550,7 +570,7 @@ export const CaixaBancosView = ({
                                     ? 'bg-accent/10 text-accent'
                                     : 'bg-white/5 text-gray-500'
                                 }`}>
-                                  {item.filial ?? 'Matriz'}
+                                  {item.filial ?? 'Global'}
                                   {item.filial && itemBloqueado && (
                                     <Lock size={9} className="inline ml-1 text-red-400" />
                                   )}

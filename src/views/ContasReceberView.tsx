@@ -8,7 +8,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
@@ -53,7 +53,11 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   const [recBankId, setRecBankId] = useState('');
   const [recSaving, setRecSaving] = useState(false);
 
-  const bancosAtivos = bancos.filter((b: any) => b.status === 'Ativo' || !b.status);
+  // Mesma régua da ContasPagarView: o crédito entra no caixa da unidade dona
+  // da conta. A migr. 325 recusa a combinação errada no banco de dados.
+  const bancosAtivos = bancos.filter(
+    (b: any) => (b.status === 'Ativo' || !b.status) && bancoDaUnidade(b, filial),
+  );
 
   // Política de juros/multa do Financeiro. Definida em Financeiro → Configurações.
   const [jurosCfg, setJurosCfg] = useState<JurosConfig | null>(null);
@@ -435,7 +439,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                                     ))}
                                   </select>
                                   {bancosAtivos.length === 0 && (
-                                    <span className="text-[10px] text-yellow-400 mt-1">Nenhum banco activo. Cadastre em Financeiro → Caixa / Bancos.</span>
+                                    <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}. Cadastre em Financeiro → Caixa / Bancos.</span>
                                   )}
                                 </div>
                                 <div className="flex gap-2 sm:contents">

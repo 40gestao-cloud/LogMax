@@ -8,7 +8,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
@@ -64,7 +64,14 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [payBankId, setPayBankId] = useState('');
   const [paySaving, setPaySaving] = useState(false);
 
-  const bancosAtivos = bancos.filter((b: any) => b.status === 'Ativo' || !b.status);
+  // A origem do dinheiro é da própria unidade: conta da Matriz debita caixa da
+  // Matriz, conta da filial debita caixa da filial. Antes o seletor listava
+  // todo banco visível — e como admin/CEO enxergam os três, dava pra quitar
+  // despesa da holding com dinheiro da SuperMax. A migr. 325 repete a régua no
+  // banco de dados; aqui é só pra não oferecer o que vai ser recusado.
+  const bancosAtivos = bancos.filter(
+    (b: any) => (b.status === 'Ativo' || !b.status) && bancoDaUnidade(b, filial),
+  );
 
   const [jurosCfg, setJurosCfg] = useState<JurosConfig | null>(null);
   useEffect(() => { fetchJurosConfig().then(setJurosCfg); }, []);
@@ -459,7 +466,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                                     ))}
                                   </select>
                                   {bancosAtivos.length === 0 && (
-                                    <span className="text-[10px] text-yellow-400 mt-1">Nenhum banco activo. Cadastre em Financeiro → Caixa / Bancos.</span>
+                                    <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}. Cadastre em Financeiro → Caixa / Bancos.</span>
                                   )}
                                 </div>
                                 <div className="flex gap-2 sm:contents">

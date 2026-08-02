@@ -21,3 +21,11 @@ export const FILIAL_COLOR: Record<FilialHolding, { bg: string; text: string; bor
 
 export const isFilialHolding = (v: any): v is FilialHolding =>
   typeof v === 'string' && (FILIAIS_HOLDING as readonly string[]).includes(v);
+
+// Uma conta de `caixa_bancos` pertence à unidade quando a filial casa. O
+// literal 'Matriz' é a holding (migr. 325); `filial = null` é a conta
+// global/legada de antes da coluna existir e continua valendo pra todas as
+// unidades — a policy `caixa_bancos_select` (migr. 196) trata NULL assim, e
+// há turma cujo único banco cadastrado está nesse estado.
+export const bancoDaUnidade = (banco: { filial?: string | null }, unidade: string) =>
+  banco.filial == null || banco.filial === unidade;
