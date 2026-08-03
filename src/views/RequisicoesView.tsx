@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
-import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
@@ -121,20 +121,47 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
 
   // Só edição de requisição já existente. A criação mora em
   // Requisições → Do Setor.
+  //
+  // Corrigir o que o gerente já aprovou devolve o documento para ele (migr.
+  // 330): item e quantidade SÃO a decisão — aprovar 5 e comprar 50 esvaziaria a
+  // aprovação. Urgência e centro de custo não reabrem nada. Quem decide isso é
+  // a RPC, porque reabrir são duas escritas (requisição e aprovação) que só
+  // fazem sentido juntas.
   const handleSave = async () => {
-    if (!validate() || !editItem) return;
+    if (!validate() || !editItem || !supabase) return;
+
+    const qtd = parseInt(extras.qtd) || 1;
+    const mudouDecisao = form.item.trim() !== (editItem.item ?? '') || qtd !== Number(editItem.qtd);
+    if (editItem.status === 'Aprovado' && mudouDecisao) {
+      const ok = await confirm(
+        `O gerente aprovou "${editItem.item}" na quantidade ${editItem.qtd}.\n\n` +
+        'Mudar o item ou a quantidade devolve a requisição para aprovação — ela sai da sua fila ' +
+        'e volta para a do gerente. Urgência e centro de custo você corrige sem reabrir nada.\n\n' +
+        'Corrigir mesmo assim?');
+      if (!ok) return;
+    }
+
     setIsSaving(true);
     showToast("Atualizando...", 'info', false);
     try {
-      const payload = {
-        item: form.item,
-        qtd: parseInt(extras.qtd) || 1,
-        urgencia: extras.urgencia,
-        centro_custo: extras.centro_custo,
-      };
-      const updated = await dbUpdate('/api/requisicoesview', editItem.id, payload);
-      setData((prev: any[]) => prev.map(d => d.id === editItem.id ? (updated ?? { ...d, ...payload }) : d));
-      showToast("Requisição atualizada!", 'success', true);
+      const { data: res, error } = await supabase.rpc('corrigir_requisicao_compra', {
+        p_id:           editItem.id,
+        p_item:         form.item,
+        p_qtd:          qtd,
+        p_urgencia:     extras.urgencia,
+        p_centro_custo: extras.centro_custo,
+      });
+      if (error) throw error;
+      const atualizada = (res as any)?.requisicao;
+      const reaberta   = !!(res as any)?.reaberta;
+      setData((prev: any[]) => prev.map(d => d.id === editItem.id
+        ? (atualizada ?? { ...d, item: form.item, qtd, urgencia: extras.urgencia, centro_custo: extras.centro_custo })
+        : d));
+      showToast(
+        reaberta
+          ? 'Requisição corrigida e devolvida para aprovação — o gerente decide de novo em Requisições → Aprovações.'
+          : 'Requisição corrigida. Quando o gerente aprovar, ela entra no dropdown de Compras → Cotações.',
+        reaberta ? 'info' : 'success', true);
       closeForm();
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -198,7 +225,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">
-                Editar Requisição
+                {editItem?.status === 'Aprovado' ? 'Corrigir requisição aprovada' : 'Corrigir requisição'}
               </h3>
 
               {editItem && (
@@ -313,10 +340,17 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.data}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Era `opacity-0 group-hover:opacity-100`: em tablet, onde
+                            não existe hover, os botões não apareciam nunca — a tela
+                            prometia correção e não mostrava sequer o botão. */}
+                        <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          {item.status === 'Pendente' && (
-                            <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                          {['Pendente', 'Aprovado'].includes(item.status) && (
+                            <button onClick={() => openEdit(item)}
+                              title={item.status === 'Aprovado'
+                                ? 'Corrigir — mudar item ou quantidade devolve para aprovação'
+                                : 'Corrigir'}
+                              className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
                           <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
