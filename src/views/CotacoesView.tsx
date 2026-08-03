@@ -355,33 +355,35 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     setDecidindo(true);
     try {
       const novoStatus = tipo === 'aprovar' ? 'Aprovado' : 'Negado';
+
+      // Decisão e cancelamento das concorrentes numa transação só (migr. 334).
+      // Eram um UPDATE mais um laço de UPDATEs com `catch {}` vazio: bastava um
+      // falhar para a proposta concorrente seguir 'Aguardando Financeiro' e
+      // aprovável — o Financeiro decidindo duas vezes a mesma compra. O banco
+      // também varre todas as propostas, não só as da página carregada.
+      if (!supabase) return;
+      const { data: res, error } = await supabase.rpc('decidir_cotacao', {
+        p_cotacao_id: cot.id,
+        p_decisao:    novoStatus,
+        p_feedback:   feedback || null,
+      });
+      if (error) throw error;
+
+      const canceladas = Number((res as any)?.canceladas ?? 0);
       const updates: any = {
         status:       novoStatus,
         feedback:     feedback || null,
         aprovado_por: profile.id,
         aprovado_em:  new Date().toISOString(),
       };
-      await dbUpdate('/api/cotacoesview', cot.id, updates);
-      setData((prev: any[]) => prev.map(c => c.id === cot.id ? { ...c, ...updates } : c));
-
-      // Aprovou → cancela as demais 'Aguardando Financeiro' da mesma requisição.
-      // Varre `todasCotacoes` (sem paginação) e não `data`: concorrente que
-      // caísse na página 2 ficava viva e podia ser aprovada depois.
-      if (tipo === 'aprovar' && cot.requisicao_id) {
-        const concorrentes = todasCotacoes.filter((c: any) =>
-          c.id !== cot.id &&
-          c.requisicao_id === cot.requisicao_id &&
-          c.status === 'Aguardando Financeiro'
-        );
-        for (const c of concorrentes) {
-          try { await dbUpdate('/api/cotacoesview', c.id, { status: 'Cancelado' }); } catch { /* noop */ }
+      setData((prev: any[]) => prev.map(c => {
+        if (c.id === cot.id) return { ...c, ...updates };
+        if (tipo === 'aprovar' && cot.requisicao_id &&
+            c.requisicao_id === cot.requisicao_id && c.status === 'Aguardando Financeiro') {
+          return { ...c, status: 'Cancelado' };
         }
-        if (concorrentes.length > 0) {
-          setData((prev: any[]) => prev.map(c =>
-            concorrentes.some((cc: any) => cc.id === c.id) ? { ...c, status: 'Cancelado' } : c
-          ));
-        }
-      }
+        return c;
+      }));
 
       // Notifica Compras.
       const reqItem = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
@@ -400,7 +402,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       });
 
       showToast(tipo === 'aprovar'
-        ? 'Cotação aprovada. Compras agora gera o pedido pelo botão "Gerar pedido", na linha da cotação.'
+        ? (canceladas > 0
+            ? `Cotação aprovada e ${canceladas} proposta(s) concorrente(s) cancelada(s). Compras agora gera o pedido pelo botão "Gerar pedido", na linha da cotação.`
+            : 'Cotação aprovada. Compras agora gera o pedido pelo botão "Gerar pedido", na linha da cotação.')
         : 'Cotação reprovada. Compras vê o motivo e cota de novo em Compras → Cotações.', 'success', true);
       setDecisao(null);
       setFeedbackInput('');
