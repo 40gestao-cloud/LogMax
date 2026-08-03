@@ -44,6 +44,14 @@
 -- A policy é FOR ALL. Se o aluno pudesse lançar durante o apagão, ele
 -- relançaria o que "sumiu" e, ao voltar, você teria tudo duplicado. Não poder
 -- nem lançar é parte da lição.
+--
+-- E a policy sozinha NÃO bastaria. As tabelas pertencem ao `postgres` e não têm
+-- FORCE ROW LEVEL SECURITY, então toda RPC SECURITY DEFINER — `criar_venda_pdv`,
+-- `confirmar_pedido_online`, `decidir_requisicao_compra` — roda como dono e
+-- ignora RLS. Com os cadastros de pé, o aluno continuaria vendendo no PDV
+-- normalmente e a venda cairia numa tabela que ele não enxerga: escrita
+-- invisível, que é pior que não congelar nada. Por isso o guard entra também no
+-- `_assert_rpc`, por onde toda RPC do sistema já passa.
 
 BEGIN;
 
@@ -120,17 +128,39 @@ COMMENT ON FUNCTION public.auth_blackout() IS
 -- A lista é a das tabelas com trilha de histórico: são exatamente as que
 -- guardam movimento, e é movimento que ninguém consegue reconstruir de cabeça.
 
+-- A lista é EXPLÍCITA, e não derivada dos triggers de histórico. Derivar era
+-- cômodo e errado por dois lados: trouxe `funcionarios` — que é cadastro de
+-- pessoas, não movimento, e cuja ausência quebraria as telas de RH sem ensinar
+-- nada — e deixou de fora `movimentacoes_estoque` e `itens_venda`, que são
+-- movimento puro e pelos quais a turma reconstruiria boa parte do que "sumiu".
 DO $$
 DECLARE
   t text;
   n integer := 0;
+  tabelas text[] := ARRAY[
+    -- Compras
+    'requisicoes', 'aprovacoes_compras', 'cotacoes', 'pedidos', 'recebimentos',
+    'requisicoes_estoque', 'aprovacoes_estoque', 'notas_recebidas',
+    -- Vendas
+    'vendas', 'itens_venda', 'devolucoes', 'orcamentos', 'pedidos_venda',
+    'expedicao', 'notas_emitidas', 'pedidos_online', 'pedidos_online_itens',
+    -- Estoque
+    'movimentacoes_estoque', 'inventarios',
+    -- Financeiro
+    'contas_pagar', 'contas_receber', 'controle_caixa', 'movimentacoes_caixa',
+    'folha_pagamento',
+    -- RH: o movimento, não o cadastro. `funcionarios` fica FORA de propósito.
+    'ferias', 'afastamentos', 'demissoes', 'rescisoes', 'ponto_eletronico',
+    -- A trilha some junto: lê-la durante o apagão entregaria a história inteira
+    -- do que se perdeu.
+    'historico_operacoes'
+  ];
 BEGIN
-  FOR t IN
-    SELECT DISTINCT c.relname
-      FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
-     WHERE tg.tgname = 'trg_historico'
-     ORDER BY 1
-  LOOP
+  FOREACH t IN ARRAY tabelas LOOP
+    CONTINUE WHEN NOT EXISTS (
+      SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = t
+    );
     EXECUTE format('DROP POLICY IF EXISTS zz_blackout ON public.%I', t);
     EXECUTE format(
       'CREATE POLICY zz_blackout ON public.%I AS RESTRICTIVE FOR ALL TO authenticated '
@@ -138,13 +168,7 @@ BEGIN
     n := n + 1;
   END LOOP;
 
-  -- A trilha some junto: ler o histórico durante o apagão entregaria a
-  -- história inteira do que "se perdeu".
-  EXECUTE 'DROP POLICY IF EXISTS zz_blackout ON public.historico_operacoes';
-  EXECUTE 'CREATE POLICY zz_blackout ON public.historico_operacoes AS RESTRICTIVE FOR ALL TO authenticated '
-          'USING (NOT public.auth_blackout()) WITH CHECK (NOT public.auth_blackout())';
-
-  RAISE NOTICE 'Simulação cobre % tabela(s) de movimento + historico_operacoes.', n;
+  RAISE NOTICE 'Simulação cobre % tabela(s).', n;
 END $$;
 
 -- ── Liga/desliga ────────────────────────────────────────────────────────────
@@ -190,6 +214,52 @@ $function$;
 REVOKE ALL ON FUNCTION public.alternar_simulacao_perda(boolean, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.alternar_simulacao_perda(boolean, text) TO authenticated;
 
+-- ── O mesmo guard nas RPCs ──────────────────────────────────────────────────
+-- Idêntico ao `_assert_rpc` vigente, com um bloco a mais. Mantida a assinatura
+-- VARIADIC e a ordem das checagens: service_role sai antes de tudo, e o
+-- desligado continua barrado como estava.
+
+CREATE OR REPLACE FUNCTION public._assert_rpc(VARIADIC p_setores text[] DEFAULT '{}'::text[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF public.auth_is_service_role() THEN
+    RETURN;
+  END IF;
+
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Não autenticado.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Vínculo encerrado não opera nada, nem o que o setor dele permitiria.
+  IF public.auth_desligado() THEN
+    RAISE EXCEPTION 'Seu vínculo com a organização foi encerrado — esta ação não está mais disponível.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Simulação de perda de dados (migr. 339). Sem isto, a RPC seria a porta dos
+  -- fundos do apagão: SECURITY DEFINER não passa pela RLS.
+  IF public.auth_blackout() THEN
+    RAISE EXCEPTION 'Dados indisponíveis — simulação de perda de dados em andamento. Nada foi apagado; a operação volta quando a direção encerrar o exercício.'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF array_length(p_setores, 1) IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- COALESCE: NULL não vira permissão.
+  IF NOT COALESCE(public.auth_in_setor(VARIADIC p_setores), false) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para esta operação.'
+      USING ERRCODE = '42501';
+  END IF;
+END;
+$function$;
+
 COMMIT;
 
 NOTIFY pgrst, 'reload schema';
@@ -207,7 +277,7 @@ NOTIFY pgrst, 'reload schema';
 --   -- 1) Interruptor desligado ao fim da migração:
 --   SELECT * FROM blackout_config;
 --
---   -- 2) 28 policies restritivas (27 tabelas + historico_operacoes):
+--   -- 2) Uma policy restritiva por tabela da lista:
 --   SELECT count(*) FROM pg_policy WHERE polname = 'zz_blackout';
 --
 --   -- 3) Nenhuma linha foi tocada — compare antes e depois de ligar:
