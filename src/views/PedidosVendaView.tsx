@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
@@ -187,6 +188,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={p.criado_por} criadoEm={p.created_at} atualizadoPor={p.atualizado_por} atualizadoEm={p.updated_at} />
+                          <HistoricoOperacoes entidade="pedidos_venda" entidadeId={p.id} titulo={`Pedido ${String(p.id).slice(-6).toUpperCase()}`} />
                             {podeSeparar && (
                               <button onClick={() => marcarSeparado(p)} disabled={processando === p.id}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-cyan-400 hover:bg-cyan-400/10 flex items-center gap-1 disabled:opacity-50">

@@ -3,6 +3,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Landmark, Package as PackageIcon, Paperclip, FileText, X, ExternalLink } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -405,6 +406,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                          <HistoricoOperacoes entidade="notas_recebidas" entidadeId={item.id} titulo={`Nota ${item.numero ?? String(item.id).slice(-6).toUpperCase()}`} />
                           <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
                           <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>

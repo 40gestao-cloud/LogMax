@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
@@ -851,6 +852,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2">
                           <AuditoriaInspect criadoPor={h.criado_por} criadoEm={h.created_at} atualizadoPor={h.atualizado_por} atualizadoEm={h.updated_at} />
+                          <HistoricoOperacoes entidade="controle_caixa" entidadeId={h.id} titulo={`Caixa ${h.data ?? ''} · ${h.filial ?? ''}`} />
                           {podeReabrir && (
                             <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
                           )}

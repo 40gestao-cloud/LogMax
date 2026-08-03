@@ -5,6 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, gerarNotaEmitidaPDF } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { hasSetor } from '../lib/rbac';
@@ -313,6 +314,10 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
                           R$ {formatBRL(Number(n.valor_total ?? 0))}
                         </td>
                         <td className="py-3 px-4 text-right">
+                          <span className="inline-flex items-center gap-1.5 align-middle mr-1.5">
+                            <HistoricoOperacoes entidade="notas_emitidas" entidadeId={n.id}
+                              titulo={`Nota ${n.numero ?? String(n.id).slice(-6).toUpperCase()}`} />
+                          </span>
                           <button onClick={() => baixarPDF(n)}
                             className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
                             <FileDown size={11} /> PDF

@@ -5,6 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, FileText } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -716,6 +717,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          <HistoricoOperacoes entidade="folha_pagamento" entidadeId={f.id} titulo={`Folha ${f.competencia ?? ''}`} />
                           <button
                             onClick={() => abrirHolerite(f)}
                             disabled={holeriteLoading === f.id}

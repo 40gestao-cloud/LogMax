@@ -5,6 +5,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { formatBRL } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -334,6 +335,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                   <th className="pb-2 font-bold px-3">Estorno</th>
                   <th className="pb-2 font-bold px-3">Motivo</th>
                   <th className="pb-2 font-bold px-3 text-center">Status</th>
+                  <th className="pb-2 font-bold px-3 text-right">Histórico</th>
                 </tr>
               </thead>
               <tbody>
@@ -350,6 +352,10 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                       <span className="line-clamp-1" title={d.motivo}>{d.motivo}</span>
                     </td>
                     <td className="py-2 px-3 text-center"><StatusBadge status={d.status} /></td>
+                    <td className="py-2 px-3 text-right">
+                      <HistoricoOperacoes entidade="devolucoes" entidadeId={d.id}
+                        titulo={`Devolução ${String(d.id).slice(-6).toUpperCase()}`} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
