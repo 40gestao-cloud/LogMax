@@ -33,12 +33,17 @@ const ATRIBUTOS_SERVICO: Record<string, AtributoDef[]> = {
   TechMax: [
     { key: 'categoria_svc', label: 'Categoria *', type: 'select', req: true,
       options: ['Troca de tela', 'Troca de bateria', 'Formatação', 'Reparo de placa', 'Software', 'Instalação', 'Diagnóstico', 'Outro'] as const },
-    { key: 'tempo_estimado_horas', label: 'Tempo estimado (h)', type: 'number', placeholder: 'Ex: 2' },
+    { key: 'tempo_estimado_min', label: 'Tempo estimado (min)', type: 'number', placeholder: 'Ex: 120' },
     { key: 'marcas_atendidas', label: 'Marcas atendidas', placeholder: 'Ex: Apple, Samsung, Motorola' },
     { key: 'garantia_dias', label: 'Garantia do serviço (dias) *', type: 'number', placeholder: 'Ex: 90', req: true },
     { key: 'requer_peca', label: 'Serviço requer peça de reposição', type: 'bool', wide: true },
   ],
-  SuperMax: [],
+  // SuperMax presta pouco serviço, mas o que presta (entrega, corte no açougue,
+  // montagem de cesta) tem duração — e sem campo de tempo o serviço só cabia na
+  // descrição, onde nenhuma tela consegue ler.
+  SuperMax: [
+    { key: 'tempo_estimado_min', label: 'Tempo estimado (min)', type: 'number', placeholder: 'Ex: 15' },
+  ],
 };
 
 const EMPTY_FORM = {
@@ -108,13 +113,23 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
 
   const openEdit = (item: any) => {
     setEditItem(item);
+    // A TechMax cadastrava em horas, o que não escreve "troca de bateria: 40
+    // min". Agora é minuto em todas as unidades; o serviço antigo entra
+    // convertido, porque salvar só grava os campos declarados — sem isto o
+    // tempo desapareceria na primeira edição.
+    const atrs: Record<string, any> =
+      (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {};
+    if (atrs.tempo_estimado_min == null && atrs.tempo_estimado_horas != null) {
+      const h = Number(atrs.tempo_estimado_horas);
+      if (Number.isFinite(h) && h > 0) atrs.tempo_estimado_min = Math.round(h * 60);
+    }
     setForm({
       codigo: item.codigo ?? '',
       nome:   item.nome   ?? '',
       tipo:   item.tipo   ?? '',
       valor:  item.valor != null ? formatBRL(Number(item.valor)) : '',
       status: item.status ?? 'Ativo',
-      atributos: (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {},
+      atributos: atrs,
     });
     setErrors({});
     setShowForm(true);
@@ -310,7 +325,9 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                   <div className="flex items-center gap-2 mb-3">
                     <Tag size={12} className="text-accent" />
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                      {filial === 'MaxLook' ? 'Detalhes do serviço (Ateliê)' : 'Detalhes da OS (Assistência)'}
+                      {filial === 'MaxLook' ? 'Detalhes do serviço (Ateliê)'
+                        : filial === 'TechMax' ? 'Detalhes da OS (Assistência)'
+                        : 'Detalhes do serviço'}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

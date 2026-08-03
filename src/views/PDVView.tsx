@@ -256,6 +256,12 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     return () => { cancelled = true; };
   }, [filialFiltro]);
   const [desconto, setDesconto] = useState('');
+  // Desconto em % é conversa de balcão ("tira 10%"), mas a venda é gravada
+  // sempre em reais: `vendas.desconto` é numeric e o RPC confere que
+  // total − desconto = total_final. O percentual vive só aqui, como forma de
+  // digitar — o que sai daqui para o banco já é o valor convertido.
+  const [descontoModo, setDescontoModo] = useState<'valor' | 'pct'>('valor');
+  const [descontoPct, setDescontoPct] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
   const [parcelas, setParcelas] = useState(1);
   const [clienteId, setClienteId] = useState('');
@@ -358,7 +364,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const filtered = buscarProdutos(produtosPorCategoria, search, produtosPorCategoria.length);
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
-  const descontoNum = parseBRL(desconto);
+  // Aceita "10", "10,5" e "10.5"; acima de 100% o desconto seria maior que a
+  // venda, e o RPC recusaria com total_final negativo.
+  const descontoPctNum = Math.min(100, Math.max(0, Number(String(descontoPct).replace(',', '.')) || 0));
+  // Arredonda em centavos (subtotal × pct já está em centavos), senão sobra
+  // fração de centavo e o RPC recusa a venda por total − desconto ≠ total_final.
+  const descontoNum = descontoModo === 'pct'
+    ? Math.min(subtotal, Math.round(subtotal * descontoPctNum) / 100)
+    : parseBRL(desconto);
   // Cupom só vale se o subtotal ainda comporta o desconto (clamp por segurança).
   const cupomDesconto = Math.min(cupomAplicado?.desconto ?? 0, Math.max(0, subtotal - descontoNum));
   const totalFinal = Math.max(0, subtotal - descontoNum - cupomDesconto);
@@ -617,7 +630,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   }, [user?.id, showToast]);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
-  const clearCart = () => { setCart([]); setDesconto(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
+  const clearCart = () => { setCart([]); setDesconto(''); setDescontoPct(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
 
   // Cupom: re-valida server-side (RPC `validar_cupom`) a cada mudança
   // estável do código, do subtotal ou da filial. Subtotal entra porque
@@ -722,6 +735,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     setThankYouOpen(true);
     setCart([]);
     setDesconto('');
+    setDescontoPct('');
     setFormaPagamento('Dinheiro');
     setParcelas(1);
     setClienteId('');
@@ -1792,17 +1806,56 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <span>Subtotal</span>
                 <span className="font-mono">{subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-gray-400">Desconto (R$)</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={desconto}
-                  onChange={e => setDesconto(formatBRL(e.target.value))}
-                  onKeyDown={handleMoneyKeyDown}
-                  placeholder="0,00"
-                  className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums"
-                />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                    Desconto
+                    {/* Trocar de modo zera o outro campo: manter os dois
+                        preenchidos deixaria um valor visível que não está
+                        sendo cobrado. */}
+                    <span className="inline-flex rounded-lg overflow-hidden border border-white/10">
+                      {(['valor', 'pct'] as const).map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => { setDescontoModo(m); setDesconto(''); setDescontoPct(''); }}
+                          className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                            descontoModo === m ? 'bg-accent/20 text-accent' : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {m === 'valor' ? 'R$' : '%'}
+                        </button>
+                      ))}
+                    </span>
+                  </span>
+                  {descontoModo === 'valor' ? (
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={desconto}
+                      onChange={e => setDesconto(formatBRL(e.target.value))}
+                      onKeyDown={handleMoneyKeyDown}
+                      placeholder="0,00"
+                      className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={descontoPct}
+                      onChange={e => setDescontoPct(e.target.value.replace(/[^\d.,]/g, '').slice(0, 6))}
+                      placeholder="0"
+                      className="neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums"
+                    />
+                  )}
+                </div>
+                {/* O percentual não vai para o banco — mostrar o valor que ele
+                    virou é o que deixa o operador conferir antes de fechar. */}
+                {descontoModo === 'pct' && descontoNum > 0 && (
+                  <p className="text-[10px] text-gray-500 text-right font-mono">
+                    {descontoPctNum.toLocaleString('pt-BR')}% de {subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} = −{descontoNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                )}
               </div>
               {/* Cupom — digitação acima/abaixo de 0 dispara revalidação no servidor */}
               <div className="flex flex-col gap-1">

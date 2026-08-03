@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -52,6 +52,17 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  // A conta nasce do pedido com a descrição "Pedido #ABC123 — Toner", e só.
+  // A quantidade fica no pedido (`item_qtd`), então quem lê a conta — na tela
+  // ou no PDF — não sabe se aquele valor pagou uma unidade ou doze. Buscamos o
+  // pedido para dizer. Conta de folha, devolução ou lançamento manual não tem
+  // pedido e continua sem quantidade, porque de fato não tem uma.
+  const { data: pedidosCompra } = useFetchData<any>('/api/pedidosview', { filial });
+  const pedidoPorId = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const p of pedidosCompra ?? []) m.set(p.id, p);
+    return m;
+  }, [pedidosCompra]);
   const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -94,8 +105,16 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const enriched = data.map((c: any) => ({
     ...c,
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
+    ped:  c.pedido_id ? pedidoPorId.get(c.pedido_id) : undefined,
     juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
   }));
+
+  // Quantidade só aparece quando o pedido a tem. `item_qtd` fracionário existe
+  // (compra por peso), por isso não é `toFixed(0)`.
+  const qtdDe = (c: any) => {
+    const q = Number(c.ped?.item_qtd);
+    return Number.isFinite(q) && q > 0 ? q : null;
+  };
 
   // Período e busca já vieram filtrados do servidor. O filtro client-side que
   // existia aqui refazia o trabalho sobre a página atual e ainda incluía
@@ -103,14 +122,22 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // fornecedor devolvia lista vazia. Ver `searchColumns` acima.
   const filtered = enriched;
 
-  const exportCols = ['Descrição', 'Fornecedor', 'Valor (R$)', 'Vencimento', 'Status'];
-  const buildExportRows = (rows: any[]) => rows.map((c: any) => [
+  // 'Qtd' e 'Unitário' são derivados do pedido, não colunas de contas_pagar: o
+  // unitário é o valor da conta dividido pela quantidade, e por isso só sai
+  // quando há quantidade — inventá-lo em conta sem pedido seria chute.
+  const exportCols = ['Descrição', 'Qtd', 'Unitário (R$)', 'Fornecedor', 'Valor (R$)', 'Vencimento', 'Status'];
+  const buildExportRows = (rows: any[]) => rows.map((c: any) => {
+    const q = qtdDe(c);
+    return [
     c.descricao ?? '—',
+    q != null ? q.toLocaleString('pt-BR') : '—',
+    q != null ? (Number(c.valor ?? 0) / q).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
     c.forn?.nome ?? '—',
     c.juros.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
     c.vencimento ?? '—',
     c.status ?? '—',
-  ]);
+    ];
+  });
 
   const fetchAllForExport = async (): Promise<any[]> => {
     if (!supabase) return [];
@@ -121,6 +148,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     return (rows ?? []).map((c: any) => ({
       ...c,
       forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
+      ped:  c.pedido_id ? pedidoPorId.get(c.pedido_id) : undefined,
       juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
     }));
   };
@@ -414,6 +442,12 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                             <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 align-middle"
                               title="Origem: Folha de Pagamento. O pagamento credita o MaxBank do colaborador e fecha a folha.">
                               Folha
+                            </span>
+                          )}
+                          {qtdDe(item) != null && (
+                            <span className="ml-2 text-[10px] font-mono text-gray-500 align-middle"
+                              title={`Pedido de ${qtdDe(item)!.toLocaleString('pt-BR')} un — R$ ${(Number(item.valor ?? 0) / qtdDe(item)!).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} cada`}>
+                              ×{qtdDe(item)!.toLocaleString('pt-BR')}
                             </span>
                           )}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.forn?.nome ?? '—'}</span>
