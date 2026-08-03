@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Send, Trash2, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -197,8 +197,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       closeForm();
       showToast(
         rows.length > 1
-          ? `${rows.length} itens enviados para Compras — o gerente da filial decide.`
-          : 'Requisição enviada para Compras — o gerente da filial decide.',
+          ? `${rows.length} itens enviados. O gerente da filial decide, e você acompanha o status nesta mesma tela.`
+          : 'Requisição enviada. O gerente da filial decide, e você acompanha o status nesta mesma tela.',
         'success', true,
       );
     } catch (err: any) {
@@ -492,6 +492,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
 export const RequisicoesSetorView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="A requisição que o seu setor abre" />;
   return <RequisicoesSetorViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

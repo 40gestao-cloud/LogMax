@@ -6,7 +6,7 @@ import { Search, Edit2, Trash2, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, SelecioneUnidade } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -151,6 +151,6 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
 
 export const RequisicoesEstoqueView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="A requisição de material do almoxarifado" />;
   return <RequisicoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
 };

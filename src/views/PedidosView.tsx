@@ -5,18 +5,25 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
-  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', { filial }, undefined, { page });
+  // Realtime: o pedido nasce em outra tela (Cotações, botão "gerar pedido") e
+  // muitas vezes por outra pessoa. Sem isto, quem estivesse com Pedidos aberto
+  // não via o pedido aparecer.
+  const { data, setData, isLoading, totalCount, reload } = useFetchData<any>('/api/pedidosview', { filial }, true, { page });
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const { data: cotacoes } = useFetchData<any>('/api/cotacoesview', { filial });
   const { data: requisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
   const [processing, setProcessing] = useState<string | null>(null);
+  // Consulta própria, sem paginação: a lista principal traz 50 linhas por vez e
+  // um contador que só enxerga a página 1 diz "nada a fazer" com trabalho na 2.
+  const { data: aguardandoEnvio } = useFetchData<any>('/api/pedidosview', { filial, status: 'Aprovado' }, true);
+  const { data: emEntrega } = useFetchData<any>('/api/pedidosview', { filial, status: 'Em Entrega' }, true);
 
   const enriched = data.map((p: any) => {
     const cotacao = cotacoes.find((c: any) => c.id === p.cotacao_id);
@@ -77,7 +84,9 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
         if (notifErr) console.warn('[Pedidos] notificar_setor(logistica):', notifErr.message);
       }
 
-      showToast(`Pedido ${flow.next.toLowerCase()}!`, 'success', true);
+      showToast(
+        'Pedido em entrega. O Estoque dá entrada da carga em Estoque → Recebimentos — e é essa conferência que libera o pagamento.',
+        'success', true);
     } catch (err: any) {
       showToast(`Erro ao atualizar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -147,9 +156,17 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Compra — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Pedidos gerados automaticamente a partir de cotações aprovadas.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Pedidos gerados a partir de cotações aprovadas. Marcar "em entrega" é o que avisa
+            o Estoque de que há carga a receber.
+          </p>
         </div>
       </div>
+
+      <FilaDeTrabalho itens={[
+        { label: 'pedido(s) para marcar em entrega', count: aguardandoEnvio.length, hint: 'sem isso o almoxarifado não sabe que a carga vem' },
+        { label: 'pedido(s) em entrega', count: emEntrega.length, hint: 'agora é com o Estoque, em Estoque → Recebimentos' },
+      ]} />
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhum pedido. Aprove uma cotação para gerar o primeiro pedido." /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
@@ -221,6 +238,6 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
 
 export const PedidosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="O pedido de compra" />;
   return <PedidosViewInner showToast={showToast} filial={filialAtiva} />;
 };

@@ -173,6 +173,48 @@ export const EmptyState = ({ message = 'Nenhum registro encontrado', error }: { 
   );
 };
 
+// Tela operacional aberta em modo Matriz. Todas as telas do fluxo de compras
+// devolviam `null` aqui: a área de conteúdo ficava vazia, sem uma palavra.
+// O menu da holding não leva a elas, mas as notificações levam — o sino aponta
+// para 'compras-cotações' e 'estoque-recebimentos', e quem clicasse a partir da
+// Matriz recebia uma tela em branco no lugar da cotação que o avisou.
+export const SelecioneUnidade = ({ oQue }: { oQue: string }) => (
+  <div className="flex-1 flex items-center justify-center p-6">
+    <div
+      className="flex flex-col items-center justify-center p-12 w-full max-w-lg text-center rounded-2xl border-dashed border-2"
+      style={{ borderColor: 'var(--color-border-md)', background: 'var(--color-surface)' }}
+    >
+      <Landmark size={32} className="text-gray-600 mb-4" />
+      <span className="text-sm font-semibold text-gray-300 mb-1">Esta tela é de cada unidade</span>
+      <span className="text-xs text-gray-500 max-w-sm leading-relaxed">
+        {oQue} pertence à filial que compra, recebe e paga. Escolha SuperMax, MaxLook ou TechMax
+        no seletor de unidade, no topo, para continuar.
+      </span>
+    </div>
+  </div>
+);
+
+// Faixa de "há trabalho seu parado aqui". Cada item é um contador com o que
+// fazer a seguir; a faixa some quando não há nada — fila vazia não merece
+// destaque, e um aviso que aparece sempre para de ser lido.
+export const FilaDeTrabalho = ({ itens }: { itens: { label: string; count: number; hint?: string }[] }) => {
+  const vivos = itens.filter(i => i.count > 0);
+  if (vivos.length === 0) return null;
+  return (
+    <div className="neu-flat rounded-2xl p-4 border border-accent/25 shrink-0 flex flex-wrap gap-x-8 gap-y-3">
+      {vivos.map(i => (
+        <div key={i.label} className="flex items-center gap-3">
+          <span className="text-2xl font-black text-accent tabular-nums leading-none">{i.count}</span>
+          <div className="leading-tight">
+            <p className="text-xs font-bold text-gray-200">{i.label}</p>
+            {i.hint && <p className="text-[10px] text-gray-500">{i.hint}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const FormField = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
   <div className="flex flex-col gap-1.5">
     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>

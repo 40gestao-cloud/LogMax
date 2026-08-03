@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { X, Check, Loader2 } from 'lucide-react';
 import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { EmptyState, StatusBadge } from '../components/ui';
+import { EmptyState, StatusBadge, SelecioneUnidade } from '../components/ui';
 import type { AprovacaoEstoque, RequisicaoEstoque, Produto } from '../types/domain';
 
 type EnrichedAp = AprovacaoEstoque & {
@@ -158,6 +158,6 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
 
 export const AprovacoesEstoqueView = ({ showToast }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile?: unknown }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="A liberação de material do almoxarifado" />;
   return <AprovacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
 };

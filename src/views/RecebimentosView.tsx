@@ -7,7 +7,7 @@ import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X }
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -32,11 +32,14 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/recebimentosview', { filial }, false,
+    '/api/recebimentosview', { filial }, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['status', 'observacao', 'pedido_id'] }
   );
   // pedidos filtrados pela filial; produtos da mesma filial para atualizar estoque.
-  const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial });
+  // Realtime nos dois: quem avisa que a carga está a caminho é Compras, marcando
+  // o pedido "Em entrega" noutra tela. Sem realtime o almoxarifado recarregava a
+  // página no escuro, à espera de um pedido que já estava lá.
+  const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial }, true);
   const { data: produtos, setData: setProdutos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -59,6 +62,14 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const confirmingRef = useRef<string | null>(null);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
+
+  // Lista sem paginação só para os contadores: a tabela mostra 50 por vez e um
+  // "nada a fazer" calculado sobre a página 1 é pior que contador nenhum.
+  const { data: todosRecebimentos } = useFetchData<any>('/api/recebimentosview', { filial }, true);
+  const pedidosSemRecebimento = pedidos.filter(
+    (p: any) => p.status === 'Em Entrega' &&
+      !todosRecebimentos.some((r: any) => r.pedido_id === p.id)).length;
+  const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
 
   // Cache de saldo por pedido — recarrega quando a lista de pedidos ou de
   // recebimentos muda (usuário registra/inativa/confirma → saldo mexe).
@@ -154,7 +165,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
       await reloadSaldos();
-      showToast("Recebimento registrado! Use o botão Confirmar para atualizar o estoque.", 'success', true);
+      showToast("Recebimento registrado — o estoque ainda NÃO mudou. Clique em Confirmar na linha para dar entrada e liberar o pagamento.", 'success', true);
       closeForm();
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -241,8 +252,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setConfirmStatus('Concluído');
       showToast(
         confirmStatus === 'Concluído'
-          ? 'Recebimento confirmado, estoque atualizado e pedido encerrado!'
-          : 'Recebimento parcial confirmado e estoque atualizado.',
+          ? 'Recebimento confirmado, estoque atualizado e pedido encerrado. A conta do fornecedor está liberada para pagamento em Financeiro → Contas a pagar.'
+          : 'Recebimento parcial confirmado e estoque atualizado. O pedido segue em entrega, esperando o restante da carga.',
         'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -257,13 +268,21 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recebimentos — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Registre o recebimento de mercadorias dos pedidos.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Registre o que chegou e confirme a entrada. É a confirmação que move o estoque
+            e libera o pagamento do fornecedor.
+          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Registrar</NeuButtonAccent>
         </div>
       </div>
+
+      <FilaDeTrabalho itens={[
+        { label: 'pedido(s) em entrega sem recebimento', count: pedidosSemRecebimento, hint: 'clique em "Registrar" quando a carga chegar' },
+        { label: 'recebimento(s) aguardando confirmação', count: aguardandoConfirmacao, hint: 'até confirmar, o estoque não mudou' },
+      ]} />
 
       <AnimatePresence>
         {showForm && (
@@ -540,6 +559,6 @@ const ModalProdutoRapido = ({ nomeInicial, filial, produtos, showToast, onClose,
 
 export const RecebimentosView = ({ showToast }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="O recebimento de mercadoria" />;
   return <RecebimentosViewInner showToast={showToast} filial={filialAtiva} />;
 };

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -65,17 +65,22 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Busca é feita client-side em `enriched` (nome do produto vem de requisicoes.item,
   // que é tabela diferente). useFetchData só sabe fazer ilike em colunas da própria
   // tabela, então qualquer searchColumns aqui filtra a coisa errada.
+  // Realtime nas três listas. Esta tela é o encontro de dois setores: Compras
+  // digita a proposta e o Financeiro decide, cada um na sua máquina. Sem
+  // realtime, o Financeiro só via a cotação depois de recarregar — e a
+  // requisição recém-aprovada pelo gerente não entrava no dropdown de nova
+  // cotação, o que lia como "o sistema perdeu meu pedido".
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/cotacoesview', { filial }, false,
+    '/api/cotacoesview', { filial }, true,
     { page }
   );
-  const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial }, true);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   // Lista SEM paginação, só para agrupar propostas concorrentes por requisição.
   // `data` traz 50 linhas; usá-la para isso fazia o contador de propostas, o
   // modal de comparação e o cancelamento automático ignorarem toda proposta
   // que tivesse caído na página seguinte.
-  const { data: todasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial });
+  const { data: todasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -174,6 +179,27 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   }, [data]);
 
   const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
+
+  // O que está parado esperando alguém desta tela. Conta sobre `todasCotacoes`
+  // (sem paginação): trabalho na página 2 é trabalho igual, e um contador que
+  // só enxerga a página 1 mente para menos.
+  const aguardandoFinanceiro = todasCotacoes.filter((c: any) => c.status === 'Aguardando Financeiro').length;
+  const aprovadasSemPedido = todasCotacoes.filter(
+    (c: any) => c.status === 'Aprovado' && !cotacoesComPedido.has(c.id)).length;
+  // Requisição aprovada segue 'Aprovado' até virar pedido, então ter cotação
+  // viva não a tira da lista — contar todas inflaria a fila com trabalho já
+  // feito. Só entra quem ainda não recebeu nenhuma proposta em pé.
+  const comCotacaoViva = new Set(
+    todasCotacoes
+      .filter((c: any) => ['Aguardando Financeiro', 'Aprovado'].includes(c.status))
+      .map((c: any) => c.requisicao_id));
+  const semNenhumaCotacao = requisicoesAprovadas.filter((r: any) => !comCotacaoViva.has(r.id)).length;
+  const filaDaTela = modoFinanceiro
+    ? [{ label: 'cotação(ões) aguardando sua decisão', count: aguardandoFinanceiro, hint: 'aprovar libera Compras a gerar o pedido' }]
+    : [
+        { label: 'requisição(ões) aprovada(s) sem cotação', count: semNenhumaCotacao, hint: 'use "Nova cotação" para pedir preço ao fornecedor' },
+        { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'clique em "Gerar pedido" na linha da cotação' },
+      ];
 
   // Requisições aprovadas da filial selecionada, ordenadas por item.
   const requisicoesAprovadaOrdenadas = useMemo(() =>
@@ -291,7 +317,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       });
       setData((prev: any[]) => [saved ?? { id: Date.now(), ...form, ...extras, status: 'Aguardando Financeiro' }, ...prev]);
       closeForm();
-      showToast('Cotação enviada ao Financeiro!', 'success', true);
+      showToast('Cotação enviada. O Financeiro decide em Financeiro → Aprovações de cotação; enquanto isso dá para cadastrar outra proposta para a mesma requisição.', 'success', true);
 
       // Notifica setor financeiro.
       await notificarSetor({
@@ -372,7 +398,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         motivo:    tipo === 'reprovar' ? feedback : undefined,
       });
 
-      showToast(tipo === 'aprovar' ? 'Cotação aprovada.' : 'Cotação reprovada.', 'success', true);
+      showToast(tipo === 'aprovar'
+        ? 'Cotação aprovada. Compras agora gera o pedido pelo botão "Gerar pedido", na linha da cotação.'
+        : 'Cotação reprovada. Compras vê o motivo e cota de novo em Compras → Cotações.', 'success', true);
       setDecisao(null);
       setFeedbackInput('');
     } catch (err: any) {
@@ -405,7 +433,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
       }
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
-      showToast(`Pedido #${novo?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado.`, 'success', true);
+      showToast(`Pedido #${novo?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -450,6 +478,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
               : 'Colete propostas de fornecedores; após aprovação do Financeiro, gere o pedido.'}
           </p>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -468,6 +497,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           )}
         </div>
       </div>
+
+      <FilaDeTrabalho itens={filaDaTela} />
 
       <AnimatePresence>
         {showForm && isCompras && !modoFinanceiro && (
@@ -832,6 +863,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
 
 export const CotacoesView = ({ showToast, profile, mode }: { showToast: any; profile: UserProfile; mode?: 'compras' | 'financeiro' }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="A cotação com fornecedores" />;
   return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} mode={mode} />;
 };

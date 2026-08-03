@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, UrgenciaBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
@@ -23,8 +23,41 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
 
   const isLoading = loadingAp || loadingReq;
 
+  // A lista de requisições vem sem paginação e limitada pelo servidor. Quando
+  // a requisição de uma aprovação pendente não vem nela, buscamos a linha pelo
+  // id em vez de descartar a aprovação — que era o que acontecia antes: o
+  // `filter` abaixo removia o card em silêncio, a requisição ficava Pendente
+  // para sempre e a tela dizia "nenhuma aprovação pendente". Falha de leitura
+  // não pode se parecer com fila vazia.
+  const [avulsas, setAvulsas] = useState<Record<string, Requisicao>>({});
+  const [orfas, setOrfas] = useState(0);
+  const faltantes = aprovacoes
+    .filter(ap => !requisicoes.some(r => r.id === ap.requisicao_id) && !avulsas[ap.requisicao_id])
+    .map(ap => ap.requisicao_id);
+  const chaveFaltantes = faltantes.join(',');
+
+  useEffect(() => {
+    if (loadingAp || loadingReq || !chaveFaltantes || !supabase) { if (!chaveFaltantes) setOrfas(0); return; }
+    let cancelado = false;
+    (async () => {
+      const ids = chaveFaltantes.split(',');
+      const { data: rows, error } = await supabase!
+        .from('requisicoes').select('*').in('id', ids).eq('ativo', true);
+      if (cancelado) return;
+      const achadas = (rows ?? []) as Requisicao[];
+      if (achadas.length) {
+        setAvulsas(prev => ({ ...prev, ...Object.fromEntries(achadas.map(r => [r.id, r])) }));
+      }
+      // Sobrou aprovação sem requisição legível: ou a requisição foi inativada
+      // sem levar a aprovação junto, ou a RLS não a entrega a quem decide. Os
+      // dois casos precisam aparecer, não sumir.
+      setOrfas(error ? ids.length : ids.length - achadas.length);
+    })();
+    return () => { cancelado = true; };
+  }, [chaveFaltantes, loadingAp, loadingReq]);
+
   const enriched: EnrichedAp[] = aprovacoes
-    .map(ap => ({ ...ap, req: requisicoes.find(r => r.id === ap.requisicao_id) }))
+    .map(ap => ({ ...ap, req: requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id] }))
     .filter((ap): ap is EnrichedAp => ap.req !== undefined);
 
   // Autoridade (migr. 282): quem decide é o gerente da filial ou a Matriz —
@@ -64,12 +97,14 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
       }
       const canceladas = Number((data as any)?.cotacoes_canceladas ?? 0);
       setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
+      // A mensagem diz o passo seguinte, não só que deu certo: aprovar aqui
+      // não compra nada — alguém em Compras ainda precisa cotar.
       showToast(
         decisao === 'Aprovado'
-          ? 'Requisição aprovada!'
+          ? 'Requisição aprovada. Compras já pode cotar em Compras → Cotações.'
           : canceladas > 0
-            ? `Requisição negada (${canceladas} cotação(ões) cancelada(s)).`
-            : 'Requisição negada.',
+            ? `Requisição negada (${canceladas} cotação(ões) cancelada(s)). O solicitante vê o motivo em Requisições → Do setor.`
+            : 'Requisição negada. O solicitante vê o motivo em Requisições → Do setor.',
         decisao === 'Aprovado' ? 'success' : 'info', true,
       );
     } catch (err: any) {
@@ -87,9 +122,22 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Requisições de compra aguardando sua decisão.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Requisições de compra aguardando sua decisão. Aprovar não compra nada —
+            libera Compras para cotar fornecedores.
+          </p>
         </div>
       </div>
+
+      {orfas > 0 && (
+        <div className="neu-flat rounded-2xl p-4 border border-yellow-500/25 shrink-0">
+          <p className="text-xs text-yellow-400 leading-relaxed">
+            {orfas} aprovação(ões) pendente(s) sem requisição legível — a requisição foi inativada
+            ou não é visível para o seu usuário. Elas não aparecem na lista abaixo e continuam
+            travando o pedido de quem solicitou.
+          </p>
+        </div>
+      )}
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
         <EmptyState message="Nenhuma aprovação pendente" />
@@ -204,6 +252,6 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
 
 export const AprovacoesComprasView = ({ showToast, profile }: { showToast: ShowToast; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  if (!filialAtiva) return <SelecioneUnidade oQue="A decisão sobre uma requisição de compra" />;
   return <AprovacoesComprasViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };
