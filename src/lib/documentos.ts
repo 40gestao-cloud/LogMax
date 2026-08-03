@@ -10,3 +10,9 @@ const curto = (id: any) => String(id ?? '').slice(-6).toUpperCase();
 
 export const numeroRequisicao = (r: { numero?: string | null; id?: any } | null | undefined): string =>
   r?.numero?.trim() || (r?.id ? `REQ-${curto(r.id)}` : '—');
+
+export const numeroCotacao = (c: { numero?: string | null; id?: any } | null | undefined): string =>
+  c?.numero?.trim() || (c?.id ? `COT-${curto(c.id)}` : '—');
+
+export const numeroPedido = (p: { numero?: string | null; id?: any } | null | undefined): string =>
+  p?.numero?.trim() || (p?.id ? `PC-${curto(p.id)}` : '—');

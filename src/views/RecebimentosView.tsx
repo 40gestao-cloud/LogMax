@@ -8,6 +8,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { numeroPedido } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -218,7 +219,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             produto_id:     confirmProduto,
             tipo:           'Entrada',
             qtd:            Number(item.qtd_recebida) || 0,
-            origem:         `Pedido #${String(item.pedido_id ?? '').slice(-6).toUpperCase()}`,
+            origem:         numeroPedido(item.ped ?? { id: item.pedido_id }),
             destino:        'Almoxarifado',
             data:           today,
             recebimento_id: item.id,
@@ -299,7 +300,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   const s = saldos[p.id];
                   const sufSaldo = s ? ` — falta ${s.qtd_saldo}/${s.qtd_pedida}` : '';
                   const esgotado = s && s.qtd_saldo <= 0;
-                  return <option key={p.id} value={p.id} disabled={esgotado}>Pedido #{p.id.slice(-6).toUpperCase()}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
+                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
                 })}</select></FormField>
                 <FormField label="Qtd Recebida"><input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
@@ -324,7 +325,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     <React.Fragment key={item.id}>
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-300">#{String(item.pedido_id ?? '').slice(-6).toUpperCase()}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_recebida ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>

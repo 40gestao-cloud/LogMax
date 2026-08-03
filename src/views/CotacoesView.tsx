@@ -8,7 +8,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
-import { numeroRequisicao } from '../lib/documentos';
+import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -439,7 +439,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
       }
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
-      showToast(`Pedido #${novo?.id?.slice(-6).toUpperCase() ?? 'NOVO'} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`, 'success', true);
+      showToast(`${numeroPedido(novo)} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -607,6 +607,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   {enrichedFiltered.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                        {/* A cotação tem número próprio e cita a requisição de
+                            onde nasceu: as duas pontas da conversa entre Compras
+                            e Financeiro numa linha só. */}
+                        <span className="block font-mono text-[10px] text-accent/70 tracking-wider">
+                          {numeroCotacao(item)}
+                        </span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{item.req?.item ?? '—'}</span>
                           {item.req && (
@@ -653,7 +659,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="cotacoes" entidadeId={item.id} titulo={item.req?.item ?? 'Cotação'} />
+                          <HistoricoOperacoes entidade="cotacoes" entidadeId={item.id} titulo={`${numeroCotacao(item)} · ${item.req?.item ?? 'Cotação'}`} />
                           {/* Aguardando Financeiro: gerente do Financeiro decide */}
                           {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>

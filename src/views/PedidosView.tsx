@@ -8,6 +8,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { numeroPedido } from '../lib/documentos';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
@@ -68,7 +69,7 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
         const { error: notifErr } = await supabase.rpc('notificar_setor', {
           p_setor:     'logistica',
           p_tipo:      'info',
-          p_titulo:    `Carga a caminho — Pedido #${String(pedido.id).slice(-6).toUpperCase()}`,
+          p_titulo:    `Carga a caminho — ${numeroPedido(pedido)}`,
           p_mensagem:  [
             item ? `Item: ${item}.` : null,
             pedido.item_qtd ? `Qtd: ${pedido.item_qtd}.` : null,
@@ -193,9 +194,9 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
                     const itemDisplay = item.item_descricao ?? item.req?.item ?? '—';
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">#{item.id?.slice(-6).toUpperCase()}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{numeroPedido(item)}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
-                          <span className="sm:hidden text-[10px] font-mono text-gray-500 block">#{item.id?.slice(-6).toUpperCase()}</span>
+                          <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{numeroPedido(item)}</span>
                           {itemDisplay}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.forn?.nome ?? '—'}</span>
                         </td>
