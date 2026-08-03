@@ -7,6 +7,8 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { FluxoCompra } from '../components/FluxoCompra';
+import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import type { AprovacaoCompras, Requisicao } from '../types/domain';
@@ -181,6 +183,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                           <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={req.item} />
                           <span className="text-[10px] text-gray-500">Histórico desta requisição</span>
                         </div>
+                        {/* A decisão fica mais fácil quando se vê o que ela
+                            destrava: aprovar aqui não compra, libera a cotação. */}
+                        <FluxoCompra etapa={etapaDaRequisicao(req.status)} />
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
                             { label: 'Solicitante', val: req.solicitante || '—' },

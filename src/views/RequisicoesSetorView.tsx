@@ -6,6 +6,8 @@ import { Plus, Send, Trash2, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { FluxoCompra } from '../components/FluxoCompra';
+import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -215,7 +217,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
-            O que o seu setor pediu. Material que já existe sai do Estoque; o que falta vai para Compras cotar, e o gerente decide.
+            O que o seu setor pediu. Material que já existe sai do Estoque; o que falta vai para Compras cotar,
+            e o gerente decide. A requisição de compra que você abre aqui é o <strong className="text-gray-300">mesmo
+            documento</strong> que Compras trabalha em Compras &rarr; Requisições de compra — clique na linha para ver
+            em que etapa ela está.
           </p>
         </div>
         {!showForm && (
@@ -482,11 +487,30 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       />
                     </td>
                   </tr>
-                  {detalhe === r.id && r.justificativa && (
+                  {detalhe === r.id && (
                     <tr className="border-b border-white/5">
                       <td colSpan={9} className="py-3 px-4">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa</span>
-                        <span className="text-xs text-gray-300">{r.justificativa}</span>
+                        {/* Só para requisição de compra: material do
+                            almoxarifado tem outro caminho, e reusar esta régua
+                            ali faria a tela mentir sobre o fluxo. */}
+                        {r.tipo === 'compra' && (
+                          <>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
+                              Onde está
+                            </span>
+                            <FluxoCompra etapa={etapaDaRequisicao(r.status)} />
+                            <p className="text-[10px] text-gray-600 mt-1.5">
+                              A última etapa é do Estoque e não aparece aqui — a sua lista mostra o que o setor pediu,
+                              não o que o almoxarifado conferiu.
+                            </p>
+                          </>
+                        )}
+                        {r.justificativa && (
+                          <div className={r.tipo === 'compra' ? 'mt-3' : ''}>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa</span>
+                            <span className="text-xs text-gray-300">{r.justificativa}</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}

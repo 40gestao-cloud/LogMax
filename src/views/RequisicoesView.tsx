@@ -4,6 +4,8 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { FluxoCompra } from '../components/FluxoCompra';
+import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -210,7 +212,11 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Fila da filial. Quem pede é a área que precisa, em Requisições → Do Setor; aqui Compras confere, corrige e leva para cotação.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Fila da filial. Quem pede é a área que precisa, em Requisições &rarr; Do Setor; aqui Compras confere,
+            corrige e leva para cotação — é o <strong className="text-gray-300">mesmo documento</strong>, visto pelo
+            papel de quem executa a compra.
+          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">
@@ -339,7 +345,14 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         {item.data_necessidade ?? '—'}
                       </td>
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.data}</td>
-                      <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
+                      <td className="py-3 px-4 text-center">
+                        <StatusBadge status={item.status} />
+                        {/* O status nomeia um ponto; a régua mostra a linha —
+                            e é a linha que responde "falta o quê?". */}
+                        <span className="block mt-1">
+                          <FluxoCompra etapa={etapaDaRequisicao(item.status)} compact />
+                        </span>
+                      </td>
                       <td className="py-3 px-4 text-right">
                         {/* Era `opacity-0 group-hover:opacity-100`: em tablet, onde
                             não existe hover, os botões não apareciam nunca — a tela
