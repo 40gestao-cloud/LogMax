@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Save } from 'lucide-react';
+import { Search, Edit2, Save, RotateCcw } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -49,16 +49,19 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
     } finally { setIsSaving(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Excluir esta requisição?')) return;
+  // Excluir saiu (migr. 340): o pedido de material é o rastro de quem tirou o
+  // que da prateleira. Reabrir devolve para a fila do Estoque — e o banco
+  // recusa se o material já saiu, porque reabrir contaria a baixa duas vezes.
+  const handleReabrir = async (item: any) => {
+    if (!supabase) return;
+    if (!await confirm('Reabrir esta requisição de material?\n\nEla volta para Pendente, na fila do Estoque.')) return;
     try {
-      await dbDelete('/api/requisicoesestoqueview', id);
-      setData((prev: any[]) => prev.filter(d => d.id !== id));
-      showToast("Excluído.", 'success', true);
+      const { error } = await supabase.rpc('reabrir_requisicao_estoque', { p_id: item.id, p_motivo: null });
+      if (error) throw error;
+      showToast('Requisição de material reaberta.', 'success', true);
+      window.location.reload();
     } catch (err: any) {
-      const msg = err?.message ?? 'verifique o console';
-      console.error('[RequisicoesEstoque] erro ao excluir:', err);
-      showToast(`Erro ao excluir: ${msg}`, 'error', true);
+      showToast(err?.message ?? 'Não foi possível reabrir.', 'error', true);
     }
   };
 
@@ -140,7 +143,12 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
                           {item.status === 'Pendente' && (
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
-                          <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          {item.status === 'Negado' && (
+                            <button onClick={() => handleReabrir(item)} title="Reabrir — volta para a fila do Estoque"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition">
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Loader2, Trash2 } from 'lucide-react';
+import { ArrowRight, Loader2, Ban } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
@@ -96,60 +96,32 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Inativar este pedido?')) return;
+  // Excluir pedido saiu (migr. 340). Cancelar preserva o documento e faz o
+  // resto na mesma transação: inativa a conta a pagar pendente e devolve a
+  // requisição para 'Aprovado', para poder ser cotada de novo. Antes eram três
+  // chamadas soltas com catch vazio no meio — falhando a segunda, sobrava conta
+  // a pagar de um pedido que não existia mais.
+  const handleCancelar = async (pedido: any) => {
+    if (!supabase) return;
+    if (!await confirm(
+      `Cancelar o pedido ${numeroPedido(pedido)}?\n\n` +
+      'A conta a pagar pendente é inativada e a requisição volta a poder ser cotada. ' +
+      'O pedido continua na lista, marcado como Cancelado — o rastro fica.')) return;
+    setProcessing(pedido.id);
     try {
-      // Pedido aprovado gera Conta a Pagar com pedido_id. Inativar só o pedido
-      // deixava a conta órfã visível em Despesas Operacionais. Inativamos
-      // junto as contas Pendentes; se houver conta 'Pago', recusamos a
-      // exclusão — registro financeiro real não some por exclusão de pedido.
-      if (supabase) {
-        const { data: contas } = await supabase
-          .from('contas_pagar')
-          .select('id, status')
-          .eq('pedido_id', id)
-          .eq('ativo', true);
-        const pagas = (contas ?? []).filter((c: any) => c.status === 'Pago');
-        if (pagas.length > 0) {
-          showToast('Existe Conta a Pagar já quitada para este pedido. Estorne antes de inativar.', 'error', true);
-          return;
-        }
-        const pendentes = (contas ?? []).filter((c: any) => c.status !== 'Pago');
-        for (const c of pendentes) {
-          await dbDelete('/api/contaspagarview', c.id);
-        }
-      }
-      await dbDelete('/api/pedidosview', id);
-
-      // A requisição foi marcada 'Atendida' quando este pedido nasceu (migr. 266).
-      // Inativando o pedido ela precisa voltar a 'Aprovado', senão fica órfã:
-      // sem pedido e fora do dropdown de Nova Cotação, ou seja, impossível de
-      // reatender. Só volta se não sobrou nenhum outro pedido ativo dela.
-      const pedido = data.find((p: any) => p.id === id);
-      if (supabase && pedido?.requisicao_id) {
-        const { data: outros } = await supabase
-          .from('pedidos')
-          .select('id')
-          .eq('requisicao_id', pedido.requisicao_id)
-          .eq('ativo', true)
-          .neq('id', id)
-          .limit(1);
-        if (!outros || outros.length === 0) {
-          try {
-            await dbUpdate('/api/requisicoesview', pedido.requisicao_id, { status: 'Aprovado' });
-          } catch {
-            // Best-effort: o pedido já foi inativado e não vale abortar por isto.
-            // Admin consegue reabrir a requisição manualmente.
-          }
-        }
-      }
-
-      setData((prev: any[]) => prev.filter(p => p.id !== id));
-      showToast('Pedido inativado.', 'success', true);
+      const { data: res, error } = await supabase.rpc('cancelar_pedido_compra', {
+        p_id: pedido.id, p_motivo: null,
+      });
+      if (error) throw error;
+      const contas = Number((res as any)?.contas_inativadas ?? 0);
+      showToast(contas > 0
+        ? `Pedido cancelado e ${contas} conta(s) a pagar inativada(s).`
+        : 'Pedido cancelado.', 'success', true);
+      await reload();
     } catch (err: any) {
-      const msg = err?.message ?? 'verifique o console';
-      console.error('[Pedidos] erro ao inativar:', err);
-      showToast(`Erro ao inativar: ${msg}`, 'error', true);
+      showToast(err?.message ?? 'Não foi possível cancelar.', 'error', true);
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -215,7 +187,13 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
                                 {flow.label}
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            {item.status !== 'Cancelado' && item.status !== 'Recebido' && (
+                              <button onClick={() => handleCancelar(item)} disabled={processing === item.id}
+                                title="Cancelar pedido — o documento fica, marcado como cancelado"
+                                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-red-400 hover:border-red-500/30 transition disabled:opacity-40">
+                                <Ban size={12} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>

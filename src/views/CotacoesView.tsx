@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award } from 'lucide-react';
+import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -86,6 +86,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [reabrindoCot, setReabrindoCot] = useState<string | null>(null);
+  const podeReabrirDoc = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
@@ -458,16 +460,24 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Inativar esta cotação?')) return;
+  // Inativar cotação saiu (migr. 340): apagar a proposta some com o preço que o
+  // fornecedor deu e com o motivo da recusa — o material da aula sobre compras.
+  // Cancelar continua sendo o caminho normal; reabrir existe para o engano.
+  const handleReabrirCot = async (cot: any) => {
+    if (!supabase) return;
+    if (!await confirm(
+      `Reabrir a cotação ${numeroCotacao(cot)}?\n\n` +
+      'Ela volta para "Aguardando Financeiro" e entra de novo na fila de decisão.')) return;
+    setReabrindoCot(cot.id);
     try {
-      await dbDelete('/api/cotacoesview', id);
-      setData((prev: any[]) => prev.filter(c => c.id !== id));
-      showToast('Cotação inativada.', 'success', true);
+      const { error } = await supabase.rpc('reabrir_cotacao', { p_id: cot.id, p_motivo: null });
+      if (error) throw error;
+      showToast('Cotação reaberta — está de volta na fila do Financeiro.', 'success', true);
+      await reload();
     } catch (err: any) {
-      const msg = err?.message ?? 'verifique o console';
-      console.error('[Cotacoes] erro ao inativar:', err);
-      showToast(`Erro ao inativar: ${msg}`, 'error', true);
+      showToast(err?.message ?? 'Não foi possível reabrir.', 'error', true);
+    } finally {
+      setReabrindoCot(null);
     }
   };
 
@@ -677,7 +687,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           {item.status === 'Aguardando Financeiro' && isCompras && (
                             <button onClick={() => handleCancelar(item.id)} title="Cancelar envio"
                               className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-yellow-400">
-                              <Trash2 size={12} />
+                              <Ban size={12} />
                             </button>
                           )}
                           {/* Aprovado e ainda sem pedido → Compras gera */}
@@ -696,11 +706,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               <MessageSquare size={12} />
                             </button>
                           )}
-                          {/* Inativar — Compras (ou admin/CEO) */}
-                          {isCompras && (
-                            <button onClick={() => handleDelete(item.id)} title="Inativar"
-                              className="action-btn-delete">
-                              <Trash2 size={12} />
+                          {/* Reabrir — só a direção, e só no que já saiu da fila */}
+                          {podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status) && (
+                            <button onClick={() => handleReabrirCot(item)} disabled={reabrindoCot === item.id}
+                              title="Reabrir — volta para a fila do Financeiro"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition disabled:opacity-40">
+                              <RotateCcw size={12} />
                             </button>
                           )}
                         </div>
