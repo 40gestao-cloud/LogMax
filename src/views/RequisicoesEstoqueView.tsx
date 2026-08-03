@@ -9,8 +9,9 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, SelecioneUnidade } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
 
-const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview', { filial }, true);
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
@@ -143,6 +144,13 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
                           {item.status === 'Pendente' && (
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
+                          {profile?.role === 'admin' && (
+                            <ExcluirAdmin endpoint="/api/requisicoesestoqueview" id={item.id}
+                              rotulo={`pedido de material de ${item.solicitante ?? 'origem desconhecida'}`}
+                              showToast={showToast}
+                              alternativa="negue a requisição: ela sai da fila e o solicitante vê o motivo."
+                              onExcluido={() => window.location.reload()} />
+                          )}
                           {item.status === 'Negado' && (
                             <button onClick={() => handleReabrir(item)} title="Reabrir — volta para a fila do Estoque"
                               className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition">
@@ -163,8 +171,8 @@ const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; fi
   );
 };
 
-export const RequisicoesEstoqueView = ({ showToast }: any) => {
+export const RequisicoesEstoqueView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A requisição de material do almoxarifado" />;
-  return <RequisicoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
+  return <RequisicoesEstoqueViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

@@ -970,7 +970,7 @@ function LogMaxAppInner() {
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} profile={profile} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" />;
-      case 'compras-pedidos':                 return <PedidosView showToast={st} />;
+      case 'compras-pedidos':                 return <PedidosView showToast={st} profile={profile} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
       case 'requisicoes-aprovações':          return <AprovacoesComprasView showToast={st} profile={profile} />;
 
@@ -980,7 +980,7 @@ function LogMaxAppInner() {
       case 'relatorio-vendas':                return <RelatoriosVendasView showToast={st} />;
       case 'estoque-liberarrequisições':      return <AprovacoesEstoqueView showToast={st} profile={profile} />;
       case 'estoque-recebimentos':            return <RecebimentosView showToast={st} />;
-      case 'estoque-requisiçõesdematerial':   return <RequisicoesEstoqueView showToast={st} />;
+      case 'estoque-requisiçõesdematerial':   return <RequisicoesEstoqueView showToast={st} profile={profile} />;
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
       case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;

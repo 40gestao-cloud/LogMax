@@ -10,8 +10,9 @@ import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, 
 import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
 
-const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   // Realtime: o pedido nasce em outra tela (Cotações, botão "gerar pedido") e
@@ -187,6 +188,12 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
                                 {flow.label}
                               </button>
                             )}
+                            {profile?.role === 'admin' && (
+                              <ExcluirAdmin endpoint="/api/pedidosview" id={item.id}
+                                rotulo={numeroPedido(item)} showToast={showToast}
+                                alternativa="cancele o pedido: a conta a pagar é inativada junto e a requisição volta a poder ser cotada."
+                                onExcluido={() => reload()} />
+                            )}
                             {item.status !== 'Cancelado' && item.status !== 'Recebido' && (
                               <button onClick={() => handleCancelar(item)} disabled={processing === item.id}
                                 title="Cancelar pedido — o documento fica, marcado como cancelado"
@@ -217,8 +224,8 @@ const PedidosViewInner = ({ showToast, filial }: { showToast: any; filial: Filia
   );
 };
 
-export const PedidosView = ({ showToast }: any) => {
+export const PedidosView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="O pedido de compra" />;
-  return <PedidosViewInner showToast={showToast} filial={filialAtiva} />;
+  return <PedidosViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

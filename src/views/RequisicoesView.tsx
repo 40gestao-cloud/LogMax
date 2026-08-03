@@ -14,6 +14,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Ur
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { usePrompt } from '../contexts/PromptContext';
 import { isConselheiro } from '../lib/rbac';
 
@@ -69,6 +70,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const [reabrindo, setReabrindo] = useState<string | null>(null);
   // Só a direção reabre — e só ela precisa enxergar o que foi excluído antes de
   // a exclusão sair de cena (migr. 340).
+  const isAdmin = profile?.role === 'admin';
   const podeReabrir = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
   const [verExcluidas, setVerExcluidas] = useState(false);
 
@@ -424,6 +426,12 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                               className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition disabled:opacity-40">
                               <RotateCcw size={12} />
                             </button>
+                          )}
+                          {isAdmin && item.ativo !== false && (
+                            <ExcluirAdmin endpoint="/api/requisicoesview" id={item.id}
+                              rotulo={numeroRequisicao(item)} showToast={showToast}
+                              alternativa="use o botão de reabrir ao lado: ela volta para Pendente e o aluno corrige."
+                              onExcluido={() => reload()} />
                           )}
                           {podeReabrir && item.ativo === false && (
                             <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}

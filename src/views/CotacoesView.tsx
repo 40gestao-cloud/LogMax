@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
@@ -705,6 +706,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
                               <MessageSquare size={12} />
                             </button>
+                          )}
+                          {profile.role === 'admin' && (
+                            <ExcluirAdmin endpoint="/api/cotacoesview" id={item.id}
+                              rotulo={numeroCotacao(item)} showToast={showToast}
+                              alternativa="cancele a cotação — ela sai da fila e o preço do fornecedor fica registrado."
+                              onExcluido={() => reload()} />
                           )}
                           {/* Reabrir — só a direção, e só no que já saiu da fila */}
                           {podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status) && (
