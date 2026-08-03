@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig } from '../hooks/useAulaConfig';
+import { useBlackout } from '../hooks/useBlackout';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, aulaSubmenuId } from '../lib/aulaModulos';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
@@ -16,6 +18,38 @@ const arraysIguais = (a: string[], b: string[]) =>
   a.length === b.length && a.every(x => b.includes(x));
 
 export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
+  // Simulação de perda de dados (migr. 339). Mora aqui porque é o painel de
+  // condução da aula, e porque quem liga é a mesma pessoa que liga o Modo Aula.
+  const { blackout } = useBlackout();
+  const [simSalvando, setSimSalvando] = useState(false);
+  const [simMensagem, setSimMensagem] = useState('');
+  const confirmar = useConfirm();
+
+  const alternarSimulacao = async (ligar: boolean) => {
+    if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
+    if (ligar && !await confirmar(
+      'Ligar a simulação de perda de dados?\n\n' +
+      'Os alunos deixam de ver e de lançar qualquer movimento — pedidos, vendas, contas, estoque. ' +
+      'NADA é apagado: o bloqueio é só de leitura e escrita, e desligar devolve tudo na hora.\n\n' +
+      'Você e a direção continuam vendo normalmente.')) return;
+
+    setSimSalvando(true);
+    try {
+      const { error } = await supabase.rpc('alternar_simulacao_perda', {
+        p_ativo: ligar,
+        p_mensagem: ligar ? (simMensagem.trim() || null) : null,
+      });
+      if (error) throw error;
+      showToast(ligar
+        ? 'Simulação ligada — as telas da turma estão vazias.'
+        : 'Simulação desligada — os dados voltaram.', 'success');
+    } catch (err: any) {
+      showToast(err?.message ?? 'Falha ao alternar a simulação.', 'error');
+    } finally {
+      setSimSalvando(false);
+    }
+  };
+
   const { config, loaded } = useAulaConfig();
 
   const [ativo, setAtivo] = useState(false);
@@ -123,6 +157,57 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             todos os usuários selecionados (admin fica sempre com acesso total pra destravar).
           </p>
         </div>
+      </div>
+
+      {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
+          esconde módulos para focar a aula, a outra tira o chão para ensinar por
+          que os dados importam. Confundir as duas seria fácil e caro. */}
+      <div className={`neu-flat rounded-3xl p-5 border ${blackout.ativo ? 'border-red-500/40' : 'border-white/5'} flex flex-col gap-3`}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-red-500/10">
+              <AlertTriangle size={18} className="text-red-400" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-gray-100">Simulação de perda de dados</h2>
+              <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
+                Deixa a turma sem ver nem lançar movimento — pedidos, vendas, contas, estoque —
+                para mostrar, sentindo, o que é depender do sistema e não ter os dados.
+                <strong className="text-gray-400"> Nada é apagado</strong>: o bloqueio é de leitura e
+                escrita, e desligar devolve tudo na hora. Cadastros, login e esta tela continuam de pé.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => alternarSimulacao(!blackout.ativo)}
+            disabled={simSalvando}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors disabled:opacity-50 shrink-0 ${
+              blackout.ativo
+                ? 'text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10'
+                : 'text-red-300 border-red-500/40 hover:bg-red-500/10'
+            }`}
+          >
+            {simSalvando ? '…' : blackout.ativo ? 'Devolver os dados' : 'Ligar simulação'}
+          </button>
+        </div>
+
+        {blackout.ativo ? (
+          <p className="text-[11px] text-red-300/90">
+            Ativa{blackout.iniciado_nome ? ` por ${blackout.iniciado_nome}` : ''}
+            {blackout.iniciado_em ? ` desde ${new Date(blackout.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}` : ''}.
+            Enquanto durar, aproveite para perguntar o que eles conseguem responder sem o sistema.
+          </p>
+        ) : (
+          <input
+            type="text"
+            value={simMensagem}
+            onChange={e => setSimMensagem(e.target.value)}
+            maxLength={200}
+            placeholder="Mensagem que a turma vai ler (opcional) — ex.: o servidor do escritório foi formatado sem backup."
+            className="neu-input rounded-xl px-3 py-2.5 text-sm"
+          />
+        )}
       </div>
 
       {/* Toggle mestre */}

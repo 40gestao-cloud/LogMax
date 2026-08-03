@@ -3,6 +3,8 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
+import { useBlackout } from './hooks/useBlackout';
+import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
 import { aulaFiltraUsuario, aulaPermiteView, aulaSetoresConcedidos } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
@@ -724,6 +726,7 @@ function LogMaxAppInner() {
   // de outras filiais). Modo Matriz (null) vê tudo.
   const badges = useSidebarBadges(profile, filialAtiva);
   const { config: aulaConfig } = useAulaConfig();
+  const { blackout } = useBlackout();
 
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
   // corpo do render (não em efeito) porque as views chamam `hasSetor` durante o
@@ -1221,6 +1224,13 @@ function LogMaxAppInner() {
             </span>
           </div>
         )}
+        <BlackoutBanner
+          ativo={blackout.ativo}
+          mensagem={blackout.mensagem}
+          por={blackout.iniciado_nome}
+          desde={blackout.iniciado_em}
+          isento={profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)}
+        />
         <div className="flex-1 min-h-0">
           <ErrorBoundary key={activeView}>
             <Suspense fallback={<PageLoadingFallback />}>
