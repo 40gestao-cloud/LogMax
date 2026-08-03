@@ -8,6 +8,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { numeroRequisicao } from '../lib/documentos';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -608,6 +609,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{item.req?.item ?? '—'}</span>
+                          {item.req && (
+                            <span className="block font-mono text-[10px] text-gray-600 tracking-wider">
+                              {numeroRequisicao(item.req)}
+                            </span>
+                          )}
                           {item.requisicao_id && (propostasPorRequisicao.get(item.requisicao_id) ?? []).length > 1 && (
                             <button
                               onClick={() => setComparando(item.requisicao_id)}

@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
+import { numeroRequisicao } from '../lib/documentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import type { AprovacaoCompras, Requisicao } from '../types/domain';
@@ -162,6 +163,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                       <ClipboardList size={18} className="text-accent" />
                     </div>
                     <div className="text-left">
+                      <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(req)}</p>
                       <p className="text-sm font-bold text-gray-200">{req.item}</p>
                       <p className="text-xs text-gray-500 mt-0.5">Solicitante: {req.solicitante} · Qtd: {req.qtd} · {req.data}</p>
                     </div>
@@ -180,7 +182,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             este documento — inclusive se ele voltou para cá
                             porque Compras corrigiu o item depois de aprovado. */}
                         <div className="flex items-center gap-2">
-                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={req.item} />
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={`${numeroRequisicao(req)} · ${req.item}`} />
                           <span className="text-[10px] text-gray-500">Histórico desta requisição</span>
                         </div>
                         {/* A decisão fica mais fácil quando se vê o que ela

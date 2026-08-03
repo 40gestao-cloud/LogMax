@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
+import { numeroRequisicao } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -104,12 +105,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const pedidos = useMemo(() => {
     const compras = data.map((r: any) => ({
       id: r.id, tipo: 'compra' as TipoReq, item: r.item, qtd: r.qtd, unidade: r.unidade,
+      numero: numeroRequisicao(r),
       complemento: r.centro_custo, prazo: r.data_necessidade, urgencia: r.urgencia ?? 'Normal',
       abertura: r.data ?? (r.created_at ?? '').slice(0, 10), status: r.status,
       justificativa: r.justificativa, solicitante: r.solicitante,
     }));
     const materiais = reqEstoque.map((r: any) => ({
-      id: r.id, tipo: 'estoque' as TipoReq,
+      id: r.id, tipo: 'estoque' as TipoReq, numero: null as string | null,
       item: produtos.find((p: any) => p.id === r.produto_id)?.nome ?? 'Produto',
       qtd: r.qtd, unidade: 'un',
       complemento: r.destino, prazo: null, urgencia: 'Normal',
@@ -455,6 +457,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         <ClipboardList size={13} className="text-gray-600 shrink-0" />
                         {r.item}
                       </span>
+                      {r.numero && (
+                        <span className="block font-mono text-[10px] text-gray-500 ml-[21px] tracking-wider">{r.numero}</span>
+                      )}
                       {r.complemento && (
                         <span className="text-[10px] text-gray-500 ml-[21px]">{r.complemento}</span>
                       )}
@@ -483,7 +488,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       <HistoricoOperacoes
                         entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
                         entidadeId={r.id}
-                        titulo={r.item}
+                        titulo={r.numero ? `${r.numero} · ${r.item}` : r.item}
                       />
                     </td>
                   </tr>

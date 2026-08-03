@@ -6,6 +6,7 @@ import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
+import { numeroRequisicao } from '../lib/documentos';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -329,6 +330,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                   {data.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[9rem] sm:max-w-[200px]">
+                        <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
                         <span className="block truncate">{item.item}</span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
@@ -359,7 +361,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                             prometia correção e não mostrava sequer o botão. */}
                         <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={item.item} />
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} />
                           {['Pendente', 'Aprovado'].includes(item.status) && (
                             <button onClick={() => openEdit(item)}
                               title={item.status === 'Aprovado'
