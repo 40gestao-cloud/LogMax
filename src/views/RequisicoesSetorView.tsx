@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -454,6 +454,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   >
                     <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                       <span className="flex items-center gap-2">
+                        {/* A seta existe porque "clique na linha" só funciona
+                            para quem já sabe que a linha abre. */}
+                        <ChevronRight size={13}
+                          className={`text-gray-500 shrink-0 transition-transform ${detalhe === r.id ? 'rotate-90' : ''}`} />
                         <ClipboardList size={13} className="text-gray-600 shrink-0" />
                         {r.item}
                       </span>

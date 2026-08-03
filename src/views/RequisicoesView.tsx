@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, ChevronRight } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
@@ -75,6 +75,9 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
     [produtos]
   );
   const [isSaving, setIsSaving] = useState(false);
+  // Linha expandida: mostra a régua inteira do fluxo e a justificativa de quem
+  // pediu — o que Compras precisa ler antes de cotar.
+  const [aberto, setAberto] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<any | null>(null);
   // produtoSel = id do produto escolhido no dropdown, ITEM_OUTRO ou '' (nenhum).
   // form.item = texto final que vai pra BD (nome do produto ou texto livre).
@@ -216,7 +219,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
           <p className="text-sm text-gray-400 mt-1">
             Fila da filial. Quem pede é a área que precisa, em Requisições &rarr; Do Setor; aqui Compras confere,
             corrige e leva para cotação — é o <strong className="text-gray-300">mesmo documento</strong>, visto pelo
-            papel de quem executa a compra.
+            papel de quem executa a compra. Clique na linha para ver em que etapa ela está e por que foi pedida.
           </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -328,10 +331,17 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
               <tbody>
                 <AnimatePresence>
                   {data.map((item: any) => (
-                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                    <React.Fragment key={item.id}>
+                    <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      onClick={() => setAberto(a => a === item.id ? null : item.id)}
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[9rem] sm:max-w-[200px]">
                         <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
-                        <span className="block truncate">{item.item}</span>
+                        <span className="flex items-center gap-1.5">
+                          <ChevronRight size={13}
+                            className={`text-gray-500 shrink-0 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
+                          <span className="block truncate">{item.item}</span>
+                        </span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
                       <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">{item.qtd}</td>
@@ -359,7 +369,8 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         {/* Era `opacity-0 group-hover:opacity-100`: em tablet, onde
                             não existe hover, os botões não apareciam nunca — a tela
                             prometia correção e não mostrava sequer o botão. */}
-                        <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity"
+                          onClick={e => e.stopPropagation()}>
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} />
                           {['Pendente', 'Aprovado'].includes(item.status) && (
@@ -373,6 +384,25 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         </div>
                       </td>
                     </motion.tr>
+                    {aberto === item.id && (
+                      <tr className="border-b border-white/5 bg-white/[0.02]">
+                        <td colSpan={9} className="py-3 px-4">
+                          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
+                            Onde está
+                          </span>
+                          <FluxoCompra etapa={etapaDaRequisicao(item.status)} />
+                          {item.justificativa && (
+                            <div className="mt-3">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+                                Por que foi pedido
+                              </span>
+                              <span className="text-xs text-gray-300">{item.justificativa}</span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                   ))}
                 </AnimatePresence>
               </tbody>
