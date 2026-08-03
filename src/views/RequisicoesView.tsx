@@ -2,18 +2,20 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, ChevronRight } from 'lucide-react';
+import { Search, Edit2, Plus, Save, ChevronRight, RotateCcw } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { usePrompt } from '../contexts/PromptContext';
+import { isConselheiro } from '../lib/rbac';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -56,16 +58,24 @@ const ProdutoResumo = ({ produto }: { produto: any }) => {
   );
 };
 
-const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
+  const [reabrindo, setReabrindo] = useState<string | null>(null);
+  // Só a direção reabre — e só ela precisa enxergar o que foi excluído antes de
+  // a exclusão sair de cena (migr. 340).
+  const podeReabrir = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
+  const [verExcluidas, setVerExcluidas] = useState(false);
+
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/requisicoesview', { filial }, true,
-    { page, searchTerm: debouncedSearch, searchColumns: ['item', 'solicitante', 'setor_solicitante', 'urgencia', 'centro_custo', 'status'] }
+    { page, searchTerm: debouncedSearch, includeInactive: verExcluidas,
+      searchColumns: ['item', 'solicitante', 'setor_solicitante', 'urgencia', 'centro_custo', 'status'] }
   );
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const produtosOrdenados = useMemo(
@@ -177,35 +187,48 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Excluir esta requisição?')) return;
-    try {
-      // Soft delete não cascateia (FK ON DELETE só age em hard delete). Excluir
-      // uma requisição com cotação/pedido vivo deixava esses registros órfãos,
-      // exibindo "—" no lugar do item. Recusamos e mandamos cancelar antes.
-      if (supabase) {
-        const [{ data: cots }, { data: peds }] = await Promise.all([
-          supabase.from('cotacoes').select('id').eq('requisicao_id', id).eq('ativo', true)
-            .in('status', ['Aguardando Financeiro', 'Aprovado']).limit(1),
-          supabase.from('pedidos').select('id').eq('requisicao_id', id).eq('ativo', true).limit(1),
-        ]);
-        if ((peds ?? []).length > 0) {
-          showToast('Esta requisição já virou pedido. Inative o pedido antes de excluí-la.', 'error', true);
-          return;
-        }
-        if ((cots ?? []).length > 0) {
-          showToast('Existe cotação ativa para esta requisição. Cancele a cotação antes de excluí-la.', 'error', true);
-          return;
-        }
-      }
+  // Excluir saiu (migr. 340). Apagar a requisição some com o documento que o
+  // aluno abriu, o gerente aprovou e Compras ia cotar — e as telas seguintes
+  // ficam sem correspondência. Foi o que aconteceu com a REQ-TM-2026-0001,
+  // procurada depois em Cotações e Pedidos, onde nunca estaria.
+  //
+  // No lugar, a direção reabre: o documento volta para 'Pendente', a aprovação
+  // volta para a fila do gerente, e quem errou corrige. Numa turma, erro é a
+  // regra — a resposta a erro não pode ser destruir o rastro.
+  const handleReabrir = async (item: any) => {
+    if (!supabase) return;
+    const excluida = item.ativo === false;
+    if (!await confirm(
+      excluida
+        ? `Restaurar a requisição ${numeroRequisicao(item)}?
 
-      await dbDelete('/api/requisicoesview', id);
-      setData((prev: any[]) => prev.filter(d => d.id !== id));
-      showToast("Requisição excluída.", 'success', true);
+Ela foi excluída e voltará para a fila como Pendente, para o gerente decidir de novo.`
+        : `Reabrir a requisição ${numeroRequisicao(item)}?
+
+Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo depois da correção.`)) return;
+
+    const motivo = await prompt({
+      message: 'Por que está sendo reaberta? (fica registrado no histórico)',
+      placeholder: 'Ex.: aluno lançou o item errado',
+      confirmLabel: excluida ? 'Restaurar' : 'Reabrir',
+      maxLength: 200,
+    });
+    if (motivo == null) return;
+
+    setReabrindo(item.id);
+    try {
+      const { data: res, error } = await supabase.rpc('reabrir_requisicao', {
+        p_id: item.id, p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      showToast((res as any)?.restaurada
+        ? 'Requisição restaurada e devolvida para aprovação.'
+        : 'Requisição reaberta — está em Requisições → Aprovações, com o gerente.', 'success', true);
+      await reload();
     } catch (err: any) {
-      const msg = err?.message ?? 'verifique o console';
-      console.error('[Requisicoes] erro ao excluir:', err);
-      showToast(`Erro ao excluir: ${msg}`, 'error', true);
+      showToast(err?.message ?? 'Não foi possível reabrir.', 'error', true);
+    } finally {
+      setReabrindo(null);
     }
   };
 
@@ -228,6 +251,16 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          {/* A exclusão saiu (migr. 340), mas o que já foi excluído continua no
+              banco — e é a direção quem traz de volta. */}
+          {podeReabrir && (
+            <button onClick={() => { setVerExcluidas(v => !v); setPage(0); }}
+              className={`neu-button rounded-xl px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                verExcluidas ? 'text-yellow-400' : 'text-gray-500 hover:text-gray-300'
+              }`}>
+              {verExcluidas ? 'Ocultar excluídas' : 'Ver excluídas'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -359,6 +392,11 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.data}</td>
                       <td className="py-3 px-4 text-center">
                         <StatusBadge status={item.status} />
+                        {item.ativo === false && (
+                          <span className="block mt-1 text-[9px] font-black uppercase tracking-widest text-red-400">
+                            excluída
+                          </span>
+                        )}
                         {/* O status nomeia um ponto; a régua mostra a linha —
                             e é a linha que responde "falta o quê?". */}
                         <span className="block mt-1">
@@ -380,7 +418,20 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                                 : 'Corrigir'}
                               className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
-                          <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          {podeReabrir && ['Aprovado', 'Negado'].includes(item.status) && item.ativo !== false && (
+                            <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
+                              title="Reabrir para correção — volta para Pendente e para a fila do gerente"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition disabled:opacity-40">
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
+                          {podeReabrir && item.ativo === false && (
+                            <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
+                              title="Restaurar esta requisição excluída"
+                              className="px-2 h-7 rounded-md flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 disabled:opacity-40">
+                              <RotateCcw size={11} />Restaurar
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -422,8 +473,8 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
   );
 };
 
-export const RequisicoesView = ({ showToast }: any) => {
+export const RequisicoesView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A fila de requisições de compra" />;
-  return <RequisicoesViewInner showToast={showToast} filial={filialAtiva} />;
+  return <RequisicoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

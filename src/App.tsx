@@ -968,7 +968,7 @@ function LogMaxAppInner() {
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} />;
+      case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} profile={profile} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
