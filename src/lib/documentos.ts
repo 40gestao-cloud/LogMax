@@ -16,3 +16,6 @@ export const numeroCotacao = (c: { numero?: string | null; id?: any } | null | u
 
 export const numeroPedido = (p: { numero?: string | null; id?: any } | null | undefined): string =>
   p?.numero?.trim() || (p?.id ? `PC-${curto(p.id)}` : '—');
+
+export const numeroPedidoVenda = (p: { numero?: string | null; id?: any } | null | undefined): string =>
+  p?.numero?.trim() || (p?.id ? `PV-${curto(p.id)}` : '—');
