@@ -25,7 +25,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation,
+  Presentation, History,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -84,6 +84,7 @@ const DesligamentosView            = lazy(() => import('./views/DesligamentosVie
 const RecrutamentoView             = lazy(() => import('./views/RecrutamentoView').then(m => ({ default: m.RecrutamentoView })));
 const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
+const AuditoriaOperacoesView       = lazy(() => import('./views/AuditoriaOperacoesView').then(m => ({ default: m.AuditoriaOperacoesView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const CentralAvaliacaoView         = lazy(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
@@ -330,6 +331,17 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
+          </button>
+        )}
+        {/* Auditoria: a trilha de operações agregada (migr. 331/332). Role-gated
+            porque a visão da unidade inteira — incluindo folha e contas — é de
+            quem responde pela unidade; o colaborador tem o histórico dentro de
+            cada documento, que é o que responde a dúvida sobre o trabalho dele.
+            A RLS recorta por filial: gerente vê a própria, Matriz vê todas. */}
+        {aulaAllow('auditoria') && (profile?.role === 'admin' || profile?.role === 'ceo'
+          || isConselheiro(profile) || profile?.role === 'gerente') && (
+          <button onClick={() => { navigate('auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <History size={18} /><span>Auditoria</span>
           </button>
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
@@ -1048,6 +1060,7 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
+      case 'auditoria':                    return <AuditoriaOperacoesView showToast={st} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
       case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;

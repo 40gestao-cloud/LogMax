@@ -15,6 +15,7 @@ export interface AulaModuloDef {
 export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'dashboard',         label: 'Dashboard',        grupo: 'Geral' },
   { id: 'usuarios',          label: 'Usuários',         grupo: 'Geral' },
+  { id: 'auditoria',         label: 'Auditoria',        grupo: 'Geral' },
   { id: 'catalogo-produtos', label: 'Catálogo',         grupo: 'Geral' },
   { id: 'avaliacoes',        label: 'Avaliações',       grupo: 'Geral' },
   { id: 'feedback-org',      label: 'Feedback & Requerimentos', grupo: 'Geral' },
@@ -133,6 +134,7 @@ const VIEW_TO_MODULO_OVERRIDE: Record<string, string> = {
   // Standalone top-level views (id === modulo)
   'dashboard':         'dashboard',
   'usuarios':          'usuarios',
+  'auditoria':         'auditoria',
   'catalogo-produtos': 'catalogo-produtos',
   'avaliacoes':        'avaliacoes',
   'feedback-org':      'feedback-org',
