@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -642,6 +643,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                          <HistoricoOperacoes entidade="cotacoes" entidadeId={item.id} titulo={item.req?.item ?? 'Cotação'} />
                           {/* Aguardando Financeiro: gerente do Financeiro decide */}
                           {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>

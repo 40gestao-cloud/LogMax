@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Send, Trash2, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -432,7 +433,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           <table className="w-full min-w-[780px]">
             <thead>
               <tr className="border-b border-white/5">
-                {['Item', 'Tipo', 'Solicitante', 'Qtd', 'Necessário até', 'Urgência', 'Aberto em', 'Situação'].map(h => (
+                {['Item', 'Tipo', 'Solicitante', 'Qtd', 'Necessário até', 'Urgência', 'Aberto em', 'Situação', 'Histórico'].map(h => (
                   <th key={h} className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">{h}</th>
                 ))}
               </tr>
@@ -471,10 +472,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-500">{r.abertura || '—'}</td>
                     <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                    {/* O aluno que pediu acompanha o próprio documento sem ter
+                        de perguntar ao professor por que ele parou. */}
+                    <td className="py-3 px-4 text-right">
+                      <HistoricoOperacoes
+                        entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
+                        entidadeId={r.id}
+                        titulo={r.item}
+                      />
+                    </td>
                   </tr>
                   {detalhe === r.id && r.justificativa && (
                     <tr className="border-b border-white/5">
-                      <td colSpan={8} className="py-3 px-4">
+                      <td colSpan={9} className="py-3 px-4">
                         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa</span>
                         <span className="text-xs text-gray-300">{r.justificativa}</span>
                       </td>

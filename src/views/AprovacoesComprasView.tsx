@@ -6,6 +6,7 @@ import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucid
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import type { AprovacaoCompras, Requisicao } from '../types/domain';
@@ -173,6 +174,13 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                   {isExpanded && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                       <div className="px-5 pb-5 flex flex-col gap-4 border-t border-white/5 pt-4">
+                        {/* Antes de decidir, dá para ver o que já aconteceu com
+                            este documento — inclusive se ele voltou para cá
+                            porque Compras corrigiu o item depois de aprovado. */}
+                        <div className="flex items-center gap-2">
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={req.item} />
+                          <span className="text-[10px] text-gray-500">Histórico desta requisição</span>
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
                             { label: 'Solicitante', val: req.solicitante || '—' },

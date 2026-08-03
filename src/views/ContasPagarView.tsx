@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
@@ -476,6 +477,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                          <HistoricoOperacoes entidade="contas_pagar" entidadeId={item.id} titulo={item.descricao} />
                             {item.status === 'Pendente' && (
                               <button onClick={() => openPay(item.id)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Pagar</button>
                             )}

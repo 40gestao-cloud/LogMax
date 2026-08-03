@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
@@ -345,6 +346,7 @@ const RequisicoesViewInner = ({ showToast, filial }: { showToast: any; filial: F
                             prometia correção e não mostrava sequer o botão. */}
                         <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                           <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={item.item} />
                           {['Pendente', 'Aprovado'].includes(item.status) && (
                             <button onClick={() => openEdit(item)}
                               title={item.status === 'Aprovado'
