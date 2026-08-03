@@ -14,7 +14,11 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, X, ArrowRight, Store, AlertTriangle } from 'lucide-react';
 import { usePedidosNovos } from '../hooks/usePedidosNovos';
+import { useFilial } from '../contexts/FilialContext';
+import type { FilialOp } from './FilialSelector';
 import type { UserProfile } from '../hooks/useUserProfile';
+
+const FILIAIS_OP: readonly string[] = ['SuperMax', 'MaxLook', 'TechMax'];
 
 const brl = (v: any) => Number(v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -33,6 +37,7 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
   // conselheiro é observador, e ninguém sem setor recebe fila de trabalho.
   const podeAtender = profile?.role !== 'conselheiro' && !!profile?.setor;
   const { pendentes } = usePedidosNovos(podeAtender);
+  const { filialAtiva, setFilialAtiva } = useFilial();
   const [open, setOpen] = useState(false);
 
   useEffect(() => { if (pendentes.length === 0) setOpen(false); }, [pendentes.length]);
@@ -46,8 +51,16 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
 
   if (pendentes.length === 0) return null;
 
+  // O FAB mostra tudo que a RLS deixa ver — para admin, CEO e quem opera mais
+  // de uma unidade, isso inclui filial diferente da ativa. A tela de destino
+  // opera UMA unidade por vez (e em modo Matriz não renderiza nada), então sem
+  // trocar a filial aqui o clique leva a uma lista sem o pedido que o próprio
+  // FAB acabou de mostrar — ou a uma tela em branco.
   const atender = () => {
     setOpen(false);
+    const temNaAtiva = pendentes.some(p => p.filial === filialAtiva);
+    const alvo = temNaAtiva ? filialAtiva : pendentes.find(p => FILIAIS_OP.includes(p.filial))?.filial;
+    if (alvo && alvo !== filialAtiva) setFilialAtiva(alvo as FilialOp);
     onNavigate('vendas-pedidosonline');
   };
 

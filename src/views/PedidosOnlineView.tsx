@@ -57,13 +57,14 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   // o domínio da Vercel no topo da caixa. O PromptProvider já existia para
   // isto — a tela é que não usava.
   const prompt = usePrompt();
-  const { data: pedidos, setData, isLoading, reload } =
+  const { data: pedidos, setData, isLoading, reload, error: erroPedidos } =
     useFetchData<Pedido>('/api/pedidosonlineview', { filial }, true);
   const { data: itens } = useFetchData<any>('/api/pedidosonlineitensview', undefined, true);
   // '/api/crmview', não '/api/clientesview': esse segundo nome nunca existiu
   // no ENDPOINT_TABLE_MAP, então a lista de clientes vinha sempre vazia.
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
-  const { data: produtos, setData: setProdutos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: produtos, setData: setProdutos, reload: reloadProdutos } =
+    useFetchData<any>('/api/produtosview', { filial });
   const { data: lojaCfg, setData: setLojaCfg } =
     useFetchData<any>('/api/lojaconfigview', { filial }, true, { orderBy: 'filial', ascending: true });
 
@@ -210,7 +211,11 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
         ? `Pedido ${atendendo.codigo} virou venda pelo valor cheio — o cupom não foi aplicado.`
         : `Pedido ${atendendo.codigo} virou venda — estoque, conta a receber e nota já saíram.`, 'success');
       setAtendendo(null);
-      await reload();
+      // O estoque acabou de cair. Sem recarregar `produtos`, o aviso "sem
+      // estoque" dos pedidos que continuam na fila fica olhando para o saldo
+      // de antes desta venda — que é exatamente o número que o aluno usaria
+      // para prometer o item ao próximo comprador.
+      await Promise.all([reload(), reloadProdutos()]);
       void data;
     } catch (err: any) {
       // A mensagem do banco diz qual produto ficou sem estoque, ou que o
@@ -532,7 +537,17 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       </div>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        {pedidos.length === 0 ? (
+        {/* Consulta que falha e lista vazia são a mesma tela sem isto — e a
+            leitura natural de uma fila vazia é "ninguém pediu ainda", não
+            "não consegui ler os pedidos". */}
+        {erroPedidos ? (
+          <div className="rounded-2xl p-4 border border-red-500/30 bg-red-500/5">
+            <p className="text-xs font-bold text-red-400 flex items-center gap-1.5 mb-1">
+              <AlertTriangle size={12} />Não foi possível carregar a fila
+            </p>
+            <p className="text-[11px] text-gray-400 leading-relaxed">{erroPedidos}</p>
+          </div>
+        ) : pedidos.length === 0 ? (
           <EmptyState message="Nenhum pedido pela loja online ainda." />
         ) : (
           <div className="flex flex-col gap-2">
@@ -841,7 +856,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   </option>
                   {clientesOpts.map((g: any) => (
                     <optgroup key={g.label} label={g.label}>
-                      {g.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </optgroup>
                   ))}
                 </select>
@@ -877,6 +892,15 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
 
 export const PedidosOnlineView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
-  if (!filialAtiva) return null;
+  // Modo Matriz não tem loja: a vitrine, os limites e a fila são da unidade.
+  // Devolver `null` aqui deixava a área de conteúdo vazia, sem dizer o que
+  // fazer — quem chegasse pelo menu achava que a tela tinha quebrado.
+  if (!filialAtiva) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <EmptyState message="A loja online é de cada unidade. Escolha SuperMax, MaxLook ou TechMax no seletor do topo para ver a fila de pedidos." />
+      </div>
+    );
+  }
   return <PedidosOnlineInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };
