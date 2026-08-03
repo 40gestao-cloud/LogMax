@@ -175,6 +175,8 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                 para mostrar, sentindo, o que é depender do sistema e não ter os dados.
                 <strong className="text-gray-400"> Nada é apagado</strong>: o bloqueio é de leitura e
                 escrita, e desligar devolve tudo na hora. Cadastros, login e esta tela continuam de pé.
+                A tela deles, porém, lê como falha real — e não diz que é exercício. Quem revela é você,
+                na hora que escolher.
               </p>
             </div>
           </div>
@@ -204,7 +206,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             value={simMensagem}
             onChange={e => setSimMensagem(e.target.value)}
             maxLength={200}
-            placeholder="Mensagem que a turma vai ler (opcional) — ex.: o servidor do escritório foi formatado sem backup."
+            placeholder="O que a turma vai ler (opcional) — ex.: Todos os dados foram apagados por um erro no sistema."
             className="neu-input rounded-xl px-3 py-2.5 text-sm"
           />
         )}
