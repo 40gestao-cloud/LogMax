@@ -19,3 +19,6 @@ export const numeroPedido = (p: { numero?: string | null; id?: any } | null | un
 
 export const numeroPedidoVenda = (p: { numero?: string | null; id?: any } | null | undefined): string =>
   p?.numero?.trim() || (p?.id ? `PV-${curto(p.id)}` : '—');
+
+export const numeroOrcamento = (o: { numero?: string | null; id?: any } | null | undefined): string =>
+  o?.numero?.trim() || (o?.id ? `ORC-${curto(o.id)}` : '—');

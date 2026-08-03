@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -358,7 +359,16 @@ const OrcamentosViewInner = ({
         ? { ...o, status: 'Convertido em Pedido', pedido_venda_id: pedidoId }
         : o
       ));
-      showToast(`Pedido de venda #${String(pedidoId).slice(0, 8).toUpperCase()} criado.`, 'success', true);
+      // O número real do pedido nasce no trigger (migr. 338); a RPC devolve só
+      // o id. Buscar aqui evita mostrar um identificador que não existe em
+      // nenhuma outra tela.
+      let rotulo = `#${String(pedidoId).slice(-6).toUpperCase()}`;
+      try {
+        const { data: pv } = await supabase
+          .from('pedidos_venda').select('numero').eq('id', pedidoId).maybeSingle();
+        if (pv?.numero) rotulo = pv.numero;
+      } catch { /* rótulo do id serve */ }
+      showToast(`${numeroOrcamento(orc)} virou o pedido de venda ${rotulo}.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao converter: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -621,7 +631,12 @@ const OrcamentosViewInner = ({
                     const podeDecidirAgora = podeDecidirFin && o.status === 'Aguardando Financeiro';
                     return (
                       <motion.tr key={o.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">{o.cliente?.nome ?? '—'}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                          {/* O orçamento vai ao cliente: é por este número que
+                              ele volta perguntando. */}
+                          <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroOrcamento(o)}</span>
+                          {o.cliente?.nome ?? '—'}
+                        </td>
                         <td className="py-3 px-4 text-xs text-gray-400">{o.vendedor_nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-500 text-center">{o.data_emissao ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-center">
@@ -642,7 +657,7 @@ const OrcamentosViewInner = ({
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={o.criado_por} criadoEm={o.created_at} atualizadoPor={o.atualizado_por} atualizadoEm={o.updated_at} />
-                          <HistoricoOperacoes entidade="orcamentos" entidadeId={o.id} titulo={`Orçamento ${String(o.id).slice(-6).toUpperCase()}`} />
+                          <HistoricoOperacoes entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} />
                             <button onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
                               className="action-btn-neutral">
                               <Eye size={12} />
