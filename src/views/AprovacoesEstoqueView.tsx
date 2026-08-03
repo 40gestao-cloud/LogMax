@@ -15,8 +15,8 @@ type EnrichedAp = AprovacaoEstoque & {
 };
 
 const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: string, type: string, persist?: boolean) => void; filial: FilialOp }) => {
-  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial });
-  const { data: requisicoes } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial });
+  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});

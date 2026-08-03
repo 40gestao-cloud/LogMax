@@ -267,7 +267,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 
 // ── View Principal ────────────────────────────────────────────────────────────
 const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
-  const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial });
+  const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial }, true);
   const confirm = useConfirm();
   const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview', { orderBy: 'data_inicio', ascending: false });
 

@@ -9,7 +9,7 @@ import { playPlim } from '../utils/audioUtils';
 
 // ── Aba Promoções (código original) ──────────────────────────────────────────
 function AbaPromocoes({ showToast, filial }: any) {
-  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação', filial });
+  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação', filial }, true);
   const [obs,       setObs]       = useState<Record<string, string>>({});
   const [expanded,  setExpanded]  = useState<string | null>(null);
   const [processing,setProcessing]= useState<string | null>(null);
@@ -145,7 +145,7 @@ function AbaPromocoes({ showToast, filial }: any) {
 // ── Aba Campanhas ─────────────────────────────────────────────────────────────
 function AbaCampanhas({ showToast, filial }: any) {
   const { data: campanhas, setData: setCampanhas, isLoading: loadingCamp } =
-    useFetchData<any>('/api/marketingcampanhasview', { status: 'Aguardando Financeiro', filial });
+    useFetchData<any>('/api/marketingcampanhasview', { status: 'Aguardando Financeiro', filial }, true);
   // itens_campanha não tem coluna filial própria — escopo é derivado
   // via campanha_id (só carregamos itens das campanhas já filtradas).
   const { data: todosItens, setData: setItens } = useFetchData<any>('itens_campanha');

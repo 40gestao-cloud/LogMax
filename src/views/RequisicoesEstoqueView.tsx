@@ -11,7 +11,7 @@ import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const RequisicoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
-  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
+  const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview', { filial }, true);
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);

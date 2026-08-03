@@ -235,7 +235,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const { data: funcionarios, reload: reloadFunc } = useFetchData<any>('/api/funcionariosview');
   // Convocações (migr. 314). Sem extraFilter pelo mesmo motivo das etapas: a
   // RLS já confina, e em Matriz o escopo é a rede toda.
-  const { data: convites, reload: reloadConvites } = useFetchData<any>('/api/vagaconvitesview');
+  const { data: convites, reload: reloadConvites } = useFetchData<any>('/api/vagaconvitesview', undefined, true);
   // Incrementado após cada promoção para o bloco de pendências se recarregar.
   const [movNonce, setMovNonce] = useState(0);
 

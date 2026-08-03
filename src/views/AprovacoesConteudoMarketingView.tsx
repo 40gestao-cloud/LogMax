@@ -16,7 +16,7 @@ export const AprovacoesConteudoMarketingView = ({ showToast }: any) => {
   const filter = filialAtiva
     ? { status_link: 'Aguardando Aprovação', filial: filialAtiva }
     : { status_link: 'Aguardando Aprovação' };
-  const { data: tarefas, setData } = useFetchData<any>('/api/marketingtarefasview', filter);
+  const { data: tarefas, setData } = useFetchData<any>('/api/marketingtarefasview', filter, true);
   const [obs, setObs]             = useState<Record<string, string>>({});
   const [expanded, setExpanded]   = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);

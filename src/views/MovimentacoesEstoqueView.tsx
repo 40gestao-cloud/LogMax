@@ -32,7 +32,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
   );
   const extraFilter = debouncedSearch.trim() ? { filial, produto_id: produtoIds } : { filial };
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/movimentacoesestoqueview', extraFilter, false, { page },
+    '/api/movimentacoesestoqueview', extraFilter, true, { page },
   );
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);

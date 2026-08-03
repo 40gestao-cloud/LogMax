@@ -28,9 +28,9 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
   );
   const extraFilter = debouncedSearch.trim() ? { filial, produto_id: produtoIds } : { filial };
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/expedicao', extraFilter, false, { page },
+    '/api/expedicao', extraFilter, true, { page },
   );
-  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial });
+  const { data: requisicoes } = useFetchData<any>('/api/requisicoesestoqueview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ produto_id: '' });

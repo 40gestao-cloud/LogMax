@@ -92,7 +92,7 @@ const diasNoPeriodo = (ini: string, fim: string): number => {
 };
 
 const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
-  const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview', { filial });
+  const { data: afastamentos, setData, isLoading, reload } = useFetchData<Afastamento>('/api/afastamentosview', { filial }, true);
   const confirm = useConfirm();
   const { data: funcionarios } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 

@@ -98,7 +98,7 @@ const splitDataHora = (iso: string): { data: string; hora: string } => {
 const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   const confirm = useConfirm();
   const { data: posts, setData, isLoading } = useFetchData<Post>('/api/marketingcalendarioview', { filial });
-  const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview', { filial });
+  const { data: promocoes } = useFetchData<Promocao>('/api/marketingpromocoesview', { filial }, true);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Post | null>(null);

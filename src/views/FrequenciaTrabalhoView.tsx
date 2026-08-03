@@ -178,7 +178,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     '/api/funcionariosview',
     filial ? { filial } : undefined,
   );
-  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview');
+  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview', undefined, true);
 
   // Filtro de filial dentro do modo Matriz (null = todas)
   const [filialFiltro, setFilialFiltro] = useState<string | null>(null);

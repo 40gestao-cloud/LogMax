@@ -5,7 +5,7 @@
 -- publica nada porque a tabela não está em `supabase_realtime`. Não há erro em
 -- lugar nenhum — o canal fica ouvindo silêncio e a tela só muda com F5.
 --
--- Levantamento em 03/08/2026 no LogMax-ERP: dez tabelas com
+-- Levantamento em 03/08/2026 no LogMax-ERP: catorze tabelas com
 -- `useFetchData(..., true)` no código e ausentes da publicação. As quatro que
 -- já estavam publicadas (requisicoes, aprovacoes_compras, pedidos,
 -- movimentacoes_estoque) explicam por que só *parte* do fluxo de compras
@@ -25,6 +25,10 @@
 --   pedidos_venda       O orçamento aprovado vira pedido para a Logística.
 --   vendas              Histórico e recibos, alimentados pelo PDV ao lado.
 --   produtos            Estoque do PDV: a venda de um caixa muda a grade do outro.
+--   marketing_promocoes Marketing cria a promoção, o Financeiro aprova.
+--   marketing_tarefas   A fila de aprovação de conteúdo, mesmo desenho.
+--   expedicao           O pedido de venda vira separação para a Logística.
+--   controle_caixa      Quem abre o caixa não é quem opera o PDV.
 --
 -- Custo: `produtos` é a mais movimentada (toda venda mexe no estoque). O
 -- `useFetchData` agrupa eventos numa janela de 250 ms, então uma rajada de
@@ -55,7 +59,11 @@ BEGIN
     'orcamentos',
     'pedidos_venda',
     'vendas',
-    'produtos'
+    'produtos',
+    'marketing_promocoes',
+    'marketing_tarefas',
+    'expedicao',
+    'controle_caixa'
   ] LOOP
     IF EXISTS (
       SELECT 1 FROM information_schema.tables
@@ -73,7 +81,7 @@ END $$;
 
 COMMIT;
 
--- Verificação (esperado: 14 linhas, as 10 acima mais as 4 que já existiam):
+-- Verificação (esperado: 18 linhas, as 14 acima mais as 4 que já existiam):
 --
 --   SELECT tablename FROM pg_publication_tables
 --    WHERE pubname = 'supabase_realtime'
@@ -81,6 +89,7 @@ COMMIT;
 --      AND tablename IN ('cotacoes','recebimentos','requisicoes_estoque',
 --                        'aprovacoes_estoque','contas_pagar','contas_receber',
 --                        'orcamentos','pedidos_venda','vendas','produtos',
---                        'requisicoes','aprovacoes_compras','pedidos',
---                        'movimentacoes_estoque')
+--                        'marketing_promocoes','marketing_tarefas','expedicao',
+--                        'controle_caixa','requisicoes','aprovacoes_compras',
+--                        'pedidos','movimentacoes_estoque')
 --    ORDER BY tablename;

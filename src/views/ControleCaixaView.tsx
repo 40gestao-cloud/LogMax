@@ -632,6 +632,11 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   const { data: historico, isLoading: histLoading, reload } = useFetchData<any>(
     '/api/controlecaixaview',
     filiaisVisiveis.length > 0 ? { filial: [...filiaisVisiveis] } : { filial: '__none__' },
+    // Realtime: quem abre o caixa quase nunca é quem opera o PDV. Sem isto o
+    // operador ficava recarregando a tela à espera de um caixa que já estava
+    // aberto — e o inverso, vendendo contra um caixa que alguém acabou de
+    // fechar.
+    true,
   );
 
   // Chama a RPC calcular_saldo_capital pra cada filial visível em paralelo.
