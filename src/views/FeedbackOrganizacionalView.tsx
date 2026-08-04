@@ -305,7 +305,7 @@ const InboxFeedbacks = ({ profile, showToast }: { profile: UserProfile; showToas
                 className="neu-button px-3 py-1.5 rounded-lg disabled:opacity-30">Anterior</button>
               <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * 50 >= totalCount}
                 className="neu-button px-3 py-1.5 rounded-lg disabled:opacity-30">Próxima</button>
-              <button onClick={reload} className="neu-button px-3 py-1.5 rounded-lg">Atualizar</button>
+              <button onClick={() => reload()} className="neu-button px-3 py-1.5 rounded-lg">Atualizar</button>
             </div>
           </div>
         )}

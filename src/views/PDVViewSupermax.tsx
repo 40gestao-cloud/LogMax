@@ -215,6 +215,10 @@ export const PDVViewSupermax = ({
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
   const cartRef              = useRef(cart);
   cartRef.current            = cart;
+  // Último caixa aberto conhecido — segura a árvore de render de pé se o
+  // hook devolver null por um instante (hiccup de rede/RLS) no meio de uma
+  // cobrança. Ver caixaAtivo, antes do RENDER.
+  const ultimoCaixaRef       = useRef(caixa);
   const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number) => Promise<void>>(null!);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
@@ -1342,8 +1346,18 @@ export const PDVViewSupermax = ({
   // Classe do container raiz — fullscreen sobrepõe o app shell (sidebar+topbar).
   const rootClass = fullscreen ? 'fixed inset-0 z-[100]' : 'h-full';
 
+  // Cobrança pendente (QR do PIX na tela, maquininha aguardando) — os dois
+  // modais moram dentro da árvore principal, então qualquer early return aqui
+  // arranca a operação da frente do cliente. Era o que acontecia: `produtos`
+  // está na publicação realtime e cada venda da turma disparava um refetch
+  // que ligava loadingProd → PDV virava spinner (a tela "piscando") e o modal
+  // do PIX sumia no meio do pagamento.
+  const cobrancaEmCurso = !!pixModal || !!cartaoModal;
+  if (caixa) ultimoCaixaRef.current = caixa;
+  const caixaAtivo = caixa ?? (cobrancaEmCurso ? ultimoCaixaRef.current : null);
+
   // === RENDER ===
-  if (caixaLoading || loadingProd) {
+  if ((caixaLoading || loadingProd) && !cobrancaEmCurso) {
     return (
       <div className={`${rootClass} flex items-center justify-center bg-gray-100`}>
         <Loader2 className="animate-spin" size={32} style={{ color: NAVY_DARK }} />
@@ -1351,7 +1365,7 @@ export const PDVViewSupermax = ({
     );
   }
 
-  if (!caixa) {
+  if (!caixaAtivo) {
     return (
       <div className={`flex flex-col ${rootClass}`} style={{ fontFamily: 'Arial, Helvetica, sans-serif', background: '#f3f4f6' }}>
         <Header
@@ -1404,7 +1418,7 @@ export const PDVViewSupermax = ({
         onOpenHelp={() => setHelpOpen(true)}
         extraActions={
           <PDVFecharCaixa
-            caixa={{ id: caixa.id, valor_abertura: caixa.valor_abertura, filial: caixa.filial, data: caixa.data }}
+            caixa={{ id: caixaAtivo.id, valor_abertura: caixaAtivo.valor_abertura, filial: caixaAtivo.filial, data: caixaAtivo.data }}
             showToast={showToast}
             onFechamentoSolicitado={refreshCaixa}
             className="px-3 py-1.5 text-xs uppercase tracking-wider bg-white flex items-center gap-1.5 border-2"
@@ -2391,7 +2405,10 @@ export const PDVViewSupermax = ({
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           tabIndex={-1}
-          ref={(el) => { if (el && pixModal && !confirmPixCancel) el.focus(); }}
+          // contains(activeElement): a callback ref roda a cada render (nova
+          // identidade sempre); sem a guarda o foco era arrancado de volta pro
+          // overlay a cada refetch/tick enquanto o cliente pagava.
+          ref={(el) => { if (el && pixModal && !confirmPixCancel && !el.contains(document.activeElement)) el.focus(); }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
             if (e.key === 'Escape' && !confirmPixCancel) {
@@ -2513,7 +2530,7 @@ export const PDVViewSupermax = ({
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           tabIndex={-1}
-          ref={(el) => { if (el && cartaoModal && !confirmCartaoCancel) el.focus(); }}
+          ref={(el) => { if (el && cartaoModal && !confirmCartaoCancel && !el.contains(document.activeElement)) el.focus(); }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' && !confirmCartaoCancel) {
               e.preventDefault(); e.stopPropagation();

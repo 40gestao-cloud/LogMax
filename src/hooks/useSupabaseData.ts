@@ -53,7 +53,15 @@ export function useFetchData<T = any>(
   // corrente — caso contrário a resposta é ignorada.
   const reqIdRef = useRef(0);
 
-  const load = useCallback(async () => {
+  // `silent` = refetch em background (disparado por realtime). NÃO liga
+  // isLoading: telas que fazem `if (isLoading) return <spinner>` desmontam a
+  // árvore inteira a cada evento — no PDV isso piscava a tela e apagava o
+  // modal do PIX no meio da operação, porque `produtos` está na publicação
+  // realtime e qualquer venda da turma dispara o evento.
+  // Objeto (e não boolean) porque `reload` é passado direto como onClick em
+  // várias telas — um MouseEvent como 1º arg viraria `silent = true`.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     if (!table) {
       // Antes isto só logava um warn e devolvia lista vazia. O resultado é
       // uma tela que abre bonita e sem dado nenhum — indistinguível de "não
@@ -73,7 +81,7 @@ export function useFetchData<T = any>(
     }
 
     const myId = ++reqIdRef.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
 
     const applyFilters = (q: any) => {
@@ -179,7 +187,7 @@ export function useFetchData<T = any>(
         if (debounceTimer !== null) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           debounceTimer = null;
-          loadRef.current();
+          loadRef.current({ silent: true }); // não pisca a UI
         }, 250);
       })
       .subscribe((status) => {

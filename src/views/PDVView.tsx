@@ -524,6 +524,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const pixPendenteRef = useRef(pixPendente);
   useEffect(() => { pixPendenteRef.current = pixPendente; }, [pixPendente]);
 
+  // Último caixa aberto conhecido — segura a árvore de render de pé se o hook
+  // devolver null por um instante (hiccup de rede/RLS) no meio de uma
+  // cobrança. Ver caixaAtivo, antes do RENDER.
+  const ultimoCaixaRef = useRef(caixa);
+
   // Refs adicionais para o gate do scanner: enquanto o PDV está
   // processando o fechamento ou mostrando confirmação da última venda,
   // o listener global não deve disparar (operador pode estar digitando
@@ -1164,7 +1169,17 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // Troca de filial sempre limpa o carrinho — itens são por unidade, não dá
   // pra carregar um produto da SuperMax e fechar como venda da MaxLook.
 
-  if (loadingProd || caixaLoading) return <LoadingSpinner />;
+  // Cobrança pendente (QR do Pix na tela, maquininha aguardando) — os dois
+  // overlays moram dentro da árvore principal, então qualquer early return
+  // daqui pra baixo arranca a operação da frente do cliente. Era o que
+  // acontecia: `produtos` está na publicação realtime e cada venda da turma
+  // disparava um refetch que ligava loadingProd → PDV virava spinner (a tela
+  // "piscando") e o QR sumia no meio do pagamento.
+  const cobrancaEmCurso = !!pixPendente || !!cartaoModal;
+  if (caixa) ultimoCaixaRef.current = caixa;
+  const caixaAtivo = caixa ?? (cobrancaEmCurso ? ultimoCaixaRef.current : null);
+
+  if ((loadingProd || caixaLoading) && !cobrancaEmCurso) return <LoadingSpinner />;
 
   // Colaborador sem filial operacional (ex: profile.filial='Matriz') não opera PDV.
   // Admin/CEO/gerente caem em SuperMax como padrão, então nunca caem aqui.
@@ -1182,7 +1197,27 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     </div>
   );
 
-  if (!caixa) return (
+  // Dispatch: SuperMax tem PDV proprio (UX estilo supermercado MaxPOS).
+  // Demais filiais (MaxLook, TechMax) continuam no PDV generico abaixo.
+  // Todos os hooks acima ja rodaram — esta condicional so afeta o JSX retornado.
+  // Fica ANTES das guardas de caixa: o filho tem os próprios estados de
+  // carregando / caixa fechado (e a própria proteção de cobrança em curso).
+  // Quando o dispatch vinha depois, uma guarda do pai desmontava o SuperMax
+  // inteiro — inclusive o QR do Pix que o filho tinha na tela.
+  if (filialFiltro === 'SuperMax') {
+    return (
+      <PDVViewSupermax
+        showToast={showToast}
+        profile={profile}
+        onSwitchFilial={onVoltar ? () => onVoltar() : undefined}
+        caixa={caixa}
+        caixaLoading={caixaLoading}
+        refreshCaixa={refreshCaixa}
+      />
+    );
+  }
+
+  if (!caixaAtivo) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
       <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
         <Lock size={28} className="text-gray-600" />
@@ -1212,7 +1247,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
   // Operador já solicitou fechamento — bloqueia venda até Financeiro confirmar.
   // Financeiro pode "reabrir" em ControleCaixaView se precisar corrigir.
-  if (caixa.status === 'Aguardando Confirmação') return (
+  if (caixaAtivo.status === 'Aguardando Confirmação' && !cobrancaEmCurso) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
       <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
         <Lock size={28} className="text-yellow-400" />
@@ -1220,7 +1255,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       <div>
         <h3 className="text-lg font-bold text-gray-300">Aguardando confirmação do Financeiro</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-md">
-          Você encerrou o caixa de <span className="text-gray-300 font-bold">{filialFiltro}</span> às {caixa.fechado_em ? new Date(caixa.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' }) : '—'}.
+          Você encerrou o caixa de <span className="text-gray-300 font-bold">{filialFiltro}</span> às {caixaAtivo.fechado_em ? new Date(caixaAtivo.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' }) : '—'}.
           O Financeiro vai revisar os valores em <span className="text-accent font-bold">Controle de Caixa</span> e confirmar.
           Novas vendas só depois de reabrir o caixa.
         </p>
@@ -1239,22 +1274,6 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       </div>
     </div>
   );
-
-  // Dispatch: SuperMax tem PDV proprio (UX estilo supermercado MaxPOS).
-  // Demais filiais (MaxLook, TechMax) continuam no PDV generico abaixo.
-  // Todos os hooks acima ja rodaram — esta condicional so afeta o JSX retornado.
-  if (filialFiltro === 'SuperMax') {
-    return (
-      <PDVViewSupermax
-        showToast={showToast}
-        profile={profile}
-        onSwitchFilial={onVoltar ? () => onVoltar() : undefined}
-        caixa={caixa}
-        caixaLoading={caixaLoading}
-        refreshCaixa={refreshCaixa}
-      />
-    );
-  }
 
   const filialMeta = FILIAL_META[filialFiltro];
   const rootClass = fullscreen ? 'fixed inset-0 z-[100] bg-[var(--color-bg-base)] overflow-hidden' : 'h-full';
@@ -1392,9 +1411,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               <Store size={12} /> Trocar PDV
             </button>
           )}
-          {caixa.status === 'Aberto' && (
+          {caixaAtivo.status === 'Aberto' && (
             <PDVFecharCaixa
-              caixa={{ id: caixa.id, valor_abertura: caixa.valor_abertura, filial: caixa.filial, data: caixa.data }}
+              caixa={{ id: caixaAtivo.id, valor_abertura: caixaAtivo.valor_abertura, filial: caixaAtivo.filial, data: caixaAtivo.data }}
               showToast={showToast}
               onFechamentoSolicitado={refreshCaixa}
               className="py-1.5 px-3 text-[10px] hidden sm:flex"
