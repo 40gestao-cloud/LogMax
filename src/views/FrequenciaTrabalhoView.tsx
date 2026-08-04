@@ -295,7 +295,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       if (error) throw error;
 
       setEdits(prev => { const n = { ...prev }; delete n[func.id]; return n; });
-      await reload();
+      // silent: a tela tem `if (isLoading) return <spinner>`, e um reload
+      // normal aqui desmontaria a grade inteira que o operador está
+      // preenchendo linha por linha. O feedback já é o saving[key] da linha.
+      await reload({ silent: true });
       showToast(`Presença de ${func.nome} registrada no ponto.`, 'success');
     } catch (err: any) {
       // A régua mora na RPC (migr. 289): dia de afastamento, filial alheia,

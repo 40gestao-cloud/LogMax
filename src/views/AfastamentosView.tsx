@@ -168,7 +168,10 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       if (error) throw error;
       const aplicados = Number(data?.aplicados ?? 0);
       const pulados   = Number(data?.pulados   ?? 0);
-      await reload();
+      // silent: chamado com o formulário ainda aberto (o resetForm vem depois)
+      // e por botão de linha que já tem seu próprio aplicandoId. Um reload
+      // normal cairia no `if (isLoading) return <spinner>` e piscaria a tela.
+      await reload({ silent: true });
       if (!opts?.silencioso) {
         if (pulados > 0) {
           showToast?.(`Aplicado em ${aplicados} dia(s). ${pulados} dia(s) já tinham outro afastamento e foram preservados.`, 'success');
