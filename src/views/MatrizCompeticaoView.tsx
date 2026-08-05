@@ -51,6 +51,7 @@ type Avaliador = {
 
 type NotaConselho = {
   id: string;
+  item_tipo: string | null;
   avaliador_id: string;
   filial_avaliada: string | null;
   nota: number | null;
@@ -200,11 +201,16 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     if (!supabase) return;
     const { data } = await supabase
       .from('avaliacoes_matriz')
-      .select('id, avaliador_id, filial_avaliada, nota, avaliador:user_profiles!avaliador_id(nome,role)')
+      .select('id, item_tipo, avaliador_id, filial_avaliada, nota, avaliador:user_profiles!avaliador_id(nome,role)')
       .eq('competicao_id', id)
       .eq('ativo', true)
       .not('nota', 'is', null);
-    setNotasConselho((data ?? []) as any as NotaConselho[]);
+    // Só notas de tarefa entram no placar (calcular_placar_competicao filtra
+    // `item_tipo LIKE 'tarefa_%'`). Notas de arte/promoção/campanha existem na
+    // mesma tabela e NÃO pesam — misturá-las aqui daria um número que não bate
+    // com o pódio. Filtro no cliente pra não depender do escape de LIKE.
+    setNotasConselho(((data ?? []) as any as NotaConselho[])
+      .filter(n => (n.item_tipo ?? '').startsWith('tarefa_')));
   }, []);
 
   const carregarPlacar = useCallback(async (comp: Competicao) => {
@@ -737,7 +743,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               {/* Quem já avaliou — nominal, com a média que cada um deu */}
               <div className="neu-flat rounded-3xl p-5 border border-white/5">
                 <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                  <Users size={13} className="text-accent" /> Quem já avaliou
+                  <Users size={13} className="text-accent" /> Quem já avaliou — Tarefas da Matriz
                 </h3>
                 {porAvaliador.length === 0 ? (
                   <EmptyState message="Nenhum eleitor cadastrado na Matriz." />
@@ -747,7 +753,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                         <tr>
                           <th className="text-left pb-3 font-bold">Avaliador</th>
-                          <th className="text-right pb-3 font-bold pr-4">Notas dadas</th>
+                          <th className="text-right pb-3 font-bold pr-4">Notas em tarefas</th>
                           {OP_FILIAIS.map(f => (
                             <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
                           ))}
@@ -764,7 +770,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                               </span>
                             </td>
                             <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
-                              {a.total === 0 ? 'ainda não avaliou' : a.total}
+                              {a.total === 0 ? 'sem nota em tarefas' : a.total}
                             </td>
                             {OP_FILIAIS.map(f => {
                               const acc = a.porFilial[f];
@@ -781,7 +787,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                 )}
                 <p className="text-[10px] text-gray-500 mt-3">
-                  Média 0-10 que cada eleitor deu por filial. Pra ver a nota participante a participante, abra a tarefa em Tarefas da Matriz.
+                  Média 0-10 que cada eleitor deu por filial nas Tarefas da Matriz — mesma fonte do pódio.
+                  Os eixos da Avaliação de Filial também pesam no placar quando o selo acima está aceso, mas
+                  não aparecem nesta tabela; veja-os na Central de Avaliação. Nota de admin nunca entra na média.
                 </p>
               </div>
 
