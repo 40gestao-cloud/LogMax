@@ -155,15 +155,16 @@ function DemandasConselhoList({ profile, filial, showToast }: {
 
       const partIds = listaP.map(p => p.id);
       if (partIds.length > 0) {
-        // View agregada preserva o segredo do voto: só media_nota por
-        // participante, sem avaliador_id/comentario/decisao individuais.
+        // RPC (migr. 346), não a view agregada: a view é security_invoker e a
+        // RLS de avaliacoes_matriz é só da Matriz, então daqui ela vinha vazia.
+        // A RPC devolve apenas média e quantidade, de tarefa já encerrada —
+        // resultado, nunca o voto individual.
         const { data: as } = await supabase!
-          .from('avaliacoes_matriz_agregado')
-          .select('item_id,filial_avaliada,media_nota')
-          .eq('competicao_id', c.id)
-          .in('item_id', partIds);
+          .rpc('media_participantes_competicao', { p_competicao_id: c.id });
         if (cancelou) return;
-        setAvaliacoes((as ?? []) as AvaliacaoP[]);
+        const doMeuEscopo = ((as ?? []) as AvaliacaoP[])
+          .filter(a => partIds.includes(a.item_id));
+        setAvaliacoes(doMeuEscopo);
       }
       setLoading(false);
     })();
