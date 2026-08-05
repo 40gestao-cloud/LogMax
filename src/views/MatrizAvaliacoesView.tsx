@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft, TrendingUp, TrendingDown, Minus, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
@@ -32,8 +32,8 @@ type Competicao = {
 // Admin/CEO cadastra atividades por tipo (treinamento em vendas, treinamento em IA,
 // apresentação, etc.); CEO+conselheiros julgam por participante.
 export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProfile; showToast: any }) {
-  const podeAvaliar = profile.role === 'ceo' || isConselheiro(profile);
-  const podeAcessar = profile.role === 'admin' || podeAvaliar;
+  const ehAvaliador = profile.role === 'ceo' || isConselheiro(profile);
+  const podeAcessar = profile.role === 'admin' || ehAvaliador;
 
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
@@ -85,6 +85,13 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       </motion.div>
     );
   }
+
+  // Fora de 'em_andamento' (a competição já foi pro cron de encerramento e
+  // espera o voto do conselho) TODAS as RPCs de escrita recusam: avaliar,
+  // remover avaliação, criar e liberar tarefa. Aqui a tela desce junto pra
+  // leitura em vez de oferecer botão que só devolve erro.
+  const emAndamento = competicao.status === 'em_andamento';
+  const podeAvaliar = ehAvaliador && emAndamento;
 
   const nomeArquivo = `central-avaliacao-${competicao.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`;
 
@@ -164,11 +171,24 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         </div>
       </div>
 
+      {!emAndamento && (
+        <div className="neu-flat rounded-2xl border border-amber-500/30 px-5 py-3 flex items-start gap-3">
+          <Lock size={15} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-gray-300 leading-snug">
+            <b className="text-amber-300">Competição fechada para notas.</b> "{competicao.nome}" saiu de
+            "em andamento" e agora aguarda o voto de encerramento do conselho — nenhuma nota, tarefa nova
+            ou liberação é aceita. Consulta e exportação seguem liberadas.
+          </p>
+        </div>
+      )}
+
       {secao === null && (
         <MatrizTarefasPanel
           competicao={competicao}
           profile={profile}
           podeAvaliar={podeAvaliar}
+          ehAvaliador={ehAvaliador}
+          emAndamento={emAndamento}
           showToast={showToast}
           extras={
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -343,10 +363,12 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
   const [expandido, setExpandido] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Fetch. `comMask` só na primeira carga — refetch disparado por nota nova
+  // não pode jogar a tela inteira de volta pro spinner.
   useEffect(() => {
     let cancelou = false;
     (async () => {
-      setLoading(true);
+      if (refreshTick === 0) setLoading(true);
       const { data: tarefas } = await supabase
         .from('matriz_tarefas')
         .select('id, tipo, nome, data, status')
@@ -419,8 +441,13 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
 
       if (!cancelou) { setLinhas(arr); setLoading(false); }
     })();
+    return () => { cancelou = true; };
+  }, [competicao.id, refreshTick]);
 
-    // Realtime: nova nota/remoção de participante disparam refetch via tick.
+  // Realtime num efeito próprio: junto do fetch, cada evento derrubava e
+  // recriava o canal (com janela cega entre um e outro) só pra refazer a
+  // consulta.
+  useEffect(() => {
     const canal = supabase
       .channel(`visao-ciclo-participante-${competicao.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${competicao.id}` }, () => {
@@ -433,8 +460,8 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         setRefreshTick(t => t + 1);
       })
       .subscribe();
-    return () => { cancelou = true; supabase.removeChannel(canal); };
-  }, [competicao.id, refreshTick]);
+    return () => { supabase.removeChannel(canal); };
+  }, [competicao.id]);
 
   const porFilial = useMemo(() => {
     const m: Record<string, LinhaParticipante[]> = {};

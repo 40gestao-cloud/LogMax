@@ -126,10 +126,18 @@ type AvaliacaoParticipante = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast, extras }: {
+export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, ehAvaliador, emAndamento, showToast, extras }: {
   competicao: Competicao;
   profile: UserProfile;
+  // Pode escrever nota agora (papel de avaliador + competição em andamento).
   podeAvaliar: boolean;
+  // É avaliador por papel (CEO/conselheiro), independente do estado da
+  // competição. É esta régua que sela o voto — não a de escrita: com a
+  // competição fechada o conselheiro continua sem poder ver nota alheia.
+  ehAvaliador: boolean;
+  // Competição em 'em_andamento'. Fora disso as RPCs de criar tarefa,
+  // liberar e avaliar recusam — os botões correspondentes somem.
+  emAndamento: boolean;
   showToast: any;
   // Cards extras da landing (Avaliação das Filiais, Visão do Ciclo). Ficam
   // ao lado dos tipos de tarefa e somem quando se entra numa tarefa — o
@@ -157,6 +165,8 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast
       competicao={competicao}
       profile={profile}
       podeAvaliar={podeAvaliar}
+      ehAvaliador={ehAvaliador}
+      emAndamento={emAndamento}
       showToast={showToast}
       onVoltar={() => setTipoAtivo(null)}
     />
@@ -185,10 +195,18 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
   // responde "o que falta eu avaliar" sem entrar tipo por tipo.
   const [pendentes, setPendentes] = useState<Record<TipoTarefa, number>>(zerado);
   const [loading, setLoading] = useState(true);
+  // Quem do conselho já votou nesta competição. Vem da RPC
+  // `progresso_avaliacao_matriz` (migr. 345), que devolve só a CONTAGEM de
+  // notas por avaliador — nunca o valor. Contar pela tabela devolveria
+  // número truncado, porque o voto fica selado até a tarefa encerrar.
+  const [progresso, setProgresso] = useState<{ avaliador_id: string; nome: string; role: string; notas_dadas: number }[]>([]);
+  const [totalParticipantesAbertos, setTotalParticipantesAbertos] = useState(0);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
+      supabase.rpc('progresso_avaliacao_matriz', { p_competicao_id: competicao.id })
+        .then(({ data, error }) => { if (!error) setProgresso((data ?? []) as any); });
       const { data: tarefas } = await supabase
         .from('matriz_tarefas')
         .select('id, tipo, status')
@@ -203,8 +221,13 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
 
       // Pendência só conta tarefa liberada: rascunho ainda não aceita nota.
       const abertas = (tarefas ?? []).filter((t: any) => t.status === 'aberta');
-      if (!podeAvaliar || abertas.length === 0) {
+      // Denominador do progresso do conselho: participante de tarefa que já
+      // aceitou nota alguma vez (aberta ou encerrada) — rascunho fica fora,
+      // ninguém podia ter votado nele.
+      const votaveis = (tarefas ?? []).filter((t: any) => t.status !== 'rascunho');
+      if (votaveis.length === 0) {
         setPendentes(zerado());
+        setTotalParticipantesAbertos(0);
         setLoading(false);
         return;
       }
@@ -212,26 +235,32 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
       const tipoPorTarefa = new Map<string, TipoTarefa>();
       abertas.forEach((t: any) => tipoPorTarefa.set(t.id, t.tipo));
 
-      const [{ data: parts }, { data: minhas }] = await Promise.all([
+      const [{ data: todosParts }, { data: minhas }] = await Promise.all([
         supabase.from('matriz_tarefa_participantes')
           .select('id, tarefa_id')
-          .in('tarefa_id', [...tipoPorTarefa.keys()])
+          .in('tarefa_id', votaveis.map((t: any) => t.id))
           .eq('ativo', true),
-        supabase.from('avaliacoes_matriz')
-          .select('item_id, nota')
-          .eq('competicao_id', competicao.id)
-          .eq('avaliador_id', minhaId)
-          .eq('ativo', true)
-          .not('nota', 'is', null),
+        podeAvaliar
+          ? supabase.from('avaliacoes_matriz')
+              .select('item_id, nota')
+              .eq('competicao_id', competicao.id)
+              .eq('avaliador_id', minhaId)
+              .eq('ativo', true)
+              .not('nota', 'is', null)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
+
+      setTotalParticipantesAbertos((todosParts ?? []).length);
 
       const jaNotei = new Set((minhas ?? []).map((a: any) => a.item_id));
       const falta = zerado();
-      (parts ?? []).forEach((p: any) => {
-        if (jaNotei.has(p.id)) return;
-        const tipo = tipoPorTarefa.get(p.tarefa_id);
-        if (tipo) falta[tipo] += 1;
-      });
+      if (podeAvaliar) {
+        (todosParts ?? []).forEach((p: any) => {
+          if (jaNotei.has(p.id)) return;
+          const tipo = tipoPorTarefa.get(p.tarefa_id);   // só tarefas abertas
+          if (tipo) falta[tipo] += 1;
+        });
+      }
       setPendentes(falta);
       setLoading(false);
     })();
@@ -257,6 +286,44 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
         </p>
       </div>
     )}
+
+    {!loading && progresso.length > 0 && totalParticipantesAbertos > 0 && (
+      <div className="neu-flat rounded-2xl border border-white/5 px-5 py-4 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Users size={14} className="text-accent" />
+          <h4 className="text-sm font-bold text-gray-200">Progresso do conselho</h4>
+          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">
+            {totalParticipantesAbertos} participante{totalParticipantesAbertos === 1 ? '' : 's'} avaliáveis
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {progresso.map(p => {
+            const pct = Math.min(100, Math.round((p.notas_dadas / totalParticipantesAbertos) * 100));
+            const completo = p.notas_dadas >= totalParticipantesAbertos;
+            return (
+              <div key={p.avaliador_id} className="neu-pressed rounded-xl px-3 py-2 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-200 flex-1 truncate">{p.nome ?? 'Conselheiro'}</span>
+                  <span className={`text-[11px] font-mono font-black tabular-nums ${completo ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {p.notas_dadas}/{totalParticipantesAbertos}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${completo ? 'bg-emerald-400/70' : 'bg-amber-400/70'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-gray-500 leading-snug">
+          Só a quantidade de notas dadas — o valor de cada nota segue selado até a tarefa encerrar.
+        </p>
+      </div>
+    )}
+
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {TIPOS.map((t, idx) => {
         const Icon = t.icon;
@@ -325,11 +392,13 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
 }
 
 // ── Painel de um tipo: lista + criar + avaliar participantes ─────────
-function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showToast, onVoltar }: {
+function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAvaliador, emAndamento, showToast, onVoltar }: {
   tipoConfig: TipoConfig;
   competicao: Competicao;
   profile: UserProfile;
   podeAvaliar: boolean;
+  ehAvaliador: boolean;
+  emAndamento: boolean;
   showToast: any;
   onVoltar: () => void;
 }) {
@@ -345,10 +414,17 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   const [avaliando, setAvaliando] = useState<{ participante: Participante; tarefa: Tarefa } | null>(null);
   const confirm = useConfirm();
 
-  const podeCriar = profile.role === 'admin' || profile.role === 'ceo' || (profile.role === 'gerente' && (profile as any).is_conselheiro) || profile.role === 'conselheiro';
+  // Criar exige competição em andamento — `criar_matriz_tarefa` recusa fora
+  // disso, e botão que só devolve erro não é botão.
+  const ehGestorMatriz = profile.role === 'admin' || profile.role === 'ceo';
+  const ehConselheiroCriador = profile.role === 'conselheiro'
+    || (profile.role === 'gerente' && (profile as any).is_conselheiro === true);
+  const podeCriar = (ehGestorMatriz || ehConselheiroCriador) && emAndamento;
 
-  const carregar = useCallback(async () => {
-    setLoading(true);
+  // comMask=false nos refetches do realtime: trocar a lista inteira por um
+  // spinner a cada nota salva por outro conselheiro é pior que não atualizar.
+  const carregar = useCallback(async (comMask = true) => {
+    if (comMask) setLoading(true);
     const { data: ts } = await supabase
       .from('matriz_tarefas')
       .select('id,competicao_id,tipo,nome,descricao,data,criado_por,created_at,status')
@@ -387,6 +463,19 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   }, [competicao.id, tipoConfig.id]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Realtime: era a única tela do módulo sem canal. Sem isso, encerrar uma
+  // tarefa (que revela as notas seladas) ou um participante entrando pela
+  // sessão do admin só apareciam com F5.
+  useEffect(() => {
+    const canal = supabase
+      .channel(`matriz-tarefas-${competicao.id}-${tipoConfig.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefas', filter: `competicao_id=eq.${competicao.id}` }, () => carregar(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefa_participantes' }, () => carregar(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${competicao.id}` }, () => carregar(false))
+      .subscribe();
+    return () => { supabase.removeChannel(canal); };
+  }, [competicao.id, tipoConfig.id, carregar]);
 
   const participantesPorTarefa = useMemo(() => {
     const m: Record<string, Participante[]> = {};
@@ -436,7 +525,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
 
     if (error) { showToast(error.message || 'Erro ao avaliar', 'error'); return false; }
     showToast('Avaliação salva', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
     return true;
   }
@@ -454,7 +543,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
 
     if (error) { showToast(error.message || 'Erro ao excluir', 'error'); return false; }
     showToast('Avaliação excluída', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
     return true;
   }
@@ -467,7 +556,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     const { error } = await supabase.rpc('liberar_matriz_tarefa', { p_tarefa_id: tarefa.id });
     if (error) return showToast(error.message || 'Erro ao liberar', 'error');
     showToast('Notas liberadas — conselho avisado', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
@@ -479,7 +568,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     const { error } = await supabase.rpc('encerrar_matriz_tarefa', { p_tarefa_id: tarefa.id });
     if (error) return showToast(error.message || 'Erro ao encerrar', 'error');
     showToast('Tarefa encerrada', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
@@ -491,7 +580,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     const { error } = await supabase.rpc('reabrir_matriz_tarefa', { p_tarefa_id: tarefa.id });
     if (error) return showToast(error.message || 'Erro ao reabrir', 'error');
     showToast('Tarefa reaberta', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
@@ -504,7 +593,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     const { error } = await supabase.rpc('remover_matriz_tarefa', { p_tarefa_id: tarefaId });
     if (error) return showToast(error.message || 'Erro ao remover', 'error');
     showToast('Tarefa removida', 'success');
-    carregar();
+    carregar(false);
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
@@ -552,7 +641,14 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
               avalsPorParticipante={avalsPorParticipante}
               submittingIds={submittingIds}
               podeAvaliar={podeAvaliar}
-              podeGerenciar={profile.role === 'admin' || profile.role === 'ceo'}
+              ehAvaliador={ehAvaliador}
+              podeGerenciar={ehGestorMatriz}
+              // Conselheiro gerencia a tarefa que ele mesmo criou (liberar,
+              // editar, participantes; remover só enquanto rascunho). É o que
+              // a migr. 348 abriu no banco — antes ele criava e a tarefa
+              // ficava encalhada esperando admin/CEO.
+              souCriador={ehConselheiroCriador && t.criado_por === profile.id}
+              emAndamento={emAndamento}
               minhaId={profile.id}
               onAbrirAvaliacao={p => setAvaliando({ participante: p, tarefa: t })}
               onRemover={() => removerTarefa(t.id)}
@@ -571,7 +667,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           tipoConfig={tipoConfig}
           competicao={competicao}
           onClose={() => setModalOpen(false)}
-          onCriada={() => { setModalOpen(false); carregar(); }}
+          onCriada={() => { setModalOpen(false); carregar(false); }}
           showToast={showToast}
         />
       )}
@@ -582,8 +678,8 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           tarefa={tarefas.find(t => t.id === editandoTarefa.id) ?? editandoTarefa}
           participantes={participantesPorTarefa[editandoTarefa.id] ?? []}
           onClose={() => setEditandoTarefa(null)}
-          onSalvo={() => { setEditandoTarefa(null); carregar(); }}
-          onRefresh={carregar}
+          onSalvo={() => { setEditandoTarefa(null); carregar(false); }}
+          onRefresh={() => carregar(false)}
           showToast={showToast}
         />
       )}
@@ -599,6 +695,8 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           minhaId={profile.id}
           // Tarefa encerrada vira leitura: a RPC recusaria a escrita de qualquer jeito.
           podeAvaliar={podeAvaliar && (tarefas.find(t => t.id === avaliando.tarefa.id)?.status ?? 'aberta') !== 'encerrada'}
+          ehAvaliador={ehAvaliador}
+          emAndamento={emAndamento}
           proximo={proximoSemMinhaNota(avaliando.tarefa.id, avaliando.participante.id)}
           onIrPara={p => setAvaliando({ participante: p, tarefa: avaliando.tarefa })}
           onFechar={() => setAvaliando(null)}
@@ -612,7 +710,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           tarefa={briefingTarefa}
           competicao={competicao}
           onClose={() => setBriefingTarefa(null)}
-          onAprovada={() => { carregar(); window.dispatchEvent(new Event('avaliacao-matriz:changed')); }}
+          onAprovada={() => { carregar(false); window.dispatchEvent(new Event('avaliacao-matriz:changed')); }}
           showToast={showToast}
         />
       )}
@@ -621,14 +719,19 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, ehAvaliador, podeGerenciar, souCriador, emAndamento, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
   avalsPorParticipante: Record<string, AvaliacaoParticipante[]>;
   submittingIds: Set<string>;
   podeAvaliar: boolean;
+  ehAvaliador: boolean;
+  // admin/CEO da Matriz: gestão completa da tarefa.
   podeGerenciar: boolean;
+  // conselheiro que criou ESTA tarefa: gestão parcial (migr. 348).
+  souCriador: boolean;
+  emAndamento: boolean;
   minhaId: string;
   onAbrirAvaliacao: (p: Participante) => void;
   onRemover: () => void;
@@ -648,7 +751,11 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   // Voto selado: nota alheia só aparece com a tarefa encerrada. A RLS da
   // migr. 345 garante isso no banco — aqui é só não exibir número parcial
   // como se fosse a média do conselho. Admin não vota e vê sempre.
-  const revelado = !podeAvaliar || encerrada;
+  // Régua é o PAPEL (ehAvaliador), não a permissão de escrita: com a
+  // competição fora de 'em_andamento' o conselheiro perde o direito de
+  // escrever, mas a nota dele continua selada — usar `podeAvaliar` aqui
+  // faria a tela exibir uma "média do conselho" feita da própria nota.
+  const revelado = !ehAvaliador || encerrada;
   // Descrição fica em 2 linhas até o conselheiro clicar. Pauta longa empurrava
   // a grade de participantes pra fora da tela quando havia várias tarefas.
   const [expandido, setExpandido] = useState(false);
@@ -695,34 +802,44 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
             <h4 className="text-lg font-black text-gray-100">{tarefa.nome}</h4>
           )}
         </div>
-        {podeGerenciar && (
+        {(podeGerenciar || souCriador) && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            {rascunho && (
+            {/* Liberar exige competição em andamento (migr. 348): fora dela
+                a tarefa abriria pra um conselho que não consegue votar. */}
+            {rascunho && emAndamento && (
               <button onClick={onLiberar} className="btn-shimmer btn-shimmer--glass-green" title="Liberar a tarefa para o conselho dar nota — dispara aviso no sino">
                 <Unlock size={11} /> Permitir notas
               </button>
             )}
             {!encerrada && (
               <>
-                <button onClick={onBriefingIa} className="btn-shimmer btn-shimmer--glass-purple" title="MaxAI Briefing — IA sugere sub-tarefas nos outros tipos pra apoiar esta tarefa">
-                  <Sparkles size={11} /> MaxAI Briefing
-                </button>
+                {podeGerenciar && (
+                  <button onClick={onBriefingIa} className="btn-shimmer btn-shimmer--glass-purple" title="MaxAI Briefing — IA sugere sub-tarefas nos outros tipos pra apoiar esta tarefa">
+                    <Sparkles size={11} /> MaxAI Briefing
+                  </button>
+                )}
                 <button onClick={onEditar} className="btn-shimmer btn-shimmer--glass-blue" title="Editar tarefa">
                   <Pencil size={11} /> Editar
                 </button>
-                <button onClick={onEncerrar} className="btn-shimmer btn-shimmer--glass-yellow" title="Encerrar tarefa">
-                  <Lock size={11} /> Encerrar
-                </button>
+                {/* Encerrar/reabrir seguem admin/CEO: encerrar é o gesto que
+                    revela o voto selado — quem avalia não controla isso. */}
+                {podeGerenciar && (
+                  <button onClick={onEncerrar} className="btn-shimmer btn-shimmer--glass-yellow" title="Encerrar tarefa">
+                    <Lock size={11} /> Encerrar
+                  </button>
+                )}
               </>
             )}
-            {encerrada && (
+            {encerrada && podeGerenciar && (
               <button onClick={onReabrir} className="btn-shimmer btn-shimmer--glass-yellow" title="Reabrir tarefa">
                 <Unlock size={11} /> Reabrir
               </button>
             )}
-            <button onClick={onRemover} className="btn-shimmer btn-shimmer--glass-red" title="Remover tarefa">
-              <Trash2 size={11} /> Remover
-            </button>
+            {(podeGerenciar || rascunho) && (
+              <button onClick={onRemover} className="btn-shimmer btn-shimmer--glass-red" title="Remover tarefa">
+                <Trash2 size={11} /> Remover
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -832,12 +949,14 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, revelado, 
 // Nota e comentário salvam JUNTOS num único UPSERT. A RPC faz
 // `nota = EXCLUDED.nota, comentario = EXCLUDED.comentario`, então mandar
 // os dois de uma vez é o que impede um campo apagar o outro.
-function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, proximo, onFechar, onSalvar, onExcluir, onIrPara }: {
+function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, ehAvaliador, emAndamento, proximo, onFechar, onSalvar, onExcluir, onIrPara }: {
   participante: Participante;
   tarefa: Tarefa;
   avals: AvaliacaoParticipante[];
   minhaId: string;
   podeAvaliar: boolean;
+  ehAvaliador: boolean;
+  emAndamento: boolean;
   // Próximo participante da tarefa ainda sem a minha nota (ordem da tela).
   proximo: Participante | null;
   onFechar: () => void;
@@ -860,8 +979,9 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
     .filter(a => a.avaliador_id !== minhaId && (a.nota != null || !!a.comentario))
     .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
   // Voto selado: nota alheia só depois da tarefa encerrada (a RLS da
-  // migr. 345 já esconde no banco — aqui é a mesma régua na tela).
-  const revelado = !podeAvaliar || tarefa.status === 'encerrada';
+  // migr. 345 já esconde no banco — aqui é a mesma régua na tela). Vale o
+  // papel, não a permissão de escrita: ver TarefaCard.
+  const revelado = !ehAvaliador || tarefa.status === 'encerrada';
 
   async function salvar(seguirParaProximo = false) {
     const bruto = nota.trim();
@@ -1017,8 +1137,13 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
           </>
         ) : tarefa.status === 'rascunho' ? (
           <p className="text-xs text-amber-300/90">
-            Esta tarefa ainda não foi liberada para notas. Admin ou CEO precisa clicar em
-            "Permitir notas" — só então o conselho avalia.
+            Esta tarefa ainda não foi liberada para notas. Admin, CEO ou quem criou a tarefa precisa
+            clicar em "Permitir notas" — só então o conselho avalia.
+          </p>
+        ) : !emAndamento && tarefa.status !== 'encerrada' ? (
+          <p className="text-xs text-amber-300/90">
+            A competição saiu de "em andamento" e não aceita mais nota — nem nova, nem alteração da
+            que já está registrada. O que foi avaliado até aqui continua valendo no placar.
           </p>
         ) : (
           <p className="text-xs text-gray-500">

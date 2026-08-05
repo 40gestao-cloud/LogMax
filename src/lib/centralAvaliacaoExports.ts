@@ -36,7 +36,10 @@ export type RelatorioTarefa = {
   nome: string;
   descricao: string | null;
   data: string;
-  status: 'aberta' | 'encerrada';
+  // 'rascunho' só chega aqui pelo export do admin (o conselho exporta apenas
+  // tarefa encerrada). Antes o cast achatava rascunho em "Aberta" e o PDF
+  // dizia que uma tarefa que nem aceita nota estava em avaliação.
+  status: 'rascunho' | 'aberta' | 'encerrada';
   participantes: RelatorioParticipante[];
 };
 export type RelatorioTarefaTipo = { id: string; label: string; tarefas: RelatorioTarefa[] };
@@ -116,7 +119,7 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
           nome: t.nome,
           descricao: t.descricao ?? null,
           data: t.data,
-          status: (t.status ?? 'aberta') as 'aberta' | 'encerrada',
+          status: (t.status ?? 'aberta') as RelatorioTarefa['status'],
           participantes,
         };
       });
@@ -133,6 +136,8 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
 
 const fmtDataBR = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '—');
 const fmtMedia = (v: number | null) => (v == null ? '—' : v.toFixed(1));
+const fmtStatus = (s: RelatorioTarefa['status']) =>
+  s === 'encerrada' ? 'Encerrada' : s === 'rascunho' ? 'Rascunho (sem notas)' : 'Aberta';
 
 // ─────────────────────────────────────────────────────────────────
 // PDF
@@ -224,7 +229,7 @@ export async function exportCentralAvaliacaoPDF(
       const meta = [
         fmtDataBR(tarefa.data),
         `${tarefa.participantes.length} participante${tarefa.participantes.length === 1 ? '' : 's'}`,
-        tarefa.status === 'encerrada' ? 'Encerrada' : 'Aberta',
+        fmtStatus(tarefa.status),
       ].join('  ·  ');
       doc.text(meta, margin, cursorY);
       cursorY += 4.5;
@@ -342,7 +347,7 @@ export async function exportCentralAvaliacaoExcel(rel: CentralRelatorio, filenam
           tarefa: tarefa.nome,
           descricao: tarefa.descricao ?? '',
           data: fmtDataBR(tarefa.data),
-          status: tarefa.status === 'encerrada' ? 'Encerrada' : 'Aberta',
+          status: fmtStatus(tarefa.status),
           filial: p.filial,
           participante: p.nome,
           media: p.media != null ? Number(p.media.toFixed(1)) : null,
