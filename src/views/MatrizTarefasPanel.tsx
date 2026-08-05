@@ -117,9 +117,10 @@ type AvaliacaoParticipante = {
   avaliador_id: string;
   nota: number | null;
   comentario: string | null;
-  // Vem via JOIN — usado só pra excluir notas de admin da média
-  // exibida (mesma regra do placar em calcular_placar_competicao).
-  avaliador?: { role: string | null } | null;
+  // Vem via JOIN — `role` exclui notas de admin da média exibida (mesma
+  // regra do placar em calcular_placar_competicao) e `nome` identifica
+  // quem já avaliou na quebra por avaliador.
+  avaliador?: { nome: string | null; role: string | null } | null;
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -272,7 +273,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     if (partIds.length > 0) {
       const { data: as } = await supabase
         .from('avaliacoes_matriz')
-        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario,avaliador:user_profiles!avaliador_id(role)')
+        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario,avaliador:user_profiles!avaliador_id(nome,role)')
         .eq('competicao_id', competicao.id)
         .eq('item_tipo', tipoConfig.id)
         .in('item_id', partIds)
@@ -598,6 +599,7 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [notaLocal, setNotaLocal] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
+  const [mostrarQuem, setMostrarQuem] = useState(false);
 
   // Sincroniza com o servidor quando a nota do usuário muda por fora (outra
   // sessão, refetch após salvar noutro dispositivo). Não sobrescreve enquanto
@@ -619,10 +621,27 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
     }
   };
 
+  // Quem já avaliou (com nota). Admin aparece marcado — a nota dele não
+  // entra na média, mas some da tela seria pior: parece que ninguém votou.
+  const comNota = avals
+    .filter(a => a.nota !== null && a.nota !== undefined)
+    .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
+
   return (
-    <div className="flex items-center gap-2 py-1 border-b border-white/5 last:border-b-0">
+    <div className="py-1 border-b border-white/5 last:border-b-0">
+    <div className="flex items-center gap-2">
       <Users size={11} className="text-gray-500 shrink-0" />
       <span className="text-xs text-gray-200 flex-1 truncate">{participante.nome_snapshot}</span>
+      {comNota.length > 0 && (
+        <button
+          onClick={() => setMostrarQuem(v => !v)}
+          title="Ver quem avaliou e a nota que deu"
+          className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-gray-500 hover:text-accent transition-colors"
+        >
+          {mostrarQuem ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          {comNota.length} voto{comNota.length === 1 ? '' : 's'}
+        </button>
+      )}
       {media !== null && (
         <span className="text-[10px] font-mono font-black text-amber-300 tabular-nums">
           {media.toFixed(1)}<span className="text-gray-500">/10</span>
@@ -645,6 +664,29 @@ function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId
           {submitting && <Loader2 size={11} className="animate-spin text-accent" />}
         </div>
       )}
+    </div>
+
+    {mostrarQuem && comNota.length > 0 && (
+      <div className="pl-5 pb-1.5 flex flex-col gap-1">
+        {comNota.map(a => (
+          <div key={a.id} className="flex items-start gap-2 text-[11px]">
+            <span className="font-mono font-black text-amber-300 tabular-nums w-9 shrink-0">
+              {Number(a.nota).toFixed(1)}
+            </span>
+            <div className="min-w-0">
+              <span className="text-gray-300">{a.avaliador?.nome ?? 'Avaliador'}</span>
+              {a.avaliador_id === minhaId && <span className="text-accent"> (você)</span>}
+              {a.avaliador?.role === 'admin' && (
+                <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">
+                  admin · fora da média
+                </span>
+              )}
+              {a.comentario && <p className="text-gray-500 break-words">{a.comentario}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
     </div>
   );
 }

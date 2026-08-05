@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -40,6 +40,21 @@ type Voto = {
   filial_escolhida: string | null;
   comentario: string | null;
   created_at: string;
+};
+
+type Avaliador = {
+  id: string;
+  nome: string | null;
+  role: string | null;
+  is_conselheiro: boolean | null;
+};
+
+type NotaConselho = {
+  id: string;
+  avaliador_id: string;
+  filial_avaliada: string | null;
+  nota: number | null;
+  avaliador?: { nome: string | null; role: string | null } | null;
 };
 
 type Placar = {
@@ -84,6 +99,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [placar, setPlacar] = useState<Placar | null>(null);
   const [competicaoAtual, setCompeticaoAtual] = useState<Competicao | null>(null);
   const [votos, setVotos] = useState<Voto[]>([]);
+  // Quem deu nota (e qual) na competição atual + quem ainda não deu.
+  // Notas individuais só rodam dentro da Matriz — a RLS de avaliacoes_matriz
+  // (migr. 234) já barra filial; aqui só quem é admin/CEO/conselheiro entra.
+  const [notasConselho, setNotasConselho] = useState<NotaConselho[]>([]);
+  const [avaliadores, setAvaliadores] = useState<Avaliador[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingPlacar, setLoadingPlacar] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -144,6 +164,21 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     })();
   }, [podeAcessar]);
 
+  // CEO + conselheiros da Matriz — pra listar também quem ainda não avaliou.
+  useEffect(() => {
+    if (!podeAcessar || !supabase) return;
+    (async () => {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('id, nome, role, is_conselheiro')
+        .eq('filial', 'Matriz')
+        .order('nome', { ascending: true });
+      setAvaliadores((data ?? []).filter((u: Avaliador) =>
+        u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true),
+      ));
+    })();
+  }, [podeAcessar]);
+
   const quorumMinimo = useMemo(
     () => Math.max(1, Math.ceil((totalVotantes || 1) / 2)),
     [totalVotantes],
@@ -157,6 +192,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       .eq('competicao_id', id)
       .order('created_at', { ascending: true });
     setVotos(data ?? []);
+  }, []);
+
+  // Notas individuais do conselho na competição — alimenta o painel
+  // "Quem já avaliou". A média do placar continua vindo da RPC.
+  const carregarNotasConselho = useCallback(async (id: string) => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('avaliacoes_matriz')
+      .select('id, avaliador_id, filial_avaliada, nota, avaliador:user_profiles!avaliador_id(nome,role)')
+      .eq('competicao_id', id)
+      .eq('ativo', true)
+      .not('nota', 'is', null);
+    setNotasConselho((data ?? []) as any as NotaConselho[]);
   }, []);
 
   const carregarPlacar = useCallback(async (comp: Competicao) => {
@@ -179,8 +227,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       setPlacar(data as Placar);
     }
     await carregarVotos(comp.id);
+    await carregarNotasConselho(comp.id);
     setLoadingPlacar(false);
-  }, [showToast, carregarVotos]);
+  }, [showToast, carregarVotos, carregarNotasConselho]);
 
   useEffect(() => {
     // Prioridade: em_andamento > aguardando_encerramento > última encerrada
@@ -196,6 +245,35 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     window.addEventListener('avaliacao-matriz:changed', h);
     return () => window.removeEventListener('avaliacao-matriz:changed', h);
   }, [competicaoAtual, carregarPlacar]);
+
+  // Quem já avaliou × média que deu por filial. Nota de admin aparece
+  // marcada — ela não pesa no placar (regra da migr. 240).
+  const porAvaliador = useMemo(() => {
+    const m = new Map<string, {
+      id: string; nome: string; role: string | null; total: number;
+      porFilial: Record<string, { soma: number; n: number }>;
+    }>();
+    const garantir = (id: string, nome: string | null, role: string | null) => {
+      let e = m.get(id);
+      if (!e) {
+        e = { id, nome: nome ?? 'Sem nome', role, total: 0, porFilial: {} };
+        m.set(id, e);
+      } else if (e.nome === 'Sem nome' && nome) {
+        e.nome = nome;
+      }
+      return e;
+    };
+    avaliadores.forEach(a => garantir(a.id, a.nome, a.role));
+    notasConselho.forEach(n => {
+      const e = garantir(n.avaliador_id, n.avaliador?.nome ?? null, n.avaliador?.role ?? null);
+      e.total += 1;
+      const f = n.filial_avaliada ?? '—';
+      const acc = (e.porFilial[f] ??= { soma: 0, n: 0 });
+      acc.soma += Number(n.nota);
+      acc.n += 1;
+    });
+    return [...m.values()].sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+  }, [avaliadores, notasConselho]);
 
   const jaVotei = useMemo(() => votos.some(v => v.votante_id === profile.id), [votos, profile.id]);
   const contagemVotos = useMemo(() => ({
@@ -653,6 +731,57 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3">
                   Média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz, agrupada pela filial do participante.
+                </p>
+              </div>
+
+              {/* Quem já avaliou — nominal, com a média que cada um deu */}
+              <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                  <Users size={13} className="text-accent" /> Quem já avaliou
+                </h3>
+                {porAvaliador.length === 0 ? (
+                  <EmptyState message="Nenhum eleitor cadastrado na Matriz." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="text-[10px] uppercase tracking-widest text-gray-500">
+                        <tr>
+                          <th className="text-left pb-3 font-bold">Avaliador</th>
+                          <th className="text-right pb-3 font-bold pr-4">Notas dadas</th>
+                          {OP_FILIAIS.map(f => (
+                            <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {porAvaliador.map(a => (
+                          <tr key={a.id} className="border-t border-white/5">
+                            <td className="py-3">
+                              <span className="text-gray-200">{a.nome}</span>
+                              {a.id === profile.id && <span className="text-accent"> (você)</span>}
+                              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-2">
+                                {a.role === 'ceo' ? 'CEO' : a.role === 'admin' ? 'admin · fora da média' : 'Conselheiro'}
+                              </span>
+                            </td>
+                            <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
+                              {a.total === 0 ? 'ainda não avaliou' : a.total}
+                            </td>
+                            {OP_FILIAIS.map(f => {
+                              const acc = a.porFilial[f];
+                              return (
+                                <td key={f} className="py-3 text-right tabular-nums pr-4 text-gray-300">
+                                  {acc ? (acc.soma / acc.n).toFixed(1) : <span className="text-gray-600">—</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-500 mt-3">
+                  Média 0-10 que cada eleitor deu por filial. Pra ver a nota participante a participante, abra a tarefa em Tarefas da Matriz.
                 </p>
               </div>
 
