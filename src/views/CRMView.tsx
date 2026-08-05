@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -194,6 +195,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
           <p className="text-sm text-gray-400 mt-1">{desc}</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+          <BotaoModeloPlanilha entidade={isClientes ? 'clientes' : 'fornecedores'} filial={filial} showToast={showToast} />
           {data.length > 0 && (
             <>
               <ExportButton label="PDF"   onClick={handleExportPDF}   icon={FileDown} />

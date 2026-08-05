@@ -7,6 +7,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } f
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
+import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 
 type AtributoDef = {
   key: string;
@@ -226,7 +227,10 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
             {filial === 'SuperMax' && 'Serviços do supermercado.'}
           </p>
         </div>
-        <NeuButtonAccent onClick={openNew}><Plus size={14} /> Novo serviço</NeuButtonAccent>
+        <div className="flex flex-wrap gap-2 items-center">
+          <BotaoModeloPlanilha entidade="servicos" filial={filial} showToast={showToast} />
+          <NeuButtonAccent onClick={openNew}><Plus size={14} /> Novo serviço</NeuButtonAccent>
+        </div>
       </div>
 
       <div className="relative">

@@ -6,6 +6,7 @@ import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -653,6 +654,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
           <p className="text-sm text-gray-400 mt-1">Gerencie o portfólio de itens do estoque e suas informações.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+          <BotaoModeloPlanilha entidade="produtos" filial={filial} showToast={showToast} />
           {data.length > 0 && (
             <>
               <ExportButton

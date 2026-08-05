@@ -7,6 +7,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FluxoCompra } from '../components/FluxoCompra';
+import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
@@ -225,11 +226,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             em que etapa ela está.
           </p>
         </div>
-        {!showForm && (
-          <NeuButtonAccent onClick={() => setShowForm(true)}>
-            <Plus size={16} /> Nova Requisição
-          </NeuButtonAccent>
-        )}
+        <div className="flex flex-wrap gap-2 items-center">
+          <BotaoModeloPlanilha entidade="requisicoes" filial={filial} showToast={showToast} />
+          {!showForm && (
+            <NeuButtonAccent onClick={() => setShowForm(true)}>
+              <Plus size={16} /> Nova Requisição
+            </NeuButtonAccent>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
