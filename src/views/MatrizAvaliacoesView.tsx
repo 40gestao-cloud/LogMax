@@ -480,7 +480,11 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
       {loading ? (
         <div className="flex items-center justify-center py-10"><Loader2 size={16} className="animate-spin text-accent" /></div>
       ) : linhas.length === 0 ? (
-        <EmptyState message="Nenhum participante avaliado ainda. Crie uma tarefa e adicione participantes." />
+        // Fora do admin, a lista só considera tarefa encerrada (voto selado).
+        // Sem essa distinção a tela mandava criar tarefa que já existe.
+        <EmptyState message={ehAdmin
+          ? 'Nenhum participante avaliado ainda. Crie uma tarefa e adicione participantes.'
+          : 'Nenhuma tarefa encerrada nesta competição ainda. As notas se revelam aqui quando a tarefa for encerrada — enquanto isso, cada avaliação fica selada.'} />
       ) : (
         <div className="flex flex-col gap-5">
           {/* Corte de desenvolvimento — leitura da Matriz, não vai pro aluno */}

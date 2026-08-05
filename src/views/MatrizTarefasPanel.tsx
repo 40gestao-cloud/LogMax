@@ -947,7 +947,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
 
         {podeAvaliar ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3 items-start">
+            <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Sua nota (0-10)</label>
                 <input
@@ -958,7 +958,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
                   placeholder="0-10"
                   className="neu-input w-28 py-2.5 px-3 text-lg font-mono font-black rounded-lg text-gray-100"
                 />
-                <p className="text-[10px] text-gray-500 leading-snug mt-0.5 max-w-[7rem]">
+                <p className="text-[10px] text-gray-500 leading-snug mt-0.5">
                   5 entregou o combinado · 8 superou · 10 referência
                 </p>
               </div>
