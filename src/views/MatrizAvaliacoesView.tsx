@@ -303,6 +303,10 @@ type LinhaParticipante = {
   tarefas: { tarefaId: string; tarefaNome: string; tarefaTipo: string; notas: number[]; media: number | null }[];
   totalNotas: number;
   mediaGeral: number | null;
+  // Tarefas dessa pessoa que já podiam receber nota (status ≠ rascunho).
+  // Zero aqui significa "ninguém podia ter avaliado ainda" — bem diferente
+  // de "podia e não avaliou".
+  avaliaveis: number;
 };
 
 const TAREFA_TIPOS_MATRIZ = [
@@ -419,8 +423,9 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
         const entrada = porPessoa.get(chave) ?? {
           chave, nome: p.nome_snapshot, filial: p.filial as FilialOp,
-          tarefas: [], totalNotas: 0, mediaGeral: null,
+          tarefas: [], totalNotas: 0, mediaGeral: null, avaliaveis: 0,
         };
+        if (tarefa?.status !== 'rascunho') entrada.avaliaveis += 1;
         entrada.tarefas.push({
           tarefaId: p.tarefa_id,
           tarefaNome: tarefa?.nome ?? '—',
@@ -481,12 +486,17 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
     // "não desenvolveu" — é gente que o conselho ainda não avaliou.
     // Jogar os dois no mesmo grupo seria acusar alguém pela omissão alheia.
     const semNota: LinhaParticipante[] = [];
+    // Fora dos três: quem só está em tarefa 'rascunho'. Ninguém podia ter
+    // dado nota, então nem "ainda sem nota" cabe — isso só aparece pro
+    // admin, que é quem enxerga tarefa não liberada.
+    const naoLiberados: LinhaParticipante[] = [];
     linhas.forEach(l => {
-      if (l.mediaGeral === null) semNota.push(l);
+      if (l.avaliaveis === 0) naoLiberados.push(l);
+      else if (l.mediaGeral === null) semNota.push(l);
       else if (l.mediaGeral >= corte) desenvolveram.push(l);
       else naoDesenvolveram.push(l);
     });
-    return { desenvolveram, naoDesenvolveram, semNota };
+    return { desenvolveram, naoDesenvolveram, semNota, naoLiberados };
   }, [linhas, corte]);
 
   return (
@@ -552,17 +562,23 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
               />
               <GrupoDesenvolvimento
                 titulo="Ainda sem nota"
-                hint="o conselho não avaliou"
+                hint="tarefa liberada, conselho não pontuou"
                 lista={grupos.semNota}
                 tom="border-gray-500/30 text-gray-400"
                 icone={<Minus size={13} />}
               />
             </div>
 
+            {grupos.naoLiberados.length > 0 && (
+              <p className="text-[10px] text-gray-500">
+                Fora do corte: {grupos.naoLiberados.length} pessoa{grupos.naoLiberados.length === 1 ? '' : 's'} só
+                em tarefa ainda não liberada para notas — ninguém poderia ter avaliado.
+              </p>
+            )}
+
             <p className="text-[10px] text-gray-500">
-              Classificação pela média das notas do conselho, só para leitura da Matriz — nada disso aparece
-              para o aluno. Quem está em "ainda sem nota" não é baixo desempenho: é gente que o conselho não
-              avaliou, e entra num grupo separado justamente pra não ser confundida com quem foi mal.
+              Leitura da Matriz, não aparece para o aluno. "Ainda sem nota" não é baixo desempenho: é quem o
+              conselho podia ter avaliado e não avaliou.
             </p>
           </div>
 
