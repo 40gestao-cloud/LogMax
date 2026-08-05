@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
@@ -38,6 +38,10 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const [competicao, setCompeticao] = useState<Competicao | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
   const [exportando, setExportando] = useState<'pdf' | 'excel' | 'maxshow' | null>(null);
+  // Seção aberta fora das tarefas. null = landing (cards). Isso tira da
+  // tela os painéis de filial/ciclo enquanto se avalia uma tarefa — antes
+  // eles apareciam embaixo de TODA tarefa aberta.
+  const [secao, setSecao] = useState<'filiais' | 'ciclo' | null>(null);
 
   useEffect(() => {
     let cancelou = false;
@@ -160,25 +164,106 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         </div>
       </div>
 
-      <MatrizTarefasPanel
-        competicao={competicao}
-        profile={profile}
-        podeAvaliar={podeAvaliar}
-        showToast={showToast}
-      />
-
-      {competicao.ciclo_id && (
-        <AvaliacaoFilialPanel
+      {secao === null && (
+        <MatrizTarefasPanel
+          competicao={competicao}
           profile={profile}
-          cicloId={competicao.ciclo_id}
+          podeAvaliar={podeAvaliar}
           showToast={showToast}
+          extras={
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <CardSecao
+                icon={Building2}
+                titulo="Avaliação das Filiais"
+                hint="Nota nos 7 eixos de cada filial + comparativo dos eixos lado a lado."
+                selo="Alimenta o placar"
+                onClick={() => setSecao('filiais')}
+                tone="bg-sky-500/15 ring-sky-500/40 text-sky-300"
+                borda="border-sky-500/30 hover:border-sky-400/60"
+                seloTone="bg-sky-500/15 text-sky-300 border-sky-500/30"
+                glow="bg-sky-500/25"
+              />
+              <CardSecao
+                icon={Users}
+                titulo="Visão do Ciclo"
+                hint="Consolidado por pessoa: todas as notas que cada participante recebeu na competição."
+                selo="Somente leitura"
+                onClick={() => setSecao('ciclo')}
+                tone="bg-violet-500/15 ring-violet-500/40 text-violet-300"
+                borda="border-violet-500/30 hover:border-violet-400/60"
+                seloTone="bg-violet-500/15 text-violet-300 border-violet-500/30"
+                glow="bg-violet-500/25"
+              />
+            </div>
+          }
         />
       )}
 
-      <PainelComparativoEixos showToast={showToast} />
+      {secao !== null && (
+        <button
+          onClick={() => setSecao(null)}
+          className="self-start flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={12} /> Voltar à Central
+        </button>
+      )}
 
-      <VisaoCicloPorParticipante competicao={competicao} />
+      {secao === 'filiais' && (
+        <>
+          {competicao.ciclo_id ? (
+            <AvaliacaoFilialPanel
+              profile={profile}
+              cicloId={competicao.ciclo_id}
+              showToast={showToast}
+            />
+          ) : (
+            <EmptyState message="Esta competição não gerou ciclo de avaliação — só competições criadas a partir da migração 238 têm avaliação de filial." />
+          )}
+          <PainelComparativoEixos showToast={showToast} />
+        </>
+      )}
+
+      {secao === 'ciclo' && <VisaoCicloPorParticipante competicao={competicao} />}
     </motion.div>
+  );
+}
+
+// Card da landing pras seções que não são tarefa. Mesmo desenho dos cards
+// de tipo em MatrizTarefasPanel pra landing ficar coesa.
+function CardSecao({ icon: Icon, titulo, hint, selo, onClick, tone, borda, seloTone, glow }: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  titulo: string;
+  hint: string;
+  selo: string;
+  onClick: () => void;
+  tone: string;
+  borda: string;
+  seloTone: string;
+  glow: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative neu-flat rounded-2xl p-5 text-left overflow-hidden group border transition-all flex items-center gap-4 ${borda}`}
+    >
+      <div className={`pointer-events-none absolute -top-20 -left-10 w-48 h-48 rounded-full blur-3xl opacity-60 ${glow}`} />
+
+      <div className={`relative w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center ring-1 ${tone}`}>
+        <Icon size={26} strokeWidth={1.7} />
+      </div>
+
+      <div className="relative min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-base font-black text-gray-100 tracking-tight">{titulo}</h3>
+          <span className={`text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full border ${seloTone}`}>
+            {selo}
+          </span>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-1 leading-snug">{hint}</p>
+      </div>
+
+      <ChevronRight size={18} className="relative shrink-0 text-gray-600 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+    </button>
   );
 }
 

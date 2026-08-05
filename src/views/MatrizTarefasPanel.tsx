@@ -124,16 +124,20 @@ type AvaliacaoParticipante = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast }: {
+export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast, extras }: {
   competicao: Competicao;
   profile: UserProfile;
   podeAvaliar: boolean;
   showToast: any;
+  // Cards extras da landing (Avaliação das Filiais, Visão do Ciclo). Ficam
+  // ao lado dos tipos de tarefa e somem quando se entra numa tarefa — o
+  // avaliador vê só o que está avaliando.
+  extras?: React.ReactNode;
 }) {
   const [tipoAtivo, setTipoAtivo] = useState<TipoTarefa | null>(null);
 
   if (tipoAtivo === null) {
-    return <LandingTipos onSelect={setTipoAtivo} competicao={competicao} />;
+    return <LandingTipos onSelect={setTipoAtivo} competicao={competicao} extras={extras} />;
   }
 
   return (
@@ -150,7 +154,7 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast
 }
 
 // ── Landing: cards por tipo de tarefa ────────────────────────────────
-function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => void; competicao: Competicao }) {
+function LandingTipos({ onSelect, competicao, extras }: { onSelect: (t: TipoTarefa) => void; competicao: Competicao; extras?: React.ReactNode }) {
   const [contadores, setContadores] = useState<Record<TipoTarefa, number>>({
     tarefa_treinamento_vendas: 0,
     tarefa_treinamento_ia: 0,
@@ -186,14 +190,21 @@ function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => v
   }, [competicao.id]);
 
   return (
+    <div className="flex flex-col gap-6">
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {TIPOS.map(t => {
+      {TIPOS.map((t, idx) => {
         const Icon = t.icon;
+        // Sobrando 1 card na última linha (7 tipos em 3 colunas), ele desce
+        // pra coluna do meio — fica embaixo de Logística em vez de pendurado
+        // na esquerda. Em 2 colunas o fluxo natural já alinha.
+        const centralizaSozinho = TIPOS.length % 3 === 1 && idx === TIPOS.length - 1;
         return (
           <button
             key={t.id}
             onClick={() => onSelect(t.id)}
-            className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all flex flex-col gap-4"
+            className={`relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all flex flex-col gap-4 ${
+              centralizaSozinho ? 'lg:col-start-2' : ''
+            }`}
           >
             <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${t.glow}`} />
 
@@ -222,6 +233,21 @@ function LandingTipos({ onSelect, competicao }: { onSelect: (t: TipoTarefa) => v
         );
       })}
     </div>
+
+    {/* Painéis que não são tarefa — faixa separada pra não competir com os
+        cards de tipo, que é onde o avaliador entra no dia a dia. */}
+    {extras && (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 shrink-0">
+            Painéis consolidados
+          </span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+        {extras}
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -242,6 +268,8 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
   const [editandoTarefa, setEditandoTarefa] = useState<Tarefa | null>(null);
   const [briefingTarefa, setBriefingTarefa] = useState<Tarefa | null>(null);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
+  // Participante aberto no modal de avaliação (nota + comentário + exclusão).
+  const [avaliando, setAvaliando] = useState<{ participante: Participante; tarefa: Tarefa } | null>(null);
   const confirm = useConfirm();
 
   const podeCriar = profile.role === 'admin' || profile.role === 'ceo' || (profile.role === 'gerente' && (profile as any).is_conselheiro) || profile.role === 'conselheiro';
@@ -303,12 +331,10 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     return m;
   }, [avaliacoes]);
 
-  async function avaliarParticipante(part: Participante, patch: { nota?: number|null; comentario?: string|null }) {
-    if (!podeAvaliar) return;
-    const minha = avalsPorParticipante[part.id]?.find(a => a.avaliador_id === profile.id);
-    const nota       = patch.nota       !== undefined ? patch.nota       : (minha?.nota ?? null);
-    const comentario = patch.comentario !== undefined ? patch.comentario : (minha?.comentario ?? null);
-
+  // Nota e comentário vão sempre juntos: o UPSERT da RPC sobrescreve os dois
+  // campos, então mandar um só apagaria o outro.
+  async function avaliarParticipante(part: Participante, patch: { nota: number|null; comentario: string|null }): Promise<boolean> {
+    if (!podeAvaliar) return false;
     setSubmittingIds(s => new Set(s).add(part.id));
     const { error } = await supabase.rpc('avaliar_item_matriz', {
       p_competicao_id:   competicao.id,
@@ -316,15 +342,34 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
       p_item_tipo:       tipoConfig.id,
       p_item_id:         part.id,
       p_decisao:         null,
-      p_nota:            nota,
-      p_comentario:      comentario,
+      p_nota:            patch.nota,
+      p_comentario:      patch.comentario,
     });
     setSubmittingIds(s => { const n = new Set(s); n.delete(part.id); return n; });
 
-    if (error) return showToast(error.message || 'Erro ao avaliar', 'error');
-    showToast('Nota registrada', 'success');
+    if (error) { showToast(error.message || 'Erro ao avaliar', 'error'); return false; }
+    showToast('Avaliação salva', 'success');
     carregar();
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+    return true;
+  }
+
+  // Soft delete da própria avaliação (RPC da migr. 343). Sai da média na hora.
+  async function excluirAvaliacao(part: Participante): Promise<boolean> {
+    if (!podeAvaliar) return false;
+    setSubmittingIds(s => new Set(s).add(part.id));
+    const { error } = await supabase.rpc('remover_avaliacao_matriz', {
+      p_competicao_id: competicao.id,
+      p_item_tipo:     tipoConfig.id,
+      p_item_id:       part.id,
+    });
+    setSubmittingIds(s => { const n = new Set(s); n.delete(part.id); return n; });
+
+    if (error) { showToast(error.message || 'Erro ao excluir', 'error'); return false; }
+    showToast('Avaliação excluída', 'success');
+    carregar();
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
+    return true;
   }
 
   async function encerrarTarefa(tarefa: Tarefa) {
@@ -410,7 +455,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
               podeAvaliar={podeAvaliar}
               podeGerenciar={profile.role === 'admin' || profile.role === 'ceo'}
               minhaId={profile.id}
-              onAvaliar={avaliarParticipante}
+              onAbrirAvaliacao={p => setAvaliando({ participante: p, tarefa: t })}
               onRemover={() => removerTarefa(t.id)}
               onEditar={() => setEditandoTarefa(t)}
               onEncerrar={() => encerrarTarefa(t)}
@@ -443,6 +488,23 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
         />
       )}
 
+      {avaliando && (
+        <ModalAvaliarParticipante
+          // key por participante: garante que nota/comentário do form remontem
+          // se a tela trocar de avaliado sem desmontar o modal.
+          key={avaliando.participante.id}
+          participante={avaliando.participante}
+          tarefa={tarefas.find(t => t.id === avaliando.tarefa.id) ?? avaliando.tarefa}
+          avals={avalsPorParticipante[avaliando.participante.id] ?? []}
+          minhaId={profile.id}
+          // Tarefa encerrada vira leitura: a RPC recusaria a escrita de qualquer jeito.
+          podeAvaliar={podeAvaliar && (tarefas.find(t => t.id === avaliando.tarefa.id)?.status ?? 'aberta') !== 'encerrada'}
+          onFechar={() => setAvaliando(null)}
+          onSalvar={patch => avaliarParticipante(avaliando.participante, patch)}
+          onExcluir={() => excluirAvaliacao(avaliando.participante)}
+        />
+      )}
+
       {briefingTarefa && (
         <ModalBriefingIa
           tarefa={briefingTarefa}
@@ -457,7 +519,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAvaliar, onRemover, onEditar, onEncerrar, onReabrir, onBriefingIa }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onBriefingIa }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
@@ -466,7 +528,7 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   podeAvaliar: boolean;
   podeGerenciar: boolean;
   minhaId: string;
-  onAvaliar: (p: Participante, patch: { nota?: number|null; comentario?: string|null }) => void;
+  onAbrirAvaliacao: (p: Participante) => void;
   onRemover: () => void;
   onEditar: () => void;
   onEncerrar: () => void;
@@ -487,9 +549,9 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
     <div className={`neu-flat rounded-2xl border p-4 flex flex-col gap-3 ${encerrada ? 'border-gray-500/25 opacity-95' : 'border-accent/10'}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2 flex-wrap">
             {new Date(tarefa.data + 'T00:00:00').toLocaleDateString('pt-BR')} · {participantes.length} participante{participantes.length === 1 ? '' : 's'}
-            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
+            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
               encerrada
                 ? 'bg-gray-500/20 text-gray-300 ring-1 ring-gray-500/30'
                 : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
@@ -504,19 +566,19 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
               title={expandido ? 'Recolher descrição' : 'Clique para ler a descrição inteira'}
               className="group text-left flex flex-col gap-1 min-w-0"
             >
-              <h4 className="text-base font-black text-gray-100 flex items-center gap-1.5">
+              <h4 className="text-lg font-black text-gray-100 flex items-center gap-1.5">
                 {tarefa.nome}
                 <ChevronDown
-                  size={13}
+                  size={14}
                   className={`shrink-0 text-gray-500 group-hover:text-accent transition-all ${expandido ? 'rotate-180 text-accent' : ''}`}
                 />
               </h4>
-              <p className={`text-xs text-gray-400 leading-snug whitespace-pre-wrap ${expandido ? '' : 'line-clamp-2'}`}>
+              <p className={`text-[13px] text-gray-400 leading-snug whitespace-pre-wrap ${expandido ? '' : 'line-clamp-2'}`}>
                 {tarefa.descricao}
               </p>
             </button>
           ) : (
-            <h4 className="text-base font-black text-gray-100">{tarefa.nome}</h4>
+            <h4 className="text-lg font-black text-gray-100">{tarefa.nome}</h4>
           )}
         </div>
         {podeGerenciar && (
@@ -553,23 +615,22 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
           return (
             <div key={f} className="neu-pressed rounded-xl p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${tone}`}>{f}</span>
-                <span className="text-[10px] font-mono text-gray-500">{lista.length}</span>
+                <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${tone}`}>{f}</span>
+                <span className="text-[11px] font-mono text-gray-500">{lista.length}</span>
               </div>
               {lista.length === 0 ? (
-                <span className="text-[11px] text-gray-500 italic">Sem participantes</span>
+                <span className="text-xs text-gray-500 italic">Sem participantes</span>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {lista.map(p => (
                     <ParticipanteRow
                       key={p.id}
                       participante={p}
-                      tipoConfig={tipoConfig}
                       avals={avalsPorParticipante[p.id] ?? []}
                       minhaId={minhaId}
                       podeAvaliar={podeAvaliar && !encerrada}
                       submitting={submittingIds.has(p.id)}
-                      onAvaliar={patch => onAvaliar(p, patch)}
+                      onAbrir={() => onAbrirAvaliacao(p)}
                     />
                   ))}
                 </div>
@@ -582,111 +643,255 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   );
 }
 
-function ParticipanteRow({ participante, tipoConfig: _tipoConfig, avals, minhaId, podeAvaliar, submitting, onAvaliar }: {
+function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, submitting, onAbrir }: {
   participante: Participante;
-  tipoConfig: TipoConfig;
   avals: AvaliacaoParticipante[];
   minhaId: string;
   podeAvaliar: boolean;
   submitting: boolean;
-  onAvaliar: (patch: { nota?: number|null; comentario?: string|null }) => void;
+  onAbrir: () => void;
 }) {
   const minha = avals.find(a => a.avaliador_id === minhaId);
   // Notas de admin não entram na média — admin é moderador aqui.
   const avalsConselho = avals.filter(a => a.avaliador?.role !== 'admin');
   const notas = avalsConselho.filter(a => a.nota !== null && a.nota !== undefined).map(a => Number(a.nota));
   const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
-
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [notaLocal, setNotaLocal] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
-  const [mostrarQuem, setMostrarQuem] = useState(false);
-
-  // Sincroniza com o servidor quando a nota do usuário muda por fora (outra
-  // sessão, refetch após salvar noutro dispositivo). Não sobrescreve enquanto
-  // ele está digitando (input focado) pra não roubar keystroke.
-  useEffect(() => {
-    if (document.activeElement === inputRef.current) return;
-    const desejado = minha?.nota != null ? String(minha.nota) : '';
-    setNotaLocal(prev => prev === desejado ? prev : desejado);
-  }, [minha?.nota]);
-
-  const salvar = () => {
-    if (notaLocal === '') {
-      if (minha?.nota != null) onAvaliar({ nota: null });
-      return;
-    }
-    const n = Number(notaLocal);
-    if (Number.isFinite(n) && n >= 0 && n <= 10 && n !== minha?.nota) {
-      onAvaliar({ nota: n });
-    }
-  };
-
-  // Quem já avaliou (com nota). Admin aparece marcado — a nota dele não
-  // entra na média, mas some da tela seria pior: parece que ninguém votou.
-  const comNota = avals
-    .filter(a => a.nota !== null && a.nota !== undefined)
-    .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
+  // Conta quem deu nota OU só comentou (comentário sem nota é avaliação
+  // válida — constraint chk_algo_avaliado da migr. 210).
+  const total = avals.filter(a => (a.nota !== null && a.nota !== undefined) || !!a.comentario).length;
 
   return (
-    <div className="py-1 border-b border-white/5 last:border-b-0">
-    <div className="flex items-center gap-2">
-      <Users size={11} className="text-gray-500 shrink-0" />
-      <span className="text-xs text-gray-200 flex-1 truncate">{participante.nome_snapshot}</span>
-      {comNota.length > 0 && (
-        <button
-          onClick={() => setMostrarQuem(v => !v)}
-          title="Ver quem avaliou e a nota que deu"
-          className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-gray-500 hover:text-accent transition-colors"
-        >
-          {mostrarQuem ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-          {comNota.length} voto{comNota.length === 1 ? '' : 's'}
-        </button>
-      )}
-      {media !== null && (
-        <span className="text-[10px] font-mono font-black text-amber-300 tabular-nums">
-          {media.toFixed(1)}<span className="text-gray-500">/10</span>
+    <button
+      onClick={onAbrir}
+      disabled={submitting}
+      className="w-full flex items-center gap-2 py-1.5 border-b border-white/5 last:border-b-0 text-left group disabled:opacity-60"
+    >
+      <Users size={13} className="text-gray-500 shrink-0" />
+      <span className="text-sm text-gray-200 flex-1 truncate group-hover:text-white transition-colors">
+        {participante.nome_snapshot}
+      </span>
+
+      {total > 0 && (
+        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 tabular-nums shrink-0">
+          {total} aval.
         </span>
       )}
-      {podeAvaliar && (
-        <div className="flex items-center gap-1">
-          <Star size={11} className="text-amber-400" />
-          <input
-            ref={inputRef}
-            type="number" min={0} max={10} step={0.5}
-            value={notaLocal}
-            onChange={e => setNotaLocal(e.target.value)}
-            onBlur={salvar}
-            onKeyDown={e => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
-            disabled={submitting}
-            placeholder="0-10"
-            className="neu-input w-14 py-0.5 px-1.5 text-[11px] font-mono rounded text-gray-200"
-          />
-          {submitting && <Loader2 size={11} className="animate-spin text-accent" />}
-        </div>
-      )}
-    </div>
 
-    {mostrarQuem && comNota.length > 0 && (
-      <div className="pl-5 pb-1.5 flex flex-col gap-1">
-        {comNota.map(a => (
-          <div key={a.id} className="flex items-start gap-2 text-[11px]">
-            <span className="font-mono font-black text-amber-300 tabular-nums w-9 shrink-0">
-              {Number(a.nota).toFixed(1)}
-            </span>
-            <div className="min-w-0">
-              <span className="text-gray-300">{a.avaliador?.nome ?? 'Avaliador'}</span>
-              {a.avaliador_id === minhaId && <span className="text-accent"> (você)</span>}
-              {a.avaliador?.role === 'admin' && (
-                <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">
-                  admin · fora da média
-                </span>
-              )}
-              {a.comentario && <p className="text-gray-500 break-words">{a.comentario}</p>}
+      {minha?.comentario && <MessageSquare size={13} className="text-accent shrink-0" />}
+
+      {minha?.nota != null && (
+        <span className="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent tabular-nums shrink-0">
+          sua {Number(minha.nota).toFixed(1)}
+        </span>
+      )}
+
+      {media !== null ? (
+        <span className="text-sm font-mono font-black text-amber-300 tabular-nums shrink-0">
+          {media.toFixed(1)}<span className="text-gray-500 text-[11px]">/10</span>
+        </span>
+      ) : (
+        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-600 shrink-0">sem nota</span>
+      )}
+
+      {submitting
+        ? <Loader2 size={14} className="animate-spin text-accent shrink-0" />
+        : podeAvaliar
+          ? <Star size={14} className="text-gray-600 group-hover:text-amber-400 transition-colors shrink-0" />
+          : <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors shrink-0" />}
+    </button>
+  );
+}
+
+// ── Modal de avaliação de um participante ────────────────────────────
+// Nota e comentário salvam JUNTOS num único UPSERT. A RPC faz
+// `nota = EXCLUDED.nota, comentario = EXCLUDED.comentario`, então mandar
+// os dois de uma vez é o que impede um campo apagar o outro.
+function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, onFechar, onSalvar, onExcluir }: {
+  participante: Participante;
+  tarefa: Tarefa;
+  avals: AvaliacaoParticipante[];
+  minhaId: string;
+  podeAvaliar: boolean;
+  onFechar: () => void;
+  onSalvar: (patch: { nota: number | null; comentario: string | null }) => Promise<boolean>;
+  onExcluir: () => Promise<boolean>;
+}) {
+  const confirm = useConfirm();
+  const minha = avals.find(a => a.avaliador_id === minhaId);
+  const [nota, setNota] = useState<string>(minha?.nota != null ? String(minha.nota) : '');
+  const [comentario, setComentario] = useState<string>(minha?.comentario ?? '');
+  const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const avalsConselho = avals.filter(a => a.avaliador?.role !== 'admin');
+  const notas = avalsConselho.filter(a => a.nota != null).map(a => Number(a.nota));
+  const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+  const outras = avals
+    .filter(a => a.avaliador_id !== minhaId && (a.nota != null || !!a.comentario))
+    .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
+
+  async function salvar() {
+    const bruto = nota.trim();
+    const n = bruto === '' ? null : Number(bruto);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 10)) {
+      return setErro('Nota precisa ser um número entre 0 e 10.');
+    }
+    const c = comentario.trim() === '' ? null : comentario.trim();
+    if (n === null && c === null) {
+      return setErro('Preencha a nota ou o comentário. Pra apagar tudo, use "Excluir minha avaliação".');
+    }
+    setErro(null);
+    setSalvando(true);
+    const ok = await onSalvar({ nota: n, comentario: c });
+    setSalvando(false);
+    if (ok) onFechar();
+  }
+
+  async function excluir() {
+    if (!await confirm({
+      message: `Excluir sua avaliação de ${participante.nome_snapshot}? A nota sai da média da filial no placar.`,
+      confirmLabel: 'Excluir avaliação',
+      danger: true,
+    })) return;
+    setExcluindo(true);
+    const ok = await onExcluir();
+    setExcluindo(false);
+    if (ok) onFechar();
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 overflow-y-auto"
+      onClick={onFechar}
+    >
+      <motion.div
+        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="neu-flat rounded-2xl border border-accent/20 p-5 sm:p-6 w-full max-w-lg my-6 flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-xl font-black text-gray-100 truncate">{participante.nome_snapshot}</h3>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${CENTRAL_FILIAL_TONE[participante.filial]}`}>
+                {participante.filial}
+              </span>
+              <span className="text-xs text-gray-500 truncate">{tarefa.nome}</span>
             </div>
           </div>
-        ))}
+          <button onClick={onFechar} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200 shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="neu-pressed rounded-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-[11px] uppercase tracking-widest font-bold text-gray-500">Média do conselho</span>
+          <span className="text-2xl font-mono font-black text-amber-300 tabular-nums">
+            {media !== null
+              ? <>{media.toFixed(1)}<span className="text-gray-500 text-sm">/10</span></>
+              : <span className="text-gray-600 text-sm">sem nota</span>}
+          </span>
+        </div>
+
+        {podeAvaliar ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3 items-start">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Sua nota (0-10)</label>
+                <input
+                  autoFocus
+                  type="number" min={0} max={10} step={0.5}
+                  value={nota}
+                  onChange={e => { setNota(e.target.value); setErro(null); }}
+                  placeholder="0-10"
+                  className="neu-input w-28 py-2.5 px-3 text-lg font-mono font-black rounded-lg text-gray-100"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Comentário (opcional)</label>
+                <textarea
+                  value={comentario}
+                  onChange={e => { setComentario(e.target.value); setErro(null); }}
+                  rows={3}
+                  placeholder="O que sustenta essa nota? Só o conselho lê."
+                  className="neu-input w-full py-2 px-3 text-sm rounded-lg text-gray-100"
+                />
+              </div>
+            </div>
+
+            {erro && <p className="text-xs text-red-400">{erro}</p>}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {minha && (
+                <button
+                  onClick={excluir}
+                  disabled={excluindo || salvando}
+                  className="btn-shimmer btn-shimmer--glass-red"
+                >
+                  {excluindo ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                  Excluir minha avaliação
+                </button>
+              )}
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={onFechar}
+                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvar}
+                  disabled={salvando || excluindo}
+                  className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+                >
+                  {salvando ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  {minha ? 'Atualizar avaliação' : 'Salvar avaliação'}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">
+            Modo leitura — só CEO e conselheiros da Matriz dão nota.
+          </p>
+        )}
+
+        <div className="pt-3 border-t border-white/5 flex flex-col gap-2">
+          <p className="text-[11px] uppercase tracking-widest font-bold text-gray-500">
+            Avaliações do conselho ({outras.length + (minha ? 1 : 0)})
+          </p>
+          {outras.length === 0 && !minha ? (
+            <p className="text-xs text-gray-600 italic">Ninguém avaliou este participante ainda.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {minha && <LinhaAvaliacao aval={minha} sou />}
+              {outras.map(a => <LinhaAvaliacao key={a.id} aval={a} />)}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function LinhaAvaliacao({ aval, sou }: { aval: AvaliacaoParticipante; sou?: boolean }) {
+  return (
+    <div className="flex items-start gap-2 text-[13px]">
+      <span className="font-mono font-black text-amber-300 tabular-nums w-10 shrink-0">
+        {aval.nota != null ? Number(aval.nota).toFixed(1) : <span className="text-gray-600">—</span>}
+      </span>
+      <div className="min-w-0">
+        <span className="text-gray-300">{aval.avaliador?.nome ?? 'Avaliador'}</span>
+        {sou && <span className="text-accent"> (você)</span>}
+        {aval.avaliador?.role === 'admin' && (
+          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">
+            admin · fora da média
+          </span>
+        )}
+        {aval.comentario && <p className="text-gray-500 break-words">{aval.comentario}</p>}
       </div>
-    )}
     </div>
   );
 }
