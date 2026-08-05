@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList, ChevronRight } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -56,7 +56,12 @@ type TipoReq = 'compra' | 'estoque';
 
 const UNIDADES = ['un', 'cx', 'pct', 'kg', 'g', 'L', 'mL', 'm', 'm²', 'sv'];
 
-const linhaVazia = () => ({ item: '', qtd: '1', unidade: 'un' });
+// `justificativa` vazia = "usa a do cabeçalho". Cada linha vira uma requisição
+// própria no banco (migr. 283), então cada uma pode ter o seu motivo — o
+// cabeçalho é só o padrão de quem pede várias coisas pela mesma razão
+// (migr. 354).
+let seqLinha = 0;
+const linhaVazia = () => ({ uid: ++seqLinha, item: '', qtd: '1', unidade: 'un', justificativa: '' });
 
 const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   // Sem filtro por autor: o recorte é o setor, e quem faz esse recorte é a
@@ -131,13 +136,25 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
-  const updateLinha = (i: number, patch: Partial<{ item: string; qtd: string; unidade: string }>) =>
+  const updateLinha = (i: number, patch: Partial<{ item: string; qtd: string; unidade: string; justificativa: string }>) =>
     setItens(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
+
+  // Quais linhas estão com campo de motivo próprio aberto. Fica fora do estado
+  // do item porque é visibilidade de UI, não dado da requisição: fechar o campo
+  // apaga o texto, e é isso que "voltar a usar o motivo geral" quer dizer.
+  // Chaveado por `uid` e não por índice — remover a linha 1 não pode transferir
+  // o campo aberto para quem era a linha 2.
+  const [justAberta, setJustAberta] = useState<Record<number, boolean>>({});
+  const toggleJust = (i: number, uid: number) => {
+    setJustAberta(m => ({ ...m, [uid]: !m[uid] }));
+    if (justAberta[uid]) updateLinha(i, { justificativa: '' });
+  };
 
   const closeForm = () => {
     setShowForm(false);
     setCab({ urgencia: 'Normal', centro_custo: '', justificativa: '', data_necessidade: '' });
     setItens([linhaVazia()]);
+    setJustAberta({});
     setEstoqueForm({ produto_id: '', qtd: '1', destino: '' });
     setErros({});
   };
@@ -170,12 +187,26 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     }
   };
 
+  // Nenhuma requisição nasce sem motivo — mas o motivo pode vir do item ou do
+  // cabeçalho. Se toda linha se explica sozinha, o campo geral pode ficar
+  // vazio; basta uma linha sem motivo próprio para ele voltar a ser obrigatório.
+  const cabJustObrigatoria = itens.some(r => !r.justificativa.trim());
+
   const validar = (): boolean => {
     const e: Record<string, string> = {};
-    if (cab.justificativa.trim().length < 10) e.justificativa = 'Explique por que o item é necessário (mín. 10 caracteres)';
+    const cabJust = cab.justificativa.trim();
+    if (cabJustObrigatoria && cabJust.length < 10) {
+      e.justificativa = cabJust.length === 0 && itens.length > 1
+        ? 'Explique o motivo geral, ou dê um motivo próprio a cada item'
+        : 'Explique por que o item é necessário (mín. 10 caracteres)';
+    }
     if (!cab.data_necessidade) e.data_necessidade = 'Obrigatório';
     else if (cab.data_necessidade < todayBR()) e.data_necessidade = 'Não pode ser no passado';
-    itens.forEach((r, i) => { if (!r.item.trim()) e[`item_${i}`] = 'Descreva o item'; });
+    itens.forEach((r, i) => {
+      if (!r.item.trim()) e[`item_${i}`] = 'Descreva o item';
+      const j = r.justificativa.trim();
+      if (j.length > 0 && j.length < 10) e[`just_${i}`] = 'Mín. 10 caracteres';
+    });
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -189,12 +220,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           item:    r.item.trim(),
           qtd:     parseInt(r.qtd, 10) || 1,
           unidade: r.unidade,
+          // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
+          justificativa: r.justificativa.trim() || null,
         })),
         p_solicitante:      profile.nome,
         p_urgencia:         cab.urgencia,
         p_centro_custo:     cab.centro_custo || null,
         p_filial:           filial,
-        p_justificativa:    cab.justificativa.trim(),
+        p_justificativa:    cab.justificativa.trim() || null,
         p_data_necessidade: cab.data_necessidade,
       });
       if (error) { showToast(error.message, 'error', true); return; }
@@ -355,7 +388,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 </FormField>
               </div>
 
-              <FormField label="Justificativa * — por que a empresa precisa disto" error={erros.justificativa}>
+              {/* O rótulo diz "geral" porque o campo é o padrão das linhas, não
+                  a única fonte: quem tem motivos diferentes justifica item a
+                  item lá embaixo (migr. 354). */}
+              <FormField
+                label={itens.length > 1
+                  ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''} — vale para os itens sem motivo próprio`
+                  : 'Justificativa * — por que a empresa precisa disto'}
+                error={erros.justificativa}
+              >
                 <textarea
                   className={`neu-input py-2 px-3 rounded-xl text-sm resize-none h-20 ${erros.justificativa ? 'border border-red-500/40' : ''}`}
                   placeholder="Ex.: o estoque de papel acaba na sexta e o setor emite 200 boletos por semana."
@@ -373,50 +414,82 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   </button>
                 </div>
 
+                {/* Vinha depois da lista, em cinza, e ninguém lia — mas é o fato
+                    que explica por que cada linha pode ter motivo próprio. */}
+                <p className="text-[11px] text-gray-400 leading-snug bg-white/[0.03] border border-white/5 rounded-lg py-2 px-3">
+                  Cada item vira uma <strong className="text-gray-300">requisição própria</strong> — Compras cota e
+                  fecha um a um, e o gerente aprova um a um. Por isso cada item pode ter o seu próprio motivo:
+                  use <em>Motivo próprio</em> quando a razão de pedir for diferente da geral.
+                </p>
+
                 <datalist id="sugestoes-catalogo">
                   {sugestoes.map(nome => <option key={nome} value={nome} />)}
                 </datalist>
 
                 {itens.map((row, i) => (
-                  <div key={i} className="flex flex-wrap md:flex-nowrap gap-2 items-start">
-                    <div className="flex-1 min-w-[180px]">
+                  <div key={row.uid} className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap md:flex-nowrap gap-2 items-start">
+                      <div className="flex-1 min-w-[180px]">
+                        <input
+                          list="sugestoes-catalogo"
+                          className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
+                          placeholder="Descreva o item — ex.: papel A4 75g, resma"
+                          value={row.item}
+                          onChange={e => updateLinha(i, { item: e.target.value })}
+                        />
+                        {erros[`item_${i}`] && (
+                          <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
+                        )}
+                      </div>
                       <input
-                        list="sugestoes-catalogo"
-                        className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
-                        placeholder="Descreva o item — ex.: papel A4 75g, resma"
-                        value={row.item}
-                        onChange={e => updateLinha(i, { item: e.target.value })}
+                        type="number" min="1"
+                        className="neu-input py-2 px-3 rounded-xl text-sm w-20"
+                        value={row.qtd}
+                        onChange={e => updateLinha(i, { qtd: e.target.value })}
                       />
-                      {erros[`item_${i}`] && (
-                        <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
-                      )}
+                      <select
+                        className="neu-input py-2 px-3 rounded-xl text-sm w-24"
+                        value={row.unidade}
+                        onChange={e => updateLinha(i, { unidade: e.target.value })}
+                      >
+                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      <button
+                        onClick={() => toggleJust(i, row.uid)}
+                        title={justAberta[row.uid] ? 'Voltar a usar a justificativa geral' : 'Dar um motivo só para este item'}
+                        className={`py-2 px-2.5 rounded-xl border transition-colors mt-0.5 ${
+                          justAberta[row.uid]
+                            ? 'bg-accent/15 border-accent/30 text-accent'
+                            : 'neu-button border-transparent text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        <MessageSquareText size={13} />
+                      </button>
+                      <button
+                        onClick={() => removeLinha(i)}
+                        disabled={itens.length <= 1}
+                        title="Remover item"
+                        className="action-btn-delete disabled:opacity-30 mt-1"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
-                    <input
-                      type="number" min="1"
-                      className="neu-input py-2 px-3 rounded-xl text-sm w-20"
-                      value={row.qtd}
-                      onChange={e => updateLinha(i, { qtd: e.target.value })}
-                    />
-                    <select
-                      className="neu-input py-2 px-3 rounded-xl text-sm w-24"
-                      value={row.unidade}
-                      onChange={e => updateLinha(i, { unidade: e.target.value })}
-                    >
-                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                    <button
-                      onClick={() => removeLinha(i)}
-                      disabled={itens.length <= 1}
-                      title="Remover item"
-                      className="action-btn-delete disabled:opacity-30 mt-1"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+
+                    {justAberta[row.uid] && (
+                      <div className="pl-3 border-l-2 border-accent/30 ml-1">
+                        <textarea
+                          className={`neu-input py-2 px-3 rounded-xl text-xs resize-none h-14 w-full ${erros[`just_${i}`] ? 'border border-red-500/40' : ''}`}
+                          placeholder={`Motivo só deste item${row.item.trim() ? ` (${row.item.trim()})` : ''} — substitui a justificativa geral`}
+                          value={row.justificativa}
+                          onChange={e => updateLinha(i, { justificativa: e.target.value })}
+                        />
+                        {erros[`just_${i}`] && (
+                          <span className="text-[10px] text-red-500 font-semibold">{erros[`just_${i}`]}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
-                <span className="text-[10px] text-gray-500">
-                  Cada item vira uma requisição própria — é assim que Compras cota e fecha um a um.
-                </span>
               </div>
               </>
               )}
