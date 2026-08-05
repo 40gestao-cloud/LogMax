@@ -24,11 +24,15 @@ export const CATEGORIA_LABEL: Record<string, string> = {
 // Financeiro / RH / Redes Sociais e Marketing / Logística / Vendas e Atendimento
 // foram removidos: cada um já é medido por dados objetivos (painel BI) e/ou
 // avaliado como Tarefa da Matriz (tarefa_rh, tarefa_financeiro, tarefa_logistica,
-// tarefa_marketing, tarefa_treinamento_vendas). Aqui ficam só os 2 eixos que
-// não têm equivalente objetivo/tarefa.
+// tarefa_marketing, tarefa_treinamento_vendas).
+//
+// 'Frequência de Trabalho' saiu na migr. 349 pelo mesmo motivo, com atraso:
+// `ponto_eletronico` já sabe quem esteve presente em cada dia do período da
+// competição, então a nota do conselho era palpite sobre dado existente. Agora
+// entra no placar como parcela medida (peso 20%) e a tela mostra %, não voto.
+// Sobrou o único eixo que é julgamento de fato.
 export const CRITERIOS_MATRIZ = {
   criterios: [
-    'Frequência de Trabalho',
     'Planejamento e Organização',
   ],
 } as const;

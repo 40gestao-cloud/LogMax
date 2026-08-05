@@ -13,6 +13,17 @@ type PainelRow = {
   metrica_label: string | null;
 };
 
+// Score comparável entre eixos. Nota do conselho já é 0-10; métrica em % vem
+// 0-100 e precisa ser normalizada — sem isso 'Frequência de Trabalho', que
+// desde a migr. 349 só tem métrica, entraria no ranking e no total valendo
+// dez vezes mais que um eixo votado.
+function scoreDaLinha(p: PainelRow): number {
+  if (p.nota_subjetiva != null) return Number(p.nota_subjetiva);
+  if (p.metrica_valor == null) return 0;
+  const v = Number(p.metrica_valor);
+  return p.metrica_label?.includes('(%)') ? v / 10 : v;
+}
+
 // Painel Comparativo dos 7 Eixos — antes vivia na aba Padrão (bloco B2 de
 // AvaliacoesView). Migrado pra Competição do Conselho porque cruza notas
 // subjetivas do conselho com métricas objetivas do sistema no período do
@@ -59,13 +70,18 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
     return () => window.removeEventListener('avaliacao-matriz:changed', h);
   }, [carregar]);
 
-  const rankingPorEixo = useMemo(() => {
+  // Eixos exibidos: os subjetivos que sobraram + 'Frequência de Trabalho',
+  // que desde a migr. 349 não tem nota do conselho — só a medida do ponto.
+  // Sem esta linha extra o eixo sumiria justo do painel que existe pra
+  // comparar julgamento com dado.
+  const EIXOS = [...CRITERIOS_MATRIZ.criterios, 'Frequência de Trabalho'] as const;
+
+  const rankingPorEixo = useMemo<Record<string, { filial: string; score: number }[]>>(() => {
     if (!painel) return {};
     const porEixo: Record<string, { filial: string; score: number }[]> = {};
     painel.forEach(p => {
       if (!porEixo[p.eixo]) porEixo[p.eixo] = [];
-      const score = p.nota_subjetiva != null ? Number(p.nota_subjetiva) : (p.metrica_valor ?? 0);
-      porEixo[p.eixo].push({ filial: p.filial, score });
+      porEixo[p.eixo].push({ filial: p.filial, score: scoreDaLinha(p) });
     });
     Object.values(porEixo).forEach(arr => arr.sort((a, b) => b.score - a.score));
     return porEixo;
@@ -92,7 +108,8 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
       </div>
       <p className="text-[11px] text-gray-500 mb-4">
         Notas subjetivas do avaliador (0-10) + métricas objetivas coletadas do sistema no período do ciclo.
-        Ranking por eixo destaca a filial líder em cada critério.
+        Ranking por eixo destaca a filial líder em cada critério. Frequência de Trabalho não recebe mais nota:
+        é a aderência do ponto no período, normalizada pra 0-10 na hora de ranquear.
       </p>
 
       {loading && !painel ? (
@@ -103,13 +120,12 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
         const totaisPorFilial: Record<string, number> = {};
         const vitoriasPorFilial: Record<string, number> = {};
         FILIAIS_OP.forEach(f => { totaisPorFilial[f] = 0; vitoriasPorFilial[f] = 0; });
-        CRITERIOS_MATRIZ.criterios.forEach(eixo => {
+        EIXOS.forEach(eixo => {
           const rank = rankingPorEixo[eixo] ?? [];
           const lider = rank[0];
           if (lider && lider.score > 0) vitoriasPorFilial[lider.filial] = (vitoriasPorFilial[lider.filial] ?? 0) + 1;
           painel.filter(p => p.eixo === eixo).forEach(p => {
-            const s = p.nota_subjetiva != null ? Number(p.nota_subjetiva) : (p.metrica_valor ?? 0);
-            totaisPorFilial[p.filial] = (totaisPorFilial[p.filial] ?? 0) + s;
+            totaisPorFilial[p.filial] = (totaisPorFilial[p.filial] ?? 0) + scoreDaLinha(p);
           });
         });
         const totalRank = FILIAIS_OP
@@ -135,7 +151,7 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
                 </tr>
               </thead>
               <tbody>
-                {CRITERIOS_MATRIZ.criterios.map(eixo => {
+                {EIXOS.map(eixo => {
                   const linhaPorFilial: Record<string, PainelRow | undefined> = {};
                   painel.filter(p => p.eixo === eixo).forEach(p => { linhaPorFilial[p.filial] = p; });
                   const rank = rankingPorEixo[eixo] ?? [];

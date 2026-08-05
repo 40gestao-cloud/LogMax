@@ -8,6 +8,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
 import { PainelComparativoEixos } from './PainelComparativoEixos';
+import { FrequenciaFiliaisCard } from './FrequenciaFiliaisCard';
 import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -195,7 +196,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
               <CardSecao
                 icon={Building2}
                 titulo="Avaliação das Filiais"
-                hint="Nota nos 7 eixos de cada filial + comparativo dos eixos lado a lado."
+                hint="Frequência medida pelo ponto + nota de Planejamento e Organização, com o comparativo dos eixos."
                 selo="Alimenta o placar"
                 onClick={() => setSecao('filiais')}
                 tone="bg-sky-500/15 ring-sky-500/40 text-sky-300"
@@ -230,6 +231,8 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
       {secao === 'filiais' && (
         <>
+          {/* Frequência não é voto: vem do ponto do período (migr. 349). */}
+          <FrequenciaFiliaisCard competicaoId={competicao.id} />
           {competicao.ciclo_id ? (
             <AvaliacaoFilialPanel
               profile={profile}

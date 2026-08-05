@@ -67,8 +67,20 @@ type NotaConselho = {
 
 type Placar = {
   competicao: any;
-  por_filial: Record<string, { media: number; n: number }>;
+  por_filial: Record<string, {
+    media: number;
+    n: number;
+    // Migr. 349: a nota final passou a misturar o julgamento do conselho com
+    // a frequência medida no ponto. `media` é o resultado; estes dois campos
+    // mostram de onde ele veio.
+    media_conselho?: number;
+    frequencia?: {
+      taxa: number | null; registros: number; presencas: number;
+      faltas: number; justificados: number; entrou: boolean;
+    } | null;
+  }>;
   inclui_eixos_conselho?: boolean;
+  peso_frequencia?: number;
 };
 
 // Snapshots antigos (pré-migração 227) tinham forma { placar: { total_por_filial } }
@@ -530,6 +542,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         filial: f,
         media: Number(placar.por_filial?.[f]?.media ?? 0),
         n:     Number(placar.por_filial?.[f]?.n ?? 0),
+        // Parcela objetiva (migr. 349): frequência do ponto no período.
+        mediaConselho: Number(placar.por_filial?.[f]?.media_conselho ?? 0),
+        freq:  placar.por_filial?.[f]?.frequencia ?? null,
       }))
       .sort((a, b) => b.media - a.media);
   }, [placar]);
@@ -706,6 +721,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     : 'Alguma filial ainda não recebeu avaliação de filial no período — fonte ignorada'}>
                     Avaliação de Filial (eixos subjetivos)
                   </span>
+                  {/* Frequência não é voto: sai do ponto do período (migr. 349). */}
+                  <span
+                    className="px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    title="Presenças e faltas do ponto eletrônico no período da competição. Justificado fica fora da conta."
+                  >
+                    Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%)
+                  </span>
                 </div>
 
                 {/* Pódio — média das notas por filial (× 10, escala 0-100) */}
@@ -742,7 +764,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <tr>
                         <th className="text-left pb-3 font-bold">Filial</th>
                         <th className="text-right pb-3 font-bold pr-4">Notas registradas</th>
-                        <th className="text-right pb-3 font-bold pr-4">Média (0-10)</th>
+                        <th className="text-right pb-3 font-bold pr-4">Conselho (0-10)</th>
+                        <th className="text-right pb-3 font-bold pr-4">Frequência</th>
+                        <th className="text-right pb-3 font-bold pr-4">Final (0-10)</th>
                         <th className="text-right pb-3 font-bold pr-4">Escala 0-100</th>
                       </tr>
                     </thead>
@@ -753,6 +777,21 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           <tr key={p.filial} className="border-t border-white/5">
                             <td className="py-3"><FilialBadge filial={p.filial} /></td>
                             <td className="py-3 text-right text-gray-300 tabular-nums pr-4">{p.n}</td>
+                            <td className="py-3 text-right text-gray-400 tabular-nums pr-4">
+                              {p.n === 0 ? '—' : (p.mediaConselho / 10).toFixed(1)}
+                            </td>
+                            <td
+                              className="py-3 text-right tabular-nums pr-4"
+                              title={p.freq
+                                ? `${p.freq.presencas} presença(s), ${p.freq.faltas} falta(s), ${p.freq.justificados} justificado(s) fora da conta`
+                                : 'Sem ponto lançado no período'}
+                            >
+                              {p.freq?.taxa == null
+                                ? <span className="text-gray-600">—</span>
+                                : <span className={p.freq.entrou ? 'text-emerald-300' : 'text-gray-500'}>
+                                    {(p.freq.taxa * 100).toFixed(0)}%
+                                  </span>}
+                            </td>
                             <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                             </td>
@@ -766,7 +805,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </table>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3">
-                  Média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz, agrupada pela filial do participante.
+                  Conselho = média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz,
+                  agrupada pela filial do participante. Frequência = presenças ÷ (presenças + faltas) no ponto do período,
+                  com justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
+                  Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
                 </p>
               </div>
 
