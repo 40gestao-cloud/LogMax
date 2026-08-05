@@ -91,7 +91,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const gerarPDF = async (destino: 'download' | 'maxshow') => {
     setExportando(destino === 'maxshow' ? 'maxshow' : 'pdf');
     try {
-      const rel = await buscarRelatorioCentralAvaliacao(competicao);
+      const rel = await buscarRelatorioCentralAvaliacao(competicao, profile.role === 'admin');
       await exportCentralAvaliacaoPDF(rel, nomeArquivo, destino, profile, showToast);
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
@@ -105,7 +105,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const baixarExcel = async () => {
     setExportando('excel');
     try {
-      const rel = await buscarRelatorioCentralAvaliacao(competicao);
+      const rel = await buscarRelatorioCentralAvaliacao(competicao, profile.role === 'admin');
       await exportCentralAvaliacaoExcel(rel, nomeArquivo);
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao gerar Excel.', 'error');
@@ -223,7 +223,9 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         </>
       )}
 
-      {secao === 'ciclo' && <VisaoCicloPorParticipante competicao={competicao} />}
+      {secao === 'ciclo' && (
+        <VisaoCicloPorParticipante competicao={competicao} ehAdmin={profile.role === 'admin'} />
+      )}
     </motion.div>
   );
 }
@@ -297,7 +299,7 @@ const TAREFA_TIPO_LABEL: Record<string, string> = {
   tarefa_logistica:          'Logística',
 };
 
-function VisaoCicloPorParticipante({ competicao }: { competicao: Competicao }) {
+function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Competicao; ehAdmin: boolean }) {
   const [loading, setLoading] = useState(true);
   const [linhas, setLinhas] = useState<LinhaParticipante[]>([]);
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -309,10 +311,14 @@ function VisaoCicloPorParticipante({ competicao }: { competicao: Competicao }) {
       setLoading(true);
       const { data: tarefas } = await supabase
         .from('matriz_tarefas')
-        .select('id, tipo, nome, data')
+        .select('id, tipo, nome, data, status')
         .eq('competicao_id', competicao.id)
         .eq('ativo', true);
-      const tsArr = tarefas ?? [];
+      // Voto selado (migr. 345): fora do admin, a RLS só devolve a própria
+      // nota enquanto a tarefa não encerra. Consolidar tarefa em avaliação
+      // aqui produziria uma "média do conselho" feita de uma nota só —
+      // número errado numa tela de consolidação. Só entram as encerradas.
+      const tsArr = (tarefas ?? []).filter((t: any) => ehAdmin || t.status === 'encerrada');
       if (tsArr.length === 0) {
         if (!cancelou) { setLinhas([]); setLoading(false); }
         return;
@@ -411,6 +417,7 @@ function VisaoCicloPorParticipante({ competicao }: { competicao: Competicao }) {
       </div>
       <p className="text-[11px] text-gray-500 mb-4">
         Cada linha é uma pessoa avaliada nesta competição — média das notas do conselho em todas as Tarefas da Matriz em que ela participou.
+        {!ehAdmin && ' Entram só as tarefas já encerradas: enquanto uma tarefa está em avaliação, as notas ficam seladas.'}
       </p>
 
       {loading ? (

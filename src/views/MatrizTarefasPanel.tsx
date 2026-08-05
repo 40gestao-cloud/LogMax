@@ -4,6 +4,7 @@ import {
   GraduationCap, Cpu, Presentation, Handshake, Plus, X, Trash2, Loader2,
   Star, MessageSquare, ChevronRight, ChevronDown, ArrowLeft, Check, Users,
   UserCircle, Megaphone, DollarSign, Package, Pencil, Lock, Unlock, Sparkles,
+  EyeOff,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -99,7 +100,8 @@ type Tarefa = {
   data: string;
   criado_por: string;
   created_at: string;
-  status: 'aberta' | 'encerrada';
+  // rascunho = criada, ainda não aceita nota (migr. 345)
+  status: 'rascunho' | 'aberta' | 'encerrada';
 };
 
 type Participante = {
@@ -137,7 +139,15 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast
   const [tipoAtivo, setTipoAtivo] = useState<TipoTarefa | null>(null);
 
   if (tipoAtivo === null) {
-    return <LandingTipos onSelect={setTipoAtivo} competicao={competicao} extras={extras} />;
+    return (
+      <LandingTipos
+        onSelect={setTipoAtivo}
+        competicao={competicao}
+        extras={extras}
+        minhaId={profile.id}
+        podeAvaliar={podeAvaliar}
+      />
+    );
   }
 
   return (
@@ -154,8 +164,14 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, showToast
 }
 
 // ── Landing: cards por tipo de tarefa ────────────────────────────────
-function LandingTipos({ onSelect, competicao, extras }: { onSelect: (t: TipoTarefa) => void; competicao: Competicao; extras?: React.ReactNode }) {
-  const [contadores, setContadores] = useState<Record<TipoTarefa, number>>({
+function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
+  onSelect: (t: TipoTarefa) => void;
+  competicao: Competicao;
+  extras?: React.ReactNode;
+  minhaId: string;
+  podeAvaliar: boolean;
+}) {
+  const zerado = (): Record<TipoTarefa, number> => ({
     tarefa_treinamento_vendas: 0,
     tarefa_treinamento_ia: 0,
     tarefa_apresentacao: 0,
@@ -164,33 +180,83 @@ function LandingTipos({ onSelect, competicao, extras }: { onSelect: (t: TipoTare
     tarefa_financeiro: 0,
     tarefa_logistica: 0,
   });
+  const [contadores, setContadores] = useState<Record<TipoTarefa, number>>(zerado);
+  // Participantes de tarefa ABERTA que ainda não têm a MINHA nota. É o que
+  // responde "o que falta eu avaliar" sem entrar tipo por tipo.
+  const [pendentes, setPendentes] = useState<Record<TipoTarefa, number>>(zerado);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data } = await supabase
+      const { data: tarefas } = await supabase
         .from('matriz_tarefas')
-        .select('tipo')
+        .select('id, tipo, status')
         .eq('competicao_id', competicao.id)
         .eq('ativo', true);
+
       const contagens: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => { contagens[r.tipo] = (contagens[r.tipo] ?? 0) + 1; });
-      setContadores({
-        tarefa_treinamento_vendas: contagens['tarefa_treinamento_vendas'] ?? 0,
-        tarefa_treinamento_ia:     contagens['tarefa_treinamento_ia'] ?? 0,
-        tarefa_apresentacao:       contagens['tarefa_apresentacao'] ?? 0,
-        tarefa_rh:                 contagens['tarefa_rh'] ?? 0,
-        tarefa_marketing:          contagens['tarefa_marketing'] ?? 0,
-        tarefa_financeiro:         contagens['tarefa_financeiro'] ?? 0,
-        tarefa_logistica:          contagens['tarefa_logistica'] ?? 0,
+      (tarefas ?? []).forEach((r: any) => { contagens[r.tipo] = (contagens[r.tipo] ?? 0) + 1; });
+      const porTipo = zerado();
+      (Object.keys(porTipo) as TipoTarefa[]).forEach(k => { porTipo[k] = contagens[k] ?? 0; });
+      setContadores(porTipo);
+
+      // Pendência só conta tarefa liberada: rascunho ainda não aceita nota.
+      const abertas = (tarefas ?? []).filter((t: any) => t.status === 'aberta');
+      if (!podeAvaliar || abertas.length === 0) {
+        setPendentes(zerado());
+        setLoading(false);
+        return;
+      }
+
+      const tipoPorTarefa = new Map<string, TipoTarefa>();
+      abertas.forEach((t: any) => tipoPorTarefa.set(t.id, t.tipo));
+
+      const [{ data: parts }, { data: minhas }] = await Promise.all([
+        supabase.from('matriz_tarefa_participantes')
+          .select('id, tarefa_id')
+          .in('tarefa_id', [...tipoPorTarefa.keys()])
+          .eq('ativo', true),
+        supabase.from('avaliacoes_matriz')
+          .select('item_id, nota')
+          .eq('competicao_id', competicao.id)
+          .eq('avaliador_id', minhaId)
+          .eq('ativo', true)
+          .not('nota', 'is', null),
+      ]);
+
+      const jaNotei = new Set((minhas ?? []).map((a: any) => a.item_id));
+      const falta = zerado();
+      (parts ?? []).forEach((p: any) => {
+        if (jaNotei.has(p.id)) return;
+        const tipo = tipoPorTarefa.get(p.tarefa_id);
+        if (tipo) falta[tipo] += 1;
       });
+      setPendentes(falta);
       setLoading(false);
     })();
-  }, [competicao.id]);
+  }, [competicao.id, minhaId, podeAvaliar]);
+
+  const totalPendente = (Object.values(pendentes) as number[]).reduce((s, n) => s + n, 0);
 
   return (
     <div className="flex flex-col gap-6">
+    {podeAvaliar && !loading && (
+      <div className={`neu-flat rounded-2xl border px-5 py-3 flex items-center gap-3 ${
+        totalPendente > 0 ? 'border-amber-500/30' : 'border-emerald-500/30'
+      }`}>
+        {totalPendente > 0
+          ? <Star size={16} className="text-amber-400 shrink-0" />
+          : <Check size={16} className="text-emerald-400 shrink-0" />}
+        <p className="text-sm text-gray-200">
+          {totalPendente > 0 ? (
+            <>Faltam <span className="font-black text-amber-300">{totalPendente}</span> participante{totalPendente === 1 ? '' : 's'} pra você avaliar em tarefas abertas.</>
+          ) : (
+            <>Você avaliou todos os participantes das tarefas abertas.</>
+          )}
+        </p>
+      </div>
+    )}
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {TIPOS.map((t, idx) => {
         const Icon = t.icon;
@@ -220,13 +286,20 @@ function LandingTipos({ onSelect, competicao, extras }: { onSelect: (t: TipoTare
               <p className="text-[11px] text-gray-400 mt-1 leading-snug">{t.hint}</p>
             </div>
 
-            <div className="relative flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold pt-3 border-t border-white/5">
+            <div className="relative flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-widest font-bold pt-3 border-t border-white/5">
               {loading ? (
                 <Loader2 size={11} className="animate-spin text-gray-500" />
               ) : (
-                <span className="text-gray-400 tabular-nums">
-                  {contadores[t.id]} tarefa{contadores[t.id] === 1 ? '' : 's'} nesta competição
-                </span>
+                <>
+                  <span className="text-gray-400 tabular-nums">
+                    {contadores[t.id]} tarefa{contadores[t.id] === 1 ? '' : 's'} nesta competição
+                  </span>
+                  {podeAvaliar && pendentes[t.id] > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 tabular-nums">
+                      {pendentes[t.id]} sem sua nota
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </button>
@@ -323,6 +396,20 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     return m;
   }, [participantes]);
 
+  // Próximo participante da MESMA tarefa que ainda não tem minha nota, na
+  // ordem em que a tela mostra (SuperMax → MaxLook → TechMax). Alimenta o
+  // "Salvar e próximo" — sem isso é fechar modal, caçar o próximo, clicar.
+  const proximoSemMinhaNota = useCallback((tarefaId: string, atualId: string): Participante | null => {
+    const daTarefa = CENTRAL_OP_FILIAIS.flatMap(f =>
+      participantes.filter(p => p.tarefa_id === tarefaId && p.filial === f),
+    );
+    const idx = daTarefa.findIndex(p => p.id === atualId);
+    const depois = idx >= 0 ? [...daTarefa.slice(idx + 1), ...daTarefa.slice(0, idx)] : daTarefa;
+    return depois.find(p =>
+      !avaliacoes.some(a => a.item_id === p.id && a.avaliador_id === profile.id && a.nota != null),
+    ) ?? null;
+  }, [participantes, avaliacoes, profile.id]);
+
   const avalsPorParticipante = useMemo(() => {
     const m: Record<string, AvaliacaoParticipante[]> = {};
     for (const a of avaliacoes) {
@@ -370,6 +457,18 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
     carregar();
     window.dispatchEvent(new Event('avaliacao-matriz:changed'));
     return true;
+  }
+
+  async function liberarTarefa(tarefa: Tarefa) {
+    if (!await confirm({
+      message: `Permitir notas em "${tarefa.nome}"? O conselho recebe aviso no sino e passa a poder avaliar. Antes disso ninguém consegue dar nota.`,
+      confirmLabel: 'Permitir notas',
+    })) return;
+    const { error } = await supabase.rpc('liberar_matriz_tarefa', { p_tarefa_id: tarefa.id });
+    if (error) return showToast(error.message || 'Erro ao liberar', 'error');
+    showToast('Notas liberadas — conselho avisado', 'success');
+    carregar();
+    window.dispatchEvent(new Event('avaliacao-matriz:changed'));
   }
 
   async function encerrarTarefa(tarefa: Tarefa) {
@@ -460,6 +559,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
               onEditar={() => setEditandoTarefa(t)}
               onEncerrar={() => encerrarTarefa(t)}
               onReabrir={() => reabrirTarefa(t)}
+              onLiberar={() => liberarTarefa(t)}
               onBriefingIa={() => setBriefingTarefa(t)}
             />
           ))}
@@ -499,6 +599,8 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
           minhaId={profile.id}
           // Tarefa encerrada vira leitura: a RPC recusaria a escrita de qualquer jeito.
           podeAvaliar={podeAvaliar && (tarefas.find(t => t.id === avaliando.tarefa.id)?.status ?? 'aberta') !== 'encerrada'}
+          proximo={proximoSemMinhaNota(avaliando.tarefa.id, avaliando.participante.id)}
+          onIrPara={p => setAvaliando({ participante: p, tarefa: avaliando.tarefa })}
           onFechar={() => setAvaliando(null)}
           onSalvar={patch => avaliarParticipante(avaliando.participante, patch)}
           onExcluir={() => excluirAvaliacao(avaliando.participante)}
@@ -519,7 +621,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, showTo
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onBriefingIa }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, podeGerenciar, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
@@ -533,6 +635,7 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   onEditar: () => void;
   onEncerrar: () => void;
   onReabrir: () => void;
+  onLiberar: () => void;
   onBriefingIa: () => void;
 }) {
   const porFilial = useMemo(() => {
@@ -541,6 +644,11 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
     return m;
   }, [participantes]);
   const encerrada = tarefa.status === 'encerrada';
+  const rascunho  = tarefa.status === 'rascunho';
+  // Voto selado: nota alheia só aparece com a tarefa encerrada. A RLS da
+  // migr. 345 garante isso no banco — aqui é só não exibir número parcial
+  // como se fosse a média do conselho. Admin não vota e vê sempre.
+  const revelado = !podeAvaliar || encerrada;
   // Descrição fica em 2 linhas até o conselheiro clicar. Pauta longa empurrava
   // a grade de participantes pra fora da tela quando havia várias tarefas.
   const [expandido, setExpandido] = useState(false);
@@ -554,9 +662,15 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
             <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
               encerrada
                 ? 'bg-gray-500/20 text-gray-300 ring-1 ring-gray-500/30'
-                : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+                : rascunho
+                  ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
+                  : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
             }`}>
-              {encerrada ? <><Lock size={9} /> Encerrada</> : <><Unlock size={9} /> Aberta</>}
+              {encerrada
+                ? <><Lock size={9} /> Encerrada</>
+                : rascunho
+                  ? <><Lock size={9} /> Notas bloqueadas</>
+                  : <><Unlock size={9} /> Em avaliação</>}
             </span>
           </span>
           {tarefa.descricao ? (
@@ -583,6 +697,11 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
         </div>
         {podeGerenciar && (
           <div className="flex items-center gap-1.5 flex-wrap">
+            {rascunho && (
+              <button onClick={onLiberar} className="btn-shimmer btn-shimmer--glass-green" title="Liberar a tarefa para o conselho dar nota — dispara aviso no sino">
+                <Unlock size={11} /> Permitir notas
+              </button>
+            )}
             {!encerrada && (
               <>
                 <button onClick={onBriefingIa} className="btn-shimmer btn-shimmer--glass-purple" title="MaxAI Briefing — IA sugere sub-tarefas nos outros tipos pra apoiar esta tarefa">
@@ -628,7 +747,8 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
                       participante={p}
                       avals={avalsPorParticipante[p.id] ?? []}
                       minhaId={minhaId}
-                      podeAvaliar={podeAvaliar && !encerrada}
+                      podeAvaliar={podeAvaliar && !encerrada && !rascunho}
+                      revelado={revelado}
                       submitting={submittingIds.has(p.id)}
                       onAbrir={() => onAbrirAvaliacao(p)}
                     />
@@ -643,11 +763,13 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   );
 }
 
-function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, submitting, onAbrir }: {
+function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, revelado, submitting, onAbrir }: {
   participante: Participante;
   avals: AvaliacaoParticipante[];
   minhaId: string;
   podeAvaliar: boolean;
+  // Notas alheias já podem ser mostradas? (tarefa encerrada, ou admin)
+  revelado: boolean;
   submitting: boolean;
   onAbrir: () => void;
 }) {
@@ -671,7 +793,7 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, submitting
         {participante.nome_snapshot}
       </span>
 
-      {total > 0 && (
+      {revelado && total > 0 && (
         <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 tabular-nums shrink-0">
           {total} aval.
         </span>
@@ -685,7 +807,11 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, submitting
         </span>
       )}
 
-      {media !== null ? (
+      {!revelado ? (
+        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-600 shrink-0 flex items-center gap-1">
+          <EyeOff size={11} /> selado
+        </span>
+      ) : media !== null ? (
         <span className="text-sm font-mono font-black text-amber-300 tabular-nums shrink-0">
           {media.toFixed(1)}<span className="text-gray-500 text-[11px]">/10</span>
         </span>
@@ -706,15 +832,18 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, submitting
 // Nota e comentário salvam JUNTOS num único UPSERT. A RPC faz
 // `nota = EXCLUDED.nota, comentario = EXCLUDED.comentario`, então mandar
 // os dois de uma vez é o que impede um campo apagar o outro.
-function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, onFechar, onSalvar, onExcluir }: {
+function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, proximo, onFechar, onSalvar, onExcluir, onIrPara }: {
   participante: Participante;
   tarefa: Tarefa;
   avals: AvaliacaoParticipante[];
   minhaId: string;
   podeAvaliar: boolean;
+  // Próximo participante da tarefa ainda sem a minha nota (ordem da tela).
+  proximo: Participante | null;
   onFechar: () => void;
   onSalvar: (patch: { nota: number | null; comentario: string | null }) => Promise<boolean>;
   onExcluir: () => Promise<boolean>;
+  onIrPara: (p: Participante) => void;
 }) {
   const confirm = useConfirm();
   const minha = avals.find(a => a.avaliador_id === minhaId);
@@ -730,8 +859,11 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
   const outras = avals
     .filter(a => a.avaliador_id !== minhaId && (a.nota != null || !!a.comentario))
     .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
+  // Voto selado: nota alheia só depois da tarefa encerrada (a RLS da
+  // migr. 345 já esconde no banco — aqui é a mesma régua na tela).
+  const revelado = !podeAvaliar || tarefa.status === 'encerrada';
 
-  async function salvar() {
+  async function salvar(seguirParaProximo = false) {
     const bruto = nota.trim();
     const n = bruto === '' ? null : Number(bruto);
     if (n !== null && (!Number.isFinite(n) || n < 0 || n > 10)) {
@@ -741,11 +873,18 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
     if (n === null && c === null) {
       return setErro('Preencha a nota ou o comentário. Pra apagar tudo, use "Excluir minha avaliação".');
     }
+    // Nota extrema move muito a média da filial com um voto só — pede uma
+    // linha de justificativa. No meio da escala segue opcional.
+    if (n !== null && (n <= 3 || n >= 9) && c === null) {
+      return setErro(`Nota ${n.toFixed(1).replace('.0', '')} pesa muito na média da filial — escreva uma linha justificando.`);
+    }
     setErro(null);
     setSalvando(true);
     const ok = await onSalvar({ nota: n, comentario: c });
     setSalvando(false);
-    if (ok) onFechar();
+    if (!ok) return;
+    if (seguirParaProximo && proximo) onIrPara(proximo);
+    else onFechar();
   }
 
   async function excluir() {
@@ -786,14 +925,25 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
           </button>
         </div>
 
-        <div className="neu-pressed rounded-xl px-4 py-3 flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-widest font-bold text-gray-500">Média do conselho</span>
-          <span className="text-2xl font-mono font-black text-amber-300 tabular-nums">
-            {media !== null
-              ? <>{media.toFixed(1)}<span className="text-gray-500 text-sm">/10</span></>
-              : <span className="text-gray-600 text-sm">sem nota</span>}
-          </span>
-        </div>
+        {revelado ? (
+          <div className="neu-pressed rounded-xl px-4 py-3 flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-widest font-bold text-gray-500">Média do conselho</span>
+            <span className="text-2xl font-mono font-black text-amber-300 tabular-nums">
+              {media !== null
+                ? <>{media.toFixed(1)}<span className="text-gray-500 text-sm">/10</span></>
+                : <span className="text-gray-600 text-sm">sem nota</span>}
+            </span>
+          </div>
+        ) : (
+          <div className="neu-pressed rounded-xl px-4 py-3 flex items-start gap-3">
+            <EyeOff size={16} className="text-gray-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-gray-400 leading-snug">
+              Voto selado: as notas dos outros conselheiros — e a média — aparecem
+              <b className="text-gray-300"> quando esta tarefa for encerrada</b>. Cada um julga sem ver o
+              julgamento do outro; é o que impede efeito manada no placar.
+            </p>
+          </div>
+        )}
 
         {podeAvaliar ? (
           <>
@@ -808,6 +958,9 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
                   placeholder="0-10"
                   className="neu-input w-28 py-2.5 px-3 text-lg font-mono font-black rounded-lg text-gray-100"
                 />
+                <p className="text-[10px] text-gray-500 leading-snug mt-0.5 max-w-[7rem]">
+                  5 entregou o combinado · 8 superou · 10 referência
+                </p>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Comentário (opcional)</label>
@@ -842,35 +995,54 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
                   Cancelar
                 </button>
                 <button
-                  onClick={salvar}
+                  onClick={() => salvar(false)}
                   disabled={salvando || excluindo}
                   className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
                 >
                   {salvando ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                  {minha ? 'Atualizar avaliação' : 'Salvar avaliação'}
+                  {minha ? 'Atualizar' : 'Salvar'}
                 </button>
+                {proximo && (
+                  <button
+                    onClick={() => salvar(true)}
+                    disabled={salvando || excluindo}
+                    title={`Salvar e abrir ${proximo.nome_snapshot}`}
+                    className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg bg-accent/15 text-accent border border-accent/40 hover:bg-accent/25 transition-all disabled:opacity-50"
+                  >
+                    Salvar e próximo <ChevronRight size={13} />
+                  </button>
+                )}
               </div>
             </div>
           </>
+        ) : tarefa.status === 'rascunho' ? (
+          <p className="text-xs text-amber-300/90">
+            Esta tarefa ainda não foi liberada para notas. Admin ou CEO precisa clicar em
+            "Permitir notas" — só então o conselho avalia.
+          </p>
         ) : (
           <p className="text-xs text-gray-500">
-            Modo leitura — só CEO e conselheiros da Matriz dão nota.
+            {tarefa.status === 'encerrada'
+              ? 'Tarefa encerrada — as notas estão congeladas e visíveis abaixo.'
+              : 'Modo leitura — só CEO e conselheiros da Matriz dão nota.'}
           </p>
         )}
 
-        <div className="pt-3 border-t border-white/5 flex flex-col gap-2">
-          <p className="text-[11px] uppercase tracking-widest font-bold text-gray-500">
-            Avaliações do conselho ({outras.length + (minha ? 1 : 0)})
-          </p>
-          {outras.length === 0 && !minha ? (
-            <p className="text-xs text-gray-600 italic">Ninguém avaliou este participante ainda.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {minha && <LinhaAvaliacao aval={minha} sou />}
-              {outras.map(a => <LinhaAvaliacao key={a.id} aval={a} />)}
-            </div>
-          )}
-        </div>
+        {revelado && (
+          <div className="pt-3 border-t border-white/5 flex flex-col gap-2">
+            <p className="text-[11px] uppercase tracking-widest font-bold text-gray-500">
+              Avaliações do conselho ({outras.length + (minha ? 1 : 0)})
+            </p>
+            {outras.length === 0 && !minha ? (
+              <p className="text-xs text-gray-600 italic">Ninguém avaliou este participante ainda.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {minha && <LinhaAvaliacao aval={minha} sou />}
+                {outras.map(a => <LinhaAvaliacao key={a.id} aval={a} />)}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

@@ -50,7 +50,7 @@ export type CentralRelatorio = {
 
 export async function buscarRelatorioCentralAvaliacao(competicao: {
   id: string; nome: string; data_inicio: string; data_fim: string;
-}): Promise<CentralRelatorio> {
+}, ehAdmin = false): Promise<CentralRelatorio> {
   // Admin não é conselho — nota dele fica de fora dos agregados (regra 240).
   const { data: avalsRaw } = await supabase
     .from('avaliacoes_matriz')
@@ -73,7 +73,12 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
     .eq('competicao_id', competicao.id)
     .eq('ativo', true)
     .order('data', { ascending: false });
-  const tarefasArr = (tarefasRaw ?? []) as any[];
+  // Voto selado (migr. 345): fora do admin, a RLS entrega só a própria nota
+  // enquanto a tarefa não encerra. Exportar tarefa em avaliação geraria um
+  // relatório com "média do conselho" calculada sobre uma nota — pior que
+  // não exportar, porque o PDF circula como se fosse o número oficial.
+  const tarefasArr = ((tarefasRaw ?? []) as any[])
+    .filter(t => ehAdmin || t.status === 'encerrada');
 
   let participantesRaw: any[] = [];
   const tarefaIds = tarefasArr.map(t => t.id);

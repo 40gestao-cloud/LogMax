@@ -49,6 +49,13 @@ type Avaliador = {
   is_conselheiro: boolean | null;
 };
 
+type ProgressoAvaliador = {
+  avaliador_id: string;
+  nome: string | null;
+  role: string | null;
+  notas_dadas: number;
+};
+
 type NotaConselho = {
   id: string;
   item_tipo: string | null;
@@ -94,6 +101,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // Admin gerencia mas não vota.
   const podeVotar     = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar   = podeGerenciar || isConselheiro(profile);
+  // Só admin lê nota individual alheia enquanto a tarefa não encerra
+  // (migr. 345). Pro conselho, esta tela mostra participação, não valores.
+  const vejoNotaAlheia = profile.role === 'admin';
 
   const [tab, setTab] = useState<Tab>('placar');
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
@@ -105,6 +115,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // (migr. 234) já barra filial; aqui só quem é admin/CEO/conselheiro entra.
   const [notasConselho, setNotasConselho] = useState<NotaConselho[]>([]);
   const [avaliadores, setAvaliadores] = useState<Avaliador[]>([]);
+  const [progresso, setProgresso] = useState<ProgressoAvaliador[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingPlacar, setLoadingPlacar] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -195,8 +206,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     setVotos(data ?? []);
   }, []);
 
-  // Notas individuais do conselho na competição — alimenta o painel
-  // "Quem já avaliou". A média do placar continua vindo da RPC.
+  // Participação de cada eleitor (quantas notas deu), via RPC — o voto é
+  // selado até a tarefa encerrar (migr. 345), então contar as notas dos
+  // outros pela tabela devolveria número truncado. A RPC não expõe valor
+  // nenhum, só a contagem.
+  const carregarProgresso = useCallback(async (id: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase.rpc('progresso_avaliacao_matriz', { p_competicao_id: id });
+    if (!error) setProgresso((data ?? []) as ProgressoAvaliador[]);
+  }, []);
+
+  // Notas individuais — só chegam completas pro admin (RLS da 345). Pro
+  // conselho vêm só as próprias, por isso a média por avaliador fica
+  // restrita a admin lá embaixo.
   const carregarNotasConselho = useCallback(async (id: string) => {
     if (!supabase) return;
     const { data } = await supabase
@@ -234,8 +256,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     }
     await carregarVotos(comp.id);
     await carregarNotasConselho(comp.id);
+    await carregarProgresso(comp.id);
     setLoadingPlacar(false);
-  }, [showToast, carregarVotos, carregarNotasConselho]);
+  }, [showToast, carregarVotos, carregarNotasConselho, carregarProgresso]);
 
   useEffect(() => {
     // Prioridade: em_andamento > aguardando_encerramento > última encerrada
@@ -254,6 +277,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   // Quem já avaliou × média que deu por filial. Nota de admin aparece
   // marcada — ela não pesa no placar (regra da migr. 240).
+  // Contagem vem da RPC (não vaza valor). Médias por filial só existem pro
+  // admin, que é o único com leitura completa depois do voto selado.
   const porAvaliador = useMemo(() => {
     const m = new Map<string, {
       id: string; nome: string; role: string | null; total: number;
@@ -270,16 +295,21 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       return e;
     };
     avaliadores.forEach(a => garantir(a.id, a.nome, a.role));
-    notasConselho.forEach(n => {
-      const e = garantir(n.avaliador_id, n.avaliador?.nome ?? null, n.avaliador?.role ?? null);
-      e.total += 1;
-      const f = n.filial_avaliada ?? '—';
-      const acc = (e.porFilial[f] ??= { soma: 0, n: 0 });
-      acc.soma += Number(n.nota);
-      acc.n += 1;
+    progresso.forEach(p => {
+      const e = garantir(p.avaliador_id, p.nome, p.role);
+      e.total = p.notas_dadas;
     });
+    if (vejoNotaAlheia) {
+      notasConselho.forEach(n => {
+        const e = garantir(n.avaliador_id, n.avaliador?.nome ?? null, n.avaliador?.role ?? null);
+        const f = n.filial_avaliada ?? '—';
+        const acc = (e.porFilial[f] ??= { soma: 0, n: 0 });
+        acc.soma += Number(n.nota);
+        acc.n += 1;
+      });
+    }
     return [...m.values()].sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
-  }, [avaliadores, notasConselho]);
+  }, [avaliadores, notasConselho, progresso, vejoNotaAlheia]);
 
   const jaVotei = useMemo(() => votos.some(v => v.votante_id === profile.id), [votos, profile.id]);
   const contagemVotos = useMemo(() => ({
@@ -754,7 +784,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <tr>
                           <th className="text-left pb-3 font-bold">Avaliador</th>
                           <th className="text-right pb-3 font-bold pr-4">Notas em tarefas</th>
-                          {OP_FILIAIS.map(f => (
+                          {vejoNotaAlheia && OP_FILIAIS.map(f => (
                             <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
                           ))}
                         </tr>
@@ -772,7 +802,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
                               {a.total === 0 ? 'sem nota em tarefas' : a.total}
                             </td>
-                            {OP_FILIAIS.map(f => {
+                            {vejoNotaAlheia && OP_FILIAIS.map(f => {
                               const acc = a.porFilial[f];
                               return (
                                 <td key={f} className="py-3 text-right tabular-nums pr-4 text-gray-300">
@@ -787,9 +817,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                 )}
                 <p className="text-[10px] text-gray-500 mt-3">
-                  Média 0-10 que cada eleitor deu por filial nas Tarefas da Matriz — mesma fonte do pódio.
-                  Os eixos da Avaliação de Filial também pesam no placar quando o selo acima está aceso, mas
-                  não aparecem nesta tabela; veja-os na Central de Avaliação. Nota de admin nunca entra na média.
+                  {vejoNotaAlheia ? (
+                    <>Média 0-10 que cada eleitor deu por filial nas Tarefas da Matriz — mesma fonte do pódio.
+                    Os eixos da Avaliação de Filial também pesam no placar quando o selo acima está aceso, mas
+                    não aparecem nesta tabela. Nota de admin nunca entra na média.</>
+                  ) : (
+                    <>Quantas notas cada eleitor já registrou nas Tarefas da Matriz. O valor de cada nota fica
+                    selado até a tarefa ser encerrada — daí ele aparece por participante, dentro da tarefa.</>
+                  )}
                 </p>
               </div>
 

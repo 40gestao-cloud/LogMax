@@ -16,6 +16,7 @@ import { createLogger } from '../lib/log.js';
 //   ?task=reverter-promocoes  → RPC reverter_promocoes_expiradas
 //   ?task=expirar-competicoes → RPC expirar_competicoes
 //   ?task=limpar-ip-hash      → RPC limpar_ip_hash_pedidos_online
+//   ?task=lembrar-avaliacoes  → RPC lembrar_avaliacoes_pendentes
 //
 // Cada task chama uma RPC idempotente que retorna nº de linhas
 // afetadas.
@@ -27,6 +28,9 @@ const TASKS: Record<string, string> = {
   // de uma hora. Depois de 30 dias não responde mais pergunta nenhuma, e dado
   // guardado sem finalidade é o oposto do que a LGPD pede (arts. 15 e 16).
   'limpar-ip-hash':      'limpar_ip_hash_pedidos_online',
+  // Lembra o conselho quando a competição está a ≤3 dias do fim e ainda
+  // há participante sem nota. 1 aviso por competição por dia.
+  'lembrar-avaliacoes':  'lembrar_avaliacoes_pendentes',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
