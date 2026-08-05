@@ -70,11 +70,11 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
     return () => window.removeEventListener('avaliacao-matriz:changed', h);
   }, [carregar]);
 
-  // Eixos exibidos: os subjetivos que sobraram + 'Frequência de Trabalho',
-  // que desde a migr. 349 não tem nota do conselho — só a medida do ponto.
-  // Sem esta linha extra o eixo sumiria justo do painel que existe pra
-  // comparar julgamento com dado.
-  const EIXOS = [...CRITERIOS_MATRIZ.criterios, 'Frequência de Trabalho'] as const;
+  // Só os eixos votados. 'Frequência de Trabalho' saiu daqui na migr. 351:
+  // desde a 349 ela não tem nota do conselho, e o card de frequência logo
+  // acima já mostra a medida inteira (presenças, faltas, atrasos e a taxa que
+  // entra no placar). Repetir aqui só daria dois números pra mesma coisa.
+  const EIXOS = CRITERIOS_MATRIZ.criterios;
 
   const rankingPorEixo = useMemo<Record<string, { filial: string; score: number }[]>>(() => {
     if (!painel) return {};
@@ -108,8 +108,8 @@ export function PainelComparativoEixos({ showToast }: { showToast: any }) {
       </div>
       <p className="text-[11px] text-gray-500 mb-4">
         Notas subjetivas do avaliador (0-10) + métricas objetivas coletadas do sistema no período do ciclo.
-        Ranking por eixo destaca a filial líder em cada critério. Frequência de Trabalho não recebe mais nota:
-        é a aderência do ponto no período, normalizada pra 0-10 na hora de ranquear.
+        Ranking por eixo destaca a filial líder em cada critério. Frequência de Trabalho não aparece aqui:
+        deixou de ser nota e está inteira no card acima, medida pelo ponto.
       </p>
 
       {loading && !painel ? (

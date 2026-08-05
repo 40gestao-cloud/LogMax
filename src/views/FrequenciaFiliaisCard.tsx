@@ -27,6 +27,10 @@ type LinhaFreq = {
   atraso_conta: boolean;
 };
 
+// Ordem canônica das unidades no projeto inteiro. A RPC devolve alfabético
+// (MaxLook viria primeiro), então a ordenação é aqui.
+const ORDEM = ['SuperMax', 'MaxLook', 'TechMax'];
+
 const TONE: Record<string, string> = {
   SuperMax: 'bg-sky-500/20 text-sky-300',
   MaxLook:  'bg-amber-400/20 text-amber-200',
@@ -49,7 +53,12 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
       p_competicao_id: competicaoId,
     });
     if (error) setErro(error.message);
-    else { setErro(null); setLinhas((data ?? []) as LinhaFreq[]); }
+    else {
+      setErro(null);
+      setLinhas([...((data ?? []) as LinhaFreq[])].sort(
+        (a, b) => ORDEM.indexOf(a.filial) - ORDEM.indexOf(b.filial),
+      ));
+    }
     setLoading(false);
   }, [competicaoId]);
 
