@@ -205,6 +205,11 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // (auditoria de veracidade): eram formulários que não geravam conta nem
     // conciliavam nada. As tabelas seguem no banco, como nas votações.
     submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio',
+      // Centros de Custo saiu de Empresa e ficou sem tela nenhuma: a tabela é
+      // truncada no reset de produção e não havia por onde repovoar, então o
+      // select de centro de custo da Requisição só mostrava "Não informar".
+      // Escrita é admin/CEO porque a policy de centros_custo é auth_is_admin().
+      { label: 'Centros de Custo', requireRole: ['admin', 'ceo'] },
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
@@ -964,6 +969,10 @@ function LogMaxAppInner() {
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
+      // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
+      // da holding inteira e todo authenticated lê (policy read_authenticated).
+      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Catálogo de centros de custo usado nas requisições e no rateio." endpoint="/api/centroscustoview"
+        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
