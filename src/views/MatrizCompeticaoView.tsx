@@ -76,11 +76,15 @@ type Placar = {
     media_conselho?: number;
     frequencia?: {
       taxa: number | null; registros: number; presencas: number;
-      faltas: number; justificados: number; entrou: boolean;
+      faltas: number; justificados: number; atrasos?: number; entrou: boolean;
     } | null;
   }>;
   inclui_eixos_conselho?: boolean;
   peso_frequencia?: number;
+  // Migr. 350: false enquanto o horário da turma não for confirmado em
+  // `ponto_jornada` — nesse estado o atraso não desconta.
+  atraso_conta?: boolean;
+  jornada_entrada?: string | null;
 };
 
 // Snapshots antigos (pré-migração 227) tinham forma { placar: { total_por_filial } }
@@ -783,7 +787,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             <td
                               className="py-3 text-right tabular-nums pr-4"
                               title={p.freq
-                                ? `${p.freq.presencas} presença(s), ${p.freq.faltas} falta(s), ${p.freq.justificados} justificado(s) fora da conta`
+                                ? `${p.freq.presencas} presença(s) — ${p.freq.atrasos ?? 0} com atraso (meio ponto), ${p.freq.faltas} falta(s), ${p.freq.justificados} justificado(s) fora da conta`
                                 : 'Sem ponto lançado no período'}
                             >
                               {p.freq?.taxa == null
@@ -806,8 +810,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3">
                   Conselho = média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz,
-                  agrupada pela filial do participante. Frequência = presenças ÷ (presenças + faltas) no ponto do período,
-                  com justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
+                  agrupada pela filial do participante. Frequência = ponto do período, com presença pontual valendo o dia
+                  inteiro, {placar.atraso_conta === false
+                    ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação das Filiais)'
+                    : `atraso valendo meio dia (entrada após ${placar.jornada_entrada ?? '—'})`}, falta zerando e
+                  justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
                   Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
                 </p>
               </div>

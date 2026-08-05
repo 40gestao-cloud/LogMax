@@ -6,7 +6,8 @@ import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { PONTO_HORARIOS, PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
+import { PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
+import { useJornadaTurma } from '../hooks/useJornadaTurma';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -86,12 +87,17 @@ type PontoRow = {
  * comparando `entrada` com o horário-alvo da turma. Então "Presente com
  * Atraso" é 'Normal' com entrada depois do alvo — e a comparação lexicográfica
  * de "HH:MM" basta.
+ *
+ * O alvo chega por parâmetro (migr. 350): a fonte é `ponto_jornada` quando a
+ * turma já confirmou o horário, senão o env do site. Ler o env direto aqui
+ * faria esta tela chamar de atrasado quem o placar da competição considera
+ * pontual, e vice-versa.
  */
-const pontoParaFrequencia = (p: PontoRow): Frequencia => {
+const pontoParaFrequencia = (p: PontoRow, alvoEntrada: string): Frequencia => {
   let status: StatusFreq;
   if (p.status === 'Falta') status = 'Falta';
   else if (p.status === 'Justificado') status = 'Justificado';
-  else if (p.entrada && p.entrada > PONTO_HORARIOS.entrada) status = 'Presente com Atraso';
+  else if (p.entrada && p.entrada > alvoEntrada) status = 'Presente com Atraso';
   else status = 'Presente';
 
   return {
@@ -172,7 +178,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   // totem. `ponto_eletronico` TEM coluna filial, e a RLS já a usa; o filtro
   // client-side abaixo continua servindo ao seletor de unidade no modo Matriz.
   const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview');
-  const frequencias = useMemo(() => (pontos ?? []).map(pontoParaFrequencia), [pontos]);
+  // Mesmo alvo que o placar da competição usa (migr. 350), com o env de
+  // fallback enquanto a turma não confirmar o horário.
+  const jornada = useJornadaTurma();
+  const frequencias = useMemo(
+    () => (pontos ?? []).map(p => pontoParaFrequencia(p, jornada.entrada)),
+    [pontos, jornada.entrada],
+  );
   // No modo Matriz (filial===null) carrega todos sem filtro
   const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>(
     '/api/funcionariosview',
@@ -280,7 +292,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       const statusPonto = edit.status === 'Falta' || edit.status === 'Justificado' ? edit.status : 'Normal';
       const entrada = edit.status === 'Falta' || edit.status === 'Justificado'
         ? null
-        : (edit.status === 'Presente com Atraso' ? edit.entrada : PONTO_HORARIOS.entrada);
+        : (edit.status === 'Presente com Atraso' ? edit.entrada : jornada.entrada);
 
       const { error } = await supabase.rpc('registrar_ponto_manual', {
         p_funcionario_id: func.id,
@@ -679,7 +691,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                                   type="time"
                                   value={currentEntrada}
                                   onChange={e => setEdit(func.id, { status: currentStatus, justificativa: currentJust, entrada: e.target.value })}
-                                  title={`Horário de entrada — alvo da turma: ${PONTO_HORARIOS.entrada}`}
+                                  title={`Horário de entrada — alvo da turma: ${jornada.entrada}`}
                                   className="neu-input px-2 py-1 rounded-lg text-xs font-mono tabular-nums w-24"
                                 />
                               )}

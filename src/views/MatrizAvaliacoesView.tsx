@@ -232,7 +232,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       {secao === 'filiais' && (
         <>
           {/* Frequência não é voto: vem do ponto do período (migr. 349). */}
-          <FrequenciaFiliaisCard competicaoId={competicao.id} />
+          <FrequenciaFiliaisCard competicaoId={competicao.id} profile={profile} showToast={showToast} />
           {competicao.ciclo_id ? (
             <AvaliacaoFilialPanel
               profile={profile}

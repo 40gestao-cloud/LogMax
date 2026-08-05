@@ -11,7 +11,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
-import { PONTO_HORARIOS } from '../lib/pontoHorarios';
+import { useJornadaTurma } from '../hooks/useJornadaTurma';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FolhaPagamento, Funcionario } from '../types/domain';
@@ -98,6 +98,7 @@ const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', desconto
 // nenhuma mudança no banco.
 const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialSelectorValue }) => {
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
+  const jornada = useJornadaTurma();
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
   const hoje = todayBR().slice(0, 7);
@@ -477,8 +478,10 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     }
   };
 
-  // Fase 3: chama RPC recalcular_folha_do_ponto. Frontend passa horários
-  // da turma vindos de PONTO_HORARIOS (env por instância).
+  // Fase 3: chama RPC recalcular_folha_do_ponto. O horário da turma vem de
+  // `ponto_jornada` quando confirmado (migr. 350) e do env do site enquanto
+  // não estiver — mesma fonte que a tela de Frequência e o placar da
+  // competição usam, pra folha e frequência não discordarem de quem atrasou.
   const handleRecalcular = async (f: any) => {
     if (!supabase) return;
     if (f.status !== 'Pendente') {
@@ -489,9 +492,10 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
     try {
       const { data: result, error } = await supabase.rpc('recalcular_folha_do_ponto', {
         p_folha_id:       f.id,
-        p_target_entrada: PONTO_HORARIOS.entrada,
-        p_target_retorno: PONTO_HORARIOS.retorno,
-        p_target_saida:   PONTO_HORARIOS.saida,
+        p_target_entrada: jornada.entrada,
+        p_target_retorno: jornada.retorno,
+        p_target_saida:   jornada.saida,
+        p_tolerancia_min: jornada.tolerancia_min,
       });
       if (error) throw error;
       const breakdown = result as RecalcBreakdown;
