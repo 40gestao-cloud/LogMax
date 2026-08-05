@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft } from 'lucide-react';
+import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
@@ -299,6 +299,44 @@ const TAREFA_TIPO_LABEL: Record<string, string> = {
   tarefa_logistica:          'Logística',
 };
 
+// Bloco de um grupo do corte (desenvolveu / não desenvolveu / sem nota).
+function GrupoDesenvolvimento({ titulo, hint, lista, tom, icone }: {
+  titulo: string;
+  hint: string;
+  lista: LinhaParticipante[];
+  tom: string;
+  icone: React.ReactNode;
+}) {
+  return (
+    <div className={`neu-flat rounded-xl border p-3 flex flex-col gap-2 ${tom.split(' ')[0]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-1.5 ${tom.split(' ')[1]}`}>
+          {icone} {titulo}
+        </span>
+        <span className="text-lg font-mono font-black text-gray-200 tabular-nums">{lista.length}</span>
+      </div>
+      <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">{hint}</span>
+      {lista.length === 0 ? (
+        <span className="text-[11px] text-gray-600 italic">Ninguém aqui.</span>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {lista.map(l => (
+            <div key={l.chave} className="flex items-center gap-2 text-xs">
+              <span className="text-gray-200 flex-1 truncate">{l.nome}</span>
+              <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full ${FILIAL_TONE[l.filial]}`}>
+                {l.filial}
+              </span>
+              <span className="font-mono font-black text-amber-300 tabular-nums w-9 text-right">
+                {l.mediaGeral !== null ? l.mediaGeral.toFixed(1) : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Competicao; ehAdmin: boolean }) {
   const [loading, setLoading] = useState(true);
   const [linhas, setLinhas] = useState<LinhaParticipante[]>([]);
@@ -404,6 +442,25 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
     return m;
   }, [linhas]);
 
+  // Corte desenvolveu / não desenvolveu. 7,0 é só o default — o professor
+  // ajusta na tela conforme a turma, sem migração nem config no banco.
+  const [corte, setCorte] = useState(7);
+
+  const grupos = useMemo(() => {
+    const desenvolveram: LinhaParticipante[] = [];
+    const naoDesenvolveram: LinhaParticipante[] = [];
+    // Terceiro balde de propósito: quem não recebeu nota nenhuma NÃO é
+    // "não desenvolveu" — é gente que o conselho ainda não avaliou.
+    // Jogar os dois no mesmo grupo seria acusar alguém pela omissão alheia.
+    const semNota: LinhaParticipante[] = [];
+    linhas.forEach(l => {
+      if (l.mediaGeral === null) semNota.push(l);
+      else if (l.mediaGeral >= corte) desenvolveram.push(l);
+      else naoDesenvolveram.push(l);
+    });
+    return { desenvolveram, naoDesenvolveram, semNota };
+  }, [linhas, corte]);
+
   return (
     <div className="neu-flat rounded-3xl p-5 border border-white/5">
       <div className="flex items-center gap-2 mb-4">
@@ -426,6 +483,57 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         <EmptyState message="Nenhum participante avaliado ainda. Crie uma tarefa e adicione participantes." />
       ) : (
         <div className="flex flex-col gap-5">
+          {/* Corte de desenvolvimento — leitura da Matriz, não vai pro aluno */}
+          <div className="neu-pressed rounded-2xl p-4 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h4 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                <TrendingUp size={14} className="text-accent" /> Desenvolvimento da turma
+              </h4>
+              <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-gray-500">
+                Corte
+                <input
+                  type="number" min={0} max={10} step={0.5}
+                  value={corte}
+                  onChange={e => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n >= 0 && n <= 10) setCorte(n);
+                  }}
+                  className="neu-input w-20 py-1.5 px-2 text-sm font-mono font-black rounded-lg text-gray-100"
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <GrupoDesenvolvimento
+                titulo="Desenvolveram"
+                hint={`média ≥ ${corte.toFixed(1)}`}
+                lista={grupos.desenvolveram}
+                tom="border-emerald-500/30 text-emerald-300"
+                icone={<TrendingUp size={13} />}
+              />
+              <GrupoDesenvolvimento
+                titulo="Não desenvolveram"
+                hint={`média < ${corte.toFixed(1)}`}
+                lista={grupos.naoDesenvolveram}
+                tom="border-red-500/30 text-red-300"
+                icone={<TrendingDown size={13} />}
+              />
+              <GrupoDesenvolvimento
+                titulo="Ainda sem nota"
+                hint="o conselho não avaliou"
+                lista={grupos.semNota}
+                tom="border-gray-500/30 text-gray-400"
+                icone={<Minus size={13} />}
+              />
+            </div>
+
+            <p className="text-[10px] text-gray-500">
+              Classificação pela média das notas do conselho, só para leitura da Matriz — nada disso aparece
+              para o aluno. Quem está em "ainda sem nota" não é baixo desempenho: é gente que o conselho não
+              avaliou, e entra num grupo separado justamente pra não ser confundida com quem foi mal.
+            </p>
+          </div>
+
           {(['SuperMax','MaxLook','TechMax'] as FilialOp[]).map(f => {
             const lista = porFilial[f] ?? [];
             if (lista.length === 0) return null;
