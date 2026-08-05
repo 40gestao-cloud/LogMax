@@ -7,7 +7,6 @@ import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
-import { PainelComparativoEixos } from './PainelComparativoEixos';
 import { FrequenciaFiliaisCard } from './FrequenciaFiliaisCard';
 import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
@@ -196,7 +195,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
               <CardSecao
                 icon={Building2}
                 titulo="Avaliação das Filiais"
-                hint="Frequência medida pelo ponto + nota de Planejamento e Organização, com o comparativo dos eixos."
+                hint="Frequência medida pelo ponto + nota de Planejamento e Organização, com o histórico por avaliador."
                 selo="Alimenta o placar"
                 onClick={() => setSecao('filiais')}
                 tone="bg-sky-500/15 ring-sky-500/40 text-sky-300"
@@ -242,7 +241,6 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
           ) : (
             <EmptyState message="Esta competição não gerou ciclo de avaliação — só competições criadas a partir da migração 238 têm avaliação de filial." />
           )}
-          <PainelComparativoEixos showToast={showToast} />
         </>
       )}
 

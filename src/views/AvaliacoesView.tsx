@@ -1145,7 +1145,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     };
 
     // Supergrupo 'matriz_filial' foi movido pra Competição do Conselho
-    // (AvaliacaoFilialPanel). As notas dos 7 eixos alimentam o placar
+    // (AvaliacaoFilialPanel). As notas do eixo votado alimentam o placar
     // da competição, então histórico e form vivem juntos lá.
     const grupos = [
       mkSuperGrupo(
@@ -1268,7 +1268,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             </div>
           </div>
           <p className="text-[11px] text-gray-500 mb-4">
-            Notas e comentários que o CEO / conselheiros registraram sobre a filial nos eixos subjetivos da competição.
+            Notas e comentários que o CEO / conselheiros registraram sobre a filial no eixo votado da competição.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {feedbackMatriz.map(f => (
@@ -1603,7 +1603,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
       {/* ── B. AVALIAR FILIAIS — movido pra Central de Avaliação → Competição
              do Conselho (AvaliacaoFilialPanel), abaixo dos cards de Tarefas.
-             Notas dos 7 eixos alimentam o placar da competição, então o
+             Notas do eixo votado alimentam o placar da competição, então o
              formulário vive junto do resto do julgamento. ── */}
 
 
