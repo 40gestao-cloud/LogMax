@@ -245,7 +245,6 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
             <div className="flex items-center gap-2 flex-wrap">
               <Building2 size={16} className="text-accent" />
               <h3 className="text-sm font-bold text-gray-200">Avaliar Filiais</h3>
-              <span className="text-[10px] text-gray-500 font-bold">Único eixo votado — frequência é medida, não votada</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
                 {filiaisJaAvaliadas.size} de {FILIAIS_OP.length} avaliadas
               </span>

@@ -90,16 +90,10 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
         {atrasoConta && jornada?.jornada_entrada && (
           <span className="text-[10px] text-gray-500 font-bold flex items-center gap-1">
             <Clock size={10} /> entrada {jornada.jornada_entrada}
-            {jornada.jornada_tolerancia ? ` (+${jornada.jornada_tolerancia} min)` : ''}
+            {jornada.jornada_tolerancia ? ` (+${jornada.jornada_tolerancia} min)` : ''} · atraso vale meio dia
           </span>
         )}
       </div>
-
-      <p className="text-[11px] text-gray-500 leading-snug">
-        Sai do ponto eletrônico no período da competição — ninguém dá nota aqui. Presença pontual vale o
-        dia inteiro, <b className="text-gray-400">presença com atraso vale meio</b>, falta zera, e
-        justificado fica fora da conta: afastamento deferido pelo RH não é desempenho do aluno.
-      </p>
 
       {!loading && !erro && linhas.length > 0 && !atrasoConta && (
         <JornadaNaoConfigurada profile={profile} showToast={showToast} onSalvo={carregar} />
@@ -152,15 +146,7 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
                       <Numero label="Faltas"    valor={l.faltas}   tom="text-red-300" />
                       <Numero label="Atrasos"   valor={l.atrasos}  tom="text-amber-300" />
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 pt-1 border-t border-white/5">
-                      <Clock size={11} className="shrink-0 text-amber-400/70" />
-                      <span>
-                        {atrasoConta
-                          ? 'Cada atraso vale meio dia na taxa.'
-                          : 'Atraso ainda fora da conta — falta confirmar o horário.'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-gray-500 tabular-nums">
+                    <span className="text-[10px] text-gray-500 tabular-nums pt-1 border-t border-white/5">
                       {l.registros} registro{l.registros === 1 ? '' : 's'} · {l.dias_distintos} dia{l.dias_distintos === 1 ? '' : 's'} · {l.funcionarios_ativos} funcionário{l.funcionarios_ativos === 1 ? '' : 's'}
                       {l.justificados > 0 && ` · ${l.justificados} justificado${l.justificados === 1 ? '' : 's'} fora da conta`}
                     </span>
@@ -178,12 +164,6 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
           })}
         </div>
       )}
-
-      <p className="text-[10px] text-gray-500 leading-snug">
-        O denominador é o que tem registro, nunca "dias do período": dia sem lançamento não é presença
-        nem falta, é buraco de dado — e por isso a contagem de dias e de funcionários fica à vista.
-        Presenças conta quem chegou no horário; quem chegou depois está em Atrasos.
-      </p>
     </div>
   );
 }
