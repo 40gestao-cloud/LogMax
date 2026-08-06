@@ -63,18 +63,25 @@ const ATRIBUTOS_FORNECEDOR: Record<string, ModeloCampo[]> = {
   MaxLook: [
     { col: 'Tipo de fornecedor', lista: ['Grife', 'Confecção', 'Atacado moda', 'Acessórios', 'Calçados'], exemplo: 'Confecção' },
     { col: 'Marcas representadas', exemplo: 'Colcci, Hering', dica: 'Separe por vírgula.' },
-    { col: 'Prazo médio de entrega (dias)', formato: 'inteiro', exemplo: '15' },
     { col: 'MOQ (mín. por pedido, peças)', formato: 'inteiro', exemplo: '12' },
   ],
   TechMax: [
     { col: 'Tipo de fornecedor', lista: ['Autorizada', 'Distribuidor', 'Peças', 'Acessórios'], exemplo: 'Distribuidor' },
     { col: 'Marcas atendidas', exemplo: 'Apple, Samsung', dica: 'Separe por vírgula.' },
-    { col: 'Prazo médio de entrega (dias)', formato: 'inteiro', exemplo: '7' },
     { col: 'Garantia da peça (dias)', formato: 'inteiro', exemplo: '90' },
   ],
 };
 
 const ATRIBUTOS_PRODUTO: Record<string, ModeloCampo[]> = {
+  // Mercearia é o único nicho onde a mercadoria estraga — e era o único sem
+  // ficha. Opcional de propósito: 149 produtos já cadastrados não podem virar
+  // incompletos de um dia para o outro.
+  SuperMax: [
+    { col: 'Produto perecível', lista: SIM_NAO, exemplo: 'Sim' },
+    { col: 'Validade (dias)', formato: 'inteiro', exemplo: '30',
+      dica: 'Prazo desde o recebimento. É o que decide remarcação e ordem de saída.' },
+    { col: 'Armazenagem', lista: ['Ambiente', 'Refrigerado', 'Congelado'], exemplo: 'Refrigerado' },
+  ],
   MaxLook: [
     { col: 'Tamanho', obrigatorio: true, exemplo: 'M', dica: 'P, M, G ou numeração (38, 40).' },
     { col: 'Cor', obrigatorio: true, exemplo: 'Azul Marinho' },
@@ -139,6 +146,10 @@ const modeloPessoa = (filial: string, isCliente: boolean): Modelo => {
   if (!isCliente) {
     campos.push({ col: 'Categoria', exemplo: 'Materiais',
       dica: 'Como sua filial agrupa esse parceiro: Materiais, Serviços, Embalagens...' });
+    // Comum às 3 filiais (migr. 360): saiu da ficha de nicho porque é do
+    // processo de compras, não do ramo.
+    campos.push({ col: 'Prazo médio de entrega (dias)', formato: 'inteiro', exemplo: '15',
+      dica: 'Do pedido à entrega. Compras usa na cotação e para prometer data a quem requisitou.' });
     campos.push(...(ATRIBUTOS_FORNECEDOR[filial] ?? []));
   }
   return {
@@ -159,7 +170,7 @@ const modeloProdutos = (filial: string): Modelo => {
       dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
     { col: 'Nome do produto', obrigatorio: true, exemplo: 'Arroz Branco 5kg' },
     { col: 'Categoria', obrigatorio: true, exemplo: 'Mercearia',
-      dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto.' },
+      dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega a margem-alvo usada para sugerir o preço de venda.' },
     { col: 'Subcategoria', exemplo: 'Grãos', dica: 'Opcional. Também vem do cadastro de categorias.' },
     { col: 'Cód. Barras EAN', exemplo: '7891234567895', dica: 'EAN-13, 13 dígitos. Deixe em branco se não houver.' },
     { col: 'Fornecedor', obrigatorio: true, exemplo: 'Distribuidora Central Ltda',
@@ -174,7 +185,8 @@ const modeloProdutos = (filial: string): Modelo => {
     ...(ATRIBUTOS_PRODUTO[filial] ?? []),
     { col: 'Preço de Custo (R$)', obrigatorio: true, formato: 'moeda', exemplo: '18,90',
       dica: 'Quanto a empresa paga. No LogMax só admin/CEO/Financeiro enxergam.' },
-    { col: 'Preço de Venda (R$)', obrigatorio: true, formato: 'moeda', exemplo: '24,90' },
+    { col: 'Preço de Venda (R$)', obrigatorio: true, formato: 'moeda', exemplo: '24,90',
+      dica: 'Se a Categoria tiver margem-alvo cadastrada, o LogMax sugere este valor a partir do custo — a sugestão é um clique, e o preço continua editável.' },
     { col: 'Unidade', lista: unidadesDeProduto(filial), exemplo: 'UN' },
     { col: 'Estoque Inicial', formato: 'decimal', exemplo: '40' },
     { col: 'Quantidade Comprada', formato: 'decimal', exemplo: '40',

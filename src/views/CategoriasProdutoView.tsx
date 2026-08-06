@@ -16,7 +16,7 @@ const COR_PRESETS = [
   '#8b5cf6','#06b6d4','#ec4899','#f97316','#6b7280',
 ];
 
-const EMPTY = { nome: '', cor: '#D4AF37', icone: '📦', imagem_url: '' };
+const EMPTY = { nome: '', cor: '#D4AF37', icone: '📦', imagem_url: '', margem_alvo: '' };
 type FormData = typeof EMPTY;
 
 // ── Picker de cor ─────────────────────────────────────────────────────────────
@@ -105,9 +105,11 @@ function CatThumb({ imagem_url, icone, cor, size = 8 }: {
 }
 
 // ── Form inline ───────────────────────────────────────────────────────────────
-function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
+function InlineForm({ initial, onSave, onCancel, saving, itemId, comMargem }: {
   initial: FormData; onSave: (v: FormData) => Promise<void>;
   onCancel: () => void; saving: boolean; itemId?: string;
+  /** Só categoria tem markup — subcategoria herda o da mãe. */
+  comMargem?: boolean;
 }) {
   const [f, setF]           = useState<FormData>(initial);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -163,6 +165,21 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId }: {
               placeholder="Ex: Alimentos, Smartphones…" autoFocus />
           </FormField>
         </div>
+        {comMargem && (
+          <div className="col-span-3">
+            {/* Markup por linha de produto — é o que faz a categoria deixar de
+                ser cor e ícone. Com o custo preenchido, o cadastro de produto
+                sugere o preço de venda; vazio, o preço fica livre. */}
+            <FormField label="Margem-alvo (%)">
+              <input className="neu-input w-full text-sm" inputMode="decimal" value={f.margem_alvo}
+                onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
+                placeholder="Ex: 35" />
+            </FormField>
+            <span className="text-[10px] text-gray-500 block mt-1">
+              Markup padrão da linha. O cadastro de produto usa isto para sugerir o preço de venda a partir do custo — deixe vazio para preço livre.
+            </span>
+          </div>
+        )}
       </div>
       <FormField label="Imagem (substitui o ícone emoji)">
         <ImagemUploader imagemUrl={previewUrl} onPreview={handlePreview} onClear={handleClear} />
@@ -202,8 +219,12 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
     if (!filial) return;
     setSaving(true);
     try {
-      if (editItem) await dbUpdate('categorias_produto', editItem.id, { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null });
-      else          await dbInsert('categorias_produto', { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, filial });
+      // String vazia vira NULL: "sem margem" é ausência de regra, não zero por
+      // cento — zero faria o produto sugerir preço igual ao custo.
+      const margem = f.margem_alvo.trim() === '' ? null : Number(f.margem_alvo.replace(',', '.'));
+      const base = { nome: f.nome, cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, margem_alvo: margem };
+      if (editItem) await dbUpdate('categorias_produto', editItem.id, base);
+      else          await dbInsert('categorias_produto', { ...base, filial });
       reload(); setEditItem(null); setShowForm(false);
     } finally { setSaving(false); }
   };
@@ -236,7 +257,7 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
 
       <AnimatePresence>
         {showForm && !editItem && (
-          <InlineForm initial={{ ...EMPTY }} onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
+          <InlineForm comMargem initial={{ ...EMPTY }} onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
         )}
       </AnimatePresence>
 
@@ -250,7 +271,9 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
                 {editItem?.id === cat.id && (
                   <InlineForm
                     itemId={cat.id}
-                    initial={{ nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦', imagem_url: cat.imagem_url ?? '' }}
+                    comMargem
+                    initial={{ nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦', imagem_url: cat.imagem_url ?? '',
+                               margem_alvo: cat.margem_alvo == null ? '' : String(cat.margem_alvo) }}
                     onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
                 )}
               </AnimatePresence>
@@ -360,7 +383,7 @@ function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
                 {editItem?.id === sub.id && (
                   <InlineForm
                     itemId={sub.id}
-                    initial={{ nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦', imagem_url: sub.imagem_url ?? '' }}
+                    initial={{ nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦', imagem_url: sub.imagem_url ?? '', margem_alvo: '' }}
                     onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
                 )}
               </AnimatePresence>

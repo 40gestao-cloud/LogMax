@@ -20,6 +20,10 @@ const makeEmptyExtras = (filial: string) => ({
   endereco: '',
   cpf_cnpj: '',
   categoria: '',
+  // Campo comum às 3 filiais (migr. 360): prazo de entrega é do processo de
+  // compras, não do ramo — alimenta a cotação e a data prometida a quem pediu.
+  // Vivia em `atributos` na MaxLook e na TechMax, e não existia no SuperMax.
+  prazo_entrega_dias: '',
   filial,
   atributos: {} as Record<string, any>,
 });
@@ -39,14 +43,12 @@ const ATRIBUTOS_FORNECEDOR: Record<string, AtributoFornecedorDef[]> = {
     { key: 'tipo_fornecedor', label: 'Tipo de fornecedor', type: 'select',
       options: ['Grife', 'Confecção', 'Atacado moda', 'Acessórios', 'Calçados'] as const },
     { key: 'marcas', label: 'Marcas representadas', placeholder: 'Ex: Nike, Adidas, Colcci' },
-    { key: 'prazo_entrega_dias', label: 'Prazo médio de entrega (dias)', type: 'number', placeholder: 'Ex: 15' },
     { key: 'moq', label: 'MOQ (mín. por pedido, peças)', type: 'number', placeholder: 'Ex: 12' },
   ],
   TechMax: [
     { key: 'tipo_fornecedor', label: 'Tipo de fornecedor', type: 'select',
       options: ['Autorizada', 'Distribuidor', 'Peças', 'Acessórios'] as const },
     { key: 'marcas_atendidas', label: 'Marcas atendidas', placeholder: 'Ex: Apple, Samsung, Motorola' },
-    { key: 'prazo_entrega_dias', label: 'Prazo médio de entrega (dias)', type: 'number', placeholder: 'Ex: 7' },
     { key: 'garantia_reposicao_dias', label: 'Garantia da peça (dias)', type: 'number', placeholder: 'Ex: 90' },
   ],
   SuperMax: [],
@@ -102,6 +104,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
       endereco:    item.endereco   ?? '',
       cpf_cnpj:    item.cpf_cnpj   ?? '',
       categoria:   item.categoria  ?? '',
+      prazo_entrega_dias: item.prazo_entrega_dias == null ? '' : String(item.prazo_entrega_dias),
       filial,
       atributos:   (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {},
     });
@@ -130,6 +133,10 @@ const CRMViewInner = ({ type, showToast, filial }: {
         endereco:    extras.endereco,
         cpf_cnpj:    extras.cpf_cnpj,
         filial,
+        ...(isClientes ? {} : {
+          prazo_entrega_dias: extras.prazo_entrega_dias.trim() === ''
+            ? null : Number(extras.prazo_entrega_dias),
+        }),
       };
       // Atributos JSONB (fornecedor apenas). Filtra pra manter só campos
       // válidos do nicho da filial atual — evita salvar lixo.
@@ -282,6 +289,20 @@ const CRMViewInner = ({ type, showToast, filial }: {
                       onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
                       placeholder="Ex: Materiais, Serviços" />
                   </FormField>
+                )}
+
+                {!isClientes && (
+                  <div>
+                    <FormField label="Prazo médio de entrega (dias)">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
+                        value={extras.prazo_entrega_dias}
+                        onChange={e => setExtras(x => ({ ...x, prazo_entrega_dias: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                        placeholder="Ex: 15" />
+                    </FormField>
+                    <span className="text-[10px] text-gray-500 block mt-1">
+                      Quanto ele costuma levar do pedido à entrega. Compras usa na cotação e para prometer data a quem requisitou.
+                    </span>
+                  </div>
                 )}
               </div>
 

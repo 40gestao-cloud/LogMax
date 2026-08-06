@@ -24,7 +24,7 @@ import {
   PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { UNIDADES_PRODUTO } from '../lib/unidades';
+import { UNIDADES_PRODUTO, unidadesDeProduto } from '../lib/unidades';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -86,6 +86,8 @@ type AtributoDef = {
   type?: 'text' | 'select' | 'bool' | 'textarea';
   options?: readonly string[];
   wide?: boolean; // ocupa linha inteira no grid
+  /** Explica o campo quando o rótulo não basta. Vai abaixo do input. */
+  dica?: string;
 };
 
 const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
@@ -112,11 +114,42 @@ const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
     { key: 'informacoes_adicionais', label: 'Informações adicionais', type: 'textarea', wide: true,
       placeholder: 'Ex: acompanha carregador e capa; aparelho de vitrine com pequena marca na traseira; garantia de bateria não coberta.' },
   ],
-  SuperMax: [],
+  // Mercearia era a única filial sem ficha — e é a que tem 61% do catálogo.
+  // Estava invertido: no varejo alimentar o cadastro de produto é o mais
+  // exigente dos três, porque é o único onde a mercadoria estraga. É isto que
+  // faz o supermercado trabalhar com PEPS e a loja de roupa não precisar.
+  //
+  // Nenhum campo é obrigatório de propósito: 149 produtos já estão cadastrados
+  // e virariam incompletos de um dia para o outro. Campo que trava sem informar
+  // é como nasce o "nao temos ou acabou" da migr. 358 — a listagem avisa quem
+  // está sem ficha, e isso basta.
+  SuperMax: [
+    { key: 'perecivel', label: 'Produto perecível', type: 'bool', wide: true },
+    { key: 'validade_dias', label: 'Validade (dias)', placeholder: 'Ex: 5, 30, 180',
+      dica: 'Prazo desde o recebimento. É o que decide remarcação e ordem de saída.' },
+    { key: 'armazenagem', label: 'Armazenagem', type: 'select',
+      options: ['Ambiente', 'Refrigerado', 'Congelado'] as const },
+  ],
 };
 
 const parseNum = (v: string | number | undefined | null): number =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;
+
+/**
+ * Produto sem nenhum campo da ficha do nicho preenchido. Só conta para filial
+ * que TEM ficha — não faz sentido acusar incompletude de uma seção que não
+ * existe.
+ */
+const fichaVazia = (item: any, filial: string): boolean => {
+  const defs = ATRIBUTOS_PRODUTO[filial] ?? [];
+  if (defs.length === 0) return false;
+  const atr = item?.atributos;
+  if (!atr || typeof atr !== 'object') return true;
+  return !defs.some(d => {
+    const v = atr[d.key];
+    return v !== undefined && v !== null && String(v).trim() !== '' && v !== false;
+  });
+};
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
@@ -149,6 +182,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     () => [...fornecedoresList].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')),
     [fornecedoresList]
   );
+
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     // Leitura pela view mascarada (migr. 262). Escrita segue em
@@ -193,6 +227,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [editItem, setEditItem]   = useState<any | null>(null);
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
+
+  // Markup da categoria escolhida (migr. 360). `preco = custo * (1 + margem/100)`
+  // — é markup sobre o custo, que é como o varejo forma preço na ponta. Margem
+  // sobre a venda daria outra conta, e o rótulo diz qual das duas é.
+  const margemCategoria = useMemo(() => {
+    const cat = categoriasProduto.find((c: any) => c.id === extras.categoria_id);
+    const m = cat?.margem_alvo;
+    return m == null || Number(m) <= 0 ? null : Number(m);
+  }, [categoriasProduto, extras.categoria_id]);
+
+  const precoSugerido = useMemo(() => {
+    if (margemCategoria === null) return null;
+    const custo = parseBRL(extras.preco_custo);
+    if (!custo || custo <= 0) return null;
+    return Math.round(custo * (1 + margemCategoria / 100) * 100) / 100;
+  }, [margemCategoria, extras.preco_custo]);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [extrasErrors, setExtrasErrors] = useState<Record<string, string>>({});
 
@@ -797,7 +847,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     <div className="flex items-center gap-2 mb-3">
                       <Tag size={12} className="text-accent" />
                       <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                        {filial === 'MaxLook' ? 'Detalhes da peça (Boutique)' : 'Ficha técnica (Loja & Assistência)'}
+                        {filial === 'MaxLook' ? 'Detalhes da peça (Boutique)'
+                          : filial === 'SuperMax' ? 'Conservação (Mercearia)'
+                          : 'Ficha técnica (Loja & Assistência)'}
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -834,21 +886,27 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                         }
                         if (d.type === 'select' && d.options) {
                           return (
-                            <FormField key={d.key} label={d.label} error={err}>
-                              <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                                value={String(val)} onChange={e => setAtr(e.target.value)}>
-                                <option value="">— Selecione —</option>
-                                {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                              </select>
-                            </FormField>
+                            <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                              <FormField label={d.label} error={err}>
+                                <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                                  value={String(val)} onChange={e => setAtr(e.target.value)}>
+                                  <option value="">— Selecione —</option>
+                                  {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              </FormField>
+                              {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
+                            </div>
                           );
                         }
                         return (
-                          <FormField key={d.key} label={d.label} error={err}>
-                            <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                              value={String(val)} onChange={e => setAtr(e.target.value)}
-                              placeholder={d.placeholder} />
-                          </FormField>
+                          <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                            <FormField label={d.label} error={err}>
+                              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                                value={String(val)} onChange={e => setAtr(e.target.value)}
+                                placeholder={d.placeholder} />
+                            </FormField>
+                            {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
+                          </div>
                         );
                       })}
                     </div>
@@ -1018,6 +1076,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
                       value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
                       onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+                    {/* Markup da categoria (migr. 360). Sugere, não impõe: o
+                        preço continua editável, e é a diferença entre o
+                        sugerido e o praticado que rende a conversa em aula. */}
+                    {precoSugerido !== null && (
+                      <button type="button"
+                        onClick={() => { setForm(f => ({ ...f, preco: formatBRL(precoSugerido) })); clearError('preco'); }}
+                        className="text-[10px] text-accent hover:underline mt-1 text-left block">
+                        Sugerido pela margem de {margemCategoria}%: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
+                      </button>
+                    )}
                     {extras.unidade && extras.unidade !== 'UN' && (
                       <p className="text-[10px] text-gray-500 mt-1">
                         Vendido por <span className="font-bold text-accent">{extras.unidade}</span> — no PDV, o caixa digita a quantidade fracionária ao pesar.
@@ -1053,10 +1121,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.unidade}
                       onChange={e => setExtras(x => ({ ...x, unidade: e.target.value }))}>
-                      {/* MaxLook/TechMax só listam unidades discretas: peça, caixa etc.
-                          KG/L/M não fazem sentido em roupa ou celular. */}
-                      {(filial === 'SuperMax' ? UNIDADES : UNIDADES.filter(u => ['UN','CX','PC','PCT'].includes(u)))
-                        .map(u => <option key={u} value={u}>{u}</option>)}
+                      {/* Régua única (src/lib/unidades.ts): KG/L/M só em mercearia.
+                          Esta era a última das cinco cópias da lista. */}
+                      {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </FormField>
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Estoque Inicial (${extras.unidade})`}>
@@ -1192,6 +1259,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                             {item.elegivel_beneficios && (
                               <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400 border border-emerald-600/30" title="Aceita MaxBank Benefícios">
                                 Benef
+                              </span>
+                            )}
+                            {/* A ficha do nicho é opcional, mas incompleta em
+                                silêncio não ajuda ninguém: o aviso na lista
+                                substitui o campo obrigatório que travaria 149
+                                cadastros de uma vez. */}
+                            {fichaVazia(item, filial) && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-600/30"
+                                title={`Ficha de ${filial} incompleta — abra o produto para preencher.`}>
+                                Ficha
                               </span>
                             )}
                           </p>
