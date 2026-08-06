@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -12,6 +12,7 @@ import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
+import { unidadesDeRequisicao, exemploItemRequisicao } from '../lib/unidades';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
@@ -41,27 +42,37 @@ import type { UserProfile } from '../hooks/useUserProfile';
 // catálogo, ou cadastrar o que falta, é trabalho de Compras na cotação. O
 // catálogo entra só como sugestão (datalist), nunca como camisa de força.
 
-// Dois tipos, como na empresa:
+// Três tipos, como na empresa (migr. 358):
 //
-//   • Material do estoque — o item já existe no almoxarifado. Escolhe-se do
-//     catálogo (não se pede do estoque o que o estoque não tem), o Estoque
-//     libera e a saída é registrada. Não passa por Compras.
-//   • Compra — não existe, ou acabou. Descrição livre, vai para Compras cotar
-//     e o gerente decide.
+//   • Reposição — item do catálogo que acabou ou bateu o mínimo. Escolhe-se da
+//     lista, **sem justificativa escrita**: o motivo é o saldo, e o sistema
+//     grava saldo e mínimo do momento. É o que o comprador lê para decidir.
+//   • Compra eventual — não está no catálogo, é serviço ou foge do normal.
+//     Descrição livre e justificativa obrigatória: aqui o comprador não tem
+//     histórico nenhum, e o texto é o que decide.
+//   • Material do estoque — já existe no almoxarifado. O Estoque libera a
+//     saída; não passa por Compras.
 //
-// Quem sabe qual é o caso é quem pede. Forçar tudo por Compras faria o sistema
-// mentir sobre o fluxo — e encheria a fila de cotação de coisa que está na
-// prateleira.
-type TipoReq = 'compra' | 'estoque';
+// A separação é a do mercado. Antes tudo caía em "Compra" com justificativa
+// obrigatória, e o resultado foi um envio de 18 itens de prateleira repetindo
+// "nao temos ou acabou" — que era o texto do hint desta própria tela. Campo
+// que se preenche para o botão liberar não informa ninguém.
+type TipoReq = 'reposicao' | 'eventual' | 'estoque';
 
-const UNIDADES = ['un', 'cx', 'pct', 'kg', 'g', 'L', 'mL', 'm', 'm²', 'sv'];
+/** Os dois que viram requisição de compra. */
+const VAI_PRA_COMPRAS = (t: TipoReq) => t === 'reposicao' || t === 'eventual';
+
+// A lista saiu daqui: era minúscula enquanto o catálogo é maiúsculo, e a
+// Reposição (que lê a unidade do produto) fez `un` e `UN` conviverem na mesma
+// coluna. Agora vem de `src/lib/unidades.ts`, por filial — KG/L/M são de
+// mercearia, e só o SuperMax vende assim.
 
 // `justificativa` vazia = "usa a do cabeçalho". Cada linha vira uma requisição
 // própria no banco (migr. 283), então cada uma pode ter o seu motivo — o
 // cabeçalho é só o padrão de quem pede várias coisas pela mesma razão
 // (migr. 354).
 let seqLinha = 0;
-const linhaVazia = () => ({ uid: ++seqLinha, item: '', qtd: '1', unidade: 'un', justificativa: '' });
+const linhaVazia = () => ({ uid: ++seqLinha, item: '', qtd: '1', unidade: 'UN', justificativa: '' });
 
 const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   // Sem filtro por autor: o recorte é o setor, e quem faz esse recorte é a
@@ -76,8 +87,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
 
-  const [tipo, setTipo] = useState<TipoReq>('compra');
+  const [tipo, setTipo] = useState<TipoReq>('reposicao');
   const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '' });
+  // Reposição: catálogo com multi-seleção. `Map<produto_id, qtd>` porque a
+  // ordem não importa e a pergunta que a tela faz o tempo todo é "este já está
+  // no carrinho?".
+  const [repo, setRepo] = useState<Map<string, string>>(new Map());
+  const [buscaCat, setBuscaCat] = useState('');
+  const [soAbaixoMin, setSoAbaixoMin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [cab, setCab] = useState({
     urgencia: 'Normal', centro_custo: '', justificativa: '', data_necessidade: '',
@@ -98,6 +115,41 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     [produtos],
   );
 
+  // Catálogo para reposição: tudo que está ativo, inclusive com saldo zero —
+  // saldo zero é justamente o que mais se repõe. `abaixoMin` é o ponto de
+  // pedido, e ordena a lista: quem furou o mínimo aparece primeiro, porque é
+  // essa a pergunta que a reposição responde.
+  const catalogoRepo = useMemo(() => {
+    const termo = buscaCat.trim().toLowerCase();
+    return [...produtos]
+      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo')
+      .map((p: any) => {
+        const saldo = Number(p.estoque ?? 0);
+        const minimo = Number(p.estoque_minimo ?? 0);
+        return { ...p, saldo, minimo, abaixoMin: minimo > 0 && saldo <= minimo };
+      })
+      .filter((p: any) => !soAbaixoMin || p.abaixoMin)
+      .filter((p: any) => !termo
+        || String(p.nome ?? '').toLowerCase().includes(termo)
+        || String(p.codigo ?? '').toLowerCase().includes(termo))
+      .sort((a: any, b: any) =>
+        Number(b.abaixoMin) - Number(a.abaixoMin)
+        || String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR'));
+  }, [produtos, buscaCat, soAbaixoMin]);
+
+  // O nicho entra por aqui e só por aqui: mercearia compra por peso e volume,
+  // loja de roupa e de eletrônico não. O formulário em si é o mesmo nas três —
+  // requisição de compra é documento corporativo único.
+  const unidadesReq = useMemo(() => unidadesDeRequisicao(filial), [filial]);
+
+  const qtdAbaixoMin = useMemo(
+    () => produtos.filter((p: any) => {
+      const min = Number(p.estoque_minimo ?? 0);
+      return (p.status ?? 'Ativo') !== 'Inativo' && min > 0 && Number(p.estoque ?? 0) <= min;
+    }).length,
+    [produtos],
+  );
+
   // Só se pede do almoxarifado o que o almoxarifado tem.
   const produtosEmEstoque = useMemo(
     () => [...produtos]
@@ -110,19 +162,25 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // rótulo, e não duas telas que alguém teria de lembrar de visitar.
   const pedidos = useMemo(() => {
     const compras = data.map((r: any) => ({
-      id: r.id, tipo: 'compra' as TipoReq, item: r.item, qtd: r.qtd, unidade: r.unidade,
+      // `tipo_requisicao` é NULL nas linhas abertas antes da migr. 358 — elas
+      // aparecem como 'Compra', sem fingir que sabemos o que eram.
+      id: r.id, tipo: (r.tipo_requisicao === 'Reposição' ? 'reposicao' : 'eventual') as TipoReq,
+      tipoLabel: r.tipo_requisicao ?? 'Compra',
+      item: r.item, qtd: r.qtd, unidade: r.unidade,
       numero: numeroRequisicao(r),
       complemento: r.centro_custo, prazo: r.data_necessidade, urgencia: r.urgencia ?? 'Normal',
       abertura: r.data ?? (r.created_at ?? '').slice(0, 10), status: r.status,
       justificativa: r.justificativa, solicitante: r.solicitante,
+      saldo: r.saldo_no_pedido, minimo: r.minimo_no_pedido,
     }));
     const materiais = reqEstoque.map((r: any) => ({
-      id: r.id, tipo: 'estoque' as TipoReq, numero: null as string | null,
+      id: r.id, tipo: 'estoque' as TipoReq, tipoLabel: 'Estoque', numero: null as string | null,
       item: produtos.find((p: any) => p.id === r.produto_id)?.nome ?? 'Produto',
-      qtd: r.qtd, unidade: 'un',
+      qtd: r.qtd, unidade: 'UN',
       complemento: r.destino, prazo: null, urgencia: 'Normal',
       abertura: (r.created_at ?? '').slice(0, 10), status: r.status,
       justificativa: null, solicitante: r.solicitante,
+      saldo: null as number | null, minimo: null as number | null,
     }));
     return [...compras, ...materiais].sort((a, b) => String(b.abertura).localeCompare(String(a.abertura)));
   }, [data, reqEstoque, produtos]);
@@ -156,8 +214,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     setItens([linhaVazia()]);
     setJustAberta({});
     setEstoqueForm({ produto_id: '', qtd: '1', destino: '' });
+    setRepo(new Map());
+    setBuscaCat('');
+    setSoAbaixoMin(false);
     setErros({});
   };
+
+  const toggleRepo = (id: string) => setRepo(m => {
+    const n = new Map(m);
+    if (n.has(id)) n.delete(id); else n.set(id, '1');
+    return n;
+  });
+  const setQtdRepo = (id: string, qtd: string) => setRepo(m => new Map(m).set(id, qtd));
 
   // Material do almoxarifado: sai do que já existe, então o produto vem do
   // catálogo — e o Estoque é quem libera (migr. 284).
@@ -192,6 +260,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // vazio; basta uma linha sem motivo próprio para ele voltar a ser obrigatório.
   const cabJustObrigatoria = itens.some(r => !r.justificativa.trim());
 
+  const validarReposicao = (): boolean => {
+    const e: Record<string, string> = {};
+    if (repo.size === 0) e.repo = 'Escolha ao menos um item do catálogo';
+    if (!cab.data_necessidade) e.data_necessidade = 'Obrigatório';
+    else if (cab.data_necessidade < todayBR()) e.data_necessidade = 'Não pode ser no passado';
+    setErros(e);
+    return Object.keys(e).length === 0;
+  };
+
   const validar = (): boolean => {
     const e: Record<string, string> = {};
     const cabJust = cab.justificativa.trim();
@@ -212,22 +289,33 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   };
 
   const handleEnviar = async () => {
-    if (!validar() || !supabase) return;
+    const ehRepo = tipo === 'reposicao';
+    if (!(ehRepo ? validarReposicao() : validar()) || !supabase) return;
     setSaving(true);
     try {
+      // Na reposição só o `produto_id` viaja: nome e unidade a RPC lê do
+      // catálogo, e o saldo ela mesma fotografa (migr. 358). Mandar o nome
+      // daqui seria deixar o navegador escrever o que o comprador vai ler.
+      const p_itens = ehRepo
+        ? [...repo.entries()].map(([produto_id, qtd]) => ({
+            produto_id, qtd: parseInt(qtd, 10) || 1,
+          }))
+        : itens.map(r => ({
+            item:    r.item.trim(),
+            qtd:     parseInt(r.qtd, 10) || 1,
+            unidade: r.unidade,
+            // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
+            justificativa: r.justificativa.trim() || null,
+          }));
+
       const { data: saved, error } = await supabase.rpc('criar_requisicoes_compra_lote', {
-        p_itens: itens.map(r => ({
-          item:    r.item.trim(),
-          qtd:     parseInt(r.qtd, 10) || 1,
-          unidade: r.unidade,
-          // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
-          justificativa: r.justificativa.trim() || null,
-        })),
+        p_itens,
+        p_tipo_requisicao:  ehRepo ? 'Reposição' : 'Eventual',
         p_solicitante:      profile.nome,
         p_urgencia:         cab.urgencia,
         p_centro_custo:     cab.centro_custo || null,
         p_filial:           filial,
-        p_justificativa:    cab.justificativa.trim() || null,
+        p_justificativa:    ehRepo ? null : (cab.justificativa.trim() || null),
         p_data_necessidade: cab.data_necessidade,
       });
       if (error) { showToast(error.message, 'error', true); return; }
@@ -254,9 +342,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
             O que o seu setor pediu. Material que já existe sai do Estoque; o que falta vai para Compras cotar,
-            e o gerente decide. A requisição de compra que você abre aqui é o <strong className="text-gray-300">mesmo
-            documento</strong> que Compras trabalha em Compras &rarr; Requisições de compra — clique na linha para ver
-            em que etapa ela está.
+            e o gerente decide. <strong className="text-gray-300">Repor</strong> item do catálogo e{' '}
+            <strong className="text-gray-300">comprar</strong> algo fora dele são pedidos diferentes: o primeiro se
+            explica pelo saldo, o segundo precisa de justificativa. A requisição que você abre aqui é o mesmo
+            documento que Compras trabalha em Compras &rarr; Requisições de compra — clique na linha para ver em que
+            etapa ela está.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -298,13 +388,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">O que você precisa</span>
                 <div className="flex flex-wrap gap-2">
                   {([
-                    { id: 'compra'  as TipoReq, label: 'Comprar', hint: 'não temos, ou acabou — vai para Compras cotar' },
-                    { id: 'estoque' as TipoReq, label: 'Material do estoque', hint: 'já existe no almoxarifado — o Estoque libera' },
+                    { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou ou bateu o mínimo' },
+                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'não está no catálogo, é serviço ou foge do normal' },
+                    { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'já existe no almoxarifado — o Estoque libera' },
                   ]).map(op => (
                     <button
                       key={op.id}
                       onClick={() => { setTipo(op.id); setErros({}); }}
-                      className={`flex-1 min-w-[200px] text-left py-2 px-3 rounded-xl border transition-colors ${
+                      className={`flex-1 min-w-[180px] text-left py-2 px-3 rounded-xl border transition-colors ${
                         tipo === op.id
                           ? 'bg-accent/15 border-accent/30 text-accent'
                           : 'neu-button border-transparent text-gray-400 hover:text-gray-200'
@@ -315,6 +406,17 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     </button>
                   ))}
                 </div>
+                {/* A regra do campo obrigatório fica visível ANTES de o aluno
+                    esbarrar nela — era o que faltava para ele entender que a
+                    justificativa não é burocracia, é o que o comprador lê
+                    quando não tem histórico nenhum. */}
+                <p className="text-[11px] text-gray-500 leading-snug">
+                  {tipo === 'reposicao'
+                    ? 'Reposição não pede justificativa escrita: o motivo é o saldo, e o sistema grava o saldo e o mínimo do produto no momento do pedido.'
+                    : tipo === 'eventual'
+                      ? 'Compra eventual pede justificativa: Compras não tem histórico deste item para decidir sozinho.'
+                      : 'Sai do almoxarifado, sem passar por Compras.'}
+                </p>
               </div>
 
               {tipo === 'estoque' ? (
@@ -388,6 +490,94 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 </FormField>
               </div>
 
+              {tipo === 'reposicao' ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                      Catálogo — marque o que precisa repor
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      {repo.size > 0
+                        ? <><strong className="text-accent">{repo.size}</strong> selecionado{repo.size === 1 ? '' : 's'}</>
+                        : 'nenhum selecionado'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                      <input
+                        className="neu-input py-2 pl-9 pr-3 rounded-xl text-sm w-full"
+                        placeholder="Buscar por nome ou código…"
+                        value={buscaCat}
+                        onChange={e => setBuscaCat(e.target.value)}
+                      />
+                    </div>
+                    {/* O ponto de pedido é a razão de existir da reposição —
+                        merece ser um clique, não um filtro que se monta na mão. */}
+                    <button
+                      onClick={() => setSoAbaixoMin(v => !v)}
+                      className={`py-2 px-3 rounded-xl text-[11px] font-bold border transition-colors ${
+                        soAbaixoMin
+                          ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                          : 'neu-button border-transparent text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      No mínimo ou abaixo ({qtdAbaixoMin})
+                    </button>
+                  </div>
+
+                  {erros.repo && <span className="text-[10px] text-red-500 font-semibold">{erros.repo}</span>}
+
+                  <div className={`neu-pressed rounded-xl max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
+                    {catalogoRepo.length === 0 ? (
+                      <p className="text-xs text-gray-500 p-4 text-center">
+                        {soAbaixoMin ? 'Nenhum item no mínimo agora.' : 'Nenhum produto encontrado.'}
+                      </p>
+                    ) : catalogoRepo.map((p: any) => {
+                      const marcado = repo.has(p.id);
+                      return (
+                        <div key={p.id} className={`flex items-center gap-3 px-3 py-2 ${marcado ? 'bg-accent/5' : ''}`}>
+                          <button
+                            onClick={() => toggleRepo(p.id)}
+                            className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 transition-colors ${
+                              marcado ? 'bg-accent border-accent' : 'border-white/20 hover:border-white/40'
+                            }`}
+                          >
+                            {marcado && <Check size={11} className="text-black" />}
+                          </button>
+                          <button onClick={() => toggleRepo(p.id)} className="flex-1 min-w-0 text-left">
+                            <span className="block text-xs font-semibold text-gray-200 truncate">{p.nome}</span>
+                            <span className="block text-[10px] text-gray-500">
+                              {p.codigo ? `${p.codigo} · ` : ''}saldo {p.saldo}
+                              {p.minimo > 0 ? ` · mínimo ${p.minimo}` : ''}
+                              {' '}{p.unidade ?? 'un'}
+                            </span>
+                          </button>
+                          {p.abaixoMin && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 shrink-0">
+                              No mínimo
+                            </span>
+                          )}
+                          {marcado && (
+                            <input
+                              type="number" min="1"
+                              className="neu-input py-1 px-2 rounded-lg text-xs w-20 shrink-0"
+                              value={repo.get(p.id) ?? '1'}
+                              onChange={e => setQtdRepo(p.id, e.target.value)}
+                              title="Quantidade a repor"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] text-gray-500">
+                    Cada item marcado vira uma requisição própria, com o saldo do momento anexado — é isso que Compras lê no lugar da justificativa.
+                  </span>
+                </div>
+              ) : (
+              <>
               {/* O rótulo diz "geral" porque o campo é o padrão das linhas, não
                   a única fonte: quem tem motivos diferentes justifica item a
                   item lá embaixo (migr. 354). */}
@@ -433,7 +623,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         <input
                           list="sugestoes-catalogo"
                           className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
-                          placeholder="Descreva o item — ex.: papel A4 75g, resma"
+                          placeholder={`Descreva o item — ${exemploItemRequisicao(filial)}`}
                           value={row.item}
                           onChange={e => updateLinha(i, { item: e.target.value })}
                         />
@@ -452,7 +642,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         value={row.unidade}
                         onChange={e => updateLinha(i, { unidade: e.target.value })}
                       >
-                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                        {unidadesReq.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                       <button
                         onClick={() => toggleJust(i, row.uid)}
@@ -493,6 +683,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               </div>
               </>
               )}
+              </>
+              )}
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-gray-400">
@@ -502,7 +694,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   <Send size={15} />
                   {tipo === 'estoque'
                     ? 'Enviar para o Estoque'
-                    : itens.length > 1 ? `Enviar ${itens.length} itens` : 'Enviar para Compras'}
+                    : tipo === 'reposicao'
+                      ? (repo.size > 1 ? `Repor ${repo.size} itens` : 'Enviar reposição')
+                      : itens.length > 1 ? `Enviar ${itens.length} itens` : 'Enviar para Compras'}
                 </NeuButtonAccent>
               </div>
             </div>
@@ -547,9 +741,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                        r.tipo === 'estoque' ? 'bg-blue-500/15 text-blue-400' : 'bg-purple-500/15 text-purple-400'
+                        r.tipo === 'estoque'   ? 'bg-blue-500/15 text-blue-400'
+                        : r.tipo === 'reposicao' ? 'bg-emerald-500/15 text-emerald-400'
+                        : 'bg-purple-500/15 text-purple-400'
                       }`}>
-                        {r.tipo === 'estoque' ? 'Estoque' : 'Compra'}
+                        {r.tipoLabel}
                       </span>
                     </td>
                     {/* Quem pediu. Vira informação útil justamente porque a
@@ -579,7 +775,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         {/* Só para requisição de compra: material do
                             almoxarifado tem outro caminho, e reusar esta régua
                             ali faria a tela mentir sobre o fluxo. */}
-                        {r.tipo === 'compra' && (
+                        {VAI_PRA_COMPRAS(r.tipo) && (
                           <>
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
                               Onde está
@@ -591,8 +787,25 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                             </p>
                           </>
                         )}
+                        {/* Na reposição isto ocupa o lugar da justificativa: é
+                            o que o comprador lê para decidir, e não depende de
+                            ninguém ter escrito bem. */}
+                        {r.saldo != null && (
+                          <div className="mt-3">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+                              Saldo quando foi pedido
+                            </span>
+                            <span className="text-xs text-gray-300">
+                              <strong className={Number(r.minimo) > 0 && Number(r.saldo) <= Number(r.minimo) ? 'text-red-400' : 'text-gray-200'}>
+                                {r.saldo}
+                              </strong>
+                              {r.minimo != null && Number(r.minimo) > 0 && <> em estoque, para um mínimo de <strong className="text-gray-200">{r.minimo}</strong></>}
+                              {' '}{r.unidade ?? ''}
+                            </span>
+                          </div>
+                        )}
                         {r.justificativa && (
-                          <div className={r.tipo === 'compra' ? 'mt-3' : ''}>
+                          <div className={VAI_PRA_COMPRAS(r.tipo) ? 'mt-3' : ''}>
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa</span>
                             <span className="text-xs text-gray-300">{r.justificativa}</span>
                           </div>

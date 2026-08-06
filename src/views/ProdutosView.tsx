@@ -24,6 +24,7 @@ import {
   PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { UNIDADES_PRODUTO } from '../lib/unidades';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -43,7 +44,9 @@ async function salvarPrecoCusto(produtoId: string, valor: number): Promise<void>
   if (error) throw new Error(`Produto salvo, mas o preço de custo não foi gravado: ${error.message}`);
 }
 
-const UNIDADES = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
+// Régua única em src/lib/unidades.ts — a lista vivia duplicada aqui, no
+// gerador de planilha e no PDV, e as três discordavam.
+const UNIDADES = UNIDADES_PRODUTO;
 
 const EMPTY_EXTRAS = {
   categoria:              '',

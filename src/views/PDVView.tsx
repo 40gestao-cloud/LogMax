@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { UNIDADES_FRACIONARIAS } from '../lib/unidades';
 import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
@@ -30,7 +31,7 @@ type FilialPDV = typeof FILIAIS_PDV[number];
 
 // Unidades em que a venda é por peso/volume — o PDV pede peso em vez de
 // incrementar +1. Operador digita "1,250" pra 1 kg e 250 g.
-const UNIDADES_FRACIONARIAS = new Set(['KG', 'L', 'M', 'M²', 'M³']);
+// Vem de src/lib/unidades.ts — mesma régua do cadastro e da requisição.
 const isProdutoFracionario = (p: any): boolean =>
   UNIDADES_FRACIONARIAS.has(String(p?.unidade ?? 'UN').toUpperCase());
 

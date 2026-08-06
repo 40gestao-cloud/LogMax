@@ -21,6 +21,7 @@
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
+import { unidadesDeProduto, unidadesDeRequisicao } from './unidades';
 
 export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
 
@@ -114,10 +115,9 @@ const ATRIBUTOS_SERVICO: Record<string, ModeloCampo[]> = {
   ],
 };
 
-// Unidades de produto: KG/L/M só fazem sentido em supermercado (ver ProdutosView).
-const UNIDADES_PRODUTO = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
-const UNIDADES_PRODUTO_DISCRETAS = ['UN', 'CX', 'PC', 'PCT'] as const;
-const UNIDADES_REQUISICAO = ['un', 'cx', 'pct', 'kg', 'g', 'L', 'mL', 'm', 'm²', 'sv'] as const;
+// Régua única em src/lib/unidades.ts. A lista de requisição era minúscula aqui
+// e no formulário, enquanto o catálogo é maiúsculo — o modelo de planilha
+// ensinava a grafia errada a quem importava dados.
 
 // ---------------------------------------------------------------------------
 // Montagem dos modelos — a ordem dos campos é a ordem do formulário na tela
@@ -175,7 +175,7 @@ const modeloProdutos = (filial: string): Modelo => {
     { col: 'Preço de Custo (R$)', obrigatorio: true, formato: 'moeda', exemplo: '18,90',
       dica: 'Quanto a empresa paga. No LogMax só admin/CEO/Financeiro enxergam.' },
     { col: 'Preço de Venda (R$)', obrigatorio: true, formato: 'moeda', exemplo: '24,90' },
-    { col: 'Unidade', lista: isSuper ? UNIDADES_PRODUTO : UNIDADES_PRODUTO_DISCRETAS, exemplo: 'UN' },
+    { col: 'Unidade', lista: unidadesDeProduto(filial), exemplo: 'UN' },
     { col: 'Estoque Inicial', formato: 'decimal', exemplo: '40' },
     { col: 'Quantidade Comprada', formato: 'decimal', exemplo: '40',
       dica: 'Quanto entrou na compra que originou este cadastro.' },
@@ -234,7 +234,7 @@ const modeloRequisicoes = (filial: string): Modelo => ({
     { col: 'Item', obrigatorio: true, exemplo: 'Papel A4 75g — resma 500 folhas',
       dica: 'Descreva o suficiente para Compras cotar sem precisar perguntar.' },
     { col: 'Quantidade', obrigatorio: true, formato: 'decimal', exemplo: '10' },
-    { col: 'Unidade', obrigatorio: true, lista: UNIDADES_REQUISICAO, exemplo: 'cx' },
+    { col: 'Unidade', obrigatorio: true, lista: unidadesDeRequisicao(filial), exemplo: 'CX' },
   ],
 });
 
