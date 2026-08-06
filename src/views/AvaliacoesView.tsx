@@ -813,6 +813,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // ceo→gerente etc). Só ciclos criados no Padrão; ciclos de competição ficam fora.
   const cicloMatrizAberto = isMatriz ? (ciclosPadrao.find(c => c.status === 'Aberto' && c.filial === 'Matriz') ?? null) : null;
 
+  // Quem ainda faz parte da empresa. `users` continua completo porque as
+  // avaliações antigas precisam resolver o nome de quem já saiu (`users.find`
+  // por id); o que não pode é o desligado voltar a virar pendência de
+  // avaliação — a filial não é julgada por quem ela não tem mais.
+  const usersAtivos = useMemo(() => users.filter(u => !u.desligado_em), [users]);
+
   // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos
   // + o ciclo Matriz (que cobre gerentes/colaboradores de todas as filiais + conselheiros).
   const pendentes = useMemo(() => {
@@ -827,7 +833,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
     ciclosOperacionaisAbertos.forEach(ciclo => {
       const feitas = minhasFeitasPorCiclo.get(ciclo.id) ?? new Set();
-      const usersFilial = users.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
+      const usersFilial = usersAtivos.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
       let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
       if (podeGerirAvaliacoes) {
         // Em Matriz com ciclo Matriz aberto, admin/CEO avalia gerentes/colaboradores
@@ -860,30 +866,30 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     if (podeGerirAvaliacoes && isMatriz && cicloMatrizAberto) {
       const feitasMatriz = minhasFeitasPorCiclo.get(cicloMatrizAberto.id) ?? new Set();
       const isAdmin = profile.role === 'admin';
-      const conselheiros = users.filter(u => u.role === 'conselheiro' && u.id !== profile.id);
+      const conselheiros = usersAtivos.filter(u => u.role === 'conselheiro' && u.id !== profile.id);
       conselheiros.forEach(user => {
         // Admin usa set estratégico próprio (admin_conselheiro); CEO/conselheiro mantêm ceo_conselheiro.
         const tipoConsel = isAdmin ? 'admin_conselheiro' as const : 'ceo_conselheiro' as const;
         if (!feitasMatriz.has(`${user.id}::${tipoConsel}`)) out.push({ user, tipo: tipoConsel, ciclo: cicloMatrizAberto });
       });
-      const gerentesMatriz = users.filter(u => u.role === 'gerente' && u.id !== profile.id);
+      const gerentesMatriz = usersAtivos.filter(u => u.role === 'gerente' && u.id !== profile.id);
       gerentesMatriz.forEach(user => {
         if (!feitasMatriz.has(`${user.id}::ceo_gerente`)) out.push({ user, tipo: 'ceo_gerente' as const, ciclo: cicloMatrizAberto });
       });
-      const colaboradoresMatriz = users.filter(u => u.role === 'colaborador' && u.id !== profile.id);
+      const colaboradoresMatriz = usersAtivos.filter(u => u.role === 'colaborador' && u.id !== profile.id);
       colaboradoresMatriz.forEach(user => {
         if (!feitasMatriz.has(`${user.id}::ceo_colaborador`)) out.push({ user, tipo: 'ceo_colaborador' as const, ciclo: cicloMatrizAberto });
       });
       // Admin avalia CEOs com o set estratégico.
       if (isAdmin) {
-        const ceos = users.filter(u => u.role === 'ceo' && u.id !== profile.id);
+        const ceos = usersAtivos.filter(u => u.role === 'ceo' && u.id !== profile.id);
         ceos.forEach(user => {
           if (!feitasMatriz.has(`${user.id}::admin_ceo`)) out.push({ user, tipo: 'admin_ceo' as const, ciclo: cicloMatrizAberto });
         });
       }
     }
     return out;
-  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, users, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
+  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, usersAtivos, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
 
   // Evidências do próprio usuário no ciclo aberto atual
   const minhasEvidencias = useMemo(() =>
@@ -1086,6 +1092,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         });
         return {
           avaliadoId,
+          // A nota fica no histórico do ciclo — apagá-la seria reescrever o
+          // passado. O que ela não faz mais é contar no placar da filial
+          // (migr. 355), e o chip abaixo explica por quê.
+          desligado: !!user?.desligado_em,
           nome: user?.nome ?? '—',
           role: user?.role ?? '—',
           setor: user?.setor ?? '—',
@@ -1119,6 +1129,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         });
         return {
           avaliadoId: filialNome,
+          desligado: false,
           nome: filialNome,
           role: 'filial',
           setor: '—',
@@ -1499,7 +1510,15 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                                   </td>
                                   <td className="py-3 px-4 text-sm font-semibold text-gray-200 flex items-center gap-1.5">
                                     {grupo.tipo === 'matriz_filial' && <Building2 size={12} className="text-accent shrink-0" />}
-                                    {l.nome}
+                                    <span className={l.desligado ? 'text-gray-500 line-through' : ''}>{l.nome}</span>
+                                    {l.desligado && (
+                                      <span
+                                        title="Desligado — a nota fica no histórico do ciclo, mas não conta no placar da filial."
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 shrink-0"
+                                      >
+                                        Desligado
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-3 px-4 text-xs text-gray-500">
                                     {grupo.tipo === 'matriz_filial' ? l.filial : `${l.role} · ${l.setor}`}
