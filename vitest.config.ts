@@ -1,13 +1,33 @@
 import { defineConfig } from 'vitest/config';
 
+// Dois grupos com necessidades opostas:
+//
+//   • integracao — fala com o Supabase de verdade. Precisa de `.env.test` e
+//     roda serial: os testes disputam o mesmo produto sentinel.
+//   • estatico   — só lê arquivos-fonte (consistência de rotas/menu). Não pode
+//     exigir credenciais: um guarda que só roda com banco à mão é um guarda
+//     que ninguém roda, e este existe justamente para pegar divergência de
+//     menu no CI.
 export default defineConfig({
   test: {
-    // Carrega .env.test antes dos testes (cliente Supabase precisa das vars)
-    setupFiles: ['./tests/setup.ts'],
-    // RPCs + cleanup levam alguns segundos por teste em rede normal
     testTimeout: 30_000,
-    // Serial: cada teste usa o mesmo produto sentinel; rodar em paralelo
-    // poderia disputar o estoque do produto
-    fileParallelism: false,
+    projects: [
+      {
+        test: {
+          name: 'estatico',
+          include: ['tests/rotas.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'integracao',
+          include: ['tests/**/*.test.ts'],
+          exclude: ['tests/rotas.test.ts'],
+          setupFiles: ['./tests/setup.ts'],
+          testTimeout: 30_000,
+          fileParallelism: false,
+        },
+      },
+    ],
   },
 });
