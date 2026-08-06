@@ -170,7 +170,21 @@ const getDaysInRange = (start: string, end: string): string[] => {
 const FILIAIS_REG = ['Matriz', 'SuperMax', 'MaxLook', 'TechMax'] as const;
 
 // Funcionário sem filial definida é tratado como Matriz (FILIAL_DEFAULT).
-const filialDoFunc = (f: any): string => f?.filial ?? 'Matriz';
+//
+// Desligado também: aqui o desligamento não é saída do curso — o aluno sai da
+// filial e vai para recuperação, continuando a ter presença lançada. Quem
+// lança passa a ser a Matriz (migr. 357), então para efeito de frequência ele
+// é da Matriz. `funcionarios.filial` continua com a filial de origem, que é o
+// que o RH precisa saber e o que a readmissão usa para devolvê-lo.
+const filialDoFunc = (f: any): string =>
+  f?.status === 'Desligado' ? 'Matriz' : (f?.filial ?? 'Matriz');
+
+// Quem tem presença a lançar. Desligado entra; soft-delete e demais status,
+// não.
+const contaNaFrequencia = (f: any): boolean => {
+  const st = f?.status ?? 'Ativo';
+  return st === 'Ativo' || st === 'Desligado';
+};
 
 const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: any) => {
   const { user } = useAuth();
@@ -220,7 +234,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
 
   const funcionariosAtivos = useMemo(
     () => (funcionarios ?? [])
-      .filter((f: any) => (f.status ?? 'Ativo') === 'Ativo')
+      .filter(contaNaFrequencia)
       .filter((f: any) => filialEfetiva === null || filialDoFunc(f) === filialEfetiva)
       .sort((a: any, b: any) =>
         (a.nome ?? '').trim().localeCompare((b.nome ?? '').trim(), 'pt-BR', { sensitivity: 'base' })
@@ -380,7 +394,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
 
   // Cumprimento por unidade: quantos lançamentos existem vs. quantos deveriam existir.
   const cumprimento = useMemo(() => {
-    const ativos = (funcionarios ?? []).filter((f: any) => (f.status ?? 'Ativo') === 'Ativo');
+    const ativos = (funcionarios ?? []).filter(contaNaFrequencia);
     return FILIAIS_REG.map(unidade => {
       const doUnidade = ativos.filter((f: any) => filialDoFunc(f) === unidade);
       const esperado = doUnidade.length * diasCobrados.length;
@@ -643,9 +657,22 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                           >
                             {func.nome}
                           </button>
+                          {func.status === 'Desligado' && (
+                            <span
+                              title={`Desligado de ${func.filial ?? '—'} — em recuperação. O ponto é lançado pela Matriz e não conta na frequência da filial de origem.`}
+                              className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 align-middle"
+                            >
+                              Recuperação
+                            </span>
+                          )}
                         </td>
                         {filial === null && (
-                          <td className="py-3 px-3 text-xs text-gray-400">{func.filial ?? '—'}</td>
+                          <td className="py-3 px-3 text-xs text-gray-400">
+                            {filialDoFunc(func)}
+                            {func.status === 'Desligado' && func.filial && (
+                              <span className="block text-[10px] text-gray-600">era {func.filial}</span>
+                            )}
+                          </td>
                         )}
                         <td className="py-3 px-3 text-xs text-gray-500">{func.cargo ?? '—'}</td>
                         <td className="py-3 px-3">
