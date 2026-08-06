@@ -49,11 +49,16 @@ export const unidadesDeRequisicao = (filial: string): readonly string[] =>
  * ramificar campos por filial faria a tela mentir sobre o processo.
  */
 export const EXEMPLO_ITEM_REQUISICAO: Record<string, string> = {
-  SuperMax: 'Ex.: sacola plástica reforçada 50x60, fardo',
-  MaxLook:  'Ex.: manequim de vitrine, corpo inteiro',
-  TechMax:  'Ex.: cabo HDMI 2.1, 2 metros',
-  Matriz:   'Ex.: papel A4 75g, resma',
+  SuperMax: 'Sacola plástica reforçada 50x60 — fardo com 500',
+  MaxLook:  'Manequim de vitrine, corpo inteiro',
+  TechMax:  'Cabo HDMI 2.1 — 2 metros',
+  Matriz:   'Papel A4 75g — resma 500 folhas',
 };
 
-export const exemploItemRequisicao = (filial: string): string =>
+/** Sem prefixo: serve de célula de exemplo no modelo de planilha. */
+export const itemExemploDaFilial = (filial: string): string =>
   EXEMPLO_ITEM_REQUISICAO[filial] ?? EXEMPLO_ITEM_REQUISICAO.Matriz;
+
+/** Com prefixo: serve de placeholder do input. */
+export const exemploItemRequisicao = (filial: string): string =>
+  `ex.: ${itemExemploDaFilial(filial).toLowerCase()}`;

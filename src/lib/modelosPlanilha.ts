@@ -21,7 +21,7 @@
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
-import { unidadesDeProduto, unidadesDeRequisicao } from './unidades';
+import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial } from './unidades';
 
 export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
 
@@ -216,25 +216,34 @@ const modeloServicos = (filial: string): Modelo => ({
 // Requisição segue a ordem da tela: tipo, prazo, urgência, centro de custo,
 // justificativa e então os itens. Uma linha por item — que é exatamente como o
 // LogMax grava (cada item vira uma requisição própria, e o cabeçalho se repete).
+//
+// Os três tipos e a justificativa condicional espelham a migr. 358: quem
+// preenche a planilha aprende a mesma distinção que vai encontrar na tela —
+// reposição se explica pelo saldo, compra eventual precisa de texto.
 const modeloRequisicoes = (filial: string): Modelo => ({
   acao: 'Requisição',
   titulo: `Requisições — ${filial}`,
   arquivo: `modelo-requisicoes-${filial.toLowerCase()}`,
-  intro: 'Uma linha por item solicitado. Os quatro primeiros campos são o cabeçalho do pedido — repita-os igual em todas as linhas da mesma requisição.',
+  intro: 'Uma linha por item solicitado. Os cinco primeiros campos são o cabeçalho do pedido — repita-os igual em todas as linhas da mesma requisição. A Justificativa só é obrigatória em Compra eventual: na Reposição o motivo é o saldo do produto, que o LogMax registra sozinho.',
   campos: [
-    { col: 'O que você precisa', obrigatorio: true, lista: ['Comprar', 'Material do estoque'], exemplo: 'Comprar',
-      dica: 'Comprar = não temos ou acabou, vai para Compras cotar. Material do estoque = já existe no almoxarifado.' },
+    { col: 'O que você precisa', obrigatorio: true,
+      lista: ['Reposição', 'Compra eventual', 'Material do estoque'], exemplo: 'Reposição',
+      dica: 'Reposição = item do catálogo que acabou ou bateu o mínimo. Compra eventual = não está no catálogo, é serviço ou foge do normal. Material do estoque = já existe no almoxarifado.' },
     { col: 'Necessário até', obrigatorio: true, formato: 'data', exemplo: '15/09/2026' },
     { col: 'Urgência', obrigatorio: true, lista: ['Normal', 'Alta', 'Urgente'], exemplo: 'Normal' },
     { col: 'Centro de custo', exemplo: 'TI',
       dica: 'Setor que arca com o gasto. Precisa existir em Empresa > Centros de custo.' },
-    { col: 'Justificativa', obrigatorio: true,
-      exemplo: 'O estoque de papel acaba na sexta e o setor emite 200 boletos por semana.',
-      dica: 'Por que a empresa precisa disto. É o que o gerente lê para aprovar.' },
-    { col: 'Item', obrigatorio: true, exemplo: 'Papel A4 75g — resma 500 folhas',
-      dica: 'Descreva o suficiente para Compras cotar sem precisar perguntar.' },
+    // Deixou de ser obrigatória na planilha pelo mesmo motivo que deixou na
+    // tela (migr. 358): na reposição o motivo é o saldo, e exigir texto aqui
+    // reproduziria em .xlsx o "nao temos ou acabou" que a 358 foi corrigir.
+    { col: 'Justificativa',
+      exemplo: 'Compressor da câmara fria parou e não há peça no mercado local.',
+      dica: 'Obrigatória só em Compra eventual — Compras não tem histórico do item para decidir sozinho. Em Reposição, deixe em branco: o motivo é o saldo.' },
+    { col: 'Item', obrigatorio: true, exemplo: itemExemploDaFilial(filial),
+      dica: 'Em Reposição, escreva o nome exato do produto no catálogo. Em Compra eventual, descreva o suficiente para Compras cotar sem precisar perguntar.' },
     { col: 'Quantidade', obrigatorio: true, formato: 'decimal', exemplo: '10' },
-    { col: 'Unidade', obrigatorio: true, lista: unidadesDeRequisicao(filial), exemplo: 'CX' },
+    { col: 'Unidade', obrigatorio: true, lista: unidadesDeRequisicao(filial), exemplo: 'CX',
+      dica: 'Em Reposição o LogMax usa a unidade do cadastro do produto, então esta coluna serve de conferência.' },
   ],
 });
 
