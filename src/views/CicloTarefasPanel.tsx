@@ -73,8 +73,13 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
 
   // Gerir = conselho da Matriz (inclui admin). Dar nota = CEO/conselheiro;
   // admin modera e não vota, mesma régua da Competição.
-  const podeGerir = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
-  const podeAvaliar = profile.role === 'ceo' || isConselheiro(profile);
+  // O `filial === 'Matriz'` não é redundante: modo Matriz é contexto de tela
+  // (FilialContext), não o perfil. Sem ele, um gerente com is_conselheiro que
+  // caísse nesse contexto veria botões que as RPCs recusam — elas exigem
+  // filial 'Matriz' no perfil.
+  const daMatriz = profile.filial === 'Matriz';
+  const podeGerir = daMatriz && (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile));
+  const podeAvaliar = daMatriz && (profile.role === 'ceo' || isConselheiro(profile));
   const cicloAberto = ciclo.status === 'Aberto';
 
   const carregar = useCallback(async (comSpinner = true) => {
@@ -484,6 +489,17 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
 
   const total = Object.values(selecionados).filter(Boolean).length;
 
+  // "Todos" age sobre a lista VISÍVEL, não sobre o cadastro inteiro: com o
+  // filtro em MaxLook, marcar todos deve pegar a MaxLook e não estourar a
+  // demanda pras outras duas filiais sem o gestor perceber.
+  const todosVisiveisMarcados = filtrados.length > 0 && filtrados.every(f => selecionados[f.id]);
+  const marcarVisiveis = (valor: boolean) =>
+    setSelecionados(s => {
+      const novo = { ...s };
+      filtrados.forEach(f => { novo[f.id] = valor; });
+      return novo;
+    });
+
   const salvar = async () => {
     if (!supabase) return;
     if (!nome.trim()) { showToast?.('Informe o nome da demanda.', 'error'); return; }
@@ -586,9 +602,24 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
-              Participantes ({total} selecionados)
-            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                Quem faz e será avaliado ({total} selecionados)
+              </label>
+              {filtrados.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => marcarVisiveis(!todosVisiveisMarcados)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg neu-button text-accent"
+                  title={filtroFilial === 'todas'
+                    ? 'Marcar/desmarcar todos os funcionários das 3 filiais'
+                    : `Marcar/desmarcar todos da ${filtroFilial}`}
+                >
+                  {todosVisiveisMarcados ? 'Limpar' : 'Todos'}
+                  {filtroFilial !== 'todas' && ` da ${filtroFilial}`}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-1 neu-pressed rounded-lg p-0.5">
               {(['todas', ...FILIAIS_OP] as const).map(f => (
                 <button

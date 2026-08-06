@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -289,6 +289,38 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     const h = () => { if (competicaoAtual) carregarPlacar(competicaoAtual); };
     window.addEventListener('avaliacao-matriz:changed', h);
     return () => window.removeEventListener('avaliacao-matriz:changed', h);
+  }, [competicaoAtual, carregarPlacar]);
+
+  // O evento acima é `window`: só alcança quem mexeu, na própria aba. Quando
+  // um conselheiro apaga a nota dele na máquina dele, quem está com o Placar
+  // aberto em outra sessão continuava vendo o número velho até dar F5 — o
+  // placar não tinha canal nenhum. `avaliacoes_matriz` já está na publicação
+  // realtime, e o soft-delete de nota é um UPDATE, então o DELETE lógico
+  // chega aqui como '*'. A RLS de voto selado (345) vale no realtime também:
+  // conselheiro só recebe evento da própria linha, admin recebe tudo.
+  // Debounce: o conselho avalia em rajada (um participante atrás do outro), e
+  // `calcular_placar_competicao` varre ponto_eletronico + avaliações a cada
+  // chamada. Sem isto, 20 notas seguidas viram 20 recálculos.
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!supabase || !competicaoAtual) return;
+    const id = competicaoAtual.id;
+    const agendar = () => {
+      if (refetchTimer.current !== null) clearTimeout(refetchTimer.current);
+      refetchTimer.current = setTimeout(() => {
+        refetchTimer.current = null;
+        carregarPlacar(competicaoAtual);
+      }, 500);
+    };
+    const canal = supabase
+      .channel(`placar-competicao-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${id}` }, agendar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefas', filter: `competicao_id=eq.${id}` }, agendar)
+      .subscribe();
+    return () => {
+      if (refetchTimer.current !== null) { clearTimeout(refetchTimer.current); refetchTimer.current = null; }
+      supabase!.removeChannel(canal);
+    };
   }, [competicaoAtual, carregarPlacar]);
 
   // Quem já avaliou × média que deu por filial. Nota de admin aparece
