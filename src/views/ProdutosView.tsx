@@ -228,6 +228,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
 
+  // A RLS de `categorias_produto` é `auth_pode_filial(filial)` — admin/CEO
+  // satisfaz para as três, então sem este filtro o select do produto oferece o
+  // catálogo inteiro da holding a quem opera a demo. Era inofensivo enquanto
+  // categoria era só rótulo; virou preço errado quando ela passou a carregar a
+  // margem-alvo. A categoria já gravada entra mesmo se for de outra filial,
+  // senão editar um produto legado esvaziaria o campo em silêncio.
+  const categoriasDaFilial = useMemo(
+    () => categoriasProduto.filter((c: any) =>
+      (c.filial == null || c.filial === filial) || c.id === extras.categoria_id),
+    [categoriasProduto, filial, extras.categoria_id],
+  );
+
   // Markup da categoria escolhida (migr. 360). `preco = custo * (1 + margem/100)`
   // — é markup sobre o custo, que é como o varejo forma preço na ponta. Margem
   // sobre a venda daria outra conta, e o rótulo diz qual das duas é.
@@ -763,7 +775,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       placeholder="Ex: Parafuso M6" />
                   </FormField>
                   <FormField label="Categoria *" error={extrasErrors.categoria_id}>
-                    {categoriasProduto.length > 0 ? (
+                    {categoriasDaFilial.length > 0 ? (
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
                         value={extras.categoria_id}
                         onChange={e => {
@@ -772,7 +784,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           setExtrasErrors(ev => ({ ...ev, categoria_id: '' }));
                         }}>
                         <option value="">— Selecione —</option>
-                        {categoriasProduto.filter((c: any) => c.ativo).map((c: any) => (
+                        {categoriasDaFilial.filter((c: any) => c.ativo).map((c: any) => (
                           <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
                         ))}
                       </select>
