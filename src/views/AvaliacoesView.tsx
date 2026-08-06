@@ -13,6 +13,7 @@ import { exportAvaliacoesCicloPDF, exportAvaliacaoIndividualPDF } from '../lib/a
 import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORIA_LABEL_MATRIZ, CATEGORIA_LABEL_ADMIN, ESCALA_MAX, type CriteriosSet } from '../lib/avaliacaoCriterios';
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { CicloTarefasPanel } from './CicloTarefasPanel';
 
 export type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean; filial: string };
 export type Avaliacao = {
@@ -609,6 +610,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // a RPC `atualizar_avaliacao` só aceita esses dois roles; conselheiro veria botões
   // que falham no save. Também alinha com a régua "conselho recebe, admin/CEO avalia".
   const podeGerirAvaliacoes = profile.role === 'admin' || profile.role === 'ceo';
+  // Demandas do ciclo são do conselho inteiro (inclui conselheiro), ao
+  // contrário de editar/excluir avaliação — por isso não reusa `podeGerirAvaliacoes`.
+  const ehConselhoMatriz = isAdminOuCEO;
   // Critérios e rótulos conforme o contexto ativo
   const csAtivo    = isMatriz ? CRITERIOS_MATRIZ : CRITERIOS;
   const clAtivo    = isMatriz ? CATEGORIA_LABEL_MATRIZ : CATEGORIA_LABEL;
@@ -765,7 +769,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       (isAberto ? '⚠️ Este ciclo está ABERTO — pessoas podem estar avaliando agora.\n\n' : '') +
       `Isso vai apagar PERMANENTEMENTE:\n` +
       `  • ${avaliacoesCiclo.length} avaliação(ões)\n` +
-      `  • ${critsCount} critério(s) com notas\n\n` +
+      `  • ${critsCount} critério(s) com notas\n` +
+      // `ciclo_tarefas.ciclo_id` é ON DELETE CASCADE (migr. 361): apagar o
+      // ciclo leva junto as demandas e as notas delas, sem outro aviso.
+      `  • as demandas deste ciclo e as notas do conselho nelas\n\n` +
       `Esta ação é irreversível.`;
     if (!await confirm(msg)) return;
 
@@ -1386,6 +1393,27 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             </div>
           )}
         </div>
+      )}
+
+      {/* ── A2. DEMANDAS DO CICLO (conselho da Matriz) ──
+             O ciclo Padrão só abria o ciclo; a pauta pra filial não tinha
+             onde nascer. Fica amarrado ao ciclo Matriz aberto porque os
+             participantes são das 3 filiais. Migr. 361. ── */}
+      {isMatriz && ehConselhoMatriz && (
+        cicloMatrizAberto ? (
+          <CicloTarefasPanel ciclo={cicloMatrizAberto} profile={profile} showToast={showToast} />
+        ) : (
+          <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-300">Demandas do Ciclo</h3>
+            </div>
+            <p className="text-xs text-gray-500">
+              Abra um ciclo com unidade <span className="text-gray-400 font-semibold">Matriz</span> para
+              publicar demandas às filiais. Elas aparecem em Demandas → Padrão.
+            </p>
+          </div>
+        )
       )}
 
       {/* ── E. CONSOLIDADO DO CICLO (admin/CEO — só modo Matriz) ── */}
