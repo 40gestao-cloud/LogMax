@@ -62,9 +62,27 @@ UPDATE public.fornecedores
    AND NULLIF(btrim(atributos->>'prazo_entrega_dias'), '') ~ '^[0-9]{1,3}$';
 
 -- E some do jsonb, senão passam a existir duas verdades para o mesmo dado.
+--
+-- Só sai de quem REALMENTE migrou. A primeira versão removia a chave de todo
+-- mundo que a tivesse: valor não numérico ("15 dias") não passava na regex
+-- acima e seria apagado sem ter para onde ir. Nas 4 turmas isso não chegou a
+-- acontecer — os que não migraram nunca tinham preenchido —, mas o script fica
+-- correto para quem reaplicar ou para turma nova.
 UPDATE public.fornecedores
    SET atributos = atributos - 'prazo_entrega_dias'
- WHERE atributos ? 'prazo_entrega_dias';
+ WHERE atributos ? 'prazo_entrega_dias'
+   AND prazo_entrega_dias IS NOT NULL;
+
+-- O que sobrar no jsonb é dado que não coube na coluna e precisa de olho
+-- humano, em vez de sumir em silêncio.
+DO $$
+DECLARE v_preso int;
+BEGIN
+  SELECT count(*) INTO v_preso FROM public.fornecedores WHERE atributos ? 'prazo_entrega_dias';
+  IF v_preso > 0 THEN
+    RAISE WARNING '% fornecedor(es) com prazo_entrega_dias não numérico no jsonb — migrar à mão.', v_preso;
+  END IF;
+END $$;
 
 -- ── 2. Margem-alvo por categoria ─────────────────────────────────────────────
 
