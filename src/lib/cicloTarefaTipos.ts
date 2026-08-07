@@ -3,10 +3,12 @@ import {
   ClipboardList, type LucideIcon,
 } from 'lucide-react';
 
-// Os 7 tipos de demanda que a Matriz publica pras filiais. A mesma régua
-// vale na Competição do Conselho (`matriz_tarefas`) e no ciclo Padrão
-// (`ciclo_tarefas`, migr. 361) — por isso o mapa mora aqui e não dentro
-// de uma view.
+// Os 7 tipos de demanda da Competição do Conselho (`matriz_tarefas`).
+//
+// O ciclo Padrão (`ciclo_tarefas`) NÃO usa mais essa régua: a demanda de lá
+// nasce sem categoria, com o tipo fixo `demanda_padrao` (migr. 362). Os 7
+// continuam aqui porque a filial lê os dois trilhos na mesma tela (Demandas)
+// e porque demanda antiga do Padrão ainda carrega um deles.
 export type TipoTarefa =
   | 'tarefa_apresentacao'
   | 'tarefa_treinamento_ia'
@@ -44,8 +46,16 @@ export const TIPOS_TAREFA: TipoTarefa[] = [
   'tarefa_treinamento_vendas',
 ];
 
+// Tipo único do ciclo Padrão (migr. 362). Não entra em TIPOS_TAREFA: não é
+// opção de select em lugar nenhum, é o valor que a demanda do Padrão grava.
+export const TIPO_DEMANDA_PADRAO = 'demanda_padrao';
+
+export const ehDemandaPadrao = (tipo: string) => tipo === TIPO_DEMANDA_PADRAO;
+
 // Fallback pra tipo legado que saiu do mapa — a tela não pode quebrar por
 // causa de um registro antigo.
 export const metaDoTipo = (tipo: string): TipoTarefaMeta =>
   TIPO_TAREFA_META[tipo as TipoTarefa]
-  ?? { label: tipo, icon: ClipboardList, color: 'text-gray-400', novoLabel: 'Nova demanda' };
+  ?? (tipo === TIPO_DEMANDA_PADRAO
+    ? { label: 'Demanda do Ciclo', icon: ClipboardList, color: 'text-sky-400', novoLabel: 'Nova demanda' }
+    : { label: tipo, icon: ClipboardList, color: 'text-gray-400', novoLabel: 'Nova demanda' });

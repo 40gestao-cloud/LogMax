@@ -838,6 +838,38 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // avaliação — a filial não é julgada por quem ela não tem mais.
   const usersAtivos = useMemo(() => users.filter(u => !u.desligado_em), [users]);
 
+  // Quem a Matriz colocou em alguma demanda do ciclo aberto (migr. 363).
+  // É essa lista que define o roster do ciclo Padrão: antes, abrir o ciclo
+  // já cobrava avaliação de toda a empresa, e a pauta publicada não tinha
+  // voz nenhuma sobre isso. `null` = ainda carregando → não lista ninguém,
+  // porque piscar a empresa inteira e depois sumir é pior que esperar.
+  const [alvosDemanda, setAlvosDemanda] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    const cicloId = cicloMatrizAberto?.id;
+    if (!supabase || !cicloId) { setAlvosDemanda(null); return; }
+    let cancelou = false;
+    const carregar = async () => {
+      const { data: ts } = await supabase!
+        .from('ciclo_tarefas').select('id').eq('ciclo_id', cicloId).eq('ativo', true);
+      if (cancelou) return;
+      const ids = (ts ?? []).map((t: any) => t.id);
+      if (ids.length === 0) { setAlvosDemanda(new Set()); return; }
+      const { data: ps } = await supabase!
+        .from('ciclo_tarefa_participantes')
+        .select('user_profile_id').in('tarefa_id', ids).eq('ativo', true);
+      if (cancelou) return;
+      setAlvosDemanda(new Set((ps ?? []).map((p: any) => p.user_profile_id).filter(Boolean)));
+    };
+    carregar();
+    const canal = supabase
+      .channel(`aval-alvos-demanda-${cicloId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefas', filter: `ciclo_id=eq.${cicloId}` }, carregar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_participantes' }, carregar)
+      .subscribe();
+    return () => { cancelou = true; supabase?.removeChannel(canal); };
+  }, [cicloMatrizAberto?.id]);
+
   // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos
   // + o ciclo Matriz (que cobre gerentes/colaboradores de todas as filiais + conselheiros).
   const pendentes = useMemo(() => {
@@ -885,30 +917,32 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     if (podeGerirAvaliacoes && isMatriz && cicloMatrizAberto) {
       const feitasMatriz = minhasFeitasPorCiclo.get(cicloMatrizAberto.id) ?? new Set();
       const isAdmin = profile.role === 'admin';
-      const conselheiros = usersAtivos.filter(u => u.role === 'conselheiro' && u.id !== profile.id);
+      // Só entra no roster quem a Matriz pôs em alguma demanda deste ciclo.
+      const naDemanda = (u: UserProfile) => (alvosDemanda ?? new Set<string>()).has(u.id);
+      const conselheiros = usersAtivos.filter(u => u.role === 'conselheiro' && u.id !== profile.id && naDemanda(u));
       conselheiros.forEach(user => {
         // Admin usa set estratégico próprio (admin_conselheiro); CEO/conselheiro mantêm ceo_conselheiro.
         const tipoConsel = isAdmin ? 'admin_conselheiro' as const : 'ceo_conselheiro' as const;
         if (!feitasMatriz.has(`${user.id}::${tipoConsel}`)) out.push({ user, tipo: tipoConsel, ciclo: cicloMatrizAberto });
       });
-      const gerentesMatriz = usersAtivos.filter(u => u.role === 'gerente' && u.id !== profile.id);
+      const gerentesMatriz = usersAtivos.filter(u => u.role === 'gerente' && u.id !== profile.id && naDemanda(u));
       gerentesMatriz.forEach(user => {
         if (!feitasMatriz.has(`${user.id}::ceo_gerente`)) out.push({ user, tipo: 'ceo_gerente' as const, ciclo: cicloMatrizAberto });
       });
-      const colaboradoresMatriz = usersAtivos.filter(u => u.role === 'colaborador' && u.id !== profile.id);
+      const colaboradoresMatriz = usersAtivos.filter(u => u.role === 'colaborador' && u.id !== profile.id && naDemanda(u));
       colaboradoresMatriz.forEach(user => {
         if (!feitasMatriz.has(`${user.id}::ceo_colaborador`)) out.push({ user, tipo: 'ceo_colaborador' as const, ciclo: cicloMatrizAberto });
       });
       // Admin avalia CEOs com o set estratégico.
       if (isAdmin) {
-        const ceos = usersAtivos.filter(u => u.role === 'ceo' && u.id !== profile.id);
+        const ceos = usersAtivos.filter(u => u.role === 'ceo' && u.id !== profile.id && naDemanda(u));
         ceos.forEach(user => {
           if (!feitasMatriz.has(`${user.id}::admin_ceo`)) out.push({ user, tipo: 'admin_ceo' as const, ciclo: cicloMatrizAberto });
         });
       }
     }
     return out;
-  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, usersAtivos, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
+  }, [ciclosOperacionaisAbertos, cicloMatrizAberto, avaliacoes, usersAtivos, alvosDemanda, profile.id, profile.role, profile.setor, isAdminOuCEO, isGerente, isMatriz]);
 
   // Evidências do próprio usuário no ciclo aberto atual
   const minhasEvidencias = useMemo(() =>
@@ -1703,7 +1737,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         {ciclosOperacionaisAbertos.length === 0 && !cicloMatrizAberto ? (
           <EmptyState message="Nenhum ciclo aberto no momento." />
         ) : pendentes.length === 0 ? (
-          <EmptyState message="Você concluiu todas as suas avaliações. 🎉" />
+          // "Nada a avaliar" tem duas causas bem diferentes agora, e mandar o
+          // 🎉 para quem ainda não publicou pauta nenhuma seria mentira.
+          cicloMatrizAberto && alvosDemanda?.size === 0 ? (
+            <EmptyState message="Nenhuma demanda com participantes neste ciclo — quem é avaliado sai de Demandas do Ciclo." />
+          ) : (
+            <EmptyState message="Você concluiu todas as suas avaliações. 🎉" />
+          )
         ) : (
           <div className="flex flex-col gap-7">
             {ORDEM_HIER.map(gid => {

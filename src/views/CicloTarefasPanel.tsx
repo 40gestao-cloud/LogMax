@@ -9,11 +9,18 @@ import { LoadingSpinner, EmptyState, FilialBadge, NeuButtonAccent } from '../com
 import { useConfirm } from '../contexts/ConfirmContext';
 import { todayBR } from '../lib/dates';
 import { isConselheiro } from '../lib/rbac';
-import { TIPOS_TAREFA, metaDoTipo, type TipoTarefa } from '../lib/cicloTarefaTipos';
+import { metaDoTipo, ehDemandaPadrao, TIPO_DEMANDA_PADRAO } from '../lib/cicloTarefaTipos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
-type FilialOp = typeof FILIAIS_OP[number];
+// A demanda do Padrão alcança a Matriz também: CEO e conselheiros são
+// avaliáveis e não têm filial operacional (migr. 363).
+const FILIAIS_DEMANDA = ['Matriz', ...FILIAIS_OP] as const;
+type FilialOp = typeof FILIAIS_DEMANDA[number];
+
+// Quem pode ser posto numa demanda. Admin fica fora de propósito: modera e
+// não é julgado, mesma régua da 240 que já tira a nota dele da média.
+const ROLES_AVALIAVEIS = ['ceo', 'conselheiro', 'gerente', 'colaborador'] as const;
 
 type Tarefa = {
   id: string;
@@ -30,6 +37,7 @@ type Participante = {
   id: string;
   tarefa_id: string;
   funcionario_id: string | null;
+  user_profile_id: string | null;
   nome_snapshot: string;
   filial: FilialOp;
 };
@@ -101,7 +109,7 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
 
       const { data: ps } = await supabase
         .from('ciclo_tarefa_participantes')
-        .select('id,tarefa_id,funcionario_id,nome_snapshot,filial')
+        .select('id,tarefa_id,funcionario_id,user_profile_id,nome_snapshot,filial')
         .in('tarefa_id', ids)
         .eq('ativo', true);
       const listaP = (ps ?? []) as Participante[];
@@ -210,6 +218,10 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
         A pauta que a Matriz publica pras filiais neste ciclo. Aparece em
         <span className="text-gray-400 font-semibold"> Demandas → Padrão</span> assim que for liberada.
         As notas ficam no ciclo — não entram no placar da competição.
+        <span className="block mt-1">
+          Quem você marca aqui é quem entra na lista de avaliação do ciclo: sem demanda,
+          ninguém é cobrado.
+        </span>
       </p>
 
       {!cicloAberto && (
@@ -239,8 +251,14 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
                   >
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       {aberta ? <ChevronDown size={12} className="text-gray-500" /> : <ChevronRight size={12} className="text-gray-500" />}
-                      <Icone size={13} className={meta.color} />
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
+                      {/* Demanda do Padrão não tem categoria: o selo só aparece
+                          nas antigas, criadas com os tipos da Competição. */}
+                      {!ehDemandaPadrao(t.tipo) && (
+                        <>
+                          <Icone size={13} className={meta.color} />
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
+                        </>
+                      )}
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${st.classe}`}>{st.label}</span>
                     </div>
                     <p className="text-sm font-black text-gray-100 leading-tight">{t.nome}</p>
@@ -455,7 +473,6 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
   showToast: any;
 }) {
   const isEdit = !!tarefa;
-  const [tipo, setTipo] = useState<TipoTarefa>((tarefa?.tipo as TipoTarefa) ?? 'tarefa_apresentacao');
   const [nome, setNome] = useState(tarefa?.nome ?? '');
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? '');
   const [data, setData] = useState(tarefa?.data ?? todayBR());
@@ -465,20 +482,42 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
   const [saving, setSaving] = useState(false);
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
-    participantesAtuais.forEach(p => { if (p.funcionario_id) init[p.funcionario_id] = true; });
+    participantesAtuais.forEach(p => { if (p.user_profile_id) init[p.user_profile_id] = true; });
     return init;
   });
 
+  // A lista vem de `user_profiles`, não de `funcionarios`: quem a demanda
+  // marca é quem depois vira pendência de avaliação, e essa identidade é o
+  // perfil. `funcionarios` entra só para preencher o cargo e manter a FK de
+  // RH viva quando a pessoa tem ficha (migr. 363).
   useEffect(() => {
     (async () => {
       if (!supabase) { setLoadingFn(false); return; }
-      const { data } = await supabase
-        .from('funcionarios')
-        .select('id,nome,filial,cargo,ativo')
-        .in('filial', FILIAIS_OP as unknown as string[])
-        .eq('ativo', true)
-        .order('nome', { ascending: true });
-      setFuncionarios(data ?? []);
+      const [{ data: perfis }, { data: fichas }] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('id,nome,filial,role,desligado_em')
+          .in('role', ROLES_AVALIAVEIS as unknown as string[])
+          .order('nome', { ascending: true }),
+        supabase
+          .from('funcionarios')
+          .select('id,cargo,user_profile_id')
+          .eq('ativo', true),
+      ]);
+      const porPerfil = new Map<string, any>();
+      (fichas ?? []).forEach((f: any) => { if (f.user_profile_id) porPerfil.set(f.user_profile_id, f); });
+      setFuncionarios(
+        (perfis ?? [])
+          .filter((p: any) => !p.desligado_em)
+          .map((p: any) => ({
+            id: p.id,
+            nome: p.nome,
+            role: p.role,
+            filial: p.filial || 'Matriz',
+            cargo: porPerfil.get(p.id)?.cargo ?? null,
+            funcionario_id: porPerfil.get(p.id)?.id ?? null,
+          })),
+      );
       setLoadingFn(false);
     })();
   }, []);
@@ -507,7 +546,12 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
     setSaving(true);
     const participantes = funcionarios
       .filter(f => selecionados[f.id])
-      .map(f => ({ funcionario_id: f.id, nome: f.nome, filial: f.filial }));
+      .map(f => ({
+        user_profile_id: f.id,
+        funcionario_id: f.funcionario_id,
+        nome: f.nome,
+        filial: f.filial,
+      }));
 
     const { error } = isEdit
       ? await supabase.rpc('atualizar_ciclo_tarefa', {
@@ -519,7 +563,9 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
         })
       : await supabase.rpc('criar_ciclo_tarefa', {
           p_ciclo_id: ciclo.id,
-          p_tipo: tipo,
+          // Demanda do Padrão não tem categoria (migr. 362) — os tipos do
+          // select antigo eram a pauta da Competição do Conselho.
+          p_tipo: TIPO_DEMANDA_PADRAO,
           p_nome: nome.trim(),
           p_descricao: descricao.trim(),
           p_data: data,
@@ -554,28 +600,13 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ct-tipo" className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Tipo</label>
-            <select
-              id="ct-tipo" value={tipo}
-              onChange={e => setTipo(e.target.value as TipoTarefa)}
-              disabled={isEdit}
-              className="neu-input py-2 px-3 text-sm rounded-lg disabled:opacity-60"
-            >
-              {TIPOS_TAREFA.map(t => (
-                <option key={t} value={t}>{metaDoTipo(t).label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ct-data" className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Data</label>
-            <input
-              id="ct-data" type="date" value={data}
-              onChange={e => setData(e.target.value)}
-              className="neu-input py-2 px-3 text-sm rounded-lg"
-            />
-          </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="ct-data" className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Data</label>
+          <input
+            id="ct-data" type="date" value={data}
+            onChange={e => setData(e.target.value)}
+            className="neu-input py-2 px-3 text-sm rounded-lg"
+          />
         </div>
 
         <div className="flex flex-col gap-1">
@@ -612,7 +643,7 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
                   onClick={() => marcarVisiveis(!todosVisiveisMarcados)}
                   className="text-[10px] font-bold px-2 py-0.5 rounded-lg neu-button text-accent"
                   title={filtroFilial === 'todas'
-                    ? 'Marcar/desmarcar todos os funcionários das 3 filiais'
+                    ? 'Marcar/desmarcar todo mundo da lista visível'
                     : `Marcar/desmarcar todos da ${filtroFilial}`}
                 >
                   {todosVisiveisMarcados ? 'Limpar' : 'Todos'}
@@ -621,7 +652,7 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
               )}
             </div>
             <div className="flex items-center gap-1 neu-pressed rounded-lg p-0.5">
-              {(['todas', ...FILIAIS_OP] as const).map(f => (
+              {(['todas', ...FILIAIS_DEMANDA] as const).map(f => (
                 <button
                   key={f} onClick={() => setFiltroFilial(f as any)}
                   className={`text-[10px] font-bold px-2 py-0.5 rounded transition-all ${
