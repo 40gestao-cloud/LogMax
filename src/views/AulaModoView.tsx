@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, aulaSubmenuId } from '../lib/aulaModulos';
+import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, AULA_MODULO_SETORES, aulaSubmenuId } from '../lib/aulaModulos';
+import {
+  AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
+} from '../lib/aulaFluxos';
+import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -59,6 +63,8 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [salvando, setSalvando] = useState(false);
   // Painel de submenus expandido por módulo (só UI local, não persiste).
   const [expandido, setExpandido] = useState<Record<string, boolean>>({});
+  // Fluxo com o diagrama de etapas aberto (um por vez — é material de projeção).
+  const [fluxoAberto, setFluxoAberto] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loaded) return;
@@ -67,6 +73,39 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     setSubmenus(config.submenus_ativos);
     setRoles(config.roles_afetados);
   }, [loaded, config.ativo, config.atualizado_em]);
+
+  // Fluxos que esta config encostou. Um fluxo sem nenhuma etapa ligada não é
+  // "quebrado" — é só um assunto que não é o de hoje, e checar pré-requisito
+  // dele seria ruído.
+  const fluxosRelevantes = AULA_FLUXOS.filter(
+    f => f.etapas.some(e => etapaCoberta(e, modulos, submenus)),
+  );
+  const cadeiasQuebradas = analisarCadeias(modulos, submenus);
+  const { status: preStatus, loading: preLoading, verificar: reverificarPre } =
+    useAulaPreRequisitos(fluxosRelevantes.flatMap(f => f.prerequisitos));
+  const preFaltando = preStatus.filter(p => !p.ok);
+
+  // Setores que a whitelist concede a todo aluno afetado (migr. 317).
+  const setoresConcedidos = Array.from(new Set(
+    modulos.flatMap(m => AULA_MODULO_SETORES[m] ?? []),
+  ));
+
+  const montarFluxo = (fluxoId: string) => {
+    const f = AULA_FLUXOS.find(x => x.id === fluxoId);
+    if (!f) return;
+    const cfg = configDoFluxo(f);
+    setModulos(cfg.modulos);
+    setSubmenus(cfg.submenus);
+    setFluxoAberto(fluxoId);
+  };
+
+  const completarCadeia = (fluxoId: string) => {
+    const f = AULA_FLUXOS.find(x => x.id === fluxoId);
+    if (!f) return;
+    const cfg = completarComFluxo(f, modulos, submenus);
+    setModulos(cfg.modulos);
+    setSubmenus(cfg.submenus);
+  };
 
   if (profile.role !== 'admin' && profile.role !== 'ceo') {
     return (
@@ -284,12 +323,216 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       </div>
 
+      {/* Fluxos de operação — a seção principal desta tela.
+          Marcar módulo a módulo obrigava o professor a saber de cor que a
+          cotação morre sem o Financeiro. Aqui ele escolhe a OPERAÇÃO e a
+          whitelist sai pronta, com o diagrama que ele projeta para a turma. */}
+      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Workflow size={14} className="text-accent" />
+            <h3 className="text-sm font-bold text-gray-200">Fluxos de operação</h3>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
+            A operação real atravessa vários módulos e mais de um papel. Escolha o fluxo
+            que a turma vai percorrer hoje e o Modo Aula liga exatamente as telas dele —
+            inclusive as dos outros setores, que são as que costumam faltar.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {AULA_FLUXOS.map(f => {
+            const cobertas = f.etapas.filter(e => etapaCoberta(e, modulos, submenus)).length;
+            const completo = cobertas === f.etapas.length;
+            const aberto = fluxoAberto === f.id;
+            return (
+              <div key={f.id}
+                className={`rounded-2xl border overflow-hidden ${
+                  completo ? 'border-accent/30 bg-accent/5'
+                  : cobertas > 0 ? 'border-yellow-500/30' : 'border-white/5'}`}>
+                <div className="flex items-start gap-3 p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold ${completo ? 'text-accent' : 'text-gray-200'}`}>
+                        {f.nome}
+                      </span>
+                      {f.matriz && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border"
+                          style={{ color: '#F0B429', borderColor: 'rgba(240,180,41,0.4)' }}>
+                          Matriz
+                        </span>
+                      )}
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${
+                        completo ? 'bg-accent/20 text-accent border-accent/30'
+                        : cobertas > 0 ? 'text-yellow-300 border-yellow-500/40'
+                        : 'text-gray-600 border-white/10'}`}>
+                        {cobertas}/{f.etapas.length} etapas
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{f.resumo}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button type="button" onClick={() => montarFluxo(f.id)}
+                      title="Substitui a whitelist pelos módulos e submenus deste fluxo"
+                      className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5">
+                      Montar
+                    </button>
+                    <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)}
+                      title="Ver as etapas e quem faz cada uma"
+                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
+                      <ChevronDown size={13} className={`transition-transform ${aberto ? 'rotate-180 text-accent' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {aberto && (
+                  <div className="border-t border-white/5 bg-black/20 px-3 py-3 flex flex-col gap-0">
+                    {f.etapas.map((etapa, i) => {
+                      const ok = etapaCoberta(etapa, modulos, submenus);
+                      const ultima = i === f.etapas.length - 1;
+                      return (
+                        <div key={`${etapa.view}-${i}`} className="flex gap-3">
+                          {/* Trilho: bolinha + linha que liga à etapa seguinte.
+                              É o que faz a lista ler como cadeia e não como
+                              checklist solto quando projetada. */}
+                          <div className="flex flex-col items-center shrink-0 pt-1">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border ${
+                              ok ? 'bg-accent border-accent text-black' : 'border-white/20 text-gray-600'}`}>
+                              {i + 1}
+                            </div>
+                            {!ultima && <div className={`w-px flex-1 my-1 ${ok ? 'bg-accent/40' : 'bg-white/10'}`} />}
+                          </div>
+                          <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-3'}`}>
+                            <div className={`text-[11px] font-bold ${ok ? 'text-gray-200' : 'text-gray-500'}`}>
+                              {etapa.titulo}
+                            </div>
+                            <div className="text-[10px] text-accent/80 mt-0.5">{etapa.quem}</div>
+                            <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{etapa.detalhe}</div>
+                            {!ok && (
+                              <div className="text-[10px] text-yellow-300/90 mt-1 leading-relaxed">
+                                Fora da aula: {etapa.seQuebra}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cadeia quebrada: o fluxo foi começado e não fecha. */}
+      {ativo && cadeiasQuebradas.length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 border border-yellow-500/30 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={14} className="text-yellow-400" />
+            <h3 className="text-sm font-bold text-gray-200">Cadeia incompleta</h3>
+          </div>
+          <p className="text-[11px] text-gray-500">
+            Estes fluxos têm etapas ligadas e etapas faltando. A turma chega até certo
+            ponto e para — e quem descobre é você, na frente deles.
+          </p>
+          {cadeiasQuebradas.map(c => (
+            <div key={c.fluxo.id} className="rounded-2xl border border-white/5 bg-black/20 p-3 flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-gray-200">{c.fluxo.nome}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">
+                    {c.cobertas} de {c.fluxo.etapas.length} etapas ligadas
+                  </div>
+                </div>
+                <button type="button" onClick={() => completarCadeia(c.fluxo.id)}
+                  className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-yellow-300 hover:text-accent transition-colors border border-yellow-500/30 shrink-0">
+                  Completar
+                </button>
+              </div>
+              {/* Só a primeira etapa faltante: é onde a turma vai parar de fato,
+                  e listar as sete seguintes esconderia justamente essa. */}
+              <div className="text-[11px] text-gray-400 leading-relaxed">
+                Para em <span className="text-gray-200 font-bold">{c.faltando[0].titulo}</span>
+                {' '}({c.faltando[0].quem}). {c.faltando[0].seQuebra}
+                {c.faltando.length > 1 && (
+                  <span className="text-gray-600"> +{c.faltando.length - 1} etapa(s) depois dessa.</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pré-requisitos de dado: o que trava a aula depois que os módulos já
+          estão certos. Consultado ao vivo no banco desta turma. */}
+      {fluxosRelevantes.length > 0 && preStatus.length > 0 && (
+        <div className={`neu-flat rounded-3xl p-5 border flex flex-col gap-3 ${
+          preFaltando.length > 0 ? 'border-yellow-500/30' : 'border-white/5'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck size={14} className="text-accent" />
+              <h3 className="text-sm font-bold text-gray-200">Pré-requisitos da turma</h3>
+            </div>
+            <button type="button" onClick={() => void reverificarPre()} disabled={preLoading}
+              title="Verificar de novo"
+              className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent disabled:opacity-50">
+              <RefreshCw size={12} className={preLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500">
+            Módulo liberado não basta: sem estes dados no banco desta turma, o fluxo não anda.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {preStatus.map(p => (
+              <div key={p.id} className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 px-3 py-2">
+                {p.ok
+                  ? <Check size={13} className="text-accent shrink-0 mt-0.5" />
+                  : <Circle size={13} className="text-yellow-400 shrink-0 mt-0.5" />}
+                <div className="min-w-0">
+                  <div className={`text-[11px] font-bold ${p.ok ? 'text-gray-300' : 'text-yellow-300'}`}>
+                    {p.label}
+                    {p.quantidade >= 0 && <span className="text-gray-600 font-normal"> · {p.quantidade}</span>}
+                  </div>
+                  {!p.ok && <div className="text-[10px] text-gray-500 mt-0.5">Resolva em {p.onde}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Segregação de funções: a aula CONCEDE setor (migr. 317), não filtra.
+          Um fluxo largo entrega vários setores ao mesmo aluno e dissolve a
+          lição que o próprio fluxo existe para ensinar. */}
+      {ativo && setoresConcedidos.length >= 2 && (
+        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start gap-3">
+          <ShieldAlert size={16} className="text-gray-500 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-gray-200">
+              Esta aula concede {setoresConcedidos.length} setores de uma vez
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+              <span className="text-gray-400">{setoresConcedidos.join(', ')}</span> — cada aluno
+              afetado recebe todos. As travas de papel do banco continuam de pé (quem abre uma
+              requisição segue sem poder aprová-la), mas os setores se somam dentro do mesmo
+              aluno. Se a aula for justamente sobre segregação de funções, ligue menos módulos
+              e distribua os papéis entre eles.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Presets */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Layers size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-200">Atalhos</h3>
+          <h3 className="text-sm font-bold text-gray-200">Atalhos por módulo</h3>
         </div>
+        <p className="text-[11px] text-gray-500">
+          Recorte por área, sem a cadeia. Servem para mostrar uma tela específica — para
+          ensinar a operação inteira, use os fluxos acima.
+        </p>
         <div className="flex flex-wrap gap-2">
           {AULA_PRESETS.map(p => (
             <button

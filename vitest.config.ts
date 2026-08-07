@@ -15,14 +15,14 @@ export default defineConfig({
       {
         test: {
           name: 'estatico',
-          include: ['tests/rotas.test.ts'],
+          include: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts'],
         },
       },
       {
         test: {
           name: 'integracao',
           include: ['tests/**/*.test.ts'],
-          exclude: ['tests/rotas.test.ts'],
+          exclude: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts'],
           setupFiles: ['./tests/setup.ts'],
           testTimeout: 30_000,
           fileParallelism: false,
