@@ -1107,7 +1107,12 @@ function LogMaxAppInner() {
   return (
     <AIAssistantProvider>
     <AuditoriaProvider>
-    <div className="flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
+    {/* `relative` não é cosmético: sem ancestral posicionado, qualquer
+        descendente `absolute` (um `sr-only`, um badge esquecido) resolve o
+        bloco contêiner no documento, escapa do `overflow-hidden` daqui e
+        estica o scroll da página — a shell some pra cima e a tela parece
+        quebrada. `fixed` não é afetado por isto, os FABs seguem iguais. */}
+    <div className="relative flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
       {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
           (migr. 307). Ver o comentário no próprio componente. */}

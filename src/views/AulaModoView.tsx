@@ -397,7 +397,13 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                               const sid = aulaSubmenuId(m.id, label);
                               const on = submenus.includes(sid);
                               return (
-                                <label key={sid} className="flex items-center gap-2 py-1 cursor-pointer group">
+                                // `relative` é obrigatório: o input abaixo usa
+                                // `sr-only`, que é `position: absolute`. Sem um
+                                // ancestral posicionado o bloco contêiner dele
+                                // vira o documento — ele escapa do
+                                // `overflow-hidden` da raiz e estica o scroll da
+                                // página em centenas de pixels por submenu.
+                                <label key={sid} className="relative flex items-center gap-2 py-1 cursor-pointer group">
                                   <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0
                                     ${on ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40'}`}>
                                     {on && <Check size={9} className="text-black" />}
