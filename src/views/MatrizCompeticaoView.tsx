@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users, Unlock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -499,6 +499,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     setEncerrando(false);
     if (error) return showToast?.(`Erro: ${error.message}`, 'error');
     setModalParabens(filial);
+    await carregarLista();
+  };
+
+  // Desfaz a DECLARAÇÃO, não a competição: volta pra votação do conselho
+  // (migr. 370). Só admin, e só sobre competição encerrada.
+  const reabrirCompeticao = async (c: Competicao) => {
+    if (!supabase) return;
+    if (!await confirm({
+      message: `Reabrir "${c.nome}"?\n\n`
+        + `A competição volta para a votação do conselho e ${c.vencedora ?? 'a vencedora'} deixa de ser a vencedora declarada. `
+        + `O placar congelado é descartado e recalculado quando você declarar de novo.\n\n`
+        + `Os votos do conselho são preservados. A filial recebe aviso da reabertura.`,
+      confirmLabel: 'Reabrir',
+      danger: true,
+    })) return;
+    const { error } = await supabase.rpc('reabrir_competicao', { p_competicao_id: c.id });
+    if (error) return showToast?.(`Erro: ${error.message}`, 'error');
+    showToast?.('Competição reaberta — voltou para a votação do conselho.', 'success');
     await carregarLista();
   };
 
@@ -1461,6 +1479,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                               title="Ver tarefas, notas e participantes desta competição"
                             >
                               <Award size={12} /> Central de Avaliação
+                            </button>
+                          )}
+                          {/* Declarar a vencedora era irreversível. Errar a filial
+                              ou encerrar cedo não pode custar a competição inteira. */}
+                          {profile.role === 'admin' && (
+                            <button
+                              onClick={() => reabrirCompeticao(c)}
+                              className="btn-shimmer btn-shimmer--glass-yellow"
+                              title="Voltar para a votação do conselho e desfazer a declaração"
+                            >
+                              <Unlock size={12} /> Reabrir
                             </button>
                           )}
                           {c.vencedora && (
