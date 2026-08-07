@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Target, ClipboardList, Calendar, Users, Trophy, FileDown, Loader2,
-  X, Maximize2, Star,
+  X, Maximize2, Star, ArrowLeft,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
@@ -94,13 +94,85 @@ const rotuloStatus = (status: string) =>
     : status === 'aguardando_encerramento' ? 'Aguardando encerramento'
     : 'Encerrada';
 
+// Chip de status. Mesmas cores da landing da Matriz (MatrizAvaliacoesView),
+// pra a filial reconhecer o estado sem reaprender a legenda.
+const STATUS_CHIP: Record<string, string> = {
+  em_andamento:            'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  aguardando_encerramento: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  encerrada:               'border-gray-500/30 bg-gray-500/10 text-gray-400',
+  Aberto:                  'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  Fechado:                 'border-gray-500/30 bg-gray-500/10 text-gray-400',
+};
+
+// ─── Landing das duas abas ───────────────────────────────────────────
+// Competição e ciclo são coleções de demandas, e a filial vai receber
+// várias. Fixar a mais recente — que era o comportamento — escondia todas
+// as outras sem dizer que existiam. Mesmo padrão da Central de Avaliação
+// da Matriz: cards na entrada, e abrir é escolha de quem lê.
+function CardColecao({ icone, titulo, periodo, status, statusClasse, contagem, cor, onClick }: {
+  icone: React.ReactNode;
+  titulo: string;
+  periodo: string;
+  status: string;
+  statusClasse: string;
+  contagem: number | null;
+  // Classe inteira ('hover:border-amber-400/40'): o Tailwind só gera o que
+  // existe literal no código, então montar `hover:${...}` por pedaço não
+  // produziria estilo nenhum.
+  cor: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`neu-flat rounded-2xl border border-white/5 ${cor} transition-colors p-4 text-left flex flex-col gap-2`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        {icone}
+        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${statusClasse}`}>
+          {status}
+        </span>
+      </div>
+      <h3 className="text-sm font-black text-gray-100 leading-tight">{titulo}</h3>
+      <p className="text-[11px] text-gray-500">{periodo}</p>
+      {contagem != null && (
+        <p className="text-[11px] text-gray-400 font-bold">
+          {contagem === 0
+            ? 'Nenhuma demanda ainda'
+            : `${contagem} demanda${contagem === 1 ? '' : 's'}`}
+        </p>
+      )}
+    </button>
+  );
+}
+
+function VoltarParaLista({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent transition-colors self-start"
+    >
+      <ArrowLeft size={11} /> {label}
+    </button>
+  );
+}
+
 function DemandasConselhoList({ profile, filial, showToast }: {
   profile: UserProfile;
   filial: string | null;
   showToast: any;
 }) {
   const [loading, setLoading] = useState(true);
-  const [comp, setComp] = useState<CompMini | null>(null);
+  // A aba lista TODAS as competições e só abre a que for clicada. Fixar a
+  // mais recente escondia as anteriores — e a filial recebe demanda de
+  // várias ao longo do curso.
+  const [comps, setComps] = useState<CompMini[]>([]);
+  const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
+  const comp = comps.find(c => c.id === selecionadaId) ?? null;
+  const [contagem, setContagem] = useState<Record<string, number>>({});
+  const [carregandoTarefas, setCarregandoTarefas] = useState(false);
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoP[]>([]);
@@ -118,18 +190,49 @@ function DemandasConselhoList({ profile, filial, showToast }: {
     if (!supabase) { setLoading(false); return; }
     let cancelou = false;
     (async () => {
-      // Última competição relevante (mais recente ativa/em andamento/encerrada)
-      const { data: comps } = await supabase!
+      // Todas as competições que a filial pode ver, mais nova primeiro.
+      const { data: lista } = await supabase!
         .from('competicoes_matriz')
         .select('id, nome, status, data_inicio, data_fim')
         .eq('ativo', true)
         .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
-        .order('data_inicio', { ascending: false })
-        .limit(1);
-      const c = (comps?.[0] ?? null) as CompMini | null;
-      if (!c) { if (!cancelou) { setComp(null); setLoading(false); } return; }
+        .order('data_inicio', { ascending: false });
       if (cancelou) return;
-      setComp(c);
+      const todas = (lista ?? []) as CompMini[];
+      setComps(todas);
+
+      // Quantas demandas cada uma tem — o card precisa dizer isso antes de
+      // abrir. Uma query só pra todas, contada no cliente.
+      if (todas.length > 0) {
+        const { data: cont } = await supabase!
+          .from('matriz_tarefas')
+          .select('competicao_id')
+          .in('competicao_id', todas.map(c => c.id))
+          .eq('ativo', true);
+        if (cancelou) return;
+        const mapa: Record<string, number> = {};
+        for (const linha of (cont ?? []) as { competicao_id: string }[]) {
+          mapa[linha.competicao_id] = (mapa[linha.competicao_id] ?? 0) + 1;
+        }
+        setContagem(mapa);
+      }
+      setLoading(false);
+    })();
+    return () => { cancelou = true; };
+  }, [filial]);
+
+  // Conteúdo da competição aberta. Só carrega quando uma é escolhida —
+  // buscar tarefa, participante e nota das que ninguém abriu seria trabalho
+  // jogado fora.
+  useEffect(() => {
+    if (!supabase || !selecionadaId) {
+      setTarefas([]); setParticipantes([]); setAvaliacoes([]);
+      return;
+    }
+    let cancelou = false;
+    (async () => {
+      setCarregandoTarefas(true);
+      const c = { id: selecionadaId };
 
       const { data: ts } = await supabase!
         .from('matriz_tarefas')
@@ -142,7 +245,7 @@ function DemandasConselhoList({ profile, filial, showToast }: {
       setTarefas(listaT);
 
       const ids = listaT.map(t => t.id);
-      if (ids.length === 0) { setParticipantes([]); setAvaliacoes([]); setLoading(false); return; }
+      if (ids.length === 0) { setParticipantes([]); setAvaliacoes([]); setCarregandoTarefas(false); return; }
 
       const { data: ps } = await supabase!
         .from('matriz_tarefa_participantes')
@@ -166,10 +269,10 @@ function DemandasConselhoList({ profile, filial, showToast }: {
           .filter(a => partIds.includes(a.item_id));
         setAvaliacoes(doMeuEscopo);
       }
-      setLoading(false);
+      setCarregandoTarefas(false);
     })();
     return () => { cancelou = true; };
-  }, [filial]);
+  }, [selecionadaId]);
 
   const partPorTarefa = useMemo(() => {
     const m: Record<string, Participante[]> = {};
@@ -238,19 +341,49 @@ function DemandasConselhoList({ profile, filial, showToast }: {
   };
 
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
-  if (!comp) return (
-    <div className="neu-flat rounded-3xl p-12 border border-white/5">
-      <EmptyState message="Nenhuma competição do conselho no momento." />
-    </div>
-  );
+
+  // Landing: uma competição por card. Clicar abre as demandas dela.
+  if (!comp) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-gray-400">
+          Escolha a competição para ver as demandas que o conselho enviou à sua unidade.
+        </p>
+        {comps.length === 0 ? (
+          <div className="neu-flat rounded-3xl p-12 border border-white/5">
+            <EmptyState message="Nenhuma competição do conselho no momento." />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+            {comps.map(c => (
+              <CardColecao
+                key={c.id}
+                icone={<Trophy size={14} className="text-amber-300 shrink-0" />}
+                titulo={c.nome}
+                periodo={`${fmtData(c.data_inicio)} → ${fmtData(c.data_fim)}`}
+                status={rotuloStatus(c.status)}
+                statusClasse={STATUS_CHIP[c.status] ?? STATUS_CHIP.encerrada}
+                contagem={contagem[c.id] ?? 0}
+                cor="hover:border-amber-400/40"
+                onClick={() => setSelecionadaId(c.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cabeçalho da competição atual */}
+      {/* Cabeçalho da competição aberta */}
       <div className="neu-flat rounded-3xl p-6 border border-amber-500/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {/* Sem isto a competição aberta vira beco: não haveria como voltar
+                à lista sem trocar de tela. */}
+            <VoltarParaLista label="Todas as competições" onClick={() => setSelecionadaId(null)} />
+            <div className="flex items-center gap-2 mb-1 mt-2 flex-wrap">
               <Trophy size={14} className="text-amber-300" />
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Competição do Conselho</p>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
@@ -277,7 +410,9 @@ function DemandasConselhoList({ profile, filial, showToast }: {
       </div>
 
       {/* Lista de tarefas */}
-      {tarefas.length === 0 ? (
+      {carregandoTarefas ? (
+        <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
+      ) : tarefas.length === 0 ? (
         <div className="neu-flat rounded-3xl p-12 border border-white/5">
           <EmptyState message="Nenhuma tarefa criada nesta competição ainda." />
         </div>
@@ -391,11 +526,29 @@ function DemandasPadraoList({ filial, showToast }: {
   showToast: any;
 }) {
   const [loading, setLoading] = useState(true);
-  const [ciclo, setCiclo] = useState<CicloMini | null>(null);
-  const [tarefas, setTarefas] = useState<TarefaBase[]>([]);
+  // Mesma régua da aba do Conselho: a entrada lista os ciclos em cards e só
+  // abre o escolhido. A Matriz publica pauta a cada ciclo, e fixar o mais
+  // recente enterrava os anteriores.
+  const [ciclos, setCiclos] = useState<CicloMini[]>([]);
+  const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
+  const ciclo = ciclos.find(c => c.id === selecionadoId) ?? null;
+  // Todas as demandas visíveis, de todos os ciclos: a query é uma só, e o
+  // card da landing precisa da contagem por ciclo antes de abrir.
+  const [todasTarefas, setTodasTarefas] = useState<(TarefaBase & { ciclo_id: string })[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [medias, setMedias] = useState<MediaCiclo[]>([]);
+  const [carregandoCiclo, setCarregandoCiclo] = useState(false);
   const [detalhe, setDetalhe] = useState<CardTarefa | null>(null);
+
+  const tarefas = useMemo(
+    () => todasTarefas.filter(t => t.ciclo_id === selecionadoId),
+    [todasTarefas, selecionadoId],
+  );
+  const contagem = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const t of todasTarefas) m[t.ciclo_id] = (m[t.ciclo_id] ?? 0) + 1;
+    return m;
+  }, [todasTarefas]);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -417,44 +570,25 @@ function DemandasPadraoList({ filial, showToast }: {
 
         const linhas = (ts ?? []) as any[];
         if (linhas.length === 0) {
-          setCiclo(null); setTarefas([]); setParticipantes([]); setMedias([]);
+          setCiclos([]); setTodasTarefas([]); setParticipantes([]); setMedias([]);
           return;
         }
 
-        // Ciclo mais recente entre os que têm demanda. PostgREST devolve o
-        // embed como objeto, mas versões antigas devolvem array — normaliza.
+        // PostgREST devolve o embed como objeto, mas versões antigas devolvem
+        // array — normaliza.
         const cicloDe = (l: any): CicloMini => Array.isArray(l.ciclos_avaliacao)
           ? l.ciclos_avaliacao[0] : l.ciclos_avaliacao;
-        const ciclos = new Map<string, CicloMini>();
-        linhas.forEach(l => { const c = cicloDe(l); if (c) ciclos.set(c.id, c); });
-        const escolhido = [...ciclos.values()]
-          .sort((a, b) => b.data_inicio.localeCompare(a.data_inicio))[0] ?? null;
-        if (!escolhido) { setCiclo(null); setTarefas([]); return; }
-        setCiclo(escolhido);
+        const mapaCiclos = new Map<string, CicloMini>();
+        linhas.forEach(l => { const c = cicloDe(l); if (c) mapaCiclos.set(c.id, c); });
+        setCiclos([...mapaCiclos.values()]
+          .sort((a, b) => b.data_inicio.localeCompare(a.data_inicio)));
 
-        const doCiclo = linhas.filter(l => cicloDe(l)?.id === escolhido.id);
-        const listaT: TarefaBase[] = doCiclo.map(l => ({
-          id: l.id, tipo: l.tipo, nome: l.nome, descricao: l.descricao, data: l.data,
-        }));
-        setTarefas(listaT);
-
-        const ids = listaT.map(t => t.id);
-        if (ids.length === 0) { setParticipantes([]); setMedias([]); return; }
-
-        const { data: ps } = await supabase!
-          .from('ciclo_tarefa_participantes')
-          .select('id,tarefa_id,funcionario_id,nome_snapshot,filial')
-          .in('tarefa_id', ids)
-          .eq('ativo', true);
-        if (cancelou) return;
-        setParticipantes((ps ?? []) as Participante[]);
-
-        // RPC: a tabela de notas é fechada pra filial (voto selado). O que
-        // sai daqui é média de demanda ENCERRADA — resultado, não voto.
-        const { data: ms } = await supabase!
-          .rpc('media_participantes_ciclo', { p_ciclo_id: escolhido.id });
-        if (cancelou) return;
-        setMedias((ms ?? []) as MediaCiclo[]);
+        setTodasTarefas(linhas
+          .filter(l => cicloDe(l))
+          .map(l => ({
+            id: l.id, tipo: l.tipo, nome: l.nome, descricao: l.descricao, data: l.data,
+            ciclo_id: cicloDe(l).id,
+          })));
       } catch (err: any) {
         if (!cancelou) showToast?.(err?.message ?? 'Erro ao carregar demandas do Padrão.', 'error');
       } finally {
@@ -463,6 +597,34 @@ function DemandasPadraoList({ filial, showToast }: {
     })();
     return () => { cancelou = true; };
   }, [filial, showToast]);
+
+  // Participantes e notas só do ciclo aberto — mesma razão da aba do
+  // Conselho: carregar tudo de todos os ciclos é trabalho jogado fora.
+  useEffect(() => {
+    if (!supabase || !selecionadoId) { setParticipantes([]); setMedias([]); return; }
+    const ids = tarefas.map(t => t.id);
+    if (ids.length === 0) { setParticipantes([]); setMedias([]); return; }
+    let cancelou = false;
+    (async () => {
+      setCarregandoCiclo(true);
+      const { data: ps } = await supabase!
+        .from('ciclo_tarefa_participantes')
+        .select('id,tarefa_id,funcionario_id,nome_snapshot,filial')
+        .in('tarefa_id', ids)
+        .eq('ativo', true);
+      if (cancelou) return;
+      setParticipantes((ps ?? []) as Participante[]);
+
+      // RPC: a tabela de notas é fechada pra filial (voto selado). O que
+      // sai daqui é média de demanda ENCERRADA — resultado, não voto.
+      const { data: ms } = await supabase!
+        .rpc('media_participantes_ciclo', { p_ciclo_id: selecionadoId });
+      if (cancelou) return;
+      setMedias((ms ?? []) as MediaCiclo[]);
+      setCarregandoCiclo(false);
+    })();
+    return () => { cancelou = true; };
+  }, [selecionadoId, tarefas]);
 
   const partPorTarefa = useMemo(() => {
     const m: Record<string, Participante[]> = {};
@@ -496,16 +658,46 @@ function DemandasPadraoList({ filial, showToast }: {
   }), [tarefas, partPorTarefa, notasPorParticipante, filial]) as CardTarefa[];
 
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
-  if (!ciclo) return (
-    <div className="neu-flat rounded-3xl p-12 border border-white/5">
-      <EmptyState message="Nenhuma demanda do ciclo Padrão publicada no momento." />
-    </div>
-  );
+
+  // Landing: um ciclo por card. Clicar abre as demandas dele.
+  if (!ciclo) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-gray-400">
+          Escolha o ciclo para ver a pauta que a Matriz publicou para a sua unidade.
+        </p>
+        {ciclos.length === 0 ? (
+          <div className="neu-flat rounded-3xl p-12 border border-white/5">
+            <EmptyState message="Nenhuma demanda do ciclo Padrão publicada no momento." />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+            {ciclos.map(c => (
+              <CardColecao
+                key={c.id}
+                icone={<Star size={14} className="text-accent shrink-0" />}
+                titulo={c.nome}
+                periodo={`${fmtData(c.data_inicio)} → ${fmtData(c.data_fim)}`}
+                status={c.status}
+                statusClasse={STATUS_CHIP[c.status] ?? STATUS_CHIP.Fechado}
+                contagem={contagem[c.id] ?? 0}
+                cor="hover:border-accent/40"
+                onClick={() => setSelecionadoId(c.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="neu-flat rounded-3xl p-6 border border-accent/20">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
+        {/* Sem isto o ciclo aberto vira beco: não haveria como voltar à lista
+            sem trocar de tela. */}
+        <VoltarParaLista label="Todos os ciclos" onClick={() => setSelecionadoId(null)} />
+        <div className="flex items-center gap-2 mb-1 mt-2 flex-wrap">
           <Star size={14} className="text-accent" />
           <p className="text-[10px] font-black uppercase tracking-widest text-accent">Demandas do ciclo Padrão</p>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-300">
@@ -518,7 +710,9 @@ function DemandasPadraoList({ filial, showToast }: {
         </p>
       </div>
 
-      {cards.length === 0 ? (
+      {carregandoCiclo ? (
+        <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
+      ) : cards.length === 0 ? (
         <div className="neu-flat rounded-3xl p-12 border border-white/5">
           <EmptyState message="Nenhuma demanda publicada neste ciclo ainda." />
         </div>
