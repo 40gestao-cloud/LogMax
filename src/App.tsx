@@ -126,6 +126,7 @@ const MatrizCapitalView                    = lazy(() => import('./views/MatrizCa
 const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
 const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
 const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAuditoriaView').then(m => ({ default: m.ComiteAuditoriaView })));
+const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -228,7 +229,12 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
       'Notas Emitidas',
-      'Capital', 'Gerenciamento', 'Relatórios']
+      'Capital',
+      // Fecha o trio com Orçamento e Prestação de Contas (migr. 381). Fica
+      // colado em Capital porque é lá que mora o piso de reserva que a
+      // deliberação passa a cobrar.
+      { label: 'Destinação do Resultado', requireRole: ['admin', 'ceo', 'conselheiro'] },
+      'Gerenciamento', 'Relatórios']
   },
   {
     id: 'rh', label: 'Recursos Humanos', icon: Users,
@@ -1029,6 +1035,7 @@ function LogMaxAppInner() {
       case 'financeiro-rateioadministrativo':  return <RateioAdministrativoView showToast={st} profile={profile} />;
       case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
       case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
+      case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
