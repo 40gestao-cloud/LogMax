@@ -75,19 +75,17 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
-  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
+  const [avaliadores, setAvaliadores] = useState<{ tarefa_id: string; user_profile_id: string }[]>([]);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [modal, setModal] = useState<{ tarefa: Tarefa | null } | null>(null);
 
-  // Gerir = conselho da Matriz (inclui admin). Dar nota = CEO/conselheiro;
-  // admin modera e não vota, mesma régua da Competição.
+  // Gerir = conselho da Matriz (inclui admin).
   // O `filial === 'Matriz'` não é redundante: modo Matriz é contexto de tela
   // (FilialContext), não o perfil. Sem ele, um gerente com is_conselheiro que
   // caísse nesse contexto veria botões que as RPCs recusam — elas exigem
   // filial 'Matriz' no perfil.
   const daMatriz = profile.filial === 'Matriz';
   const podeGerir = daMatriz && (profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile));
-  const podeAvaliar = daMatriz && (profile.role === 'ceo' || isConselheiro(profile));
   const cicloAberto = ciclo.status === 'Aberto';
 
   const carregar = useCallback(async (comSpinner = true) => {
@@ -105,7 +103,16 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
       setTarefas(lista);
 
       const ids = lista.map(t => t.id);
-      if (ids.length === 0) { setParticipantes([]); setNotas([]); return; }
+      if (ids.length === 0) { setParticipantes([]); setNotas([]); setAvaliadores([]); return; }
+
+      // Quem dá nota em cada demanda (migr. 364). Lista vazia = demanda
+      // anterior à 364, que segue a régua antiga: CEO e conselheiros.
+      const { data: avs } = await supabase
+        .from('ciclo_tarefa_avaliadores')
+        .select('tarefa_id,user_profile_id')
+        .in('tarefa_id', ids)
+        .eq('ativo', true);
+      setAvaliadores((avs ?? []) as { tarefa_id: string; user_profile_id: string }[]);
 
       const { data: ps } = await supabase
         .from('ciclo_tarefa_participantes')
@@ -126,11 +133,6 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
         .in('participante_id', partIds)
         .eq('ativo', true);
       setNotas((ns ?? []) as Nota[]);
-
-      // Nota de admin fica fora da média exibida (regra da 240).
-      const { data: admins } = await supabase
-        .from('user_profiles').select('id').eq('role', 'admin');
-      setAdminIds(new Set((admins ?? []).map((a: any) => a.id)));
     } catch (err: any) {
       showToast?.(err?.message ?? 'Erro ao carregar demandas do ciclo.', 'error');
     } finally {
@@ -146,6 +148,7 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
       .channel(`ciclo-tarefas-${ciclo.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefas', filter: `ciclo_id=eq.${ciclo.id}` }, () => carregar(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_participantes' }, () => carregar(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_avaliadores' }, () => carregar(false))
       .subscribe();
     return () => { supabase!.removeChannel(canal); };
   }, [ciclo.id, carregar]);
@@ -167,11 +170,28 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
     return m;
   }, [notas]);
 
+  // Toda nota gravada passou pelo guard da 364, então toda nota é nota
+  // autorizada — não há mais o que filtrar por cargo aqui.
   const mediaDoParticipante = useCallback((partId: string): number | null => {
-    const lista = (notasPorParticipante[partId] ?? []).filter(n => !adminIds.has(n.avaliador_id));
+    const lista = notasPorParticipante[partId] ?? [];
     if (lista.length === 0) return null;
     return lista.reduce((s, n) => s + Number(n.nota), 0) / lista.length;
-  }, [notasPorParticipante, adminIds]);
+  }, [notasPorParticipante]);
+
+  const avaliadoresPorTarefa = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const a of avaliadores) (m[a.tarefa_id] ??= []).push(a.user_profile_id);
+    return m;
+  }, [avaliadores]);
+
+  // Quem dá nota é quem a demanda designou. Sem lista (demanda anterior à
+  // 364), vale a régua antiga: CEO e conselheiros, admin fora.
+  const podeAvaliarTarefa = useCallback((tarefaId: string) => {
+    if (!daMatriz) return false;
+    const lista = avaliadoresPorTarefa[tarefaId];
+    if (lista?.length) return lista.includes(profile.id);
+    return profile.role === 'ceo' || isConselheiro(profile);
+  }, [daMatriz, avaliadoresPorTarefa, profile]);
 
   const acao = async (rpc: string, args: Record<string, any>, ok: string) => {
     if (!supabase) return;
@@ -328,8 +348,8 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
                             tarefaStatus={t.status}
                             minhaNota={(notasPorParticipante[p.id] ?? []).find(n => n.avaliador_id === profile.id) ?? null}
                             media={mediaDoParticipante(p.id)}
-                            nNotas={(notasPorParticipante[p.id] ?? []).filter(n => !adminIds.has(n.avaliador_id)).length}
-                            podeAvaliar={podeAvaliar}
+                            nNotas={(notasPorParticipante[p.id] ?? []).length}
+                            podeAvaliar={podeAvaliarTarefa(t.id)}
                             onSalvo={() => carregar(false)}
                             showToast={showToast}
                           />
@@ -348,7 +368,9 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
         <ModalDemanda
           ciclo={ciclo}
           tarefa={modal.tarefa}
+          profile={profile}
           participantesAtuais={modal.tarefa ? (partPorTarefa[modal.tarefa.id] ?? []) : []}
+          avaliadoresAtuais={modal.tarefa ? (avaliadoresPorTarefa[modal.tarefa.id] ?? []) : []}
           onClose={() => setModal(null)}
           onSalvo={() => { setModal(null); carregar(false); }}
           showToast={showToast}
@@ -411,9 +433,13 @@ function LinhaParticipante({ participante, tarefaStatus, minhaNota, media, nNota
             ? <span className="text-[11px] font-black tabular-nums text-emerald-300">
                 sua nota {Number(minhaNota.nota).toFixed(1)}
               </span>
-            : <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                <EyeOff size={10} /> sem sua nota
-              </span>
+            // "sem sua nota" só cobra quem foi designado (migr. 364); pra quem
+            // não dá nota nesta demanda seria cobrança de dívida que não existe.
+            : podeAvaliar
+              ? <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                  <EyeOff size={10} /> sem sua nota
+                </span>
+              : null
         )}
         {tarefaStatus === 'rascunho' && (
           <span className="text-[10px] text-gray-500">aguardando liberação</span>
@@ -464,10 +490,12 @@ function LinhaParticipante({ participante, tarefaStatus, minhaNota, media, nNota
 }
 
 // ── Modal criar/editar demanda ───────────────────────────────────────
-function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, showToast }: {
+function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadoresAtuais, onClose, onSalvo, showToast }: {
   ciclo: { id: string; nome: string };
   tarefa: Tarefa | null;
+  profile: UserProfile;
   participantesAtuais: Participante[];
+  avaliadoresAtuais: string[];
   onClose: () => void;
   onSalvo: () => void;
   showToast: any;
@@ -486,6 +514,17 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
     return init;
   });
 
+  // Quem dá nota nesta demanda (migr. 364). Numa demanda nova quem cria já
+  // entra marcado — quem montou a pauta sabe o que ela cobra.
+  const [avaliadoresPool, setAvaliadoresPool] = useState<any[]>([]);
+  const [avaliadoresSel, setAvaliadoresSel] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    if (avaliadoresAtuais.length > 0) avaliadoresAtuais.forEach(id => { init[id] = true; });
+    else if (!tarefa) init[profile.id] = true;
+    return init;
+  });
+  const totalAvaliadores = Object.values(avaliadoresSel).filter(Boolean).length;
+
   // A lista vem de `user_profiles`, não de `funcionarios`: quem a demanda
   // marca é quem depois vira pendência de avaliação, e essa identidade é o
   // perfil. `funcionarios` entra só para preencher o cargo e manter a FK de
@@ -493,7 +532,7 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
   useEffect(() => {
     (async () => {
       if (!supabase) { setLoadingFn(false); return; }
-      const [{ data: perfis }, { data: fichas }] = await Promise.all([
+      const [{ data: perfis }, { data: fichas }, { data: matriz }] = await Promise.all([
         supabase
           .from('user_profiles')
           .select('id,nome,filial,role,desligado_em')
@@ -503,7 +542,19 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
           .from('funcionarios')
           .select('id,cargo,user_profile_id')
           .eq('ativo', true),
+        // Pool de avaliadores: só a Matriz dá nota em demanda do ciclo.
+        supabase
+          .from('user_profiles')
+          .select('id,nome,role,is_conselheiro,desligado_em')
+          .eq('filial', 'Matriz')
+          .order('nome', { ascending: true }),
       ]);
+      setAvaliadoresPool(
+        (matriz ?? []).filter((u: any) =>
+          !u.desligado_em
+          && (['admin', 'ceo', 'conselheiro'].includes(u.role)
+              || (u.role === 'gerente' && u.is_conselheiro))),
+      );
       const porPerfil = new Map<string, any>();
       (fichas ?? []).forEach((f: any) => { if (f.user_profile_id) porPerfil.set(f.user_profile_id, f); });
       setFuncionarios(
@@ -543,6 +594,7 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
     if (!supabase) return;
     if (!nome.trim()) { showToast?.('Informe o nome da demanda.', 'error'); return; }
     if (total === 0) { showToast?.('Selecione ao menos 1 participante.', 'error'); return; }
+    if (totalAvaliadores === 0) { showToast?.('Selecione ao menos 1 avaliador.', 'error'); return; }
     setSaving(true);
     const participantes = funcionarios
       .filter(f => selecionados[f.id])
@@ -553,7 +605,11 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
         filial: f.filial,
       }));
 
-    const { error } = isEdit
+    const listaAvaliadores = Object.entries(avaliadoresSel)
+      .filter(([, on]) => on)
+      .map(([id]) => id);
+
+    const { data: novaId, error } = isEdit
       ? await supabase.rpc('atualizar_ciclo_tarefa', {
           p_tarefa_id: tarefa!.id,
           p_nome: nome.trim(),
@@ -571,8 +627,23 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
           p_data: data,
           p_participantes: participantes,
         });
+    if (error) { setSaving(false); showToast?.(error.message, 'error'); return; }
+
+    // RPC separada porque incluir os avaliadores no criar/atualizar mudaria a
+    // assinatura delas e o PostgREST recusa sobrecarga.
+    const tarefaId = isEdit ? tarefa!.id : (novaId as unknown as string);
+    const { error: errAv } = await supabase.rpc('definir_avaliadores_ciclo_tarefa', {
+      p_tarefa_id: tarefaId,
+      p_avaliadores: listaAvaliadores,
+    });
     setSaving(false);
-    if (error) { showToast?.(error.message, 'error'); return; }
+    if (errAv) {
+      // A demanda existe; só a lista falhou. Dizer isso evita que o gestor
+      // ache que perdeu a pauta e crie tudo de novo.
+      showToast?.(`Demanda salva, mas os avaliadores não: ${errAv.message}`, 'error');
+      onSalvo();
+      return;
+    }
     showToast?.(isEdit ? 'Demanda atualizada.' : 'Demanda criada — libere quando a pauta estiver pronta.', 'success');
     onSalvo();
   };
@@ -629,6 +700,40 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
             placeholder="O que a filial precisa entregar, como será avaliado…"
             className="neu-input py-2 px-3 text-sm rounded-lg resize-none"
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+            Quem dá nota nesta demanda ({totalAvaliadores} selecionados)
+          </label>
+          {avaliadoresPool.length === 0 ? (
+            <p className="text-xs text-gray-500 italic py-2">Nenhum avaliador disponível na Matriz.</p>
+          ) : (
+            <div className="neu-pressed rounded-xl p-2 flex flex-wrap gap-1.5">
+              {avaliadoresPool.map(a => {
+                const on = !!avaliadoresSel[a.id];
+                const papel = a.role === 'admin' ? 'Administração'
+                  : a.role === 'ceo' ? 'CEO' : 'Conselho';
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setAvaliadoresSel(s => ({ ...s, [a.id]: !s[a.id] }))}
+                    className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border ${
+                      on ? 'bg-accent/10 border-accent/30 text-accent' : 'border-white/5 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {on && <Check size={11} />}
+                    {a.nome}
+                    <span className="text-[9px] uppercase tracking-widest opacity-60">{papel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-600">
+            Só quem estiver aqui consegue lançar nota nesta demanda.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -701,7 +806,7 @@ function ModalDemanda({ ciclo, tarefa, participantesAtuais, onClose, onSalvo, sh
             className="text-xs font-bold px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-gray-200">
             Cancelar
           </button>
-          <button onClick={salvar} disabled={saving || !nome.trim() || total === 0}
+          <button onClick={salvar} disabled={saving || !nome.trim() || total === 0 || totalAvaliadores === 0}
             className="text-xs font-bold px-4 py-2 rounded-lg neu-button text-accent ring-1 ring-accent/40 hover:ring-accent flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             {saving && <Loader2 size={12} className="animate-spin" />}
             {isEdit ? 'Salvar' : 'Criar demanda'}
