@@ -29,7 +29,7 @@ export const BotaoModeloPlanilha = ({ entidade, filial, showToast, label = 'Mode
     <button
       onClick={handleClick}
       disabled={baixando}
-      title="Baixa uma planilha em branco com os campos desta tela, para preencher antes de cadastrar no LogMax"
+      title="Baixa uma planilha com os campos desta tela e listas suspensas já preenchidas com o que existe no LogMax, para conferir antes de cadastrar"
       className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-50"
     >
       <FileSpreadsheet size={13} />

@@ -17,7 +17,12 @@ import { AULA_SUBMENUS, aulaSubmenuId } from '../src/lib/aulaModulos';
 // O parser lê App.tsx como texto de propósito: importar o módulo puxaria o app
 // inteiro (lazy imports, contexts, supabase) para dentro do teste.
 
-const APP = readFileSync(resolve(__dirname, '../src/App.tsx'), 'utf8');
+// Normaliza CRLF: o repo tem `core.autocrlf` ligado, então a cópia de trabalho
+// no Windows vem com \r\n enquanto o índice guarda \n. Sem isto o parser abaixo
+// (que casa `\n  {\n`) não encontra módulo nenhum e o teste falha em massa na
+// máquina de quem desenvolve — só passando no CI, que roda em Linux. Guarda que
+// só funciona no CI é guarda que ninguém vê falhar na hora certa.
+const APP = readFileSync(resolve(__dirname, '../src/App.tsx'), 'utf8').replace(/\r\n/g, '\n');
 
 /** Espelha o cálculo de viewId feito em SidebarNav. */
 const viewIdDe = (modId: string, label: string) =>
