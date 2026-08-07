@@ -8,6 +8,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, AULA_MODULO_SETORES, aulaSubmenuId } from '../lib/aulaModulos';
 import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
+  etapasObrigatorias,
 } from '../lib/aulaFluxos';
 import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -77,9 +78,13 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // Fluxos que esta config encostou. Um fluxo sem nenhuma etapa ligada não é
   // "quebrado" — é só um assunto que não é o de hoje, e checar pré-requisito
   // dele seria ruído.
-  const fluxosRelevantes = AULA_FLUXOS.filter(
-    f => f.etapas.some(e => etapaCoberta(e, modulos, submenus)),
-  );
+  // Mesmo critério do alerta: só conta como "encostado" o fluxo que a turma
+  // consegue começar. Sem isso, ligar um módulo compartilhado puxava o
+  // pré-requisito de meia dúzia de fluxos que não são o assunto da aula.
+  const fluxosRelevantes = AULA_FLUXOS.filter(f => {
+    const obrig = etapasObrigatorias(f);
+    return obrig.length > 0 && etapaCoberta(obrig[0], modulos, submenus);
+  });
   const cadeiasQuebradas = analisarCadeias(modulos, submenus);
   const { status: preStatus, loading: preLoading, verificar: reverificarPre } =
     useAulaPreRequisitos(fluxosRelevantes.flatMap(f => f.prerequisitos));
@@ -340,10 +345,20 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           </p>
         </div>
 
+        {!ativo && (
+          <p className="text-[11px] text-yellow-300/90 rounded-xl border border-yellow-500/30 px-3 py-2">
+            O Modo Aula está desligado. Montar um fluxo prepara a whitelist, mas nada muda
+            para a turma até você ligar o interruptor acima e salvar.
+          </p>
+        )}
+
         <div className="flex flex-col gap-2">
           {AULA_FLUXOS.map(f => {
-            const cobertas = f.etapas.filter(e => etapaCoberta(e, modulos, submenus)).length;
-            const completo = cobertas === f.etapas.length;
+            // Cobertura conta só o que é obrigatório: uma etapa opcional
+            // desligada não deixa o fluxo incompleto.
+            const obrig = etapasObrigatorias(f);
+            const cobertas = obrig.filter(e => etapaCoberta(e, modulos, submenus)).length;
+            const completo = cobertas === obrig.length;
             const aberto = fluxoAberto === f.id;
             return (
               <div key={f.id}
@@ -366,7 +381,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                         completo ? 'bg-accent/20 text-accent border-accent/30'
                         : cobertas > 0 ? 'text-yellow-300 border-yellow-500/40'
                         : 'text-gray-600 border-white/10'}`}>
-                        {cobertas}/{f.etapas.length} etapas
+                        {cobertas}/{obrig.length} etapas
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{f.resumo}</p>
@@ -403,12 +418,35 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                             {!ultima && <div className={`w-px flex-1 my-1 ${ok ? 'bg-accent/40' : 'bg-white/10'}`} />}
                           </div>
                           <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-3'}`}>
-                            <div className={`text-[11px] font-bold ${ok ? 'text-gray-200' : 'text-gray-500'}`}>
-                              {etapa.titulo}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[11px] font-bold ${ok ? 'text-gray-200' : 'text-gray-500'}`}>
+                                {etapa.titulo}
+                              </span>
+                              {etapa.opcional && (
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
+                                  Opcional
+                                </span>
+                              )}
+                              {/* O aluno CEO/conselheiro alcança esta tela só
+                                  trocando para Matriz. Sem dizer isso aqui, o
+                                  professor libera o módulo, ninguém acha a
+                                  tela e a culpa cai na whitelist. */}
+                              {etapa.soMatriz && (
+                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border"
+                                  style={{ color: '#F0B429', borderColor: 'rgba(240,180,41,0.4)' }}>
+                                  Só em Matriz
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-accent/80 mt-0.5">{etapa.quem}</div>
                             <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{etapa.detalhe}</div>
-                            {!ok && (
+                            {etapa.soMatriz && (
+                              <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                                Quem faz precisa trocar de unidade para <span className="text-gray-300">Matriz</span> —
+                                a tela não existe dentro de uma filial, e só admin, CEO e conselheiro escolhem unidade.
+                              </div>
+                            )}
+                            {!ok && !etapa.opcional && (
                               <div className="text-[10px] text-yellow-300/90 mt-1 leading-relaxed">
                                 Fora da aula: {etapa.seQuebra}
                               </div>
@@ -442,7 +480,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-gray-200">{c.fluxo.nome}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">
-                    {c.cobertas} de {c.fluxo.etapas.length} etapas ligadas
+                    {c.cobertas} de {c.total} etapas ligadas
                   </div>
                 </div>
                 <button type="button" onClick={() => completarCadeia(c.fluxo.id)}
@@ -486,15 +524,32 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {preStatus.map(p => (
               <div key={p.id} className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 px-3 py-2">
-                {p.ok
-                  ? <Check size={13} className="text-accent shrink-0 mt-0.5" />
-                  : <Circle size={13} className="text-yellow-400 shrink-0 mt-0.5" />}
+                {p.indefinido
+                  ? <AlertTriangle size={13} className="text-gray-500 shrink-0 mt-0.5" />
+                  : p.ok
+                    ? <Check size={13} className="text-accent shrink-0 mt-0.5" />
+                    : <Circle size={13} className="text-yellow-400 shrink-0 mt-0.5" />}
                 <div className="min-w-0">
-                  <div className={`text-[11px] font-bold ${p.ok ? 'text-gray-300' : 'text-yellow-300'}`}>
+                  <div className={`text-[11px] font-bold ${
+                    p.indefinido ? 'text-gray-400' : p.ok ? 'text-gray-300' : 'text-yellow-300'}`}>
                     {p.label}
                     {p.quantidade >= 0 && <span className="text-gray-600 font-normal"> · {p.quantidade}</span>}
                   </div>
-                  {!p.ok && <div className="text-[10px] text-gray-500 mt-0.5">Resolva em {p.onde}</div>}
+                  {p.indefinido && (
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                      Não foi possível verificar nesta turma — confira à mão em {p.onde}.
+                    </div>
+                  )}
+                  {/* Filial vazia é o caso que o total esconde: o aluno só vê
+                      o catálogo da unidade dele. */}
+                  {!p.indefinido && p.filiaisVazias && p.filiaisVazias.length > 0 && (
+                    <div className="text-[10px] text-yellow-300/90 mt-0.5">
+                      Nada em {p.filiaisVazias.join(', ')} — a turma dessa unidade fica sem material.
+                    </div>
+                  )}
+                  {!p.indefinido && !p.ok && !p.filiaisVazias?.length && (
+                    <div className="text-[10px] text-gray-500 mt-0.5">Resolva em {p.onde}</div>
+                  )}
                 </div>
               </div>
             ))}

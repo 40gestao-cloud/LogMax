@@ -22,8 +22,6 @@
 // diz que uma etapa depende da outra, é porque o banco recusa a operação sem
 // ela — as referências às migrações estão em cada `seQuebra`.
 
-import type { AulaConfig } from '../hooks/useAulaConfig';
-
 export type AulaEtapa = {
   /** viewId da tela (submenu ou view top-level). Vazio = etapa sem tela própria. */
   view: string;
@@ -36,6 +34,19 @@ export type AulaEtapa = {
   detalhe: string;
   /** O que acontece com a turma se esta etapa ficar de fora. */
   seQuebra: string;
+  /**
+   * Enriquece a aula mas o ciclo fecha sem ela. Aparece no diagrama e NÃO
+   * conta para a cobertura: senão o alerta de cadeia incompleta acusaria
+   * quebra em fluxo que roda perfeitamente.
+   */
+  opcional?: boolean;
+  /**
+   * A tela só existe no modo Matriz. Quem pode alcançá-la é admin, CEO e
+   * conselheiro (os que escolhem filial) — e mesmo eles precisam TROCAR para
+   * Matriz. Sem dizer isso, o professor libera o módulo, o aluno não acha a
+   * tela e a culpa cai na whitelist.
+   */
+  soMatriz?: boolean;
 };
 
 export type AulaPreRequisito = {
@@ -47,7 +58,15 @@ export type AulaPreRequisito = {
   tabela: string;
   filtroAtivo?: boolean;
   eq?: Record<string, string>;
-  /** Quantas linhas bastam. */
+  /** Colunas que não podem ser nulas para a linha valer. */
+  naoNulo?: string[];
+  /**
+   * Conta por filial em vez de no total. Existe porque o total engana: 219
+   * produtos cadastrados com zero na MaxLook fazem o check passar e a turma
+   * daquela unidade abre o PDV sem nada para vender.
+   */
+  porFilial?: boolean;
+  /** Quantas linhas bastam (por filial, quando `porFilial`). */
   minimo: number;
 };
 
@@ -61,9 +80,11 @@ export type AulaFluxo = {
   prerequisitos: AulaPreRequisito[];
 };
 
+// `porFilial` nos catálogos operacionais: o aluno só vê o que é da unidade
+// dele, então o total da holding não diz se a turma tem com o que trabalhar.
 const PRE_PRODUTOS: AulaPreRequisito = {
   id: 'produtos', label: 'Produtos cadastrados', onde: 'Cadastros › Produtos',
-  tabela: 'produtos', filtroAtivo: true, minimo: 1,
+  tabela: 'produtos', filtroAtivo: true, porFilial: true, minimo: 1,
 };
 const PRE_FORNECEDORES: AulaPreRequisito = {
   id: 'fornecedores', label: 'Fornecedores cadastrados', onde: 'Cadastros › Fornecedores',
@@ -71,16 +92,22 @@ const PRE_FORNECEDORES: AulaPreRequisito = {
 };
 const PRE_CLIENTES: AulaPreRequisito = {
   id: 'clientes', label: 'Clientes cadastrados', onde: 'Vendas › Clientes',
-  tabela: 'clientes', filtroAtivo: true, minimo: 1,
+  tabela: 'clientes', filtroAtivo: true, porFilial: true, minimo: 1,
 };
+// `naoNulo: filial` não é preciosismo: `auth_gerente_da(filial)` compara a
+// filial do gerente com a da requisição, então gerente sem filial não decide
+// nada e a cadeia de compra para na aprovação.
 const PRE_GERENTE: AulaPreRequisito = {
-  id: 'gerente', label: 'Alguém com papel de gerente', onde: 'Usuários › editar o aluno',
-  tabela: 'user_profiles', eq: { role: 'gerente' }, minimo: 1,
+  id: 'gerente', label: 'Gerente ativo com filial definida', onde: 'Usuários › editar o aluno',
+  tabela: 'user_profiles', filtroAtivo: true, eq: { role: 'gerente' },
+  naoNulo: ['filial'], minimo: 1,
 };
-const PRE_CAIXA: AulaPreRequisito = {
-  id: 'caixa', label: 'Caixa aberto hoje', onde: 'Financeiro › Controle de Caixa',
-  tabela: 'controle_caixa', filtroAtivo: true, eq: { status: 'Aberto' }, minimo: 1,
-};
+
+// Não existe PRE_CAIXA: abrir o caixa do dia é a ETAPA 1 do fluxo de PDV, não
+// algo que o professor prepara antes. Como pré-requisito ele nascia vermelho
+// em toda aula de PDV — e ensinar o professor a ignorar alerta vermelho custa
+// mais do que o alerta vale. (A primeira versão, além disso, não filtrava a
+// data e contava caixas abertos de dias passados como se fossem de hoje.)
 
 export const AULA_FLUXOS: AulaFluxo[] = [
   {
@@ -141,6 +168,14 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         seQuebra: 'A mercadoria nunca entra e o saldo não se mexe — o aluno não vê o efeito da compra.',
       },
       {
+        view: 'compras-notasrecebidas', modulo: 'compras',
+        titulo: 'Lançar a nota do fornecedor',
+        quem: 'Setor de Compras',
+        detalhe: 'Conferência documental: a nota tem de bater com o pedido e com o que entrou.',
+        seQuebra: 'Nada — a conta a pagar já nasceu do pedido. Vale pela conferência.',
+        opcional: true,
+      },
+      {
         view: 'financeiro-contasapagar', modulo: 'financeiro',
         titulo: 'O Financeiro paga',
         quem: 'Setor Financeiro',
@@ -150,11 +185,44 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     ],
   },
   {
+    id: 'material',
+    nome: 'Material do almoxarifado — o que não passa por Compras',
+    resumo: 'O par curto do fluxo de compra, e a lição está no contraste: o que já '
+      + 'está na prateleira sai por liberação do Estoque, sem cotação nem pedido. '
+      + 'Vale dar os dois na mesma aula.',
+    prerequisitos: [PRE_PRODUTOS],
+    etapas: [
+      {
+        view: 'requisicoes-dosetor', modulo: 'requisicoes',
+        titulo: 'O setor pede material',
+        quem: 'Colaborador de qualquer setor',
+        detalhe: 'Mesma tela do pedido de compra, outra aba: o produto vem do catálogo '
+          + 'porque a saída é do que já existe (`criar_requisicao_estoque`).',
+        seQuebra: 'Não há por onde a cadeia começar.',
+      },
+      {
+        view: 'estoque-liberarrequisições', modulo: 'estoque',
+        titulo: 'O Estoque libera a saída',
+        quem: 'Setor de Estoque (nunca quem pediu)',
+        detalhe: 'Liberar dá baixa no saldo na hora — sem passar por Compras nem pelo Financeiro (migr. 284).',
+        seQuebra: 'O pedido de material fica Pendente e o aluno conclui, errado, que todo pedido vira compra.',
+      },
+      {
+        view: 'estoque-movimentações', modulo: 'estoque',
+        titulo: 'Ver a baixa na movimentação',
+        quem: 'Turma inteira',
+        detalhe: 'Onde a liberação aparece como saída, lado a lado com as entradas de compra.',
+        seQuebra: 'Nada — a baixa acontece igual. Vale para fechar o raciocínio.',
+        opcional: true,
+      },
+    ],
+  },
+  {
     id: 'venda-pdv',
     nome: 'Venda no PDV — do caixa aberto ao recebimento',
     resumo: 'Curta e imediata: boa para a primeira aula, porque o aluno vê a baixa '
       + 'de estoque e a conta a receber nascerem do mesmo clique.',
-    prerequisitos: [PRE_PRODUTOS, PRE_CAIXA],
+    prerequisitos: [PRE_PRODUTOS],
     etapas: [
       {
         view: 'financeiro-controledecaixa', modulo: 'financeiro',
@@ -175,7 +243,8 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         titulo: 'Conferir a baixa no estoque',
         quem: 'Turma inteira',
         detalhe: 'O momento de mostrar que venda e estoque são o mesmo fato visto de dois lugares.',
-        seQuebra: 'A baixa acontece e ninguém a enxerga — a integração fica abstrata.',
+        seQuebra: 'Nada na mecânica — a baixa acontece igual. Sem esta tela a integração fica abstrata.',
+        opcional: true,
       },
       {
         view: 'financeiro-contasareceber', modulo: 'financeiro',
@@ -349,6 +418,7 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         quem: 'Conselho pergunta, a unidade responde',
         detalhe: 'Conforme ou não conforme; a trilha das operações fica na aba ao lado.',
         seQuebra: 'A prestação de contas é julgada sem contraditório.',
+        soMatriz: true,
       },
     ],
   },
@@ -381,18 +451,29 @@ export function etapaCoberta(
   return doModulo.includes(etapa.view);
 }
 
+/** Etapas sem as quais o ciclo não fecha. As opcionais enriquecem, não travam. */
+export const etapasObrigatorias = (f: AulaFluxo): AulaEtapa[] =>
+  f.etapas.filter(e => !e.opcional);
+
 export type CadeiaQuebrada = {
   fluxo: AulaFluxo;
   cobertas: number;
+  total: number;
   faltando: AulaEtapa[];
 };
 
 /**
  * Fluxos que a config atual começou e não termina.
  *
- * Um fluxo entra na lista quando ao menos uma etapa está ligada — sinal de que
- * o professor quis trabalhá-lo — e ao menos uma está faltando. Fluxo com nada
- * ligado não é "quebrado", é só um assunto que não é o de hoje.
+ * O critério não é "tem alguma etapa ligada": módulos compartilhados fariam
+ * quase todo fluxo parecer começado. Ligar só Financeiro toca uma etapa de
+ * seis fluxos diferentes, e a tela despejava seis alertas — o que treina o
+ * professor a ignorá-los.
+ *
+ * Entra na lista quem a turma consegue de fato COMEÇAR (primeira etapa
+ * obrigatória liberada) ou quem já está com metade da cadeia de pé. Nos dois
+ * casos há uma aula em andamento que vai parar no meio; fora deles é só um
+ * módulo que serve a outro assunto.
  */
 export function analisarCadeias(
   modulos: string[],
@@ -400,12 +481,18 @@ export function analisarCadeias(
 ): CadeiaQuebrada[] {
   return AULA_FLUXOS
     .map(fluxo => {
-      const faltando = fluxo.etapas.filter(e => !etapaCoberta(e, modulos, submenus));
-      return { fluxo, cobertas: fluxo.etapas.length - faltando.length, faltando };
+      const obrigatorias = etapasObrigatorias(fluxo);
+      const faltando = obrigatorias.filter(e => !etapaCoberta(e, modulos, submenus));
+      const cobertas = obrigatorias.length - faltando.length;
+      const comecou = obrigatorias.length > 0
+        && etapaCoberta(obrigatorias[0], modulos, submenus);
+      return { fluxo, cobertas, total: obrigatorias.length, faltando, comecou };
     })
-    .filter(c => c.cobertas > 0 && c.faltando.length > 0)
+    .filter(c => c.faltando.length > 0
+      && (c.comecou || c.cobertas / c.total >= 0.5))
     // Mais perto de fechar primeiro: é o que o professor provavelmente quis montar.
-    .sort((a, b) => b.cobertas / b.fluxo.etapas.length - a.cobertas / a.fluxo.etapas.length);
+    .sort((a, b) => b.cobertas / b.total - a.cobertas / a.total)
+    .map(({ fluxo, cobertas, total, faltando }) => ({ fluxo, cobertas, total, faltando }));
 }
 
 /** Config que liga exatamente o fluxo, preservando o resto? Não: fluxo é foco. */
@@ -435,19 +522,6 @@ export function completarComFluxo(
   };
 }
 
-/**
- * Setores que esta config concede a TODOS os alunos filtrados (migr. 317).
- *
- * A whitelist da aula substitui o recorte por setor em vez de intersectar com
- * ele, então um fluxo largo entrega vários setores à turma inteira — e a
- * segregação de funções que o fluxo pretende ensinar ("quem abre não aprova")
- * some junto. A tela avisa; mudar a concessão é decisão separada.
- */
-export function alertaDeSegregacao(setores: string[], config: AulaConfig): string | null {
-  if (!config.ativo || setores.length < 2) return null;
-  return `Esta configuração concede ${setores.length} setores (${setores.join(', ')}) `
-    + 'a todos os alunos afetados ao mesmo tempo. As travas de papel do banco continuam '
-    + 'valendo — quem abre uma requisição segue sem poder aprová-la —, mas dentro de um '
-    + 'mesmo aluno os setores se somam. Para a aula de segregação de funções, prefira '
-    + 'ligar menos módulos e distribuir os papéis entre os alunos.';
-}
+// O aviso de segregação de funções vive na própria tela (AulaModoView): ele é
+// só texto sobre `AULA_MODULO_SETORES`, e uma função aqui para montar frase
+// seria indireção sem ganho.

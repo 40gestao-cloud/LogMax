@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
-  modulosDoFluxo, submenusDoFluxo,
+  modulosDoFluxo, submenusDoFluxo, etapasObrigatorias,
 } from '../src/lib/aulaFluxos';
 import { AULA_MODULOS, AULA_SUBMENUS, aulaSubmenuId } from '../src/lib/aulaModulos';
 
@@ -70,13 +70,55 @@ describe('AULA_FLUXOS — cobertura e alertas', () => {
     expect(analisarCadeias([], [])).toHaveLength(0);
   });
 
-  it('o atalho Logística acusa a compra quebrada no Financeiro', () => {
-    // O caso que motivou a feature: cadastros+compras+estoque sem Financeiro
-    // deixa a cotação presa em "Aguardando Financeiro".
-    const quebradas = analisarCadeias(['cadastros', 'compras', 'estoque'], []);
+  it('requisicoes+compras sem Financeiro acusa a compra quebrada', () => {
+    // O caso que motivou a feature: a cotação fica presa em "Aguardando
+    // Financeiro". Com 'requisicoes' ligado a turma consegue começar o fluxo,
+    // que é o critério do alerta.
+    const quebradas = analisarCadeias(['requisicoes', 'cadastros', 'compras', 'estoque'], []);
     const compra = quebradas.find(c => c.fluxo.id === 'compra');
     expect(compra).toBeDefined();
     expect(compra!.faltando.some(e => e.modulo === 'financeiro')).toBe(true);
+  });
+
+  it('ligar só Financeiro não despeja alerta de todo fluxo que o toca', () => {
+    // Financeiro aparece em cinco fluxos. Alertar em todos treinava o
+    // professor a ignorar o painel; só alerta quem a turma consegue começar
+    // ou quem já tem metade da cadeia de pé.
+    const quebradas = analisarCadeias(['financeiro'], []);
+    expect(quebradas.length).toBeLessThanOrEqual(2);
+    // Compra começa em Requisições, que está desligado: não é a aula de hoje.
+    expect(quebradas.map(c => c.fluxo.id)).not.toContain('compra');
+  });
+
+  it('etapa opcional desligada não deixa o fluxo incompleto', () => {
+    const compra = AULA_FLUXOS.find(f => f.id === 'compra')!;
+    const opcionais = compra.etapas.filter(e => e.opcional);
+    expect(opcionais.length).toBeGreaterThan(0);
+
+    // Liga tudo menos as opcionais.
+    const { modulos } = configDoFluxo(compra);
+    const submenus = etapasObrigatorias(compra)
+      .filter(e => e.view.startsWith(`${e.modulo}-`))
+      .map(e => e.view);
+    const quebradas = analisarCadeias(modulos, submenus).map(c => c.fluxo.id);
+    expect(quebradas).not.toContain('compra');
+  });
+
+  it('a etapa do Comitê está marcada como exclusiva do modo Matriz', () => {
+    // Comitê de Auditoria virou Matriz-only em 2026-08-07. Sem o selo, o
+    // professor libera o módulo e ninguém acha a tela dentro da filial.
+    const gov = AULA_FLUXOS.find(f => f.id === 'governanca')!;
+    const comite = gov.etapas.find(e => e.view === 'comite-auditoria')!;
+    expect(comite.soMatriz).toBe(true);
+  });
+
+  it('material do almoxarifado é um fluxo próprio e não passa por Compras', () => {
+    // O contraste com o fluxo de compra é a lição; se este fluxo encostasse
+    // em 'compras', ela se perderia.
+    const material = AULA_FLUXOS.find(f => f.id === 'material');
+    expect(material).toBeDefined();
+    expect(modulosDoFluxo(material!)).not.toContain('compras');
+    expect(modulosDoFluxo(material!)).not.toContain('financeiro');
   });
 
   it('completar a cadeia fecha o fluxo sem descartar o que já estava ligado', () => {
