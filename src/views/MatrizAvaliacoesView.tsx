@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft, TrendingUp, TrendingDown, Minus, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -43,6 +43,19 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   // eles apareciam embaixo de TODA tarefa aberta.
   const [secao, setSecao] = useState<'filiais' | 'ciclo' | null>(null);
 
+  // Competição escolhida no Histórico da tela de Competição. Lido uma vez e
+  // apagado na hora: é intenção daquela navegação, não preferência salva —
+  // se ficasse, a próxima visita abriria a encerrada mesmo havendo uma viva.
+  const alvoClicado = useRef<string | null>(
+    (() => {
+      try {
+        const v = sessionStorage.getItem('logmax:competicaoAlvo');
+        sessionStorage.removeItem('logmax:competicaoAlvo');
+        return v;
+      } catch { return null; }
+    })(),
+  );
+
   useEffect(() => {
     let cancelou = false;
     const carregar = async (comMask = true) => {
@@ -57,10 +70,15 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
         .order('data_inicio', { ascending: false });
       if (!cancelou) {
-        // Competição viva sempre ganha da encerrada: abrir uma nova não pode
-        // deixar a tela presa no histórico da anterior.
         const lista = (data ?? []) as any[];
-        setCompeticao(lista.find(c => c.status !== 'encerrada') ?? lista[0] ?? null);
+        // Prioridade: a que o usuário clicou no Histórico > competição viva >
+        // a encerrada mais recente. Sem a primeira regra, clicar numa encerrada
+        // antiga abriria sempre a última; sem a segunda, abrir uma competição
+        // nova deixaria a tela presa no histórico da anterior.
+        const clicada = alvoClicado.current
+          ? lista.find(c => c.id === alvoClicado.current)
+          : null;
+        setCompeticao(clicada ?? lista.find(c => c.status !== 'encerrada') ?? lista[0] ?? null);
         setLoadingComp(false);
       }
     };

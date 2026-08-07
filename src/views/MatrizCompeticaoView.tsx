@@ -1443,11 +1443,32 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             {fmtDataBR(c.data_inicio)} → {fmtDataBR(c.data_fim)}
                           </p>
                         </div>
-                        {c.vencedora && (
-                          <span className={`text-sm font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 ${FILIAL_COLOR[c.vencedora as FilialOp] ?? ''}`}>
-                            🏆 {c.vencedora}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* É aqui que se procura uma competição encerrada, então é
+                              aqui que precisa existir a porta para as notas. Sem
+                              isso o Histórico mostrava só o pódio e as tarefas,
+                              notas e participantes ficavam inalcançáveis. */}
+                          {navigate && (
+                            <button
+                              onClick={() => {
+                                // A Central escolhe sozinha qual competição abrir;
+                                // isto diz qual foi clicada, senão com várias
+                                // encerradas ela abriria sempre a mais recente.
+                                try { sessionStorage.setItem('logmax:competicaoAlvo', c.id); } catch { /* modo privado */ }
+                                navigate('matriz-avaliacoes');
+                              }}
+                              className="btn-shimmer btn-shimmer--gold"
+                              title="Ver tarefas, notas e participantes desta competição"
+                            >
+                              <Award size={12} /> Central de Avaliação
+                            </button>
+                          )}
+                          {c.vencedora && (
+                            <span className={`text-sm font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 ${FILIAL_COLOR[c.vencedora as FilialOp] ?? ''}`}>
+                              🏆 {c.vencedora}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {snap ? (
                         <div className="grid grid-cols-3 gap-2 mb-4">
