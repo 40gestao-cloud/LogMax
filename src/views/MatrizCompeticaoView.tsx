@@ -150,6 +150,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // Total de eleitores elegíveis (CEO + conselheiros da Matriz). Alimenta
   // o quórum dinâmico (maioria simples). RPC contar_votantes_matriz.
   const [totalVotantes, setTotalVotantes] = useState<number>(0);
+  // `totalVotantes === 0` é ambíguo: pode ser "sem eleitores" ou "ainda não
+  // respondeu". Enquanto não carrega, o quórum calculado daria 1 e o bloco
+  // de declarar vencedora apareceria com um voto só — e o banco não tem
+  // segunda barreira, exige apenas 1 voto.
+  const [votantesCarregados, setVotantesCarregados] = useState(false);
 
   // Voto em elaboração
   const [meuVoto, setMeuVoto] = useState<'aceita' | 'rejeita' | ''>('');
@@ -190,6 +195,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       const { data, error } = await supabase.rpc('contar_votantes_matriz');
       if (!error && typeof data === 'number') setTotalVotantes(data);
       else setTotalVotantes(3);
+      setVotantesCarregados(true);
     })();
   }, [podeAcessar]);
 
@@ -197,10 +203,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   useEffect(() => {
     if (!podeAcessar || !supabase) return;
     (async () => {
+      // Desligado fora do eleitorado (migr. 369): ele nunca vota, e como o
+      // empate exige que TODOS votem, uma vaga morta impediria o desempate
+      // para sempre. Tem de casar com `contar_votantes_matriz`.
       const { data } = await supabase
         .from('user_profiles')
-        .select('id, nome, role, is_conselheiro')
+        .select('id, nome, role, is_conselheiro, desligado_em')
         .eq('filial', 'Matriz')
+        .is('desligado_em', null)
         .order('nome', { ascending: true });
       setAvaliadores((data ?? []).filter((u: Avaliador) =>
         u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true),
@@ -1124,7 +1134,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               {/* Declaração de vencedora — só a Administração, e só com o
                   quórum de maioria simples atingido (migr. 369). O conselho
                   julga; quem homologa o julgamento é o admin. */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && profile.role === 'admin' && votos.length >= quorumMinimo && (() => {
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && profile.role === 'admin' && votantesCarregados && votos.length >= quorumMinimo && (() => {
                 const sugerida = sugestaoRejeicao ?? podio[0]?.filial;
                 const origem = sugestaoRejeicao ? 'maioria do conselho rejeitou o placar' : 'placar automático';
                 return (

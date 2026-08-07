@@ -48,6 +48,10 @@ AS $$
       JOIN public.user_profiles up ON up.id = v.votante_id
      WHERE v.competicao_id = p_competicao_id
        AND up.filial = 'Matriz'
+       -- Mesmo recorte de `contar_votantes_matriz`: se um eleitor votou e
+       -- depois foi desligado, o voto sai da conta junto com a vaga. Sem
+       -- isso os dois lados da comparação usariam populações diferentes.
+       AND up.desligado_em IS NULL
        AND (up.role IN ('ceo','conselheiro')
             OR (up.role = 'gerente' AND COALESCE(up.is_conselheiro,false)))
   )
@@ -172,6 +176,34 @@ $$;
 
 REVOKE ALL ON FUNCTION public.declarar_vencedora(uuid,text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.declarar_vencedora(uuid,text) TO authenticated;
+
+-- ── 4. Desligado sai do eleitorado ────────────────────────────────
+-- `contar_votantes_matriz` contava qualquer perfil com o cargo, desligado
+-- ou não. Isso trava o desempate: o empate exige que TODOS os eleitores
+-- tenham votado, e uma vaga morta nunca vota — com 2 ativos e 2
+-- desligados, 1×1 não é empate, o quórum de 3 não é atingido, e a
+-- competição não fecha por caminho nenhum.
+--
+-- Mesma régua já aplicada à frequência (356) e ao placar (364): quem foi
+-- desligado não sai do curso, sai da filial — e do conselho.
+CREATE OR REPLACE FUNCTION public.contar_votantes_matriz()
+RETURNS int
+LANGUAGE sql SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COUNT(*)::int
+  FROM public.user_profiles
+  WHERE filial = 'Matriz'
+    AND desligado_em IS NULL
+    AND (
+      role = 'ceo'
+      OR role = 'conselheiro'
+      OR (role = 'gerente' AND is_conselheiro = true)
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.contar_votantes_matriz() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.contar_votantes_matriz() TO authenticated;
 
 COMMIT;
 

@@ -850,8 +850,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     if (!supabase || !cicloId) { setAlvosDemanda(null); return; }
     let cancelou = false;
     const carregar = async () => {
+      // `rascunho` fica de fora: pauta não liberada a filial nem enxerga
+      // (DemandasView usa o mesmo corte), então não pode gerar pendência.
       const { data: ts } = await supabase!
-        .from('ciclo_tarefas').select('id').eq('ciclo_id', cicloId).eq('ativo', true);
+        .from('ciclo_tarefas').select('id')
+        .eq('ciclo_id', cicloId).eq('ativo', true).neq('status', 'rascunho');
       if (cancelou) return;
       const ids = (ts ?? []).map((t: any) => t.id);
       if (ids.length === 0) { setAlvosDemanda(new Set()); return; }

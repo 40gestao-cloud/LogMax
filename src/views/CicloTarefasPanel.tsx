@@ -549,12 +549,24 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
           .eq('filial', 'Matriz')
           .order('nome', { ascending: true }),
       ]);
-      setAvaliadoresPool(
-        (matriz ?? []).filter((u: any) =>
-          !u.desligado_em
-          && (['admin', 'ceo', 'conselheiro'].includes(u.role)
-              || (u.role === 'gerente' && u.is_conselheiro))),
-      );
+      const pool = (matriz ?? []).filter((u: any) =>
+        !u.desligado_em
+        && (['admin', 'ceo', 'conselheiro'].includes(u.role)
+            || (u.role === 'gerente' && u.is_conselheiro)));
+      setAvaliadoresPool(pool);
+
+      // Demanda anterior à 368 não tem lista e hoje é avaliada por CEO +
+      // conselheiros. Pré-marcar esse conjunto faz o default do modal ser o
+      // comportamento vigente — salvar sem mexer não tira o direito de nota
+      // de ninguém pelas costas.
+      if (tarefa && avaliadoresAtuais.length === 0) {
+        const legado: Record<string, boolean> = {};
+        pool.forEach((u: any) => {
+          if (u.role === 'ceo' || u.role === 'conselheiro'
+              || (u.role === 'gerente' && u.is_conselheiro)) legado[u.id] = true;
+        });
+        setAvaliadoresSel(legado);
+      }
       const porPerfil = new Map<string, any>();
       (fichas ?? []).forEach((f: any) => { if (f.user_profile_id) porPerfil.set(f.user_profile_id, f); });
       setFuncionarios(
