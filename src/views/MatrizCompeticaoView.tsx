@@ -207,8 +207,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     })();
   }, [podeAcessar]);
 
+  // Maioria simples é MAIS da metade, não a metade. `ceil(n/2)` acerta em
+  // número ímpar e erra em par: com 4 eleitores dava 2, e 2×2 é empate —
+  // liberava declarar vencedora sem maioria nenhuma.
   const quorumMinimo = useMemo(
-    () => Math.max(1, Math.ceil((totalVotantes || 1) / 2)),
+    () => Math.floor((totalVotantes || 1) / 2) + 1,
     [totalVotantes],
   );
 
