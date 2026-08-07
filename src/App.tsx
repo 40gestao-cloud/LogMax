@@ -124,6 +124,7 @@ const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCo
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
+const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -216,6 +217,10 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // compra. Sem requireRole: o gerente da filial precisa propor, e quem
       // delibera é filtrado dentro da view (e pela RLS, que é quem barra).
       'Orçamento Anual',
+      // Par do Orçamento (migr. 379): lá o Conselho dá a verba, aqui cobra o
+      // que foi feito com ela. Fica em Financeiro e não em Empresa porque
+      // Empresa é parametrização — foi por isso que Requisições saiu de lá.
+      'Prestação de Contas',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
@@ -1012,6 +1017,7 @@ function LogMaxAppInner() {
       // 3 unidades e gera o par conta a pagar (filial) / conta a receber (Matriz).
       case 'financeiro-rateioadministrativo':  return <RateioAdministrativoView showToast={st} profile={profile} />;
       case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
+      case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
