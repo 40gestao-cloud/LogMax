@@ -251,8 +251,10 @@ GRANT EXECUTE ON FUNCTION public.remover_avaliacao_ciclo_tarefa(uuid) TO authent
 -- quem dá nota é quem está na lista, e a escrita só passa pelo guard —
 -- então toda nota gravada é nota autorizada. Nenhum valor histórico muda:
 -- admin nunca conseguiu gravar nota aqui, não há linha dele para entrar.
+-- Nomes das colunas OUT são os da 361 (`media_nota`, `n_notas`): trocar
+-- qualquer um deles faz o Postgres recusar o REPLACE com 42P13.
 CREATE OR REPLACE FUNCTION public.media_participantes_ciclo(p_ciclo_id uuid)
-RETURNS TABLE (participante_id uuid, filial text, media numeric, n int)
+RETURNS TABLE (participante_id uuid, filial text, media_nota numeric, n_notas int)
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public AS $$
 DECLARE v_filial text;
