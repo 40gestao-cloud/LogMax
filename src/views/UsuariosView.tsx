@@ -230,6 +230,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         `${d?.usuarios_preservados ?? users.length} usuário(s)`,
         d?.funcionarios_preservados != null ? `${d.funcionarios_preservados} funcionário(s)` : null,
         d?.filiais_preservadas      != null ? `${d.filiais_preservadas} filial(is)`         : null,
+        // Blocos que a migração 377 tirou do TRUNCATE — mostrar aqui é o que
+        // dá ao professor a confirmação de que a competição das filiais
+        // atravessou o reset.
+        d?.competicoes_preservadas  != null ? `${d.competicoes_preservadas} competição(ões)`  : null,
+        d?.notas_placar_preservadas != null ? `${d.notas_placar_preservadas} nota(s) do placar` : null,
+        d?.avaliacoes_matriz_preservadas != null ? `${d.avaliacoes_matriz_preservadas} avaliação(ões) da Matriz` : null,
+        d?.tarefas_matriz_preservadas != null ? `${d.tarefas_matriz_preservadas} tarefa(s) da Matriz` : null,
       ].filter(Boolean).join(', ');
       showToast(`Reset concluído. Preservados: ${partes}.`, 'success');
       setResetOpen(false);
