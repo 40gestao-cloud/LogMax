@@ -6,7 +6,7 @@ import {
 // Os 7 tipos de demanda da Competição do Conselho (`matriz_tarefas`).
 //
 // O ciclo Padrão (`ciclo_tarefas`) NÃO usa mais essa régua: a demanda de lá
-// nasce sem categoria, com o tipo fixo `demanda_padrao` (migr. 362). Os 7
+// nasce sem categoria, com o tipo fixo `demanda_padrao` (migr. 366). Os 7
 // continuam aqui porque a filial lê os dois trilhos na mesma tela (Demandas)
 // e porque demanda antiga do Padrão ainda carrega um deles.
 export type TipoTarefa =
@@ -46,7 +46,7 @@ export const TIPOS_TAREFA: TipoTarefa[] = [
   'tarefa_treinamento_vendas',
 ];
 
-// Tipo único do ciclo Padrão (migr. 362). Não entra em TIPOS_TAREFA: não é
+// Tipo único do ciclo Padrão (migr. 366). Não entra em TIPOS_TAREFA: não é
 // opção de select em lugar nenhum, é o valor que a demanda do Padrão grava.
 export const TIPO_DEMANDA_PADRAO = 'demanda_padrao';
 

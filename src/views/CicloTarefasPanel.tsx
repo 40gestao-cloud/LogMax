@@ -14,12 +14,12 @@ import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS_OP = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 // A demanda do Padrão alcança a Matriz também: CEO e conselheiros são
-// avaliáveis e não têm filial operacional (migr. 363).
+// avaliáveis e não têm filial operacional (migr. 367).
 const FILIAIS_DEMANDA = ['Matriz', ...FILIAIS_OP] as const;
 type FilialOp = typeof FILIAIS_DEMANDA[number];
 
 // Quem pode ser posto numa demanda. Admin fica fora de propósito: modera e
-// não é julgado, mesma régua da 240 que já tira a nota dele da média.
+// não é julgado, mesma régua de sempre: quem cria a pauta não é participante dela.
 const ROLES_AVALIAVEIS = ['ceo', 'conselheiro', 'gerente', 'colaborador'] as const;
 
 type Tarefa = {
@@ -105,8 +105,8 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
       const ids = lista.map(t => t.id);
       if (ids.length === 0) { setParticipantes([]); setNotas([]); setAvaliadores([]); return; }
 
-      // Quem dá nota em cada demanda (migr. 364). Lista vazia = demanda
-      // anterior à 364, que segue a régua antiga: CEO e conselheiros.
+      // Quem dá nota em cada demanda (migr. 368). Lista vazia = demanda
+      // anterior à 368, que segue a régua antiga: CEO e conselheiros.
       const { data: avs } = await supabase
         .from('ciclo_tarefa_avaliadores')
         .select('tarefa_id,user_profile_id')
@@ -170,7 +170,7 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
     return m;
   }, [notas]);
 
-  // Toda nota gravada passou pelo guard da 364, então toda nota é nota
+  // Toda nota gravada passou pelo guard da 368, então toda nota é nota
   // autorizada — não há mais o que filtrar por cargo aqui.
   const mediaDoParticipante = useCallback((partId: string): number | null => {
     const lista = notasPorParticipante[partId] ?? [];
@@ -185,7 +185,7 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
   }, [avaliadores]);
 
   // Quem dá nota é quem a demanda designou. Sem lista (demanda anterior à
-  // 364), vale a régua antiga: CEO e conselheiros, admin fora.
+  // 368), vale a régua antiga: CEO e conselheiros, admin fora.
   const podeAvaliarTarefa = useCallback((tarefaId: string) => {
     if (!daMatriz) return false;
     const lista = avaliadoresPorTarefa[tarefaId];
@@ -433,7 +433,7 @@ function LinhaParticipante({ participante, tarefaStatus, minhaNota, media, nNota
             ? <span className="text-[11px] font-black tabular-nums text-emerald-300">
                 sua nota {Number(minhaNota.nota).toFixed(1)}
               </span>
-            // "sem sua nota" só cobra quem foi designado (migr. 364); pra quem
+            // "sem sua nota" só cobra quem foi designado (migr. 368); pra quem
             // não dá nota nesta demanda seria cobrança de dívida que não existe.
             : podeAvaliar
               ? <span className="text-[10px] text-gray-500 flex items-center gap-1">
@@ -514,7 +514,7 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
     return init;
   });
 
-  // Quem dá nota nesta demanda (migr. 364). Numa demanda nova quem cria já
+  // Quem dá nota nesta demanda (migr. 368). Numa demanda nova quem cria já
   // entra marcado — quem montou a pauta sabe o que ela cobra.
   const [avaliadoresPool, setAvaliadoresPool] = useState<any[]>([]);
   const [avaliadoresSel, setAvaliadoresSel] = useState<Record<string, boolean>>(() => {
@@ -528,7 +528,7 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
   // A lista vem de `user_profiles`, não de `funcionarios`: quem a demanda
   // marca é quem depois vira pendência de avaliação, e essa identidade é o
   // perfil. `funcionarios` entra só para preencher o cargo e manter a FK de
-  // RH viva quando a pessoa tem ficha (migr. 363).
+  // RH viva quando a pessoa tem ficha (migr. 367).
   useEffect(() => {
     (async () => {
       if (!supabase) { setLoadingFn(false); return; }
@@ -619,7 +619,7 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
         })
       : await supabase.rpc('criar_ciclo_tarefa', {
           p_ciclo_id: ciclo.id,
-          // Demanda do Padrão não tem categoria (migr. 362) — os tipos do
+          // Demanda do Padrão não tem categoria (migr. 366) — os tipos do
           // select antigo eram a pauta da Competição do Conselho.
           p_tipo: TIPO_DEMANDA_PADRAO,
           p_nome: nome.trim(),

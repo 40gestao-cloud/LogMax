@@ -838,7 +838,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // avaliação — a filial não é julgada por quem ela não tem mais.
   const usersAtivos = useMemo(() => users.filter(u => !u.desligado_em), [users]);
 
-  // Quem a Matriz colocou em alguma demanda do ciclo aberto (migr. 363).
+  // Quem a Matriz colocou em alguma demanda do ciclo aberto (migr. 367).
   // É essa lista que define o roster do ciclo Padrão: antes, abrir o ciclo
   // já cobrava avaliação de toda a empresa, e a pauta publicada não tinha
   // voz nenhuma sobre isso. `null` = ainda carregando → não lista ninguém,

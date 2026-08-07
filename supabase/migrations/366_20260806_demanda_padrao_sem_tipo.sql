@@ -1,5 +1,5 @@
 -- =================================================================
--- 362 — Demanda do ciclo Padrão deixa de herdar os tipos da Competição
+-- 366 — Demanda do ciclo Padrão deixa de herdar os tipos da Competição
 --
 -- O que estava errado:
 --   A 361 reaproveitou os 7 tipos da Competição do Conselho

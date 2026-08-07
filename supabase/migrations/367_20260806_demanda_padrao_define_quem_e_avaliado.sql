@@ -1,5 +1,5 @@
 -- =================================================================
--- 363 — A demanda do Padrão passa a definir QUEM é avaliado no ciclo
+-- 367 — A demanda do Padrão passa a definir QUEM é avaliado no ciclo
 --
 -- Dois buracos, mesma raiz — a demanda e a avaliação do ciclo Padrão não
 -- se conhecem:
