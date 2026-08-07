@@ -360,14 +360,15 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                         </button>
                       )}
                     </div>
-                    <AnimatePresence>
+                    {/* Sem animação de altura de propósito. `height: 'auto'` no
+                        motion exige medir o conteúdo, e como marcar um submenu
+                        re-renderiza este bloco (setSubmenus), a medição voltava
+                        a rodar sobre um item de grid de altura livre e a altura
+                        crescia sem parar — a página ganhava milhares de pixels
+                        vazios a cada clique. Abrir/fechar não precisa animar. */}
+                    <>
                       {active && temSubmenus && isOpen && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden border-t border-white/5"
-                        >
+                        <div className="overflow-hidden border-t border-white/5">
                           <div className="flex items-center justify-between px-3 py-2 bg-black/20">
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Submenus</span>
                             <div className="flex items-center gap-2">
@@ -419,9 +420,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                                 : `${subsSelecionados.length} submenu(s) na whitelist — só esses aparecem.`}
                             </p>
                           </div>
-                        </motion.div>
+                        </div>
                       )}
-                    </AnimatePresence>
+                    </>
                   </div>
                 );
               })}
