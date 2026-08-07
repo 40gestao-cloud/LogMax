@@ -3,7 +3,7 @@ import { Landmark, PiggyBank, Scale, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, FilialBadge } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { isConselheiro } from '../lib/rbac';
+import { isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -45,7 +45,10 @@ export function DestinacaoResultadoView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
+  // Deliberar a destinação do lucro é ato de Conselho (migr. 387): o CEO
+  // fica de fora, como em orçamento e prestação de contas. Quem barra de
+  // verdade é `deliberar_destinacao_resultado`.
+  const conselho = isConselho(profile);
 
   const [historico, setHistorico] = useState<Destinacao[]>([]);
   const [bancos, setBancos]       = useState<Banco[]>([]);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Award, CalendarClock, History, RotateCcw, UserMinus, UserPlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
-import { isConselheiro } from '../lib/rbac';
+import { isConselho } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -48,7 +48,10 @@ export function MandatosView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const conselho = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
+  // Nomear e encerrar mandato é ato de Conselho (migr. 387) — o CEO não
+  // nomeia, inclusive porque poderia nomear a si mesmo. E ninguém decide o
+  // próprio desfecho: a RPC barra, e a tela esconde o botão.
+  const conselho = isConselho(profile);
 
   const [mandatos, setMandatos] = useState<Mandato[]>([]);
   const [pessoas, setPessoas]   = useState<Pessoa[]>([]);
@@ -200,7 +203,14 @@ export function MandatosView({
 
                     {m.ato && <p className="text-xs text-gray-400 italic">“{m.ato}”</p>}
 
-                    {conselho && (
+                    {/* Ninguém decide o próprio desfecho, nem para se
+                        reconduzir — a RPC barra e a tela explica. */}
+                    {conselho && m.user_profile_id === profile?.id && (
+                      <div className="text-xs text-yellow-400/80">
+                        Este mandato é seu — outro conselheiro tem de decidir o desfecho.
+                      </div>
+                    )}
+                    {conselho && m.user_profile_id !== profile?.id && (
                       <button onClick={() => { setEncerrando(m); setEnc({ desfecho: vencido ? 'reconduzido' : 'substituido', motivo: '', nova_data_fim: '' }); }}
                         className="neu-button px-3 py-1.5 rounded-xl text-xs text-gray-100 flex items-center gap-2">
                         <RotateCcw size={12} /> Decidir o desfecho

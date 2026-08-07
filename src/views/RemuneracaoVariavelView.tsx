@@ -3,7 +3,7 @@ import { Calculator, Coins, Plus, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
-import { isConselheiro } from '../lib/rbac';
+import { isConselho } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Remuneração variável (migração 382) — o placar da competição vira dinheiro
@@ -42,7 +42,10 @@ export function RemuneracaoVariavelView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
+  // Aprovar a política, apurar e mandar pagar são atos de Conselho (migr.
+  // 387). O CEO fica de fora: era ele aprovando a régua do próprio bônus.
+  // A leitura continua aberta — cada um vê o próprio item pela RLS.
+  const conselho = isConselho(profile);
 
   const [politicas, setPoliticas]   = useState<Politica[]>([]);
   const [apuracoes, setApuracoes]   = useState<Apuracao[]>([]);

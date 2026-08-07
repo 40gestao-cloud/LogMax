@@ -3,7 +3,7 @@ import { Check, Gavel, MessageSquare, Search, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
-import { isConselheiro } from '../lib/rbac';
+import { isConselho } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Comitê de Auditoria — a trilha passa a ser lida por alguém (migração 380).
@@ -61,7 +61,10 @@ export function ComiteAuditoriaView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
+  // Abrir e encerrar questionamento é do Comitê (migr. 387) — sem o CEO,
+  // que é justamente quem a auditoria fiscaliza. Responder continua aberto
+  // a quem praticou o ato: `responder_revisao_auditoria` não mudou.
+  const conselho = isConselho(profile);
 
   const [revisoes, setRevisoes] = useState<Revisao[]>([]);
   const [operacoes, setOperacoes] = useState<Record<string, Operacao>>({});
