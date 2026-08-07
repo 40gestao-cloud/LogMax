@@ -1033,7 +1033,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           avaliacao: av,
           criterios: crits,
           media,
-          avaliadorNome: avaliador?.nome ?? '—',
+          // A filial vê a ORIGEM da nota, não quem a deu. Identificar o
+          // conselheiro transforma o julgamento coletivo em conta pessoal —
+          // e a filial passa a cobrar a pessoa, não a Matriz. Mesma razão
+          // do voto selado (345), levada até a ponta que recebe.
+          avaliadorPapel: avaliador?.role === 'ceo' ? 'CEO' : 'Conselho',
           cicloNome: ciclo?.nome ?? '—',
         };
       })
@@ -1286,7 +1290,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             </div>
           </div>
           <p className="text-[11px] text-gray-500 mb-4">
-            Notas e comentários que o CEO / conselheiros registraram sobre a filial no eixo votado da competição.
+            Notas e comentários que o CEO / conselheiros registraram sobre a filial no eixo votado
+            da competição. A avaliação é do órgão, não da pessoa — por isso cada card mostra a
+            origem (Conselho ou CEO), e não quem assinou.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {feedbackMatriz.map(f => (
@@ -1294,8 +1300,8 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 key={f.avaliacao.id}
                 avaliacao={f.avaliacao}
                 criterios={f.criterios}
-                direcaoLabel="Conselho"
-                nomeContraparte={`${f.avaliadorNome} · ${f.cicloNome}`}
+                direcaoLabel="Avaliação da Matriz"
+                nomeContraparte={`${f.avaliadorPapel} · ${f.cicloNome}`}
                 showPDI={false}
                 categoriaLabel={CATEGORIA_LABEL_MATRIZ}
                 profile={profile}

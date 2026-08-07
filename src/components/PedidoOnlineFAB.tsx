@@ -7,11 +7,13 @@
 // cancelado. Não existe botão de "já vi" — dar ciência sem atender deixaria o
 // comprador esperando com a consciência tranquila de quem clicou.
 //
-// Fica acima do AvisoMatrizFAB (bottom-24) para não colidir com ele nem com o
-// PontoFAB (bottom-6).
+// Nasce acima do AvisoMatrizFAB (bottom-24) para não colidir com ele nem com o
+// PontoFAB (bottom-6) — mas é arrastável: ancorado no canto ele tapava conteúdo
+// em tela cheia de tabela, e não havia como tirar da frente sem atender a fila.
+// A posição escolhida fica salva por navegador.
 
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence, useMotionValue } from 'motion/react';
 import { ShoppingCart, X, ArrowRight, Store, AlertTriangle } from 'lucide-react';
 import { usePedidosNovos } from '../hooks/usePedidosNovos';
 import { useFilial } from '../contexts/FilialContext';
@@ -19,6 +21,11 @@ import type { FilialOp } from './FilialSelector';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS_OP: readonly string[] = ['SuperMax', 'MaxLook', 'TechMax'];
+
+// Deslocamento em relação ao canto padrão, não coordenada absoluta: assim a
+// posição salva continua fazendo sentido se a âncora do CSS mudar.
+const POS_KEY = 'logmax:pedido-fab-pos';
+const MARGEM = 8;
 
 const brl = (v: any) => Number(v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -39,6 +46,46 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
   const { pendentes } = usePedidosNovos(podeAtender);
   const { filialAtiva, setFilialAtiva } = useFilial();
   const [open, setOpen] = useState(false);
+
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // Arrastar termina em click no DOM. Sem esta guarda, soltar o FAB abriria
+  // a fila toda vez que alguém só quisesse tirá-lo da frente.
+  const arrastou = useRef(false);
+  const visivel = pendentes.length > 0;
+
+  // Puxa de volta pra dentro da tela. Necessário em dois momentos: ao restaurar
+  // uma posição salva num monitor maior, e ao redimensionar a janela — senão o
+  // FAB fica inalcançável fora da viewport, e com ele a fila de pedidos.
+  const acomodar = useCallback(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    let dx = 0;
+    let dy = 0;
+    if (r.left < MARGEM) dx = MARGEM - r.left;
+    else if (r.right > window.innerWidth - MARGEM) dx = window.innerWidth - MARGEM - r.right;
+    if (r.top < MARGEM) dy = MARGEM - r.top;
+    else if (r.bottom > window.innerHeight - MARGEM) dy = window.innerHeight - MARGEM - r.bottom;
+    if (dx) x.set(x.get() + dx);
+    if (dy) y.set(y.get() + dy);
+  }, [x, y]);
+
+  useEffect(() => {
+    if (!visivel) return;
+    try {
+      const raw = localStorage.getItem(POS_KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (Number.isFinite(p?.x) && Number.isFinite(p?.y)) { x.set(p.x); y.set(p.y); }
+      }
+    } catch { /* storage bloqueado ou json torto: fica no canto padrão */ }
+    // Espera o layout aplicar o transform antes de medir.
+    const id = requestAnimationFrame(acomodar);
+    window.addEventListener('resize', acomodar);
+    return () => { cancelAnimationFrame(id); window.removeEventListener('resize', acomodar); };
+  }, [visivel, x, y, acomodar]);
 
   useEffect(() => { if (pendentes.length === 0) setOpen(false); }, [pendentes.length]);
 
@@ -69,13 +116,29 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
   return (
     <>
       <motion.button
-        onClick={() => setOpen(true)}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
+        ref={btnRef}
+        onClick={() => {
+          if (arrastou.current) { arrastou.current = false; return; }
+          setOpen(true);
+        }}
+        drag
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={() => { arrastou.current = true; }}
+        onDragEnd={() => {
+          acomodar();
+          try {
+            localStorage.setItem(POS_KEY, JSON.stringify({ x: x.get(), y: y.get() }));
+          } catch { /* sem storage, a posição vale só nesta sessão */ }
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         whileTap={{ scale: 0.95 }}
-        aria-label="Ver pedidos da loja online esperando atendimento"
-        className="fixed bottom-40 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-emerald-400/40 flex items-center gap-2 text-emerald-200 hover:border-emerald-400 hover:text-emerald-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-        style={{ background: 'var(--color-card-bg)' }}
+        whileDrag={{ scale: 1.04 }}
+        aria-label="Ver pedidos da loja online esperando atendimento. Arraste para reposicionar."
+        title="Clique para ver a fila · arraste para tirar da frente"
+        className="fixed bottom-40 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-emerald-400/40 flex items-center gap-2 text-emerald-200 hover:border-emerald-400 hover:text-emerald-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)] cursor-grab active:cursor-grabbing"
+        style={{ x, y, background: 'var(--color-card-bg)' }}
       >
         <span className="relative flex items-center justify-center">
           <span className="absolute inline-flex w-5 h-5 rounded-full bg-emerald-400/30 animate-ping" />
