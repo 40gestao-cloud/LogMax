@@ -114,7 +114,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const confirm = useConfirm();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
   // Votação restrita a CEO + conselheiros (alinha com RLS voto_write).
-  // Admin gerencia mas não vota.
+  // Admin gerencia e não vota — exceto para desfazer empate, e é ele quem
+  // declara a vencedora (migr. 369).
   const podeVotar     = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar   = podeGerenciar || isConselheiro(profile);
   // Só admin lê nota individual alheia enquanto a tarefa não encerra
@@ -367,6 +368,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     aceita:  votos.filter(v => v.voto === 'aceita').length,
     rejeita: votos.filter(v => v.voto === 'rejeita').length,
   }), [votos]);
+
+  // Empate é medido só entre os votos do conselho — o desempate do admin
+  // não pode se anular (migr. 369). Com eleitorado par (hoje 1 CEO + 3
+  // conselheiros) o 2×2 é possível, e é aí que a Administração entra.
+  const empate = useMemo(() => {
+    const doConselho = votos.filter(v => avaliadores.some(a => a.id === v.votante_id));
+    if (doConselho.length === 0 || doConselho.length !== totalVotantes) return false;
+    const aceita  = doConselho.filter(v => v.voto === 'aceita').length;
+    const rejeita = doConselho.filter(v => v.voto === 'rejeita').length;
+    return aceita === rejeita;
+  }, [votos, avaliadores, totalVotantes]);
+
+  const podeDesempatar = profile.role === 'admin' && empate;
 
   // Sincroniza o voto que o usuário já registrou (pra permitir editar).
   useEffect(() => {
@@ -938,11 +952,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               )}
 
               {/* Votação */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && (
-                <div className="neu-flat rounded-3xl p-5 border border-white/5">
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && (podeVotar || podeDesempatar) && (
+                <div className={`neu-flat rounded-3xl p-5 border ${podeDesempatar && !jaVotei ? 'border-amber-500/40' : 'border-white/5'}`}>
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                      <MessageCircle size={13} className="text-accent" /> Votação do conselho
+                      <MessageCircle size={13} className="text-accent" />
+                      {podeDesempatar ? 'Desempate da Administração' : 'Votação do conselho'}
                     </h3>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
                       <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
@@ -952,6 +967,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       </span>
                     </div>
                   </div>
+
+                  {/* O conselho empatou e o eleitorado é par: quem desempata é
+                      a Administração. Só aparece nesse estado — fora dele o
+                      admin modera a competição e não julga. */}
+                  {podeDesempatar && !jaVotei && (
+                    <p className="text-xs text-amber-300/90 mb-4 leading-relaxed">
+                      O conselho empatou em {contagemVotos.aceita}×{contagemVotos.rejeita} com todos os
+                      {' '}{totalVotantes} eleitores votando. Seu voto entra na contagem como qualquer
+                      outro e desfaz o empate.
+                    </p>
+                  )}
 
                   {jaVotei && !editandoVoto ? (
                     <div className="flex items-center justify-between gap-3 mb-4">
@@ -1054,7 +1080,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               )}
 
               {/* Aguardando votação — visão somente-leitura pra quem gerencia mas não vota (admin) */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && !podeVotar && (
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && !podeVotar && !podeDesempatar && (
                 <div className="neu-flat rounded-3xl p-5 border border-white/5">
                   <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                     <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
@@ -1095,8 +1121,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
               )}
 
-              {/* Declaração de vencedora — quórum dinâmico (maioria simples dos eleitores) */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && votos.length >= quorumMinimo && (() => {
+              {/* Declaração de vencedora — só a Administração, e só com o
+                  quórum de maioria simples atingido (migr. 369). O conselho
+                  julga; quem homologa o julgamento é o admin. */}
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && profile.role === 'admin' && votos.length >= quorumMinimo && (() => {
                 const sugerida = sugestaoRejeicao ?? podio[0]?.filial;
                 const origem = sugestaoRejeicao ? 'maioria do conselho rejeitou o placar' : 'placar automático';
                 return (
