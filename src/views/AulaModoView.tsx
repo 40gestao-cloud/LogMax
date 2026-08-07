@@ -313,7 +313,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         {grupos.map(g => (
           <div key={g} className="flex flex-col gap-2">
             <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">{g}</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {/* items-start: sem isso o card expandido estica a linha inteira e os
+                vizinhos viram caixas vazias do mesmo tamanho. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-start">
               {AULA_MODULOS.filter(m => m.grupo === g).map(m => {
                 const active = modulos.includes(m.id);
                 const temSubmenus = AULA_SUBMENUS[m.id]?.length > 0;
