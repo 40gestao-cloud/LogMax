@@ -21,7 +21,6 @@ const TIPO_LABEL: Record<string, string> = {
   ceo_gerente: 'CEO → Gerentes',
   ceo_conselheiro: 'CEO → Conselheiros',
   ceo_colaborador: 'CEO → Colaboradores',
-  gerente_colaborador: 'Gerentes → Colaboradores',
   feedback_colaborador: 'Feedback Reverso',
 };
 

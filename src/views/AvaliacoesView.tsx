@@ -56,7 +56,7 @@ type HierGrupo = 'estrategico' | 'gerentes' | 'colaboradores' | 'feedback';
 const grupoDoTipo = (tipo: string): HierGrupo => {
   if (tipo === 'admin_ceo' || tipo === 'admin_conselheiro' || tipo === 'ceo_conselheiro') return 'estrategico';
   if (tipo === 'ceo_gerente') return 'gerentes';
-  if (tipo === 'ceo_colaborador' || tipo === 'gerente_colaborador') return 'colaboradores';
+  if (tipo === 'ceo_colaborador') return 'colaboradores';
   return 'feedback';
 };
 
@@ -129,6 +129,18 @@ export const notaCorClasses = (nota: number): string => {
   return 'text-red-400 bg-red-500/10 border-red-500/30';
 };
 
+// A ponta que recebe a nota ve a ORIGEM dela, nao quem assinou. Identificar
+// o avaliador transforma julgamento do orgao em conta pessoal — mesma razao
+// do voto selado (345), levada ate quem recebe. Gerente nao avalia ninguem,
+// entao todo avaliador aqui e admin, CEO ou conselheiro.
+const papelDoAvaliador = (u?: UserProfile | null): string => {
+  if (!u) return 'Matriz';
+  if (u.role === 'ceo') return 'CEO';
+  if (u.role === 'admin') return 'Administração';
+  if (isConselheiro(u)) return 'Conselho';
+  return 'Matriz';
+};
+
 const fmtData = (s: string) => {
   const [y, m, d] = s.split('-');
   return `${d}/${m}/${y}`;
@@ -143,7 +155,7 @@ export function ModalAvaliacao({
 }: {
   ciclo: Ciclo;
   alvo: AvaliadoTarget;
-  tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
+  tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'feedback_colaborador';
   avaliacaoExistente?: { id: string; observacao: string | null; criterios: Criterio[] };
   onClose: () => void;
   onSaved: () => Promise<void> | void;
@@ -595,7 +607,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   const [avaliando, setAvaliando] = useState<{
     ciclo: Ciclo;
     alvo: AvaliadoTarget;
-    tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador';
+    tipo?: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'feedback_colaborador';
   } | null>(null);
 
   const [editando, setEditando] = useState<{
@@ -837,11 +849,11 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       minhasFeitasPorCiclo.get(a.ciclo_id)!.add(`${a.avaliado_id}::${a.tipo}`);
     });
 
-    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
+    const out: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'feedback_colaborador'; ciclo: Ciclo }[] = [];
     ciclosOperacionaisAbertos.forEach(ciclo => {
       const feitas = minhasFeitasPorCiclo.get(ciclo.id) ?? new Set();
       const usersFilial = usersAtivos.filter(u => !u.filial || u.filial === ciclo.filial || u.role === 'ceo' || u.role === 'admin');
-      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador' }[] = [];
+      let alvos: { user: UserProfile; tipo: 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'feedback_colaborador' }[] = [];
       if (podeGerirAvaliacoes) {
         // Em Matriz com ciclo Matriz aberto, admin/CEO avalia gerentes/colaboradores
         // pelo ciclo Matriz (bloco abaixo) — evita listar a mesma pessoa 2×.
@@ -983,7 +995,12 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         return {
           avaliacao: av,
           criterios: criterios.filter(c => c.avaliacao_id === av.id),
-          avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+          // Feedback reverso e o unico caso em que quem avalia NAO e a Matriz:
+          // e um colaborador falando do gestor, e ali quem decide expor o nome
+          // e o anonimato do ciclo. Nos demais, so a origem.
+          avaliadorNome: av.tipo === 'feedback_colaborador'
+            ? (isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'))
+            : papelDoAvaliador(avaliador),
           cicloNome: ciclo?.nome ?? '—',
         };
       })
@@ -1037,7 +1054,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           // conselheiro transforma o julgamento coletivo em conta pessoal —
           // e a filial passa a cobrar a pessoa, não a Matriz. Mesma razão
           // do voto selado (345), levada até a ponta que recebe.
-          avaliadorPapel: avaliador?.role === 'ceo' ? 'CEO' : 'Conselho',
+          avaliadorPapel: papelDoAvaliador(avaliador),
           cicloNome: ciclo?.nome ?? '—',
         };
       })
@@ -1172,9 +1189,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     const grupos = [
       mkSuperGrupo(
         'gerentes_colaboradores',
-        ['ceo_gerente', 'ceo_colaborador', 'gerente_colaborador', 'feedback_colaborador'],
+        ['ceo_gerente', 'ceo_colaborador', 'feedback_colaborador'],
         'Avaliação de Gerentes e Colaboradores',
-        'Notas do CEO/admin e dos gerentes aos gerentes e colaboradores, mais o feedback reverso (anônimo quando o ciclo pede).',
+        'Notas do CEO/admin aos gerentes e colaboradores, mais o feedback reverso (anônimo quando o ciclo pede).',
       ),
       mkSuperGrupo(
         'ceo_conselheiros',
@@ -1234,7 +1251,9 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       const slug = `${avaliadoNome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}-${ciclo.nome.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
       await exportAvaliacaoIndividualPDF(
         {
-          avaliadorNome: isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'),
+          avaliadorNome: av.tipo === 'feedback_colaborador'
+            ? (isAnonimo ? 'Anônimo' : (avaliador?.nome ?? '—'))
+            : papelDoAvaliador(avaliador),
           avaliadoNome,
           cicloNome: ciclo.nome,
           cicloPeriodo: { inicio: ciclo.data_inicio, fim: ciclo.data_fim },
@@ -1977,7 +1996,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           <ModalAvaliacao
             ciclo={editando.ciclo}
             alvo={editando.alvo}
-            tipo={editando.tipo as 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'gerente_colaborador' | 'feedback_colaborador'}
+            tipo={editando.tipo as 'ceo_gerente' | 'ceo_colaborador' | 'ceo_conselheiro' | 'admin_ceo' | 'admin_conselheiro' | 'feedback_colaborador'}
             avaliacaoExistente={editando.avaliacaoExistente}
             onClose={() => setEditando(null)}
             onSaved={reload}
@@ -1998,8 +2017,8 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
 
 // ─────────────────────────────────────────────────────────────────────────
 // Card de pódio da filial na competição matriz — só modo filial.
-// Busca a competição mais recente ativa/encerrada e mostra medalha
-// (ouro/prata/bronze) conforme posição da filial no ranking.
+// Só aparece com a competição ENCERRADA: enquanto a votação corre, a medalha
+// oscilaria a cada nota e viraria placar ao vivo, não resultado.
 // ─────────────────────────────────────────────────────────────────────────
 type CompMini = { id: string; nome: string; status: string; vencedora: string | null };
 type PlacarPorFilial = Record<string, { media: number; n: number }>;
@@ -2008,21 +2027,22 @@ function PodioFilialCard({ filial }: { filial: string }) {
   const [loading, setLoading] = useState(true);
   const [comp, setComp] = useState<CompMini | null>(null);
   const [placar, setPlacar] = useState<PlacarPorFilial | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     let cancelou = false;
     (async () => {
-      // Última competição relevante: em andamento, aguardando, ou encerrada.
+      // Só a última competição já encerrada — resultado, não placar ao vivo.
       const { data: comps } = await supabase!
         .from('competicoes_matriz')
         .select('id, nome, status, vencedora')
         .eq('ativo', true)
-        .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
+        .eq('status', 'encerrada')
         .order('data_inicio', { ascending: false })
         .limit(1);
       const c = comps?.[0] as CompMini | undefined;
-      if (!c) { if (!cancelou) setLoading(false); return; }
+      if (!c) { if (!cancelou) { setComp(null); setPlacar(null); setLoading(false); } return; }
       const { data: p } = await supabase!.rpc('calcular_placar_competicao', { p_competicao_id: c.id });
       if (cancelou) return;
       setComp(c);
@@ -2030,7 +2050,18 @@ function PodioFilialCard({ filial }: { filial: string }) {
       setLoading(false);
     })();
     return () => { cancelou = true; };
-  }, [filial]);
+  }, [filial, tick]);
+
+  // Sem isso a medalha só aparece no próximo reload: quem encerra a competição
+  // é a Matriz (ou o cron das 03:10), nunca a tela da filial. `competicoes_matriz`
+  // já está na publicação realtime (migr. 350).
+  useEffect(() => {
+    const canal = supabase
+      ?.channel('podio-filial-competicao')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'competicoes_matriz' }, () => setTick(t => t + 1))
+      .subscribe();
+    return () => { if (canal) supabase?.removeChannel(canal); };
+  }, []);
 
   if (loading || !comp || !placar) return null;
 
@@ -2039,8 +2070,6 @@ function PodioFilialCard({ filial }: { filial: string }) {
     .sort((a, b) => b.media - a.media || b.n - a.n);
   const meu = ranking.find(x => x.filial === filial);
   if (!meu) return null;
-  // Sem notas ainda + competição não encerrada → não faz sentido mostrar medalha
-  if (meu.n === 0 && comp.status !== 'encerrada') return null;
   const pos = ranking.findIndex(x => x.filial === filial) + 1;
   if (pos < 1 || pos > 3) return null;
 
@@ -2050,12 +2079,6 @@ function PodioFilialCard({ filial }: { filial: string }) {
       ? { klass: 'medal-card--silver', label: '2º Lugar',             emoji: '🥈' }
       : { klass: 'medal-card--bronze', label: '3º Lugar',             emoji: '🥉' };
 
-  const statusLabel = comp.status === 'encerrada'
-    ? 'Resultado final'
-    : comp.status === 'aguardando_encerramento'
-      ? 'Aguardando encerramento — votação em curso'
-      : 'Andamento';
-
   return (
     <div className={`medal-card ${medal.klass} shrink-0`}>
       <div className="relative flex items-center justify-between gap-4 flex-wrap">
@@ -2064,7 +2087,7 @@ function PodioFilialCard({ filial }: { filial: string }) {
             <Trophy size={11} /> Competição do Conselho
           </span>
           <h3 className="text-xl font-black leading-tight mt-1.5">{comp.nome}</h3>
-          <p className="text-xs font-bold mt-1 opacity-80">{statusLabel} · Placar entre as 3 filiais</p>
+          <p className="text-xs font-bold mt-1 opacity-80">Resultado final · Placar entre as 3 filiais</p>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-2 justify-end">
