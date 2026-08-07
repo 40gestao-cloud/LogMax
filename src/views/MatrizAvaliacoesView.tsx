@@ -28,6 +28,14 @@ type Competicao = {
   ciclo_id: string | null;
 };
 
+const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
+
+const STATUS_COMPETICAO: Record<string, { label: string; classe: string }> = {
+  em_andamento:            { label: 'Em andamento', classe: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
+  aguardando_encerramento: { label: 'Em votação',   classe: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  encerrada:               { label: 'Encerrada',    classe: 'border-gray-500/30 bg-gray-500/10 text-gray-400' },
+};
+
 // Central de Avaliação — Competição: hoje é só o painel de Tarefas da Matriz.
 // Admin/CEO cadastra atividades por tipo (treinamento em vendas, treinamento em IA,
 // apresentação, etc.); CEO+conselheiros julgam por participante.
@@ -35,7 +43,11 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   const ehAvaliador = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar = profile.role === 'admin' || ehAvaliador;
 
-  const [competicao, setCompeticao] = useState<Competicao | null>(null);
+  // A aba lista TODAS as competições e só abre a que for clicada. Fixar uma
+  // sozinha escondia as demais — e vão existir várias, não só a 001.
+  const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
+  const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
+  const competicao = competicoes.find(c => c.id === selecionadaId) ?? null;
   const [loadingComp, setLoadingComp] = useState(true);
   const [exportando, setExportando] = useState<'pdf' | 'excel' | 'maxshow' | null>(null);
   // Seção aberta fora das tarefas. null = landing (cards). Isso tira da
@@ -70,15 +82,17 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
         .order('data_inicio', { ascending: false });
       if (!cancelou) {
-        const lista = (data ?? []) as any[];
-        // Prioridade: a que o usuário clicou no Histórico > competição viva >
-        // a encerrada mais recente. Sem a primeira regra, clicar numa encerrada
-        // antiga abriria sempre a última; sem a segunda, abrir uma competição
-        // nova deixaria a tela presa no histórico da anterior.
-        const clicada = alvoClicado.current
-          ? lista.find(c => c.id === alvoClicado.current)
-          : null;
-        setCompeticao(clicada ?? lista.find(c => c.status !== 'encerrada') ?? lista[0] ?? null);
+        const lista = (data ?? []) as Competicao[];
+        setCompeticoes(lista);
+        // Só abre direto o que veio clicado do Histórico — navegação explícita.
+        // Fora disso a aba fica na lista: escolher é do usuário, não da tela.
+        // `alvoClicado` é zerado no uso pra que um refresh do realtime não
+        // reabra a competição depois que o usuário voltou para a lista.
+        if (alvoClicado.current) {
+          const clicada = lista.find(c => c.id === alvoClicado.current);
+          alvoClicado.current = null;
+          if (clicada) setSelecionadaId(clicada.id);
+        }
         setLoadingComp(false);
       }
     };
@@ -98,14 +112,45 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   }
   if (loadingComp) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
 
+  // Landing: uma competição por card. Clicar abre tudo dela.
   if (!competicao) {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
-          <p className="text-sm text-gray-400 mt-1">Tarefas propostas pela Matriz para as filiais durante a competição.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Escolha a competição para ver as tarefas, as notas do conselho e quem participou.
+          </p>
         </div>
-        <EmptyState message="🏆 Nenhuma competição em andamento — abra uma em Matriz → Competição para começar a cadastrar tarefas." />
+
+        {competicoes.length === 0 ? (
+          <EmptyState message="🏆 Nenhuma competição ainda — abra uma em Matriz → Competição para começar a cadastrar tarefas." />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+            {competicoes.map(c => {
+              const meta = STATUS_COMPETICAO[c.status] ?? STATUS_COMPETICAO.encerrada;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelecionadaId(c.id)}
+                  className="neu-flat rounded-2xl border border-white/5 hover:border-accent/40 transition-colors p-4 text-left flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Trophy size={14} className="text-amber-300 shrink-0" />
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${meta.classe}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-black text-gray-100 leading-tight">{c.nome}</h3>
+                  <p className="text-[11px] text-gray-500">
+                    {fmtDataBR(c.data_inicio)} → {fmtDataBR(c.data_fim)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -150,6 +195,15 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       <div className="neu-flat rounded-2xl border border-accent/20 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex flex-col gap-1 min-w-0">
+            {/* Sem isto a competição aberta vira beco: a aba entra na lista e
+                não haveria como voltar a ela sem trocar de tela. */}
+            <button
+              type="button"
+              onClick={() => { setSelecionadaId(null); setSecao(null); }}
+              className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent transition-colors self-start"
+            >
+              <ArrowLeft size={11} /> Todas as competições
+            </button>
             <h2 className="text-xl sm:text-2xl font-bold text-accent tracking-tight truncate">Central de Avaliação — Matriz</h2>
             <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
               <Trophy size={12} className="text-amber-400" />
