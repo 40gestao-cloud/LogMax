@@ -87,15 +87,19 @@ type Placar = {
     frequencia?: {
       taxa: number | null; registros: number; presencas: number;
       faltas: number; justificados: number; atrasos?: number; entrou: boolean;
-      // Migr. 374: cobertura do lançamento. A taxa só fala do que foi
-      // lançado; sem estes dois, 100% em 6 registros e 100% em 24 são o
-      // mesmo número no pódio. Ausentes em snapshot anterior à 374.
+      // Migr. 374/376: cobertura do lançamento. `esperado` é o universo de
+      // pessoa-dia (com calendário da turma, dias letivos × gente ativa);
+      // `ausencias` é o que não foi lançado — e, com calendário, já entrou
+      // como falta. Ausentes em snapshot anterior à 374.
       dias_distintos?: number; funcionarios_ativos?: number;
+      dias_letivos?: number; esperado?: number; ausencias?: number; calendario?: boolean;
     } | null;
   }>;
   inclui_eixos_conselho?: boolean;
   peso_frequencia?: number;
   media_por_item?: boolean;
+  // Migr. 376: com calendário da turma, dia letivo sem lançamento vira falta.
+  calendario_turma?: boolean;
   // Migr. 350: false enquanto o horário da turma não for confirmado em
   // `ponto_jornada` — nesse estado o atraso não desconta.
   atraso_conta?: boolean;
@@ -978,19 +982,25 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                                 Sem ela, 100% em 6 registros e 100% em 24 são o
                                 mesmo número — e a frequência vale 20% da nota. */}
                             {(() => {
-                              const esperado = (p.freq?.dias_distintos ?? 0) * (p.freq?.funcionarios_ativos ?? 0);
-                              const lancados = (p.freq?.registros ?? 0) + (p.freq?.justificados ?? 0);
+                              // `esperado` vem do banco desde a 376; o produto
+                              // é o fallback pro snapshot da 374.
+                              const esperado = p.freq?.esperado
+                                ?? ((p.freq?.dias_distintos ?? 0) * (p.freq?.funcionarios_ativos ?? 0));
+                              const lancados = p.freq?.registros ?? 0;
                               if (!esperado) {
                                 return (
                                   <td className="py-3 text-right tabular-nums pr-4 text-gray-600"
                                       title="Snapshot anterior à migr. 374 não guarda a cobertura.">—</td>
                                 );
                               }
+                              const comCalendario = !!p.freq?.calendario;
                               const pct = Math.round((lancados / esperado) * 100);
                               return (
                                 <td className="py-3 text-right tabular-nums pr-4"
-                                    title={`${lancados} de ${esperado} lançamento(s) esperado(s) — ${p.freq?.dias_distintos} dia(s) com ponto × ${p.freq?.funcionarios_ativos} pessoa(s) ativa(s). Abaixo de 100% a taxa fala de um pedaço da unidade.`}>
-                                  <span className={pct >= 100 ? 'text-gray-400' : 'text-amber-400 font-bold'}>
+                                    title={comCalendario
+                                      ? `${lancados} de ${esperado} lançamento(s) esperado(s) — ${p.freq?.dias_letivos} dia(s) letivo(s) × ${p.freq?.funcionarios_ativos} pessoa(s). Os ${p.freq?.ausencias ?? 0} que faltaram já contam como falta na taxa.`
+                                      : `${lancados} de ${esperado} — sem calendário da turma configurado, o que não foi lançado não entra na conta e a taxa pode estar inflada.`}>
+                                  <span className={pct >= 100 ? 'text-gray-400' : comCalendario ? 'text-gray-400' : 'text-amber-400 font-bold'}>
                                     {pct}%
                                   </span>
                                   <span className="text-gray-600"> ({lancados}/{esperado})</span>
@@ -1018,8 +1028,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     : `atraso valendo meio dia (entrada após ${placar.jornada_entrada ?? '—'})`}, falta zerando e
                   justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
                   Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
-                  Cobertura = quanto do ponto esperado foi de fato lançado; abaixo de 100% a taxa descreve só parte da unidade,
-                  e é assim que se enxerga quem "melhora" a frequência deixando de lançar.
+                  {placar.calendario_turma
+                    ? ' Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
+                    : ' Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na Central de Avaliação, para a falta descontar.'}
                 </p>
               </div>
 

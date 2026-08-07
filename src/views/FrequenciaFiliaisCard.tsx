@@ -25,7 +25,17 @@ type LinhaFreq = {
   jornada_entrada: string | null;
   jornada_tolerancia: number | null;
   atraso_conta: boolean;
+  // Migr. 376: com calendário da turma configurado, dia letivo sem lançamento
+  // vira falta. Sem calendário, a conta continua sendo só o que foi lançado.
+  // Opcionais: a RPC só devolve os três a partir da 376. Enquanto o banco de
+  // alguma turma estiver atrás do deploy, a tela cai no comportamento antigo
+  // em vez de renderizar "24/undefined".
+  ausencias?: number;
+  esperado?: number;
+  tem_calendario?: boolean;
 };
+
+const DIAS_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 // Ordem canônica das unidades no projeto inteiro. A RPC devolve alfabético
 // (MaxLook viria primeiro), então a ordenação é aqui.
@@ -70,6 +80,7 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
       .channel(`freq-filiais-${competicaoId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_eletronico' }, () => carregar())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_jornada' }, () => carregar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_calendario_excecoes' }, () => carregar())
       .subscribe();
     return () => { supabase.removeChannel(canal); };
   }, [competicaoId, carregar]);
@@ -99,6 +110,16 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
         <JornadaNaoConfigurada profile={profile} showToast={showToast} onSalvo={carregar} />
       )}
 
+      {!loading && !erro && linhas.length > 0 && (
+        <CalendarioTurma
+          profile={profile}
+          showToast={showToast}
+          onSalvo={carregar}
+          configurado={!!jornada?.tem_calendario}
+          entradaAtual={jornada?.jornada_entrada ?? null}
+        />
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8"><Loader2 size={16} className="animate-spin text-accent" /></div>
       ) : erro ? (
@@ -112,8 +133,11 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
             // Um lançamento por funcionário por dia é o esperado. Muito abaixo
             // disso, a taxa é alta porque faltou lançar, não porque a turma
             // compareceu — e é justamente assim que o eixo seria burlado.
-            const esperado = l.dias_distintos * l.funcionarios_ativos;
-            const subnotificado = !semRegistro && esperado > 0
+            // Com calendário configurado, faltar de lançar JÁ pune (a ausência
+            // entra como falta), então o alerta perde a função. Sem calendário
+            // ele continua sendo a única defesa contra taxa inflada.
+            const esperado = l.esperado ?? (l.dias_distintos * l.funcionarios_ativos);
+            const subnotificado = !semRegistro && !l.tem_calendario && esperado > 0
               && (l.registros + l.justificados) < esperado * 0.8;
             return (
               <div key={l.filial} className="neu-pressed rounded-xl p-3 flex flex-col gap-2">
@@ -141,13 +165,18 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
                         aparece na própria coluna, senão o mesmo dia seria contado
                         duas vezes na leitura. Justificado saiu do card — está
                         fora da conta por definição e só polui a comparação. */}
-                    <div className="grid grid-cols-3 gap-1 text-center">
+                    <div className={`grid ${l.tem_calendario ? 'grid-cols-4' : 'grid-cols-3'} gap-1 text-center`}>
                       <Numero label="Presenças" valor={l.presencas - l.atrasos} tom="text-emerald-300" />
                       <Numero label="Faltas"    valor={l.faltas}   tom="text-red-300" />
                       <Numero label="Atrasos"   valor={l.atrasos}  tom="text-amber-300" />
+                      {/* Sem calendário, ausência não é medível: o dia sem
+                          lançamento não existe pra conta (migr. 376). */}
+                      {l.tem_calendario && (
+                        <Numero label="Sem registro" valor={l.ausencias ?? 0} tom="text-red-300" />
+                      )}
                     </div>
                     <span className="text-[10px] text-gray-500 tabular-nums pt-1 border-t border-white/5">
-                      {l.registros} registro{l.registros === 1 ? '' : 's'} · {l.dias_distintos} dia{l.dias_distintos === 1 ? '' : 's'} · {l.funcionarios_ativos} funcionário{l.funcionarios_ativos === 1 ? '' : 's'}
+                      {l.registros}/{esperado} lançado{esperado === 1 ? '' : 's'} · {l.dias_distintos} dia{l.dias_distintos === 1 ? '' : 's'} {l.tem_calendario ? 'letivo' : 'com ponto'}{l.dias_distintos === 1 ? '' : 's'} · {l.funcionarios_ativos} funcionário{l.funcionarios_ativos === 1 ? '' : 's'}
                       {l.justificados > 0 && ` · ${l.justificados} justificado${l.justificados === 1 ? '' : 's'} fora da conta`}
                     </span>
                     {subnotificado && (
@@ -228,6 +257,218 @@ function JornadaNaoConfigurada({ profile, showToast, onSalvo }: {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendário da turma (migr. 376).
+//
+// Sem ele, o denominador da frequência é "o que foi lançado" — e aí não faltar
+// e não registrar dão o mesmo número. Com ele, cada pessoa ativa responde por
+// cada dia letivo: ausência sem lançamento vira falta.
+//
+// Mora aqui, e não no código, porque cada turma tem um calendário: hoje ERP,
+// contabilidade e aprendiz têm 2 dias por semana e adm tem 1 — e a próxima
+// turma pode ter 5.
+// ─────────────────────────────────────────────────────────────────────────────
+type Excecao = { data: string; tipo: 'sem_aula' | 'aula_extra'; motivo: string | null };
+
+function CalendarioTurma({ profile, showToast, onSalvo, configurado, entradaAtual }: {
+  profile: UserProfile;
+  showToast?: any;
+  onSalvo: () => void;
+  configurado: boolean;
+  entradaAtual: string | null;
+}) {
+  const podeConfigurar = profile.role === 'admin' || profile.role === 'ceo';
+  const [aberto, setAberto] = useState(false);
+  const [dias, setDias] = useState<number[]>([]);
+  const [excecoes, setExcecoes] = useState<Excecao[]>([]);
+  const [novaData, setNovaData] = useState('');
+  const [novoTipo, setNovoTipo] = useState<'sem_aula' | 'aula_extra'>('sem_aula');
+  const [novoMotivo, setNovoMotivo] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const carregarConfig = useCallback(async () => {
+    const [{ data: j }, { data: ex }] = await Promise.all([
+      supabase.from('ponto_jornada').select('dias_semana').eq('id', true).maybeSingle(),
+      supabase.from('ponto_calendario_excecoes').select('data, tipo, motivo').order('data'),
+    ]);
+    setDias((((j as any)?.dias_semana ?? []) as number[]));
+    setExcecoes((ex ?? []) as Excecao[]);
+  }, []);
+
+  useEffect(() => { if (aberto) carregarConfig(); }, [aberto, carregarConfig]);
+
+  const salvarDias = async () => {
+    setSalvando(true);
+    const { error } = await supabase.rpc('definir_ponto_jornada', {
+      p_entrada: entradaAtual ?? PONTO_HORARIOS.entrada,
+      p_dias_semana: dias,
+    });
+    setSalvando(false);
+    if (error) return showToast?.(error.message || 'Erro ao salvar calendário', 'error');
+    showToast?.(dias.length === 0
+      ? 'Calendário limpo — a frequência volta a medir só o que for lançado.'
+      : 'Calendário salvo — dia letivo sem lançamento passa a contar como falta.', 'success');
+    onSalvo();
+  };
+
+  const addExcecao = async () => {
+    if (!novaData) return showToast?.('Escolha a data.', 'error');
+    setSalvando(true);
+    const { error } = await supabase.rpc('definir_excecao_calendario', {
+      p_data: novaData, p_tipo: novoTipo, p_motivo: novoMotivo.trim() || null,
+    });
+    setSalvando(false);
+    if (error) return showToast?.(error.message || 'Erro ao salvar exceção', 'error');
+    setNovaData(''); setNovoMotivo('');
+    await carregarConfig();
+    onSalvo();
+  };
+
+  const removerExcecao = async (data: string) => {
+    const { error } = await supabase.rpc('remover_excecao_calendario', { p_data: data });
+    if (error) return showToast?.(error.message || 'Erro ao remover', 'error');
+    await carregarConfig();
+    onSalvo();
+  };
+
+  const editor = (
+    <EditorCalendario
+      dias={dias} setDias={setDias} salvarDias={salvarDias} salvando={salvando}
+      excecoes={excecoes} novaData={novaData} setNovaData={setNovaData}
+      novoTipo={novoTipo} setNovoTipo={setNovoTipo} novoMotivo={novoMotivo}
+      setNovoMotivo={setNovoMotivo} addExcecao={addExcecao} removerExcecao={removerExcecao}
+    />
+  );
+
+  if (!configurado) {
+    return (
+      <div className="neu-pressed rounded-xl border border-amber-500/30 p-3 flex flex-col gap-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-gray-300 leading-snug">
+            <b className="text-amber-300">Faltar ainda não está descontando.</b> Sem os dias de aula desta
+            turma, o cálculo só divide pelo que foi lançado — quem não registra ponto não aparece na conta.
+            {podeConfigurar
+              ? ' Marque abaixo os dias em que esta turma tem aula.'
+              : ' Admin ou CEO precisa configurar os dias de aula da turma.'}
+          </p>
+        </div>
+        {podeConfigurar && (
+          <button onClick={() => setAberto(a => !a)}
+            className="self-start flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 ml-6">
+            <CalendarCheck size={11} /> Configurar calendário da turma
+          </button>
+        )}
+        {aberto && podeConfigurar && editor}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 flex-wrap text-[10px] text-gray-500 font-bold">
+        <CalendarCheck size={11} className="text-emerald-400" />
+        <span className="text-emerald-300">Calendário da turma ativo</span>
+        <span>· dia letivo sem lançamento conta como falta</span>
+        {podeConfigurar && (
+          <button onClick={() => setAberto(a => !a)} className="text-accent underline underline-offset-2">
+            {aberto ? 'fechar' : 'editar'}
+          </button>
+        )}
+      </div>
+      {aberto && podeConfigurar && editor}
+    </div>
+  );
+}
+
+function EditorCalendario({ dias, setDias, salvarDias, salvando, excecoes, novaData, setNovaData,
+  novoTipo, setNovoTipo, novoMotivo, setNovoMotivo, addExcecao, removerExcecao }: {
+  dias: number[];
+  setDias: React.Dispatch<React.SetStateAction<number[]>>;
+  salvarDias: () => void;
+  salvando: boolean;
+  excecoes: Excecao[];
+  novaData: string;
+  setNovaData: (v: string) => void;
+  novoTipo: 'sem_aula' | 'aula_extra';
+  setNovoTipo: (v: 'sem_aula' | 'aula_extra') => void;
+  novoMotivo: string;
+  setNovoMotivo: (v: string) => void;
+  addExcecao: () => void;
+  removerExcecao: (data: string) => void;
+}) {
+  const toggle = (d: number) =>
+    setDias(atual => atual.includes(d) ? atual.filter(x => x !== d) : [...atual, d].sort());
+
+  return (
+    <div className="neu-pressed rounded-xl p-3 flex flex-col gap-3 mt-1">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] uppercase tracking-widest font-bold text-gray-500">
+          Dias com aula
+        </label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {DIAS_LABEL.map((label, d) => (
+            <button key={d} onClick={() => toggle(d)}
+              className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-colors ${
+                dias.includes(d)
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'neu-button text-gray-500 hover:text-gray-300'
+              }`}>
+              {label}
+            </button>
+          ))}
+          <button onClick={salvarDias} disabled={salvando}
+            className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 disabled:opacity-50">
+            {salvando ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-500 leading-snug">
+          Nenhum dia marcado = calendário desligado: volta a valer só o que foi lançado. Lançamento em dia
+          sem aula é ignorado, e quem foi admitido no meio do período só responde a partir da admissão.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5">
+        <label className="text-[10px] uppercase tracking-widest font-bold text-gray-500">
+          Feriado, recesso ou reposição
+        </label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
+            className="neu-input py-1.5 px-2 text-xs rounded-lg text-gray-100" />
+          <select value={novoTipo} onChange={e => setNovoTipo(e.target.value as 'sem_aula' | 'aula_extra')}
+            className="neu-input py-1.5 px-2 text-xs rounded-lg text-gray-100">
+            <option value="sem_aula">Sem aula</option>
+            <option value="aula_extra">Aula extra</option>
+          </select>
+          <input type="text" value={novoMotivo} onChange={e => setNovoMotivo(e.target.value)}
+            placeholder="Motivo (opcional)"
+            className="neu-input py-1.5 px-2 text-xs rounded-lg text-gray-100 flex-1 min-w-[140px]" />
+          <button onClick={addExcecao} disabled={salvando}
+            className="text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 disabled:opacity-50">
+            Adicionar
+          </button>
+        </div>
+        {excecoes.length > 0 && (
+          <div className="flex flex-col gap-1 pt-1">
+            {excecoes.map(e => (
+              <div key={e.data} className="flex items-center gap-2 text-[11px]">
+                <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                  e.tipo === 'sem_aula' ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'
+                }`}>
+                  {e.tipo === 'sem_aula' ? 'sem aula' : 'aula extra'}
+                </span>
+                <span className="text-gray-300 tabular-nums">{e.data.split('-').reverse().join('/')}</span>
+                <span className="text-gray-500 truncate flex-1">{e.motivo ?? '—'}</span>
+                <button onClick={() => removerExcecao(e.data)} className="text-gray-500 hover:text-red-300">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
