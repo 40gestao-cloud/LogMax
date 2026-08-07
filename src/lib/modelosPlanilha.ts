@@ -413,6 +413,25 @@ const colLetra = (n: number) => {
   return s;
 };
 
+/**
+ * Logo do LogMax para a faixa de topo das abas.
+ *
+ * Vem por `fetch` do próprio site em vez de embutido em base64 no bundle: o
+ * PNG tem 53 KB, viraria ~71 KB de string carregada por todo mundo que abre o
+ * app, e só serve a quem clica em "Modelo de planilha". Falhou o fetch (offline,
+ * PWA sem cache do asset), devolve null e a planilha sai sem logo — arquivo sem
+ * marca é chato, arquivo que não baixa é problema.
+ */
+async function carregarLogo(): Promise<ArrayBuffer | null> {
+  try {
+    const r = await fetch('/icon-logmax.png');
+    if (!r.ok) return null;
+    return await r.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
 /** Largura que cabe o cabeçalho E o exemplo — a antiga só olhava o cabeçalho. */
 const larguraDaColuna = (campo: ModeloCampo): number => {
   const porTitulo  = campo.col.length + 6;
@@ -431,6 +450,20 @@ export async function baixarModeloPlanilha(entidade: ModeloEntidade, filial: str
   const wb = new ExcelJS.Workbook();
   wb.creator = 'LogMax';
   wb.created = new Date();
+
+  const logo = await carregarLogo();
+  const logoId = logo ? wb.addImage({ buffer: logo as any, extension: 'png' }) : null;
+  // Faixa dourada do topo com o logo à esquerda. O texto ganha recuo para não
+  // ficar embaixo da imagem — a imagem flutua sobre a célula, não empurra nada.
+  const marcar = (aba: any, linha: number) => {
+    if (logoId === null) return;
+    aba.addImage(logoId, {
+      tl: { col: 0.25, row: linha - 1 + 0.12 },
+      ext: { width: 34, height: 34 },
+      editAs: 'oneCell',
+    });
+  };
+  const RECUO_LOGO = logoId === null ? 0 : 5;
 
   // ---- Aba oculta com as opções -------------------------------------------
   // Antes, as opções iam inline na fórmula da validação (`"A,B,C"`). Isso tinha
@@ -466,10 +499,11 @@ export async function baixarModeloPlanilha(entidade: ModeloEntidade, filial: str
 
   const tituloRow = info.addRow([modelo.titulo]);
   info.mergeCells(`A${tituloRow.number}:D${tituloRow.number}`);
-  tituloRow.height = 30;
+  tituloRow.height = 40;
   tituloRow.getCell(1).font = { bold: true, size: 16, color: { argb: BLACK_HEX } };
-  tituloRow.getCell(1).alignment = { vertical: 'middle' };
+  tituloRow.getCell(1).alignment = { vertical: 'middle', indent: RECUO_LOGO };
   tituloRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD_HEX } };
+  marcar(info, tituloRow.number);
 
   const introRow = info.addRow([modelo.intro]);
   info.mergeCells(`A${introRow.number}:D${introRow.number}`);
@@ -545,10 +579,11 @@ export async function baixarModeloPlanilha(entidade: ModeloEntidade, filial: str
 
   const acaoRow = ws.addRow([modelo.acao]);
   ws.mergeCells(`A1:${ultimaCol}1`);
-  acaoRow.height = 30;
+  acaoRow.height = 40;
   acaoRow.getCell(1).font = { bold: true, size: 16, color: { argb: BLACK_HEX } };
-  acaoRow.getCell(1).alignment = { vertical: 'middle' };
+  acaoRow.getCell(1).alignment = { vertical: 'middle', indent: RECUO_LOGO };
   acaoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD_HEX } };
+  marcar(ws, acaoRow.number);
 
   ws.addRow([]).height = 6;
 
