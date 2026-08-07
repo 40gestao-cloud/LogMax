@@ -27,12 +27,17 @@ import type { UserProfile } from '../hooks/useUserProfile';
 
 type Pendencia = { label: string; count: number; view: string; hint: string };
 
+// Comitê de Auditoria e Matriz de Riscos só existem no modo Matriz (sidebar,
+// 2026-08-07). O painel acompanha: em modo filial esses dois atalhos apontariam
+// para telas que o menu não oferece mais.
 export function PainelGovernanca({
   profile,
   onNavigate,
+  matrizMode,
 }: {
   profile?: UserProfile;
   onNavigate?: (view: string) => void;
+  matrizMode?: boolean;
 }) {
   const conselho  = isConselho(profile);
   // Executor = quem responde por uma unidade e presta contas dela.
@@ -65,7 +70,7 @@ export function PainelGovernanca({
           hint: 'Rascunho aberto. Enquanto não submeter, o Conselho não tem o que julgar.' },
         { label: 'Auditoria a responder',   count: quest, view: 'comite-auditoria',
           hint: 'O Comitê questionou uma operação e espera a explicação.' },
-      ].filter(p => p.count > 0));
+      ].filter(p => p.count > 0 && (matrizMode || p.view !== 'comite-auditoria')));
     } else {
       setExec([]);
     }
@@ -103,11 +108,12 @@ export function PainelGovernanca({
           hint: 'Severidade 15+. Revise probabilidade, impacto e mitigação.' },
         { label: 'Bônus a pagar',           count: bonus, view: 'rh-remuneraçãovariável',
           hint: 'Apuração fechada esperando o Conselho mandar creditar.' },
-      ].filter(p => p.count > 0));
+      ].filter(p => p.count > 0
+        && (matrizMode || (p.view !== 'comite-auditoria' && p.view !== 'riscos'))));
     } else {
       setDelib([]);
     }
-  }, [profile?.id, conselho, executor]);
+  }, [profile?.id, conselho, executor, matrizMode]);
 
   useEffect(() => { void carregar(); }, [carregar]);
 

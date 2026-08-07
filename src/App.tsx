@@ -341,6 +341,21 @@ const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false): boolean
   return true;
 };
 
+// Views que existem em UM modo só. O menu já as esconde, mas ele não é a única
+// porta: activeView vem do sessionStorage, dos cards da Início e do botão
+// Voltar. Sem esta lista, uma view da Matriz sobrevivia à troca pra filial
+// (relatado em 2026-08-07) e vice-versa.
+// Só entram aqui as views cujo item de menu é condicionado a `matrizMode` —
+// as telas que aparecem nos dois modos e se adaptam por dentro (feedback-org,
+// avaliacoes, financeiro-*) ficam de fora de propósito.
+const MATRIZ_ONLY_VIEWS = new Set([
+  'sessoes-gerais', 'analise-ia', 'matriz-capital', 'matriz-competicao',
+  'matriz-avaliacoes', 'aula-modo', 'comite-auditoria', 'riscos',
+]);
+const FILIAL_ONLY_VIEWS = new Set(['demandas']);
+const viewPermitidaNoModo = (view: string, matrizMode: boolean): boolean =>
+  matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
+
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
@@ -372,22 +387,20 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {/* Comitê de Auditoria (migr. 380). A tela de Auditoria virou a aba
             "Trilha" daqui em 2026-08-07 — eram dois itens de menu para o mesmo
             trabalho, e a busca do Comitê era pior que a de lá.
-            Recorte: o gerente entra porque é ele quem responde ao
-            questionamento; abrir e encerrar é do Conselho, e quem barra é a
-            RPC, não o menu. A RLS de `historico_operacoes` recorta por filial:
-            gerente vê a própria, Matriz vê todas. */}
-        {aulaAllow('auditoria') && (profile?.role === 'admin' || profile?.role === 'ceo'
-          || isConselheiro(profile) || profile?.role === 'gerente') && (
+            Recorte: exclusivo do modo Matriz — fiscalização é ato de holding e
+            dentro de uma unidade o item não tem o que fazer. `matrizMode` já
+            implica admin/CEO/conselheiro (podeEscolherFilial), então checar
+            role de novo aqui é redundante. Quem barra o ato continua sendo a
+            RPC, não o menu. */}
+        {matrizMode && aulaAllow('auditoria') && (
           <button onClick={() => { navigate('comite-auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'comite-auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <ShieldAlert size={18} /><span>Comitê de Auditoria</span>
           </button>
         )}
         {/* Matriz de Riscos (migr. 385) — o par prospectivo da Auditoria: ela
             olha o que já aconteceu, esta olha o que ainda não aconteceu. Mesmo
-            recorte de papéis, porque o dono do risco costuma ser o gerente, e a
-            RLS confina por filial (a unidade vê a dela e as corporativas). */}
-        {aulaAllow('riscos') && (profile?.role === 'admin' || profile?.role === 'ceo'
-          || isConselheiro(profile) || profile?.role === 'gerente') && (
+            recorte da Auditoria: só modo Matriz. */}
+        {matrizMode && aulaAllow('riscos') && (
           <button onClick={() => { navigate('riscos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'riscos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <AlertTriangle size={18} /><span>Matriz de Riscos</span>
           </button>
@@ -756,20 +769,27 @@ function LogMaxAppInner() {
   // Qualquer troca de contexto (Filial↔Matriz ou entre filiais) reseta
   // activeView pra 'inicio'. Cada contexto tem sidebar/RBAC diferentes,
   // manter a view anterior gera flash de "sem permissão" ou dados de
-  // outra filial. Guard `primeiraTrocaRef` evita disparar no mount inicial
-  // — aí queremos preservar o activeView vindo do sessionStorage.
+  // outra filial.
   // Feito durante o render (padrão "store info from previous renders") em
   // vez de useEffect: assim o reset acontece ANTES do commit, sem flash da
   // view antiga sob a nova filial.
-  const filialAnteriorRef = useRef<FilialOp | null>(filialAtiva);
-  const primeiraTrocaRef = useRef(true);
+  //
+  // O ref guarda a última escolha COMMITADA (só é tocado quando escolheu=true)
+  // e nasce com o sentinel 'UNSET' quando ninguém escolheu ainda. A primeira
+  // escolha da sessão não reseta — é ali que o activeView restaurado do
+  // sessionStorage (ou a filial injetada pelo efeito do colaborador) deve
+  // sobreviver. Da segunda em diante, toda troca reseta.
+  //
+  // Versão anterior usava um `primeiraTrocaRef` booleano e vazava: quem abria
+  // a sessão escolhendo Matriz não disparava mudança nenhuma (null === null),
+  // então a flag continuava intacta e era consumida pela PRIMEIRA troca real
+  // — Matriz → Filial mantinha a view da Matriz. O sentinel distingue
+  // "nunca escolhi" de "escolhi Matriz", que é justamente o que faltava.
+  const filialAnteriorRef = useRef<FilialOp | null | 'UNSET'>(escolheu ? filialAtiva : 'UNSET');
   if (escolheu && filialAnteriorRef.current !== filialAtiva) {
+    const primeiraEscolha = filialAnteriorRef.current === 'UNSET';
     filialAnteriorRef.current = filialAtiva;
-    if (primeiraTrocaRef.current) {
-      primeiraTrocaRef.current = false;
-    } else {
-      setActiveView('inicio');
-    }
+    if (!primeiraEscolha) setActiveView('inicio');
   }
 
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
@@ -953,6 +973,14 @@ function LogMaxAppInner() {
   // Em modo Matriz (filialAtiva===null + podeEscolherFilial) a sidebar mostra
   // apenas gerenciamentos/relatórios — operações unit-scoped ficam ocultas.
   const matrizMode = podeEscolherFilial && filialAtiva === null;
+
+  // Segunda camada da troca de contexto: mesmo que o reset acima não pegue
+  // (view veio do sessionStorage de outra sessão, de um card da Início ou do
+  // botão Voltar), uma view exclusiva do outro modo cai em 'inicio' aqui —
+  // durante o render, antes do commit, então não há flash. 'inicio' é
+  // permitida nos dois modos, o que garante que isto converge.
+  if (!viewPermitidaNoModo(activeView, matrizMode)) setActiveView('inicio');
+
   const visibleModulesBase = matrizMode
     // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,
     // Análise com IA, Comparativos Matriz). Sidebar top-level fica só com os
