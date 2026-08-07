@@ -23,6 +23,27 @@ const SETOR_LABEL: Record<string, string> = {
   gerencia:   'Gerência',
 };
 
+// Setores que o select oferece a todo mundo. 'all' fica de fora: é escopo de
+// cargo global (admin/CEO/conselheiro), não um setor que se escolhe.
+const SETORES_SELECIONAVEIS = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
+
+const roleEscopoGlobal = (role: string) => role === 'ceo' || role === 'conselheiro';
+
+/**
+ * Setor coerente com o cargo.
+ *
+ * Existe pelo mesmo motivo da correção de filial logo abaixo, e o bug era o
+ * mesmo: ao rebaixar um CEO, a `<option value="all">` some do select, o
+ * navegador passa a exibir a primeira opção ("Logística") e o estado React
+ * continua 'all' — remover uma option não dispara `onChange`. A tela dizia
+ * Logística e o payload mandava 'all'; o usuário virava colaborador com
+ * escopo global, que foi o que aconteceu com três alunos em 2026-08-07.
+ */
+const setorParaRole = (role: string, setor: string): string => {
+  if (roleEscopoGlobal(role)) return 'all';
+  return setor === 'all' ? SETORES_SELECIONAVEIS[0] : setor;
+};
+
 const ROLE_LABEL: Record<string, string> = {
   admin:       'Administrador',
   ceo:         'CEO',
@@ -107,7 +128,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if ((form.role === 'colaborador' || form.role === 'gerente') && form.filial === 'Matriz') {
       setForm((p: any) => ({ ...p, filial: FILIAIS_GERENTE[0] }));
     }
-  }, [form.role, form.filial]);
+    const setorOk = setorParaRole(form.role, form.setor);
+    if (setorOk !== form.setor) setForm((p: any) => ({ ...p, setor: setorOk }));
+  }, [form.role, form.filial, form.setor]);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -263,7 +286,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if ((editForm.role === 'colaborador' || editForm.role === 'gerente') && editForm.filial === 'Matriz') {
       setEditForm((p: any) => (p ? { ...p, filial: FILIAIS_GERENTE[0] } : p));
     }
-  }, [editForm?.role, editForm?.filial]);
+    const setorOk = setorParaRole(editForm.role, editForm.setor);
+    if (setorOk !== editForm.setor) {
+      setEditForm((p: any) => (p ? { ...p, setor: setorOk } : p));
+    }
+  }, [editForm?.role, editForm?.filial, editForm?.setor]);
 
   useEffect(() => {
     if (!supabase) { setIsLoading(false); return; }
@@ -441,8 +468,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       if (editForm.password) payload.password = editForm.password;
       if (isGlobal) {
         payload.role = editForm.role;
-        // CEO sempre setor 'all' — servidor força, mas mandamos coerente.
-        payload.setor = (editForm.role === 'ceo' || editForm.role === 'conselheiro') ? 'all' : editForm.setor;
+        // Nunca envia `editForm.setor` cru: se o cargo mudou para não-global,
+        // 'all' ainda pode estar no estado (a option some sem disparar
+        // onChange). `setorParaRole` é a mesma régua do efeito acima.
+        payload.setor = setorParaRole(editForm.role, editForm.setor);
         // CEO já é global; extras zeradas.
         payload.setores_extras = editForm.role === 'ceo'
           ? []
@@ -493,7 +522,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const setorOptions = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
+  const setorOptions = SETORES_SELECIONAVEIS;
 
   // Admin pode criar CEO/gerente/colaborador. CEO pode criar gerente/colaborador.
   // Gerente só cria colaborador.
@@ -966,12 +995,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <label htmlFor="user-edit-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
                   <select id="user-edit-setor" value={editForm.setor}
                     onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
-                    disabled={editForm.role === 'ceo' || editForm.role === 'conselheiro'}
+                    disabled={roleEscopoGlobal(editForm.role)}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'].map(s => (
+                    {SETORES_SELECIONAVEIS.map(s => (
                       <option key={s} value={s}>{SETOR_LABEL[s]}</option>
                     ))}
-                    {(editForm.role === 'ceo' || editForm.role === 'conselheiro') && <option value="all">{SETOR_LABEL.all}</option>}
+                    {roleEscopoGlobal(editForm.role) && <option value="all">{SETOR_LABEL.all}</option>}
                   </select>
                 </div>
 

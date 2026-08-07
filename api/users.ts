@@ -94,6 +94,12 @@ async function handleCreate(
     }
     setor = 'all'; extras = [];
   }
+  // Mesma trava da edição: 'all' é escopo de cargo global, não setor.
+  if (setor === 'all' && role !== 'admin' && role !== 'ceo' && role !== 'conselheiro') {
+    return res.status(400).json({
+      error: 'Escopo global é exclusivo de admin, CEO e conselheiro. Escolha um setor.',
+    });
+  }
 
   if (extras.length > 0 && callerProfile.role !== 'admin' && callerProfile.role !== 'ceo') {
     log.warn('user.permission_denied', { caller_id: callerId, reason: 'gerente_setores_extras' });
@@ -226,6 +232,19 @@ async function handleUpdate(
   if (updates.role === 'ceo' || updates.role === 'conselheiro') {
     updates.setor = 'all';
     updates.setores_extras = [];
+  }
+  // 'all' é escopo de cargo global, não um setor que se atribui. Sem esta
+  // trava, rebaixar um CEO deixava um colaborador com escopo global: o select
+  // da tela perdia a option 'all' sem disparar onChange, exibia "Logística" e
+  // mandava 'all' assim mesmo (três alunos ficaram assim em 2026-08-07).
+  // Vale para o role que fica DEPOIS da edição, não só para o que veio no
+  // corpo — editar só o setor de um colaborador também passa por aqui.
+  const roleFinal = updates.role ?? targetProfile.role;
+  const escopoGlobalPermitido = roleFinal === 'admin' || roleFinal === 'ceo' || roleFinal === 'conselheiro';
+  if (updates.setor === 'all' && !escopoGlobalPermitido) {
+    return res.status(400).json({
+      error: 'Escopo global é exclusivo de admin, CEO e conselheiro. Escolha um setor.',
+    });
   }
   if (updates.setor === 'gerencia') {
     updates.setores_extras = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'];
