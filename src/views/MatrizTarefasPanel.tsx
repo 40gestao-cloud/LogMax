@@ -1065,7 +1065,11 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
 
   async function excluir() {
     if (!await confirm({
-      message: `Excluir sua avaliação de ${participante.nome_snapshot}? A nota sai da média da filial no placar.`,
+      // Em desligado a frase padrão mentiria: a nota dele já saiu da média
+      // na migr. 364, então excluir não mexe em placar nenhum.
+      message: desligado
+        ? `Excluir sua avaliação de ${participante.nome_snapshot}? Ele está desligado, então a nota já não entra no placar — isto só apaga o registro.`
+        : `Excluir sua avaliação de ${participante.nome_snapshot}? A nota sai da média da filial no placar.`,
       confirmLabel: 'Excluir avaliação',
       danger: true,
     })) return;
@@ -1195,11 +1199,32 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
             </div>
           </>
         ) : desligado ? (
-          <p className="text-xs text-red-400/90">
-            Participante desligado — saiu da filial e não recebe mais nota nesta
-            competição. As notas que ele já tinha continuam registradas, mas
-            deixaram de contar no placar da filial.
-          </p>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-red-400/90">
+              Participante desligado — saiu da filial e não recebe mais nota nesta
+              competição. As notas que ele já tinha continuam registradas, mas
+              deixaram de contar no placar da filial.
+            </p>
+            {/* Bloquear nota NOVA não pode bloquear desfazer a que já existe:
+                o avaliador continua dono da avaliação dele. `remover_avaliacao_matriz`
+                não recusa desligado — só exige a tarefa aberta. */}
+            {minha && podeAvaliar && (
+              <div>
+                <button
+                  onClick={excluir}
+                  disabled={excluindo || salvando}
+                  className="btn-shimmer btn-shimmer--glass-red"
+                >
+                  {excluindo ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                  Excluir minha avaliação
+                </button>
+                <p className="text-[10px] text-gray-500 mt-1.5">
+                  A nota dele já não conta no placar nem no seu contador — excluir
+                  só limpa o registro.
+                </p>
+              </div>
+            )}
+          </div>
         ) : tarefa.status === 'rascunho' ? (
           <p className="text-xs text-amber-300/90">
             Esta tarefa ainda não foi liberada para notas. Admin, CEO ou quem criou a tarefa precisa
