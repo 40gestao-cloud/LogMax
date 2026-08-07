@@ -47,14 +47,20 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
     let cancelou = false;
     const carregar = async (comMask = true) => {
       if (comMask) setLoadingComp(true);
+      // A encerrada entra na busca: declarar a vencedora não pode apagar da
+      // tela as tarefas, as notas e quem fez o quê — é justamente quando se
+      // quer consultar isso. `maybeSingle` saiu porque encerrada há várias.
       const { data } = await supabase
         .from('competicoes_matriz')
         .select('id,nome,data_inicio,data_fim,status,ciclo_id')
         .eq('ativo', true)
-        .in('status', ['em_andamento', 'aguardando_encerramento'])
-        .maybeSingle();
+        .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
+        .order('data_inicio', { ascending: false });
       if (!cancelou) {
-        setCompeticao(data as any);
+        // Competição viva sempre ganha da encerrada: abrir uma nova não pode
+        // deixar a tela presa no histórico da anterior.
+        const lista = (data ?? []) as any[];
+        setCompeticao(lista.find(c => c.status !== 'encerrada') ?? lista[0] ?? null);
         setLoadingComp(false);
       }
     };
@@ -175,9 +181,20 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
         <div className="neu-flat rounded-2xl border border-amber-500/30 px-5 py-3 flex items-start gap-3">
           <Lock size={15} className="text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-gray-300 leading-snug">
-            <b className="text-amber-300">Competição fechada para notas.</b> "{competicao.nome}" saiu de
-            "em andamento" e agora aguarda o voto de encerramento do conselho — nenhuma nota, tarefa nova
-            ou liberação é aceita. Consulta e exportação seguem liberadas.
+            {competicao.status === 'encerrada' ? (
+              <>
+                <b className="text-amber-300">Competição encerrada.</b> "{competicao.nome}" já teve a
+                vencedora declarada. A tela fica em leitura: as tarefas, as notas e quem fez o quê
+                continuam aqui para consulta e exportação. Abrir uma competição nova traz a tela de volta
+                para ela.
+              </>
+            ) : (
+              <>
+                <b className="text-amber-300">Competição fechada para notas.</b> "{competicao.nome}" saiu de
+                "em andamento" e agora aguarda o voto de encerramento do conselho — nenhuma nota, tarefa nova
+                ou liberação é aceita. Consulta e exportação seguem liberadas.
+              </>
+            )}
           </p>
         </div>
       )}
