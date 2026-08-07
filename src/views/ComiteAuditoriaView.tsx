@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Gavel, MessageSquare, Search, ShieldAlert } from 'lucide-react';
+import { Check, Gavel, MessageSquare, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { isConselho } from '../lib/rbac';
+import { AuditoriaOperacoesView, type Linha as TrilhaLinha } from './AuditoriaOperacoesView';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Comitê de Auditoria — a trilha passa a ser lida por alguém (migração 380).
 //
-// A tela de Auditoria já deixa navegar por `historico_operacoes`. Ler, porém,
-// não é fiscalizar: faltava o ato. Aqui o conselheiro escolhe uma operação,
-// abre questionamento, a unidade responde e o comitê encerra como conforme
-// ou não conforme — e a não conformidade vira tarefa com prazo.
+// Ler a trilha não é fiscalizar: faltava o ato. Aqui o conselheiro escolhe
+// uma operação, abre questionamento, a unidade responde e o comitê encerra
+// como conforme ou não conforme — e a não conformidade vira tarefa com prazo.
 //
 // Nenhum dado de operação novo: tudo é fluxo por cima do que já existe.
+//
+// A tela de Auditoria virou a aba "Trilha" daqui (2026-08-07). Eram dois itens
+// de menu para o mesmo trabalho, e o pior lado era o desta tela: a busca daqui
+// era um `ilike` limitado a 25 resultados, enquanto a de lá tinha período,
+// filtro por documento e por pessoa, paginação e export. Fiscalizar 1.482
+// linhas de trilha com 25 resultados por vez não é fiscalizar.
 
 type Status = 'aberta' | 'respondida' | 'encerrada';
 
@@ -68,10 +74,9 @@ export function ComiteAuditoriaView({
 
   const [revisoes, setRevisoes] = useState<Revisao[]>([]);
   const [operacoes, setOperacoes] = useState<Record<string, Operacao>>({});
-  const [recentes, setRecentes] = useState<Operacao[]>([]);
+  const [aba, setAba]           = useState<'revisoes' | 'trilha'>('revisoes');
   const [loading, setLoading]   = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [busca, setBusca]       = useState('');
 
   const [novoAlvo, setNovoAlvo]     = useState<Operacao | null>(null);
   const [questionamento, setQuest]  = useState('');
@@ -111,19 +116,15 @@ export function ComiteAuditoriaView({
     return () => { supabase?.removeChannel(ch); };
   }, [carregar]);
 
-  // Busca na trilha para escolher o alvo do questionamento. A RLS de
-  // historico_operacoes é quem recorta por unidade — a tela não repete a régua.
-  const buscarOperacoes = useCallback(async () => {
-    if (!supabase) return;
-    let q = supabase.from('historico_operacoes')
-      .select('id, entidade, entidade_id, filial, evento, detalhe, ator_nome, ator_setor, created_at')
-      .order('created_at', { ascending: false })
-      .limit(25);
-    if (busca.trim()) q = q.or(`entidade.ilike.%${busca}%,evento.ilike.%${busca}%,ator_nome.ilike.%${busca}%`);
-    const { data, error } = await q;
-    if (error) { showToast(`Erro na busca: ${error.message}`, 'error'); return; }
-    setRecentes((data ?? []) as Operacao[]);
-  }, [busca, showToast]);
+  // A trilha vive na aba "Trilha"; questionar de lá traz a linha para cá.
+  const questionarDaTrilha = useCallback((l: TrilhaLinha) => {
+    setNovoAlvo({
+      id: l.id, entidade: l.entidade, entidade_id: l.entidade_id, filial: l.filial,
+      evento: l.evento, detalhe: l.detalhe, ator_nome: l.ator_nome,
+      ator_setor: l.ator_setor, created_at: l.created_at,
+    });
+    setAba('revisoes');
+  }, []);
 
   const abrir = async () => {
     if (!supabase || !novoAlvo) return;
@@ -135,7 +136,7 @@ export function ComiteAuditoriaView({
     setSalvando(false);
     if (error) { showToast(`Erro: ${error.message}`, 'error'); return; }
     showToast('Questionamento aberto e notificado ao setor responsável.', 'success');
-    setNovoAlvo(null); setQuest(''); setRecentes([]);
+    setNovoAlvo(null); setQuest('');
     carregar();
   };
 
@@ -184,39 +185,48 @@ export function ComiteAuditoriaView({
         </p>
       </div>
 
-      {conselho && (
-        <div className="neu-card p-4 space-y-3">
-          <div className="text-sm font-medium text-gray-300">Abrir questionamento</div>
-          <div className="flex flex-wrap gap-2">
-            <input value={busca} onChange={e => setBusca(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') buscarOperacoes(); }}
-              placeholder="Buscar na trilha por documento, evento ou pessoa…"
-              className="neu-input flex-1 min-w-[240px] px-3 py-2 rounded-xl text-sm" />
-            <button onClick={buscarOperacoes}
-              className="neu-button px-3 py-2 rounded-xl text-sm text-gray-100 flex items-center gap-2">
-              <Search size={14} /> Buscar
-            </button>
-          </div>
+      {/* Duas abas: o que já está em curso e a trilha de onde sai o próximo
+          questionamento. */}
+      <div className="flex gap-1.5">
+        {([['revisoes', 'Questionamentos'], ['trilha', 'Trilha']] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setAba(id)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${
+              aba === id ? 'neu-pressed text-accent' : 'neu-button text-gray-500 hover:text-gray-300'
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {recentes.length > 0 && !novoAlvo && (
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {recentes.map(op => (
-                <button key={op.id} onClick={() => setNovoAlvo(op)}
-                  className="w-full text-left neu-button px-3 py-2 rounded-xl text-sm">
-                  <div className="flex items-center gap-2">
-                    <FilialBadge filial={op.filial} />
-                    <span className="text-gray-200">{op.evento}</span>
-                    <span className="text-gray-500 text-xs">· {op.entidade}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {op.ator_nome ?? '—'} · {formatDataHoraBR(op.created_at)}
-                  </div>
-                </button>
-              ))}
-            </div>
+      {aba === 'trilha' && (
+        <div className="min-h-[60vh] flex flex-col">
+          <AuditoriaOperacoesView
+            showToast={showToast}
+            embutido
+            onQuestionar={conselho ? questionarDaTrilha : undefined}
+          />
+          {!conselho && (
+            <p className="text-xs text-gray-500 mt-3">
+              Você navega a trilha; abrir questionamento é do Comitê.
+            </p>
           )}
+        </div>
+      )}
 
+      {aba === 'revisoes' && conselho && !novoAlvo && (
+        <div className="neu-card p-4">
+          <p className="text-xs text-gray-500">
+            Para abrir um questionamento, vá à aba <span className="text-gray-300">Trilha</span>,
+            filtre o que quer olhar e clique em <span className="text-gray-300">Questionar</span> na linha.
+          </p>
+        </div>
+      )}
+
+      {aba === 'revisoes' && conselho && (
+        <div className="space-y-3">
           {novoAlvo && (
+            <div className="neu-card p-4 space-y-3">
+              <div className="text-sm font-medium text-gray-300">Abrir questionamento</div>
             <div className="space-y-2 bg-black/20 rounded-xl p-3">
               <div className="text-sm text-gray-200">{novoAlvo.evento} · {novoAlvo.entidade}</div>
               <div className="text-xs text-gray-500">
@@ -236,12 +246,13 @@ export function ComiteAuditoriaView({
                   Cancelar
                 </button>
               </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {revisoes.length === 0 ? (
+      {aba === 'revisoes' && (revisoes.length === 0 ? (
         <EmptyState message="Nenhuma revisão de auditoria ainda." />
       ) : (
         <div className="space-y-3">
@@ -340,7 +351,7 @@ export function ComiteAuditoriaView({
             );
           })}
         </div>
-      )}
+      ))}
     </div>
   );
 }

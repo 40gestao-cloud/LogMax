@@ -15,12 +15,11 @@ export interface AulaModuloDef {
 export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'dashboard',         label: 'Dashboard',        grupo: 'Geral' },
   { id: 'usuarios',          label: 'Usuários',         grupo: 'Geral' },
-  { id: 'auditoria',         label: 'Auditoria',        grupo: 'Geral' },
+  { id: 'auditoria',         label: 'Comitê de Auditoria', grupo: 'Geral' },
   { id: 'catalogo-produtos', label: 'Catálogo',         grupo: 'Geral' },
   { id: 'avaliacoes',        label: 'Avaliações',       grupo: 'Geral' },
   { id: 'feedback-org',      label: 'Feedback & Requerimentos', grupo: 'Geral' },
   { id: 'metas',             label: 'Metas',            grupo: 'Geral' },
-  { id: 'politicas',         label: 'Políticas',        grupo: 'Geral' },
   { id: 'riscos',            label: 'Matriz de Riscos', grupo: 'Geral' },
   { id: 'empresa',           label: 'Empresa',          grupo: 'Operacional' },
   { id: 'requisicoes',       label: 'Requisições',      grupo: 'Operacional' },
@@ -137,11 +136,14 @@ const VIEW_TO_MODULO_OVERRIDE: Record<string, string> = {
   'dashboard':         'dashboard',
   'usuarios':          'usuarios',
   'auditoria':         'auditoria',
+  // O Comitê é a tela de Auditoria (a trilha virou aba dele em 2026-08-07).
+  // Sem este override a regra padrão faria split('-')[0] = 'comite', que não
+  // é módulo nenhum — a tela ficaria invisível em toda turma com aula ativa.
+  'comite-auditoria':  'auditoria',
   'catalogo-produtos': 'catalogo-produtos',
   'avaliacoes':        'avaliacoes',
   'feedback-org':      'feedback-org',
   'metas':             'metas',
-  'politicas':         'politicas',
   'riscos':            'riscos',
   // Aliases pra views top-level que pertencem a um módulo
   'artes-promocionais': 'marketing',

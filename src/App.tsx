@@ -27,7 +27,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, History, ShieldAlert, BookMarked, AlertTriangle,
+  Presentation, ShieldAlert, AlertTriangle,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -86,7 +86,6 @@ const DesligamentosView            = lazy(() => import('./views/DesligamentosVie
 const RecrutamentoView             = lazy(() => import('./views/RecrutamentoView').then(m => ({ default: m.RecrutamentoView })));
 const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
 const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
-const AuditoriaOperacoesView       = lazy(() => import('./views/AuditoriaOperacoesView').then(m => ({ default: m.AuditoriaOperacoesView })));
 const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
 const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
 const CentralAvaliacaoView         = lazy(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
@@ -129,7 +128,6 @@ const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAu
 const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
 const RemuneracaoVariavelView              = lazy(() => import('./views/RemuneracaoVariavelView').then(m => ({ default: m.RemuneracaoVariavelView })));
 const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
-const PoliticasView                        = lazy(() => import('./views/PoliticasView').then(m => ({ default: m.PoliticasView })));
 const RiscosView                           = lazy(() => import('./views/RiscosView').then(m => ({ default: m.RiscosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
@@ -371,21 +369,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
-        {/* Auditoria: a trilha de operações agregada (migr. 331/332). Role-gated
-            porque a visão da unidade inteira — incluindo folha e contas — é de
-            quem responde pela unidade; o colaborador tem o histórico dentro de
-            cada documento, que é o que responde a dúvida sobre o trabalho dele.
-            A RLS recorta por filial: gerente vê a própria, Matriz vê todas. */}
-        {aulaAllow('auditoria') && (profile?.role === 'admin' || profile?.role === 'ceo'
-          || isConselheiro(profile) || profile?.role === 'gerente') && (
-          <button onClick={() => { navigate('auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <History size={18} /><span>Auditoria</span>
-          </button>
-        )}
-        {/* Comitê de Auditoria (migr. 380) — irmão da Auditoria e com o mesmo
-            recorte: o gerente entra porque é ele quem responde ao
+        {/* Comitê de Auditoria (migr. 380). A tela de Auditoria virou a aba
+            "Trilha" daqui em 2026-08-07 — eram dois itens de menu para o mesmo
+            trabalho, e a busca do Comitê era pior que a de lá.
+            Recorte: o gerente entra porque é ele quem responde ao
             questionamento; abrir e encerrar é do Conselho, e quem barra é a
-            RPC, não o menu. */}
+            RPC, não o menu. A RLS de `historico_operacoes` recorta por filial:
+            gerente vê a própria, Matriz vê todas. */}
         {aulaAllow('auditoria') && (profile?.role === 'admin' || profile?.role === 'ceo'
           || isConselheiro(profile) || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('comite-auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'comite-auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -400,14 +390,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || isConselheiro(profile) || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('riscos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'riscos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <AlertTriangle size={18} /><span>Matriz de Riscos</span>
-          </button>
-        )}
-        {/* Políticas (migr. 384) — aberto a todo mundo de propósito: política
-            que só o Conselho enxerga não é política. Quem publica é filtrado
-            dentro da view, e a ciência é sempre em nome de auth.uid(). */}
-        {aulaAllow('politicas') && (
-          <button onClick={() => { navigate('politicas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'politicas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <BookMarked size={18} /><span>Políticas</span>
           </button>
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
@@ -673,6 +655,11 @@ function LogMaxAppInner() {
         .replace(/^rh-colaboradores$/,         'rh-funcionários')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
         .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
+        // Auditoria virou a aba "Trilha" do Comitê de Auditoria (2026-08-07).
+        .replace(/^auditoria$/,                'comite-auditoria')
+        // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
+        // uma linha em nenhuma das 4 turmas.
+        .replace(/^politicas$/,                'inicio')
         // Votações removida; Feedback + Requerimentos unificados numa só tela com abas.
         .replace(/^votacoes$/,                 'inicio')
         .replace(/^matriz-votacoes$/,          'inicio')
@@ -1069,7 +1056,6 @@ function LogMaxAppInner() {
       case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
       case 'rh-remuneraçãovariável':           return <RemuneracaoVariavelView showToast={st} profile={profile} />;
       case 'rh-mandatos':                      return <MandatosView showToast={st} profile={profile} />;
-      case 'politicas':                        return <PoliticasView showToast={st} profile={profile} />;
       case 'riscos':                           return <RiscosView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
@@ -1138,7 +1124,6 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
-      case 'auditoria':                    return <AuditoriaOperacoesView showToast={st} />;
       case 'comite-auditoria':             return <ComiteAuditoriaView showToast={st} profile={profile} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
       // `matriz-avaliacoes` existe só para cair na Competição do Conselho —

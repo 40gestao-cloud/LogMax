@@ -56,7 +56,7 @@ const COR_EVENTO: Record<string, string> = {
   Inativado: 'text-red-400 border-red-500/30',
 };
 
-type Linha = {
+export type Linha = {
   id: string; entidade: string; entidade_id: string; filial: string | null;
   evento: string; de: string | null; para: string | null; detalhe: string | null;
   ator_nome: string | null; ator_setor: string | null; created_at: string;
@@ -72,7 +72,23 @@ const PERIODOS = [
   { id: 'tudo', label: 'Tudo' },
 ] as const;
 
-export const AuditoriaOperacoesView = ({ showToast }: { showToast?: any }) => {
+// A trilha completa deixou de ser tela própria (2026-08-07) e virou a aba
+// "Trilha" do Comitê de Auditoria. Eram dois itens de menu para o mesmo
+// trabalho: navegar o histórico e questionar o que não fecha. Aqui vive a
+// navegação — filtros, paginação e export; `onQuestionar` é o gancho que o
+// Comitê passa para transformar uma linha em revisão.
+//
+// Sem `onQuestionar` o componente segue idêntico ao que era, o que mantém
+// possível reaproveitá-lo em outro lugar sem arrastar o Comitê junto.
+export const AuditoriaOperacoesView = ({
+  showToast,
+  onQuestionar,
+  embutido = false,
+}: {
+  showToast?: any;
+  onQuestionar?: (op: Linha) => void;
+  embutido?: boolean;
+}) => {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [page, setPage] = useState(0);
@@ -179,13 +195,16 @@ export const AuditoriaOperacoesView = ({ showToast }: { showToast?: any }) => {
       className="flex flex-col h-full gap-6">
 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Auditoria</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Tudo que foi feito nos documentos, em ordem. Serve para a dúvida que ainda não tem
-            endereço — quem mexeu, quando, e o que mudou.
-          </p>
-        </div>
+        {!embutido && (
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Auditoria</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Tudo que foi feito nos documentos, em ordem. Serve para a dúvida que ainda não tem
+              endereço — quem mexeu, quando, e o que mudou.
+            </p>
+          </div>
+        )}
+        {embutido && <div className="flex-1" />}
         <div className="flex gap-2">
           <button onClick={() => void carregar()} disabled={loading}
             className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2 disabled:opacity-50">
@@ -268,6 +287,7 @@ export const AuditoriaOperacoesView = ({ showToast }: { showToast?: any }) => {
                   <th className="pb-4 font-bold px-3">O que mudou</th>
                   <th className="pb-4 font-bold px-3">Quem</th>
                   <th className="pb-4 font-bold px-3 text-right">Trilha</th>
+                  {onQuestionar && <th className="pb-4 font-bold px-3 text-right">Auditar</th>}
                 </tr>
               </thead>
               <tbody>
@@ -316,6 +336,14 @@ export const AuditoriaOperacoesView = ({ showToast }: { showToast?: any }) => {
                       <HistoricoOperacoes entidade={l.entidade} entidadeId={l.entidade_id}
                         titulo={`${ENTIDADE_LABEL[l.entidade] ?? l.entidade} ${String(l.entidade_id).slice(-6).toUpperCase()}`} />
                     </td>
+                    {onQuestionar && (
+                      <td className="py-3 px-3 text-right">
+                        <button onClick={() => onQuestionar(l)}
+                          className="neu-button rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent">
+                          Questionar
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
