@@ -77,6 +77,9 @@ type Placar = {
   por_filial: Record<string, {
     media: number;
     n: number;
+    // Migr. 375: o placar passou a medir ITEM (participante, ou o eixo da
+    // filial), não nota solta — `n` continua sendo a contagem de notas.
+    itens?: number;
     // Migr. 349: a nota final passou a misturar o julgamento do conselho com
     // a frequência medida no ponto. `media` é o resultado; estes dois campos
     // mostram de onde ele veio.
@@ -84,10 +87,15 @@ type Placar = {
     frequencia?: {
       taxa: number | null; registros: number; presencas: number;
       faltas: number; justificados: number; atrasos?: number; entrou: boolean;
+      // Migr. 374: cobertura do lançamento. A taxa só fala do que foi
+      // lançado; sem estes dois, 100% em 6 registros e 100% em 24 são o
+      // mesmo número no pódio. Ausentes em snapshot anterior à 374.
+      dias_distintos?: number; funcionarios_ativos?: number;
     } | null;
   }>;
   inclui_eixos_conselho?: boolean;
   peso_frequencia?: number;
+  media_por_item?: boolean;
   // Migr. 350: false enquanto o horário da turma não for confirmado em
   // `ponto_jornada` — nesse estado o atraso não desconta.
   atraso_conta?: boolean;
@@ -153,10 +161,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [formEdit, setFormEdit] = useState({ nome: '', descricao: '', data_inicio: '', data_fim: '' });
   const [baixandoPdf, setBaixandoPdf] = useState(false);
   const [modalParabens, setModalParabens] = useState<string | null>(null);
-  // Filial escolhida que contraria o resultado — abre o campo de justificativa
-  // exigido pela migr. 372.
-  const [divergente, setDivergente] = useState<FilialOp | null>(null);
+  // Filial escolhida que ainda precisa de justificativa — por contrariar o
+  // resultado (372) ou por a avaliação estar incompleta (375).
+  const [escolhaDeclaracao, setEscolhaDeclaracao] = useState<FilialOp | null>(null);
   const [justificativa, setJustificativa] = useState('');
+  // Voto selado (375): o conselho não enxerga mais o voto alheio antes da
+  // declaração, então quórum vem de RPC que não revela valor nenhum.
+  const [progressoVoto, setProgressoVoto] = useState<
+    { votos: number; eleitores: number; quorum: number; ja_votei: boolean } | null
+  >(null);
+  // Participantes de tarefa liberada sem nota de todo o conselho (375).
+  const [semNota, setSemNota] = useState<number>(0);
   const [editandoVoto, setEditandoVoto] = useState(false);
   // Total de eleitores elegíveis (CEO + conselheiros da Matriz). Alimenta
   // o quórum dinâmico (maioria simples). RPC contar_votantes_matriz.
@@ -232,9 +247,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // Maioria simples é MAIS da metade, não a metade. `ceil(n/2)` acerta em
   // número ímpar e erra em par: com 4 eleitores dava 2, e 2×2 é empate —
   // liberava declarar vencedora sem maioria nenhuma.
+  // A conta oficial vem da RPC (375), que usa a mesma régua de
+  // `declarar_vencedora`. O cálculo local fica de fallback enquanto ela não
+  // responde.
   const quorumMinimo = useMemo(
-    () => Math.floor((totalVotantes || 1) / 2) + 1,
-    [totalVotantes],
+    () => progressoVoto?.quorum ?? Math.floor((totalVotantes || 1) / 2) + 1,
+    [progressoVoto, totalVotantes],
   );
 
   const carregarVotos = useCallback(async (id: string) => {
@@ -255,6 +273,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     if (!supabase) return;
     const { data, error } = await supabase.rpc('progresso_avaliacao_matriz', { p_competicao_id: id });
     if (!error) setProgresso((data ?? []) as ProgressoAvaliador[]);
+  }, []);
+
+  // Quantos votaram (sem dizer em quê) e quantos participantes ainda estão
+  // sem nota de todo o conselho. As duas RPCs são da Matriz.
+  const carregarFecho = useCallback(async (id: string) => {
+    if (!supabase) return;
+    const [{ data: pv }, { data: sn }] = await Promise.all([
+      supabase.rpc('progresso_votacao_competicao', { p_competicao_id: id }),
+      supabase.rpc('participantes_sem_nota_competicao', { p_competicao_id: id }),
+    ]);
+    if (pv) setProgressoVoto(pv as any);
+    setSemNota(typeof sn === 'number' ? sn : 0);
   }, []);
 
   // Notas individuais — só chegam completas pro admin (RLS da 345). Pro
@@ -289,17 +319,27 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       }
       return comp;
     });
-    const { data, error } = await supabase.rpc('calcular_placar_competicao', { p_competicao_id: comp.id });
-    if (error) {
-      showToast?.(`Erro ao calcular placar: ${error.message}`, 'error');
+    // Competição declarada mostra o placar CONGELADO, não um recálculo. O
+    // snapshot é a saída desta mesma RPC gravada na declaração (372); recalcular
+    // faria o resultado publicado mudar sozinho se uma nota fosse mexida — ou
+    // se a régua do cálculo evoluísse, como na 375. A filial já recebe o
+    // snapshot pelo próprio banco (373); aqui a Matriz passa a ver o mesmo.
+    if (comp.status === 'encerrada' && comp.placar_snapshot?.por_filial) {
+      setPlacar(comp.placar_snapshot as Placar);
     } else {
-      setPlacar(data as Placar);
+      const { data, error } = await supabase.rpc('calcular_placar_competicao', { p_competicao_id: comp.id });
+      if (error) {
+        showToast?.(`Erro ao calcular placar: ${error.message}`, 'error');
+      } else {
+        setPlacar(data as Placar);
+      }
     }
     await carregarVotos(comp.id);
     await carregarNotasConselho(comp.id);
     await carregarProgresso(comp.id);
+    await carregarFecho(comp.id);
     setLoadingPlacar(false);
-  }, [showToast, carregarVotos, carregarNotasConselho, carregarProgresso]);
+  }, [showToast, carregarVotos, carregarNotasConselho, carregarProgresso, carregarFecho]);
 
   useEffect(() => {
     // Prioridade: em_andamento > aguardando_encerramento > última encerrada
@@ -394,10 +434,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     return votos.filter(v => (v.votado_em ?? v.created_at) >= corte);
   }, [votos, competicaoAtual]);
 
+  // O próprio voto a RLS sempre entrega, então isto continua valendo mesmo
+  // com o voto alheio selado.
   const jaVotei = useMemo(
     () => votosValidos.some(v => v.votante_id === profile.id),
     [votosValidos, profile.id],
   );
+
+  // Voto alheio só chega pro admin, ou pra todo o conselho depois da
+  // declaração (RLS da 375). Sem isto a tela mostraria "Aceita: 1" pra quem
+  // só enxerga o próprio voto, o que é pior que não mostrar nada.
+  const vejoVotoAlheio = profile.role === 'admin' || competicaoAtual?.status === 'encerrada';
+  const votosNoQuorum = progressoVoto?.votos ?? votosValidos.length;
   const contagemVotos = useMemo(() => ({
     aceita:  votosValidos.filter(v => v.voto === 'aceita').length,
     rejeita: votosValidos.filter(v => v.voto === 'rejeita').length,
@@ -490,6 +538,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     setMeuVoto(''); setComentario(''); setFilialSugerida('');
     setEditandoVoto(false);
     await carregarVotos(competicaoAtual.id);
+    await carregarFecho(competicaoAtual.id);
   };
 
   const encerrarAgora = async () => {
@@ -526,7 +575,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     });
     setEncerrando(false);
     if (error) return showToast?.(`Erro: ${error.message}`, 'error');
-    setDivergente(null);
+    setEscolhaDeclaracao(null);
     setJustificativa('');
     setModalParabens(filial);
     await carregarLista();
@@ -664,6 +713,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       n:     Number(placar.por_filial?.[f]?.n ?? 0),
       // Parcela objetiva (migr. 349): frequência do ponto no período.
       media_conselho: Number(placar.por_filial?.[f]?.media_conselho ?? 0),
+      itens: Number(placar.por_filial?.[f]?.itens ?? 0),
       taxa:  placar.por_filial?.[f]?.frequencia?.taxa ?? null,
       freq:  placar.por_filial?.[f]?.frequencia ?? null,
     })));
@@ -890,9 +940,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                       <tr>
                         <th className="text-left pb-3 font-bold">Filial</th>
-                        <th className="text-right pb-3 font-bold pr-4">Notas registradas</th>
+                        <th className="text-right pb-3 font-bold pr-4">Notas / itens</th>
                         <th className="text-right pb-3 font-bold pr-4">Conselho (0-10)</th>
                         <th className="text-right pb-3 font-bold pr-4">Frequência</th>
+                        <th className="text-right pb-3 font-bold pr-4">Cobertura do ponto</th>
                         <th className="text-right pb-3 font-bold pr-4">Final (0-10)</th>
                         <th className="text-right pb-3 font-bold pr-4">Escala 0-100</th>
                       </tr>
@@ -903,7 +954,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         return (
                           <tr key={p.filial} className="border-t border-white/5">
                             <td className="py-3"><FilialBadge filial={p.filial} /></td>
-                            <td className="py-3 text-right text-gray-300 tabular-nums pr-4">{p.n}</td>
+                            <td className="py-3 text-right text-gray-300 tabular-nums pr-4"
+                                title={p.itens ? `${p.n} nota(s) sobre ${p.itens} item(ns) julgado(s)` : undefined}>
+                              {p.n}{p.itens ? <span className="text-gray-600"> / {p.itens}</span> : null}
+                            </td>
                             <td className="py-3 text-right text-gray-400 tabular-nums pr-4">
                               {p.n === 0 ? '—' : (p.media_conselho / 10).toFixed(1)}
                             </td>
@@ -919,6 +973,30 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                                     {(p.freq.taxa * 100).toFixed(0)}%
                                   </span>}
                             </td>
+                            {/* Cobertura: o que foi lançado sobre o que se
+                                esperava lançar (dias com ponto × gente ativa).
+                                Sem ela, 100% em 6 registros e 100% em 24 são o
+                                mesmo número — e a frequência vale 20% da nota. */}
+                            {(() => {
+                              const esperado = (p.freq?.dias_distintos ?? 0) * (p.freq?.funcionarios_ativos ?? 0);
+                              const lancados = (p.freq?.registros ?? 0) + (p.freq?.justificados ?? 0);
+                              if (!esperado) {
+                                return (
+                                  <td className="py-3 text-right tabular-nums pr-4 text-gray-600"
+                                      title="Snapshot anterior à migr. 374 não guarda a cobertura.">—</td>
+                                );
+                              }
+                              const pct = Math.round((lancados / esperado) * 100);
+                              return (
+                                <td className="py-3 text-right tabular-nums pr-4"
+                                    title={`${lancados} de ${esperado} lançamento(s) esperado(s) — ${p.freq?.dias_distintos} dia(s) com ponto × ${p.freq?.funcionarios_ativos} pessoa(s) ativa(s). Abaixo de 100% a taxa fala de um pedaço da unidade.`}>
+                                  <span className={pct >= 100 ? 'text-gray-400' : 'text-amber-400 font-bold'}>
+                                    {pct}%
+                                  </span>
+                                  <span className="text-gray-600"> ({lancados}/{esperado})</span>
+                                </td>
+                              );
+                            })()}
                             <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                             </td>
@@ -932,13 +1010,16 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </table>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3">
-                  Conselho = média das notas 0-10 que CEO/conselheiros deram aos participantes das Tarefas da Matriz,
-                  agrupada pela filial do participante. Frequência = ponto do período, com presença pontual valendo o dia
+                  Conselho = média por participante primeiro (as notas que ele recebeu), depois média dos
+                  participantes da filial — assim um avaliador que julgue mais gente de uma unidade não pesa
+                  mais que os outros. O eixo subjetivo da Avaliação de Filial entra como um item da unidade. Frequência = ponto do período, com presença pontual valendo o dia
                   inteiro, {placar.atraso_conta === false
                     ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação das Filiais)'
                     : `atraso valendo meio dia (entrada após ${placar.jornada_entrada ?? '—'})`}, falta zerando e
                   justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
                   Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
+                  Cobertura = quanto do ponto esperado foi de fato lançado; abaixo de 100% a taxa descreve só parte da unidade,
+                  e é assim que se enxerga quem "melhora" a frequência deixando de lançar.
                 </p>
               </div>
 
@@ -1034,10 +1115,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       {podeDesempatar ? 'Desempate da Administração' : 'Votação do conselho'}
                     </h3>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
-                      <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
-                      <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
-                      <span className={votosValidos.length >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
-                        Quórum: {votosValidos.length}/{quorumMinimo}
+                      {vejoVotoAlheio ? (
+                        <>
+                          <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
+                          <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-500" title="O voto de cada eleitor fica selado até a vencedora ser declarada (migr. 375).">
+                          Votos selados
+                        </span>
+                      )}
+                      <span className={votosNoQuorum >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
+                        Quórum: {votosNoQuorum}/{quorumMinimo}
                       </span>
                     </div>
                   </div>
@@ -1129,7 +1218,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </div>
                   )}
 
-                  {votos.length > 0 && (
+                  {vejoVotoAlheio && votos.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-white/5">
                       <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
                         Votos registrados ({votosValidos.length}
@@ -1174,17 +1263,25 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <MessageCircle size={13} className="text-accent" /> Votação do conselho
                     </h3>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
-                      <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
-                      <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
-                      <span className={votosValidos.length >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
-                        Quórum: {votosValidos.length}/{quorumMinimo}
+                      {vejoVotoAlheio ? (
+                        <>
+                          <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
+                          <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-500" title="O voto de cada eleitor fica selado até a vencedora ser declarada (migr. 375).">
+                          Votos selados
+                        </span>
+                      )}
+                      <span className={votosNoQuorum >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
+                        Quórum: {votosNoQuorum}/{quorumMinimo}
                       </span>
                     </div>
                   </div>
                   <p className="text-xs text-gray-400">
                     Aguardando CEO e conselheiros votarem pra declarar a filial vencedora. Nenhuma ação sua é necessária aqui.
                   </p>
-                  {votos.length > 0 && (
+                  {vejoVotoAlheio && votos.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-white/5">
                       <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
                         Votos registrados ({votosValidos.length}
@@ -1224,9 +1321,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               {/* Declaração de vencedora — só a Administração, e só com o
                   quórum de maioria simples atingido (migr. 369). O conselho
                   julga; quem homologa o julgamento é o admin. */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && profile.role === 'admin' && votantesCarregados && votosValidos.length >= quorumMinimo && (() => {
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && profile.role === 'admin' && votantesCarregados && votosNoQuorum >= quorumMinimo && (() => {
                 const sugerida = sugestaoRejeicao ?? podio[0]?.filial;
                 const origem = sugestaoRejeicao ? 'maioria do conselho rejeitou o placar' : 'placar automático';
+                // O banco cobra justificativa em dois casos (372 e 375):
+                // declarar contra o apurado, ou homologar com participante
+                // sem nota de todo o conselho. A tela pede antes, pra o
+                // admin não descobrir por mensagem de erro.
+                const precisaJustificar = (f: FilialOp) => f !== sugerida || semNota > 0;
                 return (
                   <div className="neu-flat rounded-3xl p-5 border border-accent/30">
                     <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
@@ -1237,15 +1339,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       {!sugestaoRejeicao && podio[0] && podio[0].n > 0 && <> (nota média {(podio[0].media / 10).toFixed(1)})</>}.
                       {' '}Declarar outra filial contraria o resultado e exige justificativa registrada.
                     </p>
+                    {semNota > 0 && (
+                      <p className="text-xs text-amber-300/90 mb-4 leading-relaxed">
+                        ⚠ {semNota} participante(s) de tarefa liberada ainda sem nota de todo o conselho.
+                        Dá pra homologar assim, mas o banco vai pedir justificativa por escrito — o caminho
+                        limpo é a Central de Avaliação antes de declarar.
+                      </p>
+                    )}
                     <div className="grid grid-cols-3 gap-2">
                       {OP_FILIAIS.map(f => {
                         const isSugerida = f === sugerida;
                         return (
                           <button key={f}
-                            onClick={() => (isSugerida ? declararVencedora(f) : (setDivergente(f), setJustificativa('')))}
+                            onClick={() => (precisaJustificar(f)
+                              ? (setEscolhaDeclaracao(f), setJustificativa(''))
+                              : declararVencedora(f))}
                             disabled={encerrando}
                             className={`neu-button rounded-xl p-3 text-xs font-bold uppercase tracking-widest transition-colors ${FILIAL_COLOR[f]} hover:border-accent ${
-                              isSugerida ? 'ring-2 ring-accent/60' : divergente === f ? 'ring-2 ring-amber-500/60' : ''
+                              isSugerida ? 'ring-2 ring-accent/60' : escolhaDeclaracao === f ? 'ring-2 ring-amber-500/60' : ''
                             }`}
                             style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
                             {encerrando ? <Loader2 size={12} className="animate-spin inline" /> : (
@@ -1259,32 +1370,38 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       })}
                     </div>
 
-                    {divergente && divergente !== sugerida && (
+                    {escolhaDeclaracao && (
                       <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-3">
                         <p className="text-xs text-amber-300/90 leading-relaxed">
-                          {divergente} não é o resultado apurado ({sugerida}). A justificativa fica gravada
-                          na competição e aparece no histórico — escreva ao menos 20 caracteres.
+                          {escolhaDeclaracao !== sugerida && (
+                            <>{escolhaDeclaracao} não é o resultado apurado ({sugerida}). </>
+                          )}
+                          {semNota > 0 && (
+                            <>{semNota} participante(s) de tarefa liberada ainda não receberam nota de todo o
+                            conselho — a média que você vai congelar não descreve a filial inteira. </>
+                          )}
+                          A justificativa fica gravada na competição — escreva ao menos 20 caracteres.
                         </p>
-                        <FormField label="Por que a Administração diverge do resultado">
+                        <FormField label="Justificativa da Administração">
                           <textarea value={justificativa} onChange={e => setJustificativa(e.target.value)}
                             className="neu-input rounded-lg px-3 py-2 text-xs w-full" rows={3}
                             placeholder="Ex.: apuração revista após identificação de tarefa lançada na filial errada…" />
                         </FormField>
                         <div className="flex justify-end gap-2">
                           <button
-                            onClick={() => { setDivergente(null); setJustificativa(''); }}
+                            onClick={() => { setEscolhaDeclaracao(null); setJustificativa(''); }}
                             className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white"
                           >
                             Cancelar
                           </button>
                           <NeuButtonAccent
-                            onClick={() => declararVencedora(divergente, justificativa.trim())}
+                            onClick={() => declararVencedora(escolhaDeclaracao, justificativa.trim())}
                             disabled={encerrando || justificativa.trim().length < 20}
                             variant=""
                           >
                             {encerrando
                               ? <><Loader2 size={12} className="animate-spin" /> Declarando…</>
-                              : <>Declarar {divergente} mesmo assim</>}
+                              : <>Declarar {escolhaDeclaracao} mesmo assim</>}
                           </NeuButtonAccent>
                         </div>
                       </div>
@@ -1420,6 +1537,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               <p className="text-[10px] text-gray-500 mb-4">
                 As datas do ciclo da Avaliação de Filial vinculado são atualizadas junto.
               </p>
+              {/* O período não é rótulo: é o filtro do placar. Os eixos da
+                  Avaliação de Filial entram por `created_at` dentro da janela, e
+                  a frequência soma o ponto do intervalo — mexer aqui recalcula o
+                  resultado de todas as filiais. Fica registrado na trilha (374),
+                  mas quem clica merece saber antes. */}
+              {editando.status !== 'encerrada' && (
+                <p className="text-[10px] text-amber-400/90 mb-4 leading-relaxed">
+                  ⚠ Mudar o período muda o placar: as notas dos eixos e o ponto que entram na conta são os
+                  que caem dentro dele. A alteração fica registrada no histórico da competição.
+                </p>
+              )}
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setEditando(null)}

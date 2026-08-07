@@ -2063,6 +2063,10 @@ export const AvaliacoesView = ({ showToast, profile }: { showToast: any; profile
 // Card de pódio da filial na competição matriz — só modo filial.
 // Só aparece com a competição ENCERRADA: enquanto a votação corre, a medalha
 // oscilaria a cada nota e viraria placar ao vivo, não resultado.
+// Desde a migr. 373 essa regra também vale no banco: pra quem não é da Matriz,
+// `calcular_placar_competicao` recusa competição em andamento e devolve o
+// `placar_snapshot` congelado na declaração — a medalha não muda mais se
+// alguma nota for mexida depois do resultado.
 // ─────────────────────────────────────────────────────────────────────────
 type CompMini = { id: string; nome: string; status: string; vencedora: string | null };
 type PlacarPorFilial = Record<string, { media: number; n: number }>;
@@ -2125,11 +2129,20 @@ function PodioFilialCard({ filial }: { filial: string }) {
   const pos = ranking.findIndex(x => x.filial === filial) + 1;
   if (pos < 1 || pos > 3) return null;
 
-  const medal = pos === 1
-    ? { klass: 'medal-card--gold',   label: 'Vencedora — 1º Lugar', emoji: '🥇' }
-    : pos === 2
-      ? { klass: 'medal-card--silver', label: '2º Lugar',             emoji: '🥈' }
-      : { klass: 'medal-card--bronze', label: '3º Lugar',             emoji: '🥉' };
+  // Vencedora é quem a Administração declarou, não quem está no topo do
+  // placar. Os dois quase sempre coincidem — mas quando o conselho rejeita
+  // o placar, ou a Administração diverge com justificativa (migr. 372), a
+  // posição e o título deixam de ser a mesma coisa. Derivar o título da
+  // posição fazia duas filiais receberem informação contraditória sobre
+  // quem ganhou.
+  const ehVencedora = comp.vencedora === filial;
+  const medal = ehVencedora
+    ? { klass: 'medal-card--gold', label: 'Vencedora', emoji: '🏆' }
+    : pos === 1
+      ? { klass: 'medal-card--silver', label: '1º no placar', emoji: '🥇' }
+      : pos === 2
+        ? { klass: 'medal-card--silver', label: '2º Lugar',   emoji: '🥈' }
+        : { klass: 'medal-card--bronze', label: '3º Lugar',   emoji: '🥉' };
 
   return (
     <div className={`medal-card ${medal.klass} shrink-0`}>
