@@ -14,6 +14,7 @@ import { CRITERIOS, CRITERIOS_MATRIZ, CRITERIOS_ADMIN, CATEGORIA_LABEL, CATEGORI
 import { CriteriosAvaliacaoForm, notasIniciais } from '../components/CriteriosAvaliacaoForm';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { CicloTarefasPanel } from './CicloTarefasPanel';
+import { ordenarRanking } from '../lib/competicaoRanking';
 
 export type Ciclo = { id: string; nome: string; data_inicio: string; data_fim: string; status: string; feedback_anonimo: boolean; filial: string };
 export type Avaliacao = {
@@ -2108,9 +2109,17 @@ function PodioFilialCard({ filial }: { filial: string }) {
 
   if (loading || !comp || !placar) return null;
 
-  const ranking = Object.entries(placar)
-    .map(([f, v]) => ({ filial: f, media: Number(v?.media ?? 0), n: Number(v?.n ?? 0) }))
-    .sort((a, b) => b.media - a.media || b.n - a.n);
+  // Mesma cascata de desempate da tela da Matriz e da RPC `ranking_competicao`
+  // (migr. 372) — antes as duas telas ordenavam por critérios diferentes e
+  // podiam apontar campeãs diferentes num empate.
+  const ranking = ordenarRanking(Object.entries(placar)
+    .map(([f, v]) => ({
+      filial: f,
+      media: Number(v?.media ?? 0),
+      n: Number(v?.n ?? 0),
+      media_conselho: Number((v as any)?.media_conselho ?? 0),
+      taxa: (v as any)?.frequencia?.taxa ?? null,
+    })));
   const meu = ranking.find(x => x.filial === filial);
   if (!meu) return null;
   const pos = ranking.findIndex(x => x.filial === filial) + 1;
