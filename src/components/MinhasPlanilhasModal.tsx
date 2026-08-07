@@ -41,7 +41,12 @@ export function MinhasPlanilhasModal({
   const [erro, setErro]       = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Sem `userId` não há o que listar: a sessão ainda está resolvendo. Manter o
+  // spinner é o certo — a versão anterior chamava a listagem assim mesmo, e
+  // sem dono a consulta trazia tudo o que a RLS permitisse, que para admin,
+  // CEO e conselheiro é a turma inteira dentro de "Minhas planilhas".
   const carregar = useCallback(async () => {
+    if (!userId) return;
     setLoading(true);
     try {
       setItens(await listarPlanilhas(userId));
@@ -65,7 +70,12 @@ export function MinhasPlanilhasModal({
     }
     setOcupado(true);
     try {
-      const jaExistia = itens.some(i => i.arquivo_nome === file.name);
+      // Case-insensitive porque é assim que o caminho no bucket é montado:
+      // "Produtos.xlsx" e "produtos.xlsx" são a mesma planilha, e o aviso de
+      // substituição precisa dizer isso.
+      const jaExistia = itens.some(
+        i => i.arquivo_nome.toLowerCase() === file.name.toLowerCase(),
+      );
       await salvarPlanilha({
         file, userId, nome: userNome ?? '', entidade, filial: filial || null,
       });
