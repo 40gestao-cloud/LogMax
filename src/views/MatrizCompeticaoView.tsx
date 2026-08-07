@@ -709,11 +709,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Ordem: Central de Avaliação → Baixar PDF → Status → Encerrar agora → Excluir */}
-                    {placar.competicao.status === 'em_andamento' && navigate && (
+                    {/* Este botão é a ÚNICA porta para `matriz-avaliacoes` no app
+                        inteiro. Prendê-lo a 'em_andamento' deixava as tarefas, as
+                        notas e quem fez o quê inalcançáveis assim que a competição
+                        encerrava — justo quando se quer consultar. Fora de
+                        andamento a tela abre em leitura, que ela já sabe fazer. */}
+                    {navigate && (
                       <button
                         onClick={() => navigate('matriz-avaliacoes')}
                         className="btn-shimmer btn-shimmer--gold"
-                        title="Avaliar itens das 3 filiais"
+                        title={placar.competicao.status === 'em_andamento'
+                          ? 'Avaliar itens das 3 filiais'
+                          : 'Consultar tarefas, notas e participantes desta competição'}
                       >
                         <Award size={12} /> Central de Avaliação
                       </button>
