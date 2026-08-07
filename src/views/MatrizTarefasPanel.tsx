@@ -237,7 +237,7 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
 
       const [{ data: todosParts }, { data: minhas }] = await Promise.all([
         supabase.from('matriz_tarefa_participantes')
-          .select('id, tarefa_id')
+          .select('id, tarefa_id, funcionario_id')
           .in('tarefa_id', votaveis.map((t: any) => t.id))
           .eq('ativo', true),
         podeAvaliar
@@ -250,12 +250,27 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      setTotalParticipantesAbertos((todosParts ?? []).length);
+      // Desligado nao gera pendencia nem entra no denominador do progresso:
+      // a RPC recusa nota nele (migr. 364), entao contar seria prometer um
+      // contador que o conselheiro nunca consegue zerar.
+      const funcIdsLanding = (todosParts ?? []).map((p: any) => p.funcionario_id).filter(Boolean);
+      // Guarda o `.in()` com lista vazia: tarefa liberada sem participante
+      // existe (o gestor libera e escala depois) e viraria `id=in.()`.
+      const { data: deslLanding } = funcIdsLanding.length > 0
+        ? await supabase.from('funcionarios').select('id')
+            .in('id', funcIdsLanding).eq('status', 'Desligado')
+        : { data: [] as any[] };
+      const deslSet = new Set((deslLanding ?? []).map((d: any) => d.id));
+      const partsValidos = (todosParts ?? []).filter(
+        (p: any) => !(p.funcionario_id && deslSet.has(p.funcionario_id)),
+      );
+
+      setTotalParticipantesAbertos(partsValidos.length);
 
       const jaNotei = new Set((minhas ?? []).map((a: any) => a.item_id));
       const falta = zerado();
       if (podeAvaliar) {
-        (todosParts ?? []).forEach((p: any) => {
+        partsValidos.forEach((p: any) => {
           if (jaNotei.has(p.id)) return;
           const tipo = tipoPorTarefa.get(p.tarefa_id);   // só tarefas abertas
           if (tipo) falta[tipo] += 1;
@@ -405,6 +420,8 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoParticipante[]>([]);
+  // funcionario_id de quem foi desligado depois de entrar na tarefa.
+  const [desligados, setDesligados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoTarefa, setEditandoTarefa] = useState<Tarefa | null>(null);
@@ -445,6 +462,22 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
       .in('tarefa_id', ids)
       .eq('ativo', true);
     setParticipantes((ps ?? []) as Participante[]);
+
+    // Quem já estava na tarefa e foi desligado depois. A lista de
+    // participantes é snapshot do dia da criação — ninguém sai dela pela
+    // rescisão —, então a marcação precisa vir de fora. A barreira real é
+    // a RPC (migr. 364); aqui é só pra não oferecer um botão que falha.
+    const funcIds = (ps ?? []).map((p: any) => p.funcionario_id).filter(Boolean);
+    if (funcIds.length > 0) {
+      const { data: desl } = await supabase
+        .from('funcionarios')
+        .select('id')
+        .in('id', funcIds)
+        .eq('status', 'Desligado');
+      setDesligados(new Set((desl ?? []).map((d: any) => d.id)));
+    } else {
+      setDesligados(new Set());
+    }
 
     const partIds = (ps ?? []).map((p: any) => p.id);
     if (partIds.length > 0) {
@@ -495,9 +528,10 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
     const idx = daTarefa.findIndex(p => p.id === atualId);
     const depois = idx >= 0 ? [...daTarefa.slice(idx + 1), ...daTarefa.slice(0, idx)] : daTarefa;
     return depois.find(p =>
-      !avaliacoes.some(a => a.item_id === p.id && a.avaliador_id === profile.id && a.nota != null),
+      !(p.funcionario_id && desligados.has(p.funcionario_id))
+      && !avaliacoes.some(a => a.item_id === p.id && a.avaliador_id === profile.id && a.nota != null),
     ) ?? null;
-  }, [participantes, avaliacoes, profile.id]);
+  }, [participantes, avaliacoes, desligados, profile.id]);
 
   const avalsPorParticipante = useMemo(() => {
     const m: Record<string, AvaliacaoParticipante[]> = {};
@@ -649,6 +683,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
               // ficava encalhada esperando admin/CEO.
               souCriador={ehConselheiroCriador && t.criado_por === profile.id}
               emAndamento={emAndamento}
+              desligados={desligados}
               minhaId={profile.id}
               onAbrirAvaliacao={p => setAvaliando({ participante: p, tarefa: t })}
               onRemover={() => removerTarefa(t.id)}
@@ -697,6 +732,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
           podeAvaliar={podeAvaliar && (tarefas.find(t => t.id === avaliando.tarefa.id)?.status ?? 'aberta') !== 'encerrada'}
           ehAvaliador={ehAvaliador}
           emAndamento={emAndamento}
+          desligado={!!avaliando.participante.funcionario_id && desligados.has(avaliando.participante.funcionario_id)}
           proximo={proximoSemMinhaNota(avaliando.tarefa.id, avaliando.participante.id)}
           onIrPara={p => setAvaliando({ participante: p, tarefa: avaliando.tarefa })}
           onFechar={() => setAvaliando(null)}
@@ -719,7 +755,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
 }
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
-function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, ehAvaliador, podeGerenciar, souCriador, emAndamento, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
+function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, ehAvaliador, podeGerenciar, souCriador, emAndamento, desligados, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
   tarefa: Tarefa;
   tipoConfig: TipoConfig;
   participantes: Participante[];
@@ -732,6 +768,8 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   // conselheiro que criou ESTA tarefa: gestão parcial (migr. 348).
   souCriador: boolean;
   emAndamento: boolean;
+  // funcionario_id desligado depois de entrar na tarefa (migr. 364).
+  desligados: Set<string>;
   minhaId: string;
   onAbrirAvaliacao: (p: Participante) => void;
   onRemover: () => void;
@@ -864,6 +902,7 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
                       participante={p}
                       avals={avalsPorParticipante[p.id] ?? []}
                       minhaId={minhaId}
+                      desligado={!!p.funcionario_id && desligados.has(p.funcionario_id)}
                       podeAvaliar={podeAvaliar && !encerrada && !rascunho}
                       revelado={revelado}
                       submitting={submittingIds.has(p.id)}
@@ -880,10 +919,13 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   );
 }
 
-function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, revelado, submitting, onAbrir }: {
+function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar, revelado, submitting, onAbrir }: {
   participante: Participante;
   avals: AvaliacaoParticipante[];
   minhaId: string;
+  // Saiu da filial depois de escalado: a nota dele nao conta mais no placar
+  // e a RPC recusa nota nova (migr. 364).
+  desligado: boolean;
   podeAvaliar: boolean;
   // Notas alheias já podem ser mostradas? (tarefa encerrada, ou admin)
   revelado: boolean;
@@ -906,9 +948,20 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, revelado, 
       className="w-full flex items-center gap-2 py-1.5 border-b border-white/5 last:border-b-0 text-left group disabled:opacity-60"
     >
       <Users size={13} className="text-gray-500 shrink-0" />
-      <span className="text-sm text-gray-200 flex-1 truncate group-hover:text-white transition-colors">
+      <span className={`text-sm flex-1 truncate transition-colors ${
+        desligado ? 'text-gray-500 line-through' : 'text-gray-200 group-hover:text-white'
+      }`}>
         {participante.nome_snapshot}
       </span>
+
+      {desligado && (
+        <span
+          title="Desligado depois de entrar nesta tarefa — não recebe mais nota e as notas dele saíram do placar da filial."
+          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400 shrink-0"
+        >
+          Desligado
+        </span>
+      )}
 
       {revelado && total > 0 && (
         <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 tabular-nums shrink-0">
@@ -949,7 +1002,7 @@ function ParticipanteRow({ participante, avals, minhaId, podeAvaliar, revelado, 
 // Nota e comentário salvam JUNTOS num único UPSERT. A RPC faz
 // `nota = EXCLUDED.nota, comentario = EXCLUDED.comentario`, então mandar
 // os dois de uma vez é o que impede um campo apagar o outro.
-function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, ehAvaliador, emAndamento, proximo, onFechar, onSalvar, onExcluir, onIrPara }: {
+function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAvaliar, ehAvaliador, emAndamento, desligado, proximo, onFechar, onSalvar, onExcluir, onIrPara }: {
   participante: Participante;
   tarefa: Tarefa;
   avals: AvaliacaoParticipante[];
@@ -957,6 +1010,9 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
   podeAvaliar: boolean;
   ehAvaliador: boolean;
   emAndamento: boolean;
+  // Desligado depois de escalado: a RPC recusa nota (migr. 364), então o
+  // form some e o motivo aparece no lugar.
+  desligado: boolean;
   // Próximo participante da tarefa ainda sem a minha nota (ordem da tela).
   proximo: Participante | null;
   onFechar: () => void;
@@ -1065,7 +1121,10 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
           </div>
         )}
 
-        {podeAvaliar ? (
+        {/* `!desligado` primeiro: sem isso o form de nota ganharia do ramo
+            de desligado abaixo, e o conselheiro digitaria uma nota que a
+            RPC recusa (migr. 364). */}
+        {podeAvaliar && !desligado ? (
           <>
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
@@ -1135,6 +1194,12 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
               </div>
             </div>
           </>
+        ) : desligado ? (
+          <p className="text-xs text-red-400/90">
+            Participante desligado — saiu da filial e não recebe mais nota nesta
+            competição. As notas que ele já tinha continuam registradas, mas
+            deixaram de contar no placar da filial.
+          </p>
         ) : tarefa.status === 'rascunho' ? (
           <p className="text-xs text-amber-300/90">
             Esta tarefa ainda não foi liberada para notas. Admin, CEO ou quem criou a tarefa precisa
@@ -1215,9 +1280,13 @@ function ModalCriarTarefa({ tipoConfig, competicao, onClose, onCriada, showToast
       setLoadingFn(true);
       const { data } = await supabase
         .from('funcionarios')
-        .select('id,nome,filial,cargo,ativo')
+        .select('id,nome,filial,cargo,ativo,status')
         .in('filial', CENTRAL_OP_FILIAIS as unknown as string[])
         .eq('ativo', true)
+        // `ativo` NÃO cai no desligamento — a rescisão seta status='Desligado'
+        // e deixa ativo=true. Sem este filtro o desligado continuava
+        // aparecendo pra ser escalado em tarefa nova (migr. 364).
+        .neq('status', 'Desligado')
         .order('nome', { ascending: true });
       setFuncionarios(data ?? []);
       setLoadingFn(false);
@@ -1394,9 +1463,13 @@ function ModalEditarTarefa({ tipoConfig: _tipoConfig, tarefa, participantes, onC
       setLoadingFn(true);
       const { data } = await supabase
         .from('funcionarios')
-        .select('id,nome,filial,cargo,ativo')
+        .select('id,nome,filial,cargo,ativo,status')
         .in('filial', CENTRAL_OP_FILIAIS as unknown as string[])
         .eq('ativo', true)
+        // `ativo` NÃO cai no desligamento — a rescisão seta status='Desligado'
+        // e deixa ativo=true. Sem este filtro o desligado continuava
+        // aparecendo pra ser escalado em tarefa nova (migr. 364).
+        .neq('status', 'Desligado')
         .order('nome', { ascending: true });
       setFuncionarios(data ?? []);
       setLoadingFn(false);
