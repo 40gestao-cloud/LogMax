@@ -27,7 +27,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, History,
+  Presentation, History, ShieldAlert,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -125,6 +125,7 @@ const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAv
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
 const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
+const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAuditoriaView').then(m => ({ default: m.ComiteAuditoriaView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -360,6 +361,16 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || isConselheiro(profile) || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <History size={18} /><span>Auditoria</span>
+          </button>
+        )}
+        {/* Comitê de Auditoria (migr. 380) — irmão da Auditoria e com o mesmo
+            recorte: o gerente entra porque é ele quem responde ao
+            questionamento; abrir e encerrar é do Conselho, e quem barra é a
+            RPC, não o menu. */}
+        {aulaAllow('auditoria') && (profile?.role === 'admin' || profile?.role === 'ceo'
+          || isConselheiro(profile) || profile?.role === 'gerente') && (
+          <button onClick={() => { navigate('comite-auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'comite-auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <ShieldAlert size={18} /><span>Comitê de Auditoria</span>
           </button>
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
@@ -1086,6 +1097,7 @@ function LogMaxAppInner() {
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
       case 'auditoria':                    return <AuditoriaOperacoesView showToast={st} />;
+      case 'comite-auditoria':             return <ComiteAuditoriaView showToast={st} profile={profile} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
       // `matriz-avaliacoes` existe só para cair na Competição do Conselho —
       // é o destino do botão "Central de Avaliação" da tela de Competição.
