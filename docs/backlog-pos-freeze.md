@@ -60,6 +60,11 @@ Ordem de valor sugerida: **#G1 e #G3 primeiro** — juntos fecham o ciclo
 (Conselho dá a verba → CEO executa → CEO volta explicar o que fez com ela).
 Todo o resto pendura nisso.
 
+**Status (2026-08-07): o bloco G1–G8 saiu inteiro.** Migrações 378 (#G1),
+382 (#G2), 379 (#G3), 381 (#G4), 380 (#G5), 383 (#G6), 384 (#G7) e 385 (#G8).
+As descrições abaixo ficam como registro do que foi pedido e por quê — o que
+vale como especificação é o cabeçalho de cada migration.
+
 ### #G1 — Orçamento anual (maior lacuna)
 Real: cada unidade propõe orçamento do período por centro de custo; o Conselho
 aprova, corta ou devolve; durante o ciclo, gasto é confrontado com o aprovado

@@ -27,7 +27,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, History, ShieldAlert,
+  Presentation, History, ShieldAlert, BookMarked, AlertTriangle,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -128,6 +128,9 @@ const PrestacaoContasView                  = lazy(() => import('./views/Prestaca
 const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAuditoriaView').then(m => ({ default: m.ComiteAuditoriaView })));
 const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
 const RemuneracaoVariavelView              = lazy(() => import('./views/RemuneracaoVariavelView').then(m => ({ default: m.RemuneracaoVariavelView })));
+const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
+const PoliticasView                        = lazy(() => import('./views/PoliticasView').then(m => ({ default: m.PoliticasView })));
+const RiscosView                           = lazy(() => import('./views/RiscosView').then(m => ({ default: m.RiscosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -278,6 +281,11 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // pagamento a pessoa. Sem requireSetor — o colaborador precisa abrir
       // pra ver o próprio bônus, e a RLS já mostra só o item dele.
       'Remuneração Variável',
+      // Mandatos (migr. 383) fica ao lado de Desligamento: os dois são o
+      // começo e o fim da vida de um posto. Sem requireSetor — quem é o
+      // titular da unidade não é dado sigiloso, e nomear/encerrar é a RPC
+      // que barra, não o menu.
+      'Mandatos',
       { label: 'Benefícios', requireSetor: ['rh'] },
       'Treinamentos',
       { label: 'Pesquisas', requireSetor: ['rh'] },
@@ -382,6 +390,24 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || isConselheiro(profile) || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('comite-auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'comite-auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <ShieldAlert size={18} /><span>Comitê de Auditoria</span>
+          </button>
+        )}
+        {/* Matriz de Riscos (migr. 385) — o par prospectivo da Auditoria: ela
+            olha o que já aconteceu, esta olha o que ainda não aconteceu. Mesmo
+            recorte de papéis, porque o dono do risco costuma ser o gerente, e a
+            RLS confina por filial (a unidade vê a dela e as corporativas). */}
+        {aulaAllow('riscos') && (profile?.role === 'admin' || profile?.role === 'ceo'
+          || isConselheiro(profile) || profile?.role === 'gerente') && (
+          <button onClick={() => { navigate('riscos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'riscos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <AlertTriangle size={18} /><span>Matriz de Riscos</span>
+          </button>
+        )}
+        {/* Políticas (migr. 384) — aberto a todo mundo de propósito: política
+            que só o Conselho enxerga não é política. Quem publica é filtrado
+            dentro da view, e a ciência é sempre em nome de auth.uid(). */}
+        {aulaAllow('politicas') && (
+          <button onClick={() => { navigate('politicas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'politicas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <BookMarked size={18} /><span>Políticas</span>
           </button>
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
@@ -1042,6 +1068,9 @@ function LogMaxAppInner() {
       case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
       case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
       case 'rh-remuneraçãovariável':           return <RemuneracaoVariavelView showToast={st} profile={profile} />;
+      case 'rh-mandatos':                      return <MandatosView showToast={st} profile={profile} />;
+      case 'politicas':                        return <PoliticasView showToast={st} profile={profile} />;
+      case 'riscos':                           return <RiscosView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
