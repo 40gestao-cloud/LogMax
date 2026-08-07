@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users, Unlock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
+import { todayBR } from '../lib/dates';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -502,21 +503,29 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     await carregarLista();
   };
 
-  // Desfaz a DECLARAÇÃO, não a competição: volta pra votação do conselho
-  // (migr. 370). Só admin, e só sobre competição encerrada.
+  // Volta a competição para 'em_andamento' (migr. 371): é o único estado em
+  // que o conselho consegue corrigir nota — em 'aguardando_encerramento'
+  // todas as RPCs de escrita recusam. Só admin, e só sobre encerrada.
   const reabrirCompeticao = async (c: Competicao) => {
     if (!supabase) return;
+    // `isoToday` local usa toISOString (UTC) e divergiria da RPC perto da
+    // meia-noite; a régua da reabertura é o Acre, igual ao cron.
+    const hojeAcre = todayBR();
+    const venceu = c.data_fim < hojeAcre;
     if (!await confirm({
       message: `Reabrir "${c.nome}"?\n\n`
-        + `A competição volta para a votação do conselho e ${c.vencedora ?? 'a vencedora'} deixa de ser a vencedora declarada. `
-        + `O placar congelado é descartado e recalculado quando você declarar de novo.\n\n`
+        + `A competição volta a correr: o conselho pode dar e corrigir nota, e a Matriz volta a criar e liberar tarefa. `
+        + `${c.vencedora ?? 'A vencedora'} deixa de ser a vencedora declarada e o placar congelado é descartado — ele é recalculado quando você declarar de novo.\n\n`
+        + (venceu
+            ? `O prazo dela terminou em ${fmtDataBR(c.data_fim)}, então a data de fim passa para hoje (${fmtDataBR(hojeAcre)}). Sem isso o cron da madrugada fecharia ela de novo. Ajuste em Config se precisar de mais tempo.\n\n`
+            : '')
         + `Os votos do conselho são preservados. A filial recebe aviso da reabertura.`,
       confirmLabel: 'Reabrir',
       danger: true,
     })) return;
-    const { error } = await supabase.rpc('reabrir_competicao', { p_competicao_id: c.id });
+    const { data, error } = await supabase.rpc('reabrir_competicao', { p_competicao_id: c.id });
     if (error) return showToast?.(`Erro: ${error.message}`, 'error');
-    showToast?.('Competição reaberta — voltou para a votação do conselho.', 'success');
+    showToast?.(`Competição reaberta — vale até ${fmtDataBR(String(data))}.`, 'success');
     await carregarLista();
   };
 
