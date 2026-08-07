@@ -144,7 +144,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const grupos = Array.from(new Set(AULA_MODULOS.map(m => m.grupo)));
 
   return (
-    <div className="flex flex-col gap-6">
+    // pb-24 reserva o espaço da barra sticky de ações. Sem isso ela cobre
+    // permanentemente a última faixa de conteúdo — no fim da rolagem os
+    // módulos do último grupo ficam atrás dela e não há como alcançá-los.
+    <div className="flex flex-col gap-6 pb-24">
       {/* Header */}
       <div className="flex items-start gap-4">
         <div className="w-12 h-12 neu-pressed rounded-2xl flex items-center justify-center shrink-0">
@@ -434,7 +437,12 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="sticky bottom-4 flex items-center justify-between gap-3 neu-flat rounded-2xl px-5 py-3 border border-accent/20"
+            // A barra flutua sobre a grade enquanto se rola. Sem sombra e sem
+            // fundo opaco ela lia como uma linha cortando o card ao meio, em
+            // vez de uma faixa por cima dele.
+            // `bg-base` é utility do projeto (index.css), não cor do Tailwind:
+            // não aceita modificador de opacidade, tem que ser sólido.
+            className="sticky bottom-4 z-10 flex items-center justify-between gap-3 neu-flat rounded-2xl px-5 py-3 border border-accent/20 bg-base shadow-lg shadow-black/40"
           >
             <span className="text-xs text-accent font-bold">Alterações não salvas</span>
             <div className="flex items-center gap-2">
