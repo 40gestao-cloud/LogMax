@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Gavel, Plus, Send, TriangleAlert, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -75,7 +75,12 @@ export function PrestacaoContasView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
+  // Dois testes de propósito (migr. 386): `conselho` é VISIBILIDADE — enxergar
+  // as prestações das 4 unidades, e o CEO precisa disso para submeter a dele.
+  // `podeDeliberar` é o ATO, e aí o CEO sai: ele presta contas, não as julga.
+  // Quem barra de verdade é a RPC.
   const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
+  const podeDeliberar = isConselho(profile);
   // Conselho enxerga tudo, inclusive a Matriz — que é justamente de quem o
   // CEO presta contas. A unidade enxerga só a própria.
   const filiaisVisiveis = useMemo(
@@ -254,7 +259,7 @@ export function PrestacaoContasView({
         <div className="space-y-3">
           {lista.map(p => {
             const editavel   = p.status === 'rascunho';
-            const deliberar  = conselho && p.status === 'submetida' && p.autor_id !== profile?.id;
+            const deliberar  = podeDeliberar && p.status === 'submetida' && p.autor_id !== profile?.id;
             const meus       = pareceres[p.id] ?? [];
             const encerrada  = ['aprovada','aprovada_com_ressalva','reprovada'].includes(p.status);
 
@@ -343,9 +348,13 @@ export function PrestacaoContasView({
                       </div>
                     )}
 
-                    {conselho && p.status === 'submetida' && p.autor_id === profile?.id && (
+                    {/* Por que não há painel de parecer aqui. Sem esta linha o
+                        CEO só vê um botão que sumiu (migr. 386). */}
+                    {conselho && p.status === 'submetida' && !deliberar && (
                       <div className="text-xs text-yellow-400/80">
-                        Você submeteu esta prestação — não pode dar parecer sobre ela.
+                        {p.autor_id === profile?.id
+                          ? 'Você submeteu esta prestação — não pode dar parecer sobre ela.'
+                          : 'Parecer é do Conselho. O CEO presta contas; quem as julga é outro corpo.'}
                       </div>
                     )}
 

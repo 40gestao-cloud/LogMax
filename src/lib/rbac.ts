@@ -17,6 +17,27 @@ export function isConselheiro(
   return profile.role === 'conselheiro' || (profile.role === 'gerente' && profile.is_conselheiro === true);
 }
 
+/**
+ * True se o usuário pertence ao **Conselho deliberativo**: conselheiro puro,
+ * gerente-conselheiro ou admin (o professor, que destrava qualquer etapa).
+ *
+ * **CEO fica de fora de propósito** — espelha `auth_is_conselho()` da migr.
+ * 386. O CEO propõe orçamento, executa e presta contas; quem delibera sobre
+ * o que ele fez é outro corpo. Se ele deliberasse também, o loop de
+ * accountability não fecharia — era exatamente o buraco que o bloco G1–G8
+ * existia para tapar.
+ *
+ * Use para *atos de deliberação* (aprovar verba, dar parecer, encerrar).
+ * Para visibilidade — ver as propostas das 4 unidades, abrir a tela — o
+ * teste continua sendo o amplo, que inclui o CEO.
+ */
+export function isConselho(
+  profile: Pick<UserProfile, 'role' | 'is_conselheiro'> | null | undefined,
+): boolean {
+  if (!profile) return false;
+  return profile.role === 'admin' || isConselheiro(profile);
+}
+
 // --- Modo Aula: setores concedidos temporariamente ---
 // Enquanto a aula está ativa, o aluno opera os módulos da whitelist mesmo fora
 // do setor dele — e a RLS concede o mesmo (migr. 317, `auth_aula_setores()`).

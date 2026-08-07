@@ -3,7 +3,7 @@ import { Check, ChevronDown, ChevronRight, Plus, Send, Trash2, Undo2, X } from '
 import { supabase } from '../lib/supabase';
 import { EmptyState, FilialBadge, LoadingSpinner, StatusBadge } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -32,6 +32,7 @@ type Orcamento = {
   status: Status;
   observacao: string | null;
   parecer: string | null;
+  proposto_por: string | null;
   submetido_em: string | null;
   deliberado_em: string | null;
 };
@@ -73,7 +74,12 @@ export function OrcamentoView({
   profile: UserProfile | null;
   showToast: (msg: string, t?: string) => void;
 }) {
+  // Dois testes diferentes de propósito (migr. 386): `conselho` é VISIBILIDADE
+  // — quem enxerga as propostas das 4 unidades, e o CEO precisa enxergar para
+  // propor. `podeDeliberar` é o ATO, e aí o CEO fica de fora: quem pede a verba
+  // não é quem a concede. Quem barra de verdade é a RPC.
   const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
+  const podeDeliberar = isConselho(profile);
   const filiaisVisiveis = useMemo(
     () => (conselho ? [...FILIAIS_OP] : profile?.filial ? [profile.filial] : []),
     [conselho, profile?.filial],
@@ -99,7 +105,7 @@ export function OrcamentoView({
     setLoading(true);
     const [{ data: orcs }, { data: ccs }] = await Promise.all([
       supabase.from('orcamentos_periodo')
-        .select('id, filial, nome, periodo_inicio, periodo_fim, status, observacao, parecer, submetido_em, deliberado_em')
+        .select('id, filial, nome, periodo_inicio, periodo_fim, status, observacao, parecer, proposto_por, submetido_em, deliberado_em')
         .eq('ativo', true)
         .in('filial', filiaisVisiveis)
         .order('periodo_inicio', { ascending: false }),
@@ -271,7 +277,10 @@ export function OrcamentoView({
           {orcamentos.map(o => {
             const linhas    = execucao[o.id] ?? [];
             const editavel  = (o.status === 'rascunho' || o.status === 'devolvido');
-            const deliberar_ = conselho && o.status === 'submetido';
+            // Nem o proponente delibera sobre a própria proposta — o guard
+            // vale inclusive para conselheiro (a RPC repete a regra).
+            const deliberar_ = podeDeliberar && o.status === 'submetido'
+              && o.proposto_por !== profile?.id;
             const totalProp = linhas.reduce((s, l) => s + Number(l.valor_proposto), 0);
             const totalApr  = linhas.reduce((s, l) => s + Number(l.valor_aprovado ?? 0), 0);
             const totalReal = linhas.reduce((s, l) => s + Number(l.realizado), 0);
@@ -412,6 +421,16 @@ export function OrcamentoView({
                           className="neu-button px-4 py-2 rounded-xl text-sm text-accent font-medium flex items-center gap-2 disabled:opacity-50">
                           <Send size={14} /> Submeter ao Conselho
                         </button>
+                      </div>
+                    )}
+
+                    {/* Por que não há painel de deliberação aqui. Sem esta
+                        linha o CEO só vê um botão que sumiu (migr. 386). */}
+                    {conselho && o.status === 'submetido' && !deliberar_ && (
+                      <div className="text-xs text-yellow-400/80 pt-2">
+                        {o.proposto_por === profile?.id
+                          ? 'Você propôs este orçamento — não pode deliberar sobre ele.'
+                          : 'Deliberação é do Conselho. O CEO propõe e executa; quem concede a verba é outro corpo.'}
                       </div>
                     )}
 
