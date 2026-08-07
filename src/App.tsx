@@ -123,6 +123,7 @@ const MetricasRedesSociaisView             = lazy(() => import('./views/Metricas
 const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
+const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -210,6 +211,11 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // select de centro de custo da Requisição só mostrava "Não informar".
       // Escrita é admin/CEO porque a policy de centros_custo é auth_is_admin().
       { label: 'Centros de Custo', requireRole: ['admin', 'ceo'] },
+      // 'Orçamento Anual' (migr. 378) é o teto deliberado pelo Conselho, não
+      // confundir com 'Aprovações de Orçamento' logo abaixo, que é cotação de
+      // compra. Sem requireRole: o gerente da filial precisa propor, e quem
+      // delibera é filtrado dentro da view (e pela RLS, que é quem barra).
+      'Orçamento Anual',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
@@ -1005,6 +1011,7 @@ function LogMaxAppInner() {
       // Só no hub da Matriz (migr. 323): distribui o custo da holding entre as
       // 3 unidades e gera o par conta a pagar (filial) / conta a receber (Matriz).
       case 'financeiro-rateioadministrativo':  return <RateioAdministrativoView showToast={st} profile={profile} />;
+      case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;

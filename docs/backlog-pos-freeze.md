@@ -48,6 +48,101 @@ Padrão contábil. RelatoriosFinanceirosView hoje só tem listagens. Falta:
 Escopo: **grande**. Plano de contas + RPC agregadora + view dedicada. Pode
 virar projeto isolado.
 
+## Governança: o que CEO e Conselho fariam além de avaliar/votar (2026-08-07)
+
+Levantado a pedido do usuário. **Diagnóstico de fundo:** hoje Conselho e CEO
+têm as mesmas mãos — os dois avaliam, votam e criam tarefa. Numa empresa real
+o Conselho delibera e fiscaliza, o CEO executa e presta contas. Falta o loop
+de accountability: ninguém cobra o CEO de nada. Quase todos os itens abaixo
+nascem disso.
+
+Ordem de valor sugerida: **#G1 e #G3 primeiro** — juntos fecham o ciclo
+(Conselho dá a verba → CEO executa → CEO volta explicar o que fez com ela).
+Todo o resto pendura nisso.
+
+### #G1 — Orçamento anual (maior lacuna)
+Real: cada unidade propõe orçamento do período por centro de custo; o Conselho
+aprova, corta ou devolve; durante o ciclo, gasto é confrontado com o aprovado
+e estouro exige aprovação suplementar.
+- Tabelas: `orcamentos_periodo` (filial, ciclo, status) + itens por
+  `centros_custo`; parecer do Conselho com valor aprovado ≠ proposto
+- Consumo: view/RPC confrontando `contas_pagar` × orçado por centro de custo
+- Trava: alerta ou bloqueio em Compras quando o centro de custo estourar
+- Reaproveita: `orcamento_mensal_categoria`, `centros_custo`, `contas_pagar`,
+  `alcadas_compra`, Rateio Administrativo
+- Didático: hoje filial gasta sem teto. Ensina a diferença entre querer e ter
+  verba — a conversa nº 1 de qualquer gestor.
+
+Escopo: **grande**. 1 migration robusta + 2 telas (propor / deliberar) +
+integração em Compras.
+
+### #G2 — Remuneração variável atrelada a resultado
+Real: Conselho aprova a política de bônus; pagamento sai do atingimento de
+metas e do desempenho medido.
+- Tabelas: `politica_remuneracao` (vigência, pesos, gatilhos) +
+  `apuracao_bonus` por ciclo/pessoa
+- Fonte do desempenho: placar da competição (`avaliacoes` tipo
+  `matriz_filial`) + `metas_estrategicas`/`tarefas_taticas`
+- Saída: provento na folha e/ou crédito em `maxbank_contas`
+- Didático: fecha o ciclo do que já existe. Hoje o placar é orgulho; virando
+  dinheiro na carteira, a competição vira consequência.
+
+Escopo: médio-grande. Depende de folha e do placar estarem estáveis.
+
+### #G3 — Prestação de contas do CEO ao Conselho
+Real: reunião periódica em que o CEO apresenta resultados e o Conselho aprova,
+aprova com ressalva ou reprova — ressalva vira plano de ação com prazo.
+- Tabelas: `prestacoes_contas` (ciclo, autor, indicadores, anexo) +
+  `prestacao_pareceres` (conselheiro, voto, ressalva)
+- Ressalva gera linha em `matriz_tarefas` com prazo (plano de ação)
+- Reaproveita: Painel BI (já exporta), `ciclos_avaliacao` pro ritmo
+- Didático: é o que falta pro CEO ser cargo de verdade e não super-admin.
+
+Escopo: médio. 1 migration + 1 tela com duas faces (submeter / deliberar).
+
+### #G4 — Destinação do resultado
+Real: apurado o lucro do ciclo, decide-se entre reinvestir, formar reserva ou
+distribuir.
+- Tabela: `destinacoes_resultado` (ciclo, lucro apurado, rateio das 3 vias)
+- Reaproveita: `capital_filial`, `capital_config`, MaxBank
+- Didático: o trade-off mais adulto que existe — distribuir agora ou ter caixa
+  pra crescer depois.
+
+Escopo: médio.
+
+### #G5 — Comitê de Auditoria (o mais barato)
+Real: conselheiros revisam exceções, questionam responsáveis e assinam parecer.
+- **Sem dado novo**: workflow por cima de `historico_operacoes` (1482 linhas já
+  acumuladas no ERP) e da tela de Auditoria
+- Tabela mínima: `auditoria_revisoes` (operação, revisor, status,
+  questionamento, resposta)
+- Didático: ensina que trilha de auditoria existe pra ser lida por alguém.
+
+Escopo: **pequeno** — melhor candidato a exceção isolada se a trava continuar.
+
+### #G6 — Nomeação com mandato
+Real: Conselho nomeia gestor da unidade por mandato; ao fim, reconduz ou
+substitui com base no desempenho.
+- Tabela: `mandatos` (pessoa, cargo, filial, início/fim, ato de nomeação)
+- Reaproveita: `movimentacoes_carreira` (existe e está vazia), Desligamento /
+  Rescisão, placar como critério
+- Didático: hoje virar gerente é o admin editar um campo. Com mandato, o cargo
+  ganha origem, prazo e consequência.
+
+Escopo: médio.
+
+### #G7 — Política / código de conduta com versão
+`avisos_matriz` + "Ciente" já faz metade. Falta o conceito de política vigente
+com versionamento e reciência quando a versão muda.
+
+Escopo: pequeno-médio (extensão de tela existente — pode contar como refino).
+
+### #G8 — Matriz de riscos
+Conselho registra risco, dono, probabilidade/impacto e mitigação; revisa a cada
+ciclo. Barato e aparece em toda entrevista de gestão.
+
+Escopo: pequeno.
+
 ## Pedidos novos (não-auditoria)
 
 Adicionar aqui quaisquer ideias que aparecerem durante a trava.
