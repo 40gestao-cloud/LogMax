@@ -127,6 +127,7 @@ const OrcamentoView                        = lazy(() => import('./views/Orcament
 const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
 const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAuditoriaView').then(m => ({ default: m.ComiteAuditoriaView })));
 const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
+const RemuneracaoVariavelView              = lazy(() => import('./views/RemuneracaoVariavelView').then(m => ({ default: m.RemuneracaoVariavelView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -273,6 +274,10 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // unidades e o processo interno inter-filiais.
       { label: 'Recrutamento e Seleção', requireSetor: ['rh'] },
       { label: 'Folha de Pagamento', requireSetor: ['rh'] },
+      // Remuneração variável (migr. 382) fica em RH e não em Financeiro: é
+      // pagamento a pessoa. Sem requireSetor — o colaborador precisa abrir
+      // pra ver o próprio bônus, e a RLS já mostra só o item dele.
+      'Remuneração Variável',
       { label: 'Benefícios', requireSetor: ['rh'] },
       'Treinamentos',
       { label: 'Pesquisas', requireSetor: ['rh'] },
@@ -1036,6 +1041,7 @@ function LogMaxAppInner() {
       case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
       case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
       case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
+      case 'rh-remuneraçãovariável':           return <RemuneracaoVariavelView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
