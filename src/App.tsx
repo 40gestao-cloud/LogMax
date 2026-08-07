@@ -1074,7 +1074,10 @@ function LogMaxAppInner() {
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
       case 'auditoria':                    return <AuditoriaOperacoesView showToast={st} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
-      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} />;
+      // `matriz-avaliacoes` existe só para cair na Competição do Conselho —
+      // é o destino do botão "Central de Avaliação" da tela de Competição.
+      // Sem o initialTab ele abria em Padrão, que não tem nada a ver.
+      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       // Rota mudou com o rótulo. A antiga fica de alias porque `activeView` vive

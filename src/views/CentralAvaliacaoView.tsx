@@ -35,18 +35,19 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
     if (!podeCompeticao || !supabase) { setLoading(false); return; }
     let cancelou = false;
 
-    // Inclui `aguardando_encerramento` — durante a votação do conselho a aba
-    // continua útil pra revisitar itens/tarefas já pontuados. Some só quando
-    // encerrada de fato.
+    // Inclui `encerrada`: a aba sumir ao declarar a vencedora tornava tarefas,
+    // notas e participantes inalcançáveis — é justamente quando se consulta.
+    // Fora de 'em_andamento' a tela abre em leitura, que ela já sabe fazer.
+    // `maybeSingle` saiu porque encerrada há várias.
     const verificar = async () => {
       const { data } = await supabase!
         .from('competicoes_matriz')
         .select('id')
         .eq('ativo', true)
-        .in('status', ['em_andamento', 'aguardando_encerramento'])
-        .maybeSingle();
+        .in('status', ['em_andamento', 'aguardando_encerramento', 'encerrada'])
+        .limit(1);
       if (!cancelou) {
-        setTemCompeticao(!!data);
+        setTemCompeticao((data ?? []).length > 0);
         setLoading(false);
       }
     };
@@ -67,25 +68,29 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
 
   const mostrarCompeticao = podeCompeticao && temCompeticao;
+  // Quem chega por `matriz-avaliacoes` pede a aba de Competição. Se ela não
+  // existe (sem competição, ou fora do conselho), cai em Padrão em vez de
+  // renderizar nada — tela em branco é pior que a aba errada.
+  const abaEfetiva: Aba = aba === 'competicao' && !mostrarCompeticao ? 'padrao' : aba;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
         {modoMatriz && (
-          <TabBtn active={aba === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
+          <TabBtn active={abaEfetiva === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
         )}
-        <TabBtn active={aba === 'padrao'} onClick={() => setAba('padrao')} icon={<Star size={12} />} label="Padrão" />
+        <TabBtn active={abaEfetiva === 'padrao'} onClick={() => setAba('padrao')} icon={<Star size={12} />} label="Padrão" />
         {podeAvisos && (
-          <TabBtn active={aba === 'avisos'} onClick={() => setAba('avisos')} icon={<Megaphone size={12} className="text-amber-300" />} label="Avisos" />
+          <TabBtn active={abaEfetiva === 'avisos'} onClick={() => setAba('avisos')} icon={<Megaphone size={12} className="text-amber-300" />} label="Avisos" />
         )}
         {mostrarCompeticao && (
-          <TabBtn active={aba === 'competicao'} onClick={() => setAba('competicao')} icon={<Trophy size={12} className="text-amber-300" />} label="Competição do Conselho" />
+          <TabBtn active={abaEfetiva === 'competicao'} onClick={() => setAba('competicao')} icon={<Trophy size={12} className="text-amber-300" />} label="Competição do Conselho" />
         )}
       </div>
-      {aba === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
-      {aba === 'metas'    && modoMatriz && <MetasView profile={profile} showToast={showToast} />}
-      {aba === 'avisos'   && podeAvisos && <MatrizAvisosView profile={profile} showToast={showToast} />}
-      {aba === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
+      {abaEfetiva === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
+      {abaEfetiva === 'metas'    && modoMatriz && <MetasView profile={profile} showToast={showToast} />}
+      {abaEfetiva === 'avisos'   && podeAvisos && <MatrizAvisosView profile={profile} showToast={showToast} />}
+      {abaEfetiva === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
     </div>
   );
 }
