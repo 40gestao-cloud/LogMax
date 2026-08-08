@@ -21,7 +21,7 @@ ERP PWA didático (React 19 + Vite + Tailwind v4 + Supabase + Vercel). Deploy au
 ### Backend serverless (`api/`)
 Endpoints Vercel (Node). Tudo precisa de service-role + checagem RBAC manual:
 - `create-user.ts`, `update-user.ts`, `delete-user.ts` — gestão de usuários (admin/CEO).
-- `ai-chat.ts`, `ai-models.ts` — MaxAI (Gemini `gemini-2.5-flash`, requer `GEMINI_API_KEY`).
+- `ai-chat.ts`, `ai-models.ts` — MaxAI (cadeia Gemini free `gemini-3.6-flash` → `2.5-flash-lite`, requer `GEMINI_API_KEY`).
 - `register-ponto-codigo.ts`, `register-ponto-qr.ts`, `qr-token.ts` — totem de ponto.
 - `reverter-promocoes-expiradas.ts` — Vercel Cron (usa `CRON_SECRET` Bearer).
 

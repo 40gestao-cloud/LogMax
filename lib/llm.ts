@@ -2,7 +2,7 @@ import type { Logger } from './log.js';
 
 // Camada unificada de chamada a LLMs com fallback automático em cascata:
 //   1. Gemini (primário) com retry em 503/429. Google Search grounding.
-//   2. Cerebras (tier 2) — Wafer-scale, LLaMA 3.3 70B em <1s.
+//   2. Cerebras (tier 2) — Wafer-scale, modelo de 120B em <1s.
 //   3. Mistral (tier 3) — bom PT-BR nativo, JSON mode confiável.
 //   4. Groq (tier 4) — LPU rápida, free tier alto (~14k req/dia).
 //   5. OpenRouter (tier 5) — agrega ~50 provedores, free tier baixo.
@@ -24,41 +24,61 @@ import type { Logger } from './log.js';
 // Gemini — se cair pra Groq/OpenRouter, perde grounding mas mantém
 // resposta.
 
-const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+// Cadeia Gemini (free tier). Tenta na ordem; 429/503 do topo cai pro
+// proximo modelo antes de trocar de provedor — o free tier tem quota por
+// modelo, entao o 3.6 estourado nao significa que o 2.5 esteja.
+// Override via GEMINI_MODELS (CSV) ou GEMINI_MODEL (valor unico, legado).
+// Conferido em https://ai.google.dev/gemini-api/docs/pricing em 2026-08-08.
+const GEMINI_DEFAULT_MODELS = [
+  'gemini-3.6-flash',       // flagship free atual
+  'gemini-3.5-flash',       // geracao anterior, quota separada
+  'gemini-2.5-flash',       // estavel de longa data, era o unico daqui
+  'gemini-2.5-flash-lite',  // ultimo recurso barato/rapido
+];
 
-// Cadeia Cerebras (free tier). Wafer-scale = <1s pra 70B.
+// Cadeia Cerebras (free tier). Wafer-scale = <1s pra 120B.
 // Override via CEREBRAS_MODELS (CSV). Catalogo em inference.cerebras.ai.
+// Os llama-3.x sairam do catalogo publico (so via dedicated endpoint).
+// Conferido em 2026-08-08.
 const CEREBRAS_DEFAULT_MODELS = [
-  'llama-3.3-70b',     // 70B, qualidade alta, ~1000 tok/s
-  'llama3.1-8b',       // 8B, ultimo recurso ultra-rapido
+  'gpt-oss-120b',      // 120B, producao, ~1000 tok/s
+  'gemma-4-31b',       // 31B, preview, bom PT-BR
 ];
 
 // Cadeia Mistral (free tier). Bom PT-BR nativo.
 // Override via MISTRAL_MODELS (CSV). Catalogo em docs.mistral.ai/getting-started/models.
+// open-mistral-nemo foi aposentado em 2026-07-31. O alias -latest continua
+// resolvendo pro Small vigente; o id fixo abaixo é a rede de segurança se o
+// alias sumir. Conferido em 2026-08-08.
 const MISTRAL_DEFAULT_MODELS = [
-  'mistral-small-latest',   // 22B, free tier, ótimo em PT-BR
-  'open-mistral-nemo',      // 12B, backup mais leve
+  'mistral-small-latest',   // alias, aponta pro Small 4
+  'mistral-small-2603',     // Small 4 fixo, caso o alias saia do ar
+  'ministral-3-8b-25-12',   // 8B, backup mais leve
 ];
 
 // Cadeia Groq (free tier). Tenta na ordem; se 429/erro, vai pro próximo.
 // Override via GROQ_MODELS (CSV). Lista válida em console.groq.com.
+// Os dois llama que estavam aqui são desligados em 2026-08-16 — a Groq
+// aponta os gpt-oss como substitutos. Conferido em 2026-08-08.
 const GROQ_DEFAULT_MODELS = [
-  'llama-3.3-70b-versatile',   // 70B, qualidade alta, bom em PT-BR
-  'llama-3.1-8b-instant',      // 8B, último recurso ultra-rápido
+  'openai/gpt-oss-120b',       // 120B, produção, substituto do llama-3.3-70b
+  'openai/gpt-oss-20b',        // 20B, último recurso ultra-rápido
 ];
 
 // Cadeia de modelos free no OpenRouter. Override via OPENROUTER_MODELS
 // (CSV) se quiser priorizar outros. OpenRouter tenta na ordem e cai pro
 // próximo automaticamente.
 //
-// IMPORTANTE: lista de free models do OpenRouter rotaciona com frequência.
-// Verificar em https://openrouter.ai/models?max_price=0 e atualizar se
-// começar a falhar. Conferido pela última vez em 2026-06-16.
+// IMPORTANTE: lista de free models do OpenRouter rotaciona com frequência —
+// os 4 modelos anteriores (llama-3.3-70b, gpt-oss-120b, qwen3-next-80b)
+// saíram do catálogo free. Conferir em
+// https://openrouter.ai/api/v1/models (filtrar id terminado em ':free')
+// e atualizar quando começar a falhar. Conferido em 2026-08-08.
 const OPENROUTER_DEFAULT_MODELS = [
-  'meta-llama/llama-3.3-70b-instruct:free',  // 70B reliável, bom em PT-BR
-  'openai/gpt-oss-120b:free',                // 120B open-source da OpenAI
-  'qwen/qwen3-next-80b-a3b-instruct:free',   // Qwen3 MoE 80B multilíngue
-  'nvidia/nemotron-3-super-120b-a12b:free',  // Nemotron 120B reasoning
+  'nvidia/nemotron-3-ultra-550b-a55b:free',  // 550B, contexto de 1M
+  'nvidia/nemotron-3-super-120b-a12b:free',  // 120B reasoning
+  'google/gemma-4-31b-it:free',              // 31B multilíngue, bom PT-BR
+  'openai/gpt-oss-20b:free',                 // 20B, último recurso leve
 ];
 
 const RETRY_DELAYS_MS = [1500, 3500];
@@ -155,6 +175,15 @@ const toOpenAIMessages = (req: LLMRequest) => {
 // Chamadas individuais (uma tentativa)
 // ─────────────────────────────────────────────
 
+// Gemini 3 trocou `thinkingBudget` (tokens) por `thinkingLevel` (enum) e
+// recusa o campo antigo. Como a cadeia mistura 3.x e 2.5, o budget que os
+// endpoints passam é traduzido por família: 0 = o mínimo que o modelo
+// aceita, qualquer outro valor = raciocínio curto.
+const thinkingConfigFor = (model: string, budget: number) =>
+  model.startsWith('gemini-3')
+    ? { thinkingLevel: budget <= 0 ? 'minimal' : 'low' }
+    : { thinkingBudget: budget };
+
 async function callGeminiOnce(
   req: LLMRequest,
   model: string,
@@ -172,7 +201,7 @@ async function callGeminiOnce(
       topP:            req.topP            ?? 0.95,
       ...(req.jsonMode ? { responseMimeType: 'application/json' } : {}),
       ...(req.geminiThinkingBudget !== undefined
-        ? { thinkingConfig: { thinkingBudget: req.geminiThinkingBudget } }
+        ? { thinkingConfig: thinkingConfigFor(model, req.geminiThinkingBudget) }
         : {}),
     },
     safetySettings: [
@@ -436,7 +465,10 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   const mistralKey    = process.env.MISTRAL_API_KEY?.trim();
   const groqKey       = process.env.GROQ_API_KEY?.trim();
   const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  const geminiModel   = (process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
+  // GEMINI_MODEL (valor unico) continua valendo e vira uma cadeia de um item.
+  const geminiModels  = process.env.GEMINI_MODEL?.trim()
+    ? [process.env.GEMINI_MODEL.trim()]
+    : envList('GEMINI_MODELS', GEMINI_DEFAULT_MODELS);
   const cerebrasModels = envList('CEREBRAS_MODELS', CEREBRAS_DEFAULT_MODELS);
   const mistralModels  = envList('MISTRAL_MODELS',  MISTRAL_DEFAULT_MODELS);
   const groqModels     = envList('GROQ_MODELS',     GROQ_DEFAULT_MODELS);
@@ -449,10 +481,16 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   let lastGeminiStatus = 0;
 
   if (geminiKey) {
-    const { outcome, lastStatus } = await runGemini(req, geminiModel, geminiKey, log);
-    lastGeminiStatus = lastStatus;
-    if (outcome.kind === 'ok' || outcome.kind === 'fail') return outcome.result;
-    if (outcome.kind === 'stash') stashedGemini = outcome.result;
+    for (const model of geminiModels) {
+      const { outcome, lastStatus } = await runGemini(req, model, geminiKey, log);
+      lastGeminiStatus = lastStatus;
+      // SAFETY/RECITATION nao muda com o modelo, e sucesso encerra.
+      if (outcome.kind === 'ok' || outcome.kind === 'fail') return outcome.result;
+      // Guarda o primeiro parcial: os proximos modelos truncariam igual.
+      if (outcome.kind === 'stash' && !stashedGemini) stashedGemini = outcome.result;
+      // Chave invalida/rejeitada nao melhora trocando de modelo.
+      if (lastStatus === 401 || lastStatus === 403) break;
+    }
   }
 
   if (cerebrasKey) {
@@ -476,7 +514,7 @@ export async function callLLM(req: LLMRequest, log: Logger): Promise<LLMResult> 
   }
 
   if (stashedGemini) {
-    log.warn('llm.fallback_to_truncated_gemini', { model: geminiModel });
+    log.warn('llm.fallback_to_truncated_gemini', { model: stashedGemini.modelUsed });
     return stashedGemini;
   }
 
