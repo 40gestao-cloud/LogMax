@@ -27,14 +27,21 @@ import type { UserProfile } from '../hooks/useUserProfile';
 
 type Pendencia = { label: string; count: number; view: string; hint: string };
 
-// Auditoria (Comitê + trilha) e Matriz de Riscos saíram em 2026-08-08: as
-// pendências que apontavam para essas telas saíram junto.
+// Auditoria (Comitê + trilha) e Matriz de Riscos saíram em 2026-08-08, e a
+// Remuneração Variável em 2026-08-09: as pendências que apontavam para essas
+// telas saíram junto.
+//
+// `matrizMode` voltou por causa de Mandatos: a tela virou Matriz-only em
+// 2026-08-09, então a pendência que aponta pra ela não pode aparecer com
+// filial ativa — daria um clique que o próprio guarda de modo desfaz.
 export function PainelGovernanca({
   profile,
   onNavigate,
+  matrizMode = false,
 }: {
   profile?: UserProfile;
   onNavigate?: (view: string) => void;
+  matrizMode?: boolean;
 }) {
   const conselho  = isConselho(profile);
   // Executor = quem responde por uma unidade e presta contas dela.
@@ -68,7 +75,7 @@ export function PainelGovernanca({
     }
 
     if (conselho) {
-      const [orc, prest, mand, bonus] = await Promise.all([
+      const [orc, prest, mand] = await Promise.all([
         // Quem propôs não delibera (migr. 386) — o próprio some da conta.
         contar(supabase.from('orcamentos_periodo').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'submetido')
@@ -77,11 +84,12 @@ export function PainelGovernanca({
           .eq('ativo', true).eq('status', 'submetida')
           .or(`autor_id.is.null,autor_id.neq.${profile.id}`)),
         // Mandato vencido não cai sozinho: fica aqui até alguém decidir.
-        contar(supabase.from('mandatos').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).eq('status', 'vigente').lt('data_fim', hoje)
-          .neq('user_profile_id', profile.id)),
-        contar(supabase.from('apuracoes_bonus').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).eq('status', 'calculada')),
+        // Só na Matriz — é de lá que se nomeia (ver MATRIZ_ONLY_VIEWS).
+        matrizMode
+          ? contar(supabase.from('mandatos').select('id', { count: 'exact', head: true })
+              .eq('ativo', true).eq('status', 'vigente').lt('data_fim', hoje)
+              .neq('user_profile_id', profile.id))
+          : Promise.resolve(0),
       ]);
       setDelib([
         { label: 'Orçamento a deliberar',   count: orc,   view: 'financeiro-orçamentoanual',
@@ -90,13 +98,11 @@ export function PainelGovernanca({
           hint: 'Aprovar, ressalvar ou reprovar. Ressalva vira tarefa com prazo.' },
         { label: 'Mandato vencido',         count: mand,  view: 'rh-mandatos',
           hint: 'Passou do prazo. Reconduza, substitua ou encerre o posto.' },
-        { label: 'Bônus a pagar',           count: bonus, view: 'rh-remuneraçãovariável',
-          hint: 'Apuração fechada esperando o Conselho mandar creditar.' },
       ].filter(p => p.count > 0));
     } else {
       setDelib([]);
     }
-  }, [profile?.id, conselho, executor]);
+  }, [profile?.id, conselho, executor, matrizMode]);
 
   useEffect(() => { void carregar(); }, [carregar]);
 

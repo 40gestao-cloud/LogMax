@@ -125,7 +125,6 @@ const MatrizCapitalView                    = lazy(() => import('./views/MatrizCa
 const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
 const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
 const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
-const RemuneracaoVariavelView              = lazy(() => import('./views/RemuneracaoVariavelView').then(m => ({ default: m.RemuneracaoVariavelView })));
 const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
@@ -138,7 +137,10 @@ const MaxShowsView                         = lazy(() => import('./views/MaxShows
 // { label, requireRole?, requireSetor? } pra esconder linha por role/setor
 // (ex.: Cliente Especial só admin/CEO; Pedidos de Venda no Estoque só pra
 // logística). Funções de filtro estão em filterSubmenus() abaixo.
-type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[] };
+// `requireMatriz` esconde a linha quando há filial ativa: é ato da Matriz, não
+// operação da unidade. Não confundir com requireRole — o mesmo admin/CEO vê o
+// item na Matriz e não vê depois de entrar numa filial.
+type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[]; requireMatriz?: boolean };
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     // Empresa é parametrização: filiais, formas e condições de pagamento,
@@ -273,15 +275,14 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // unidades e o processo interno inter-filiais.
       { label: 'Recrutamento e Seleção', requireSetor: ['rh'] },
       { label: 'Folha de Pagamento', requireSetor: ['rh'] },
-      // Remuneração variável (migr. 382) fica em RH e não em Financeiro: é
-      // pagamento a pessoa. Sem requireSetor — o colaborador precisa abrir
-      // pra ver o próprio bônus, e a RLS já mostra só o item dele.
-      'Remuneração Variável',
       // Mandatos (migr. 383) fica ao lado de Desligamento: os dois são o
       // começo e o fim da vida de um posto. Sem requireSetor — quem é o
       // titular da unidade não é dado sigiloso, e nomear/encerrar é a RPC
       // que barra, não o menu.
-      'Mandatos',
+      // requireMatriz (2026-08-09): nomear o titular é ato da Matriz sobre a
+      // unidade, não operação dentro dela. A filial não nomeia o próprio
+      // gestor — e via o item mesmo sem poder concluir a ação.
+      { label: 'Mandatos', requireMatriz: true },
       { label: 'Benefícios', requireSetor: ['rh'] },
       'Treinamentos',
       { label: 'Pesquisas', requireSetor: ['rh'] },
@@ -325,8 +326,11 @@ const subLabel = (s: SubmenuItem): string => typeof s === 'string' ? s : s.label
 // aula substitui o recorte por setor (migr. 317 concede o setor na RLS junto),
 // senão o aluno de vendas veria o módulo RH da aula pela metade. `requireRole`
 // continua valendo: aula não promove colaborador a aprovador.
-const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false): boolean => {
+const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false, matrizMode = false): boolean => {
   if (typeof s === 'string') return true;
+  // Modo, antes de papel: nomear é ato da Matriz. Vale inclusive na aula — a
+  // whitelist escolhe QUAIS telas aparecem, não em que contexto elas existem.
+  if (s.requireMatriz && !matrizMode) return false;
   if (s.requireRole && !s.requireRole.includes(profile?.role)) return false;
   if (s.requireSetor) {
     if (aulaAberta) return true;
@@ -349,6 +353,9 @@ const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false): boolean
 const MATRIZ_ONLY_VIEWS = new Set([
   'sessoes-gerais', 'analise-ia', 'matriz-capital', 'matriz-competicao',
   'matriz-avaliacoes', 'aula-modo',
+  // Único item de submenu com requireMatriz — precisa estar aqui pelo mesmo
+  // motivo dos hubs: o menu não é a única porta pra chegar na view.
+  'rh-mandatos',
 ]);
 const FILIAL_ONLY_VIEWS = new Set(['demandas']);
 const viewPermitidaNoModo = (view: string, matrizMode: boolean): boolean =>
@@ -530,7 +537,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                       <div className="flex flex-col pt-2 pb-1">
                         {mod.submenus
                           .filter((sub: any) => {
-                            if (!subPermitido(sub, profile, aulaFiltro)) return false;
+                            if (!subPermitido(sub, profile, aulaFiltro, matrizMode)) return false;
                             const label = subLabel(sub);
                             const viewId = `${mod.id}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
                             return aulaAllow(viewId);
@@ -650,6 +657,9 @@ function LogMaxAppInner() {
         .replace(/^comite-auditoria$/,         'inicio')
         .replace(/^auditoria$/,                'inicio')
         .replace(/^riscos$/,                   'inicio')
+        // Remuneração Variável sai (2026-08-09): o placar da competição volta
+        // a ser orgulho, não dinheiro. Folha e carteira seguem intactas.
+        .replace(/^rh-remuneraçãovariável$/,   'inicio')
         // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
         // uma linha em nenhuma das 4 turmas.
         .replace(/^politicas$/,                'inicio')
@@ -1062,7 +1072,6 @@ function LogMaxAppInner() {
       case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
       case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
       case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
-      case 'rh-remuneraçãovariável':           return <RemuneracaoVariavelView showToast={st} profile={profile} />;
       case 'rh-mandatos':                      return <MandatosView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;

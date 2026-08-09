@@ -81,18 +81,15 @@ e estouro exige aprovação suplementar.
 Escopo: **grande**. 1 migration robusta + 2 telas (propor / deliberar) +
 integração em Compras.
 
-### #G2 — Remuneração variável atrelada a resultado
-Real: Conselho aprova a política de bônus; pagamento sai do atingimento de
-metas e do desempenho medido.
-- Tabelas: `politica_remuneracao` (vigência, pesos, gatilhos) +
-  `apuracao_bonus` por ciclo/pessoa
-- Fonte do desempenho: placar da competição (`avaliacoes` tipo
-  `matriz_filial`) + `metas_estrategicas`/`tarefas_taticas`
-- Saída: provento na folha e/ou crédito em `maxbank_contas`
-- Didático: fecha o ciclo do que já existe. Hoje o placar é orgulho; virando
-  dinheiro na carteira, a competição vira consequência.
+### #G2 — Remuneração variável atrelada a resultado — ~~feito~~ **removido em 2026-08-09**
+Foi implementado (migr. 382) e retirado do produto. Não reabrir sem pedido
+explícito: a decisão foi de escopo, não de bug. O placar da competição volta a
+ser orgulho e não dinheiro; folha de pagamento e carteira do MaxBank seguem
+intactas, cada uma com o próprio caminho de crédito.
 
-Escopo: médio-grande. Depende de folha e do placar estarem estáveis.
+As tabelas continuam no banco (`politicas_remuneracao`, `apuracoes_bonus`,
+`apuracao_bonus_itens`), sem tela — mesma situação de `riscos` e
+`auditoria_revisoes` depois do #G5/#G8.
 
 ### #G3 — Prestação de contas do CEO ao Conselho
 Real: reunião periódica em que o CEO apresenta resultados e o Conselho aprova,
