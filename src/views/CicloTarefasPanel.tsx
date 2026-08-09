@@ -75,7 +75,7 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
-  const [avaliadores, setAvaliadores] = useState<{ tarefa_id: string; user_profile_id: string }[]>([]);
+  const [avaliadores, setAvaliadores] = useState<{ tarefa_id: string; user_profile_id: string; nome: string }[]>([]);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [modal, setModal] = useState<{ tarefa: Tarefa | null } | null>(null);
 
@@ -105,14 +105,19 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
       const ids = lista.map(t => t.id);
       if (ids.length === 0) { setParticipantes([]); setNotas([]); setAvaliadores([]); return; }
 
-      // Quem dá nota em cada demanda (migr. 368). Lista vazia = demanda
-      // anterior à 368, que segue a régua antiga: CEO e conselheiros.
+      // Quem dá nota em cada demanda (migr. 368/392). O nome vem junto porque
+      // é o que o card mostra: sem ver quem delibera, a escolha vira invisível
+      // e o professor só descobre abrindo a edição.
       const { data: avs } = await supabase
         .from('ciclo_tarefa_avaliadores')
-        .select('tarefa_id,user_profile_id')
+        .select('tarefa_id,user_profile_id,user_profiles(nome)')
         .in('tarefa_id', ids)
         .eq('ativo', true);
-      setAvaliadores((avs ?? []) as { tarefa_id: string; user_profile_id: string }[]);
+      setAvaliadores(((avs ?? []) as any[]).map(a => ({
+        tarefa_id: a.tarefa_id,
+        user_profile_id: a.user_profile_id,
+        nome: a.user_profiles?.nome ?? '—',
+      })));
 
       const { data: ps } = await supabase
         .from('ciclo_tarefa_participantes')
@@ -184,14 +189,20 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
     return m;
   }, [avaliadores]);
 
-  // Quem dá nota é quem a demanda designou. Sem lista (demanda anterior à
-  // 368), vale a régua antiga: CEO e conselheiros, admin fora.
+  const nomesAvaliadoresPorTarefa = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const a of avaliadores) (m[a.tarefa_id] ??= []).push(a.nome);
+    for (const k of Object.keys(m)) m[k].sort((x, y) => x.localeCompare(y, 'pt-BR'));
+    return m;
+  }, [avaliadores]);
+
+  // Quem dá nota é quem a demanda designou — e mais ninguém (migr. 392).
+  // O fallback "sem lista = CEO e conselheiros" saiu: ele fazia o Conselho
+  // aparecer deliberando em demanda onde era o avaliado.
   const podeAvaliarTarefa = useCallback((tarefaId: string) => {
     if (!daMatriz) return false;
-    const lista = avaliadoresPorTarefa[tarefaId];
-    if (lista?.length) return lista.includes(profile.id);
-    return profile.role === 'ceo' || isConselheiro(profile);
-  }, [daMatriz, avaliadoresPorTarefa, profile]);
+    return (avaliadoresPorTarefa[tarefaId] ?? []).includes(profile.id);
+  }, [daMatriz, avaliadoresPorTarefa, profile.id]);
 
   const acao = async (rpc: string, args: Record<string, any>, ok: string) => {
     if (!supabase) return;
@@ -286,6 +297,19 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
                       <Calendar size={10} /> {fmtData(t.data)}
                       <span className="flex items-center gap-1"><Users size={10} /> {parts.length}</span>
                     </p>
+                    {/* Quem delibera fica à vista. Deliberar é ato designado
+                        (migr. 392) e a designação não pode viver só dentro do
+                        modal de edição — era ali que ela ficava invisível. */}
+                    {(nomesAvaliadoresPorTarefa[t.id] ?? []).length > 0 ? (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        <span className="uppercase tracking-widest font-bold text-gray-600">Dá nota: </span>
+                        <span className="text-gray-400">{nomesAvaliadoresPorTarefa[t.id].join(' · ')}</span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-amber-300/80 mt-1">
+                        Sem avaliador definido — edite a demanda antes de liberar.
+                      </p>
+                    )}
                   </button>
 
                   {podeGerir && (
@@ -555,17 +579,13 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
             || (u.role === 'gerente' && u.is_conselheiro)));
       setAvaliadoresPool(pool);
 
-      // Demanda anterior à 368 não tem lista e hoje é avaliada por CEO +
-      // conselheiros. Pré-marcar esse conjunto faz o default do modal ser o
-      // comportamento vigente — salvar sem mexer não tira o direito de nota
-      // de ninguém pelas costas.
+      // Demanda sem lista costumava abrir aqui com CEO + conselheiros
+      // pré-marcados, para espelhar a régua antiga. Com a 392 essa régua não
+      // existe mais: pré-marcar o Conselho seria reintroduzir, no default do
+      // modal, exatamente a presunção que a migração tirou. Abre com quem
+      // está editando — a escolha volta a ser explícita.
       if (tarefa && avaliadoresAtuais.length === 0) {
-        const legado: Record<string, boolean> = {};
-        pool.forEach((u: any) => {
-          if (u.role === 'ceo' || u.role === 'conselheiro'
-              || (u.role === 'gerente' && u.is_conselheiro)) legado[u.id] = true;
-        });
-        setAvaliadoresSel(legado);
+        setAvaliadoresSel({ [profile.id]: true });
       }
       const porPerfil = new Map<string, any>();
       (fichas ?? []).forEach((f: any) => { if (f.user_profile_id) porPerfil.set(f.user_profile_id, f); });
@@ -715,9 +735,28 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
-            Quem dá nota nesta demanda ({totalAvaliadores} selecionados)
-          </label>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+              Quem dá nota nesta demanda ({totalAvaliadores} selecionados)
+            </label>
+            {/* Os dois casos que mais aparecem, em um clique: a pauta que só o
+                professor julga e a que vai ao Conselho inteiro. */}
+            {avaliadoresPool.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setAvaliadoresSel({ [profile.id]: true })}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg neu-button text-accent">
+                  Só eu
+                </button>
+                <button type="button" onClick={() => setAvaliadoresSel(
+                  Object.fromEntries(avaliadoresPool
+                    .filter(a => a.role !== 'admin')
+                    .map(a => [a.id, true])))}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg neu-button text-accent">
+                  Todo o Conselho
+                </button>
+              </div>
+            )}
+          </div>
           {avaliadoresPool.length === 0 ? (
             <p className="text-xs text-gray-500 italic py-2">Nenhum avaliador disponível na Matriz.</p>
           ) : (
@@ -744,8 +783,17 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
             </div>
           )}
           <p className="text-[10px] text-gray-600">
-            Só quem estiver aqui consegue lançar nota nesta demanda.
+            Só quem estiver aqui consegue lançar nota nesta demanda. Há pauta que o
+            Conselho julga e pauta em que ele é o julgado — quem decide qual é esta
+            é você, e não o cargo de cada um.
           </p>
+          {tarefa && avaliadoresAtuais.length === 0 && (
+            <p className="text-[10px] text-amber-300/80">
+              Esta demanda foi criada sem lista de avaliadores. Até a 392 isso a
+              deixava, por omissão, nas mãos de CEO e conselheiros — inclusive
+              quando eram eles os avaliados. Escolha agora quem dá nota.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
