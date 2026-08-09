@@ -37,6 +37,23 @@ type Competicao = {
   declaracao_justificativa: string | null;
 };
 
+type CompeticaoStatus = Competicao['status'];
+
+// Rótulo e cor do estado da competição, em um lugar só: o chip do placar, a
+// lista de Configuração e o PDF diziam a mesma coisa em três ternários
+// separados, e o do placar tinha só dois braços para três estados.
+const STATUS_LABEL: Record<CompeticaoStatus, string> = {
+  em_andamento:            'Em andamento',
+  aguardando_encerramento: 'Aguardando encerramento',
+  encerrada:               'Encerrada',
+};
+
+const STATUS_CHIP_CLASSE: Record<CompeticaoStatus, string> = {
+  em_andamento:            'btn-shimmer--glass-green',
+  aguardando_encerramento: 'btn-shimmer--glass-yellow',
+  encerrada:               'btn-shimmer--glass-gray',
+};
+
 type Voto = {
   id: string;
   competicao_id: string;
@@ -145,6 +162,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
   const [placar, setPlacar] = useState<Placar | null>(null);
   const [competicaoAtual, setCompeticaoAtual] = useState<Competicao | null>(null);
+  // Estado vigente vem da LINHA, não do placar. Para quem não é da Matriz o
+  // placar é o snapshot congelado na declaração (migr. 373) — e até a 391 ele
+  // guardava o instante anterior a ela, dizendo "aguardando encerramento" de
+  // uma competição com vencedora na tela. A linha nunca mente sobre isso.
+  const statusVigente = competicaoAtual?.status ?? placar?.competicao.status ?? null;
   const [votos, setVotos] = useState<Voto[]>([]);
   // Quem deu nota (e qual) na competição atual + quem ainda não deu.
   // Notas individuais só rodam dentro da Matriz — a RLS de avaliacoes_matriz
@@ -346,11 +368,15 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   }, [showToast, carregarVotos, carregarNotasConselho, carregarProgresso, carregarFecho]);
 
   useEffect(() => {
-    // Prioridade: em_andamento > aguardando_encerramento > última encerrada
-    const alvo = ativa ?? aguardando[0] ?? competicoes.find(c => c.status === 'encerrada') ?? null;
+    // O Placar é da competição VIVA: em andamento ou em votação. Declarada a
+    // vencedora, a aba esvazia e o resultado passa a morar no Histórico —
+    // antes ela seguia exibindo a competição encerrada como se fosse a
+    // corrente, e quem abria o módulo não distinguia o que acabou do que
+    // está correndo.
+    const alvo = ativa ?? aguardando[0] ?? null;
     if (alvo) carregarPlacar(alvo);
     else { setPlacar(null); setCompeticaoAtual(null); }
-  }, [ativa, aguardando, competicoes, carregarPlacar]);
+  }, [ativa, aguardando, carregarPlacar]);
 
   // Central de Avaliação altera notas de eixos/tarefas → refaz o placar sem F5.
   // Especialmente crítico após 240: gate `v_incluir_eixos` pode virar true/false.
@@ -763,6 +789,48 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const baixarPdfResultado = () => gerarPdfResultado('download');
   const enviarPdfAoMaxShow = () => gerarPdfResultado('maxshow');
 
+  // Mesmo PDF, para uma competição do Histórico. Existe porque o Placar
+  // deixou de exibir competição encerrada: sem isto, declarar a vencedora
+  // apagaria o botão de exportar o resultado — justo quando ele serve.
+  // Os números vêm do snapshot congelado; os votos, da tabela (o voto não
+  // muda depois do fecho, e carregá-los sob demanda evita puxar os votos de
+  // todas as encerradas ao abrir a aba).
+  const [pdfHistoricoId, setPdfHistoricoId] = useState<string | null>(null);
+  const gerarPdfDeEncerrada = async (c: Competicao, destino: 'download' | 'maxshow') => {
+    if (!supabase) return;
+    setPdfHistoricoId(c.id);
+    try {
+      const snap = c.placar_snapshot as any;
+      const porFilial = snap?.por_filial ?? {};
+      const podioSnap = ordenarRanking(OP_FILIAIS.map(f => ({
+        filial: f as string,
+        media: Number(porFilial?.[f]?.media ?? 0),
+        n:     Number(porFilial?.[f]?.n ?? 0),
+      })));
+      const { data: votosDela } = await supabase
+        .from('competicao_votos')
+        .select('voto, filial_escolhida, comentario')
+        .eq('competicao_id', c.id)
+        .order('created_at', { ascending: true });
+      await exportCompeticaoResultadoPDF(
+        {
+          nome: c.nome, data_inicio: c.data_inicio, data_fim: c.data_fim,
+          status: c.status, vencedora: c.vencedora, analise_ia: c.analise_ia,
+        },
+        podioSnap,
+        (votosDela ?? []) as any,
+        `competicao-${c.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`,
+        destino,
+        profile,
+        showToast,
+      );
+    } catch (err: any) {
+      showToast?.(err?.message ?? 'Erro ao gerar PDF.', 'error');
+    } finally {
+      setPdfHistoricoId(null);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -793,10 +861,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
           {loadingList || loadingPlacar ? (
             <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>
           ) : !placar ? (
-            <div className="neu-flat rounded-3xl p-12 border border-white/5">
+            <div className="neu-flat rounded-3xl p-12 border border-white/5 flex flex-col items-center gap-4">
               <EmptyState message={podeGerenciar
                 ? 'Nenhuma competição em andamento. Vá em Config pra criar.'
                 : 'Nenhuma competição em andamento. Aguarde admin/CEO abrir uma.'} />
+              {/* Só oferece o Histórico quando há o que ver lá: botão que leva a
+                  uma aba vazia ensina que a aba é inútil. */}
+              {competicoes.some(c => c.status === 'encerrada') && (
+                <button onClick={() => setTab('historico')} className="btn-shimmer btn-shimmer--glass-black">
+                  <Trophy size={12} /> Ver competições encerradas
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -829,7 +904,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <button
                         onClick={() => navigate('matriz-avaliacoes')}
                         className="btn-shimmer btn-shimmer--gold"
-                        title={placar.competicao.status === 'em_andamento'
+                        title={statusVigente === 'em_andamento'
                           ? 'Avaliar itens das 3 filiais'
                           : 'Consultar tarefas, notas e participantes desta competição'}
                       >
@@ -854,13 +929,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
                       Enviar ao Max Show
                     </button>
-                    <span
-                      className={`btn-shimmer ${placar.competicao.status === 'em_andamento' ? 'btn-shimmer--glass-green' : 'btn-shimmer--glass-yellow'}`}
-                      style={{ cursor: 'default' }}
-                    >
-                      {placar.competicao.status === 'em_andamento' ? 'Em andamento' : 'Aguardando encerramento'}
-                    </span>
-                    {podeGerenciar && placar.competicao.status === 'em_andamento' && (
+                    {/* Três estados, três rótulos. O ternário de dois braços que
+                        existia aqui chamava a competição já declarada de
+                        "Aguardando encerramento" — o pior momento para errar,
+                        porque é exatamente quando se apresenta o resultado. */}
+                    {statusVigente && (
+                      <span
+                        className={`btn-shimmer ${STATUS_CHIP_CLASSE[statusVigente] ?? 'btn-shimmer--glass-gray'}`}
+                        style={{ cursor: 'default' }}
+                      >
+                        {STATUS_LABEL[statusVigente] ?? statusVigente}
+                      </span>
+                    )}
+                    {podeGerenciar && statusVigente === 'em_andamento' && (
                       <button
                         onClick={encerrarAgora}
                         disabled={encerrandoAgora}
@@ -1421,33 +1502,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 );
               })()}
 
-              {/* Estado encerrado — mostra vencedora + votos */}
-              {competicaoAtual && competicaoAtual.status === 'encerrada' && (
-                <div className="neu-flat rounded-3xl p-6 border border-emerald-500/30 text-center">
-                  <Crown size={32} className="text-emerald-400 mx-auto mb-2" />
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Vencedora declarada</p>
-                  <p className={`text-2xl font-black tracking-wider mt-1 ${FILIAL_COLOR[competicaoAtual.vencedora as FilialOp]}`}>
-                    🏆 {competicaoAtual.vencedora}
-                  </p>
-                  {votosValidos.length > 0 && (
-                    <p className="text-[10px] text-gray-500 mt-3">
-                      {contagemVotos.aceita} aceita · {contagemVotos.rejeita} rejeita
-                    </p>
-                  )}
-                  {/* Declaração que contrariou o resultado apurado fica registrada
-                      na tela, não só no banco (migr. 372). */}
-                  {competicaoAtual.declaracao_justificativa && (
-                    <div className="mt-4 pt-4 border-t border-white/5 text-left">
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-amber-400/80 mb-1">
-                        Declarada contra o resultado apurado — justificativa da Administração
-                      </p>
-                      <p className="text-xs text-gray-300 whitespace-pre-wrap">
-                        {competicaoAtual.declaracao_justificativa}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* O painel "Vencedora declarada" saiu daqui: declarada a
+                  vencedora, esta aba não carrega mais a competição. O momento
+                  da declaração tem o modal de parabéns, e a consulta depois é
+                  no Histórico. */}
             </>
           )}
         </>
@@ -1733,6 +1791,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                               <Award size={12} /> Central de Avaliação
                             </button>
                           )}
+                          <button
+                            onClick={() => gerarPdfDeEncerrada(c, 'download')}
+                            disabled={pdfHistoricoId === c.id}
+                            className="btn-shimmer btn-shimmer--glass-black"
+                            title="Baixar o resultado desta competição em PDF"
+                          >
+                            {pdfHistoricoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+                            Baixar PDF
+                          </button>
+                          <button
+                            onClick={() => gerarPdfDeEncerrada(c, 'maxshow')}
+                            disabled={pdfHistoricoId === c.id}
+                            className="btn-shimmer btn-shimmer--glass-black"
+                            title="Enviar o resultado ao Max Show pra apresentar em tela cheia"
+                          >
+                            {pdfHistoricoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
+                            Enviar ao Max Show
+                          </button>
                           {/* Declarar a vencedora era irreversível. Errar a filial
                               ou encerrar cedo não pode custar a competição inteira. */}
                           {profile.role === 'admin' && (
@@ -1767,6 +1843,20 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         </div>
                       ) : (
                         <p className="text-[10px] text-gray-500 mb-3">Placar snapshot indisponível.</p>
+                      )}
+                      {/* Declaração que contrariou o resultado apurado fica
+                          registrada na tela, não só no banco (migr. 372).
+                          Estava no Placar; veio junto quando a competição
+                          encerrada deixou de aparecer lá. */}
+                      {c.declaracao_justificativa && (
+                        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                          <p className="text-[10px] uppercase tracking-widest font-bold text-amber-400/80 mb-1">
+                            Declarada contra o resultado apurado — justificativa da Administração
+                          </p>
+                          <p className="text-xs text-gray-300 whitespace-pre-wrap">
+                            {c.declaracao_justificativa}
+                          </p>
+                        </div>
                       )}
                       {c.analise_ia && (
                         <details className="text-xs">
