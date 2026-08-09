@@ -14,10 +14,10 @@ import type { UserProfile } from '../hooks/useUserProfile';
 // o conselheiro vê "1" e clica.
 //
 // Duas colunas porque são dois papéis (migrs. 386/387):
-//   • EXECUTAR  — CEO e gerente. Propor verba, prestar contas, responder ao
-//     questionamento da auditoria. É o lado que age e depois explica.
-//   • DELIBERAR — Conselho. Conceder verba, julgar as contas, encerrar
-//     questionamento, decidir mandato vencido, pagar bônus, revisar risco.
+//   • EXECUTAR  — CEO e gerente. Propor verba e prestar contas dela. É o lado
+//     que age e depois explica.
+//   • DELIBERAR — Conselho. Conceder verba, julgar as contas, decidir mandato
+//     vencido, pagar bônus.
 //
 // Quem acumula os dois papéis (o admin/professor) vê as duas colunas, e é
 // exatamente o que ele precisa para conduzir a aula.
@@ -27,17 +27,14 @@ import type { UserProfile } from '../hooks/useUserProfile';
 
 type Pendencia = { label: string; count: number; view: string; hint: string };
 
-// Comitê de Auditoria e Matriz de Riscos só existem no modo Matriz (sidebar,
-// 2026-08-07). O painel acompanha: em modo filial esses dois atalhos apontariam
-// para telas que o menu não oferece mais.
+// Auditoria (Comitê + trilha) e Matriz de Riscos saíram em 2026-08-08: as
+// pendências que apontavam para essas telas saíram junto.
 export function PainelGovernanca({
   profile,
   onNavigate,
-  matrizMode,
 }: {
   profile?: UserProfile;
   onNavigate?: (view: string) => void;
-  matrizMode?: boolean;
 }) {
   const conselho  = isConselho(profile);
   // Executor = quem responde por uma unidade e presta contas dela.
@@ -54,29 +51,24 @@ export function PainelGovernanca({
     const contar = (q: any) => q.then((r: any) => r.count ?? 0);
 
     if (executor) {
-      const [orc, prest, quest] = await Promise.all([
+      const [orc, prest] = await Promise.all([
         contar(supabase.from('orcamentos_periodo').select('id', { count: 'exact', head: true })
           .eq('ativo', true).in('status', ['rascunho', 'devolvido'])),
         contar(supabase.from('prestacoes_contas').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'rascunho')),
-        // Responder é do fiscalizado — quem abriu não responde.
-        contar(supabase.from('auditoria_revisoes').select('id', { count: 'exact', head: true })
-          .eq('status', 'aberta').neq('aberta_por', profile.id)),
       ]);
       setExec([
         { label: 'Orçamento a propor',      count: orc,   view: 'financeiro-orçamentoanual',
           hint: 'Rascunho ou devolvido pelo Conselho — monte as rubricas e submeta.' },
         { label: 'Contas a prestar',        count: prest, view: 'financeiro-prestaçãodecontas',
           hint: 'Rascunho aberto. Enquanto não submeter, o Conselho não tem o que julgar.' },
-        { label: 'Auditoria a responder',   count: quest, view: 'comite-auditoria',
-          hint: 'O Comitê questionou uma operação e espera a explicação.' },
-      ].filter(p => p.count > 0 && (matrizMode || p.view !== 'comite-auditoria')));
+      ].filter(p => p.count > 0));
     } else {
       setExec([]);
     }
 
     if (conselho) {
-      const [orc, prest, enc, mand, risco, bonus] = await Promise.all([
+      const [orc, prest, mand, bonus] = await Promise.all([
         // Quem propôs não delibera (migr. 386) — o próprio some da conta.
         contar(supabase.from('orcamentos_periodo').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'submetido')
@@ -84,14 +76,10 @@ export function PainelGovernanca({
         contar(supabase.from('prestacoes_contas').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'submetida')
           .or(`autor_id.is.null,autor_id.neq.${profile.id}`)),
-        contar(supabase.from('auditoria_revisoes').select('id', { count: 'exact', head: true })
-          .eq('status', 'respondida')),
         // Mandato vencido não cai sozinho: fica aqui até alguém decidir.
         contar(supabase.from('mandatos').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'vigente').lt('data_fim', hoje)
           .neq('user_profile_id', profile.id)),
-        contar(supabase.from('riscos').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).gte('severidade', 15).neq('status', 'encerrado')),
         contar(supabase.from('apuracoes_bonus').select('id', { count: 'exact', head: true })
           .eq('ativo', true).eq('status', 'calculada')),
       ]);
@@ -100,20 +88,15 @@ export function PainelGovernanca({
           hint: 'A unidade pediu a verba. Corte linha a linha e decida.' },
         { label: 'Contas a julgar',         count: prest, view: 'financeiro-prestaçãodecontas',
           hint: 'Aprovar, ressalvar ou reprovar. Ressalva vira tarefa com prazo.' },
-        { label: 'Auditoria a encerrar',    count: enc,   view: 'comite-auditoria',
-          hint: 'A unidade já explicou. Conclua como conforme ou não conforme.' },
         { label: 'Mandato vencido',         count: mand,  view: 'rh-mandatos',
           hint: 'Passou do prazo. Reconduza, substitua ou encerre o posto.' },
-        { label: 'Risco crítico',           count: risco, view: 'riscos',
-          hint: 'Severidade 15+. Revise probabilidade, impacto e mitigação.' },
         { label: 'Bônus a pagar',           count: bonus, view: 'rh-remuneraçãovariável',
           hint: 'Apuração fechada esperando o Conselho mandar creditar.' },
-      ].filter(p => p.count > 0
-        && (matrizMode || (p.view !== 'comite-auditoria' && p.view !== 'riscos'))));
+      ].filter(p => p.count > 0));
     } else {
       setDelib([]);
     }
-  }, [profile?.id, conselho, executor, matrizMode]);
+  }, [profile?.id, conselho, executor]);
 
   useEffect(() => { void carregar(); }, [carregar]);
 

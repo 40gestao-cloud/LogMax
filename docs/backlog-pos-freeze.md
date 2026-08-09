@@ -115,15 +115,11 @@ distribuir.
 
 Escopo: médio.
 
-### #G5 — Comitê de Auditoria (o mais barato)
-Real: conselheiros revisam exceções, questionam responsáveis e assinam parecer.
-- **Sem dado novo**: workflow por cima de `historico_operacoes` (1482 linhas já
-  acumuladas no ERP) e da tela de Auditoria
-- Tabela mínima: `auditoria_revisoes` (operação, revisor, status,
-  questionamento, resposta)
-- Didático: ensina que trilha de auditoria existe pra ser lida por alguém.
-
-Escopo: **pequeno** — melhor candidato a exceção isolada se a trava continuar.
+### #G5 — Comitê de Auditoria — ~~feito~~ **removido em 2026-08-08**
+Foi implementado (migrs. 380/387/388) e retirado do produto junto com a tela de
+Auditoria (trilha) e a Matriz de Riscos. Não reabrir sem pedido explícito: a
+decisão foi de escopo, não de bug. O histórico de cada documento continua
+dentro dele, e `historico_operacoes` segue gravando.
 
 ### #G6 — Nomeação com mandato
 Real: Conselho nomeia gestor da unidade por mandato; ao fim, reconduz ou
@@ -142,11 +138,9 @@ com versionamento e reciência quando a versão muda.
 
 Escopo: pequeno-médio (extensão de tela existente — pode contar como refino).
 
-### #G8 — Matriz de riscos
-Conselho registra risco, dono, probabilidade/impacto e mitigação; revisa a cada
-ciclo. Barato e aparece em toda entrevista de gestão.
-
-Escopo: pequeno.
+### #G8 — Matriz de riscos — ~~feito~~ **removido em 2026-08-08**
+Implementada na migr. 385 e retirada do produto junto com o Comitê de Auditoria.
+Mesma observação do #G5.
 
 ## Pedidos novos (não-auditoria)
 

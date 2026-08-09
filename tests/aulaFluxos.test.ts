@@ -104,12 +104,12 @@ describe('AULA_FLUXOS — cobertura e alertas', () => {
     expect(quebradas).not.toContain('compra');
   });
 
-  it('a etapa do Comitê está marcada como exclusiva do modo Matriz', () => {
-    // Comitê de Auditoria virou Matriz-only em 2026-08-07. Sem o selo, o
-    // professor libera o módulo e ninguém acha a tela dentro da filial.
+  it('governança não passa mais por Auditoria', () => {
+    // Comitê de Auditoria, trilha e Matriz de Riscos saíram em 2026-08-08.
+    // Se o módulo voltar ao fluxo, o professor libera algo que não existe.
     const gov = AULA_FLUXOS.find(f => f.id === 'governanca')!;
-    const comite = gov.etapas.find(e => e.view === 'comite-auditoria')!;
-    expect(comite.soMatriz).toBe(true);
+    expect(modulosDoFluxo(gov)).not.toContain('auditoria');
+    expect(modulosDoFluxo(gov)).not.toContain('riscos');
   });
 
   it('material do almoxarifado é um fluxo próprio e não passa por Compras', () => {
@@ -141,9 +141,14 @@ describe('AULA_FLUXOS — cobertura e alertas', () => {
     expect(cfg.submenus.some(s => s.startsWith('financeiro-'))).toBe(true);
   });
 
-  it('submenusDoFluxo ignora views top-level', () => {
-    const gov = AULA_FLUXOS.find(f => f.id === 'governanca')!;
-    expect(submenusDoFluxo(gov)).not.toContain('comite-auditoria');
-    expect(modulosDoFluxo(gov)).toContain('auditoria');
+  it('submenusDoFluxo só devolve view com prefixo de módulo', () => {
+    // View top-level não entra em `submenus_ativos`; se vazasse pra lá, a
+    // whitelist do módulo passaria a excluir os submenus de verdade.
+    for (const f of AULA_FLUXOS) {
+      for (const s of submenusDoFluxo(f)) {
+        expect(s, `${f.id}: ${s}`).toMatch(/^[a-z-]+-.+/);
+        expect(modulosDoFluxo(f).some(m => s.startsWith(`${m}-`)), s).toBe(true);
+      }
+    }
   });
 });

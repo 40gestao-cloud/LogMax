@@ -27,7 +27,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, ShieldAlert, AlertTriangle,
+  Presentation,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -124,11 +124,9 @@ const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAv
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
 const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
 const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
-const ComiteAuditoriaView                  = lazy(() => import('./views/ComiteAuditoriaView').then(m => ({ default: m.ComiteAuditoriaView })));
 const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
 const RemuneracaoVariavelView              = lazy(() => import('./views/RemuneracaoVariavelView').then(m => ({ default: m.RemuneracaoVariavelView })));
 const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
-const RiscosView                           = lazy(() => import('./views/RiscosView').then(m => ({ default: m.RiscosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
@@ -350,7 +348,7 @@ const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false): boolean
 // avaliacoes, financeiro-*) ficam de fora de propósito.
 const MATRIZ_ONLY_VIEWS = new Set([
   'sessoes-gerais', 'analise-ia', 'matriz-capital', 'matriz-competicao',
-  'matriz-avaliacoes', 'aula-modo', 'comite-auditoria', 'riscos',
+  'matriz-avaliacoes', 'aula-modo',
 ]);
 const FILIAL_ONLY_VIEWS = new Set(['demandas']);
 const viewPermitidaNoModo = (view: string, matrizMode: boolean): boolean =>
@@ -382,27 +380,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
-          </button>
-        )}
-        {/* Comitê de Auditoria (migr. 380). A tela de Auditoria virou a aba
-            "Trilha" daqui em 2026-08-07 — eram dois itens de menu para o mesmo
-            trabalho, e a busca do Comitê era pior que a de lá.
-            Recorte: exclusivo do modo Matriz — fiscalização é ato de holding e
-            dentro de uma unidade o item não tem o que fazer. `matrizMode` já
-            implica admin/CEO/conselheiro (podeEscolherFilial), então checar
-            role de novo aqui é redundante. Quem barra o ato continua sendo a
-            RPC, não o menu. */}
-        {matrizMode && aulaAllow('auditoria') && (
-          <button onClick={() => { navigate('comite-auditoria'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'comite-auditoria' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <ShieldAlert size={18} /><span>Comitê de Auditoria</span>
-          </button>
-        )}
-        {/* Matriz de Riscos (migr. 385) — o par prospectivo da Auditoria: ela
-            olha o que já aconteceu, esta olha o que ainda não aconteceu. Mesmo
-            recorte da Auditoria: só modo Matriz. */}
-        {matrizMode && aulaAllow('riscos') && (
-          <button onClick={() => { navigate('riscos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'riscos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <AlertTriangle size={18} /><span>Matriz de Riscos</span>
           </button>
         )}
         {/* Painel de BI e Briefing Diário: em modo Matriz vivem no hub "Análise com IA". */}
@@ -668,8 +645,11 @@ function LogMaxAppInner() {
         .replace(/^rh-colaboradores$/,         'rh-funcionários')
         .replace(/^empresa-clientes$/,         'vendas-clientes')
         .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
-        // Auditoria virou a aba "Trilha" do Comitê de Auditoria (2026-08-07).
-        .replace(/^auditoria$/,                'comite-auditoria')
+        // Auditoria inteira sai (2026-08-08): Comitê, trilha e Matriz de
+        // Riscos. O histórico de cada documento continua dentro dele.
+        .replace(/^comite-auditoria$/,         'inicio')
+        .replace(/^auditoria$/,                'inicio')
+        .replace(/^riscos$/,                   'inicio')
         // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
         // uma linha em nenhuma das 4 turmas.
         .replace(/^politicas$/,                'inicio')
@@ -1084,7 +1064,6 @@ function LogMaxAppInner() {
       case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
       case 'rh-remuneraçãovariável':           return <RemuneracaoVariavelView showToast={st} profile={profile} />;
       case 'rh-mandatos':                      return <MandatosView showToast={st} profile={profile} />;
-      case 'riscos':                           return <RiscosView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
@@ -1152,7 +1131,6 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
-      case 'comite-auditoria':             return <ComiteAuditoriaView showToast={st} profile={profile} />;
       case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
       // `matriz-avaliacoes` existe só para cair na Competição do Conselho —
       // é o destino do botão "Central de Avaliação" da tela de Competição.

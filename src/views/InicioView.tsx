@@ -163,7 +163,7 @@ export const InicioView = ({
       {/* Governança: "o que é seu" por papel (migr. 386/387). Vem antes dos
           KPIs porque é obrigação com prazo, e KPI é informação. Some inteiro
           quando não há pendência — painel de zeros ensina a ignorar a tela. */}
-      <PainelGovernanca profile={profile} onNavigate={onNavigate} matrizMode={matrizMode} />
+      <PainelGovernanca profile={profile} onNavigate={onNavigate} />
 
       {pesquisasPendentesCount > 0 && (
         <button onClick={() => onNavigate?.('minhas-pesquisas')}

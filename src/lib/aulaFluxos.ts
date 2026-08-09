@@ -387,10 +387,22 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     id: 'governanca',
     nome: 'Verba pedida, gasta e prestada',
     resumo: 'A pauta de holding: a unidade propõe, o Conselho concede, a unidade '
-      + 'explica e a auditoria revisa. Conduzido no modo Matriz.',
+      + 'gasta e depois presta contas. Conduzido no modo Matriz.',
     matriz: true,
     prerequisitos: [PRE_GERENTE],
     etapas: [
+      {
+        // Abertura em RH desde 2026-08-08: o fluxo perdeu a etapa de auditoria
+        // e ficaria inteiro dentro de Financeiro — fluxo de um módulo só é
+        // atalho, não cadeia. O mandato também é o começo real da história:
+        // quem pede verba é o gestor nomeado para responder pela unidade.
+        view: 'rh-mandatos', modulo: 'rh',
+        titulo: 'O Conselho nomeia quem responde pela unidade',
+        quem: 'Conselho',
+        detalhe: 'Cargo com início, fim e ato de nomeação — sem isso, pedir '
+          + 'verba não tem dono.',
+        seQuebra: 'A verba é pedida por alguém que ninguém nomeou.',
+      },
       {
         view: 'financeiro-orçamentoanual', modulo: 'financeiro',
         titulo: 'A unidade propõe a verba',
@@ -413,12 +425,11 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         seQuebra: 'O dinheiro é gasto e ninguém responde por ele.',
       },
       {
-        view: 'comite-auditoria', modulo: 'auditoria',
-        titulo: 'O Comitê questiona e encerra',
-        quem: 'Conselho pergunta, a unidade responde',
-        detalhe: 'Conforme ou não conforme; a trilha das operações fica na aba ao lado.',
-        seQuebra: 'A prestação de contas é julgada sem contraditório.',
-        soMatriz: true,
+        view: 'financeiro-prestaçãodecontas', modulo: 'financeiro',
+        titulo: 'O Conselho julga as contas',
+        quem: 'Conselho (nunca quem prestou)',
+        detalhe: 'Aprovar, ressalvar ou reprovar — ressalva vira tarefa com prazo.',
+        seQuebra: 'Prestar contas vira formalidade sem consequência.',
       },
     ],
   },
