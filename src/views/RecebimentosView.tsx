@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X } from 'lucide-react';
+import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X, Lock } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -143,6 +143,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     const p = pedidos.find((x: any) => x.id === pedidoId);
     return p?.item_descricao ?? p?.req?.item ?? '';
   };
+
+  // Produto que o pedido comprou (migr. 396). Vem da requisição de Reposição,
+  // que nasce do catálogo — a compra Eventual não tem, e continua deixando o
+  // almoxarife escolher. Enquanto o pedido não carregava isso, o select de
+  // "Produto recebido" listava o catálogo inteiro e dava pra receber o pedido
+  // de arroz dando entrada em notebook: a quantidade era criticada contra o
+  // saldo, o produto contra nada.
+  const produtoDoPedido = (pedidoId: string): string | null =>
+    pedidos.find((x: any) => x.id === pedidoId)?.produto_id ?? null;
 
   const handleSave = async () => {
     if (!validate()) return;
@@ -337,7 +346,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                               <button
                                 onClick={() => {
                                   setConfirmando(confirmando === item.id ? null : item.id);
-                                  setConfirmProduto('');
+                                  // Pedido com produto declarado já abre resolvido: não há
+                                  // escolha a fazer, e deixar o campo vazio faria o almoxarife
+                                  // procurar no catálogo o que o pedido já diz.
+                                  setConfirmProduto(produtoDoPedido(item.pedido_id) ?? '');
                                   // Auto-status: soma dos recebimentos ativos (incluindo esse) atinge
                                   // o pedido → sugere Concluído (fecha pedido). Senão Parcial.
                                   const s = saldos[item.pedido_id];
@@ -365,6 +377,24 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     <span>Saldo restante: <strong className={saldos[item.pedido_id].qtd_saldo > 0 ? 'text-amber-300' : 'text-emerald-300'}>{saldos[item.pedido_id].qtd_saldo}</strong></span>
                                   </div>
                                 )}
+                                {/* Pedido de Reposição já sabe o produto: o campo vira leitura.
+                                    A trava de verdade está na trigger da migr. 396 — esta tela
+                                    só evita que o almoxarife tenha de adivinhar (e o F12 não
+                                    passa pelo <select> mesmo). */}
+                                {produtoDoPedido(item.pedido_id) ? (
+                                <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido</span>
+                                  <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-200 flex items-center gap-1.5">
+                                    <Lock size={11} className="text-gray-500 shrink-0" />
+                                    {produtos.find((p: any) => p.id === produtoDoPedido(item.pedido_id))?.nome
+                                      ?? descricaoDoPedido(item.pedido_id) ?? '—'}
+                                  </div>
+                                  <p className="text-[10px] text-gray-500">
+                                    Definido no pedido, herdado da requisição. Chegou outra coisa? Não confirme —
+                                    registre a divergência com Compras.
+                                  </p>
+                                </div>
+                                ) : (
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
                                   <label htmlFor={`receb-produto-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
                                   <select
@@ -384,9 +414,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     <option value={PRODUTO_NOVO}>➕ Produto novo — cadastrar agora…</option>
                                   </select>
                                   <p className="text-[10px] text-gray-500">
-                                    Item que não está no catálogo? Use “Produto novo” — o cadastro mínimo abre aqui e o item já entra selecionado.
+                                    Compra eventual não vem do catálogo, então o produto é escolhido aqui.
+                                    Não está cadastrado? Use “Produto novo” — o cadastro mínimo abre aqui e o item já entra selecionado.
                                   </p>
                                 </div>
+                                )}
                                 <div className="flex flex-col gap-1">
                                   <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
                                   <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
