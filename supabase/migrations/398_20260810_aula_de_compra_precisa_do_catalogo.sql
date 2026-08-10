@@ -41,7 +41,11 @@ BEGIN;
 UPDATE public.aula_config
    SET modulos_ativos = CASE
          WHEN 'cadastros' = ANY(modulos_ativos) THEN modulos_ativos
-         ELSE modulos_ativos || 'cadastros'
+         -- `::text` não é enfeite: sem o cast, o literal fica sem tipo e o
+         -- Postgres resolve `text[] || 'cadastros'` como concatenação de DOIS
+         -- arrays, tentando ler "cadastros" como array literal — 22P02,
+         -- "malformed array literal".
+         ELSE modulos_ativos || 'cadastros'::text
        END,
        submenus_ativos = submenus_ativos || ARRAY(
          SELECT s FROM unnest(ARRAY[
