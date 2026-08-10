@@ -159,6 +159,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   const vejoNotaAlheia = profile.role === 'admin';
 
   const [tab, setTab] = useState<Tab>('placar');
+  // Id da competição encerrada aberta para análise (leitura). Guardado como id
+  // e não como objeto pra não congelar uma linha velha: a lista recarrega
+  // depois de reabrir/declarar e o estado tem de acompanhar.
+  const [analiseId, setAnaliseId] = useState<string | null>(null);
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
   const [placar, setPlacar] = useState<Placar | null>(null);
   const [competicaoAtual, setCompeticaoAtual] = useState<Competicao | null>(null);
@@ -224,6 +228,17 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
   const ativa = useMemo(() => competicoes.find(c => c.status === 'em_andamento') ?? null, [competicoes]);
   const aguardando = useMemo(() => competicoes.filter(c => c.status === 'aguardando_encerramento'), [competicoes]);
+  // Competição encerrada aberta em LEITURA. Existe porque ver as notas de uma
+  // competição declarada só era possível reabrindo ela — e reabrir joga tudo
+  // de volta pra votação, anula os votos da rodada e apaga o placar congelado.
+  // Conferir resultado não pode custar o resultado.
+  const emAnalise = useMemo(
+    // O filtro por 'encerrada' é o que faz a análise se desfazer sozinha: se
+    // o admin reabrir a competição que está sendo analisada, ela deixa de
+    // casar aqui e a tela volta a seguir a competição viva.
+    () => (analiseId ? competicoes.find(c => c.id === analiseId && c.status === 'encerrada') ?? null : null),
+    [analiseId, competicoes],
+  );
 
   const carregarLista = useCallback(async () => {
     if (!supabase) return;
@@ -373,10 +388,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     // antes ela seguia exibindo a competição encerrada como se fosse a
     // corrente, e quem abria o módulo não distinguia o que acabou do que
     // está correndo.
-    const alvo = ativa ?? aguardando[0] ?? null;
+    // ...a não ser que o admin tenha aberto uma encerrada para análise: aí ela
+    // ocupa o Placar em leitura, com o snapshot congelado, até ele sair.
+    const alvo = emAnalise ?? ativa ?? aguardando[0] ?? null;
     if (alvo) carregarPlacar(alvo);
     else { setPlacar(null); setCompeticaoAtual(null); }
-  }, [ativa, aguardando, carregarPlacar]);
+  }, [emAnalise, ativa, aguardando, carregarPlacar]);
 
   // Central de Avaliação altera notas de eixos/tarefas → refaz o placar sem F5.
   // Especialmente crítico após 240: gate `v_incluir_eixos` pode virar true/false.
@@ -879,7 +896,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               <div className="neu-flat rounded-3xl p-6 border border-accent/20">
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Competição ativa</p>
+                    <p className={`text-[10px] uppercase tracking-widest font-bold ${emAnalise ? 'text-amber-400' : 'text-gray-500'}`}>
+                      {emAnalise ? 'Análise · competição encerrada (somente leitura)' : 'Competição ativa'}
+                    </p>
                     <h3 className="text-lg font-black text-gray-100">{placar.competicao.nome}</h3>
                     <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
                       <Calendar size={11} />
@@ -895,6 +914,27 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Ordem: Central de Avaliação → Baixar PDF → Status → Encerrar agora → Excluir */}
+                    {/* Em análise as duas saídas ficam lado a lado: voltar pro
+                        que está correndo, ou reabrir de fato — que aí sim é o
+                        gesto que devolve a competição pra votação. */}
+                    {emAnalise && (
+                      <button
+                        onClick={() => { setAnaliseId(null); setTab('historico'); }}
+                        className="btn-shimmer btn-shimmer--glass-black"
+                        title="Voltar ao Histórico e devolver o Placar à competição em curso"
+                      >
+                        <X size={12} /> Sair da análise
+                      </button>
+                    )}
+                    {emAnalise && profile.role === 'admin' && (
+                      <button
+                        onClick={() => reabrirCompeticao(emAnalise)}
+                        className="btn-shimmer btn-shimmer--glass-yellow"
+                        title="Devolver a competição para a votação do conselho e desfazer a declaração"
+                      >
+                        <Unlock size={12} /> Reabrir de verdade
+                      </button>
+                    )}
                     {/* Este botão é a ÚNICA porta para `matriz-avaliacoes` no app
                         inteiro. Prendê-lo a 'em_andamento' deixava as tarefas, as
                         notas e quem fez o quê inalcançáveis assim que a competição
@@ -952,7 +992,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         Encerrar agora
                       </button>
                     )}
-                    {podeGerenciar && competicaoAtual && (
+                    {/* Análise é leitura: excluir a competição que se está
+                        conferindo não é uma opção que deva estar à mão. */}
+                    {podeGerenciar && competicaoAtual && !emAnalise && (
                       <button
                         onClick={() => excluirCompeticao(competicaoAtual)}
                         disabled={excluindo === competicaoAtual.id}
@@ -1772,6 +1814,19 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Conferir o resultado não pode custar o resultado:
+                              antes disto, ver as notas de uma competição
+                              declarada exigia REABRIR — e reabrir devolve tudo
+                              pra votação, invalida os votos da rodada e
+                              descarta o placar congelado. Análise abre o mesmo
+                              Placar em leitura, sem tocar em status nenhum. */}
+                          <button
+                            onClick={() => { setAnaliseId(c.id); setTab('placar'); }}
+                            className="btn-shimmer btn-shimmer--glass-black"
+                            title="Abrir o Placar desta competição em leitura — notas, votos e pódio, sem reabrir"
+                          >
+                            <Star size={12} /> Abrir para análise
+                          </button>
                           {/* É aqui que se procura uma competição encerrada, então é
                               aqui que precisa existir a porta para as notas. Sem
                               isso o Histórico mostrava só o pódio e as tarefas,
@@ -1815,7 +1870,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             <button
                               onClick={() => reabrirCompeticao(c)}
                               className="btn-shimmer btn-shimmer--glass-yellow"
-                              title="Voltar para a votação do conselho e desfazer a declaração"
+                              title="Desfaz a declaração e devolve a competição para a votação. Só pra corrigir o resultado — pra apenas consultar as notas, use Abrir para análise."
                             >
                               <Unlock size={12} /> Reabrir
                             </button>
