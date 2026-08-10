@@ -1,10 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
 import { X, Check, Loader2 } from 'lucide-react';
-import { useFetchData, dbUpdate, dbInsert } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge, SelecioneUnidade } from '../components/ui';
 import type { AprovacaoEstoque, RequisicaoEstoque, Produto } from '../types/domain';
@@ -36,102 +35,53 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
   // libera a própria requisição" na 2ª das três escritas — e o `catch {}` que
   // existia trocava essa frase por "Erro ao aprovar", fazendo a turma ler como
   // defeito do sistema justamente a lição que o fluxo existe pra ensinar.
-  // `dbUpdate` repassa `error.message` intacto no throw, então basta não jogar
+  // A RPC repassa `error.message` intacto no throw, então basta não jogar
   // fora.
   const motivoDoErro = (err: unknown): string => {
     const msg = String((err as { message?: string })?.message ?? '').trim();
     return msg || 'erro inesperado';
   };
 
-  const handleAprovar = async (ap: EnrichedAp) => {
+  // Aprovar e negar são a MESMA chamada, com decisão diferente. Até a migr.
+  // 401 eram três escritas soltas daqui (aprovação → requisição → baixa) com
+  // rollback escrito à mão no catch: dava conta de erro do banco, não de aba
+  // fechada no meio. Quando isso acontecia sobrava requisição 'Aprovado' sem
+  // baixa — o estoque não descia e o documento sumia desta tela, que só lista
+  // Pendente. Agora ou tudo acontece, ou nada aconteceu.
+  //
+  // A conferência de saldo saiu daqui junto: ela vivia antes das escritas e
+  // deixava uma janela entre conferir e baixar. Quem recusa saldo insuficiente
+  // é a trigger de estoque, dentro da transação, e a mensagem dela chega pelo
+  // mesmo caminho das outras.
+  const decidir = async (ap: EnrichedAp, decisao: 'Aprovado' | 'Negado') => {
     if (processingRef.current === ap.id) return;
-    processingRef.current = ap.id;
-    setProcessing(ap.id);
-    let aprovUpdated = false;
-    try {
-      // Consulta saldo ATUAL no banco (evita TOCTOU com dados em memória desatualizados)
-      if (ap.req?.produto_id && ap.req?.qtd) {
-        const { data: prodFresh } = await supabase!
-          .from('produtos')
-          .select('estoque')
-          .eq('id', ap.req.produto_id)
-          .single();
-        const saldoAtual = Number(prodFresh?.estoque ?? 0);
-        const qtdSolicitada = Number(ap.req.qtd);
-        if (saldoAtual < qtdSolicitada) {
-          showToast(`Saldo insuficiente: estoque atual é ${saldoAtual} un. (solicitado: ${qtdSolicitada}).`, 'error', true);
-          return;
-        }
-      }
-      await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Aprovado', observacao: obs[ap.id] ?? '' });
-      aprovUpdated = true;
-      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Aprovado' });
-      if (ap.req?.produto_id && ap.req?.qtd) {
-        const today = todayBR();
-        try {
-          await dbInsert('/api/movimentacoesestoqueview', {
-            produto_id:            ap.req.produto_id,
-            tipo:                  'Saída',
-            qtd:                   Number(ap.req.qtd),
-            origem:                'Requisição de Estoque',
-            destino:               ap.req.destino || 'Solicitado',
-            data:                  today,
-            requisicao_estoque_id: ap.requisicao_estoque_id,
-            filial,
-          });
-        } catch (movErr: unknown) {
-          // 23505 = UNIQUE: já existe movimento pra essa requisição
-          // (double-click, ou aprovação concorrente em outra aba).
-          // Idempotência: trata como sucesso silencioso.
-          const msg = String((movErr as { message?: string })?.message ?? '');
-          const isDuplicate = msg.includes('uq_mov_estoque_por_requisicao_estoque')
-                            || msg.includes('23505')
-                            || /duplicate key value/i.test(msg);
-          if (!isDuplicate) throw movErr;
-        }
-      }
-      setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
-      showToast("Requisição aprovada e estoque atualizado!", 'success', true);
-    } catch (err: unknown) {
-      if (aprovUpdated) {
-        // Reverte AS DUAS pontas. Antes só a aprovação voltava para 'Pendente'
-        // e a requisição ficava 'Aprovado' — estado que a tela de aprovações
-        // não mostra e ninguém mais consegue destravar.
-        try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
-        try { await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Pendente' }); } catch {}
-      }
-      // "nada mudou" só quando houve o que desfazer — dizer isso numa falha da
-      // primeira escrita seria tranquilizar o aluno sobre algo que nem começou.
-      showToast(
-        `Não foi possível liberar: ${motivoDoErro(err)}${aprovUpdated ? ' A requisição continua Pendente.' : ''}`,
-        'error', true);
-    } finally {
-      setProcessing(null);
-      processingRef.current = null;
+    if (decisao === 'Negado' && !obs[ap.id]?.trim()) {
+      showToast('Informe uma observação para negar.', 'error', true);
+      return;
     }
-  };
-
-  const handleNegar = async (ap: EnrichedAp) => {
-    if (processingRef.current === ap.id) return;
-    if (!obs[ap.id]?.trim()) { showToast("Informe uma observação para negar.", 'error', true); return; }
+    if (!supabase) return;
     processingRef.current = ap.id;
     setProcessing(ap.id);
-    let aprovUpdated = false;
     try {
-      await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Negado', observacao: obs[ap.id] });
-      aprovUpdated = true;
-      await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Negado' });
+      const { data, error } = await supabase.rpc('liberar_requisicao_estoque', {
+        p_aprovacao_id: ap.id,
+        p_decisao:      decisao,
+        p_observacao:   obs[ap.id] ?? '',
+      });
+      if (error) throw new Error(error.message);
       setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
-      showToast("Requisição negada.", 'success', true);
-    } catch (err: unknown) {
-      if (aprovUpdated) {
-        try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
-      }
-      // Negar passa pelo MESMO guard que aprovar (ele dispara em 'Aprovado' e
-      // 'Negado'), então quem tenta negar a própria requisição também recebia o
-      // texto genérico.
       showToast(
-        `Não foi possível negar: ${motivoDoErro(err)}${aprovUpdated ? ' A requisição continua Pendente.' : ''}`,
+        decisao === 'Negado'
+          ? 'Requisição negada.'
+          : (data as any)?.baixou_estoque
+            ? 'Material liberado e estoque baixado.'
+            : 'Requisição aprovada.',
+        'success', true);
+    } catch (err: unknown) {
+      // Sem sufixo sobre estado: a transação garante que nada ficou pela
+      // metade, então não há o que tranquilizar.
+      showToast(
+        `Não foi possível ${decisao === 'Negado' ? 'negar' : 'liberar'}: ${motivoDoErro(err)}`,
         'error', true);
     } finally {
       setProcessing(null);
@@ -162,10 +112,10 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
               )}
               <div className="flex gap-2 justify-end">
                 {expanded !== ap.id && (<button onClick={() => setExpanded(ap.id)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">Adicionar obs.</button>)}
-                <button onClick={() => handleNegar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
+                <button onClick={() => decidir(ap, 'Negado')} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
                   {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Negar
                 </button>
-                <button onClick={() => handleAprovar(ap)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
+                <button onClick={() => decidir(ap, 'Aprovado')} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
                   {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Aprovar
                 </button>
               </div>
