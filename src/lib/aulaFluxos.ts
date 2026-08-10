@@ -148,14 +148,19 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         view: 'compras-pedidos', modulo: 'compras',
         titulo: 'Pedido emitido ao fornecedor',
         quem: 'Setor de Compras',
-        detalhe: '`gerar_pedido_de_cotacao` cria o pedido E a conta a pagar na mesma transação (migr. 336).',
+        detalhe: '`gerar_pedido_de_cotacao` cria o pedido E a conta a pagar na mesma transação '
+          + '(migr. 336). O pedido também herda o produto da requisição — é o que trava o '
+          + 'recebimento lá na frente.',
         seQuebra: 'A aprovação do Financeiro não tem efeito visível para a turma.',
       },
       {
         view: 'estoque-recebimentos', modulo: 'estoque',
         titulo: 'Estoque confere e dá entrada',
         quem: 'Setor de Estoque / Logística',
-        detalhe: 'Receber parcial é o caso interessante: o saldo do pedido controla o resto.',
+        detalhe: 'Receber parcial é o caso interessante: o saldo do pedido controla o resto. '
+          + 'Na compra de Reposição o produto vem travado do pedido (migr. 396) — não se '
+          + 'dá entrada em item diferente do que foi comprado. Na compra Eventual, que não '
+          + 'nasce do catálogo, o almoxarife é quem escolhe.',
         seQuebra: 'A mercadoria nunca entra e o saldo não se mexe — o aluno não vê o efeito da compra.',
       },
       {
@@ -194,8 +199,11 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       {
         view: 'estoque-liberarrequisições', modulo: 'estoque',
         titulo: 'O Estoque libera a saída',
-        quem: 'Setor de Estoque (nunca quem pediu)',
-        detalhe: 'Liberar dá baixa no saldo na hora — sem passar por Compras nem pelo Financeiro (migr. 284).',
+        quem: 'Setor de Estoque (nunca quem pediu — nem o gerente)',
+        detalhe: 'Liberar dá baixa no saldo na hora — sem passar por Compras nem pelo '
+          + 'Financeiro (migr. 284). Documento e baixa saem juntos, numa transação só '
+          + '(migr. 401): se faltar saldo, nada acontece e a requisição segue Pendente. '
+          + 'E a regra vale para todos, inclusive o gerente da filial (migr. 399).',
         seQuebra: 'O pedido de material fica Pendente e o aluno conclui, errado, que todo pedido vira compra.',
       },
       {
