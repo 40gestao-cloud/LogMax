@@ -3,6 +3,7 @@ import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
   modulosDoFluxo, submenusDoFluxo, etapasObrigatorias,
 } from '../src/lib/aulaFluxos';
+import { roteiroDoFluxo, normalizarRoteiro } from '../src/lib/aulaAtividade';
 import { AULA_MODULOS, AULA_SUBMENUS, aulaSubmenuId } from '../src/lib/aulaModulos';
 
 // Os fluxos de aula são uma lista escrita à mão que referencia viewIds gerados
@@ -104,12 +105,18 @@ describe('AULA_FLUXOS — cobertura e alertas', () => {
     expect(quebradas).not.toContain('compra');
   });
 
-  it('governança não passa mais por Auditoria', () => {
+  it('nenhum fluxo passa por Auditoria ou Matriz de Riscos', () => {
     // Comitê de Auditoria, trilha e Matriz de Riscos saíram em 2026-08-08.
-    // Se o módulo voltar ao fluxo, o professor libera algo que não existe.
-    const gov = AULA_FLUXOS.find(f => f.id === 'governanca')!;
-    expect(modulosDoFluxo(gov)).not.toContain('auditoria');
-    expect(modulosDoFluxo(gov)).not.toContain('riscos');
+    // Se o módulo voltar a um fluxo, o professor libera algo que não existe.
+    //
+    // O teste era ancorado no fluxo 'governanca', que por sua vez saiu em
+    // 2026-08-10 junto com a pauta da holding — e passou a estourar
+    // `undefined.etapas` no CI em vez de acusar o que se propunha a guardar.
+    // Perguntar a todos os fluxos guarda a mesma regra e não morre com nenhum.
+    for (const f of AULA_FLUXOS) {
+      expect(modulosDoFluxo(f), f.id).not.toContain('auditoria');
+      expect(modulosDoFluxo(f), f.id).not.toContain('riscos');
+    }
   });
 
   it('material do almoxarifado é um fluxo próprio e não passa por Compras', () => {
@@ -150,5 +157,56 @@ describe('AULA_FLUXOS — cobertura e alertas', () => {
         expect(modulosDoFluxo(f).some(m => s.startsWith(`${m}-`)), s).toBe(true);
       }
     }
+  });
+});
+
+// A atividade da aula (migr. 403) nasce do MESMO fluxo, sem IA: o roteiro
+// determinístico é o que o professor tem quando o LLM falha, quando a quota
+// acaba ou quando ele simplesmente não quer usar IA. Se ele degradar em
+// silêncio — uma tarefa sem papel, uma etapa perdida —, ninguém percebe até a
+// turma receber um PDF com buraco.
+describe('roteiroDoFluxo — atividade sem IA', () => {
+  it('todo fluxo gera uma tarefa por etapa, com papel e enunciado', () => {
+    for (const f of AULA_FLUXOS) {
+      const r = roteiroDoFluxo(f);
+      expect(r.tarefas.length, f.id).toBe(f.etapas.length);
+      expect(r.etapas.length, f.id).toBe(f.etapas.length);
+      for (const t of r.tarefas) {
+        expect(t.papel, `${f.id}: ${t.titulo}`).not.toBe('');
+        expect(t.enunciado, `${f.id}: ${t.titulo}`).not.toBe('');
+      }
+    }
+  });
+
+  it('a ordem das tarefas é a ordem da cadeia', () => {
+    // Uma cadeia fora de ordem ensina a operação errada: aprovar antes de pedir.
+    for (const f of AULA_FLUXOS) {
+      const r = roteiroDoFluxo(f);
+      expect(r.tarefas.map(t => t.ordem), f.id).toEqual(f.etapas.map((_, i) => i + 1));
+      expect(r.tarefas.map(t => t.titulo), f.id).toEqual(f.etapas.map(e => e.titulo));
+    }
+  });
+
+  it('etapa opcional continua no roteiro, marcada', () => {
+    // Some-la seria perder o "faça também se der tempo"; deixá-la sem marca
+    // faria a turma parar num item que não trava a cadeia.
+    for (const f of AULA_FLUXOS) {
+      const r = roteiroDoFluxo(f);
+      f.etapas.forEach((e, i) => {
+        expect(!!r.tarefas[i].opcional, `${f.id}: ${e.titulo}`).toBe(!!e.opcional);
+      });
+    }
+  });
+
+  it('normalizarRoteiro devolve forma completa a partir de jsonb degenerado', () => {
+    // O roteiro chega do banco como jsonb sem garantia nenhuma. Atividade
+    // antiga, campo que ainda não existia: a tela do aluno não pode quebrar.
+    const r = normalizarRoteiro({ tarefas: [{ titulo: 'Abrir a requisição' }], lixo: 1 });
+    expect(r.versao).toBe(1);
+    expect(r.prerequisitos).toEqual([]);
+    expect(r.etapas).toEqual([]);
+    expect(r.tarefas).toHaveLength(1);
+    expect(r.tarefas[0].ordem).toBe(1);
+    expect(normalizarRoteiro(null).tarefas).toEqual([]);
   });
 });
