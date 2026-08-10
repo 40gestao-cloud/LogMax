@@ -40,13 +40,6 @@ export type AulaEtapa = {
    * quebra em fluxo que roda perfeitamente.
    */
   opcional?: boolean;
-  /**
-   * A tela só existe no modo Matriz. Quem pode alcançá-la é admin, CEO e
-   * conselheiro (os que escolhem filial) — e mesmo eles precisam TROCAR para
-   * Matriz. Sem dizer isso, o professor libera o módulo, o aluno não acha a
-   * tela e a culpa cai na whitelist.
-   */
-  soMatriz?: boolean;
 };
 
 export type AulaPreRequisito = {
@@ -74,8 +67,6 @@ export type AulaFluxo = {
   id: string;
   nome: string;
   resumo: string;
-  /** Só faz sentido no modo Matriz (pauta de holding). */
-  matriz?: boolean;
   etapas: AulaEtapa[];
   prerequisitos: AulaPreRequisito[];
 };
@@ -471,56 +462,18 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       },
     ],
   },
-  {
-    id: 'governanca',
-    nome: 'Verba pedida, gasta e prestada',
-    resumo: 'A pauta de holding: a unidade propõe, o Conselho concede, a unidade '
-      + 'gasta e depois presta contas. Conduzido no modo Matriz.',
-    matriz: true,
-    prerequisitos: [PRE_GERENTE],
-    etapas: [
-      {
-        // Abertura em RH desde 2026-08-08: o fluxo perdeu a etapa de auditoria
-        // e ficaria inteiro dentro de Financeiro — fluxo de um módulo só é
-        // atalho, não cadeia. O mandato também é o começo real da história:
-        // quem pede verba é o gestor nomeado para responder pela unidade.
-        view: 'rh-mandatos', modulo: 'rh',
-        titulo: 'O Conselho nomeia quem responde pela unidade',
-        quem: 'Conselho',
-        detalhe: 'Cargo com início, fim e ato de nomeação — sem isso, pedir '
-          + 'verba não tem dono.',
-        seQuebra: 'A verba é pedida por alguém que ninguém nomeou.',
-      },
-      {
-        view: 'financeiro-orçamentoanual', modulo: 'financeiro',
-        titulo: 'A unidade propõe a verba',
-        quem: 'Gerente ou CEO da unidade',
-        detalhe: 'Monta as rubricas e submete; devolvido volta para cá.',
-        seQuebra: 'Não há verba para deliberar.',
-      },
-      {
-        view: 'financeiro-orçamentoanual', modulo: 'financeiro',
-        titulo: 'O Conselho concede ou corta',
-        quem: 'Conselho (nunca quem propôs)',
-        detalhe: 'Mesma tela, outro papel — é o que torna a segregação visível.',
-        seQuebra: 'O orçamento fica submetido para sempre.',
-      },
-      {
-        view: 'financeiro-prestaçãodecontas', modulo: 'financeiro',
-        titulo: 'A unidade presta contas',
-        quem: 'Gerente ou CEO da unidade',
-        detalhe: 'Enquanto for rascunho, o Conselho não tem o que julgar.',
-        seQuebra: 'O dinheiro é gasto e ninguém responde por ele.',
-      },
-      {
-        view: 'financeiro-prestaçãodecontas', modulo: 'financeiro',
-        titulo: 'O Conselho julga as contas',
-        quem: 'Conselho (nunca quem prestou)',
-        detalhe: 'Aprovar, ressalvar ou reprovar — ressalva vira tarefa com prazo.',
-        seQuebra: 'Prestar contas vira formalidade sem consequência.',
-      },
-    ],
-  },
+  // NÃO existe fluxo de Matriz aqui, e é decisão de currículo (2026-08-10):
+  // a turma é treinada na operação da filial, não na pauta da holding. O
+  // fluxo "Verba pedida, gasta e prestada" (mandato → orçamento anual →
+  // prestação de contas) viveu aqui até esta data e foi removido por isso —
+  // não por defeito. As telas e as RPCs continuam de pé para o Conselho usar
+  // fora da aula, com a segregação toda no banco (`deliberar_orcamento` e
+  // `dar_parecer_prestacao` recusam quem propôs).
+  //
+  // Se um dia entrar de novo, lembrar do que tornava esse fluxo diferente:
+  // `rh-mandatos` é a única view do app com `requireMatriz`, e a whitelist do
+  // Modo Aula não recorta nada em modo Matriz (lá o menu são os três hubs),
+  // então montar o fluxo só preparava o lado da filial.
 ];
 
 /** Todos os módulos que um fluxo exige. */

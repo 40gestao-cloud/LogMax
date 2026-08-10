@@ -371,12 +371,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                       <span className={`text-xs font-bold ${completo ? 'text-accent' : 'text-gray-200'}`}>
                         {f.nome}
                       </span>
-                      {f.matriz && (
-                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border"
-                          style={{ color: '#F0B429', borderColor: 'rgba(240,180,41,0.4)' }}>
-                          Matriz
-                        </span>
-                      )}
                       <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${
                         completo ? 'bg-accent/20 text-accent border-accent/30'
                         : cobertas > 0 ? 'text-yellow-300 border-yellow-500/40'
@@ -427,25 +421,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                                   Opcional
                                 </span>
                               )}
-                              {/* O aluno CEO/conselheiro alcança esta tela só
-                                  trocando para Matriz. Sem dizer isso aqui, o
-                                  professor libera o módulo, ninguém acha a
-                                  tela e a culpa cai na whitelist. */}
-                              {etapa.soMatriz && (
-                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border"
-                                  style={{ color: '#F0B429', borderColor: 'rgba(240,180,41,0.4)' }}>
-                                  Só em Matriz
-                                </span>
-                              )}
                             </div>
                             <div className="text-[10px] text-accent/80 mt-0.5">{etapa.quem}</div>
                             <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{etapa.detalhe}</div>
-                            {etapa.soMatriz && (
-                              <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                                Quem faz precisa trocar de unidade para <span className="text-gray-300">Matriz</span> —
-                                a tela não existe dentro de uma filial, e só admin, CEO e conselheiro escolhem unidade.
-                              </div>
-                            )}
                             {!ok && !etapa.opcional && (
                               <div className="text-[10px] text-yellow-300/90 mt-1 leading-relaxed">
                                 Fora da aula: {etapa.seQuebra}
