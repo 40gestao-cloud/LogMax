@@ -27,6 +27,20 @@ window.addEventListener('wheel', (e) => {
   }
 }, { passive: true, capture: true });
 
+// Apaga o cache 'supabase-api' deixado pelo service worker antigo.
+//
+// A entrada de runtimeCaching saiu do vite.config em 2026-08-10 (servia
+// resposta de API velha quando a rede falhava, e a turma via o menu de antes
+// do Modo Aula). Tirar a regra impede novas gravações, mas `cleanupOutdated-
+// Caches` do workbox só varre o precache: o cache já gravado sobreviveria à
+// atualização e continuaria sendo consultado pelo SW antigo até ele morrer.
+//
+// Some sozinho depois que todos os dispositivos rodarem esta versão; até lá
+// custa uma chamada assíncrona no boot.
+if ('caches' in window) {
+  caches.delete('supabase-api').catch(() => { /* sem SW, ou modo privado */ });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

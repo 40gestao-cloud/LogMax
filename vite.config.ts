@@ -29,16 +29,21 @@ export default defineConfig(({ mode }) => {
           // As entradas de `vendor-univer-*` saíram em 2026-07-29 com Max Docs e
           // Max Planilhas; sem os dois módulos, nenhum chunk desse nome nasce.
           globIgnores: ['**/vendor-pdfjs-*.js', '**/pdf.worker*.js', '**/pdf.worker*.mjs'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'supabase-api',
-                expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-              },
-            },
-          ],
+          // NÃO existe runtimeCaching para o Supabase, e é decisão, não esquecimento.
+          //
+          // Havia um NetworkFirst em `*.supabase.co/*` (cacheName 'supabase-api',
+          // maxAge 300s). NetworkFirst devolve o cache quando a rede falha — e na
+          // internet da sala isso acontece o tempo todo. Em 2026-08-10 o
+          // professor ligou o Modo Aula, a turma abriu o LogMax e continuou
+          // vendo TODOS os módulos; só Ctrl+Shift+R corrigia — que é
+          // exatamente o recarregamento que ignora o service worker. Uma
+          // resposta de `aula_config` gravada antes do interruptor explica
+          // essa assinatura.
+          //
+          // Resposta de API sob RLS não é ativo estático: ela expressa permissão
+          // e estado, e servir a versão de cinco minutos atrás é servir a
+          // permissão de cinco minutos atrás. Sem entrada de runtimeCaching o
+          // workbox nem intercepta essas requisições — vão direto à rede.
         },
         // Service worker DESLIGADO em dev por padrão.
         //
