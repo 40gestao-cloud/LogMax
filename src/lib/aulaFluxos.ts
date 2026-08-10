@@ -235,7 +235,10 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         view: 'vendas-pdv', modulo: 'vendas',
         titulo: 'Vender',
         quem: 'Operador de caixa',
-        detalhe: '`criar_venda_pdv` baixa o estoque e gera a conta a receber numa transação só.',
+        detalhe: 'Peça DUAS vendas do mesmo produto: uma em Dinheiro, outra em Fiado. '
+          + 'É o contraste que faz a etapa de receber existir — e sem ele metade da '
+          + 'aula vira slide. `criar_venda_pdv` baixa o estoque, gera a conta a receber '
+          + 'e emite a nota, tudo numa transação só.',
         seQuebra: 'Não há venda para acompanhar.',
       },
       {
@@ -248,10 +251,28 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       },
       {
         view: 'financeiro-contasareceber', modulo: 'financeiro',
-        titulo: 'Receber',
+        titulo: 'Receber o que ficou a prazo',
         quem: 'Setor Financeiro',
-        detalhe: 'À vista ou parcelado em 1x-12x; o fechamento do caixa volta ao Controle de Caixa.',
+        // O texto antigo ("à vista ou parcelado em 1x-12x") descrevia as opções
+        // do PDV, não o que chega aqui — e mandava a turma para uma tela sem
+        // ação. `criar_venda_pdv` só cria conta 'Aberto' em Fiado e Cartão
+        // Crédito; Dinheiro, Pix e Débito nascem 'Pago', com vencimento hoje.
+        detalhe: 'Só a venda a prazo dá trabalho aqui: Fiado e Cartão Crédito nascem '
+          + '"Aberto" (30 dias, ou 30/60/90… no parcelado). Dinheiro, Pix e Débito '
+          + 'entram já como "Pago" — a linha existe, mas não há o que receber, e é '
+          + 'esse o ponto: à vista o dinheiro já entrou, a prazo virou direito a '
+          + 'receber. O dinheiro do turno volta no fechamento do Controle de Caixa.',
         seQuebra: 'O outro lado da venda fica invisível.',
+      },
+      {
+        view: 'financeiro-notasemitidas', modulo: 'financeiro',
+        titulo: 'A nota que saiu sozinha',
+        quem: 'Turma inteira',
+        detalhe: 'Ninguém emitiu: `criar_venda_pdv` chama `emitir_nota` dentro da mesma '
+          + 'transação, com numeração própria por filial e série. Boa hora para dizer '
+          + 'que faturar não é uma tela a mais, é consequência de vender.',
+        seQuebra: 'Nada — a nota sai igual. É a etapa que mostra o que o sistema fez sem pedir.',
+        opcional: true,
       },
     ],
   },
