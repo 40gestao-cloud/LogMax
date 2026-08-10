@@ -12,9 +12,14 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        // 'prompt' permite ao app mostrar banner "Nova versão disponível"
-        // em vez de atualizar silenciosamente — vide PwaUpdatePrompt.tsx.
-        registerType: 'prompt',
+        // 'autoUpdate' desde 2026-08-10. Era 'prompt' (banner "Nova versão
+        // disponível", vide PwaUpdatePrompt.tsx), e o preço apareceu no
+        // primeiro fix de service worker: a correção só alcançava quem
+        // clicasse no banner, então a turma que adiava continuava rodando o SW
+        // com o bug — no caso, o que servia a `aula_config` de antes do Modo
+        // Aula. Numa sala de aula ninguém lê banner, e o custo de um reload
+        // inesperado é menor que o de metade da turma em outra versão.
+        registerType: 'autoUpdate',
         includeAssets: ['icon-logmax.png', 'icon-logmax-modoclaro.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {
