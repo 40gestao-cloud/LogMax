@@ -345,9 +345,14 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     nome: 'Pessoas — da contratação à folha paga',
     resumo: 'Atravessa RH inteiro e desemboca no Financeiro. Ensina que folha '
       + 'não é planilha à parte: é conta a pagar como qualquer outra.',
+    // `porFilial` não é detalhe: as duas telas são filialScoped, cada unidade
+    // tem os seus. Contando global, o painel ficava VERDE com os 2 cargos e o
+    // 1 departamento que existiam só na Matriz, enquanto SuperMax, MaxLook e
+    // TechMax — onde a aula acontece — estavam zeradas. O aluno só descobria
+    // ao abrir o cadastro do funcionário e não achar o que selecionar.
     prerequisitos: [
-      { id: 'cargos', label: 'Cargos cadastrados', onde: 'RH › Cargos', tabela: 'cargos', filtroAtivo: true, minimo: 1 },
-      { id: 'departamentos', label: 'Departamentos cadastrados', onde: 'RH › Departamentos', tabela: 'departamentos', filtroAtivo: true, minimo: 1 },
+      { id: 'cargos', label: 'Cargos cadastrados', onde: 'RH › Cargos', tabela: 'cargos', filtroAtivo: true, porFilial: true, minimo: 1 },
+      { id: 'departamentos', label: 'Departamentos cadastrados', onde: 'RH › Departamentos', tabela: 'departamentos', filtroAtivo: true, porFilial: true, minimo: 1 },
     ],
     etapas: [
       {
@@ -368,22 +373,47 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         view: 'rh-registrodeponto', modulo: 'rh',
         titulo: 'Marcar ponto',
         quem: 'Cada aluno, por si',
-        detalhe: 'Frequência é medida, não voto: entra no placar com peso próprio.',
+        detalhe: 'Frequência é medida, não voto: entra no placar com peso próprio. '
+          + 'Para chegar na FOLHA, porém, ela ainda depende do passo seguinte.',
         seQuebra: 'A folha sai sem lastro de jornada e vira número inventado.',
+      },
+      {
+        // Etapa que faltava, e sem ela o `seQuebra` da anterior acontece de
+        // qualquer jeito: marcar ponto não entra na folha sozinho. Quem traz é
+        // `recalcular_folha_do_ponto`, um botão próprio na tela da Folha. Sem
+        // esse clique a folha sai pelo salário base, atraso e falta não
+        // descontam — exatamente o "número inventado" que o roteiro temia.
+        view: 'rh-folhadepagamento', modulo: 'rh',
+        titulo: 'Trazer o ponto para a folha',
+        quem: 'Setor de RH',
+        detalhe: 'O botão "Recalcular do ponto" na folha do mês: ele lê o ponto do '
+          + 'período e transforma atraso, falta e hora extra em rubrica. É aqui que a '
+          + 'jornada vira dinheiro — antes disso a folha é só o salário do contrato.',
+        seQuebra: 'A folha processa com o salário base, e o ponto que a turma marcou '
+          + 'não muda um centavo. Pior que não ter ponto: dá a impressão de que tem.',
       },
       {
         view: 'rh-folhadepagamento', modulo: 'rh',
         titulo: 'Processar a folha',
         quem: 'Setor de RH',
-        detalhe: '`processar_folha` lança a folha direto em contas a pagar.',
+        detalhe: '`processar_folha` lança a folha direto em contas a pagar. Exige '
+          + 'líquido maior que zero e folha ainda Pendente.',
         seQuebra: 'O trabalho do mês não vira obrigação financeira.',
       },
       {
         view: 'financeiro-contasapagar', modulo: 'financeiro',
         titulo: 'Pagar a folha',
         quem: 'Setor Financeiro',
-        detalhe: 'Onde o custo de pessoal aparece junto com todos os outros.',
-        seQuebra: 'A folha é processada e some da vista da turma.',
+        // Quem processa não paga (`processar_folha` cobra RH, pagar cobra
+        // Financeiro), e pagar dispara mais do que o roteiro dizia: a trigger
+        // credita a carteira e só então a folha vira Paga.
+        detalhe: 'Onde o custo de pessoal aparece junto com todos os outros — e quem '
+          + 'processou não paga. Pagar aqui credita salário e benefícios na carteira '
+          + 'MaxBank do colaborador e só então a folha vira "Paga". O RH confere pelo '
+          + 'botão Carteira, na linha da folha (o MaxBank é outro app — dentro do '
+          + 'LogMax é por ali que se vê o crédito).',
+        seQuebra: 'A folha é processada e some da vista da turma — e ninguém recebe: '
+          + 'o crédito na carteira pendura no pagamento desta conta.',
       },
     ],
   },
