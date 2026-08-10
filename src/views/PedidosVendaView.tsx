@@ -5,6 +5,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroPedidoVenda } from '../lib/documentos';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
@@ -62,21 +63,22 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
   // Status final 'Concluído' é atribuído pela ação que completar o par
   // (separar quando já pago, ou pagar quando já separado). Antes disso o
   // status reflete só o último evento ('Separado' ou 'Pago').
+  // Separar deixou de ser um carimbo. Até a migr. 400 isto era um UPDATE de
+  // três campos: a mercadoria saía da loja e o saldo ficava igual — o único
+  // lugar do sistema onde vender não mexia no estoque, bem ao lado do PDV,
+  // onde a baixa é no mesmo clique. Agora a RPC lança uma saída por item e
+  // marca a separação na mesma transação; saldo insuficiente derruba tudo,
+  // que é o certo (pedido meio separado é pior que pedido não separado).
   const marcarSeparado = async (p: any) => {
+    if (!supabase) return;
     setProcessando(p.id);
     try {
-      const novoStatus = p.pago_em ? 'Concluído' : 'Separado';
-      const updates = {
-        status: novoStatus,
-        separado_em: new Date().toISOString(),
-        separado_por: profile.id,
-        separado_por_nome: profile.nome,
-      };
-      await dbUpdate('/api/pedidosvendaview', p.id, updates);
-      setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
-      showToast('Marcado como separado.', 'success', true);
+      const { data: atualizado, error } = await supabase.rpc('separar_pedido_venda', { p_pedido_id: p.id });
+      if (error) throw new Error(error.message);
+      setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...(atualizado ?? {}) } : x));
+      showToast('Pedido separado e estoque baixado.', 'success', true);
     } catch (err: any) {
-      showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
+      showToast(`Não foi possível separar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setProcessando(null);
     }
@@ -157,7 +159,13 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                 <AnimatePresence>
                   {enriched.map((p: any) => {
                     const podeSeparar = (isLogistica || isAdminOuCeo) && !p.separado_em && p.status !== 'Cancelado';
-                    const podePagar   = (isFinanceiro || isAdminOuCeo) && !p.pago_em && p.status !== 'Cancelado';
+                    // Pedido com conta a receber se paga NA CONTA, não aqui. Havia duas
+                    // portas para o mesmo fato e nenhuma avisava a outra: este botão
+                    // marcava a flag e deixava a conta Aberta para sempre, e quitar a
+                    // conta não fechava o pedido. Agora a conta manda (trigger da migr.
+                    // 400) e este botão sobra só para pedido sem conta vinculada.
+                    const podePagar   = (isFinanceiro || isAdminOuCeo) && !p.pago_em
+                                        && !p.conta_receber_id && p.status !== 'Cancelado';
                     return (
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-500">{numeroPedidoVenda(p)}</td>
@@ -205,7 +213,11 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                               </button>
                             )}
                             {p.conta_receber_id && (isFinanceiro || isAdminOuCeo) && (
-                              <span title="Conta a Receber gerada" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400">
+                              <span
+                                title={p.pago_em
+                                  ? 'Conta a Receber quitada — foi ela que fechou este pedido.'
+                                  : 'O recebimento deste pedido é feito em Financeiro → Contas a Receber. Ao quitar a conta, o pedido fecha sozinho.'}
+                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400">
                                 <ExternalLink size={12} />
                               </span>
                             )}

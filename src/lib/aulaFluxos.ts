@@ -287,28 +287,55 @@ export const AULA_FLUXOS: AulaFluxo[] = [
         view: 'vendas-orçamentos', modulo: 'vendas',
         titulo: 'Montar o orçamento',
         quem: 'Setor de Vendas',
-        detalhe: 'Proposta ao cliente, ainda sem compromisso de estoque.',
+        detalhe: 'Proposta ao cliente, ainda sem compromisso de estoque. Nasce Rascunho '
+          + 'e o vendedor envia ao Financeiro — não dá para pular para o cliente.',
         seQuebra: 'Não há por onde começar.',
+      },
+      {
+        // Etapa que faltava. O orçamento percorre Rascunho → Aguardando
+        // Financeiro → Aprovado Financeiro → Enviado ao Cliente → Aprovado
+        // Cliente, e só no último estado o botão Converter aparece. Sem esta
+        // etapa no roteiro, o professor montava a aula sem o submenu do
+        // Financeiro, o orçamento parava no primeiro estado e a turma
+        // concluía que o sistema tinha travado.
+        view: 'financeiro-aprovaçõesdeorçamento', modulo: 'financeiro',
+        titulo: 'O Financeiro aprova a proposta',
+        quem: 'Setor Financeiro',
+        detalhe: 'Segunda autoridade do fluxo: quem vende não decide sozinho o preço que '
+          + 'sai da loja. Aprovado aqui, Vendas envia ao cliente — e só depois do aceite '
+          + 'dele o orçamento fica convertível.',
+        seQuebra: 'O orçamento morre em "Aguardando Financeiro": o botão Converter só '
+          + 'aparece em "Aprovado Cliente", e não há como chegar lá.',
       },
       {
         view: 'vendas-pedidosdevenda', modulo: 'vendas',
         titulo: 'Converter em pedido',
         quem: 'Setor de Vendas',
-        detalhe: '`converter_orcamento_em_pedido` cria o pedido e a conta a receber.',
+        detalhe: '`converter_orcamento_em_pedido` cria o pedido e a conta a receber na '
+          + 'mesma transação. Exige o orçamento em "Aprovado Cliente".',
         seQuebra: 'O orçamento fica eterno — o aluno não vê a proposta virar compromisso.',
       },
       {
-        view: 'estoque-expedição', modulo: 'estoque',
-        titulo: 'Separar e expedir',
+        // Era `estoque-expedição`, e era a tela errada: `expedicao` conhece
+        // requisição de ALMOXARIFADO e produto solto, não pedido de venda —
+        // tanto que `expedir` busca o destino em `requisicoes_estoque`. O
+        // aluno não achava o pedido lá, e se tentasse se virar criava uma
+        // expedição avulsa que baixava estoque por fora, sem vínculo nenhum.
+        view: 'estoque-pedidosdevenda', modulo: 'estoque',
+        titulo: 'Separar o pedido',
         quem: 'Setor de Estoque',
-        detalhe: 'É a etapa que transforma um documento em mercadoria saindo.',
+        detalhe: 'A fila "Pedidos a Separar" é a mesma tela do pedido, vista pelo Estoque. '
+          + 'Separar lança a saída de cada item (migr. 400) — é aqui, e não na conversão, '
+          + 'que a mercadoria deixa o saldo.',
         seQuebra: 'O pedido nunca sai; a turma não vê o efeito físico.',
       },
       {
         view: 'financeiro-contasareceber', modulo: 'financeiro',
         titulo: 'Receber do cliente',
         quem: 'Setor Financeiro',
-        detalhe: 'Fecha o ciclo comercial.',
+        detalhe: 'Diferente do PDV à vista, aqui sempre há o que receber: a conversão cria '
+          + 'a conta "Aberto" com 30 dias. Quitar a conta fecha o pedido sozinho — o '
+          + 'recebimento não se registra na tela de Pedidos.',
         seQuebra: 'A venda não vira dinheiro na aula.',
       },
     ],
