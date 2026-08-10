@@ -31,6 +31,18 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
     return { ...ap, req, prod: req ? produtos.find(p => p.id === req.produto_id) : undefined };
   });
 
+  // O erro que mais aparece aqui não é falha: é regra. O guard
+  // `trg_requisicao_estoque_decisao_guard` levanta "Quem pede o material não
+  // libera a própria requisição" na 2ª das três escritas — e o `catch {}` que
+  // existia trocava essa frase por "Erro ao aprovar", fazendo a turma ler como
+  // defeito do sistema justamente a lição que o fluxo existe pra ensinar.
+  // `dbUpdate` repassa `error.message` intacto no throw, então basta não jogar
+  // fora.
+  const motivoDoErro = (err: unknown): string => {
+    const msg = String((err as { message?: string })?.message ?? '').trim();
+    return msg || 'erro inesperado';
+  };
+
   const handleAprovar = async (ap: EnrichedAp) => {
     if (processingRef.current === ap.id) return;
     processingRef.current = ap.id;
@@ -80,7 +92,7 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
       }
       setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição aprovada e estoque atualizado!", 'success', true);
-    } catch {
+    } catch (err: unknown) {
       if (aprovUpdated) {
         // Reverte AS DUAS pontas. Antes só a aprovação voltava para 'Pendente'
         // e a requisição ficava 'Aprovado' — estado que a tela de aprovações
@@ -88,7 +100,11 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
         try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
         try { await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Pendente' }); } catch {}
       }
-      showToast("Erro ao aprovar — rollback aplicado.", 'error', true);
+      // "nada mudou" só quando houve o que desfazer — dizer isso numa falha da
+      // primeira escrita seria tranquilizar o aluno sobre algo que nem começou.
+      showToast(
+        `Não foi possível liberar: ${motivoDoErro(err)}${aprovUpdated ? ' A requisição continua Pendente.' : ''}`,
+        'error', true);
     } finally {
       setProcessing(null);
       processingRef.current = null;
@@ -107,11 +123,16 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
       await dbUpdate('/api/requisicoesestoqueview', ap.requisicao_estoque_id, { status: 'Negado' });
       setAprovacoes(prev => prev.filter(a => a.id !== ap.id));
       showToast("Requisição negada.", 'success', true);
-    } catch {
+    } catch (err: unknown) {
       if (aprovUpdated) {
         try { await dbUpdate('/api/minhasaprovacoesestoqueview', ap.id, { status: 'Pendente', observacao: '' }); } catch {}
       }
-      showToast("Erro ao negar — rollback aplicado.", 'error', true);
+      // Negar passa pelo MESMO guard que aprovar (ele dispara em 'Aprovado' e
+      // 'Negado'), então quem tenta negar a própria requisição também recebia o
+      // texto genérico.
+      showToast(
+        `Não foi possível negar: ${motivoDoErro(err)}${aprovUpdated ? ' A requisição continua Pendente.' : ''}`,
+        'error', true);
     } finally {
       setProcessing(null);
       processingRef.current = null;
