@@ -41,6 +41,34 @@ if ('caches' in window) {
   caches.delete('supabase-api').catch(() => { /* sem SW, ou modo privado */ });
 }
 
+// Tela preta depois de um deploy: o índice em cache aponta para chunks cujo
+// hash não existe mais no servidor (a Vercel não serve assets de deploys
+// anteriores), o import dinâmico dá 404 e o React nunca monta. Sem erro na
+// tela, sem nada no console que o usuário vá ler.
+//
+// Aconteceu em 2026-08-10 na troca do service worker para 'autoUpdate'. Mas a
+// causa não é o service worker: o app tem ~60 views em lazy import, e qualquer
+// deploy feito enquanto alguém está com a aba aberta pode 404 o próximo chunk.
+//
+// O Vite emite `vite:preloadError` justamente para isso. Recarregar resgata a
+// sessão; a trava evita que um chunk que 404 de verdade vire loop de reload.
+//
+// A trava é uma JANELA DE TEMPO, não um "uma vez por sessão". Liberá-la no
+// evento `load` seria pior que não ter trava: `load` dispara assim que os
+// recursos iniciais chegam, mesmo com o chunk ainda quebrado, então cada
+// tentativa devolveria o crédito à seguinte e o reload não pararia nunca. Com
+// a janela, duas falhas seguidas deixam o erro aparecer — comportamento
+// honesto — e uma falha meses depois ainda ganha seu resgate.
+const CHAVE_RELOAD = 'logmax.chunk_reload';
+const JANELA_RELOAD_MS = 30_000;
+window.addEventListener('vite:preloadError', (e) => {
+  const ultimo = Number(sessionStorage.getItem(CHAVE_RELOAD) ?? 0);
+  if (Date.now() - ultimo < JANELA_RELOAD_MS) return;  // acabamos de tentar
+  e.preventDefault();
+  sessionStorage.setItem(CHAVE_RELOAD, String(Date.now()));
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

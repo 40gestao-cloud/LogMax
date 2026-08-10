@@ -802,6 +802,16 @@ function LogMaxAppInner() {
   // de outras filiais). Modo Matriz (null) vê tudo.
   const badges = useSidebarBadges(profile, filialAtiva);
   const { config: aulaConfig } = useAulaConfig();
+  // Atividade publicada pela Matriz (migr. 403). Vive no App, e não num FAB
+  // como os avisos, porque todo FAB some no Modo Aula — justamente quando esta
+  // é a informação mais importante da tela do aluno.
+  //
+  // FICA AQUI, junto dos outros hooks, e não lá embaixo perto de onde é usado:
+  // deste ponto até o render há seis `return` (Supabase ausente, carregando,
+  // não autenticado, sem perfil, escolha de filial, sem filial). Um hook depois
+  // deles roda na tela do app e não na de login, e a contagem de hooks muda
+  // entre um render e outro — React #310, tela preta em produção (2026-08-10).
+  const { atividades: atividadesAula, naoLidas: atividadesNaoLidas } = useAulaAtividades(profile);
   const { blackout } = useBlackout();
 
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
@@ -1002,10 +1012,6 @@ function LogMaxAppInner() {
   // roles configurados (admin é sempre isento pra não travar quem administra).
   const aulaFiltro = aulaFiltraUsuario(aulaConfig, profile);
   const aulaAllow = (viewId: string) => !aulaFiltro || aulaPermiteView(aulaConfig, profile, viewId);
-  // Atividade publicada pela Matriz (migr. 403). Vive aqui, e não num FAB como
-  // os avisos, porque todo FAB some no Modo Aula — justamente quando esta é a
-  // informação mais importante da tela do aluno.
-  const { atividades: atividadesAula, naoLidas: atividadesNaoLidas } = useAulaAtividades(profile);
   // A whitelist da aula SUBSTITUI o recorte por setor — não intersecta com ele.
   // Enquanto era interseção (`visibleModulesBase.filter(...)`), uma aula de
   // Cadastros/Compras/Estoque deixava todo aluno que não fosse de logística com
