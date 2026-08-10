@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -11,6 +11,7 @@ import {
   etapasObrigatorias,
 } from '../lib/aulaFluxos';
 import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
+import { AulaAtividadeModal } from './AulaAtividadeModal';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -66,6 +67,8 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [expandido, setExpandido] = useState<Record<string, boolean>>({});
   // Fluxo com o diagrama de etapas aberto (um por vez — é material de projeção).
   const [fluxoAberto, setFluxoAberto] = useState<string | null>(null);
+  // Fluxo cuja atividade está sendo montada (modal). Null = fechado.
+  const [fluxoAtividade, setFluxoAtividade] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loaded) return;
@@ -386,6 +389,13 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                       className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5">
                       Montar
                     </button>
+                    {/* Liberar as telas é metade: sem enunciado o aluno abre a
+                        tela certa e não sabe o que fazer nela. */}
+                    <button type="button" onClick={() => setFluxoAtividade(f.id)}
+                      title="Montar a atividade deste fluxo, baixar em PDF e enviar às filiais"
+                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
+                      <ClipboardList size={13} />
+                    </button>
                     <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)}
                       title="Ver as etapas e quem faz cada uma"
                       className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
@@ -440,6 +450,24 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           })}
         </div>
       </div>
+
+      {/* Atividade do fluxo. O modal vive fora da lista para não remontar a
+          cada re-render dos cards — o professor perderia o texto que digitou. */}
+      {fluxoAtividade && (() => {
+        const f = AULA_FLUXOS.find(x => x.id === fluxoAtividade);
+        if (!f) return null;
+        const obrig = etapasObrigatorias(f);
+        return (
+          <AulaAtividadeModal
+            fluxo={f}
+            profile={profile}
+            showToast={showToast}
+            onClose={() => setFluxoAtividade(null)}
+            coberturaCompleta={obrig.every(e => etapaCoberta(e, modulos, submenus))}
+            aulaAtiva={config.ativo}
+          />
+        );
+      })()}
 
       {/* Cadeia quebrada: o fluxo foi começado e não fecha. */}
       {ativo && cadeiasQuebradas.length > 0 && (

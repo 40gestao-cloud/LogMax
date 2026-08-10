@@ -6,6 +6,7 @@ import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
+import { useAulaAtividades } from './hooks/useAulaAtividades';
 import { aulaFiltraUsuario, aulaPermiteView, aulaSetoresConcedidos } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import {
@@ -130,6 +131,7 @@ const FilialCapitalView                    = lazy(() => import('./views/FilialCa
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
 const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
+const AulaAtividadeView                    = lazy(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
 const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 
 // --- menu ---
@@ -361,7 +363,7 @@ const FILIAL_ONLY_VIEWS = new Set(['demandas']);
 const viewPermitidaNoModo = (view: string, matrizMode: boolean): boolean =>
   matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
 
-const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro }: any) => (
+const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro, atividadesAula, atividadesNaoLidas }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
       <div className="logo-shimmer inline-block">
@@ -383,6 +385,19 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
         </button>
+        {/* Atividade da aula: só aparece para quem recebeu alguma vigente, e por
+            isso não tem condição de role — o filtro é a própria existência da
+            atividade (a RLS da migr. 403 já recorta por filial e público). */}
+        {atividadesAula > 0 && (
+          <button onClick={() => { navigate('aula-atividade'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'aula-atividade' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <ClipboardList size={18} /><span className="flex-1 text-left">Atividade da aula</span>
+            {atividadesNaoLidas > 0 && (
+              <span className="text-[9px] font-black min-w-5 h-5 px-1.5 rounded-full bg-accent text-black flex items-center justify-center">
+                {atividadesNaoLidas}
+              </span>
+            )}
+          </button>
+        )}
         {aulaAllow('dashboard') && (profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
           || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -987,6 +1002,10 @@ function LogMaxAppInner() {
   // roles configurados (admin é sempre isento pra não travar quem administra).
   const aulaFiltro = aulaFiltraUsuario(aulaConfig, profile);
   const aulaAllow = (viewId: string) => !aulaFiltro || aulaPermiteView(aulaConfig, profile, viewId);
+  // Atividade publicada pela Matriz (migr. 403). Vive aqui, e não num FAB como
+  // os avisos, porque todo FAB some no Modo Aula — justamente quando esta é a
+  // informação mais importante da tela do aluno.
+  const { atividades: atividadesAula, naoLidas: atividadesNaoLidas } = useAulaAtividades(profile);
   // A whitelist da aula SUBSTITUI o recorte por setor — não intersecta com ele.
   // Enquanto era interseção (`visibleModulesBase.filter(...)`), uma aula de
   // Cadastros/Compras/Estoque deixava todo aluno que não fosse de logística com
@@ -1147,6 +1166,7 @@ function LogMaxAppInner() {
       case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
+      case 'aula-atividade':               return <AulaAtividadeView profile={profile} showToast={st} />;
       // Rota mudou com o rótulo. A antiga fica de alias porque `activeView` vive
       // no sessionStorage: quem estivesse no Max Show no momento do deploy
       // recarregaria num switch sem case. Vide o mesmo caso na Vitrine.
@@ -1212,6 +1232,7 @@ function LogMaxAppInner() {
                 visibleModules={visibleModules} profile={profile} badges={badges}
                 matrizMode={matrizMode}
                 aulaAllow={aulaAllow} aulaFiltro={aulaFiltro}
+                atividadesAula={atividadesAula.length} atividadesNaoLidas={atividadesNaoLidas}
               />
             </motion.aside>
           </>
@@ -1227,6 +1248,7 @@ function LogMaxAppInner() {
           visibleModules={visibleModules} profile={profile} badges={badges}
           matrizMode={matrizMode}
           aulaAllow={aulaAllow} aulaFiltro={aulaFiltro}
+                atividadesAula={atividadesAula.length} atividadesNaoLidas={atividadesNaoLidas}
         />
       </aside>
 
@@ -1306,6 +1328,16 @@ function LogMaxAppInner() {
             <span className="text-[11px] text-gray-400 truncate">
               {aulaConfig.modulos_ativos.length} módulo{aulaConfig.modulos_ativos.length === 1 ? '' : 's'} liberado{aulaConfig.modulos_ativos.length === 1 ? '' : 's'} pela Matriz
             </span>
+            {/* Atalho no banner porque é onde o aluno olha ao estranhar a
+                sidebar curta — e é de lá que ele precisa chegar ao enunciado. */}
+            {atividadesAula.length > 0 && activeView !== 'aula-atividade' && (
+              <button
+                onClick={() => navigate('aula-atividade')}
+                className="ml-auto shrink-0 text-[10px] font-black uppercase tracking-widest text-accent border border-accent/30 rounded-full px-2.5 py-1 hover:bg-accent/10 transition-colors"
+              >
+                Ver atividade{atividadesNaoLidas > 0 ? ` (${atividadesNaoLidas})` : ''}
+              </button>
+            )}
           </div>
         )}
         <BlackoutBanner

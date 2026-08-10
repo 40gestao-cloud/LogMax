@@ -123,8 +123,11 @@ export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[
 // - 'inicio' e 'aula-modo': sempre.
 // - hubs de Matriz e views que só existem em Matriz: admin/CEO já é isento
 //   ou tá em contexto onde a trava não faz sentido.
+// - 'aula-atividade': é o enunciado da aula em curso (migr. 403). Uma
+//   atividade que a própria whitelist esconde seria pior que não existir —
+//   e o aluno não teria como descobrir o que fazer nas telas liberadas.
 const SEMPRE_LIBERADO = new Set([
-  'inicio', 'aula-modo',
+  'inicio', 'aula-modo', 'aula-atividade',
   'sessoes-gerais', 'analise-ia', 'comparativos-matriz',
   'painel-bi', 'briefing-diario', 'central-tempo',
 ]);
