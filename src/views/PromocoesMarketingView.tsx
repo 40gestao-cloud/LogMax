@@ -263,6 +263,14 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const handleSave = async () => {
     if (!form.produto_id) { showToast('Selecione um produto ou serviço.', 'error'); return; }
     if (!form.preco_promocional) { showToast('Informe o preço promocional.', 'error'); return; }
+    // Data de fim deixou de ser opcional: o cron `reverter_promocoes_expiradas`
+    // exige `data_fim IS NOT NULL`, então promoção sem prazo NUNCA volta — o
+    // preço promocional vira o preço da casa e ninguém percebe. Prazo é o que
+    // separa promoção de remarcação.
+    if (!form.data_fim) {
+      showToast('Informe a data de fim: sem prazo o preço promocional não volta sozinho.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const item = itens.find(i => i.id === form.produto_id);
@@ -556,9 +564,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha</label>
+                <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha *</label>
                 <input id="promo-data-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                <span className="text-[10px] text-gray-500">É o prazo que devolve o preço: sem ele a promoção nunca encerra.</span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>

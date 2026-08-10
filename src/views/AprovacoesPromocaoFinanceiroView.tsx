@@ -21,31 +21,53 @@ function AbaPromocoes({ showToast, filial }: any) {
     });
   }, []);
 
+  // Status da promoção e preço do produto eram dois `dbUpdate` soltos, sem
+  // transação e sem rollback: falhando o segundo, a promoção ficava APROVADA
+  // com o preço velho. E como a linha só saía da fila no caminho feliz, a tela
+  // seguia mostrando "aguardando" enquanto o banco já dizia "Aprovado" — no
+  // primeiro F5 sumia da fila e ninguém voltava a olhar. A migr. 402 juntou as
+  // duas escritas numa RPC e pôs a régua no banco.
   const handleAprovar = async (promo: any) => {
-    if (processing) return;
+    if (processing || !supabase) return;
     setProcessing(promo.id);
     try {
-      await dbUpdate('/api/marketingpromocoesview', promo.id, { status: 'Aprovado', observacao: obs[promo.id] ?? '' });
-      if (promo.produto_id && promo.preco_promocional) {
-        await dbUpdate('/api/produtosview', promo.produto_id, { preco: Number(promo.preco_promocional) });
-      }
+      const { data: res, error } = await supabase.rpc('aprovar_promocao', {
+        p_promocao_id: promo.id,
+        p_observacao:  obs[promo.id] ?? '',
+      });
+      if (error) throw new Error(error.message);
       setData((prev: any[]) => prev.filter(p => p.id !== promo.id));
       playPlim();
-      showToast('Promoção aprovada! Preço atualizado no PDV.', 'success', true);
-    } catch { showToast('Erro ao aprovar.', 'error', true); }
-    finally { setProcessing(null); }
+      // Só anuncia o preço quando ele mudou de fato: promoção de serviço não
+      // tem produto, e dizer "preço atualizado no PDV" ali era falso.
+      const semPrazo = (res as any)?.sem_prazo
+        ? ' Atenção: sem data de fim, o preço não volta sozinho.'
+        : '';
+      showToast(
+        ((res as any)?.preco_alterado
+          ? 'Promoção aprovada! Preço atualizado no PDV.'
+          : 'Promoção aprovada.') + semPrazo,
+        'success', true);
+    } catch (err: any) {
+      showToast(`Não foi possível aprovar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setProcessing(null); }
   };
 
   const handleReprovar = async (promo: any) => {
-    if (processing) return;
+    if (processing || !supabase) return;
     if (!obs[promo.id]?.trim()) { showToast('Informe uma observação para reprovar.', 'error', true); return; }
     setProcessing(promo.id);
     try {
-      await dbUpdate('/api/marketingpromocoesview', promo.id, { status: 'Reprovado', observacao: obs[promo.id] });
+      const { error } = await supabase.rpc('reprovar_promocao', {
+        p_promocao_id: promo.id,
+        p_observacao:  obs[promo.id],
+      });
+      if (error) throw new Error(error.message);
       setData((prev: any[]) => prev.filter(p => p.id !== promo.id));
       showToast('Promoção reprovada.', 'info', true);
-    } catch { showToast('Erro ao reprovar.', 'error', true); }
-    finally { setProcessing(null); }
+    } catch (err: any) {
+      showToast(`Não foi possível reprovar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setProcessing(null); }
   };
 
   const calcDesconto = (promo: any) => {

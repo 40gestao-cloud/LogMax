@@ -425,24 +425,34 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     prerequisitos: [PRE_PRODUTOS],
     etapas: [
       {
+        // Opcional na mecânica: `campanha_id` é nullable e a promoção existe
+        // sem ela. O próprio seQuebra já dizia isso — é perda de contexto, não
+        // quebra de cadeia —, mas a etapa contava na cobertura e fazia o Montar
+        // acusar cadeia incompleta sem necessidade.
         view: 'marketing-campanhas', modulo: 'marketing',
         titulo: 'Planejar a campanha',
         quem: 'Setor de Marketing',
-        detalhe: 'O guarda-chuva a que promoções e cupons se penduram.',
+        detalhe: 'O guarda-chuva a que promoções e cupons se penduram. A promoção '
+          + 'funciona sem campanha; com ela, o ROI passa a ter a quem pertencer.',
         seQuebra: 'A promoção nasce sem contexto de campanha.',
+        opcional: true,
       },
       {
         view: 'marketing-promoções', modulo: 'marketing',
         titulo: 'Propor o desconto',
         quem: 'Setor de Marketing',
-        detalhe: 'Promoção tem prazo — o cron devolve o preço quando vence.',
+        detalhe: 'A data de fim é obrigatória, e é ela que devolve o preço: o cron só '
+          + 'reverte promoção com prazo vencido. Sem prazo, o preço promocional viraria '
+          + 'o preço da casa — remarcação disfarçada de promoção.',
         seQuebra: 'Não há o que aprovar.',
       },
       {
         view: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro',
         titulo: 'O Financeiro aprova o desconto',
-        quem: 'Setor Financeiro',
-        detalhe: 'Segunda autoridade: quem quer vender não define sozinho a margem.',
+        quem: 'Setor Financeiro (nunca quem propôs)',
+        detalhe: 'Segunda autoridade: quem quer vender não define sozinho a margem. '
+          + '`aprovar_promocao` muda o status E o preço do produto na mesma transação '
+          + '(migr. 402) — aprovação que não chega ao PDV não fica de pé.',
         seQuebra: 'A promoção fica pendente e o preço no PDV nunca muda.',
       },
       {
