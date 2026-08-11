@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
   modulosDoFluxo, submenusDoFluxo, etapasObrigatorias,
+  viewsDeApoio,
 } from '../src/lib/aulaFluxos';
 import { roteiroDoFluxo, normalizarRoteiro } from '../src/lib/aulaAtividade';
 import { AULA_MODULOS, AULA_SUBMENUS, aulaSubmenuId } from '../src/lib/aulaModulos';
@@ -240,16 +241,17 @@ describe('AULA_FLUXOS — pré-requisito aponta para tela que a aula abre', () =
     }
   });
 
-  it('views extras de uma etapa entram na whitelist junto com a principal', () => {
-    // Sem isto, "Montar o catálogo" liberaria Produtos e esconderia
-    // Fornecedores — e a cotação morre sem fornecedor.
+  it('telas de apoio entram na whitelist e ficam fora da cadeia', () => {
+    // As duas metades da regra. Se o apoio não entrar na whitelist, volta o
+    // problema que a migr. 398 remendou à mão. Se entrar como etapa, o
+    // diagrama passa a ensinar que cadastrar produto é passo do processo de
+    // compra — que é o erro oposto, e o pior dos dois: ele vai para a sala.
     for (const f of AULA_FLUXOS) {
       const { modulos, submenus } = configDoFluxo(f);
-      for (const e of f.etapas) {
-        for (const extra of e.viewsExtras ?? []) {
-          expect(modulos, `${f.id} › ${e.titulo}`).toContain(extra.split('-')[0]);
-          expect(submenus, `${f.id} › ${e.titulo} → ${extra}`).toContain(extra);
-        }
+      for (const apoio of viewsDeApoio(f)) {
+        expect(modulos, `${f.id} → ${apoio}`).toContain(apoio.split('-')[0]);
+        if (apoio.includes('-')) expect(submenus, `${f.id} → ${apoio}`).toContain(apoio);
+        expect(f.etapas.map(e => e.view), `${f.id}: ${apoio} virou etapa`).not.toContain(apoio);
       }
     }
   });
