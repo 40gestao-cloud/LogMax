@@ -40,6 +40,18 @@ export type AulaEtapa = {
    * quebra em fluxo que roda perfeitamente.
    */
   opcional?: boolean;
+  /**
+   * Telas que a etapa precisa ter abertas mas que não merecem linha própria
+   * no diagrama. "Montar o catálogo" é uma etapa para a turma e três telas
+   * para o sistema (Categorias, Produtos, Fornecedores): sem isto, `Montar`
+   * liberaria só a tela da `view` principal e a cotação morreria por falta de
+   * fornecedor — que foi exatamente o que a migr. 398 teve de remendar no
+   * banco, turma por turma.
+   *
+   * Entram na whitelist como a `view`; NÃO entram na cobertura, que continua
+   * sendo uma pergunta por etapa.
+   */
+  viewsExtras?: string[];
 };
 
 export type AulaPreRequisito = {
@@ -47,6 +59,17 @@ export type AulaPreRequisito = {
   label: string;
   /** Onde resolver, em linguagem de menu. */
   onde: string;
+  /**
+   * viewId de `onde`, para a máquina. Existe porque `onde` é prosa e ninguém
+   * cobra prosa: os pré-requisitos mandavam resolver em telas que o preset do
+   * próprio fluxo escondia — «Cadastros › Produtos» numa aula sem Cadastros,
+   * «RH › Cargos» numa aula de folha sem Cargos. `tests/aulaFluxos.test.ts`
+   * cobra que a tela citada esteja aberta no fluxo que a exige.
+   *
+   * Vazio quando quem resolve é o PROFESSOR, fora da aula (definir gerente é
+   * trabalho de admin em Usuários, não etapa da turma).
+   */
+  view?: string;
   /** Tabela e filtros para contar o que existe. Só colunas que existem nas 4 turmas. */
   tabela: string;
   filtroAtivo?: boolean;
@@ -75,14 +98,17 @@ export type AulaFluxo = {
 // dele, então o total da holding não diz se a turma tem com o que trabalhar.
 const PRE_PRODUTOS: AulaPreRequisito = {
   id: 'produtos', label: 'Produtos cadastrados', onde: 'Cadastros › Produtos',
+  view: 'cadastros-produtos',
   tabela: 'produtos', filtroAtivo: true, porFilial: true, minimo: 1,
 };
 const PRE_FORNECEDORES: AulaPreRequisito = {
   id: 'fornecedores', label: 'Fornecedores cadastrados', onde: 'Cadastros › Fornecedores',
+  view: 'cadastros-fornecedores',
   tabela: 'fornecedores', filtroAtivo: true, minimo: 1,
 };
 const PRE_CLIENTES: AulaPreRequisito = {
   id: 'clientes', label: 'Clientes cadastrados', onde: 'Vendas › Clientes',
+  view: 'vendas-clientes',
   tabela: 'clientes', filtroAtivo: true, porFilial: true, minimo: 1,
 };
 // `naoNulo: filial` não é preciosismo: `auth_gerente_da(filial)` compara a
@@ -108,6 +134,27 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       + 'módulos e por duas autoridades diferentes antes de virar dinheiro saindo.',
     prerequisitos: [PRE_PRODUTOS, PRE_FORNECEDORES, PRE_GERENTE],
     etapas: [
+      {
+        // Etapa que a migr. 398 teve de remendar direto no `aula_config` de
+        // cada turma porque ela não existia aqui: o fluxo foi montado com
+        // requisicoes+compras+financeiro+estoque e sem o começo. Enquanto a
+        // correção viveu só no banco, clicar em «Montar» a DESFAZIA.
+        //
+        // Não é conveniência: Reposição vem do catálogo (catálogo vazio, aba
+        // inútil) e a cotação exige `fornecedor_id` — sem fornecedor a cadeia
+        // morre na 4ª etapa, e é parede, não contorno. O aluno também não se
+        // salva sozinho: a whitelist SUBSTITUI o setor (migr. 317), então nem
+        // o gerente enxerga Cadastros se a aula não o abrir.
+        view: 'cadastros-produtos', modulo: 'cadastros',
+        viewsExtras: ['cadastros-categorias', 'cadastros-fornecedores'],
+        titulo: 'Montar o catálogo da filial',
+        quem: 'Setor de Compras / Logística',
+        detalhe: 'Categoria, produto e fornecedor — nesta ordem, porque o produto pede '
+          + 'categoria e a cotação pede fornecedor. É o cadastro que sustenta todo o '
+          + 'resto da cadeia; sem ele as telas seguintes abrem vazias.',
+        seQuebra: 'A requisição de Reposição não acha o que pedir e a cotação não acha '
+          + 'a quem pedir: a cadeia morre na quarta etapa.',
+      },
       {
         view: 'requisicoes-dosetor', modulo: 'requisicoes',
         titulo: 'O setor pede o que falta',
@@ -189,6 +236,21 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     prerequisitos: [PRE_PRODUTOS],
     etapas: [
       {
+        // Opcional, ao contrário da irmã no fluxo de compra: aqui o catálogo
+        // costuma vir pronto da aula anterior, e a lição deste fluxo é o
+        // contraste com Compras, não o cadastro. Mas a tela entra na
+        // whitelist do «Montar» de qualquer jeito — etapa opcional também
+        // libera view —, então a turma que precisar corrigir um produto tem
+        // por onde, em vez de bater numa tela escondida.
+        view: 'cadastros-produtos', modulo: 'cadastros',
+        titulo: 'O catálogo de onde o material sai',
+        quem: 'Setor de Logística',
+        detalhe: 'A requisição de material só enxerga o que está no catálogo — é a '
+          + 'mesma lista da compra, vista do outro lado.',
+        seQuebra: 'Nada, se o catálogo já veio pronto. Sem catálogo, não há o que pedir.',
+        opcional: true,
+      },
+      {
         view: 'requisicoes-dosetor', modulo: 'requisicoes',
         titulo: 'O setor pede material',
         quem: 'Colaborador de qualquer setor',
@@ -223,6 +285,19 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       + 'de estoque e a conta a receber nascerem do mesmo clique.',
     prerequisitos: [PRE_PRODUTOS],
     etapas: [
+      {
+        // Opcional: a aula de PDV costuma vir depois da de catálogo, e o
+        // ponto dela é a venda, não o cadastro. Mas a tela entra na whitelist
+        // do «Montar» — sem isso, a turma que descobre um preço errado no
+        // meio da venda não tem onde corrigir.
+        view: 'cadastros-produtos', modulo: 'cadastros',
+        titulo: 'O que a loja vende',
+        quem: 'Setor de Logística / Compras',
+        detalhe: 'O PDV só mostra produto ativo da própria filial, com preço de venda. '
+          + 'Se a grade abrir vazia, é aqui que se resolve.',
+        seQuebra: 'Nada, se o catálogo já veio pronto. Vazio, o PDV não tem o que vender.',
+        opcional: true,
+      },
       {
         view: 'financeiro-controledecaixa', modulo: 'financeiro',
         titulo: 'Abrir o caixa do dia',
@@ -282,6 +357,33 @@ export const AULA_FLUXOS: AulaFluxo[] = [
       + 'Mostra por que existe pedido separado do PDV.',
     prerequisitos: [PRE_CLIENTES, PRE_PRODUTOS],
     etapas: [
+      {
+        // O pré-requisito mandava resolver em «Vendas › Clientes» e o preset
+        // escondia justamente essa tela: a whitelist de `vendas` só tinha
+        // Orçamentos e Pedidos de Venda. O professor lia "resolva em Vendas ›
+        // Clientes" numa aula em que Vendas › Clientes não existe.
+        // Par do cliente: o orçamento precisa de a quem propor E do que
+        // propor. Mesma razão de ser opcional — a carteira e o catálogo
+        // costumam vir prontos —, e mesma razão de existir: a tela tem de
+        // estar aberta para quem precisar corrigir.
+        view: 'cadastros-produtos', modulo: 'cadastros',
+        titulo: 'Os itens que entram na proposta',
+        quem: 'Setor de Logística / Compras',
+        detalhe: 'O orçamento monta linha a linha a partir do catálogo da filial, com o '
+          + 'preço de venda vigente.',
+        seQuebra: 'Nada, se o catálogo já veio pronto. Vazio, não há itens para orçar.',
+        opcional: true,
+      },
+      {
+        view: 'vendas-clientes', modulo: 'vendas',
+        titulo: 'O cliente da proposta',
+        quem: 'Setor de Vendas',
+        detalhe: 'O orçamento é nominal: sem cliente não há a quem propor. Se a turma '
+          + 'recebeu a carteira pronta, é só conferir.',
+        seQuebra: 'Não há cliente a quem endereçar o orçamento, e a tela de cadastrá-lo '
+          + 'está fora da aula.',
+        opcional: true,
+      },
       {
         view: 'vendas-orçamentos', modulo: 'vendas',
         titulo: 'Montar o orçamento',
@@ -350,10 +452,27 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     // TechMax — onde a aula acontece — estavam zeradas. O aluno só descobria
     // ao abrir o cadastro do funcionário e não achar o que selecionar.
     prerequisitos: [
-      { id: 'cargos', label: 'Cargos cadastrados', onde: 'RH › Cargos', tabela: 'cargos', filtroAtivo: true, porFilial: true, minimo: 1 },
-      { id: 'departamentos', label: 'Departamentos cadastrados', onde: 'RH › Departamentos', tabela: 'departamentos', filtroAtivo: true, porFilial: true, minimo: 1 },
+      { id: 'cargos', label: 'Cargos cadastrados', onde: 'RH › Cargos', view: 'rh-cargos', tabela: 'cargos', filtroAtivo: true, porFilial: true, minimo: 1 },
+      { id: 'departamentos', label: 'Departamentos cadastrados', onde: 'RH › Departamentos', view: 'rh-departamentos', tabela: 'departamentos', filtroAtivo: true, porFilial: true, minimo: 1 },
     ],
     etapas: [
+      {
+        // Mesmo descompasso do fluxo de venda: os dois pré-requisitos apontam
+        // para «RH › Cargos» e «RH › Departamentos», e a whitelist de `rh`
+        // montada pelo fluxo escondia as duas telas. O cadastro do
+        // funcionário — etapa 2 — cobra cargo e departamento, então o roteiro
+        // mandava a turma para um formulário sem opção a selecionar.
+        view: 'rh-cargos', modulo: 'rh',
+        viewsExtras: ['rh-departamentos'],
+        titulo: 'Cargos e departamentos da filial',
+        quem: 'Setor de RH',
+        detalhe: 'As duas telas são por filial: cada unidade tem os seus, e o que existe '
+          + 'na Matriz não aparece aqui. É o que o formulário do funcionário vai pedir '
+          + 'na etapa seguinte.',
+        seQuebra: 'O cadastro do funcionário abre sem cargo nem departamento para '
+          + 'escolher, e as telas de criá-los estão fora da aula.',
+        opcional: true,
+      },
       {
         view: 'rh-recrutamentoeseleção', modulo: 'rh',
         titulo: 'Abrir a vaga e selecionar',
@@ -424,6 +543,19 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     prerequisitos: [PRE_PRODUTOS],
     etapas: [
       {
+        // A promoção incide sobre um produto do catálogo da filial: sem
+        // catálogo não há o que promover, e `aprovar_promocao` (migr. 402)
+        // escreve o preço de volta NO produto. Opcional porque a aula de
+        // marketing raramente é a primeira da turma.
+        view: 'cadastros-produtos', modulo: 'cadastros',
+        titulo: 'O produto que vai entrar em promoção',
+        quem: 'Setor de Logística / Compras',
+        detalhe: 'A promoção aponta para um produto e o Financeiro, ao aprovar, altera o '
+          + 'preço dele. Ver o preço "de" antes ajuda a turma a enxergar a mudança depois.',
+        seQuebra: 'Nada, se o catálogo já veio pronto. Vazio, não há o que promover.',
+        opcional: true,
+      },
+      {
         // Opcional na mecânica: `campanha_id` é nullable e a promoção existe
         // sem ela. O próprio seQuebra já dizia isso — é perda de contexto, não
         // quebra de cadeia —, mas a etapa contava na cobertura e fazia o Montar
@@ -484,9 +616,23 @@ export const AULA_FLUXOS: AulaFluxo[] = [
   // então montar o fluxo só preparava o lado da filial.
 ];
 
+/** Todas as views que uma etapa precisa ter abertas (principal + extras). */
+const viewsDaEtapa = (e: AulaEtapa): string[] =>
+  [e.view, ...(e.viewsExtras ?? [])].filter(Boolean);
+
+/** Módulo a que uma view pertence — o prefixo antes do primeiro hífen. */
+const moduloDaView = (view: string): string => view.split('-')[0];
+
 /** Todos os módulos que um fluxo exige. */
 export const modulosDoFluxo = (f: AulaFluxo): string[] =>
-  Array.from(new Set(f.etapas.map(e => e.modulo)));
+  Array.from(new Set(f.etapas.flatMap(e => [
+    e.modulo,
+    // Extras podem morar em outro módulo que o da etapa. Hoje não moram, mas
+    // derivar em vez de assumir evita a classe de bug em que a tela entra na
+    // whitelist de submenus de um módulo que ninguém ligou — e submenu de
+    // módulo desligado não aparece.
+    ...(e.viewsExtras ?? []).map(moduloDaView),
+  ])));
 
 /**
  * Views do fluxo que são submenu (têm prefixo `modulo-`). Views top-level
@@ -494,7 +640,13 @@ export const modulosDoFluxo = (f: AulaFluxo): string[] =>
  */
 export const submenusDoFluxo = (f: AulaFluxo): string[] =>
   Array.from(new Set(
-    f.etapas.filter(e => e.view.startsWith(`${e.modulo}-`)).map(e => e.view),
+    f.etapas.flatMap(e => [
+      // Regra original preservada para a view principal: ela só é submenu se
+      // for prefixada pelo módulo DA ETAPA. `catalogo-produtos` tem hífen e
+      // não é submenu de nada — o teste de rotas cobre isso.
+      ...(e.view.startsWith(`${e.modulo}-`) ? [e.view] : []),
+      ...(e.viewsExtras ?? []).filter(v => v.startsWith(`${moduloDaView(v)}-`)),
+    ]),
   ));
 
 /** Uma etapa está coberta pela config atual? */
@@ -568,12 +720,14 @@ export function completarComFluxo(
 ): { modulos: string[]; submenus: string[] } {
   const novosSubs = new Set(submenus);
   for (const etapa of f.etapas) {
-    // Só acrescenta submenu onde JÁ existe whitelist para aquele módulo —
-    // criar uma do nada restringiria um módulo que estava inteiro liberado.
-    const temWhitelist = submenus.some(s => s.startsWith(`${etapa.modulo}-`));
-    const novoModulo = !modulos.includes(etapa.modulo);
-    if ((temWhitelist || novoModulo) && etapa.view.startsWith(`${etapa.modulo}-`)) {
-      novosSubs.add(etapa.view);
+    for (const view of viewsDaEtapa(etapa)) {
+      const mod = view.startsWith(`${etapa.modulo}-`) ? etapa.modulo : moduloDaView(view);
+      if (!view.startsWith(`${mod}-`)) continue;  // view top-level
+      // Só acrescenta submenu onde JÁ existe whitelist para aquele módulo —
+      // criar uma do nada restringiria um módulo que estava inteiro liberado.
+      const temWhitelist = submenus.some(s => s.startsWith(`${mod}-`));
+      const novoModulo = !modulos.includes(mod);
+      if (temWhitelist || novoModulo) novosSubs.add(view);
     }
   }
   return {

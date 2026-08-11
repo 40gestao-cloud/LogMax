@@ -210,3 +210,47 @@ describe('roteiroDoFluxo — atividade sem IA', () => {
     expect(normalizarRoteiro(null).tarefas).toEqual([]);
   });
 });
+
+// O descompasso que a migr. 398 teve de remendar no banco, turma por turma:
+// o painel manda "resolva em Cadastros › Produtos" e o preset do MESMO fluxo
+// esconde Cadastros. O professor lê uma instrução impossível, e o aluno bate
+// numa tela que não existe para ele — a whitelist da aula SUBSTITUI o setor
+// (migr. 317), então nem o gerente escapa.
+//
+// `onde` é prosa e ninguém cobra prosa; por isso o pré-requisito ganhou
+// `view`, e é isso que este teste cobra. Pré-requisito sem `view` é o que o
+// PROFESSOR resolve fora da aula (definir gerente em Usuários) e fica de fora
+// de propósito.
+describe('AULA_FLUXOS — pré-requisito aponta para tela que a aula abre', () => {
+  /** A view está acessível com a config que o próprio fluxo monta? */
+  const acessivel = (f: typeof AULA_FLUXOS[number], view: string) => {
+    const { modulos, submenus } = configDoFluxo(f);
+    const mod = view.split('-')[0];
+    if (!modulos.includes(mod)) return false;
+    const doModulo = submenus.filter(s => s.startsWith(`${mod}-`));
+    return doModulo.length === 0 || doModulo.includes(view);
+  };
+
+  it('toda tela citada por um pré-requisito está aberta no fluxo que a exige', () => {
+    for (const f of AULA_FLUXOS) {
+      for (const p of f.prerequisitos) {
+        if (!p.view) continue;  // resolvido pelo professor, fora da aula
+        expect(acessivel(f, p.view), `${f.id} › ${p.label} (${p.onde} = ${p.view})`).toBe(true);
+      }
+    }
+  });
+
+  it('views extras de uma etapa entram na whitelist junto com a principal', () => {
+    // Sem isto, "Montar o catálogo" liberaria Produtos e esconderia
+    // Fornecedores — e a cotação morre sem fornecedor.
+    for (const f of AULA_FLUXOS) {
+      const { modulos, submenus } = configDoFluxo(f);
+      for (const e of f.etapas) {
+        for (const extra of e.viewsExtras ?? []) {
+          expect(modulos, `${f.id} › ${e.titulo}`).toContain(extra.split('-')[0]);
+          expect(submenus, `${f.id} › ${e.titulo} → ${extra}`).toContain(extra);
+        }
+      }
+    }
+  });
+});
