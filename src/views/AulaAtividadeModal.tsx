@@ -43,6 +43,8 @@ interface Props {
   profile: UserProfile;
   showToast: (msg: string, type?: string) => void;
   onClose: () => void;
+  /** Publicou — o painel de acompanhamento recarrega. */
+  onPublicado?: () => void;
   /** O fluxo inteiro está na whitelist atual? */
   coberturaCompleta: boolean;
   /** O Modo Aula está ligado e salvo? */
@@ -50,7 +52,7 @@ interface Props {
 }
 
 export const AulaAtividadeModal: React.FC<Props> = ({
-  fluxo, profile, showToast, onClose, coberturaCompleta, aulaAtiva,
+  fluxo, profile, showToast, onClose, onPublicado, coberturaCompleta, aulaAtiva,
 }) => {
   const confirmar = useConfirm();
 
@@ -186,6 +188,7 @@ export const AulaAtividadeModal: React.FC<Props> = ({
       });
       if (error) throw error;
       showToast('Atividade enviada para a turma.', 'success');
+      onPublicado?.();
       onClose();
     } catch (err: any) {
       showToast(err?.message ?? 'Falha ao enviar a atividade.', 'error');

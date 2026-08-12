@@ -12,6 +12,7 @@ import {
 } from '../lib/aulaFluxos';
 import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import { AulaAtividadeModal } from './AulaAtividadeModal';
+import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -69,6 +70,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [fluxoAberto, setFluxoAberto] = useState<string | null>(null);
   // Fluxo cuja atividade está sendo montada (modal). Null = fechado.
   const [fluxoAtividade, setFluxoAtividade] = useState<string | null>(null);
+  // Incrementa a cada publicação: é o que faz a atividade recém-enviada
+  // aparecer no painel de acompanhamento sem o professor ter que recarregar.
+  const [atividadesVersao, setAtividadesVersao] = useState(0);
 
   useEffect(() => {
     if (!loaded) return;
@@ -451,6 +455,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       </div>
 
+      {/* Acompanhamento do que já foi enviado. Fica logo abaixo dos fluxos
+          porque é a resposta imediata ao «Enviar» que sai dali. */}
+      <AulaAtividadesPublicadas showToast={showToast} recarregarEm={atividadesVersao} />
+
       {/* Atividade do fluxo. O modal vive fora da lista para não remontar a
           cada re-render dos cards — o professor perderia o texto que digitou. */}
       {fluxoAtividade && (() => {
@@ -463,6 +471,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             profile={profile}
             showToast={showToast}
             onClose={() => setFluxoAtividade(null)}
+            onPublicado={() => setAtividadesVersao(v => v + 1)}
             coberturaCompleta={obrig.every(e => etapaCoberta(e, modulos, submenus))}
             aulaAtiva={config.ativo}
           />
