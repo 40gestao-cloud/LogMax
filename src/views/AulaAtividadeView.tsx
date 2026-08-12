@@ -14,6 +14,7 @@ import { exportAtividadePDF } from '../lib/aulaAtividadePdf';
 import { nomeArquivoAtividade, termosDoAluno, tarefaEhDoAluno } from '../lib/aulaAtividade';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { LoadingSpinner, EmptyState } from '../components/ui';
+import { AtividadeApoioBloco } from '../components/AtividadeApoioBloco';
 
 interface Props {
   profile: UserProfile;
@@ -260,6 +261,8 @@ const CartaoAtividade: React.FC<{
               );
             })}
           </div>
+
+          {a.roteiro.apoio && <AtividadeApoioBloco apoio={a.roteiro.apoio} />}
 
           {!a.lida && (
             <button

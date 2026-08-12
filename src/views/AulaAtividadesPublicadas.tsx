@@ -25,6 +25,7 @@ import { formatDataHoraBR } from '../lib/dates';
 import { atividadeAlcanca } from '../hooks/useAulaAtividades';
 import { exportAtividadePDF } from '../lib/aulaAtividadePdf';
 import { nomeArquivoAtividade, normalizarRoteiro, type Atividade } from '../lib/aulaAtividade';
+import { AtividadeApoioBloco } from '../components/AtividadeApoioBloco';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const PUBLICO_LABEL: Record<string, string> = {
@@ -354,6 +355,12 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
                           );
                         })}
                       </div>
+
+                      {doc.roteiro.apoio && (
+                        <div className="mt-3">
+                          <AtividadeApoioBloco apoio={doc.roteiro.apoio} />
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

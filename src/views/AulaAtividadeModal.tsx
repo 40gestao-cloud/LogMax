@@ -23,6 +23,7 @@ import {
   type AtividadeRoteiro, type AtividadeTarefa,
 } from '../lib/aulaAtividade';
 import { exportAtividadePDF } from '../lib/aulaAtividadePdf';
+import { AtividadeApoioBloco } from '../components/AtividadeApoioBloco';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -359,6 +360,11 @@ export const AulaAtividadeModal: React.FC<Props> = ({
               </div>
             ))}
           </div>
+
+          {/* Não é editável e não deveria ser: sai do fluxo, igual às etapas.
+              Está aqui para o professor ver, antes de enviar, o que o aluno vai
+              ler depois da última tarefa — e o que sai no PDF. */}
+          {roteiro.apoio && <AtividadeApoioBloco apoio={roteiro.apoio} />}
         </div>
 
         {/* Envio */}

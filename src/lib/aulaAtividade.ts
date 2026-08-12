@@ -12,7 +12,8 @@
 // `aulaAtividadePdf.ts` que gera o do professor — é o que dispensa upload de
 // arquivo e bucket.
 
-import { AULA_FLUXOS, etapasObrigatorias, type AulaFluxo } from './aulaFluxos';
+import { AULA_FLUXOS, etapasObrigatorias, apoioDoFluxo, type AulaFluxo } from './aulaFluxos';
+import { rotuloDaView } from './aulaModulos';
 
 /** Uma tarefa do enunciado. `papel` é quem executa — a dimensão que a aula perde sem isto. */
 export type AtividadeTarefa = {
@@ -31,6 +32,20 @@ export type AtividadeTarefa = {
 
 export type AtividadePrerequisito = { label: string; onde: string };
 
+/**
+ * O bloco de apoio, como o documento registra: as telas que a aula abre fora
+ * da cadeia e a frase que diz por quê.
+ *
+ * Está no roteiro — e não só no diagrama — porque o enunciado é o que sobra
+ * depois da aula. Sem isto, o aluno lê "o Financeiro paga" como fim de tudo e
+ * não fica registrado em lugar nenhum que o que foi requisitado e comprado
+ * ainda precisa ser cadastrado para virar item de venda.
+ *
+ * Opcional no tipo: atividade publicada antes desta mudança não tem o campo,
+ * e tem de continuar abrindo (ver `normalizarRoteiro`).
+ */
+export type AtividadeApoio = { nota: string; telas: string[] };
+
 export type AtividadeEtapa = {
   ordem: number;
   titulo: string;
@@ -45,6 +60,7 @@ export type AtividadeRoteiro = {
   prerequisitos: AtividadePrerequisito[];
   etapas: AtividadeEtapa[];
   tarefas: AtividadeTarefa[];
+  apoio?: AtividadeApoio;
 };
 
 /** O documento inteiro, como o professor envia e como o aluno lê. */
@@ -66,9 +82,11 @@ export type Atividade = {
  * justamente o "faça também se der tempo".
  */
 export function roteiroDoFluxo(f: AulaFluxo): AtividadeRoteiro {
+  const apoio = apoioDoFluxo(f);
   return {
     versao: 1,
     resumo: f.resumo,
+    apoio: apoio ? { nota: apoio.nota, telas: apoio.views.map(rotuloDaView) } : undefined,
     prerequisitos: f.prerequisitos.map(p => ({ label: p.label, onde: p.onde })),
     etapas: f.etapas.map((e, i) => ({
       ordem: i + 1,
@@ -118,9 +136,16 @@ export const totalObrigatorias = (f: AulaFluxo): number => etapasObrigatorias(f)
 export function normalizarRoteiro(raw: any): AtividadeRoteiro {
   const arr = (v: any): any[] => (Array.isArray(v) ? v : []);
   const txt = (v: any): string => (typeof v === 'string' ? v.trim() : '');
+  // Nota sem tela (ou tela sem nota) não é meio-bloco: é um bloco que o leitor
+  // não consegue usar. Só entra completo.
+  const notaApoio = txt(raw?.apoio?.nota);
+  const telasApoio = arr(raw?.apoio?.telas).map(txt).filter(Boolean);
   return {
     versao: 1,
     resumo: txt(raw?.resumo),
+    apoio: notaApoio && telasApoio.length > 0
+      ? { nota: notaApoio, telas: telasApoio }
+      : undefined,
     prerequisitos: arr(raw?.prerequisitos)
       .map((p: any) => ({ label: txt(p?.label), onde: txt(p?.onde) }))
       .filter(p => p.label),

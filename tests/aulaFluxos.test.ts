@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
   modulosDoFluxo, submenusDoFluxo, etapasObrigatorias,
-  viewsDeApoio,
+  viewsDeApoio, apoioDoFluxo,
 } from '../src/lib/aulaFluxos';
 import { roteiroDoFluxo, normalizarRoteiro } from '../src/lib/aulaAtividade';
 import { AULA_MODULOS, AULA_SUBMENUS, aulaSubmenuId } from '../src/lib/aulaModulos';
@@ -209,6 +209,34 @@ describe('roteiroDoFluxo — atividade sem IA', () => {
     expect(r.tarefas).toHaveLength(1);
     expect(r.tarefas[0].ordem).toBe(1);
     expect(normalizarRoteiro(null).tarefas).toEqual([]);
+  });
+
+  it('o apoio vai para o roteiro com as telas rotuladas como o menu', () => {
+    // O PDF é o que sobra da aula. Se o apoio não entrar aqui, o documento
+    // termina no pagamento e não fica registrado em lugar nenhum que o que foi
+    // requisitado e comprado ainda precisa ser cadastrado para virar item de
+    // venda — que é justamente a parte que o aluno não deduz sozinho.
+    for (const f of AULA_FLUXOS) {
+      const r = roteiroDoFluxo(f);
+      const esperado = apoioDoFluxo(f);
+      if (!esperado) { expect(r.apoio, f.id).toBeUndefined(); continue; }
+      expect(r.apoio?.nota, f.id).toBe(esperado.nota);
+      expect(r.apoio?.telas, f.id).toHaveLength(esperado.views.length);
+      // viewId cru no PDF seria pior que nada: ninguém acha uma tela por
+      // 'cadastros-categorias'. `rotuloDaView` cai no id quando o submenu some
+      // do catálogo — é esse o caso que este expect pega.
+      for (const tela of r.apoio!.telas) {
+        expect(tela, `${f.id}: ${tela}`).toContain(' › ');
+      }
+    }
+  });
+
+  it('normalizarRoteiro descarta apoio pela metade', () => {
+    // Nota sem tela (ou tela sem nota) é bloco que o leitor não consegue usar.
+    expect(normalizarRoteiro({ apoio: { nota: 'só a nota' } }).apoio).toBeUndefined();
+    expect(normalizarRoteiro({ apoio: { telas: ['Cadastros › Produtos'] } }).apoio).toBeUndefined();
+    const ok = normalizarRoteiro({ apoio: { nota: 'n', telas: ['Cadastros › Produtos'] } });
+    expect(ok.apoio).toEqual({ nota: 'n', telas: ['Cadastros › Produtos'] });
   });
 });
 

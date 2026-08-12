@@ -198,6 +198,32 @@ export async function exportAtividadePDF(
         2: { cellWidth: 34 },
       },
     });
+    cursorY = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ─── Depois da última etapa: o apoio ──────────────────────────────
+  // Fecha o documento porque é onde o ciclo fecha: pago o fornecedor, o que
+  // foi requisitado e comprado ainda tem de ser cadastrado para virar item de
+  // venda. Sem esta seção o PDF terminava no pagamento e o aluno guardava a
+  // cadeia pela metade — o diagrama na parede dizia isso, o papel não.
+  //
+  // Sem número, como no diagrama: numerar aqui ensinaria que cadastrar é a
+  // etapa seguinte da compra, e não o cadastro de que a compra vive.
+  if (a.roteiro.apoio) {
+    ensureSpace(30);
+    autoTable(doc, {
+      startY: cursorY,
+      head: [['Fora da numeração — o cadastro que a cadeia usa']],
+      body: [
+        [a.roteiro.apoio.nota],
+        [`Telas abertas na aula: ${a.roteiro.apoio.telas.join('  ·  ')}`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 8, valign: 'top' },
+      alternateRowStyles: { fillColor: GOLD_TINT },
+      margin: { left: margin, right: margin },
+    });
     cursorY = (doc as any).lastAutoTable.finalY + 4;
   }
 
