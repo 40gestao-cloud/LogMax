@@ -192,5 +192,14 @@ export function termosDoAluno(
 export const tarefaEhDoAluno = (papel: string, termos: string[]): boolean => {
   if (termos.length === 0 || !papel) return false;
   const p = semAcento(papel);
-  return termos.some(t => p.includes(t));
+  // Fronteira de palavra à ESQUERDA. Sem ela, `includes` casava termo curto no
+  // meio de outra palavra: 'ti' dentro de "markeTIng" e "logísTIca" fazia o
+  // aluno de TI ver as tarefas de Marketing com o selo «Você», e 'ia' dentro
+  // de "filIAl" pegava metade dos papéis do sistema.
+  //
+  // Sem fronteira à direita, de propósito: os termos de prefixo ('almoxarif')
+  // precisam alcançar almoxarife e almoxarifado.
+  return termos.some(t => new RegExp(`\\b${escaparRegex(t)}`).test(p));
 };
+
+const escaparRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
