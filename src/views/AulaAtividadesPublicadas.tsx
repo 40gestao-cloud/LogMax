@@ -59,9 +59,11 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
   const [expandida, setExpandida] = useState<string | null>(null);
   const confirmar = useConfirm();
 
-  const carregar = useCallback(async () => {
+  // `silencioso` para as recargas do realtime: trocar a lista pelo spinner a
+  // cada aluno que clica em Ciente faria a tela piscar no meio da aula.
+  const carregar = useCallback(async (silencioso = false) => {
     if (!supabase) { setLoading(false); return; }
-    setLoading(true);
+    if (!silencioso) setLoading(true);
 
     const [{ data: ativs }, { data: pessoas }] = await Promise.all([
       supabase
@@ -92,6 +94,20 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
   }, []);
 
   useEffect(() => { carregar(); }, [carregar, recarregarEm]);
+
+  // A contagem se move sozinha enquanto a turma abre o enunciado (migr. 404).
+  // O botão «Atualizar» fica: realtime cai, e numa aula projetada é melhor ter
+  // como forçar do que ficar olhando para um número parado sem saber se é a
+  // turma que não abriu ou o canal que morreu.
+  useEffect(() => {
+    if (!supabase) return;
+    const canal = supabase
+      .channel('aula-atividades-acompanhamento')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades_ciencia' }, () => { carregar(true); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades' }, () => { carregar(true); })
+      .subscribe();
+    return () => { supabase!.removeChannel(canal); };
+  }, [carregar]);
 
   const remover = async (a: Publicada) => {
     if (!await confirmar({
@@ -144,11 +160,14 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
           </div>
           <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
             O que a turma está vendo agora, por filial, e quem já abriu o enunciado.
-            «Ciente» é confirmação de leitura — não é entrega da tarefa.
+            A contagem se move sozinha durante a aula. «Ciente» é confirmação de
+            leitura — não é entrega da tarefa.
           </p>
         </div>
-        <button type="button" onClick={carregar} disabled={loading}
-          title="Recarregar — a ciência do aluno não chega sozinha nesta tela"
+        {/* Seta explícita: `onClick={carregar}` passaria o evento como
+            `silencioso` e o clique não mostraria mais o spinner. */}
+        <button type="button" onClick={() => carregar()} disabled={loading}
+          title="Recarregar — use se o realtime cair no meio da aula"
           className="shrink-0 neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5 disabled:opacity-50">
           <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Atualizar
         </button>
