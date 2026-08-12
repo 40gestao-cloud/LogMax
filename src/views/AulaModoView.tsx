@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -15,6 +15,7 @@ import { AulaAtividadeModal } from './AulaAtividadeModal';
 import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import { AulaFluxoProjecao } from './AulaFluxoProjecao';
 import { AulaPainelControle } from './AulaPainelControle';
+import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -28,11 +29,12 @@ const arraysIguais = (a: string[], b: string[]) =>
 
 // As três coisas que esta tela faz, na ordem em que a aula acontece: montar o
 // recorte, enviar o enunciado, acompanhar quem fez.
-type AbaId = 'montagem' | 'atividades' | 'controle';
+type AbaId = 'montagem' | 'atividades' | 'controle' | 'historico';
 const ABAS: { id: AbaId; label: string; icone: any }[] = [
-  { id: 'montagem',   label: 'Montagem',  icone: Workflow },
+  { id: 'montagem',   label: 'Montagem',   icone: Workflow },
   { id: 'atividades', label: 'Atividades', icone: ClipboardList },
-  { id: 'controle',   label: 'Controle',  icone: ClipboardCheck },
+  { id: 'controle',   label: 'Controle',   icone: ClipboardCheck },
+  { id: 'historico',  label: 'Histórico',  icone: History },
 ];
 
 export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
@@ -932,6 +934,8 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       {aba === 'controle' && (
         <AulaPainelControle showToast={showToast} recarregarEm={atividadesVersao} />
       )}
+
+      {aba === 'historico' && <AulaHistorico showToast={showToast} />}
 
       {/* Projeção do fluxo. Recebe a whitelist EM EDIÇÃO, não a salva: projetar
           o que está no banco enquanto o professor monta outra coisa mostraria à
