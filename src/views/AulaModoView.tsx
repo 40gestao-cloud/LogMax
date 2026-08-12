@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, AULA_MODULO_SETORES, aulaSubmenuId } from '../lib/aulaModulos';
+import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, AULA_MODULO_SETORES, aulaSubmenuId, rotuloDaView } from '../lib/aulaModulos';
 import {
   AULA_FLUXOS, analisarCadeias, etapaCoberta, configDoFluxo, completarComFluxo,
-  etapasObrigatorias,
+  etapasObrigatorias, apoioDoFluxo, apoioCoberto,
 } from '../lib/aulaFluxos';
 import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import { AulaAtividadeModal } from './AulaAtividadeModal';
@@ -528,7 +528,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                   <div className="border-t border-white/5 bg-black/20 px-3 py-3 flex flex-col gap-0">
                     {f.etapas.map((etapa, i) => {
                       const ok = etapaCoberta(etapa, modulos, submenus);
-                      const ultima = i === f.etapas.length - 1;
+                      // O bloco de apoio continua o trilho: a última etapa só
+                      // é o fim quando o fluxo não abre tela de apoio nenhuma.
+                      const ultima = i === f.etapas.length - 1 && !apoioDoFluxo(f);
                       return (
                         <div key={`${etapa.view}-${i}`} className="flex gap-3">
                           {/* Trilho: bolinha + linha que liga à etapa seguinte.
@@ -563,6 +565,46 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                         </div>
                       );
                     })}
+
+                    {/* Apoio: as telas que «Montar» abre e a cadeia não numera.
+                        Sem isto, o professor via o botão ligar Cadastros e o
+                        diagrama nunca explicava por quê. */}
+                    {(() => {
+                      const apoio = apoioDoFluxo(f);
+                      if (!apoio) return null;
+                      return (
+                        <div className="flex gap-3">
+                          <div className="flex flex-col items-center shrink-0 pt-1">
+                            <div className="w-5 h-5 rounded-full border border-dashed border-white/25 flex items-center justify-center text-gray-500">
+                              <FolderPlus size={10} />
+                            </div>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-gray-300">
+                                Apoio — o cadastro que a cadeia usa
+                              </span>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
+                                Fora da numeração
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{apoio.nota}</div>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {apoio.views.map(v => {
+                                const okApoio = apoioCoberto(v, modulos, submenus);
+                                return (
+                                  <span key={v}
+                                    className={`text-[10px] font-semibold rounded-lg px-2 py-0.5 border ${
+                                      okApoio ? 'border-accent/40 text-accent/90' : 'border-yellow-500/40 text-yellow-300/90'}`}>
+                                    {rotuloDaView(v)}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

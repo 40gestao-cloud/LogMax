@@ -93,10 +93,24 @@ export type AulaFluxo = {
    * campo é para o que nenhum pré-requisito cita e o formulário exige mesmo
    * assim: o cadastro de produto pede categoria.
    *
-   * Entram no «Montar»; ficam FORA do diagrama e da cobertura — senão a
-   * cadeia passaria a ensinar uma sequência que a operação não tem.
+   * Entram no «Montar»; ficam fora da NUMERAÇÃO e da cobertura — senão a
+   * cadeia passaria a ensinar uma sequência que a operação não tem. Aparecem
+   * no diagrama como bloco de apoio, sem número (ver `notaApoio`).
    */
   viewsApoio?: string[];
+  /**
+   * O que o professor diz sobre as telas de apoio ao projetar o fluxo.
+   *
+   * Elas eram invisíveis no diagrama, e a omissão custava caro: «Montar» abria
+   * Cadastros na turma, a projeção não o mencionava em lugar nenhum, e o aluno
+   * ficava com um módulo na sidebar que a aula nunca explicava. Some ao
+   * contrário também — sem esta nota, uma tela que a cadeia consome mas não
+   * numera simplesmente não existe para quem só assiste à projeção.
+   *
+   * Não vira etapa numerada: numerar apagaria a distinção entre a cadeia (o
+   * que a operação faz, nesta ordem) e o cadastro (o dado de que ela vive).
+   */
+  notaApoio?: string;
 };
 
 // `porFilial` nos catálogos operacionais: o aluno só vê o que é da unidade
@@ -141,6 +155,13 @@ export const AULA_FLUXOS: AulaFluxo[] = [
     // `cadastros-categorias` nao e citado por nenhum pre-requisito e o
     // formulario de produto o exige — sem categoria o produto nao salva.
     viewsApoio: ['cadastros-categorias'],
+    notaApoio: 'Cadastros é onde a cadeia se apoia e para onde ela volta. Antes: '
+      + 'a requisição de reposição escolhe do catálogo e a cotação escolhe entre '
+      + 'fornecedores — sem produto e sem fornecedor a etapa 1 não tem o que pedir. '
+      + 'Depois do pagamento: é aqui que o que foi comprado vira item vendável — '
+      + 'categoria, preço de venda, SKU da filial —, e é por isso que Cadastros '
+      + 'continua aberto quando a última etapa fecha. O ciclo termina no catálogo, '
+      + 'que é de onde o próximo começa.',
     etapas: [
       {
         view: 'requisicoes-dosetor', modulo: 'requisicoes',
@@ -544,6 +565,25 @@ export const viewsDeApoio = (f: AulaFluxo): string[] =>
     ...(f.viewsApoio ?? []),
   ]));
 
+/** Nota genérica para o fluxo que não escreveu a sua. Melhor que silêncio: o
+ *  aluno vê o módulo aberto na sidebar e precisa saber por que ele está lá. */
+const NOTA_APOIO_PADRAO = 'Estas telas ficam abertas na aula sem serem etapas da '
+  + 'cadeia: é o dado que a operação consome. Quando algo acima não achar o que '
+  + 'selecionar, é aqui que se resolve.';
+
+export type AulaApoio = { views: string[]; nota: string };
+
+/**
+ * O bloco de apoio do fluxo, como o diagrama mostra: as telas que a aula abre
+ * fora da cadeia, mais a frase que explica por que elas estão abertas.
+ *
+ * `null` quando o fluxo não abre nenhuma — aí não há bloco a desenhar.
+ */
+export const apoioDoFluxo = (f: AulaFluxo): AulaApoio | null => {
+  const views = viewsDeApoio(f);
+  return views.length === 0 ? null : { views, nota: f.notaApoio ?? NOTA_APOIO_PADRAO };
+};
+
 /** Todos os módulos que as ETAPAS de um fluxo exigem. */
 export const modulosDoFluxo = (f: AulaFluxo): string[] =>
   Array.from(new Set(f.etapas.map(e => e.modulo)));
@@ -557,19 +597,36 @@ export const submenusDoFluxo = (f: AulaFluxo): string[] =>
     f.etapas.filter(e => e.view.startsWith(`${e.modulo}-`)).map(e => e.view),
   ));
 
+/** Uma tela está liberada pela config atual? */
+export function viewCoberta(
+  view: string,
+  modulo: string,
+  modulos: string[],
+  submenus: string[],
+): boolean {
+  if (!modulos.includes(modulo)) return false;
+  // Sem whitelist de submenu para o módulo, todos os submenus dele valem.
+  const doModulo = submenus.filter(s => s.startsWith(`${modulo}-`));
+  if (doModulo.length === 0) return true;
+  if (!view.startsWith(`${modulo}-`)) return true;  // top-level
+  return doModulo.includes(view);
+}
+
 /** Uma etapa está coberta pela config atual? */
 export function etapaCoberta(
   etapa: AulaEtapa,
   modulos: string[],
   submenus: string[],
 ): boolean {
-  if (!modulos.includes(etapa.modulo)) return false;
-  // Sem whitelist de submenu para o módulo, todos os submenus dele valem.
-  const doModulo = submenus.filter(s => s.startsWith(`${etapa.modulo}-`));
-  if (doModulo.length === 0) return true;
-  if (!etapa.view.startsWith(`${etapa.modulo}-`)) return true;  // top-level
-  return doModulo.includes(etapa.view);
+  return viewCoberta(etapa.view, etapa.modulo, modulos, submenus);
 }
+
+/** Idem, para tela de apoio — que não declara módulo: ele vem do prefixo. */
+export const apoioCoberto = (
+  view: string,
+  modulos: string[],
+  submenus: string[],
+): boolean => viewCoberta(view, moduloDaView(view), modulos, submenus);
 
 /** Etapas sem as quais o ciclo não fecha. As opcionais enriquecem, não travam. */
 export const etapasObrigatorias = (f: AulaFluxo): AulaEtapa[] =>

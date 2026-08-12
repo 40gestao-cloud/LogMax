@@ -19,8 +19,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { X, ChevronLeft, ChevronRight, EyeOff } from 'lucide-react';
-import { etapaCoberta, type AulaFluxo } from '../lib/aulaFluxos';
+import { X, ChevronLeft, ChevronRight, EyeOff, FolderPlus } from 'lucide-react';
+import { etapaCoberta, apoioDoFluxo, apoioCoberto, type AulaFluxo } from '../lib/aulaFluxos';
+import { rotuloDaView } from '../lib/aulaModulos';
 
 interface Props {
   fluxo: AulaFluxo;
@@ -34,8 +35,14 @@ export const AulaFluxoProjecao: React.FC<Props> = ({ fluxo, modulos, submenus, o
   // começa ("olhem o caminho todo") antes de percorrer etapa a etapa.
   const [atual, setAtual] = useState(-1);
   const total = fluxo.etapas.length;
+  // As telas de apoio são a última parada da projeção, não a etapa N+1: o
+  // professor avança até elas com a mesma seta, e a turma vê de onde saiu (e
+  // para onde volta) o cadastro que a cadeia consome. Ficavam de fora do
+  // diagrama inteiro — «Montar» abria Cadastros e a projeção nunca dizia isso.
+  const apoio = apoioDoFluxo(fluxo);
+  const paradas = total + (apoio ? 1 : 0);
 
-  const avancar = useCallback(() => setAtual(i => Math.min(i + 1, total - 1)), [total]);
+  const avancar = useCallback(() => setAtual(i => Math.min(i + 1, paradas - 1)), [paradas]);
   const voltar = useCallback(() => setAtual(i => Math.max(i - 1, -1)), []);
 
   useEffect(() => {
@@ -73,7 +80,9 @@ export const AulaFluxoProjecao: React.FC<Props> = ({ fluxo, modulos, submenus, o
         <div className="flex flex-col gap-0 mt-10 flex-1">
           {fluxo.etapas.map((etapa, i) => {
             const ok = etapaCoberta(etapa, modulos, submenus);
-            const ultima = i === total - 1;
+            // Com bloco de apoio, a última etapa deixa de ser o fim do trilho:
+            // a linha desce até ele.
+            const ultima = i === total - 1 && !apoio;
             const foco = atual === -1 || atual === i;
             const passada = atual > i;
             return (
@@ -122,6 +131,63 @@ export const AulaFluxoProjecao: React.FC<Props> = ({ fluxo, modulos, submenus, o
               </div>
             );
           })}
+
+          {/* Bloco de apoio: sem número, de propósito. Numerar aqui ensinaria
+              uma sequência que a operação não tem — cadastrar não é o passo 10
+              da compra. Fora da cadeia, mas dentro da aula, que é exatamente o
+              que o aluno precisa entender ao ver Cadastros na sidebar. */}
+          {apoio && (() => {
+            const foco = atual === -1 || atual === total;
+            const passada = atual > total;
+            return (
+              <div
+                onClick={() => setAtual(total)}
+                className={`flex gap-5 sm:gap-7 cursor-pointer transition-opacity duration-200 ${
+                  foco ? 'opacity-100' : passada ? 'opacity-30' : 'opacity-40'}`}>
+                <div className="flex flex-col items-center shrink-0">
+                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center border-2 border-dashed transition-colors ${
+                    atual === total ? 'bg-accent border-accent text-black' : 'border-white/30 text-gray-400'}`}>
+                    <FolderPlus size={22} />
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1 pb-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white leading-snug">
+                      Apoio — o cadastro que a cadeia usa
+                    </h2>
+                    <span className="text-xs font-black uppercase tracking-widest text-gray-500 border border-white/20 rounded-full px-2.5 py-1">
+                      Fora da numeração
+                    </span>
+                  </div>
+                  <div className="text-base sm:text-lg text-accent mt-1.5 font-semibold">
+                    Telas abertas na aula, sem serem etapas
+                  </div>
+                  <p className="text-base sm:text-lg text-gray-300 mt-2.5 leading-relaxed max-w-3xl">
+                    {apoio.nota}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {apoio.views.map(v => {
+                      const ok = apoioCoberto(v, modulos, submenus);
+                      return (
+                        <span key={v}
+                          className={`text-sm sm:text-base font-semibold rounded-xl px-3 py-1.5 border flex items-center gap-2 ${
+                            ok ? 'border-accent/50 text-accent' : 'border-yellow-500/50 text-yellow-300'}`}>
+                          {!ok && <EyeOff size={14} />}
+                          {rotuloDaView(v)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {apoio.views.some(v => !apoioCoberto(v, modulos, submenus)) && (
+                    <p className="text-sm sm:text-base text-yellow-300/90 mt-3 leading-relaxed max-w-3xl">
+                      As telas em amarelo não estão na aula: a turma não vai encontrá-las
+                      para cadastrar o que os passos acima exigem.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Barra de condução. Fixa no rodapé da projeção porque o professor
@@ -132,7 +198,11 @@ export const AulaFluxoProjecao: React.FC<Props> = ({ fluxo, modulos, submenus, o
           className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 bg-[#08090b] border-t border-white/10 pt-4 pb-1"
         >
           <span className="text-sm text-gray-500">
-            {atual === -1 ? `Cadeia inteira · ${total} etapas` : `Etapa ${atual + 1} de ${total}`}
+            {atual === -1
+              ? `Cadeia inteira · ${total} etapas${apoio ? ' + apoio' : ''}`
+              : atual === total
+                ? 'Apoio — fora da numeração'
+                : `Etapa ${atual + 1} de ${total}`}
             <span className="hidden sm:inline text-gray-700"> · setas navegam, Esc sai</span>
           </span>
           <div className="flex items-center gap-2">
@@ -140,7 +210,7 @@ export const AulaFluxoProjecao: React.FC<Props> = ({ fluxo, modulos, submenus, o
               className="w-11 h-11 rounded-xl border border-white/15 flex items-center justify-center text-gray-300 hover:text-white hover:border-white/40 transition-colors disabled:opacity-25">
               <ChevronLeft size={20} />
             </button>
-            <button type="button" onClick={avancar} disabled={atual === total - 1}
+            <button type="button" onClick={avancar} disabled={atual === paradas - 1}
               className="w-11 h-11 rounded-xl border border-white/15 flex items-center justify-center text-gray-300 hover:text-white hover:border-white/40 transition-colors disabled:opacity-25">
               <ChevronRight size={20} />
             </button>

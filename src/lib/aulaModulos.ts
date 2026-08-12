@@ -86,6 +86,24 @@ export function aulaSubmenuId(modId: string, label: string): string {
   return `${modId}-${label.toLowerCase().replace(/ /g, '').replace(/\//g, '')}`;
 }
 
+/**
+ * viewId → «Módulo › Submenu», do jeito que o menu mostra.
+ *
+ * Existe porque o diagrama do fluxo passou a citar telas que não são etapas
+ * (as de apoio, vindas de `viewsApoio`/`prerequisitos`) e ninguém acha uma
+ * tela pelo id: «cadastros-categorias» não é nome de lugar, «Cadastros ›
+ * Categorias» é. Cai no id cru só se o submenu sumir daqui — preferível a
+ * mostrar nada.
+ */
+export function rotuloDaView(view: string): string {
+  const mod = AULA_MODULOS.find(m => m.id === view)
+    ?? AULA_MODULOS.find(m => view.startsWith(`${m.id}-`));
+  if (!mod) return view;
+  if (mod.id === view) return mod.label;
+  const sub = (AULA_SUBMENUS[mod.id] ?? []).find(l => aulaSubmenuId(mod.id, l) === view);
+  return sub ? `${mod.label} › ${sub}` : view;
+}
+
 // Submenus que mudaram de nome ou de módulo: a config gravada no banco guarda
 // o viewId antigo, e a tela ficaria invisível na turma cujo professor já
 // montou a whitelist — o mesmo bug que a 26fc1bc consertou. Traduzir na
