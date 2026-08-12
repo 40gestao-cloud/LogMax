@@ -80,6 +80,10 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
   const [enunciadoAberto, setEnunciadoAberto] = useState<string | null>(null);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  // Expirada continua existindo (o professor às vezes reabre a da aula
+  // passada), mas fora do caminho: este painel é ferramenta de agora, e depois
+  // de um mês de aulas a lista de ontem é o que separa ele do que interessa.
+  const [mostrarExpiradas, setMostrarExpiradas] = useState(false);
   const confirmar = useConfirm();
 
   // `silencioso` para as recargas do realtime: trocar a lista pelo spinner a
@@ -194,6 +198,13 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
     };
   }), [atividades, ciencias, destinatarios]);
 
+  // Uma lista só, filtrada — não duas listas: o card é o mesmo e duplicá-lo
+  // faria as duas divergirem na primeira mudança. Com as expiradas à mostra
+  // elas voltam intercaladas por data, que é a ordem em que as aulas
+  // aconteceram.
+  const expiradas = linhas.filter(l => l.expirado);
+  const visiveis = mostrarExpiradas ? linhas : linhas.filter(l => !l.expirado);
+
   return (
     <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -219,11 +230,15 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
 
       {loading ? (
         <div className="py-8 flex justify-center"><LoadingSpinner /></div>
-      ) : linhas.length === 0 ? (
-        <EmptyState message="Nenhuma atividade publicada. Use o ícone de prancheta no fluxo acima para montar e enviar a primeira." />
+      ) : visiveis.length === 0 ? (
+        <EmptyState message={
+          expiradas.length > 0
+            ? `Nenhuma atividade vigente. ${expiradas.length} já expirou — abra abaixo para revê-las.`
+            : 'Nenhuma atividade publicada. Use o ícone de prancheta no fluxo acima para montar e enviar a primeira.'
+        } />
       ) : (
         <div className="flex flex-col gap-3">
-          {linhas.map(({ atividade: a, alvo, confirmaram, pendentes, porFilial, expirado, nTarefas }) => {
+          {visiveis.map(({ atividade: a, alvo, confirmaram, pendentes, porFilial, expirado, nTarefas }) => {
             const aberta = expandida === a.id;
             return (
               <div key={a.id}
@@ -411,6 +426,16 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
             );
           })}
         </div>
+      )}
+
+      {!loading && expiradas.length > 0 && (
+        <button type="button" onClick={() => setMostrarExpiradas(v => !v)}
+          className="self-start text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent flex items-center gap-1.5">
+          <ChevronDown size={11} className={`transition-transform ${mostrarExpiradas ? 'rotate-180 text-accent' : ''}`} />
+          {mostrarExpiradas
+            ? 'Ocultar as expiradas'
+            : `Ver ${expiradas.length} expirada${expiradas.length === 1 ? '' : 's'}`}
+        </button>
       )}
     </div>
   );

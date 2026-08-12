@@ -148,3 +148,49 @@ export function normalizarRoteiro(raw: any): AtividadeRoteiro {
       .sort((a, b) => a.ordem - b.ordem),
   };
 }
+
+// ─────────────────────────────────────────────
+// Quais tarefas são deste aluno
+// ─────────────────────────────────────────────
+//
+// A tela do aluno promete "as suas são as do papel que você ocupa hoje" e
+// depois lista tudo em cinza uniforme. Casar tarefa com aluno é heurística e
+// não tem como ser outra coisa: `papel` é texto livre — vem do fluxo ("Setor de
+// Compras", "Gerente da filial (nunca quem abriu)") ou da IA, que reescreve.
+//
+// Por isso a régua é conservadora e o resultado é DESTAQUE, nunca filtro: uma
+// tarefa que a heurística não reconheceu continua legível na tela. Esconder
+// enunciado com base em `includes` de string seria trocar um problema pequeno
+// (tudo com o mesmo peso) por um grande (o aluno não vê o que era dele).
+
+const semAcento = (s: string) =>
+  s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+/**
+ * Termos que identificam este aluno dentro de um `papel`. Vazio quando não há
+ * como distinguir (setor 'all', perfil sem setor) — aí ninguém é destacado.
+ */
+export function termosDoAluno(
+  profile: { role?: string; setor?: string; setores_extras?: string[] | null } | null | undefined,
+): string[] {
+  if (!profile) return [];
+  if (profile.setor === 'all') return [];
+  const termos = new Set<string>();
+  if (profile.role === 'gerente' || profile.role === 'colaborador') termos.add(profile.role);
+  for (const s of [profile.setor, ...(profile.setores_extras ?? [])]) {
+    if (!s || s === 'all') continue;
+    termos.add(semAcento(s));
+    // O label do setor nem sempre é o id, e o papel é escrito em prosa.
+    if (s === 'rh') { termos.add('recursos humanos'); termos.add('pessoal'); }
+    if (s === 'logistica') termos.add('almoxarif');
+    if (s === 'ti') termos.add('suporte');
+  }
+  return Array.from(termos);
+}
+
+/** O `papel` desta tarefa cita algum termo do aluno? */
+export const tarefaEhDoAluno = (papel: string, termos: string[]): boolean => {
+  if (termos.length === 0 || !papel) return false;
+  const p = semAcento(papel);
+  return termos.some(t => p.includes(t));
+};

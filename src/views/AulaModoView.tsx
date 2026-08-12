@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -13,6 +13,7 @@ import {
 import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import { AulaAtividadeModal } from './AulaAtividadeModal';
 import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
+import { AulaFluxoProjecao } from './AulaFluxoProjecao';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -70,6 +71,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [fluxoAberto, setFluxoAberto] = useState<string | null>(null);
   // Fluxo cuja atividade está sendo montada (modal). Null = fechado.
   const [fluxoAtividade, setFluxoAtividade] = useState<string | null>(null);
+  // Fluxo em projeção (tela cheia). Independente do `fluxoAberto`: o professor
+  // projeta um e continua conferindo outro no card.
+  const [fluxoProjetado, setFluxoProjetado] = useState<string | null>(null);
   // Incrementa a cada publicação: é o que faz a atividade recém-enviada
   // aparecer no painel de acompanhamento sem o professor ter que recarregar.
   const [atividadesVersao, setAtividadesVersao] = useState(0);
@@ -134,6 +138,17 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const setoresConcedidos = Array.from(new Set(
     modulos.flatMap(m => AULA_MODULO_SETORES[m] ?? []),
   ));
+
+  // Fluxos que a whitelist atual fecha inteiros. É a resposta curta para "que
+  // aula está montada aqui?" — ler isso do grid de módulos exigia saber de cor
+  // qual combinação forma qual cadeia.
+  const fluxosCompletos = AULA_FLUXOS.filter(f => {
+    const obrig = etapasObrigatorias(f);
+    return obrig.length > 0 && obrig.every(e => etapaCoberta(e, modulos, submenus));
+  });
+
+  const irPara = (id: string) =>
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   // «Montar» SUBSTITUI a whitelist; «Completar», ao lado, só acrescenta. Só o
   // title distinguia os dois, e o clique errado levava junto o recorte de
@@ -295,61 +310,12 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       )}
 
-      {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
-          esconde módulos para focar a aula, a outra tira o chão para ensinar por
-          que os dados importam. Confundir as duas seria fácil e caro. */}
-      <div className={`neu-flat rounded-3xl p-5 border ${blackout.ativo ? 'border-red-500/40' : 'border-white/5'} flex flex-col gap-3`}>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-red-500/10">
-              <AlertTriangle size={18} className="text-red-400" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-100">Simulação de perda de dados</h2>
-              <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
-                Deixa a turma sem ver nem lançar movimento — pedidos, vendas, contas, estoque —
-                para mostrar, sentindo, o que é depender do sistema e não ter os dados.
-                <strong className="text-gray-400"> Nada é apagado</strong>: o bloqueio é de leitura e
-                escrita, e desligar devolve tudo na hora. Cadastros, login e esta tela continuam de pé.
-                A tela deles, porém, lê como falha real — e não diz que é exercício. Quem revela é você,
-                na hora que escolher.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => alternarSimulacao(!blackout.ativo)}
-            disabled={simSalvando}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors disabled:opacity-50 shrink-0 ${
-              blackout.ativo
-                ? 'text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10'
-                : 'text-red-300 border-red-500/40 hover:bg-red-500/10'
-            }`}
-          >
-            {simSalvando ? '…' : blackout.ativo ? 'Devolver os dados' : 'Ligar simulação'}
-          </button>
-        </div>
-
-        {blackout.ativo ? (
-          <p className="text-[11px] text-red-300/90">
-            Ativa{blackout.iniciado_nome ? ` por ${blackout.iniciado_nome}` : ''}
-            {blackout.iniciado_em ? ` desde ${new Date(blackout.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}` : ''}.
-            Enquanto durar, aproveite para perguntar o que eles conseguem responder sem o sistema.
-          </p>
-        ) : (
-          <input
-            type="text"
-            value={simMensagem}
-            onChange={e => setSimMensagem(e.target.value)}
-            maxLength={200}
-            placeholder="O que a turma vai ler (opcional) — ex.: Todos os dados foram apagados por um erro no sistema."
-            className="neu-input rounded-xl px-3 py-2.5 text-sm"
-          />
-        )}
-      </div>
-
-      {/* Toggle mestre */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-center justify-between gap-4">
+      {/* Toggle mestre + estado da aula. Os dois juntos porque é a mesma
+          pergunta: "o que está valendo agora?". A tela é longa, e os avisos que
+          respondem isso ficam espalhados por ela — as pastilhas abaixo dizem
+          quantos são e levam até eles. */}
+      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <button
             type="button"
@@ -385,35 +351,39 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         )}
       </div>
 
-      {/* Roles alvo */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Users size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-200">Quem cai no Modo Aula</h3>
-        </div>
-        <p className="text-[11px] text-gray-500">
-          Admin nunca é filtrado (pra não travar você mesmo). Escolha quais roles seguem a whitelist.
-          «Conselheiro» vale para a role pura; quem é gerente com o selo de conselheiro entra por «Gerente».
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {AULA_ROLES_ALVO.map(r => {
-            const active = roles.includes(r.id);
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => toggleRole(r.id)}
-                title={r.hint}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all
-                  ${active
-                    ? 'bg-accent/15 text-accent border-accent/30'
-                    : 'neu-button border-white/5 text-gray-500 hover:text-gray-300'}`}
-              >
-                {active && <Check size={11} className="inline mr-1 -mt-0.5" />}
-                {r.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {fluxosCompletos.length > 0 ? (
+            fluxosCompletos.map(f => (
+              <span key={f.id} title="Todas as etapas obrigatórias deste fluxo estão na whitelist"
+                className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 flex items-center gap-1.5">
+                <Workflow size={10} /> {f.nome.split('—')[0].trim()}
+              </span>
+            ))
+          ) : (
+            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-gray-500 border border-white/10">
+              Nenhum fluxo completo
+            </span>
+          )}
+          {/* Contadores que levam ao aviso. Um número sem caminho até ele
+              obrigaria a varrer a tela inteira atrás do card correspondente. */}
+          {cadeiasQuebradas.length > 0 && (
+            <button type="button" onClick={() => irPara('alerta-cadeia')}
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/10 transition-colors flex items-center gap-1.5">
+              <AlertTriangle size={10} /> {cadeiasQuebradas.length} cadeia{cadeiasQuebradas.length === 1 ? '' : 's'} incompleta{cadeiasQuebradas.length === 1 ? '' : 's'}
+            </button>
+          )}
+          {preFaltando.length > 0 && (
+            <button type="button" onClick={() => irPara('alerta-prereq')}
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/10 transition-colors flex items-center gap-1.5">
+              <ClipboardCheck size={10} /> {preFaltando.length} pré-requisito{preFaltando.length === 1 ? '' : 's'}
+            </button>
+          )}
+          {setoresConcedidos.length >= 2 && (
+            <button type="button" onClick={() => irPara('alerta-setores')}
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-gray-400 border border-white/15 hover:bg-white/5 transition-colors flex items-center gap-1.5">
+              <ShieldAlert size={10} /> {setoresConcedidos.length} setores
+            </button>
+          )}
         </div>
       </div>
 
@@ -482,6 +452,13 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                       className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
                       <ClipboardList size={13} />
                     </button>
+                    {/* O diagrama do card é para conferir montando; este é o
+                        mesmo conteúdo do tamanho que a parede da sala exige. */}
+                    <button type="button" onClick={() => setFluxoProjetado(f.id)}
+                      title="Projetar o fluxo para a turma (tela cheia)"
+                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
+                      <Presentation size={13} />
+                    </button>
                     <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)}
                       title="Ver as etapas e quem faz cada uma"
                       className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
@@ -537,35 +514,12 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       </div>
 
-      {/* Acompanhamento do que já foi enviado. Fica logo abaixo dos fluxos
-          porque é a resposta imediata ao «Enviar» que sai dali. */}
-      <AulaAtividadesPublicadas showToast={showToast} profile={profile} recarregarEm={atividadesVersao} />
-
-      {/* Atividade do fluxo. O modal vive fora da lista para não remontar a
-          cada re-render dos cards — o professor perderia o texto que digitou. */}
-      {fluxoAtividade && (() => {
-        const f = AULA_FLUXOS.find(x => x.id === fluxoAtividade);
-        if (!f) return null;
-        const obrig = etapasObrigatorias(f);
-        return (
-          <AulaAtividadeModal
-            fluxo={f}
-            profile={profile}
-            showToast={showToast}
-            onClose={() => setFluxoAtividade(null)}
-            onPublicado={() => setAtividadesVersao(v => v + 1)}
-            coberturaCompleta={obrig.every(e => etapaCoberta(e, modulos, submenus))}
-            aulaAtiva={config.ativo}
-          />
-        );
-      })()}
-
       {/* Cadeia quebrada: o fluxo foi começado e não fecha.
           Não depende de `ativo`: o momento em que este aviso vale alguma coisa
           é a PREPARAÇÃO — quem monta a aula na véspera, com o interruptor
           desligado, era justamente quem não o via. */}
       {cadeiasQuebradas.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-yellow-500/30 flex flex-col gap-3">
+        <div id="alerta-cadeia" className="neu-flat rounded-3xl p-5 border border-yellow-500/30 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <AlertTriangle size={14} className="text-yellow-400" />
             <h3 className="text-sm font-bold text-gray-200">Cadeia incompleta</h3>
@@ -605,7 +559,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       {/* Pré-requisitos de dado: o que trava a aula depois que os módulos já
           estão certos. Consultado ao vivo no banco desta turma. */}
       {fluxosRelevantes.length > 0 && preStatus.length > 0 && (
-        <div className={`neu-flat rounded-3xl p-5 border flex flex-col gap-3 ${
+        <div id="alerta-prereq" className={`neu-flat rounded-3xl p-5 border flex flex-col gap-3 ${
           preFaltando.length > 0 ? 'border-yellow-500/30' : 'border-white/5'}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -663,7 +617,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       {/* Também sem `ativo`: decidir quantos setores a aula concede é escolha
           de montagem, e depois de ligar o interruptor já é tarde. */}
       {setoresConcedidos.length >= 2 && (
-        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start gap-3">
+        <div id="alerta-setores" className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start gap-3">
           <ShieldAlert size={16} className="text-gray-500 shrink-0 mt-0.5" />
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-gray-200">
@@ -679,6 +633,44 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           </div>
         </div>
       )}
+
+      {/* Acompanhamento do que já foi enviado. Vem depois dos avisos e antes do
+          ajuste fino: os avisos são sobre a aula que está sendo montada, este
+          painel é sobre a que já saiu — e nenhum dos dois espera o professor
+          rolar até o grid de módulos. */}
+      <AulaAtividadesPublicadas showToast={showToast} profile={profile} recarregarEm={atividadesVersao} />
+
+      {/* Roles alvo */}
+      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Users size={14} className="text-accent" />
+          <h3 className="text-sm font-bold text-gray-200">Quem cai no Modo Aula</h3>
+        </div>
+        <p className="text-[11px] text-gray-500">
+          Admin nunca é filtrado (pra não travar você mesmo). Escolha quais roles seguem a whitelist.
+          «Conselheiro» vale para a role pura; quem é gerente com o selo de conselheiro entra por «Gerente».
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {AULA_ROLES_ALVO.map(r => {
+            const active = roles.includes(r.id);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => toggleRole(r.id)}
+                title={r.hint}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all
+                  ${active
+                    ? 'bg-accent/15 text-accent border-accent/30'
+                    : 'neu-button border-white/5 text-gray-500 hover:text-gray-300'}`}
+              >
+                {active && <Check size={11} className="inline mr-1 -mt-0.5" />}
+                {r.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Presets */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
@@ -704,7 +696,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       </div>
 
-      {/* Grid de módulos + accordion de submenus */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
         <div>
           <h3 className="text-sm font-bold text-gray-200">Módulos disponíveis na aula</h3>
@@ -836,6 +827,94 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           </div>
         ))}
       </div>
+
+      {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
+          esconde módulos para focar a aula, a outra tira o chão para ensinar por
+          que os dados importam. Confundir as duas seria fácil e caro. */}
+      <div className={`neu-flat rounded-3xl p-5 border ${blackout.ativo ? 'border-red-500/40' : 'border-white/5'} flex flex-col gap-3`}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-red-500/10">
+              <AlertTriangle size={18} className="text-red-400" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-gray-100">Simulação de perda de dados</h2>
+              <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
+                Deixa a turma sem ver nem lançar movimento — pedidos, vendas, contas, estoque —
+                para mostrar, sentindo, o que é depender do sistema e não ter os dados.
+                <strong className="text-gray-400"> Nada é apagado</strong>: o bloqueio é de leitura e
+                escrita, e desligar devolve tudo na hora. Cadastros, login e esta tela continuam de pé.
+                A tela deles, porém, lê como falha real — e não diz que é exercício. Quem revela é você,
+                na hora que escolher.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => alternarSimulacao(!blackout.ativo)}
+            disabled={simSalvando}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors disabled:opacity-50 shrink-0 ${
+              blackout.ativo
+                ? 'text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10'
+                : 'text-red-300 border-red-500/40 hover:bg-red-500/10'
+            }`}
+          >
+            {simSalvando ? '…' : blackout.ativo ? 'Devolver os dados' : 'Ligar simulação'}
+          </button>
+        </div>
+
+        {blackout.ativo ? (
+          <p className="text-[11px] text-red-300/90">
+            Ativa{blackout.iniciado_nome ? ` por ${blackout.iniciado_nome}` : ''}
+            {blackout.iniciado_em ? ` desde ${new Date(blackout.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}` : ''}.
+            Enquanto durar, aproveite para perguntar o que eles conseguem responder sem o sistema.
+          </p>
+        ) : (
+          <input
+            type="text"
+            value={simMensagem}
+            onChange={e => setSimMensagem(e.target.value)}
+            maxLength={200}
+            placeholder="O que a turma vai ler (opcional) — ex.: Todos os dados foram apagados por um erro no sistema."
+            className="neu-input rounded-xl px-3 py-2.5 text-sm"
+          />
+        )}
+      </div>
+
+      {/* Projeção do fluxo. Recebe a whitelist EM EDIÇÃO, não a salva: projetar
+          o que está no banco enquanto o professor monta outra coisa mostraria à
+          turma um fluxo diferente do que ele está preparando. */}
+      {fluxoProjetado && (() => {
+        const f = AULA_FLUXOS.find(x => x.id === fluxoProjetado);
+        if (!f) return null;
+        return (
+          <AulaFluxoProjecao
+            fluxo={f}
+            modulos={modulos}
+            submenus={submenus}
+            onClose={() => setFluxoProjetado(null)}
+          />
+        );
+      })()}
+
+      {/* Atividade do fluxo. O modal vive fora da lista para não remontar a
+          cada re-render dos cards — o professor perderia o texto que digitou. */}
+      {fluxoAtividade && (() => {
+        const f = AULA_FLUXOS.find(x => x.id === fluxoAtividade);
+        if (!f) return null;
+        const obrig = etapasObrigatorias(f);
+        return (
+          <AulaAtividadeModal
+            fluxo={f}
+            profile={profile}
+            showToast={showToast}
+            onClose={() => setFluxoAtividade(null)}
+            onPublicado={() => setAtividadesVersao(v => v + 1)}
+            coberturaCompleta={obrig.every(e => etapaCoberta(e, modulos, submenus))}
+            aulaAtiva={config.ativo}
+          />
+        );
+      })()}
 
       {/* Footer sticky de ações */}
       <AnimatePresence>

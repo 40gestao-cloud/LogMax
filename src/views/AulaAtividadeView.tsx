@@ -7,11 +7,11 @@
 // O PDF é remontado aqui a partir do `roteiro` jsonb, pelo mesmo gerador que o
 // professor usou — não há arquivo guardado em lugar nenhum.
 
-import React, { useState } from 'react';
-import { ClipboardList, Download, Check, Clock, ChevronDown, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ClipboardList, Download, Check, Clock, ChevronDown, Sparkles, Square, CheckSquare, User } from 'lucide-react';
 import { useAulaAtividades, type AtividadeAula } from '../hooks/useAulaAtividades';
 import { exportAtividadePDF } from '../lib/aulaAtividadePdf';
-import { nomeArquivoAtividade } from '../lib/aulaAtividade';
+import { nomeArquivoAtividade, termosDoAluno, tarefaEhDoAluno } from '../lib/aulaAtividade';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 
@@ -28,6 +28,21 @@ const fmtPrazo = (iso: string | null | undefined) =>
       })
     : '—';
 
+// Marcação pessoal de progresso. Fica no PRÓPRIO dispositivo, de propósito:
+// não é entrega, não é nota, e o professor não vê. Serve para o aluno não
+// perder o lugar num roteiro de sete tarefas que ele percorre em duas horas —
+// mandar isso ao banco criaria um registro que parece avaliação sem ser.
+const chaveProgresso = (atividadeId: string, userId: string) =>
+  `logmax.aula_progresso.${userId}.${atividadeId}`;
+
+const lerProgresso = (chave: string): number[] => {
+  try {
+    const raw = localStorage.getItem(chave);
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((n: any) => Number.isInteger(n)) : [];
+  } catch { return []; }
+};
+
 const CartaoAtividade: React.FC<{
   atividade: AtividadeAula;
   profile: UserProfile;
@@ -37,6 +52,26 @@ const CartaoAtividade: React.FC<{
 }> = ({ atividade: a, profile, showToast, onCiencia, inicialmenteAberto }) => {
   const [aberto, setAberto] = useState(inicialmenteAberto);
   const [baixando, setBaixando] = useState(false);
+
+  const chave = chaveProgresso(a.id, profile.id);
+  const [feitas, setFeitas] = useState<number[]>(() => lerProgresso(chave));
+  const alternarFeita = (i: number) =>
+    setFeitas(prev => {
+      const proximo = prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i];
+      try { localStorage.setItem(chave, JSON.stringify(proximo)); } catch { /* quota/privado */ }
+      return proximo;
+    });
+
+  // Destaque por papel. Só vale quando separa de fato: se a heurística casou
+  // com tudo (ou com nada), destacar tudo é o mesmo que não destacar nada — e
+  // apagar as outras tarefas por engano seria pior que o cinza uniforme.
+  const termos = useMemo(() => termosDoAluno(profile), [profile]);
+  const minhas = useMemo(
+    () => a.roteiro.tarefas.map(t => tarefaEhDoAluno(t.papel, termos)),
+    [a.roteiro.tarefas, termos],
+  );
+  const nMinhas = minhas.filter(Boolean).length;
+  const destacar = nMinhas > 0 && nMinhas < a.roteiro.tarefas.length;
 
   const baixar = async () => {
     setBaixando(true);
@@ -100,6 +135,22 @@ const CartaoAtividade: React.FC<{
           </span>
           <span className="text-gray-700">·</span>
           <span>{a.roteiro.tarefas.length} tarefa{a.roteiro.tarefas.length === 1 ? '' : 's'}</span>
+          {destacar && (
+            <>
+              <span className="text-gray-700">·</span>
+              <span className="text-accent/90 flex items-center gap-1.5">
+                <User size={11} /> {nMinhas} no seu papel
+              </span>
+            </>
+          )}
+          {feitas.length > 0 && (
+            <>
+              <span className="text-gray-700">·</span>
+              <span title="Marcação sua, guardada neste aparelho">
+                {feitas.length} de {a.roteiro.tarefas.length} marcadas
+              </span>
+            </>
+          )}
         </div>
 
         {a.objetivo && (
@@ -126,22 +177,43 @@ const CartaoAtividade: React.FC<{
             </div>
           )}
 
+          {/* Dito uma vez, no lugar onde a dúvida nasce: marcar não entrega
+              nada. Sem isto o aluno marca as sete e acha que acabou. */}
+          <p className="text-[10px] text-gray-600 leading-relaxed">
+            {destacar && <>As marcadas com «Você» são do papel que você ocupa hoje; as outras ficam à vista para você acompanhar a cadeia. </>}
+            As caixas são anotação sua, guardada neste aparelho — o professor não as vê, e marcar não entrega a tarefa.
+          </p>
+
           <div className="flex flex-col gap-0">
             {a.roteiro.tarefas.map((t, i) => {
               const ultima = i === a.roteiro.tarefas.length - 1;
+              const minha = destacar && minhas[i];
+              const feita = feitas.includes(i);
               return (
                 <div key={i} className="flex gap-3">
                   {/* Mesmo trilho do diagrama de fluxo da tela do professor: a
                       turma reconhece que a lista é uma cadeia, não um checklist. */}
                   <div className="flex flex-col items-center shrink-0 pt-1">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border border-accent/50 text-accent">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border ${
+                      feita ? 'bg-accent border-accent text-black' : 'border-accent/50 text-accent'}`}>
                       {i + 1}
                     </div>
                     {!ultima && <div className="w-px flex-1 my-1 bg-accent/25" />}
                   </div>
-                  <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-4'}`}>
+                  {/* Tarefa de outro papel fica recuada, nunca escondida: o aluno
+                      precisa enxergar a cadeia inteira para entender de quem ele
+                      depende e quem depende dele. */}
+                  <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-4'} ${
+                    destacar && !minha ? 'opacity-55' : ''} ${feita ? 'opacity-50' : ''}`}>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-gray-200">{t.titulo}</span>
+                      <span className={`text-xs font-bold text-gray-200 ${feita ? 'line-through' : ''}`}>
+                        {t.titulo}
+                      </span>
+                      {minha && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
+                          <User size={9} /> Você
+                        </span>
+                      )}
                       {t.opcional && (
                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
                           Opcional
@@ -164,6 +236,14 @@ const CartaoAtividade: React.FC<{
                         Avaliação: {t.criterio}
                       </p>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => alternarFeita(i)}
+                      className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-600 hover:text-accent flex items-center gap-1.5 transition-colors"
+                    >
+                      {feita ? <CheckSquare size={12} className="text-accent" /> : <Square size={12} />}
+                      {feita ? 'Feita' : 'Marcar como feita'}
+                    </button>
                   </div>
                 </div>
               );
