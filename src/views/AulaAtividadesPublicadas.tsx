@@ -94,10 +94,16 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
         .select('id,titulo,fluxo_id,fluxo_nome,objetivo,filiais,publico,expira_em,nome_criador,created_at,gerado_por_ia,roteiro')
         .eq('ativo', true)
         .order('created_at', { ascending: false }),
+      // `desligado_em` fora: o perfil desligado (migr. 306) não é mais aluno da
+      // turma — as próprias funções de RBAC ignoram a linha, então ele nunca vai
+      // abrir a atividade. Contá-lo deixava um pendente eterno na lista e um
+      // «ok/total» por filial que não fechava em verde nem com a turma inteira
+      // ciente.
       supabase
         .from('user_profiles')
         .select('id,nome,filial,role')
-        .in('role', ['gerente', 'colaborador']),
+        .in('role', ['gerente', 'colaborador'])
+        .is('desligado_em', null),
     ]);
 
     const lista = (ativs ?? []) as Publicada[];

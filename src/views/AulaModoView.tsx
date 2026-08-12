@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAulaConfig } from '../hooks/useAulaConfig';
+import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { AULA_MODULOS, AULA_PRESETS, AULA_ROLES_ALVO, AULA_SUBMENUS, AULA_MODULO_SETORES, aulaSubmenuId } from '../lib/aulaModulos';
@@ -74,12 +74,45 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // aparecer no painel de acompanhamento sem o professor ter que recarregar.
   const [atividadesVersao, setAtividadesVersao] = useState(0);
 
-  useEffect(() => {
-    if (!loaded) return;
+  // Config em que a edição local se apoia. Comparar contra ela — e não contra
+  // `config`, que o realtime troca por baixo — é o que separa "ainda não mexi"
+  // de "mexi e alguém salvou".
+  const baseRef = useRef<AulaConfig | null>(null);
+  // Espelho do estado local para o efeito de sincronia poder consultá-lo sem
+  // virar dependência: com os arrays na lista de deps, cada submenu marcado
+  // reexecutaria a sincronia e desfaria a própria marcação.
+  const localRef = useRef({ ativo, modulos, submenus, roles });
+  localRef.current = { ativo, modulos, submenus, roles };
+  // Quando preenchido: chegou config nova do servidor e havia trabalho local
+  // não salvo. Guarda o `atualizado_em` de quem salvou, para datar o aviso.
+  const [conflito, setConflito] = useState<string | null>(null);
+
+  /** Adota a config do servidor, descartando a edição local. */
+  const adotarDoServidor = () => {
+    baseRef.current = config;
     setAtivo(config.ativo);
     setModulos(config.modulos_ativos);
     setSubmenus(config.submenus_ativos);
     setRoles(config.roles_afetados);
+    setConflito(null);
+  };
+
+  useEffect(() => {
+    if (!loaded) return;
+    const base = baseRef.current;
+    const local = localRef.current;
+    const sujo = base !== null && (
+      local.ativo !== base.ativo ||
+      !arraysIguais(local.modulos, base.modulos_ativos) ||
+      !arraysIguais(local.submenus, base.submenus_ativos) ||
+      !arraysIguais(local.roles, base.roles_afetados)
+    );
+    // Sobrescrever aqui apagava, sem uma palavra, a whitelist que o professor
+    // acabou de montar — junto com a faixa "Alterações não salvas", que some e
+    // leva embora a única pista de que havia algo para salvar.
+    if (sujo) { setConflito(config.atualizado_em ?? new Date().toISOString()); return; }
+    adotarDoServidor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, config.ativo, config.atualizado_em]);
 
   // Fluxos que esta config encostou. Um fluxo sem nenhuma etapa ligada não é
@@ -102,10 +135,25 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     modulos.flatMap(m => AULA_MODULO_SETORES[m] ?? []),
   ));
 
-  const montarFluxo = (fluxoId: string) => {
+  // «Montar» SUBSTITUI a whitelist; «Completar», ao lado, só acrescenta. Só o
+  // title distinguia os dois, e o clique errado levava junto o recorte de
+  // submenus que o professor montou à mão — sem desfazer, porque «Descartar»
+  // volta ao que está salvo, não ao que estava um clique atrás.
+  const montarFluxo = async (fluxoId: string) => {
     const f = AULA_FLUXOS.find(x => x.id === fluxoId);
     if (!f) return;
     const cfg = configDoFluxo(f);
+    const temSelecao = modulos.length > 0 || submenus.length > 0;
+    const mudaAlgo = !arraysIguais(cfg.modulos, modulos) || !arraysIguais(cfg.submenus, submenus);
+    if (temSelecao && mudaAlgo && !await confirmar({
+      message: `Montar "${f.nome}" substitui a seleção atual`
+        + `${modulos.length > 0 ? ` (${modulos.length} módulo${modulos.length === 1 ? '' : 's'}` : ''}`
+        + `${submenus.length > 0 ? `${modulos.length > 0 ? ', ' : ' ('}${submenus.length} submenu${submenus.length === 1 ? '' : 's'}` : ''}`
+        + `${temSelecao ? ')' : ''} pela whitelist deste fluxo.\n\n`
+        + 'Para somar este fluxo ao que já está marcado, sem tirar nada, use «Completar» '
+        + 'no aviso de cadeia incompleta.',
+      confirmLabel: 'Substituir',
+    })) return;
     setModulos(cfg.modulos);
     setSubmenus(cfg.submenus);
     setFluxoAberto(fluxoId);
@@ -161,12 +209,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     setSubmenus([]);
   };
 
-  const resetar = () => {
-    setAtivo(config.ativo);
-    setModulos(config.modulos_ativos);
-    setSubmenus(config.submenus_ativos);
-    setRoles(config.roles_afetados);
-  };
+  // Descartar volta ao que está NO SERVIDOR agora — inclusive quando quem
+  // salvou por último foi outra pessoa.
+  const resetar = adotarDoServidor;
 
   const salvar = async () => {
     if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
@@ -184,6 +229,17 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         })
         .eq('id', 1);
       if (error) throw error;
+      // O que acabou de ser gravado passa a ser a base. Sem isto, o eco do
+      // próprio save chega pelo realtime, não bate com a base antiga e a tela
+      // acusaria conflito com ela mesma.
+      baseRef.current = {
+        ativo,
+        modulos_ativos: modulos,
+        submenus_ativos: submenus,
+        roles_afetados: roles,
+        atualizado_em: null,
+      };
+      setConflito(null);
       showToast(ativo ? 'Modo Aula ativado' : 'Modo Aula desligado', 'success');
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error');
@@ -212,6 +268,32 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           </p>
         </div>
       </div>
+
+      {/* Outra pessoa salvou enquanto esta tela tinha trabalho pendente. As duas
+          versões continuam de pé: a do servidor está valendo para a turma, a
+          desta tela está na barra de ações esperando o Salvar. Quem decide qual
+          fica é quem está aqui. */}
+      {conflito && (
+        <div className="neu-flat rounded-3xl p-5 border border-yellow-500/40 flex items-start gap-3 flex-wrap">
+          <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-bold text-gray-200">
+              Outra pessoa alterou o Modo Aula agora
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+              A config do servidor mudou{' '}
+              {new Date(conflito).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}
+              {' '}e é ela que a turma está vendo. O que está nesta tela são as suas alterações,
+              ainda não salvas — <strong className="text-gray-400">Salvar</strong> sobrescreve a
+              do servidor, <strong className="text-gray-400">Descartar</strong> abandona a sua.
+            </p>
+          </div>
+          <button type="button" onClick={adotarDoServidor}
+            className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 shrink-0">
+            Carregar a do servidor
+          </button>
+        </div>
+      )}
 
       {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
           esconde módulos para focar a aula, a outra tira o chão para ensinar por
@@ -388,7 +470,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                     <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{f.resumo}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" onClick={() => montarFluxo(f.id)}
+                    <button type="button" onClick={() => void montarFluxo(f.id)}
                       title="Substitui a whitelist pelos módulos e submenus deste fluxo"
                       className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5">
                       Montar
@@ -478,8 +560,11 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         );
       })()}
 
-      {/* Cadeia quebrada: o fluxo foi começado e não fecha. */}
-      {ativo && cadeiasQuebradas.length > 0 && (
+      {/* Cadeia quebrada: o fluxo foi começado e não fecha.
+          Não depende de `ativo`: o momento em que este aviso vale alguma coisa
+          é a PREPARAÇÃO — quem monta a aula na véspera, com o interruptor
+          desligado, era justamente quem não o via. */}
+      {cadeiasQuebradas.length > 0 && (
         <div className="neu-flat rounded-3xl p-5 border border-yellow-500/30 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <AlertTriangle size={14} className="text-yellow-400" />
@@ -575,7 +660,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       {/* Segregação de funções: a aula CONCEDE setor (migr. 317), não filtra.
           Um fluxo largo entrega vários setores ao mesmo aluno e dissolve a
           lição que o próprio fluxo existe para ensinar. */}
-      {ativo && setoresConcedidos.length >= 2 && (
+      {/* Também sem `ativo`: decidir quantos setores a aula concede é escolha
+          de montagem, e depois de ligar o interruptor já é tarde. */}
+      {setoresConcedidos.length >= 2 && (
         <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start gap-3">
           <ShieldAlert size={16} className="text-gray-500 shrink-0 mt-0.5" />
           <div className="min-w-0">

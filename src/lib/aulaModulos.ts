@@ -32,13 +32,23 @@ export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'max-show',          label: 'Max Show',         grupo: 'Didático' },
 ];
 
+// Recorte por área, sem a cadeia — para mostrar uma tela específica. Quem quer
+// a operação inteira usa os fluxos (`aulaFluxos.ts`), que ligam as etapas na
+// ordem e sabem dizer o que falta.
+//
+// «Logística» leva o Financeiro junto porque sem ele a cadeia de compra morre
+// em «Aguardando Financeiro»: é `gerar_pedido_de_cotacao` (migr. 336) quem cria
+// o pedido e a conta a pagar, e ninguém na turma destrava. O atalho mais óbvio
+// da tela montava, antes disso, uma aula que não fechava.
 export const AULA_PRESETS: { nome: string; modulos: string[] }[] = [
-  { nome: 'Logística',    modulos: ['cadastros', 'compras', 'estoque'] },
+  { nome: 'Logística',    modulos: ['cadastros', 'compras', 'estoque', 'financeiro'] },
   { nome: 'Vendas + PDV', modulos: ['vendas', 'catalogo-produtos'] },
   { nome: 'Finanças',     modulos: ['financeiro'] },
   { nome: 'RH',           modulos: ['rh'] },
   { nome: 'Marketing',    modulos: ['marketing'] },
-  { nome: 'Todos',        modulos: AULA_MODULOS.map(m => m.id) },
+  // O nome importa: «Todos» lia como atalho e é, na prática, o Modo Aula sem
+  // recorte nenhum — a sidebar da turma volta inteira.
+  { nome: 'Tudo liberado', modulos: AULA_MODULOS.map(m => m.id) },
   { nome: 'Só Início',    modulos: [] },
 ];
 
