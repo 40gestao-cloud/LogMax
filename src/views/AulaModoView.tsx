@@ -457,7 +457,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
 
       {/* Acompanhamento do que já foi enviado. Fica logo abaixo dos fluxos
           porque é a resposta imediata ao «Enviar» que sai dali. */}
-      <AulaAtividadesPublicadas showToast={showToast} recarregarEm={atividadesVersao} />
+      <AulaAtividadesPublicadas showToast={showToast} profile={profile} recarregarEm={atividadesVersao} />
 
       {/* Atividade do fluxo. O modal vive fora da lista para não remontar a
           cada re-render dos cards — o professor perderia o texto que digitou. */}

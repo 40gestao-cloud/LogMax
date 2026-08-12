@@ -16,12 +16,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ClipboardList, Clock, Check, Users, AlertCircle, Trash2, RefreshCw, Sparkles, ChevronDown,
+  Download, FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDataHoraBR } from '../lib/dates';
 import { atividadeAlcanca } from '../hooks/useAulaAtividades';
+import { exportAtividadePDF } from '../lib/aulaAtividadePdf';
+import { nomeArquivoAtividade, normalizarRoteiro, type Atividade } from '../lib/aulaAtividade';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const PUBLICO_LABEL: Record<string, string> = {
@@ -33,7 +36,9 @@ const PUBLICO_LABEL: Record<string, string> = {
 type Publicada = {
   id: string;
   titulo: string;
+  fluxo_id: string;
   fluxo_nome: string;
+  objetivo: string | null;
   filiais: string[];
   publico: string;
   expira_em: string;
@@ -47,16 +52,34 @@ type Destinatario = { id: string; nome: string; filial: string | null; role: str
 
 interface Props {
   showToast: (msg: string, type?: string) => void;
+  /** Quem está conduzindo — vai no cabeçalho do PDF. */
+  profile: UserProfile;
   /** Muda a cada publicação no modal — força recarga sem realtime. */
   recarregarEm?: number;
 }
 
-export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarregarEm }) => {
+/** O que está no banco de volta na forma que o gerador de PDF e a tela do aluno usam. */
+const comoAtividade = (a: Publicada): Atividade => ({
+  titulo: a.titulo,
+  fluxoId: a.fluxo_id,
+  fluxoNome: a.fluxo_nome,
+  objetivo: a.objetivo ?? null,
+  roteiro: normalizarRoteiro(a.roteiro),
+  criador: a.nome_criador ?? null,
+  expiraEm: a.expira_em,
+  geradoPorIa: a.gerado_por_ia,
+});
+
+export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, recarregarEm }) => {
   const [atividades, setAtividades] = useState<Publicada[]>([]);
   const [ciencias, setCiencias] = useState<Ciencia[]>([]);
   const [destinatarios, setDestinatarios] = useState<Destinatario[]>([]);
   const [loading, setLoading] = useState(true);
+  // Duas aberturas independentes: o enunciado (o que foi enviado) e a lista de
+  // nomes (quem abriu). Na aula elas são consultadas em momentos diferentes.
+  const [enunciadoAberto, setEnunciadoAberto] = useState<string | null>(null);
   const [expandida, setExpandida] = useState<string | null>(null);
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const confirmar = useConfirm();
 
   // `silencioso` para as recargas do realtime: trocar a lista pelo spinner a
@@ -68,7 +91,7 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
     const [{ data: ativs }, { data: pessoas }] = await Promise.all([
       supabase
         .from('aula_atividades')
-        .select('id,titulo,fluxo_nome,filiais,publico,expira_em,nome_criador,created_at,gerado_por_ia,roteiro')
+        .select('id,titulo,fluxo_id,fluxo_nome,objetivo,filiais,publico,expira_em,nome_criador,created_at,gerado_por_ia,roteiro')
         .eq('ativo', true)
         .order('created_at', { ascending: false }),
       supabase
@@ -108,6 +131,21 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
       .subscribe();
     return () => { supabase!.removeChannel(canal); };
   }, [carregar]);
+
+  // O PDF é remontado do `roteiro` jsonb, igual ao do aluno — o professor baixa
+  // exatamente o documento que a turma tem na mão, não uma versão do que ele
+  // digitou antes de enviar.
+  const baixarPdf = async (a: Publicada) => {
+    setBaixandoId(a.id);
+    try {
+      const doc = comoAtividade(a);
+      await exportAtividadePDF(doc, nomeArquivoAtividade(doc), 'download', profile, showToast as any);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível gerar o PDF.', 'error');
+    } finally {
+      setBaixandoId(null);
+    }
+  };
 
   const remover = async (a: Publicada) => {
     if (!await confirmar({
@@ -212,11 +250,92 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, recarrega
                       {' '}válida até {formatDataHoraBR(a.expira_em)}
                     </p>
                   </div>
-                  <button type="button" onClick={() => remover(a)}
-                    className="btn-shimmer btn-shimmer--glass-red shrink-0" title="Remover atividade">
-                    <Trash2 size={11} /> Remover
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button type="button" onClick={() => setEnunciadoAberto(enunciadoAberto === a.id ? null : a.id)}
+                      title="Ver o enunciado exatamente como a turma está vendo"
+                      className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5">
+                      <FileText size={12} /> Enunciado
+                      <ChevronDown size={11} className={`transition-transform ${enunciadoAberto === a.id ? 'rotate-180 text-accent' : ''}`} />
+                    </button>
+                    <button type="button" onClick={() => baixarPdf(a)} disabled={baixandoId === a.id}
+                      title="Baixar o mesmo PDF que o aluno baixa"
+                      className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5 disabled:opacity-50">
+                      <Download size={12} /> {baixandoId === a.id ? '…' : 'PDF'}
+                    </button>
+                    <button type="button" onClick={() => remover(a)}
+                      className="btn-shimmer btn-shimmer--glass-red" title="Remover atividade">
+                      <Trash2 size={11} /> Remover
+                    </button>
+                  </div>
                 </div>
+
+                {enunciadoAberto === a.id && (() => {
+                  const doc = comoAtividade(a);
+                  return (
+                    <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-3 flex flex-col gap-3">
+                      {doc.objetivo && (
+                        <p className="text-[11px] text-gray-400 leading-relaxed border-l-2 border-accent/40 pl-3">
+                          {doc.objetivo}
+                        </p>
+                      )}
+                      {doc.roteiro.prerequisitos.length > 0 && (
+                        <div>
+                          <h5 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1.5">
+                            Antes de começar
+                          </h5>
+                          <ul className="flex flex-col gap-1">
+                            {doc.roteiro.prerequisitos.map((p, i) => (
+                              <li key={i} className="text-[11px] text-gray-400">
+                                {p.label} <span className="text-gray-600">— {p.onde}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {/* Mesmo trilho numerado da tela do aluno: o professor
+                          confere o que projetou sem traduzir de um layout para outro. */}
+                      <div className="flex flex-col gap-0">
+                        {doc.roteiro.tarefas.map((t, i) => {
+                          const ultima = i === doc.roteiro.tarefas.length - 1;
+                          return (
+                            <div key={i} className="flex gap-3">
+                              <div className="flex flex-col items-center shrink-0 pt-1">
+                                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border border-accent/50 text-accent">
+                                  {i + 1}
+                                </div>
+                                {!ultima && <div className="w-px flex-1 my-1 bg-accent/25" />}
+                              </div>
+                              <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-3'}`}>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] font-bold text-gray-200">{t.titulo}</span>
+                                  {t.opcional && (
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
+                                      Opcional
+                                    </span>
+                                  )}
+                                </div>
+                                {t.papel && <div className="text-[10px] text-accent/80 mt-0.5">{t.papel}</div>}
+                                {t.enunciado && (
+                                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed whitespace-pre-line">
+                                    {t.enunciado}
+                                  </p>
+                                )}
+                                {t.entregavel && (
+                                  <p className="text-[10px] text-gray-500 mt-1">
+                                    <span className="text-gray-400 font-bold">Entregar:</span> {t.entregavel}
+                                  </p>
+                                )}
+                                {t.criterio && (
+                                  <p className="text-[10px] text-gray-500 mt-0.5 italic">Avaliação: {t.criterio}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="neu-pressed rounded-xl p-3 flex flex-col gap-2.5">
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
