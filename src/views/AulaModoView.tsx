@@ -14,6 +14,7 @@ import { useAulaPreRequisitos } from '../hooks/useAulaPreRequisitos';
 import { AulaAtividadeModal } from './AulaAtividadeModal';
 import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import { AulaFluxoProjecao } from './AulaFluxoProjecao';
+import { AulaPainelControle } from './AulaPainelControle';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
 
@@ -24,6 +25,15 @@ interface Props {
 
 const arraysIguais = (a: string[], b: string[]) =>
   a.length === b.length && a.every(x => b.includes(x));
+
+// As três coisas que esta tela faz, na ordem em que a aula acontece: montar o
+// recorte, enviar o enunciado, acompanhar quem fez.
+type AbaId = 'montagem' | 'atividades' | 'controle';
+const ABAS: { id: AbaId; label: string; icone: any }[] = [
+  { id: 'montagem',   label: 'Montagem',  icone: Workflow },
+  { id: 'atividades', label: 'Atividades', icone: ClipboardList },
+  { id: 'controle',   label: 'Controle',  icone: ClipboardCheck },
+];
 
 export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // Simulação de perda de dados (migr. 339). Mora aqui porque é o painel de
@@ -77,6 +87,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // Incrementa a cada publicação: é o que faz a atividade recém-enviada
   // aparecer no painel de acompanhamento sem o professor ter que recarregar.
   const [atividadesVersao, setAtividadesVersao] = useState(0);
+  const [aba, setAba] = useState<AbaId>('montagem');
 
   // Config em que a edição local se apoia. Comparar contra ela — e não contra
   // `config`, que o realtime troca por baixo — é o que separa "ainda não mexi"
@@ -111,10 +122,23 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       !arraysIguais(local.submenus, base.submenus_ativos) ||
       !arraysIguais(local.roles, base.roles_afetados)
     );
+    // Convergiu: o que chegou do servidor é exatamente o que está na tela.
+    // Sem esta saída, salvar de outro lugar uma config IGUAL à editada aqui
+    // levantava o aviso de conflito apontando para uma barra de ações que a
+    // própria convergência tinha acabado de esconder (`dirty` vira false).
+    const igualAoServidor =
+      local.ativo === config.ativo &&
+      arraysIguais(local.modulos, config.modulos_ativos) &&
+      arraysIguais(local.submenus, config.submenus_ativos) &&
+      arraysIguais(local.roles, config.roles_afetados);
+
     // Sobrescrever aqui apagava, sem uma palavra, a whitelist que o professor
     // acabou de montar — junto com a faixa "Alterações não salvas", que some e
     // leva embora a única pista de que havia algo para salvar.
-    if (sujo) { setConflito(config.atualizado_em ?? new Date().toISOString()); return; }
+    if (sujo && !igualAoServidor) {
+      setConflito(config.atualizado_em ?? new Date().toISOString());
+      return;
+    }
     adotarDoServidor();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, config.ativo, config.atualizado_em]);
@@ -310,6 +334,27 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       )}
 
+      {/* Abas. A tela juntava tres trabalhos que acontecem em momentos
+          diferentes da aula -- montar, enviar, acompanhar -- num scroll unico
+          de oito cards. A barra de acoes fica FORA das abas: alteracao nao
+          salva nao pode sumir porque o professor foi conferir outra coisa. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {ABAS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setAba(t.id)}
+            className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
+              aba === t.id
+                ? 'bg-accent/15 text-accent border-accent/30'
+                : 'neu-button border-white/5 text-gray-500 hover:text-gray-300'}`}
+          >
+            <t.icone size={13} /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'montagem' && (<>
       {/* Toggle mestre + estado da aula. Os dois juntos porque é a mesma
           pergunta: "o que está valendo agora?". A tela é longa, e os avisos que
           respondem isso ficam espalhados por ela — as pastilhas abaixo dizem
@@ -634,11 +679,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
       )}
 
-      {/* Acompanhamento do que já foi enviado. Vem depois dos avisos e antes do
-          ajuste fino: os avisos são sobre a aula que está sendo montada, este
-          painel é sobre a que já saiu — e nenhum dos dois espera o professor
-          rolar até o grid de módulos. */}
-      <AulaAtividadesPublicadas showToast={showToast} profile={profile} recarregarEm={atividadesVersao} />
 
       {/* Roles alvo */}
       <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
@@ -880,6 +920,18 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           />
         )}
       </div>
+      </>)}
+
+      {aba === 'atividades' && (<>
+      {/* O que já foi enviado e onde caiu. Conta quem ABRIU o enunciado; quem
+          FEZ é a aba «Controle» — as duas perguntas são diferentes e juntá-las
+          num painel só desfaria a distinção. */}
+      <AulaAtividadesPublicadas showToast={showToast} profile={profile} recarregarEm={atividadesVersao} />
+      </>)}
+
+      {aba === 'controle' && (
+        <AulaPainelControle showToast={showToast} recarregarEm={atividadesVersao} />
+      )}
 
       {/* Projeção do fluxo. Recebe a whitelist EM EDIÇÃO, não a salva: projetar
           o que está no banco enquanto o professor monta outra coisa mostraria à
@@ -909,7 +961,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             profile={profile}
             showToast={showToast}
             onClose={() => setFluxoAtividade(null)}
-            onPublicado={() => setAtividadesVersao(v => v + 1)}
+            // Publicou: a aba de acompanhamento é o próximo lugar em que o
+            // professor olha — deixá-lo na Montagem obrigaria a procurar a
+            // confirmação de que a atividade saiu.
+            onPublicado={() => { setAtividadesVersao(v => v + 1); setAba('atividades'); }}
             coberturaCompleta={obrig.every(e => etapaCoberta(e, modulos, submenus))}
             aulaAtiva={config.ativo}
           />

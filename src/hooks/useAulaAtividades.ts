@@ -18,6 +18,13 @@ export type AtividadeAula = Atividade & {
   publico: 'gerentes' | 'colaboradores' | 'todos';
   createdAt: string;
   lida: boolean;
+  /**
+   * Índices das tarefas que o PROFESSOR deu por realizadas (migr. 405). É
+   * devolutiva, não entrada: o aluno lê e não escreve — a RLS só lhe dá a
+   * própria linha, e no SELECT. A marcação pessoal dele, essa fica no
+   * dispositivo e não passa por aqui.
+   */
+  realizadas: number[];
 };
 
 /** A atividade alcança este perfil? Espelha `atividade_aula_alcanca()` no banco. */
@@ -34,7 +41,7 @@ export function atividadeAlcanca(
   return naFilial && noPublico;
 }
 
-const mapear = (row: any, lida: boolean): AtividadeAula => ({
+const mapear = (row: any, lida: boolean, realizadas: number[]): AtividadeAula => ({
   id: row.id,
   titulo: row.titulo,
   fluxoId: row.fluxo_id,
@@ -48,6 +55,7 @@ const mapear = (row: any, lida: boolean): AtividadeAula => ({
   publico: row.publico,
   createdAt: row.created_at,
   lida,
+  realizadas,
 });
 
 export function useAulaAtividades(profile: UserProfile | null) {
@@ -70,14 +78,30 @@ export function useAulaAtividades(profile: UserProfile | null) {
     const alvo = (data ?? []).filter((a: any) => atividadeAlcanca(a, profile));
     if (alvo.length === 0) { setAtividades([]); setLoading(false); return; }
 
-    const { data: ciencias } = await supabase
-      .from('aula_atividades_ciencia')
-      .select('atividade_id')
-      .eq('user_id', profile.id)
-      .in('atividade_id', alvo.map((a: any) => a.id));
+    const ids = alvo.map((a: any) => a.id);
+    const [{ data: ciencias }, { data: feitas }] = await Promise.all([
+      supabase
+        .from('aula_atividades_ciencia')
+        .select('atividade_id')
+        .eq('user_id', profile.id)
+        .in('atividade_id', ids),
+      // O que o professor marcou para ESTE aluno. A RLS já recorta (migr. 405),
+      // mas o filtro explícito evita depender dela para a correção da tela.
+      supabase
+        .from('aula_tarefas_realizadas')
+        .select('atividade_id,tarefa_idx')
+        .eq('user_id', profile.id)
+        .in('atividade_id', ids),
+    ]);
 
     const lidos = new Set((ciencias ?? []).map((c: any) => c.atividade_id));
-    setAtividades(alvo.map((a: any) => mapear(a, lidos.has(a.id))));
+    const porAtividade = new Map<string, number[]>();
+    for (const f of (feitas ?? []) as any[]) {
+      const lista = porAtividade.get(f.atividade_id) ?? [];
+      lista.push(f.tarefa_idx);
+      porAtividade.set(f.atividade_id, lista);
+    }
+    setAtividades(alvo.map((a: any) => mapear(a, lidos.has(a.id), porAtividade.get(a.id) ?? [])));
     setLoading(false);
   }, [profile, ehDestinatario]);
 
@@ -90,6 +114,9 @@ export function useAulaAtividades(profile: UserProfile | null) {
     const canal = supabase
       .channel('aula-atividades')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades' }, () => { carregar(); })
+      // A devolutiva do professor chega pelo mesmo caminho: ele marca a tarefa
+      // no painel e o aluno vê, sem F5, que aquela etapa foi dada por feita.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_tarefas_realizadas' }, () => { carregar(); })
       .subscribe();
     return () => { supabase!.removeChannel(canal); };
   }, [carregar, ehDestinatario]);

@@ -182,6 +182,7 @@ const CartaoAtividade: React.FC<{
           <p className="text-[10px] text-gray-600 leading-relaxed">
             {destacar && <>As marcadas com «Você» são do papel que você ocupa hoje; as outras ficam à vista para você acompanhar a cadeia. </>}
             As caixas são anotação sua, guardada neste aparelho — o professor não as vê, e marcar não entrega a tarefa.
+            O selo <span className="text-emerald-300 font-bold">Realizada</span> é dele: aparece quando ele dá a tarefa por feita.
           </p>
 
           <div className="flex flex-col gap-0">
@@ -189,6 +190,10 @@ const CartaoAtividade: React.FC<{
               const ultima = i === a.roteiro.tarefas.length - 1;
               const minha = destacar && minhas[i];
               const feita = feitas.includes(i);
+              // Marcação do professor (migr. 405). Vem do banco e o aluno não
+              // mexe nela — é a diferença entre "eu acho que fiz" e "foi dado
+              // por feito".
+              const confirmada = a.realizadas.includes(i);
               return (
                 <div key={i} className="flex gap-3">
                   {/* Mesmo trilho do diagrama de fluxo da tela do professor: a
@@ -212,6 +217,12 @@ const CartaoAtividade: React.FC<{
                       {minha && (
                         <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
                           <User size={9} /> Você
+                        </span>
+                      )}
+                      {confirmada && (
+                        <span title="O professor deu esta tarefa por realizada"
+                          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <Check size={9} /> Realizada
                         </span>
                       )}
                       {t.opcional && (
