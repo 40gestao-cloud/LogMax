@@ -386,6 +386,16 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
                 ? `${modulos.length} módulo${modulos.length === 1 ? '' : 's'} liberado${modulos.length === 1 ? '' : 's'}`
                 : 'Sidebar segue o comportamento normal (RBAC por setor)'}
             </div>
+            {/* O desligar deixou de ser só "devolver o menu": é ele que fecha a
+                sessão no histórico (migr. 406). Sem essa frase, o professor não
+                tem como saber que deixar ligado funde a aula de hoje com a de
+                amanhã numa linha só. */}
+            {ativo && (
+              <div className="text-[10px] text-gray-600 mt-1">
+                Desligue ao fim da aula: é o que fecha esta sessão no histórico.
+                Esquecida ligada, ela é encerrada automaticamente às 22h.
+              </div>
+            )}
           </div>
         </div>
         {config.atualizado_em && (

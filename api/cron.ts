@@ -17,6 +17,7 @@ import { createLogger } from '../lib/log.js';
 //   ?task=expirar-competicoes → RPC expirar_competicoes
 //   ?task=limpar-ip-hash      → RPC limpar_ip_hash_pedidos_online
 //   ?task=lembrar-avaliacoes  → RPC lembrar_avaliacoes_pendentes
+//   ?task=encerrar-aulas      → RPC encerrar_aulas_ociosas
 //
 // Cada task chama uma RPC idempotente que retorna nº de linhas
 // afetadas.
@@ -31,6 +32,11 @@ const TASKS: Record<string, string> = {
   // Lembra o conselho quando a competição está a ≤3 dias do fim e ainda
   // há participante sem nota. 1 aviso por competição por dia.
   'lembrar-avaliacoes':  'lembrar_avaliacoes_pendentes',
+  // Desliga o Modo Aula esquecido ligado (migr. 407). Desligar é gesto humano
+  // no fim da aula, o primeiro a ser esquecido — e sem isso a sessão seguinte
+  // é engolida pela anterior, virando uma aula só de doze horas no histórico.
+  // Roda às 22:10 do Acre, quando nenhuma turma está em sala.
+  'encerrar-aulas':      'encerrar_aulas_ociosas',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
