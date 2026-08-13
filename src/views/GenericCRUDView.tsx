@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
@@ -117,6 +117,19 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
 
   const isFormOpen = showForm || !!editItem;
 
+  // Form acima da tabela: editar uma linha do fim da lista abria o formulário
+  // fora da viewport. Vale para todas as telas que usam este componente —
+  // Clientes, Fornecedores, Bancos e companhia tinham o mesmo problema que
+  // Produtos.
+  const formRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isFormOpen) return;
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
+    });
+  }, [isFormOpen, editItem?.id]);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
@@ -141,7 +154,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar' : 'Novo'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

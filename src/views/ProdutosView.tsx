@@ -625,6 +625,20 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const margemAoVivo = calcMargem(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const isFormOpen = showForm || !!editItem;
 
+  // O formulário fica ACIMA da tabela. Clicar em editar numa linha do fim da
+  // lista abria o form fora da viewport, e o operador tinha de rolar até o topo
+  // para descobrir que alguma coisa havia acontecido. Mesmo padrão de
+  // Funcionários, Metas e Folha. `editItem?.id` na dependência cobre trocar de
+  // produto com o form já aberto.
+  const formRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isFormOpen) return;
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
+    });
+  }, [isFormOpen, editItem?.id]);
+
   // EAN-13 — preview ao vivo
   const eanNorm = normalizeEan13(extras.ean);
   const eanPreviewRef = useRef<HTMLCanvasElement | null>(null);
@@ -700,7 +714,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       {/* Formulário */}
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Produto' : 'Novo Produto'}</h3>
 
