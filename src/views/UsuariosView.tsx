@@ -260,7 +260,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     if (resetConfirm !== TEXTO_CONFIRMACAO) return;
     setResetRunning(true);
     try {
-      const { data, error } = await supabase.rpc('resetar_dados_operacionais');
+      // `_admin` e não a original: a migr. 412 tirou o grant da original para
+      // `authenticated` e pôs esta porta na frente, que exige role = 'admin'
+      // literal. A original continua intocada — é a lista de TRUNCATE, e
+      // reescrevê-la só para trocar um guard reverteria o que as migrs. 377 e
+      // 395 mandaram preservar.
+      const { data, error } = await supabase.rpc('resetar_dados_operacionais_admin');
       if (error) throw error;
       const d = data as any;
       const partes = [
@@ -1013,9 +1018,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       {/* Zona de Perigo — só o professor. Era `isGlobal`, o que colocava o
           botão mais destrutivo do app na mão de CEO e conselheiro, que são
-          alunos. A RPC `resetar_dados_operacionais` ainda aceita 'ceo' no
-          próprio guard (migr. 395): esconder aqui não fecha o F12 — ver a
-          pendência anotada na migração 410. */}
+          alunos. Esconder aqui não fechava o F12: a migr. 412 é que fecha,
+          tirando o grant da RPC original e pondo `_admin` na frente. */}
       {isAdmin && (
         <div className="neu-flat rounded-3xl p-6 border border-red-500/30 shrink-0"
              style={{ background: 'color-mix(in srgb, rgb(239 68 68) 4%, transparent)' }}>
