@@ -114,18 +114,20 @@ const PendenciasAcesso = ({ showToast, podeAjustar, nonce }: {
 
       // O acesso vai por /api/users (service_role); a RPC só CONFERE depois.
       //
-      // Filial e role vão no MESMO request de propósito: a API recusa filial
-      // 'Matriz' para colaborador e gerente, então mandar a unidade primeiro e
-      // o nível depois falharia na primeira metade (migr. 315).
+      // Manda só o ID da movimentação: o destino (filial e cargo) o servidor
+      // LÊ da própria movimentação pendente. Antes isto era um `action:
+      // 'update'` com filial e role no corpo — que é o endpoint genérico de
+      // editar usuário, hoje exclusivo do admin. Passar o destino no corpo
+      // deixaria admin/CEO movendo qualquer um para qualquer lugar por baixo
+      // de um botão que promete só aplicar a promoção já decidida.
+      //
+      // Filial e role continuam no MESMO request de propósito: a API recusa
+      // filial 'Matriz' para colaborador e gerente, então mandar a unidade
+      // primeiro e o nível depois falharia na primeira metade (migr. 315).
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          action: 'update',
-          userId: m.user_profile_id,
-          filial: m.filial_nova,
-          ...(m.role_nova ? { role: m.role_nova } : {}),
-        }),
+        body: JSON.stringify({ action: 'ajustar-acesso-carreira', movimentacaoId: m.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Erro ao ajustar o acesso.');
@@ -286,7 +288,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const [convocarSel, setConvocarSel] = useState<Set<string>>(new Set());
   const [convocarPrazo, setConvocarPrazo] = useState('');
   const [criarAcessoDe, setCriarAcessoDe] = useState<any | null>(null);
-  const [acessoForm, setAcessoForm] = useState({ nome: '', email: '', password: '', role: 'colaborador', setor: 'vendas' });
+  const [acessoForm, setAcessoForm] = useState({ nome: '', email: '', role: 'colaborador', setor: 'vendas' });
 
   // A unidade da vaga: fixa quando se opera dentro de uma filial, escolhida no
   // formulário quando é a Matriz abrindo. Tipada como string porque 'Matriz'
@@ -515,21 +517,24 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
     if (!supabase || !criarAcessoDe) return;
     const f = criarAcessoDe;
     if (!acessoForm.email.trim())          { showToast('Informe o e-mail.', 'error'); return; }
-    if (acessoForm.password.length < 6)    { showToast('Senha deve ter ao menos 6 caracteres.', 'error'); return; }
 
     setAcaoId(f.id);
     try {
       const token = await freshToken();
       if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); setAcaoId(null); return; }
 
+      // `criar-acesso`, e não o `create` genérico: quem contrata dá o login,
+      // mas não escolhe nem recebe a senha — ela é gerada no servidor e vai
+      // direto para o cofre do administrador (migr. 409). A filial sai da
+      // ficha do funcionário, não daqui.
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          action: 'create',
+          action: 'criar-acesso',
+          funcionarioId: f.id,
           nome: acessoForm.nome.trim(), email: acessoForm.email.trim(),
-          password: acessoForm.password, role: acessoForm.role,
-          setor: acessoForm.setor, filial: f.filial,
+          role: acessoForm.role, setor: acessoForm.setor,
         }),
       });
       const json = await res.json();
@@ -544,7 +549,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
         throw new Error(`Acesso criado, mas o vínculo falhou: ${error.message}. Vincule em Usuários.`);
       }
 
-      showToast(`Acesso criado para ${f.nome}.`, 'success');
+      showToast(`Acesso criado para ${f.nome}. A senha está com o administrador.`, 'success');
       setCriarAcessoDe(null);
       await reloadFunc();
     } catch (err: any) {
@@ -1122,7 +1127,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                                       setCriarAcessoDe(novo);
                                       setAcessoForm({
                                         nome: novo.nome ?? '', email: novo.email ?? '',
-                                        password: '', role: 'colaborador', setor: 'vendas',
+                                        role: 'colaborador', setor: 'vendas',
                                       });
                                     }}
                                       className="text-[11px] text-accent hover:brightness-110 flex items-center gap-1 font-semibold">
@@ -1256,11 +1261,16 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                     onChange={e => setAcessoForm(p => ({ ...p, email: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Senha inicial</label>
-                  <input type="password" value={acessoForm.password} autoComplete="new-password"
-                    onChange={e => setAcessoForm(p => ({ ...p, password: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Mínimo 6 caracteres" />
+                {/* Sem campo de senha, de propósito: ela é gerada no servidor
+                    e só o administrador a lê. Quem contrata não entra na conta
+                    de quem contratou. */}
+                <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 border border-white/5"
+                     style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }}>
+                  <KeyRound size={13} className="text-accent shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    A senha é gerada automaticamente e fica com o <strong className="text-gray-300">administrador</strong>,
+                    que a entrega a {criarAcessoDe.nome?.split(' ')[0] ?? 'quem foi contratado'}.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
@@ -1277,7 +1287,10 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                     <select value={acessoForm.setor}
                       onChange={e => setAcessoForm(p => ({ ...p, setor: e.target.value }))}
                       className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                      {['vendas', 'financeiro', 'rh', 'marketing', 'logistica', 'ti', 'gerencia'].map(s => (
+                      {/* 'gerencia' abre os seis setores de uma vez — o
+                          servidor só aceita de admin/CEO, então nem oferece. */}
+                      {['vendas', 'financeiro', 'rh', 'marketing', 'logistica', 'ti',
+                        ...(podeInterfilial ? ['gerencia'] : [])].map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>

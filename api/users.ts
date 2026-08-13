@@ -4,9 +4,9 @@ import { getAdminClient, applyCors } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 
 // Endpoint unificado de gestão de usuários (Auth + user_profiles).
-// Roteia por body.action ∈ 'create' | 'update' | 'delete'. Substitui os 3
-// endpoints separados (fusão pra caber no limite 12 functions do Vercel Hobby).
-// Toda a lógica RBAC/validação idêntica à das versões antigas.
+// Roteia por body.action ∈ 'create' | 'update' | 'delete' | 'reset-password'.
+// Substitui os endpoints separados (fusão pra caber no limite 12 functions do
+// Vercel Hobby). Toda a lógica RBAC/validação idêntica à das versões antigas.
 
 const VALID_ROLES = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
 const VALID_SETORES = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
@@ -14,6 +14,35 @@ const VALID_SETORES_EXTRAS = ['logistica','vendas','financeiro','rh','marketing'
 const VALID_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'];
 
 type Log = ReturnType<typeof createLogger>;
+
+// ── Cofre de senhas (migr. 409) ─────────────────────────────────────────
+// O hash do Auth é irreversível, então a senha só existe legível no instante
+// em que o painel a define. Aqui é esse instante. Falha ao anotar NÃO derruba
+// a operação: o usuário já foi criado/atualizado no Auth, e reverter isso por
+// causa de uma anotação seria pior do que a coluna ficar sem registro.
+async function anotarSenha(
+  admin: SupabaseClient, userId: string, senha: string, callerId: string, log: Log,
+) {
+  const { error } = await admin.from('senhas_visiveis').upsert({
+    user_id: userId, senha, definida_em: new Date().toISOString(), definida_por: callerId,
+  }, { onConflict: 'user_id' });
+  if (error) log.warn('senha.vault_write_failed', { target_id: userId, error: error.message });
+}
+
+// Senha ditável em voz alta: uma palavra do vocabulário do curso + 4 dígitos.
+// Sem caracteres ambíguos e sem símbolo — ela vai ser lida para o aluno.
+const PALAVRAS_SENHA = [
+  'venda', 'caixa', 'estoque', 'compra', 'pedido', 'entrega',
+  'lucro', 'meta', 'equipe', 'filial', 'balanco', 'cliente',
+];
+
+function gerarSenha(): string {
+  const bytes = new Uint32Array(2);
+  globalThis.crypto.getRandomValues(bytes);
+  const palavra = PALAVRAS_SENHA[bytes[0] % PALAVRAS_SENHA.length];
+  const digitos = String(bytes[1] % 10000).padStart(4, '0');
+  return `${palavra}${digitos}`;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action = (req.body?.action ?? req.query?.action) as string | undefined;
@@ -38,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { data: callerProfile } = await admin
       .from('user_profiles')
-      .select('role, setor, filial, pode_acessar_usuarios, is_conselheiro')
+      .select('role, setor, setores_extras, filial, pode_acessar_usuarios, is_conselheiro')
       .eq('id', caller.id)
       .single();
 
@@ -47,10 +76,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Perfil não encontrado.' });
     }
 
+    // ── Portão do módulo Usuários: escrita é do professor ──────────────
+    //
+    // Antes, cada ação tinha a própria régua e soltava CEO, conselheiro e
+    // gerente sobre recortes da turma. Todos esses cargos são ALUNOS: quem
+    // cria conta, troca senha ou muda cargo de colega manda no acesso do
+    // colega, e as filiais competem entre si. A TELA de Usuários é leitura
+    // para quem não é `role = 'admin'`, e este portão é a mesma regra onde o
+    // F12 alcança.
+    //
+    // As réguas por ação continuam abaixo de propósito, mesmo inalcançáveis:
+    // elas dizem quem poderia o quê caso este portão um dia se abra.
+    //
+    // FORA DO PORTÃO ficam as duas ações que o RH e o conselho exercem sem
+    // ser sobre conta de colega — cada uma com a própria régua, mais estreita
+    // que um `update` genérico:
+    //   criar-acesso            → RH/gerente dão login a QUEM ACABOU DE SER
+    //                             CONTRATADO, sem escolher nem ver a senha.
+    //   ajustar-acesso-carreira → admin/CEO movem de unidade quem TEM
+    //                             movimentação pendente, e só para o destino
+    //                             que a movimentação já registrou.
+    const ACOES_DO_ADMIN = ['create', 'update', 'delete', 'reset-password'];
+    if (ACOES_DO_ADMIN.includes(action ?? '') && callerProfile.role !== 'admin') {
+      log.warn('users.permission_denied', {
+        caller_id: caller.id, caller_role: callerProfile.role, action, reason: 'modulo_somente_leitura',
+      });
+      return res.status(403).json({
+        error: 'Somente o administrador pode criar, editar ou excluir usuários.',
+      });
+    }
+
     if (action === 'create') return await handleCreate(req, res, admin, caller.id, callerProfile, log);
     if (action === 'update') return await handleUpdate(req, res, admin, caller.id, callerProfile, log);
     if (action === 'delete') return await handleDelete(req, res, admin, caller.id, callerProfile, log);
-    return res.status(400).json({ error: 'action deve ser "create", "update" ou "delete".' });
+    if (action === 'reset-password') return await handleResetPassword(req, res, admin, caller.id, callerProfile, log);
+    if (action === 'criar-acesso') return await handleCriarAcesso(req, res, admin, caller.id, callerProfile, log);
+    if (action === 'ajustar-acesso-carreira') return await handleAjustarAcessoCarreira(req, res, admin, caller.id, callerProfile, log);
+    return res.status(400).json({ error: 'action inválida.' });
   } catch (err) {
     log.error('handler.unhandled', err);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
@@ -160,6 +222,8 @@ async function handleCreate(
     await admin.auth.admin.deleteUser(newUser.id);
     return res.status(500).json({ error: 'Erro ao criar perfil. Usuário removido.' });
   }
+
+  await anotarSenha(admin, newUser.id, password, callerId, log);
 
   log.info('user.created', { user_id: newUser.id, role, setor, caller_id: callerId });
   return res.status(200).json({ success: true, userId: newUser.id });
@@ -300,7 +364,18 @@ async function handleUpdate(
 
   const authUpdates: { email?: string; password?: string } = {};
   if (updates.email) authUpdates.email = updates.email;
-  if (typeof password === 'string' && password.length >= 6) authUpdates.password = password;
+  // Trocar a senha de OUTRA pessoa é só do admin (o professor). Gerente e CEO
+  // são alunos: quem define a senha de um colega entra na conta dele, e num
+  // ambiente onde as filiais competem entre si isso não é detalhe. Mudar a
+  // PRÓPRIA senha segue liberado — não impersona ninguém, e o cofre continua
+  // refletindo a senha em vigor.
+  if (typeof password === 'string' && password.length >= 6) {
+    if (callerProfile.role !== 'admin' && callerId !== userId) {
+      log.warn('user.permission_denied', { caller_id: callerId, target_id: userId, reason: 'senha_de_terceiro' });
+      return res.status(403).json({ error: 'Apenas o administrador pode trocar a senha de outro usuário.' });
+    }
+    authUpdates.password = password;
+  }
 
   if (Object.keys(authUpdates).length > 0) {
     const { error: authErr } = await admin.auth.admin.updateUserById(userId, authUpdates);
@@ -310,6 +385,7 @@ async function handleUpdate(
       log.warn('auth.update_failed', { error: msg, target_id: userId });
       return res.status(400).json({ error: friendly });
     }
+    if (authUpdates.password) await anotarSenha(admin, userId, authUpdates.password, callerId, log);
   }
 
   if (Object.keys(updates).length === 0) {
@@ -323,6 +399,237 @@ async function handleUpdate(
   }
 
   log.info('user.updated', { target_id: userId, caller_id: callerId, fields: Object.keys(updates) });
+  return res.status(200).json({ success: true });
+}
+
+// ── RESET-PASSWORD ──────────────────────────────────────────────────────
+// Gera uma senha nova, aplica no Auth e anota no cofre. Existe separado do
+// 'update' porque o caso de uso é outro: no update quem escolhe a senha é
+// quem edita; aqui ninguém escolhe — o professor só quer uma senha válida na
+// tela pra ditar ao aluno.
+//
+// ADMIN E MAIS NINGUÉM. Não vale a régua do 'update' (que solta gerente sobre
+// a própria filial), porque esta ação devolve a senha em texto na resposta:
+// quem chama entra na conta do alvo. CEO, conselheiro e gerente são ALUNOS —
+// dar isso a eles é dar login de colega em ano de competição entre filiais.
+// Pela mesma razão a leitura do cofre (migr. 409) é `role = 'admin'` literal,
+// e não `auth_is_admin()`.
+async function handleResetPassword(
+  req: VercelRequest, res: VercelResponse, admin: SupabaseClient,
+  callerId: string, callerProfile: any, log: Log,
+) {
+  if (callerProfile.role !== 'admin') {
+    log.warn('user.permission_denied', { caller_id: callerId, caller_role: callerProfile.role, reason: 'reset_nao_admin' });
+    return res.status(403).json({ error: 'Apenas o administrador pode redefinir senhas.' });
+  }
+
+  const { userId } = req.body ?? {};
+  if (!userId || typeof userId !== 'string') {
+    return res.status(400).json({ error: 'userId obrigatório.' });
+  }
+
+  const { data: targetProfile } = await admin
+    .from('user_profiles').select('role').eq('id', userId).single();
+  if (!targetProfile) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+  // Outro admin (outro professor) continua fora de alcance — a régua do
+  // 'update' vale aqui também.
+  if (targetProfile.role === 'admin' && callerId !== userId) {
+    return res.status(403).json({ error: 'Administradores não podem ser editados.' });
+  }
+
+  const password = gerarSenha();
+  const { error: authErr } = await admin.auth.admin.updateUserById(userId, { password });
+  if (authErr) {
+    log.warn('auth.reset_failed', { error: authErr.message, target_id: userId });
+    return res.status(400).json({ error: authErr.message ?? 'Erro ao redefinir senha.' });
+  }
+
+  await anotarSenha(admin, userId, password, callerId, log);
+
+  log.info('user.password_reset', { target_id: userId, caller_id: callerId });
+  return res.status(200).json({ success: true, password });
+}
+
+// ── CRIAR-ACESSO ────────────────────────────────────────────────────────
+// O RH dá login a quem acabou de ser contratado, SEM escolher e SEM ver a
+// senha: o servidor gera, grava no cofre (migr. 409) e não devolve nada. A
+// contratação fecha sem o professor; a credencial continua só com ele.
+//
+// A régua é estreita de propósito — não é um `create` genérico:
+//   • o alvo tem de ser um funcionário EXISTENTE, ATIVO e AINDA SEM login;
+//   • a filial vem da ficha do funcionário, nunca do corpo da request, senão
+//     o RH criaria conta em unidade adversária;
+//   • cargo acima de colaborador só admin/CEO atribuem.
+//
+// Sobra um caminho, e é aceitável: quem administra Funcionários pode cadastrar
+// uma ficha e depois dar login a ela. É um passo a mais, some da lista de
+// pendências e aparece no módulo Usuários do professor.
+async function handleCriarAcesso(
+  req: VercelRequest, res: VercelResponse, admin: SupabaseClient,
+  callerId: string, callerProfile: any, log: Log,
+) {
+  // hasSetor do frontend, replicado: setor primário, extras ou escopo global.
+  const setoresDoCaller: string[] = [
+    callerProfile.setor,
+    ...(Array.isArray(callerProfile.setores_extras) ? callerProfile.setores_extras : []),
+  ];
+  const ehRH = callerProfile.setor === 'all' || setoresDoCaller.includes('rh');
+  const podeOperar = callerProfile.role === 'admin' || callerProfile.role === 'ceo'
+    || callerProfile.role === 'gerente' || ehRH;
+  if (!podeOperar) {
+    log.warn('acesso.permission_denied', { caller_id: callerId, caller_role: callerProfile.role });
+    return res.status(403).json({ error: 'Sem permissão para criar acesso de contratado.' });
+  }
+
+  const { funcionarioId, email, nome, setor } = req.body ?? {};
+  let { role } = req.body ?? {};
+  if (!funcionarioId || typeof funcionarioId !== 'string') {
+    return res.status(400).json({ error: 'funcionarioId obrigatório.' });
+  }
+
+  const { data: func } = await admin
+    .from('funcionarios')
+    .select('id, nome, email, filial, status, user_profile_id')
+    .eq('id', funcionarioId)
+    .single();
+  if (!func) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+  if (func.user_profile_id) {
+    return res.status(400).json({ error: 'Este funcionário já tem login.' });
+  }
+  if (func.status !== 'Ativo') {
+    return res.status(400).json({ error: 'Só funcionário ativo recebe acesso.' });
+  }
+
+  // Gerente e RH de filial não criam acesso em outra unidade.
+  if (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo'
+      && callerProfile.filial && func.filial !== callerProfile.filial) {
+    log.warn('acesso.permission_denied', { caller_id: callerId, alvo_filial: func.filial, reason: 'outra_filial' });
+    return res.status(403).json({ error: 'Só é possível dar acesso a funcionário da própria unidade.' });
+  }
+
+  const emailFinal = (typeof email === 'string' && email.trim()) || func.email;
+  const nomeFinal  = (typeof nome  === 'string' && nome.trim())  || func.nome;
+  if (!emailFinal) return res.status(400).json({ error: 'Informe o e-mail do novo acesso.' });
+
+  if (role !== 'colaborador' && role !== 'gerente') role = 'colaborador';
+  if (role === 'gerente' && callerProfile.role !== 'admin' && callerProfile.role !== 'ceo') {
+    return res.status(403).json({ error: 'Apenas admin ou CEO podem criar acesso de gerente.' });
+  }
+  if (!VALID_SETORES.includes(setor) || setor === 'all') {
+    return res.status(400).json({ error: 'Setor inválido.' });
+  }
+  // 'gerencia' não é um departamento: é o escopo que abre os seis setores de
+  // uma vez (o insert abaixo preenche `setores_extras` com todos). Quem
+  // contrata não distribui isso sozinho.
+  if (setor === 'gerencia' && callerProfile.role !== 'admin' && callerProfile.role !== 'ceo') {
+    return res.status(403).json({ error: 'Apenas admin ou CEO podem dar acesso de Gerência.' });
+  }
+  // Mesma trava do create: cargo operacional não vive na Matriz, senão o
+  // FilialContext barra o login com "Filial não configurada".
+  if (!func.filial || func.filial === 'Matriz') {
+    return res.status(400).json({ error: 'Funcionário precisa estar numa unidade operacional para receber acesso.' });
+  }
+
+  const password = gerarSenha();
+  const { data: { user: newUser }, error: createErr } = await admin.auth.admin.createUser({
+    email: emailFinal, password, email_confirm: true,
+  });
+  if (createErr || !newUser) {
+    const msg = createErr?.message ?? 'Erro ao criar acesso.';
+    const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
+    log.warn('acesso.create_failed', { error: msg, funcionario_id: funcionarioId });
+    return res.status(400).json({ error: friendly });
+  }
+
+  const { error: profileErr } = await admin.from('user_profiles').insert({
+    id: newUser.id, nome: nomeFinal, email: emailFinal,
+    role, setor, setores_extras: setor === 'gerencia'
+      ? ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti'] : [],
+    filial: func.filial, criado_por: callerId,
+  });
+  if (profileErr) {
+    log.error('acesso.profile_insert_failed', profileErr, { new_user_id: newUser.id, rollback: 'deleting_auth_user' });
+    await admin.auth.admin.deleteUser(newUser.id);
+    return res.status(500).json({ error: 'Erro ao criar perfil. Acesso removido.' });
+  }
+
+  await anotarSenha(admin, newUser.id, password, callerId, log);
+
+  log.info('acesso.created', { user_id: newUser.id, funcionario_id: funcionarioId, caller_id: callerId });
+  // A senha NÃO volta na resposta: é o ponto inteiro deste endpoint.
+  return res.status(200).json({ success: true, userId: newUser.id, senhaNoCofre: true });
+}
+
+// ── AJUSTAR-ACESSO-CARREIRA ─────────────────────────────────────────────
+// Movimentação de carreira mexe em unidade e cargo — decisão de holding, e por
+// isso admin e CEO, a mesma régua do `decidir_vaga` e do `_assert_interfilial`
+// (migr. 312). O que impede isso de virar um `update` disfarçado é o destino
+// não vir do corpo da request: ele é LIDO da movimentação pendente. Não há
+// como pedir "mova fulano para a minha filial" — só "aplique o que a promoção
+// já decidiu".
+async function handleAjustarAcessoCarreira(
+  req: VercelRequest, res: VercelResponse, admin: SupabaseClient,
+  callerId: string, callerProfile: any, log: Log,
+) {
+  if (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo') {
+    log.warn('carreira.permission_denied', { caller_id: callerId, caller_role: callerProfile.role });
+    return res.status(403).json({ error: 'Apenas admin ou CEO ajustam acesso de movimentação de carreira.' });
+  }
+
+  const { movimentacaoId } = req.body ?? {};
+  if (!movimentacaoId || typeof movimentacaoId !== 'string') {
+    return res.status(400).json({ error: 'movimentacaoId obrigatório.' });
+  }
+
+  const { data: mov } = await admin
+    .from('movimentacoes_carreira')
+    .select('id, user_profile_id, filial_nova, role_nova, acesso_pendente, ativo')
+    .eq('id', movimentacaoId)
+    .single();
+  if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada.' });
+  if (!mov.acesso_pendente || mov.ativo === false) {
+    return res.status(400).json({ error: 'Esta movimentação não tem acesso pendente.' });
+  }
+  if (!mov.user_profile_id) {
+    return res.status(400).json({ error: 'Esta movimentação não tem login vinculado.' });
+  }
+
+  const { data: alvo } = await admin
+    .from('user_profiles').select('role').eq('id', mov.user_profile_id).single();
+  if (!alvo) return res.status(404).json({ error: 'Usuário da movimentação não encontrado.' });
+  if (alvo.role === 'admin') {
+    return res.status(403).json({ error: 'Administradores não podem ser editados.' });
+  }
+
+  const updates: Record<string, any> = {};
+  if (!VALID_FILIAIS.includes(mov.filial_nova)) {
+    return res.status(400).json({ error: 'A movimentação aponta para uma filial inválida.' });
+  }
+  updates.filial = mov.filial_nova;
+  if (mov.role_nova) {
+    if (!VALID_ROLES.includes(mov.role_nova) || mov.role_nova === 'admin') {
+      return res.status(400).json({ error: 'A movimentação aponta para um cargo inválido.' });
+    }
+    if ((mov.role_nova === 'ceo' || mov.role_nova === 'conselheiro') && callerProfile.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas administradores promovem a CEO ou Conselheiro.' });
+    }
+    updates.role = mov.role_nova;
+  }
+  const roleFinal = updates.role ?? alvo.role;
+  if ((roleFinal === 'colaborador' || roleFinal === 'gerente') && updates.filial === 'Matriz') {
+    return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional.' });
+  }
+
+  const { error } = await admin.from('user_profiles').update(updates).eq('id', mov.user_profile_id);
+  if (error) {
+    log.error('carreira.update_failed', error, { movimentacao_id: movimentacaoId });
+    return res.status(500).json({ error: 'Erro ao ajustar o acesso.' });
+  }
+
+  log.info('carreira.acesso_ajustado', {
+    movimentacao_id: movimentacaoId, target_id: mov.user_profile_id, caller_id: callerId, fields: Object.keys(updates),
+  });
   return res.status(200).json({ success: true });
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -292,6 +292,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     }
   }, [editForm?.role, editForm?.filial, editForm?.setor]);
 
+  // ---- Cofre de senhas (migr. 409) ----
+  // O Auth guarda só o hash, que é irreversível: o que aparece aqui é a senha
+  // anotada no momento em que o painel a definiu. Quem foi criado antes da
+  // migração não tem registro, e só passa a ter depois de um reset.
+  // A RLS já restringe a leitura a role='admin'; o `isAdmin` abaixo evita o
+  // request inútil de quem sabidamente receberia lista vazia.
+  const [senhas, setSenhas] = useState<Record<string, string>>({});
+  const [senhaVisivel, setSenhaVisivel] = useState<Record<string, boolean>>({});
+  const [confirmReset, setConfirmReset] = useState<string | null>(null);
+  const [resetandoId, setResetandoId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!supabase) { setIsLoading(false); return; }
     (async () => {
@@ -306,6 +317,48 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!supabase || !isAdmin) return;
+    (async () => {
+      const { data } = await supabase!.from('senhas_visiveis').select('user_id, senha');
+      if (!data) return;
+      setSenhas(Object.fromEntries(data.map((r: any) => [r.user_id, r.senha])));
+    })();
+  }, [isAdmin]);
+
+  const copiarSenha = async (senha: string) => {
+    try {
+      await navigator.clipboard.writeText(senha);
+      showToast('Senha copiada.', 'success');
+    } catch {
+      showToast('Não foi possível copiar. Selecione e copie à mão.', 'error');
+    }
+  };
+
+  const handleResetSenha = async (userId: string) => {
+    const token = await freshToken();
+    if (!token) { showToast('Sessão expirada. Faça login novamente.', 'error'); return; }
+    setResetandoId(userId);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: 'reset-password', userId }),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast(json.error ?? 'Erro ao redefinir senha.', 'error'); return; }
+      setSenhas(prev => ({ ...prev, [userId]: json.password }));
+      // Revela sozinha: o professor acabou de pedir essa senha pra ditar.
+      setSenhaVisivel(prev => ({ ...prev, [userId]: true }));
+      showToast(`Nova senha: ${json.password}`, 'success');
+    } catch {
+      showToast('Erro de conexão.', 'error');
+    } finally {
+      setResetandoId(null);
+      setConfirmReset(null);
+    }
+  };
 
   const isGlobalRole = (u: UserProfile) =>
     u.role === 'admin' || u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true);
@@ -352,6 +405,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', 'error'); return; }
       setUsers(prev => prev.filter(u => u.id !== userId));
+      // O cofre cascateia no banco (FK ON DELETE CASCADE); aqui é só o espelho.
+      setSenhas(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => id !== userId)));
       showToast('Usuário excluído.', 'success');
     } catch {
       showToast('Erro de conexão.', 'error');
@@ -387,6 +442,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       // Upload de foto, se selecionada
       const newUserId: string = json.userId;
+      setSenhas(prev => ({ ...prev, [newUserId]: form.password }));
       if (formPhotoFile && supabase) {
         try {
           const url = await uploadFotoPerfil(formPhotoFile, newUserId);
@@ -415,12 +471,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // ---- Editar usuário ----
 
   // Quem pode editar este usuário?
+  //
+  // Só o professor. CEO, conselheiro e gerente são alunos, e a tela virou
+  // leitura para eles — quem edita usuário manda no acesso de um colega. O
+  // `/api/users` recusa igual (portão único no topo do handler); isto aqui só
+  // evita botão que existe pra dar 403.
   const canEdit = (u: UserProfile) => {
-    if (u.id === callerProfile.id) return true; // self
-    if (u.role === 'admin') return false;       // ninguém edita admin
-    if (u.role === 'ceo' && !isAdmin) return false;
-    if (isGerente) return u.role === 'colaborador';
-    return isGlobal; // admin/CEO
+    if (!isAdmin) return false;
+    if (u.id === callerProfile.id) return true;  // self
+    return u.role !== 'admin';                   // um admin não edita o outro
   };
 
   const openEdit = (u: UserProfile) => {
@@ -465,7 +524,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         nome: editForm.nome,
         email: editForm.email,
       };
-      if (editForm.password) payload.password = editForm.password;
+      if (editForm.password && (isAdmin || editingUser.id === callerProfile.id)) {
+        payload.password = editForm.password;
+      }
       if (isGlobal) {
         payload.role = editForm.role;
         // Nunca envia `editForm.setor` cru: se o cargo mudou para não-global,
@@ -495,6 +556,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao atualizar.', 'error'); return; }
+
+      if (payload.password) {
+        setSenhas(prev => ({ ...prev, [editingUser.id]: payload.password }));
+      }
 
       // Atualiza estado local
       setUsers(prev => prev.map(u => {
@@ -592,14 +657,27 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <FileSpreadsheet size={14} />{exportingExcel ? 'Gerando...' : 'Excel'}
             </button>
           )}
-          <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
-            <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
-          </NeuButtonAccent>
+          {isAdmin && (
+            <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
+              <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
+            </NeuButtonAccent>
+          )}
         </div>
       </div>
 
+      {/* Aviso de leitura — sem ele, quem não é admin acha que a tela quebrou
+          ao não encontrar botão nenhum. */}
+      {!isAdmin && (
+        <div className="neu-flat rounded-2xl px-4 py-3 border border-white/5 shrink-0 flex items-center gap-2.5">
+          <Eye size={14} className="text-gray-500 shrink-0" />
+          <p className="text-xs text-gray-400">
+            Consulta apenas. Criar usuário, trocar senha, mudar cargo ou excluir conta é do administrador.
+          </p>
+        </div>
+      )}
+
       <AnimatePresence>
-        {showForm && (
+        {showForm && isAdmin && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
@@ -743,6 +821,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-2 w-10"></th>
                   <th className="pb-4 font-bold px-4">Nome</th>
                   <th className="pb-4 font-bold px-4">E-mail</th>
+                  {isAdmin && <th className="pb-4 font-bold px-4">Senha</th>}
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
@@ -762,17 +841,46 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                             ? <img src={u.foto_url} alt={u.nome ?? ''} className="w-8 h-8 rounded-full object-cover" />
                             : <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300">{(u.nome?.[0] ?? '?').toUpperCase()}</div>
                           }
-                          <button
-                            onClick={() => { setPhotoUploadId(u.id); setTimeout(() => photoInputRef.current?.click(), 0); }}
-                            disabled={photoUploading}
-                            title="Alterar foto"
-                            className="absolute inset-0 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity disabled:cursor-wait">
-                            <Camera size={12} className="text-white" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => { setPhotoUploadId(u.id); setTimeout(() => photoInputRef.current?.click(), 0); }}
+                              disabled={photoUploading}
+                              title="Alterar foto"
+                              className="absolute inset-0 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity disabled:cursor-wait">
+                              <Camera size={12} className="text-white" />
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
                       <td className="py-3 px-4 text-xs text-gray-400 font-mono">{u.email}</td>
+                      {isAdmin && (
+                        <td className="py-3 px-4">
+                          {senhas[u.id] ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono text-gray-300 select-all min-w-[5.5rem]">
+                                {senhaVisivel[u.id] ? senhas[u.id] : '••••••••'}
+                              </span>
+                              <button
+                                onClick={() => setSenhaVisivel(p => ({ ...p, [u.id]: !p[u.id] }))}
+                                title={senhaVisivel[u.id] ? 'Ocultar senha' : 'Mostrar senha'}
+                                className="text-gray-500 hover:text-gray-200 transition-colors">
+                                {senhaVisivel[u.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+                              {senhaVisivel[u.id] && (
+                                <button onClick={() => copiarSenha(senhas[u.id])} title="Copiar senha"
+                                  className="text-gray-500 hover:text-accent transition-colors">
+                                  <Copy size={12} />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-600" title="Senha definida antes do cofre existir — o hash do Auth não pode ser lido de volta. Use Redefinir senha.">
+                              não registrada
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-center">
                         <div className="flex flex-wrap gap-1 justify-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${u.setor === 'all' ? 'setor-badge--global' : `border-current/25 ${setorCls(u.setor)}`}`}>
@@ -787,22 +895,40 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       </td>
                       <td className="py-3 px-4 text-center"><FilialBadge filial={u.filial} /></td>
                       <td className="py-3 px-4">
-                        <select
-                          value={u.funcionario_id ?? ''}
-                          onChange={e => handleLinkFuncionario(u.id, e.target.value)}
-                          className="neu-input rounded-lg px-2 py-1.5 text-xs w-full max-w-[160px]"
-                        >
-                          <option value="">Sem vínculo</option>
-                          {funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => (
-                            <option key={f.id} value={f.id}>{f.nome}</option>
-                          ))}
-                        </select>
+                        {isAdmin ? (
+                          <select
+                            value={u.funcionario_id ?? ''}
+                            onChange={e => handleLinkFuncionario(u.id, e.target.value)}
+                            className="neu-input rounded-lg px-2 py-1.5 text-xs w-full max-w-[160px]"
+                          >
+                            <option value="">Sem vínculo</option>
+                            {funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => (
+                              <option key={f.id} value={f.id}>{f.nome}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            {funcionarios.find((f: any) => f.id === u.funcionario_id)?.nome ?? 'Sem vínculo'}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {confirmDelete === u.id ? (
+                        {confirmReset === u.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Nova senha?</span>
+                            <button onClick={() => handleResetSenha(u.id)} disabled={resetandoId === u.id}
+                              className="text-[10px] text-accent hover:brightness-125 font-bold uppercase tracking-widest transition-all disabled:opacity-50">
+                              {resetandoId === u.id ? '...' : 'Gerar'}
+                            </button>
+                            <button onClick={() => setConfirmReset(null)}
+                              className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-widest transition-colors">
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : confirmDelete === u.id ? (
                           <div className="flex items-center justify-end gap-2">
                             <button onClick={() => handleDelete(u.id)} disabled={deleting}
                               className="text-[10px] text-red-500 hover:text-red-300 font-bold uppercase tracking-widest transition-colors disabled:opacity-50">
@@ -822,7 +948,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                                 <Pencil size={13} />
                               </button>
                             )}
-                            {u.id !== callerProfile.id && u.role !== 'admin' && !(u.role === 'ceo' && !isAdmin) && (
+                            {/* Só admin: a resposta traz a senha em texto, então
+                                quem reseta entra na conta do alvo. CEO,
+                                conselheiro e gerente são alunos. */}
+                            {isAdmin && (u.role !== 'admin' || u.id === callerProfile.id) && (
+                              <button onClick={() => setConfirmReset(u.id)}
+                                title="Redefinir senha (gera uma nova e mostra na coluna Senha)"
+                                className="action-btn-edit">
+                                <KeyRound size={13} />
+                              </button>
+                            )}
+                            {isAdmin && u.id !== callerProfile.id && u.role !== 'admin' && (
                               <button onClick={() => setConfirmDelete(u.id)}
                                 title="Excluir"
                                 className="action-btn-delete">
@@ -841,8 +977,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         )}
       </div>
 
-      {/* Zona de Perigo — admin e CEO. Reset operacional preservando os usuários. */}
-      {isGlobal && (
+      {/* Zona de Perigo — só o professor. Era `isGlobal`, o que colocava o
+          botão mais destrutivo do app na mão de CEO e conselheiro, que são
+          alunos. A RPC `resetar_dados_operacionais` ainda aceita 'ceo' no
+          próprio guard (migr. 395): esconder aqui não fecha o F12 — ver a
+          pendência anotada na migração 410. */}
+      {isAdmin && (
         <div className="neu-flat rounded-3xl p-6 border border-red-500/30 shrink-0"
              style={{ background: 'color-mix(in srgb, rgb(239 68 68) 4%, transparent)' }}>
           <div className="flex items-start gap-3 mb-4">
@@ -975,7 +1115,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
 
-                {/* Nova senha (opcional) */}
+                {/* Nova senha (opcional) — trocar a de OUTRA pessoa é só do
+                    admin; a própria, qualquer um. Gerente e CEO são alunos, e
+                    definir a senha de um colega é entrar na conta dele. O
+                    backend recusa igual, este `&&` só evita o campo morto. */}
+                {(isAdmin || editingUser.id === callerProfile.id) && (
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="user-edit-password" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nova Senha (opcional)</label>
                   <div className="relative">
@@ -989,6 +1133,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     </button>
                   </div>
                 </div>
+                )}
 
                 {/* Setor — admin/CEO/gerente podem alterar (gerente só em colaboradores) */}
                 <div className="flex flex-col gap-1.5">
