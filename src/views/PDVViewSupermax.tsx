@@ -9,6 +9,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
+import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
@@ -39,6 +40,11 @@ interface CartItem {
 }
 
 type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fiado' | 'PIX';
+
+// O que fazer quando o MaxBank autorizar a maquininha: fechar a venda inteira
+// ('venda', cartão como forma única) ou devolver o valor como uma linha da
+// lista do pagamento misto ('linha').
+type DestinoCartao = 'venda' | 'linha';
 
 // Foco fica preso dentro do modal — Tab/Shift+Tab ciclam só nos focáveis dele.
 const FOCUSABLE_SELECTOR =
@@ -87,6 +93,10 @@ export const PDVViewSupermax = ({
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', { filial: [filial, 'Matriz'] }, true);
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
 
+  // Cobranças abandonadas da SuperMax (Pix e cartão). Até agora só o PDV de
+  // MaxLook/TechMax varria, e só Pix — a SuperMax acumulava as duas coisas.
+  useVarrerPendentesOrfaos(filial, user?.id, showToast);
+
   const [code, setCode]                 = useState('');
   const [cart, setCart]                 = useState<CartItem[]>([]);
   const [lastAdded, setLastAdded]       = useState<CartItem | null>(null);
@@ -108,7 +118,10 @@ export const PDVViewSupermax = ({
   const [cashReceived, setCashReceived]         = useState('');
   const [changeModal, setChangeModal]           = useState<{ amount: number } | null>(null);
   const [pixModal, setPixModal]                 = useState<{ id: string; valor: number } | null>(null);
-  const [cartaoModal, setCartaoModal]           = useState<{ id: string; valor: number; metodo: 'debito' | 'credito'; parcelas: number } | null>(null);
+  // `destino` diz o que fazer quando o MaxBank autorizar: 'venda' fecha a
+  // venda inteira (cartão como forma única), 'linha' devolve o valor como um
+  // pagamento da lista do misto.
+  const [cartaoModal, setCartaoModal]           = useState<{ id: string; valor: number; metodo: 'debito' | 'credito'; parcelas: number; destino: DestinoCartao } | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch]         = useState('');
   const [confirmCancel, setConfirmCancel]       = useState(false);
@@ -169,8 +182,9 @@ export const PDVViewSupermax = ({
   // fica bloqueado no misto (gera conta_receber pelo valor cheio, não
   // pelo parcial — incoerente sem refactor do RPC).
   // troco fica gravado na linha do Dinheiro (não em stash agregado), pra
-  // que remover uma linha decremente o troco corretamente. parcelas só é
-  // usado quando Cartão Crédito é forma única (RPC ignora em misto).
+  // que remover uma linha decremente o troco corretamente. `parcelas` vale
+  // também dentro do misto desde a migr. 415 — a parte do crédito vira conta
+  // a receber parcelada pela RPC `pdv_registrar_credito_misto`.
   type PaymentLine = { forma: Exclude<FormaPagamento, 'Fiado'>; valor: number; troco?: number; parcelas?: number };
   const [pagamentos, setPagamentos] = useState<PaymentLine[]>([]);
   const [parcialValor, setParcialValor] = useState('');
@@ -219,7 +233,7 @@ export const PDVViewSupermax = ({
   // hook devolver null por um instante (hiccup de rede/RLS) no meio de uma
   // cobrança. Ver caixaAtivo, antes do RENDER.
   const ultimoCaixaRef       = useRef(caixa);
-  const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number) => Promise<void>>(null!);
+  const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number) => Promise<string>>(null!);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
   useEffect(() => {
@@ -739,7 +753,9 @@ export const PDVViewSupermax = ({
   }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint]);
 
   // === FINALIZAR ===
-  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1) => {
+  // Devolve o id da venda criada — o fluxo misto precisa dele pra registrar a
+  // parte do crédito como conta a receber (migr. 415).
+  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1): Promise<string> => {
     if (!supabase) throw new Error('Supabase indisponível.');
     const cid = cidOverride !== undefined ? cidOverride : null;
     const itensPayload = cart.map(item => ({
@@ -784,6 +800,7 @@ export const PDVViewSupermax = ({
     // código, ou thankYou direto). Sem isso, o foco vazava pro código
     // antes do agradecimento renderizar e o usuário começava a digitar
     // por baixo do overlay.
+    return String(vendaId);
   };
   finalizarVendaRef.current = finalizarVenda;
 
@@ -830,6 +847,14 @@ export const PDVViewSupermax = ({
     const parcelas = (pagamentos.length === 1 && pagamentos[0].forma === 'Cartão Crédito')
       ? (pagamentos[0].parcelas ?? 1)
       : 1;
+    // Parte da venda paga em crédito. A RPC de venda marca o misto inteiro
+    // como recebido no dia; o crédito só é repassado pela operadora depois,
+    // e é isso que `pdv_registrar_credito_misto` corrige (migr. 415).
+    // Linhas de crédito com parcelamentos diferentes são raras no balcão —
+    // somamos os valores e usamos o maior parcelamento lançado.
+    const linhasCredito = pagamentos.filter(p => p.forma === 'Cartão Crédito');
+    const creditoValor = parseFloat(linhasCredito.reduce((s, p) => s + p.valor, 0).toFixed(2));
+    const creditoParcelas = linhasCredito.reduce((mx, p) => Math.max(mx, p.parcelas ?? 1), 1);
     try {
       setIsClosing(true);
       setPaymentError(null);
@@ -837,7 +862,24 @@ export const PDVViewSupermax = ({
       // handlePayChoice. O tempo entre cash modal e FECHAR VENDA é de
       // segundos; revalidar gera falso-negativo silencioso (toast some
       // atrás do overlay fullscreen z-100) e mata a venda.
-      await finalizarVenda(forma, undefined, parcelas);
+      const vendaId = await finalizarVenda(forma, undefined, parcelas);
+      // Só em misto com crédito. Falha aqui não desfaz a venda — ela já
+      // persistiu, e o aviso diz exatamente o que ficou pendente de ajuste
+      // pro Financeiro não descobrir isso no fechamento do mês.
+      if (pagamentos.length > 1 && creditoValor > 0 && supabase) {
+        const { error: creditoErr } = await supabase.rpc('pdv_registrar_credito_misto', {
+          p_venda_id:      vendaId,
+          p_valor_credito: creditoValor,
+          p_parcelas:      creditoParcelas,
+        });
+        if (creditoErr) {
+          showToast?.(
+            `Venda fechada, mas a parte no crédito (R$ ${formatBRL(creditoValor)}) ficou lançada como recebida hoje. Ajuste em Financeiro → Contas a Receber. (${creditoErr.message})`,
+            'error',
+            true,
+          );
+        }
+      }
       setPaymentModalOpen(false);
       // Sequência de feedback final: troco/exato (se aplicável) → agradecimento.
       // Cartão puro pula direto pro agradecimento (sem feedback redundante).
@@ -902,6 +944,9 @@ export const PDVViewSupermax = ({
             cliente_id:  null,
             status:      'aguardando',
             operador_id: user?.id ?? null,
+            // Filial do CAIXA, não a do perfil — admin opera pelo hub com
+            // perfil 'Matriz', que não vende (migr. 414).
+            filial,
           })
           .select('id, valor')
           .single();
@@ -924,36 +969,38 @@ export const PDVViewSupermax = ({
       return;
     }
 
-    // Cartão Crédito como forma única → pergunta parcelas (1x-12x). Em
-    // misto vai direto 1x porque a RPC ignora p_parcelas na string 'Misto:'.
+    // Cartão SEMPRE passa pela maquininha, sozinho ou dentro do misto.
+    //
+    // Até 2026-08-13 a linha de cartão no misto era só adicionada à lista, sem
+    // criar `cartao_pendentes` e sem esperar o MaxBank autorizar. Um centavo em
+    // dinheiro convertia qualquer venda de cartão num fechamento sem
+    // maquininha — o caminho curto para furar o fluxo que o resto do PDV
+    // obriga. O que muda no misto é só o destino da autorização: em vez de
+    // fechar a venda, ela vira uma linha de pagamento.
+    // Crédito pergunta parcelas antes, nos dois casos: agora que o misto gera
+    // conta a receber de verdade (RPC pdv_registrar_credito_misto), parcelar
+    // dentro do misto deixou de ser mentira contábil. `confirmarParcelas`
+    // recalcula o destino e segue daqui.
     if (forma === 'Cartão Crédito') {
-      const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
-      if (!isMistoActive) {
-        setParcelasIdx(0);
-        setParcelasModalOpen(true);
-        return;
-      }
+      setParcelasIdx(0);
+      setParcelasModalOpen(true);
+      return;
     }
 
-    // Cartão Débito como forma única → cria pendente para maquininha (MaxPay)
-    if (forma === 'Cartão Débito') {
-      const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
-      if (!isMistoActive) {
-        setPaymentModalOpen(false);
-        await criarCartaoPendente('debito', totalFinal, 1);
-        return;
-      }
-    }
-
-    // Cartão em misto — adiciona à lista e foca FECHAR VENDA.
-    setPagamentos(prev => [...prev, { forma, valor: parseFloat(valorDevido.toFixed(2)) }]);
-    setParcialValor('');
-    focusFecharVenda();
+    // Só Cartão Débito chega aqui: Dinheiro, PIX e Fiado retornaram acima.
+    const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+    setPaymentModalOpen(false);
+    await criarCartaoPendente('debito', parseFloat(valorDevido.toFixed(2)), 1, isMistoActive ? 'linha' : 'venda');
   };
 
   // Cria cartao_pendentes e abre overlay aguardando aproximação na maquininha.
   // Quando MaxBank autoriza, realtime/polling finaliza venda.
-  const criarCartaoPendente = async (metodo: 'debito' | 'credito', valor: number, parcelas: number) => {
+  const criarCartaoPendente = async (
+    metodo: 'debito' | 'credito',
+    valor: number,
+    parcelas: number,
+    destino: DestinoCartao = 'venda',
+  ) => {
     try {
       if (!supabase) throw new Error('Supabase indisponível.');
       const aberto = await caixaAindaAberto();
@@ -981,6 +1028,7 @@ export const PDVViewSupermax = ({
           parcelas,
           status: 'aguardando',
           operador_id: user?.id ?? null,
+          filial,
         })
         .select('id, valor, metodo, parcelas')
         .single();
@@ -990,6 +1038,7 @@ export const PDVViewSupermax = ({
         valor: Number(pendente.valor),
         metodo: pendente.metodo,
         parcelas: pendente.parcelas,
+        destino,
       });
     } catch (err: any) {
       showToast?.(`Erro Cartão: ${err?.message ?? '—'}`, 'error', true);
@@ -1003,10 +1052,11 @@ export const PDVViewSupermax = ({
   const confirmarParcelas = async (n: number) => {
     const parcial = parseBRL(parcialValor);
     const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+    const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
     setParcelasModalOpen(false);
     setParcialValor('');
     setPaymentModalOpen(false);
-    await criarCartaoPendente('credito', parseFloat(valorDevido.toFixed(2)), n);
+    await criarCartaoPendente('credito', parseFloat(valorDevido.toFixed(2)), n, isMistoActive ? 'linha' : 'venda');
   };
 
   // Cash modal não finaliza mais — adiciona Dinheiro à lista de pagamentos
@@ -1132,8 +1182,26 @@ export const PDVViewSupermax = ({
         setCartaoModal(null);
         return;
       }
+      const formaCanon = cartaoModal.metodo === 'debito' ? 'Cartão Débito' : 'Cartão Crédito';
+
+      // Misto: a autorização vira uma linha de pagamento e o operador volta ao
+      // modal pra lançar o resto. A venda só fecha no FECHAR VENDA.
+      if (cartaoModal.destino === 'linha') {
+        setPagamentos(prev => [...prev, {
+          forma:    formaCanon as Exclude<FormaPagamento, 'Fiado'>,
+          valor:    cartaoModal.valor,
+          parcelas: cartaoModal.metodo === 'credito' ? cartaoModal.parcelas : undefined,
+        }]);
+        // O parcial já virou linha — deixar o campo preenchido faria o próximo
+        // lançamento herdar o valor do anterior.
+        setParcialValor('');
+        setCartaoModal(null);
+        setPaymentModalOpen(true);
+        focusFecharVenda();
+        return;
+      }
+
       try {
-        const formaCanon = cartaoModal.metodo === 'debito' ? 'Cartão Débito' : 'Cartão Crédito';
         await finalizarVendaRef.current(formaCanon as any, undefined, cartaoModal.parcelas);
         setCartaoModal(null);
         setReciboModalOpen(true);
@@ -1288,6 +1356,9 @@ export const PDVViewSupermax = ({
       return;
     }
     const cartaoId = cartaoModal.id;
+    // Cartão que ia virar linha do misto: desistir dele não pode abandonar a
+    // venda pela metade — o operador volta pro modal com o que já lançou.
+    const voltaProMisto = cartaoModal.destino === 'linha';
     try {
       const { error } = await supabase
         .from('cartao_pendentes')
@@ -1299,6 +1370,7 @@ export const PDVViewSupermax = ({
     } finally {
       setConfirmCartaoCancel(false);
       setCartaoModal(null);
+      if (voltaProMisto) setPaymentModalOpen(true);
     }
   };
 

@@ -25,6 +25,7 @@ import {
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { UNIDADES_PRODUTO, unidadesDeProduto } from '../lib/unidades';
+import { ATRIBUTOS_PRODUTO, type AtributoDef } from '../lib/atributosProduto';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -74,63 +75,9 @@ const EMPTY_EXTRAS = {
   atributos:              {} as Record<string, any>,
 };
 
-// Metadados de campos por nicho — dirige o form e a validação.
-// `key` é a propriedade em `produtos.atributos`. Se `req=true`, campo
-// obrigatório. `type='select'` requer `options`. `type='bool'` renderiza
-// como checkbox. Padrão é input texto.
-type AtributoDef = {
-  key: string;
-  label: string;
-  placeholder?: string;
-  req?: boolean;
-  type?: 'text' | 'select' | 'bool' | 'textarea';
-  options?: readonly string[];
-  wide?: boolean; // ocupa linha inteira no grid
-  /** Explica o campo quando o rótulo não basta. Vai abaixo do input. */
-  dica?: string;
-};
-
-const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
-  MaxLook: [
-    { key: 'tamanho',  label: 'Tamanho *',   placeholder: 'Ex: P, M, G, 38, 40', req: true },
-    { key: 'cor',      label: 'Cor *',       placeholder: 'Ex: Preto, Azul Marinho', req: true },
-    { key: 'genero',   label: 'Gênero *',    type: 'select', req: true,
-      options: ['Feminino', 'Masculino', 'Unissex', 'Infantil'] as const },
-    { key: 'colecao',  label: 'Coleção',     placeholder: 'Ex: Verão 2026' },
-    { key: 'material', label: 'Composição / Material', placeholder: 'Ex: 100% Algodão' },
-  ],
-  TechMax: [
-    { key: 'modelo',        label: 'Modelo *',        placeholder: 'Ex: iPhone 13, Galaxy S23', req: true },
-    { key: 'cor',           label: 'Cor',             placeholder: 'Ex: Meia-noite, Titânio' },
-    { key: 'memoria',       label: 'Memória',         placeholder: 'Ex: 128 GB, 256 GB' },
-    { key: 'tela',          label: 'Tela',            placeholder: 'Ex: 6.1"' },
-    { key: 'bateria',       label: 'Bateria',         placeholder: 'Ex: 3240 mAh' },
-    { key: 'camera',        label: 'Câmera',          placeholder: 'Ex: 12 MP + 12 MP' },
-    { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365', type: 'text' },
-    { key: 'requer_imei',   label: 'Requer IMEI/Serial no fechamento', type: 'bool', wide: true },
-    // Eletrônico raramente cabe nos campos fixos: acessório que acompanha,
-    // estado de seminovo, restrição de operadora, condição da assistência.
-    // Campo livre no fim da ficha em vez de mais seis colunas fixas.
-    { key: 'informacoes_adicionais', label: 'Informações adicionais', type: 'textarea', wide: true,
-      placeholder: 'Ex: acompanha carregador e capa; aparelho de vitrine com pequena marca na traseira; garantia de bateria não coberta.' },
-  ],
-  // Mercearia era a única filial sem ficha — e é a que tem 61% do catálogo.
-  // Estava invertido: no varejo alimentar o cadastro de produto é o mais
-  // exigente dos três, porque é o único onde a mercadoria estraga. É isto que
-  // faz o supermercado trabalhar com PEPS e a loja de roupa não precisar.
-  //
-  // Nenhum campo é obrigatório de propósito: 149 produtos já estão cadastrados
-  // e virariam incompletos de um dia para o outro. Campo que trava sem informar
-  // é como nasce o "nao temos ou acabou" da migr. 358 — a listagem avisa quem
-  // está sem ficha, e isso basta.
-  SuperMax: [
-    { key: 'perecivel', label: 'Produto perecível', type: 'bool', wide: true },
-    { key: 'validade_dias', label: 'Validade (dias)', placeholder: 'Ex: 5, 30, 180',
-      dica: 'Prazo desde o recebimento. É o que decide remarcação e ordem de saída.' },
-    { key: 'armazenagem', label: 'Armazenagem', type: 'select',
-      options: ['Ambiente', 'Refrigerado', 'Congelado'] as const },
-  ],
-};
+// A ficha por nicho (tipo + tabela) vive em src/lib/atributosProduto.ts —
+// o PDV exibe a mesma lista no modal de detalhes do produto, e duas cópias
+// divergiriam no primeiro campo novo.
 
 const parseNum = (v: string | number | undefined | null): number =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;

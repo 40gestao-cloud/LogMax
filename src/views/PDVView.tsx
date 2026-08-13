@@ -1,10 +1,11 @@
 import { isConselheiro } from '../lib/rbac';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store, Undo2, Wrench } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store, Undo2, Wrench, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
+import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useAuth } from '../hooks/useAuth';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
@@ -20,6 +21,7 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
+import { ProdutoDetalheModal } from '../components/ProdutoDetalheModal';
 import { normalizarBusca, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
@@ -64,16 +66,20 @@ interface CartItem {
 const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
 
 // `subtitulo` aparece no header do PDV aberto (personalidade da unidade);
-// `chips` são filtros rápidos por categoria (compara case-insensitive contra
-// `produtos.categoria`); `layout` define o estilo do card na grade;
-// `accentBar` é a cor decorativa da barra sob a logo — mantém accent dourado
-// no texto pra coesão com o resto do app.
+// `layout` define o estilo do card na grade; `accentBar` é a cor decorativa da
+// barra sob a logo — mantém accent dourado no texto pra coesão com o resto do app.
+//
+// Não tem mais lista fixa de `chips`: até 2026-08-13 cada filial declarava as
+// categorias à mão aqui e o filtro comparava por substring contra
+// `produtos.categoria`. Nenhuma turma cadastrou com esses nomes — "Roupas" não
+// existia em nenhuma categoria da MaxLook, então a aba abria vazia; TechMax
+// tinha 4 de 5 chips mortos pelo mesmo motivo. Agora os chips saem do próprio
+// cadastro (categoriasChips), então gaveta vazia deixou de ser possível.
 const FILIAL_META: Record<FilialPDV, {
   logo: string;
   desc: string;
   logoBg?: string;
   subtitulo?: string;
-  chips?: readonly string[];
   layout?: 'fashion' | 'tech';
   accentBar?: string;
 }> = {
@@ -82,7 +88,6 @@ const FILIAL_META: Record<FilialPDV, {
     logo: '/icon-maxlook.png',
     desc: 'Roupas, Calçados e Acessórios Femininos e Masculinos',
     subtitulo: 'Boutique',
-    chips: ['Roupas', 'Calçados', 'Acessórios', 'Feminino', 'Masculino'],
     layout: 'fashion',
     accentBar: '#D4AF37',
   },
@@ -90,11 +95,15 @@ const FILIAL_META: Record<FilialPDV, {
     logo: '/icon-techmax.png',
     desc: 'Eletrônicos e Assistência Técnica',
     subtitulo: 'Loja & Assistência',
-    chips: ['Smartphones', 'Notebooks', 'Acessórios', 'Peças', 'Serviços'],
     layout: 'tech',
     accentBar: '#F97316',
   },
 };
+
+// Chave de agrupamento de categoria: sem acento, sem caixa, sem espaço nas
+// pontas. Colapsa as variantes que a turma digitou ("Acessorios"/"Acessórios",
+// "LIMPEZA " com espaço à direita) numa gaveta só.
+const chaveCategoria = (c: unknown): string => normalizarBusca(c).trim();
 
 export const PDVView = ({ showToast, profile, filialAtiva }: any) => {
   const podeAlternar = podeAlternarFilial(profile);
@@ -208,6 +217,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
   const [search, setSearch] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
+  // Ficha do produto aberta pelo botão de informação do card — a tela que o
+  // vendedor vira pro cliente. O clique no card continua sendo "adicionar".
+  const [detalheProduto, setDetalheProduto] = useState<any | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   // Nicho-específico (Fase 2, sem migração — grava em vendas.observacao pós-RPC).
   // MaxLook: vendedor associado à venda (comissão de moda). TechMax: IMEI/Serial
@@ -274,6 +286,18 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [thankYouOpen, setThankYouOpen] = useState(false);
   // Pix em aguardo: payload na DB + snapshot do carrinho para chamar o RPC após confirmação
   const [pixPendente, setPixPendente] = useState<{ id: string; valor: number } | null>(null);
+  // Cliente pagou (Pix confirmado / cartão autorizado) mas `criar_venda_pdv`
+  // falhou — quase sempre estoque, porque nada reserva o item entre gerar a
+  // cobrança e o cliente confirmar. Era só um toast: sumia em segundos e
+  // levava junto a única evidência de que havia dinheiro recebido sem venda.
+  // Agora é modal bloqueante com retry, como no PDV da SuperMax.
+  const [falhaPosPagamento, setFalhaPosPagamento] = useState<{
+    forma: string;
+    parcelas: number;
+    valor: number;
+    erro: string;
+    tentando: boolean;
+  } | null>(null);
   // Cartão (maquininha MaxPay) em aguardo: pendente em cartao_pendentes; PDV
   // finaliza venda via realtime/polling quando MaxBank autoriza. Mesmo padrão
   // usado no SuperMax, adaptado pra MaxLook/TechMax.
@@ -319,14 +343,17 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && fullscreen) {
+      // Esc com a ficha do produto aberta fecha só a ficha (o próprio modal
+      // trata). Sem esta guarda, um Esc fazia as duas coisas: fechava a ficha
+      // e derrubava o PDV do modo tela cheia.
+      if (e.key === 'Escape' && fullscreen && !detalheProduto) {
         e.preventDefault();
         setFullscreen(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fullscreen]);
+  }, [fullscreen, detalheProduto]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -353,10 +380,30 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica
   // fora — PDV opera só nas 3 unidades operacionais.
   const produtosPorFilial = produtosAtivos.filter((p: any) => p.filial === filialFiltro);
-  // Categoria continua por substring (é filtro de gaveta, não digitação livre).
+
+  // Chips de categoria derivados do que está cadastrado nesta filial — um chip
+  // só existe se tem produto atrás dele. `chave` agrupa variantes de acento e
+  // espaço; `label` é a primeira grafia encontrada (mostra o que a turma digitou).
+  const categoriasChips = React.useMemo(() => {
+    const mapa = new Map<string, { chave: string; label: string; total: number }>();
+    for (const p of produtosPorFilial) {
+      const label = String((p as any).categoria ?? '').trim();
+      if (!label) continue;
+      const chave = chaveCategoria(label);
+      const atual = mapa.get(chave);
+      if (atual) atual.total += 1;
+      else mapa.set(chave, { chave, label, total: 1 });
+    }
+    return [...mapa.values()].sort((a, b) =>
+      b.total - a.total || a.label.localeCompare(b.label, 'pt-BR'));
+  }, [produtosPorFilial]);
+
+  // O filtro guarda a CHAVE normalizada, não o rótulo — senão "Acessorios" e
+  // "Acessórios" voltariam a ser gavetas diferentes.
+  const categoriaLabel = categoriasChips.find(c => c.chave === categoriaFiltro)?.label ?? categoriaFiltro;
   const produtosPorCategoria = produtosPorFilial.filter((p: any) => {
     if (!categoriaFiltro) return true;
-    return String(p.categoria ?? '').toLowerCase().includes(categoriaFiltro.toLowerCase());
+    return chaveCategoria(p.categoria) === categoriaFiltro;
   });
   // Busca textual por PREFIXO e acento-insensível (lib/produtoBusca.ts). Antes
   // era `.includes()` sem normalizar: "ca" trazia ma[ca]rrão junto com café, e
@@ -589,51 +636,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     return () => document.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // Limpeza de Pix órfãos ao montar o PDV. Substitui o cron de servidor
-  // (impossível no plano Hobby do Vercel: limite de 1 execução/dia).
-  // Qualquer operador que abre o PDV faz a limpeza — efeito coletivo.
-  //
-  // Duas janelas de idade:
-  //   • > 5 min do PRÓPRIO operador: sessão anterior do mesmo usuário
-  //     (fechou aba no meio do checkout). Margem curta porque sabemos
-  //     que é dele; cliente real confirma em < 1 min.
-  //   • > 1h de QUALQUER operador: pendente abandonado de outro caixa
-  //     que não voltou ao PDV. Margem longa pra não pisar em fluxo
-  //     legítimo em andamento noutro terminal.
-  useEffect(() => {
-    if (!supabase || !user?.id) return;
-    let cancelled = false;
-    (async () => {
-      const cutoff5min = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const cutoff1h   = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const [own, others] = await Promise.all([
-        supabase.from('pix_pendentes').select('id')
-          .eq('operador_id', user.id)
-          .eq('status', 'aguardando')
-          .lt('created_at', cutoff5min),
-        supabase.from('pix_pendentes').select('id')
-          .eq('status', 'aguardando')
-          .lt('created_at', cutoff1h),
-      ]);
-      if (cancelled) return;
-      // Set dedupe: pendente do próprio operador com > 1h aparece nos dois.
-      const ids = Array.from(new Set([
-        ...((own.data ?? []).map((o: any) => o.id)),
-        ...((others.data ?? []).map((o: any) => o.id)),
-      ]));
-      if (ids.length === 0) return;
-      await supabase
-        .from('pix_pendentes')
-        .update({ status: 'cancelado' })
-        .in('id', ids);
-      showToast?.(
-        `${ids.length} pagamento${ids.length > 1 ? 's' : ''} Pix antigo${ids.length > 1 ? 's' : ''} cancelado${ids.length > 1 ? 's' : ''}.`,
-        'info',
-        true,
-      );
-    })();
-    return () => { cancelled = true; };
-  }, [user?.id, showToast]);
+  // Varredura de cobranças abandonadas (Pix e cartão) desta filial. Regras e
+  // janelas no hook — compartilhado com o PDV da SuperMax pra que as três
+  // lojas varram a própria casa com o mesmo critério.
+  useVarrerPendentesOrfaos(filialFiltro, user?.id, showToast);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
   const clearCart = () => { setCart([]); setDesconto(''); setDescontoPct(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
@@ -844,6 +850,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             parcelas:    parcelasEfetivas,
             status:      'aguardando',
             operador_id: user?.id ?? null,
+            filial:      filialFiltro,
           })
           .select('id, valor, metodo, parcelas')
           .single();
@@ -877,6 +884,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             cliente_id: clienteId || null,
             status: 'aguardando',
             operador_id: user?.id ?? null,
+            // Filial do CAIXA aberto, não a do perfil — admin/CEO operam esta
+            // unidade pelo hub com perfil 'Matriz' (migr. 414).
+            filial: filialFiltro,
           })
           .select('id, valor')
           .single();
@@ -961,7 +971,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         vendaSnapshotRef.current = null;
         setPixPendente(null);
       } catch (err: any) {
-        showToast?.(`Pagamento confirmado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+        setFalhaPosPagamento({
+          forma: 'PIX',
+          parcelas: 1,
+          valor: snap.totalFinal,
+          erro: err?.message ?? 'Erro desconhecido.',
+          tentando: false,
+        });
         setPixPendente(null);
         setIsClosing(false);
       }
@@ -1020,7 +1036,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         vendaSnapshotRef.current = null;
         setCartaoModal(null);
       } catch (err: any) {
-        showToast?.(`Cartão autorizado mas falhou ao gerar venda: ${err?.message ?? '—'}`, 'error', true);
+        setFalhaPosPagamento({
+          forma: cartaoModal.metodo === 'debito' ? 'Cartão Débito' : 'Cartão Crédito',
+          parcelas: cartaoModal.parcelas,
+          valor: snap.totalFinal,
+          erro: err?.message ?? 'Erro desconhecido.',
+          tentando: false,
+        });
         setCartaoModal(null);
         setIsClosing(false);
       }
@@ -1048,6 +1070,26 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartaoModal]);
+
+  // Retry do registro depois que o dinheiro já entrou. O snapshot do carrinho
+  // continua em memória (só é limpo no sucesso), então basta rechamar o RPC —
+  // se o problema era estoque de outro caixa, repor resolve sem refazer a venda.
+  const tentarRegistrarNovamente = async () => {
+    const snap = vendaSnapshotRef.current;
+    if (!falhaPosPagamento) return;
+    if (!snap) {
+      setFalhaPosPagamento(f => f ? { ...f, erro: 'Carrinho da venda não está mais em memória — registre a venda manualmente.' } : f);
+      return;
+    }
+    setFalhaPosPagamento(f => f ? { ...f, tentando: true } : f);
+    try {
+      await finalizarVenda(snap, falhaPosPagamento.forma, falhaPosPagamento.parcelas);
+      vendaSnapshotRef.current = null;
+      setFalhaPosPagamento(null);
+    } catch (err: any) {
+      setFalhaPosPagamento(f => f ? { ...f, tentando: false, erro: err?.message ?? 'Erro desconhecido.' } : f);
+    }
+  };
 
   const cancelarCartao = async () => {
     if (!cartaoModal || !supabase) return;
@@ -1482,9 +1524,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             />
           </div>
 
-          {/* Chips de categoria — filtro rápido case-insensitive contra produtos.categoria.
-              Só aparece pra filiais que definiram chips em FILIAL_META. */}
-          {filialMeta.chips && (
+          {/* Chips de categoria — montados a partir das categorias que existem no
+              cadastro desta filial (com contagem). Com uma categoria só o filtro
+              não separa nada, então nem aparece. */}
+          {categoriasChips.length > 1 && (
             <div className="flex gap-1.5 overflow-x-auto pb-1 shrink-0 -mx-1 px-1 main-scrollbar-h"
               style={{ scrollbarWidth: 'thin' }}>
               <button
@@ -1502,15 +1545,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       color: '#262626',
                       borderColor: 'rgba(0,0,0,0.20)',
                     }}>
-                Todos
+                Todos <span className="tabular-nums font-black opacity-60">{produtosPorFilial.length}</span>
               </button>
-              {filialMeta.chips.map(chip => {
-                const ativo = categoriaFiltro === chip;
+              {categoriasChips.map(chip => {
+                const ativo = categoriaFiltro === chip.chave;
                 return (
                   <button
-                    key={chip}
-                    onClick={() => setCategoriaFiltro(ativo ? null : chip)}
-                    className="shrink-0 px-3.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all border-2"
+                    key={chip.chave}
+                    onClick={() => setCategoriaFiltro(ativo ? null : chip.chave)}
+                    className="shrink-0 px-3.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all border-2 flex items-center gap-1.5"
                     style={ativo
                       ? {
                           background: 'var(--color-accent)',
@@ -1523,7 +1566,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                           color: '#262626',
                           borderColor: 'rgba(0,0,0,0.20)',
                         }}>
-                    {chip}
+                    {chip.label}
+                    {/* Contagem: o operador vê o tamanho da gaveta antes de abrir. */}
+                    <span className="tabular-nums font-black opacity-60">{chip.total}</span>
                   </button>
                 );
               })}
@@ -1565,7 +1610,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   </p>
                   <p className="text-xs mt-1 max-w-[18rem]" style={{ color: '#737373' }}>
                     {categoriaFiltro
-                      ? <>Nenhum item em <b>{categoriaFiltro}</b>. Tente outra categoria ou <button className="underline font-bold" onClick={() => setCategoriaFiltro(null)}>ver todos</button>.</>
+                      ? <>Nenhum item em <b>{categoriaLabel}</b>. Tente outra categoria ou <button className="underline font-bold" onClick={() => setCategoriaFiltro(null)}>ver todos</button>.</>
                       : search
                         ? 'Ajuste o termo, bipe outro código ou limpe a busca.'
                         : 'Cadastre produtos em Cadastros → Produtos pra começar a vender aqui.'}
@@ -1606,6 +1651,20 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                           {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
                         </span>
                       )}
+                      {/* Ficha técnica. stopPropagation porque o card inteiro é
+                          o botão de adicionar — sem isso, consultar venderia. */}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Ver ficha de ${p.nome}`}
+                        onClick={e => { e.stopPropagation(); setDetalheProduto(p); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setDetalheProduto(p); }
+                        }}
+                        className="absolute bottom-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center z-10 cursor-pointer"
+                        style={{ background: 'rgba(255,255,255,0.92)', color: filialMeta.accentBar, border: `1px solid ${filialMeta.accentBar}55` }}>
+                        <Info size={13} strokeWidth={2.5} />
+                      </span>
                       <ProdutoThumb url={p.imagem_url} size="md" alt={p.nome} />
                       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1647,18 +1706,21 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   );
                 }
 
-                // MaxLook: card só-texto compacto (padrão MaxPOS). Marca dourada
-                // uppercase + categoria pequena + nome. Sem imagem, sem "Última peça"
-                // — layout limpo tipo lista de PDV real de boutique.
+                // MaxLook: card de vitrine — foto quadrada em cima, marca dourada,
+                // categoria, nome e preço. Até 2026-08-13 era só-texto: o card não
+                // renderizava `imagem_url` (moda se vende pela peça, e as fotos já
+                // estavam cadastradas), nem preço, nem estoque — o operador clicava
+                // sem saber quanto custava.
                 if (filialMeta.layout === 'fashion') {
                   const inCartFashion = inCart;
+                  const ultimaPeca = !semEstoque && typeof p.estoque === 'number' && p.estoque > 0 && p.estoque <= 2;
                   return (
                     <motion.button
                       key={p.id}
                       onClick={onClick}
                       whileTap={!semEstoque ? { scale: 0.98 } : {}}
                       disabled={semEstoque}
-                      className="rounded-xl px-3 py-2.5 flex flex-col gap-1 text-left transition-all border relative bg-white hover:shadow-md disabled:opacity-40"
+                      className="rounded-xl p-2 flex flex-col gap-1.5 text-left transition-all border relative bg-white hover:shadow-md disabled:opacity-40"
                       style={{
                         borderColor: inCartFashion ? filialMeta.accentBar : 'rgba(0,0,0,0.08)',
                         background: inCartFashion ? `${filialMeta.accentBar}15` : 'white',
@@ -1666,11 +1728,46 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       }}
                     >
                       {inCartFashion && (
-                        <span className="absolute top-1.5 right-1.5 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                        <span className="absolute top-3 right-3 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
                           style={{ background: filialMeta.accentBar, color: '#0A0A0A' }}>
                           {fracionario ? formatQtd(inCart.qtd, inCart.unidade) : inCart.qtd}
                         </span>
                       )}
+                      {/* Ficha técnica. stopPropagation porque o card inteiro é
+                          o botão de adicionar — sem isso, consultar venderia. */}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Ver ficha de ${p.nome}`}
+                        onClick={e => { e.stopPropagation(); setDetalheProduto(p); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setDetalheProduto(p); }
+                        }}
+                        className="absolute top-3 left-3 w-7 h-7 rounded-full flex items-center justify-center z-10 cursor-pointer"
+                        style={{ background: 'rgba(255,255,255,0.92)', color: filialMeta.accentBar, border: `1px solid ${filialMeta.accentBar}55` }}>
+                        <Info size={13} strokeWidth={2.5} />
+                      </span>
+                      <div className="w-full aspect-square rounded-lg overflow-hidden flex items-center justify-center relative"
+                        style={{ background: '#F4F1EA', border: '1px solid rgba(0,0,0,0.05)' }}>
+                        {p.imagem_url ? (
+                          <img src={p.imagem_url} alt={p.nome} loading="lazy"
+                            className="w-full h-full object-cover" />
+                        ) : (
+                          <Package size={26} strokeWidth={1.5} style={{ color: '#C4BCA8' }} />
+                        )}
+                        {ultimaPeca && (
+                          <span className="absolute bottom-1 left-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm"
+                            style={{ background: '#0A0A0AD9', color: '#ffffff' }}>
+                            {p.estoque === 1 ? 'Última peça' : `Últimas ${p.estoque}`}
+                          </span>
+                        )}
+                        {semEstoque && (
+                          <span className="absolute bottom-1 left-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm"
+                            style={{ background: '#DC2626', color: '#ffffff' }}>
+                            Esgotado
+                          </span>
+                        )}
+                      </div>
                       {p.marca && (
                         <span className="text-[11px] font-black uppercase tracking-[0.18em] truncate"
                           style={{ color: filialMeta.accentBar }}>
@@ -1683,6 +1780,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                         </span>
                       )}
                       <span className="text-sm font-bold text-gray-900 leading-tight line-clamp-1 truncate">{p.nome}</span>
+                      <span className="text-base font-black tabular-nums mt-auto" style={{ color: filialMeta.accentBar }}>
+                        {Number(p.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
                     </motion.button>
                   );
                 }
@@ -2315,6 +2415,84 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Ficha do produto — abre pelo botão de informação do card, nunca pelo
+          clique do card (esse continua adicionando ao carrinho). */}
+      <AnimatePresence>
+        {detalheProduto && (
+          <ProdutoDetalheModal
+            // key pelo produto: trocar de ficha remonta o modal em vez de
+            // herdar o índice da foto anterior (produto com 3 fotos → produto
+            // com 1 deixaria a miniatura selecionada apontando pro vazio).
+            key={detalheProduto.id}
+            produto={detalheProduto}
+            filial={filialFiltro}
+            accent={filialMeta.accentBar ?? 'var(--color-accent)'}
+            substantivo={filialMeta.layout === 'fashion' ? 'peça' : 'unidade'}
+            onClose={() => setDetalheProduto(null)}
+            onAdd={addToCart}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Dinheiro entrou, venda não foi registrada. Bloqueante de propósito:
+          é a única evidência de que o cliente pagou e o sistema não gravou,
+          e some se o operador não decidir o que fazer. */}
+      <AnimatePresence>
+        {falhaPosPagamento && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[220] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+          >
+            <div className="w-full max-w-md rounded-2xl overflow-hidden bg-white shadow-2xl"
+              style={{ border: '2px solid #DC2626' }}>
+              <div className="px-5 py-4 flex items-center gap-3" style={{ background: '#DC2626' }}>
+                <AlertTriangle size={22} className="text-white shrink-0" />
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
+                    Pagamento recebido · venda não registrada
+                  </p>
+                  <p className="text-lg font-black text-white leading-tight">
+                    {falhaPosPagamento.forma} · {falhaPosPagamento.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                <p className="text-sm font-bold" style={{ color: '#262626' }}>
+                  O cliente pagou, mas o sistema não conseguiu gravar a venda. Não cobre de novo.
+                </p>
+                <div className="rounded-lg p-3 text-xs font-mono break-words"
+                  style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>
+                  {falhaPosPagamento.erro}
+                </div>
+                <p className="text-xs" style={{ color: '#737373' }}>
+                  Causa mais comum: outro caixa vendeu a última unidade enquanto o pagamento era
+                  confirmado. Reponha o estoque e tente de novo — o carrinho continua guardado.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={tentarRegistrarNovamente}
+                    disabled={falhaPosPagamento.tentando}
+                    className="flex-1 py-3 rounded-xl font-black text-sm text-white disabled:opacity-60 flex items-center justify-center gap-2"
+                    style={{ background: '#DC2626' }}>
+                    {falhaPosPagamento.tentando
+                      ? <><Loader2 size={16} className="animate-spin" /> Tentando...</>
+                      : 'Tentar registrar de novo'}
+                  </button>
+                  <button
+                    onClick={() => setFalhaPosPagamento(null)}
+                    disabled={falhaPosPagamento.tentando}
+                    className="px-4 py-3 rounded-xl font-black text-sm disabled:opacity-60"
+                    style={{ background: '#F5F5F5', color: '#262626', border: '1px solid rgba(0,0,0,0.12)' }}>
+                    Resolver depois
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Modal Troca/Devolução (MaxLook) — busca venda concluída pelos 6
