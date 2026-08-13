@@ -385,3 +385,59 @@ export const PlaceholderView = ({ title, desc }: { title: string; desc?: string 
     </div>
   </motion.div>
 );
+
+/**
+ * Modal de leitura — texto que o usuário só precisa LER.
+ *
+ * Existe porque o caso não tem componente: `useConfirm` faz pergunta (dois
+ * botões, e o "Cancelar" não quer dizer nada quando não há o que cancelar) e
+ * o toast some sozinho, o que é péssimo para o feedback do Financeiro, que
+ * costuma ser um parágrafo. Antes disso, os dois lugares chamavam o `alert()`
+ * do navegador — diálogo cinza, fora do tema, com o domínio no título.
+ *
+ * `whitespace-pre-line` preserva as quebras de linha de quem escreveu o
+ * feedback; `overflow-y-auto` segura texto longo sem esticar a página.
+ */
+export const TextoModal = ({ titulo, texto, onClose }: {
+  titulo: string; texto: string; onClose: () => void;
+}) => (
+  <AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 10 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-md"
+        style={{
+          background: 'rgba(10,10,10,0.82)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderRadius: '1rem',
+          padding: '1.5rem',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.06) inset',
+        }}
+      >
+        <h3 className="text-sm font-bold text-accent uppercase tracking-widest mb-3">{titulo}</h3>
+        <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-line max-h-[60vh] overflow-y-auto main-scrollbar">
+          {texto}
+        </p>
+        <div className="flex justify-end mt-5">
+          <button
+            onClick={onClose}
+            autoFocus
+            className="px-5 py-2 rounded-lg text-sm font-semibold neu-button text-gray-300 hover:text-accent transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  </AnimatePresence>
+);

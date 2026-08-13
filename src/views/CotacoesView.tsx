@@ -4,7 +4,7 @@ import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -87,6 +87,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  // Feedback do Financeiro é parágrafo, não frase: modal de leitura em vez do
+  // alert() do navegador, que vinha cinza e com o domínio no título.
+  const [feedbackAberto, setFeedbackAberto] = useState<string | null>(null);
   const [reabrindoCot, setReabrindoCot] = useState<string | null>(null);
   const podeReabrirDoc = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
@@ -701,7 +704,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           )}
                           {/* Negado com feedback longo: botão pra ver o motivo completo */}
                           {item.status === 'Negado' && item.feedback && (
-                            <button onClick={() => alert(`Feedback do Financeiro:\n\n${item.feedback}`)}
+                            <button onClick={() => setFeedbackAberto(item.feedback)}
                               title="Ver feedback completo"
                               className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
                               <MessageSquare size={12} />
@@ -893,6 +896,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           </motion.div>
         )}
       </AnimatePresence>
+
+      {feedbackAberto && (
+        <TextoModal titulo="Feedback do Financeiro" texto={feedbackAberto}
+          onClose={() => setFeedbackAberto(null)} />
+      )}
     </motion.div>
   );
 };

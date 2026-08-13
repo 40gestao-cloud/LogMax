@@ -5,7 +5,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { supabase } from '../lib/supabase';
@@ -96,6 +96,9 @@ const OrcamentosViewInner = ({
   const modoFinanceiro = mode === 'financeiro';
 
   const [isSaving, setIsSaving] = useState(false);
+  // Ver nota igual à de CotacoesView: o feedback é longo e precisa ficar na
+  // tela até o aluno terminar de ler.
+  const [feedbackAberto, setFeedbackAberto] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [convertendo, setConvertendo] = useState<string | null>(null);
@@ -701,7 +704,7 @@ const OrcamentosViewInner = ({
                               </button>
                             )}
                             {o.feedback_financeiro && (
-                              <button onClick={() => alert(`Feedback do Financeiro:\n\n${o.feedback_financeiro}`)} title="Ver feedback"
+                              <button onClick={() => setFeedbackAberto(o.feedback_financeiro)} title="Ver feedback"
                                 className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
                                 <MessageSquare size={12} />
                               </button>
@@ -911,6 +914,11 @@ const OrcamentosViewInner = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {feedbackAberto && (
+        <TextoModal titulo="Feedback do Financeiro" texto={feedbackAberto}
+          onClose={() => setFeedbackAberto(null)} />
+      )}
     </motion.div>
   );
 };

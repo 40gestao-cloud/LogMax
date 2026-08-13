@@ -84,4 +84,28 @@ describe('diálogos do app', () => {
       `\n  ` + infratores.join('\n  '),
     ).toEqual([]);
   });
+
+  // `alert` não tem hook equivalente porque não deveria ter: mensagem curta é
+  // toast, e texto que o usuário precisa reler é modal. O ban é chapado.
+  it('ninguém usa alert()', () => {
+    const USO_DE_ALERT = /(?<![.\w])alert\s*\(/;
+    const infratores = arquivosDeFonte(SRC).flatMap(caminho => {
+      const linhas = readFileSync(caminho, 'utf-8').split('\n');
+      const relativo = caminho.slice(caminho.indexOf('src'));
+      return linhas
+        .map((l, i) => ({ l, n: i + 1 }))
+        // Comentário citando `alert()` não conta — os consertos explicam o que
+        // saiu dali, e seria perverso que a explicação quebrasse o teste.
+        .filter(({ l }) => !/^\s*(\/\/|\*|\/\*)/.test(l) && USO_DE_ALERT.test(l))
+        .map(({ n }) => `${relativo}:${n}`);
+    });
+
+    expect(
+      infratores,
+      `alert() do navegador é diálogo cinza, fora do tema e com o domínio no ` +
+      `título. Use showToast(msg, 'error') para aviso curto, ou <TextoModal> ` +
+      `(components/ui) para texto que precisa ficar na tela.\n  ` +
+      infratores.join('\n  '),
+    ).toEqual([]);
+  });
 });

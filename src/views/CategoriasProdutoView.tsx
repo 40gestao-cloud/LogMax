@@ -42,12 +42,18 @@ function ImagemUploader({
   onClear: () => void; disabled?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  // Erro inline em vez do `alert()` do navegador que estava aqui. Além de sair
+  // do tema, o alert tirava a mensagem do lado do campo que a causou — e este
+  // componente não recebe `showToast`, então toast custaria três assinaturas
+  // novas para dizer algo que pertence ao próprio campo.
+  const [erro, setErro] = useState<string | null>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const v = validarImagemCategoria(file);
-    if (!v.ok) { alert(v.motivo); return; }
+    if (!v.ok) { setErro(v.motivo ?? 'Imagem inválida.'); e.target.value = ''; return; }
+    setErro(null);
     const preview = URL.createObjectURL(file);
     onPreview(file, preview);
     e.target.value = '';
@@ -76,7 +82,9 @@ function ImagemUploader({
             className="neu-button text-xs px-3 py-1.5 rounded-lg text-gray-300 hover:text-accent flex items-center gap-1.5">
             <ImageIcon size={11} />{imagemUrl ? 'Trocar imagem' : 'Adicionar imagem'}
           </button>
-          <p className="text-[10px] text-gray-600 mt-1">JPG, PNG, WEBP ou SVG — máx. 1 MB</p>
+          <p className={`text-[10px] mt-1 ${erro ? 'text-red-400' : 'text-gray-600'}`}>
+            {erro ?? 'JPG, PNG, WEBP ou SVG — máx. 1 MB'}
+          </p>
           <input ref={ref} type="file" accept={CATEGORIA_IMAGEM_ACCEPT} className="hidden" onChange={handleFile} />
         </div>
       )}
