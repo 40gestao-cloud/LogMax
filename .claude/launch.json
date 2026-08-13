@@ -7,6 +7,19 @@
       "runtimeArgs": ["vite", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "maxbank",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:/Users/franc/Downloads/maxbank",
+        "run",
+        "dev",
+        "--",
+        "--port=3100"
+      ],
+      "port": 3100
     }
   ]
 }
