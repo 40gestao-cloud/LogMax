@@ -9,6 +9,7 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { usePrompt } from '../contexts/PromptContext';
 
 const STATUS_STYLE: Record<string, string> = {
   'Rascunho':                 'bg-gray-500/10  text-gray-400  border-gray-500/20',
@@ -54,6 +55,9 @@ const fmtBRL = (n: number) => Number(n ?? 0).toLocaleString('pt-BR', { style: 'c
 function ModalProdutos({ campanha, onClose, showToast, profile }: {
   campanha: Campanha; onClose: () => void; showToast: any; profile: any;
 }) {
+  // `confirm` é escopo léxico: sem o hook aqui, cai no window.confirm e o
+  // navegador desenha o diálogo no lugar do modal do app.
+  const confirm = useConfirm();
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroSubcat,    setFiltroSubcat]    = useState('');
   const [search,          setSearch]          = useState('');
@@ -269,6 +273,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
 const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial }, true);
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview', { orderBy: 'data_inicio', ascending: false });
 
   const [showForm,  setShowForm]  = useState(false);
@@ -338,7 +343,13 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
 
   const handleAjustarGasto = async (c: Campanha) => {
     const atual = formatBRL(c.gasto_real);
-    const novo = prompt(`Gasto real da campanha "${c.nome}" (atual: R$ ${atual}):`, atual);
+    const novo = await prompt({
+      message: `Gasto real da campanha "${c.nome}"`,
+      defaultValue: atual,
+      placeholder: 'Ex.: 1.250,00',
+      confirmLabel: 'Atualizar gasto',
+      maxLength: 20,
+    });
     if (novo == null) return;
     const valor = parseBRL(novo);
     if (Number.isNaN(valor) || valor < 0) { showToast('Valor inválido.', 'error'); return; }

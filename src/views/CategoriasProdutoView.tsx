@@ -209,6 +209,12 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
   canEdit: boolean; selectedId: string | null;
   onSelect: (id: string, nome: string) => void; filial: FilialOp | null;
 }) {
+  // Sem esta linha, `confirm` cai no `window.confirm` do navegador — a função
+  // global existe, aceita string e devolve boolean, então o TypeScript aprova
+  // e o `await` funciona. O sintoma é o diálogo cinza do browser no lugar do
+  // modal do app. O hook mora aqui, e não só no componente de fora: `confirm`
+  // é resolvido por escopo léxico, não herdado do pai.
+  const confirm = useConfirm();
   // Matriz (filial null) vê o consolidado de todas as unidades, só leitura.
   const { data, isLoading, reload } = useFetchData<any>('categorias_produto', filial ? { filial } : undefined);
   const [showForm, setShowForm] = useState(false);
@@ -324,6 +330,7 @@ function PainelCategorias({ canEdit, selectedId, onSelect, filial }: {
 function PainelSubcategorias({ categoriaId, categoriaNome, canEdit }: {
   categoriaId: string; categoriaNome: string; canEdit: boolean;
 }) {
+  const confirm = useConfirm();
   const { data, isLoading, reload } = useFetchData<any>('subcategorias_produto', { categoria_id: categoriaId });
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
