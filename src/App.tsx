@@ -955,16 +955,22 @@ function LogMaxAppInner() {
     );
   }
 
-  // Colaborador/gerente sem filial configurada no perfil — erro de cadastro.
+  // Colaborador/gerente sem filial no perfil.
   // (podeEscolherFilial=false + filialAtiva=null; nunca cai em Matriz porque
   // esses perfis não têm o botão Matriz no seletor.)
+  //
+  // Desde a migr. 411 isto deixou de ser só erro de cadastro: `filial IS NULL`
+  // é o estado de quem foi criado numa leva e ainda não foi distribuído nas
+  // unidades. Esta tela é a sala de espera desse aluno, então o texto fala de
+  // alocação pendente em vez de acusar configuração errada.
   if (!filialAtiva && !podeEscolherFilial) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
         <Building2 size={40} className="text-gray-600" />
-        <h2 className="text-lg font-bold text-gray-300">Filial não configurada</h2>
+        <h2 className="text-lg font-bold text-gray-300">Aguardando alocação</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
-          Seu perfil não possui filial atribuída. Solicite ao administrador.
+          Sua conta foi criada, mas você ainda não está em nenhuma unidade.
+          O administrador vai alocar você em uma filial.
         </p>
         <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
       </div>

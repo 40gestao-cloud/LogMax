@@ -178,24 +178,33 @@ async function handleCreate(
     return res.status(403).json({ error: 'Apenas administradores podem criar administradores.' });
   }
 
+  // Filial pode vir vazia de propósito: "criado, alocação depois" (migr. 411).
+  // Montar turma é dezenas de contas numa sentada, e a unidade é a parte que
+  // se decide com a turma na frente. `null` aqui é esse estado — diferente de
+  // 'Matriz', que para cargo operacional continua sendo erro.
+  const filialInformada = typeof filial === 'string' ? filial.trim() : '';
+  const semAlocacao = filial === null || filialInformada === '';
+
   if (callerProfile.role === 'gerente') {
     if (role !== 'colaborador') {
       log.warn('user.permission_denied', { caller_id: callerId, target_role: role, reason: 'gerente_role_mismatch' });
       return res.status(403).json({ error: 'Gerentes só podem criar colaboradores.' });
     }
-    const targetFilial = (typeof filial === 'string' ? filial.trim() : '') || 'Matriz';
-    if (targetFilial !== callerProfile.filial) {
-      log.warn('user.permission_denied', { caller_id: callerId, target_filial: targetFilial, caller_filial: callerProfile.filial, reason: 'gerente_outra_filial' });
+    // Gerente não deixa aluno em aberto: a conta que ele cria é da unidade
+    // dele, e "sem alocação" é decisão de quem organiza a turma inteira.
+    if (semAlocacao || filialInformada !== callerProfile.filial) {
+      log.warn('user.permission_denied', { caller_id: callerId, target_filial: filialInformada || null, caller_filial: callerProfile.filial, reason: 'gerente_outra_filial' });
       return res.status(403).json({ error: 'Gerentes só podem criar colaboradores da própria filial.' });
     }
   }
 
-  if (role === 'colaborador' || role === 'gerente') {
-    const targetFilial = (typeof filial === 'string' ? filial.trim() : '') || 'Matriz';
-    if (targetFilial === 'Matriz') {
-      log.warn('user.validation_failed', { caller_id: callerId, target_role: role, target_filial: targetFilial, reason: 'operational_role_needs_unit' });
-      return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax).' });
-    }
+  if (!semAlocacao && !VALID_FILIAIS.includes(filialInformada)) {
+    return res.status(400).json({ error: 'Filial inválida.' });
+  }
+
+  if ((role === 'colaborador' || role === 'gerente') && filialInformada === 'Matriz') {
+    log.warn('user.validation_failed', { caller_id: callerId, target_role: role, reason: 'operational_role_needs_unit' });
+    return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax) — ou de nenhuma, para alocar depois.' });
   }
 
   const { data: { user: newUser }, error: createErr } = await admin.auth.admin.createUser({
@@ -213,9 +222,9 @@ async function handleCreate(
     setores_extras: extras,
     criado_por: callerId,
   };
-  if (typeof filial === 'string' && filial.trim()) {
-    profilePayload.filial = filial.trim();
-  }
+  // Explícito nos dois casos: omitir a coluna cairia no DEFAULT 'Matriz' da
+  // migr. 017, e "ainda não alocado" viraria "lotado na holding".
+  profilePayload.filial = semAlocacao ? null : filialInformada;
   const { error: profileErr } = await admin.from('user_profiles').insert(profilePayload);
   if (profileErr) {
     log.error('profile.insert_failed', profileErr, { new_user_id: newUser.id, rollback: 'deleting_auth_user' });
@@ -322,20 +331,29 @@ async function handleUpdate(
     updates.setores_extras = extras.filter(s => s !== primaryAfter);
   }
   if (filial !== undefined) {
-    if (typeof filial !== 'string' || !VALID_FILIAIS.includes(filial)) {
+    // `null` (ou string vazia) devolve a conta para a fila de alocação — o
+    // mesmo estado em que ela pode nascer (migr. 411). Útil quando o aluno sai
+    // de uma unidade e ainda não se sabe para onde vai.
+    if (filial === null || (typeof filial === 'string' && filial.trim() === '')) {
+      if (!isGlobalCaller) {
+        return res.status(403).json({ error: 'Apenas admin/CEO podem deixar um usuário sem unidade.' });
+      }
+      updates.filial = null;
+    } else if (typeof filial !== 'string' || !VALID_FILIAIS.includes(filial)) {
       return res.status(400).json({ error: 'Filial inválida.' });
+    } else {
+      if (!isGlobalCaller && filial === 'Matriz') {
+        return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
+      }
+      if (callerProfile.role === 'gerente' && filial !== callerProfile.filial) {
+        return res.status(403).json({ error: 'Gerentes só podem atribuir a própria filial.' });
+      }
+      const targetRoleAfter = updates.role ?? targetProfile.role;
+      if ((targetRoleAfter === 'colaborador' || targetRoleAfter === 'gerente') && filial === 'Matriz') {
+        return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax).' });
+      }
+      updates.filial = filial;
     }
-    if (!isGlobalCaller && filial === 'Matriz') {
-      return res.status(403).json({ error: 'Gerentes não podem atribuir a filial Matriz.' });
-    }
-    if (callerProfile.role === 'gerente' && filial !== callerProfile.filial) {
-      return res.status(403).json({ error: 'Gerentes só podem atribuir a própria filial.' });
-    }
-    const targetRoleAfter = updates.role ?? targetProfile.role;
-    if ((targetRoleAfter === 'colaborador' || targetRoleAfter === 'gerente') && filial === 'Matriz') {
-      return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax).' });
-    }
-    updates.filial = filial;
   }
   if (is_conselheiro !== undefined) {
     if (callerProfile.role !== 'admin') {

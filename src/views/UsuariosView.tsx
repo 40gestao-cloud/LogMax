@@ -8,7 +8,7 @@ import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { FILIAIS_HOLDING, FILIAL_DEFAULT } from '../lib/filiais';
+import { FILIAIS_HOLDING } from '../lib/filiais';
 import { exportToExcel } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 
@@ -69,6 +69,16 @@ const setorCls = (s: string) => {
 // Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
 const FILIAIS_GERENTE = FILIAIS_HOLDING.filter(f => f !== 'Matriz');
 
+// Conta criada e ainda não alocada (migr. 411): `filial IS NULL`. No form e no
+// filtro isso é a string vazia, porque `<option>` não carrega null.
+//
+// Não é a Matriz. Matriz é escopo de cargo global; isto é ausência de decisão,
+// e existe porque montar turma são dezenas de contas numa sentada e a alocação
+// se resolve depois, com todo mundo na frente. Enquanto está assim, o aluno
+// esbarra em "Filial não configurada" ao entrar — que é a sala de espera dele.
+const SEM_ALOCACAO = '';
+const filialLabel = (f?: string | null) => f || 'Sem alocação';
+
 // Só admin/CEO/conselheiro podem ficar em Matriz. Colaborador e gerente
 // precisam de unidade operacional, senão travam no gate "Filial não
 // configurada" (FilialContext rejeita Matriz como filialAtiva).
@@ -112,7 +122,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     setores_extras: [] as string[],
     // Gerente não-global só cria colaborador da própria filial — trava aqui
     // em vez de deixar SuperMax como default e depender do select.
-    filial: (isGerente && !isGlobal ? callerProfile.filial : FILIAIS_GERENTE[0]) as string,
+    //
+    // Para quem organiza a turma, o default é SEM alocação: criar as contas é
+    // uma sentada só, distribuir nas unidades é outra. Escolher unidade na
+    // criação obrigava a decidir cedo e reorganizar depois.
+    filial: (isGerente && !isGlobal ? callerProfile.filial : SEM_ALOCACAO) as string,
   }), [isGerente, isGlobal, callerProfile.setor, callerProfile.filial]);
 
   // Setores válidos para extras (mesma lista do backend; sem 'all').
@@ -155,7 +169,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       u.email ?? '—',
       ROLE_LABEL[u.role] ?? u.role,
       (SETOR_LABEL[u.setor] ?? u.setor) + (extras ? ` (+${extras})` : ''),
-      u.filial ?? FILIAL_DEFAULT,
+      filialLabel(u.filial),
       u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—',
     ];
   });
@@ -368,8 +382,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const filteredUsers = users.filter(u => {
     // Modo filial: só globais (admin/CEO/conselheiro) + gerente/colaborador
     // da própria filial ativa — nada de outra unidade aparece.
-    if (filialAtiva && !isGlobalRole(u) && (u.filial ?? FILIAL_DEFAULT) !== filialAtiva) return false;
-    if (filialFiltro !== 'todas' && (u.filial ?? FILIAL_DEFAULT) !== filialFiltro) return false;
+    if (filialAtiva && !isGlobalRole(u) && (u.filial ?? SEM_ALOCACAO) !== filialAtiva) return false;
+    if (filialFiltro !== 'todas' && (u.filial ?? SEM_ALOCACAO) !== filialFiltro) return false;
     if (setorFiltro !== 'todos') {
       const setores = [u.setor, ...(u.setores_extras ?? [])];
       if (u.setor !== 'all' && !setores.includes(setorFiltro as any)) return false;
@@ -490,7 +504,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       role: u.role,
       setor: u.setor,
       setores_extras: (u.setores_extras ?? []) as string[],
-      filial: u.filial ?? FILIAL_DEFAULT,
+      filial: u.filial ?? SEM_ALOCACAO,
       password: '',
       // Default true preserva comportamento atual quando coluna ainda é nula em registros antigos.
       pode_acessar_usuarios: u.pode_acessar_usuarios !== false,
@@ -632,6 +646,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               className="neu-input py-2.5 px-3 rounded-xl text-sm" title="Filtrar por filial">
               <option value="todas">Todas filiais</option>
               {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+              {/* A fila de alocação: quem foi criado e ainda não tem unidade. */}
+              <option value={SEM_ALOCACAO}>Sem alocação</option>
             </select>
           )}
           <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
@@ -766,8 +782,16 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <select id="user-filial" value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
                   disabled={isGerente && !isGlobal}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  {/* Gerente não deixa conta em aberto — o backend recusa. */}
+                  {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação (definir depois)</option>}
                   {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
+                {form.filial === SEM_ALOCACAO && (
+                  <p className="text-[10px] text-gray-600 leading-relaxed">
+                    A conta é criada e fica aguardando: até você escolher a unidade, o aluno vê
+                    "Filial não configurada" ao entrar.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -893,7 +917,17 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center"><FilialBadge filial={u.filial} /></td>
+                      <td className="py-3 px-4 text-center">
+                        {u.filial
+                          ? <FilialBadge filial={u.filial} />
+                          : (
+                            /* Âmbar e não cinza: isto é pendência sua, não um
+                               dado ausente. O FilialBadge devolveria só "—". */
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-amber-500/25 bg-amber-500/10 text-amber-400">
+                              Sem alocação
+                            </span>
+                          )}
+                      </td>
                       <td className="py-3 px-4">
                         {isAdmin ? (
                           <select
@@ -1183,6 +1217,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
                     disabled={isGerente && !isGlobal}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                    {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação (definir depois)</option>}
                     {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
                       <option key={f} value={f}>{f}</option>
                     ))}
