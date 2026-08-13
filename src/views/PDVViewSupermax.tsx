@@ -10,6 +10,7 @@ import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
+import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
@@ -126,9 +127,13 @@ export const PDVViewSupermax = ({
   const [clientSearch, setClientSearch]         = useState('');
   const [confirmCancel, setConfirmCancel]       = useState(false);
 
-  // Modo tela cheia (overlay sobre app shell). Default ON ao entrar no PDV.
-  // ESC sai do modo tela cheia; F9/botão vermelho seguem cancelando venda.
+  // Modo tela cheia (overlay sobre app shell + tela cheia do navegador).
+  // Default ON ao entrar no PDV. ESC sai do modo tela cheia; F9/botão vermelho
+  // seguem cancelando venda.
   const [fullscreen, setFullscreen] = useState(true);
+  // Sem isto o overlay cobria só a shell, e a barra do navegador e a do
+  // sistema continuavam ocupando a tela do caixa.
+  useFullscreenNativo(fullscreen, useCallback(() => setFullscreen(false), []));
 
   // Índices de seleção por teclado nos modais (Arrow keys + Enter).
   const [payChoiceIdx, setPayChoiceIdx]       = useState(0);

@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
+import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { useAuth } from '../hooks/useAuth';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
@@ -326,6 +327,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     editIndex: number | null;
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(true);
+  // Tela cheia do navegador, não só o overlay sobre a shell: sem isto a barra
+  // de endereço e a barra de tarefas continuavam à vista no caixa.
+  useFullscreenNativo(fullscreen, useCallback(() => setFullscreen(false), []));
   const [mobileTab, setMobileTab] = useState<'produtos' | 'carrinho'>('produtos');
   const vendaSnapshotRef = useRef<{
     cart: CartItem[]; subtotal: number; descontoNum: number; totalFinal: number; clienteId: string;
