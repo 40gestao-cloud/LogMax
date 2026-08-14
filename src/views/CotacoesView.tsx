@@ -14,6 +14,7 @@ import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
+import { useFornecedorDesempenho, SeloDesempenho } from '../components/FornecedorDesempenho';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
@@ -79,6 +80,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   );
   const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial }, true);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  // Pontualidade por fornecedor (migr. 421). Vive ao lado do preço porque é
+  // aqui que a escolha é feita — no relatório, chegaria tarde.
+  const { desempenho, desempenhoDisponivel } = useFornecedorDesempenho(filial);
   // Lista SEM paginação, só para agrupar propostas concorrentes por requisição.
   // `data` traz 50 linhas; usá-la para isso fazia o contador de propostas, o
   // modal de comparação e o cancelamento automático ignorarem toda proposta
@@ -570,6 +574,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         ))}
                       </select>
                     </FormField>
+                    {/* Histórico de quem foi escolhido, ainda no formulário: o
+                        prazo prometido abaixo vale o que o fornecedor costuma
+                        cumprir. */}
+                    {desempenhoDisponivel && form.fornecedor_id && (
+                      <div className="flex flex-col gap-1 justify-end pb-1">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                          Histórico de entrega
+                        </span>
+                        <SeloDesempenho d={desempenho[form.fornecedor_id]} />
+                      </div>
+                    )}
                     <FormField label="Valor Total (R$)">
                       <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
                         value={extras.valor_total}
@@ -647,7 +662,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         </div>
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{item.forn?.nome ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400">
+                        <div className="flex flex-col gap-0.5">
+                          <span>{item.forn?.nome ?? '—'}</span>
+                          {desempenhoDisponivel && item.fornecedor_id && (
+                            <SeloDesempenho d={desempenho[item.fornecedor_id]} compacto />
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
                         <div className="flex flex-col items-end gap-0.5">
                           <span>R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
@@ -765,7 +787,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     </span>
                   </h3>
                   <p className="text-[11px] text-gray-500 mt-1">
-                    {propostasDoModal.length} proposta(s) registrada(s). A menor entre as vivas está destacada.
+                    {propostasDoModal.length} proposta(s) registrada(s). A menor entre as vivas está destacada —
+                    confira a coluna de entrega antes de decidir só pelo preço.
                   </p>
                 </div>
                 <button onClick={() => setComparando(null)}
@@ -780,6 +803,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       <th className="pb-3 font-bold px-3">Fornecedor</th>
                       <th className="pb-3 font-bold px-3 text-right">Valor</th>
+                      <th className="pb-3 font-bold px-3">Entrega no prazo</th>
                       <th className="pb-3 font-bold px-3">Prazo</th>
                       <th className="pb-3 font-bold px-3">Validade</th>
                       <th className="pb-3 font-bold px-3 text-center">Status</th>
@@ -801,6 +825,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           </td>
                           <td className={`py-2.5 px-3 text-xs font-mono text-right tabular-nums ${isMenor ? 'text-emerald-300 font-bold' : 'text-gray-200'}`}>
                             R$ {formatBRL(Number(c.valor_total ?? 0))}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {desempenhoDisponivel && c.fornecedor_id
+                              ? <SeloDesempenho d={desempenho[c.fornecedor_id]} />
+                              : <span className="text-[10px] text-gray-600">—</span>}
                           </td>
                           <td className="py-2.5 px-3 text-xs text-gray-400">{c.prazo_entrega || '—'}</td>
                           <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{c.validade || '—'}</td>
