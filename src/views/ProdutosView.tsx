@@ -39,7 +39,10 @@ async function salvarPrecoCusto(produtoId: string, valor: number): Promise<void>
   const { error } = await supabase
     .from('produtos_custo')
     .upsert(
-      { produto_id: produtoId, preco_custo: valor, updated_at: new Date().toISOString() },
+      // `origem: 'manual'` é obrigatório aqui (migr. 417): sem ele o ON CONFLICT
+      // preserva o 'compra' gravado pelo último recebimento, e o custo digitado
+      // à mão continuaria se apresentando como custo apurado da compra.
+      { produto_id: produtoId, preco_custo: valor, origem: 'manual', updated_at: new Date().toISOString() },
       { onConflict: 'produto_id' },
     );
   if (error) throw new Error(`Produto salvo, mas o preço de custo não foi gravado: ${error.message}`);
@@ -1044,6 +1047,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       value={extras.preco_custo}
                       onChange={e => { setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) })); setExtrasErrors(ev => ({ ...ev, preco_custo: '' })); }}
                       onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+                    {/* Custo apurado pela compra (migr. 417). Editar aqui é
+                        permitido — mas o próximo recebimento deste produto
+                        recalcula a média ponderada e assume de volta. */}
+                    {editItem?.custo_origem === 'compra' && (
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        Média ponderada apurada no recebimento
+                        {editItem?.custo_ultima_compra_em ? ` de ${new Date(`${editItem.custo_ultima_compra_em}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}
+                        {editItem?.custo_ultima_compra_valor != null
+                          ? ` — última compra a R$ ${fmtBRL(parseNum(editItem.custo_ultima_compra_valor))} a unidade`
+                          : ''}.
+                      </p>
+                    )}
                   </FormField>
                   <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
                     <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
