@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
+import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Loader2, Ban } from 'lucide-react';
+import { ArrowRight, Loader2, Ban, Clock } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
@@ -11,6 +12,34 @@ import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
+
+// Atraso do pedido (migr. 418). Não é coluna nem status: é a data prometida
+// contra hoje. Guardar "Atrasado" no banco envelheceria errado — o pedido
+// marcado ontem continuaria atrasado depois de recebido no prazo combinado
+// numa renegociação. Datas do PostgREST vêm 'YYYY-MM-DD', que compara e
+// subtrai direto como string ordenável.
+const diasEntre = (de: string, ate: string): number =>
+  Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
+
+const EM_ABERTO = (status: string) => status !== 'Recebido' && status !== 'Cancelado';
+
+type Atraso = { dias: number; entregue: boolean } | null;
+
+const calcAtraso = (pedido: any, hoje: string): Atraso => {
+  const prazo = pedido?.prazo_entrega;
+  if (!prazo) return null;
+  // Já recebido: o atraso é histórico e congelado na data da chegada.
+  if (pedido.recebido_em) {
+    const d = diasEntre(prazo, pedido.recebido_em);
+    return d > 0 ? { dias: d, entregue: true } : null;
+  }
+  if (!EM_ABERTO(pedido.status)) return null;
+  const d = diasEntre(prazo, hoje);
+  return d > 0 ? { dias: d, entregue: false } : null;
+};
+
+const fmtData = (iso?: string | null) =>
+  iso ? iso.split('-').reverse().join('/') : '—';
 
 const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -27,6 +56,14 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
   // um contador que só enxerga a página 1 diz "nada a fazer" com trabalho na 2.
   const { data: aguardandoEnvio } = useFetchData<any>('/api/pedidosview', { filial, status: 'Aprovado' }, true);
   const { data: emEntrega } = useFetchData<any>('/api/pedidosview', { filial, status: 'Em Entrega' }, true);
+
+  const hoje = todayBR();
+  // Atrasados vêm das duas consultas sem paginação que a fila já usa: são os
+  // dois únicos status em que a carga ainda pode chegar.
+  const atrasados = [...aguardandoEnvio, ...emEntrega]
+    .filter((p: any) => calcAtraso(p, hoje) !== null).length;
+  const semPrazo = [...aguardandoEnvio, ...emEntrega]
+    .filter((p: any) => !p.prazo_entrega).length;
 
   const enriched = data.map((p: any) => {
     const cotacao = cotacoes.find((c: any) => c.id === p.cotacao_id);
@@ -141,6 +178,8 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
       <FilaDeTrabalho itens={[
         { label: 'pedido(s) para marcar em entrega', count: aguardandoEnvio.length, hint: 'sem isso o almoxarifado não sabe que a carga vem' },
         { label: 'pedido(s) em entrega', count: emEntrega.length, hint: 'agora é com o Estoque, em Estoque → Recebimentos' },
+        { label: 'pedido(s) com prazo estourado', count: atrasados, hint: 'a data prometida passou e a carga não chegou — cobre o fornecedor' },
+        { label: 'pedido(s) em aberto sem prazo', count: semPrazo, hint: 'sem data prometida não há o que cobrar — informe o prazo médio no cadastro do fornecedor' },
       ]} />
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhum pedido. Aprove uma cotação para gerar o primeiro pedido." /> : (
@@ -165,6 +204,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                     const isProc = processing === item.id;
                     // Snapshot tem prioridade sobre o JOIN — preserva nome/qtd se a requisição mudar.
                     const itemDisplay = item.item_descricao ?? item.req?.item ?? '—';
+                    const atraso = calcAtraso(item, hoje);
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{numeroPedido(item)}</td>
@@ -175,7 +215,26 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.prazo_entrega || '—'}</td>
+                        <td className="py-3 px-4 text-xs hidden lg:table-cell">
+                          <span className={atraso && !atraso.entregue ? 'text-red-400 font-semibold' : 'text-gray-400'}>
+                            {fmtData(item.prazo_entrega)}
+                          </span>
+                          {atraso && (
+                            <span
+                              title={atraso.entregue
+                                ? `Prometido para ${fmtData(item.prazo_entrega)}, chegou em ${fmtData(item.recebido_em)}.`
+                                : 'A data prometida passou e a carga não chegou.'}
+                              className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                atraso.entregue ? 'bg-amber-900/30 text-amber-400' : 'bg-red-950/50 text-red-400'}`}>
+                              <Clock size={9} />
+                              {atraso.entregue ? `entregou +${atraso.dias}d` : `atrasado ${atraso.dias}d`}
+                            </span>
+                          )}
+                          {!item.prazo_entrega && EM_ABERTO(item.status) && (
+                            <span title="Cotação sem data e fornecedor sem prazo médio cadastrado — este pedido não tem como ser cobrado."
+                              className="ml-2 text-[10px] text-gray-600">sem prazo</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
