@@ -154,13 +154,12 @@ restantes ficam aqui, na ordem em que valem a pena.
 - ~~#4 Prazo de entrega não era cobrável~~ — migr. 418 (`pedidos.recebido_em`,
   prazo herdado do fornecedor, atraso na tela).
 
-### #5 — Desempenho de fornecedor
-Agora existe matéria-prima: `pedidos.prazo_entrega` × `pedidos.recebido_em` dão
-pontualidade por fornecedor. Falta a apuração (view ou RPC) e o lugar de olhar
-— o candidato natural é a própria tela de Cotações, ao lado do preço, para que
-escolher fornecedor deixe de ser só escolher o mais barato.
-
-Escopo: pequeno-médio. É o item com melhor relação valor/custo da lista hoje.
+### ~~#5 — Desempenho de fornecedor~~ — feito em 2026-08-14 (migr. 421)
+View `v_fornecedor_desempenho` (pontualidade, atraso médio, pior atraso, última
+entrega, volume) + selo em Cotações nos três pontos de decisão: linha da
+cotação, coluna nova do comparativo e formulário de nova proposta. Pedido em
+aberto com prazo vencido conta à parte (`em_atraso_agora`), e fornecedor sem
+entrega fechada mostra "sem histórico" em vez de 0%.
 
 ### #6 — Lote e validade (FEFO)
 `vencimentos_estoque` tem tabela, policy (010) e endpoint mapeado, e não tem
