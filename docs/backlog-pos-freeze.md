@@ -139,6 +139,57 @@ Escopo: pequeno-médio (extensão de tela existente — pode contar como refino)
 Implementada na migr. 385 e retirada do produto junto com o Comitê de Auditoria.
 Mesma observação do #G5.
 
+## Auditoria de realismo de 2026-08-14
+
+Levantamento pedido pelo usuário ("o que sugere melhorar, e onde falta
+realidade"). Nove gaps, ordenados por valor/custo. **Os quatro primeiros
+saíram no mesmo dia** (migrs. 416/417/418, exceção aberta à trava); os cinco
+restantes ficam aqui, na ordem em que valem a pena.
+
+- ~~#1 Fiado sem limite de crédito nem checagem de inadimplência~~ — migr. 416.
+- ~~#2 Custo do produto não vinha da compra~~ — migr. 417 (média ponderada móvel
+  apurada no recebimento).
+- ~~#3 Sugestão de compra valorizada a preço de venda~~ — corrigido em
+  `SugestoesComprasView` (lê a view mascarada e estima a preço de custo).
+- ~~#4 Prazo de entrega não era cobrável~~ — migr. 418 (`pedidos.recebido_em`,
+  prazo herdado do fornecedor, atraso na tela).
+
+### #5 — Desempenho de fornecedor
+Agora existe matéria-prima: `pedidos.prazo_entrega` × `pedidos.recebido_em` dão
+pontualidade por fornecedor. Falta a apuração (view ou RPC) e o lugar de olhar
+— o candidato natural é a própria tela de Cotações, ao lado do preço, para que
+escolher fornecedor deixe de ser só escolher o mais barato.
+
+Escopo: pequeno-médio. É o item com melhor relação valor/custo da lista hoje.
+
+### #6 — Lote e validade (FEFO)
+`vencimentos_estoque` tem tabela, policy (010) e endpoint mapeado, e não tem
+tela, submenu nem rota. Sem isso a SuperMax — que é mercearia — não tem alerta
+de vencimento nem perda por validade.
+
+Escopo: médio (tela nova + integração na saída de estoque). É feature, não
+refino: esperar a janela.
+
+### #7 — Divergência de recebimento vira ocorrência
+Recebimento parcial funciona (`v_pedido_saldo`), mas item avariado ou errado não
+gera devolução ao fornecedor — o saldo fica aberto para sempre e "chegou errado"
+não tem consequência nenhuma.
+
+Escopo: médio.
+
+### #8 — Baixa parcial em Contas a Receber
+`ContasReceberView` grava `status: 'Pago'` com o valor cheio. Cliente que paga
+metade não tem representação no sistema — e é o caso mais comum de cobrança.
+Casa com o limite de crédito da migr. 416: enquanto a baixa for tudo-ou-nada, o
+saldo devedor que trava o Fiado é grosseiro.
+
+Escopo: pequeno-médio.
+
+### #9 — DRE / resultado
+Ver #7 da auditoria de 2026-06-19, acima. Continua sendo o item grande. Ficou
+mais viável depois da migr. 417: com custo apurado da compra, o CMV deixa de ser
+chute.
+
 ## Pedidos novos (não-auditoria)
 
 Adicionar aqui quaisquer ideias que aparecerem durante a trava.

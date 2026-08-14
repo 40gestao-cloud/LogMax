@@ -9,7 +9,13 @@ import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../co
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
-  const { data: produtos, isLoading } = useFetchData<any>('/api/produtosview', { filial });
+  // Lê pela view mascarada (migr. 262): o valor de uma recompra é o que a casa
+  // PAGA no item, não o que cobra por ele. Antes daqui a estimativa saía de
+  // `p.preco` — o comprador via um orçamento de reposição inflado pela própria
+  // margem da loja e levava esse número para a cotação. Logística está entre os
+  // setores que enxergam custo; para quem não está, `preco_custo` vem NULL e a
+  // coluna mostra "—" em vez de mentir.
+  const { data: produtos, isLoading } = useFetchData<any>('/api/produtoscomcustoview', { filial });
   const [search, setSearch] = useState('');
   const [filtroMode, setFiltroMode] = useState<'todos' | 'zerados'>('todos');
   const [requestingItem, setRequestingItem] = useState<any | null>(null);
@@ -33,11 +39,17 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
     .filter((p: any) => [p.codigo, p.nome, p.categoria].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())))
     .map((p: any) => {
       const qtd_sugerida = Math.max((limiteMin(p) * 2) - p.estoque, limiteMin(p));
-      const valor_est = qtd_sugerida * Number(p.preco || 0);
-      return { ...p, qtd_sugerida, valor_est };
+      const custo = Number(p.preco_custo ?? 0);
+      // Custo desconhecido (não cadastrado, ou usuário sem permissão de ver)
+      // não vira zero nem cai no preço de venda: fica nulo e some do total.
+      const valor_est = custo > 0 ? qtd_sugerida * custo : null;
+      return { ...p, qtd_sugerida, custo, valor_est };
     });
 
-  const valorTotalEst = sugestoes.reduce((acc: number, p: any) => acc + p.valor_est, 0);
+  const valorTotalEst = sugestoes.reduce((acc: number, p: any) => acc + (p.valor_est ?? 0), 0);
+  const semCusto = sugestoes.filter((p: any) => p.valor_est === null).length;
+  const fmtValor = (v: number | null) =>
+    v === null ? '—' : `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const situacao = (estoque: number) =>
     estoque === 0 ? { label: 'Crítico', cls: 'bg-red-950/50 text-red-500' }
@@ -93,18 +105,19 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
     }
   };
 
-  const exportCols = ['Código', 'Produto', 'Estoque Atual', 'Unidade', 'Situação', 'Qtd Sugerida', 'Valor Est.'];
+  const exportCols = ['Código', 'Produto', 'Estoque Atual', 'Unidade', 'Situação', 'Qtd Sugerida', 'Custo Est.'];
   const exportRows = () => sugestoes.map((p: any) => [
     p.codigo ?? '', p.nome ?? '', String(p.estoque ?? 0), p.unidade ?? '',
     situacao(p.estoque).label,
     String(p.qtd_sugerida),
-    `R$ ${p.valor_est.toFixed(2)}`,
+    fmtValor(p.valor_est),
   ]);
 
   const kpis = [
     { label: 'Estoque Crítico', value: criticos.length, sub: 'produtos zerados', warn: criticos.length > 0 },
     { label: 'Estoque Baixo', value: baixos.length, sub: 'menos de 10 unid.', warn: baixos.length > 0 },
-    { label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'para reabastecimento', warn: false },
+    { label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      sub: semCusto > 0 ? `a preço de custo — ${semCusto} item(ns) sem custo ficaram de fora` : 'a preço de custo', warn: false },
     { label: 'Produtos Monitorados', value: ativos.length, sub: 'ativos no catálogo', warn: false },
   ];
 
@@ -223,8 +236,8 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                             <p className="text-sm font-mono font-bold text-gray-200">{p.qtd_sugerida}</p>
                           </div>
                           <div>
-                            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Valor</p>
-                            <p className="text-sm font-mono font-bold text-gray-200">R$ {p.valor_est.toFixed(2)}</p>
+                            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Custo est.</p>
+                            <p className="text-sm font-mono font-bold text-gray-200">{fmtValor(p.valor_est)}</p>
                           </div>
                         </div>
                         <button onClick={() => openSolicitar(p)}
@@ -246,7 +259,7 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                   <th className="pb-4 font-bold px-4">Unidade</th>
                   <th className="pb-4 font-bold px-4 text-center">Situação</th>
                   <th className="pb-4 font-bold px-4 text-right">Qtd Sugerida</th>
-                  <th className="pb-4 font-bold px-4 text-right">Valor Est.</th>
+                  <th className="pb-4 font-bold px-4 text-right">Custo Est.</th>
                   <th className="pb-4 font-bold px-4 text-right">Ação</th>
                 </tr></thead>
                 <tbody>
@@ -261,7 +274,10 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                           <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
                           <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span></td>
                           <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{p.qtd_sugerida}</td>
-                          <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {p.valor_est.toFixed(2)}</td>
+                          <td className={`py-3 px-4 text-xs font-mono text-right ${p.valor_est === null ? 'text-gray-600' : 'text-gray-200'}`}
+                              title={p.valor_est === null ? 'Produto sem preço de custo cadastrado — o custo passa a vir sozinho no primeiro recebimento de compra deste item.' : `Custo unitário R$ ${p.custo.toFixed(2)}`}>
+                            {fmtValor(p.valor_est)}
+                          </td>
                           <td className="py-3 px-4 text-right">
                             <button onClick={() => openSolicitar(p)}
                               className="flex items-center gap-1.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity neu-button px-3 py-1.5 rounded-lg text-xs text-accent font-semibold hover:border-accent/20 border border-transparent">
