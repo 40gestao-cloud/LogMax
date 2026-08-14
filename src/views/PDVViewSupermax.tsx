@@ -14,6 +14,7 @@ import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
+import { consultarCreditoCliente, bloqueioFiado } from '../lib/credito';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 import { normalizarBusca as norm, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
@@ -1100,6 +1101,13 @@ export const PDVViewSupermax = ({
         await refreshCaixa();
         return;
       }
+      // Limite de crédito e inadimplência (migr. 416). Consultado aqui, depois
+      // do picker: é o último ponto antes da venda, e entre escolher o cliente
+      // e confirmar já pode ter entrado outro fiado dele em outro caixa. Quem
+      // recusa de fato é a trigger em `vendas` — isto troca o erro de banco por
+      // uma frase que diz o que fazer.
+      const motivo = bloqueioFiado(await consultarCreditoCliente(cid), totalFinal);
+      if (motivo) { showToast?.(motivo, 'error', true); return; }
       await finalizarVenda('Fiado', cid);
       setReciboModalOpen(true);
     } catch (err: any) {

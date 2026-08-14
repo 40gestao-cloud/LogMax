@@ -8,7 +8,7 @@ import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ } from '../lib/viewUtils';
+import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
@@ -24,6 +24,9 @@ const makeEmptyExtras = (filial: string) => ({
   // compras, não do ramo — alimenta a cotação e a data prometida a quem pediu.
   // Vivia em `atributos` na MaxLook e na TechMax, e não existia no SuperMax.
   prazo_entrega_dias: '',
+  // Só cliente (migr. 416). Vazio = sem limite cadastrado, que é diferente de
+  // zero: zero é "não leva fiado".
+  limite_credito: '',
   filial,
   atributos: {} as Record<string, any>,
 });
@@ -105,6 +108,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
       cpf_cnpj:    item.cpf_cnpj   ?? '',
       categoria:   item.categoria  ?? '',
       prazo_entrega_dias: item.prazo_entrega_dias == null ? '' : String(item.prazo_entrega_dias),
+      limite_credito: item.limite_credito == null ? '' : formatBRL(Number(item.limite_credito)),
       filial,
       atributos:   (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {},
     });
@@ -133,7 +137,12 @@ const CRMViewInner = ({ type, showToast, filial }: {
         endereco:    extras.endereco,
         cpf_cnpj:    extras.cpf_cnpj,
         filial,
-        ...(isClientes ? {} : {
+        ...(isClientes ? {
+          // String vazia vira NULL, não 0: "sem limite" e "não leva fiado" são
+          // decisões diferentes e o banco distingue as duas.
+          limite_credito: extras.limite_credito.trim() === ''
+            ? null : parseBRL(extras.limite_credito),
+        } : {
           prazo_entrega_dias: extras.prazo_entrega_dias.trim() === ''
             ? null : Number(extras.prazo_entrega_dias),
         }),
@@ -289,6 +298,22 @@ const CRMViewInner = ({ type, showToast, filial }: {
                       onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
                       placeholder="Ex: Materiais, Serviços" />
                   </FormField>
+                )}
+
+                {isClientes && (
+                  <div>
+                    <FormField label="Limite de crédito (R$)">
+                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                        value={extras.limite_credito}
+                        onChange={e => setExtras(x => ({ ...x, limite_credito: formatBRL(e.target.value) }))}
+                        onKeyDown={handleMoneyKeyDown} placeholder="Em branco = sem limite" />
+                    </FormField>
+                    <span className="text-[10px] text-gray-500 block mt-1">
+                      Teto da venda a prazo (Fiado). Em branco, a casa não definiu limite e o PDV não trava.
+                      Zero significa "este cliente não leva fiado". Título vencido bloqueia a venda a prazo de
+                      qualquer jeito, com ou sem limite.
+                    </span>
+                  </div>
                 )}
 
                 {!isClientes && (

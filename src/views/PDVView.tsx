@@ -17,6 +17,7 @@ import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
 import type { Produto, Cliente } from '../types/domain';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import { consultarCreditoCliente, bloqueioFiado, type CreditoCliente } from '../lib/credito';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
@@ -279,6 +280,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
   const [parcelas, setParcelas] = useState(1);
   const [clienteId, setClienteId] = useState('');
+  // Crédito do cliente escolhido no Fiado (migr. 416). Só para MOSTRAR: quem
+  // barra a venda é a trigger em `vendas`, e o fechamento reconsulta.
+  const [credito, setCredito] = useState<CreditoCliente | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    if (!clienteId || formaPagamento !== 'Fiado') { setCredito(null); return; }
+    consultarCreditoCliente(clienteId).then(c => { if (vivo) setCredito(c); });
+    return () => { vivo = false; };
+  }, [clienteId, formaPagamento]);
   const [isClosing, setIsClosing] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [lastVenda, setLastVenda] = useState<{ id: string; total: number } | null>(null);
@@ -767,6 +777,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     if (networkError) return;
     if (cart.length === 0) { showToast?.('Carrinho vazio.', 'error', true); return; }
     if (formaPagamento === 'Fiado' && !clienteId) { showToast?.('Selecione o cliente para venda Fiado.', 'error', true); return; }
+    // Crédito reconsultado na hora de fechar, não o do state: entre escolher o
+    // cliente e bater o total, outro caixa pode ter vendido fiado pra ele. A
+    // trigger da migr. 416 recusaria a venda de qualquer jeito — isto só troca
+    // um erro de banco por uma frase que diz o que fazer.
+    if (formaPagamento === 'Fiado') {
+      const motivo = bloqueioFiado(await consultarCreditoCliente(clienteId), totalFinal);
+      if (motivo) { showToast?.(motivo, 'error', true); return; }
+    }
     if (filialFiltro === 'TechMax' && tipoAtendimento === 'OS' && !defeitoRelatado.trim()) {
       showToast?.('Descreva o defeito relatado para abrir a OS.', 'error', true);
       return;
@@ -2076,6 +2094,38 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       ))}
                     </select>
                   </div>
+                  {/* Situação de crédito (migr. 416). Aparece só quando há algo
+                      a dizer: sem limite cadastrado e sem dívida, não há painel
+                      — o caixa não precisa de um retângulo dizendo "tudo bem". */}
+                  {credito && (credito.limite !== null || credito.devedor > 0) && (() => {
+                    const estoura = bloqueioFiado(credito, totalFinal) !== null;
+                    return (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 px-2 py-1.5 rounded-lg text-[10px]"
+                        style={{
+                          background: estoura ? 'rgba(220,38,38,0.08)' : 'rgba(0,0,0,0.04)',
+                          border: `1px solid ${estoura ? 'rgba(220,38,38,0.35)' : 'rgba(0,0,0,0.10)'}`,
+                        }}>
+                        {credito.vencidos > 0 && (
+                          <span className="font-black uppercase tracking-wider text-red-600">
+                            {credito.vencidos} título(s) vencido(s)
+                          </span>
+                        )}
+                        <span className="text-gray-600">
+                          Em aberto: <strong className="tabular-nums text-gray-800">R$ {formatBRL(credito.devedor)}</strong>
+                        </span>
+                        {credito.limite !== null && (
+                          <>
+                            <span className="text-gray-600">
+                              Limite: <strong className="tabular-nums text-gray-800">R$ {formatBRL(credito.limite)}</strong>
+                            </span>
+                            <span className={estoura ? 'text-red-600 font-bold' : 'text-gray-600'}>
+                              Disponível: <strong className="tabular-nums">R$ {formatBRL(credito.disponivel ?? 0)}</strong>
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               )}
 
