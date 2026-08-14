@@ -159,52 +159,54 @@ CREATE TRIGGER trg_custo_medio_da_entrada
 -- 3. A view mascarada passa a mostrar a procedência
 --
 -- `produtos_com_custo` é como o front lê o custo (a tabela tem RLS própria
--- desde a migr. 262). CREATE OR REPLACE VIEW só aceita colunas novas no FIM da
--- lista — por isso as três entram depois de `preco_custo`. `security_invoker`
--- vai declarado dentro do CREATE: sem isso o REPLACE devolve a view ao padrão
--- (security definer) e o custo vazaria para quem a RLS barra.
+-- desde a migr. 262). CREATE OR REPLACE VIEW não pode renomear nem reordenar
+-- coluna existente: as novas só entram no FIM, e as antigas têm de sair na
+-- mesma ordem em que já estão.
+--
+-- E a ordem NÃO é a mesma nos 4 bancos. Este bloco nasceu com a lista de
+-- colunas escrita à mão, copiada da LogMax-ERP, e quebrou na turma Aprendiz
+-- com 42P16 ("cannot change name of view column categoria to estoque"): lá
+-- `categoria` é a 4ª coluna e na ERP é a 9ª. A ERP ainda tem uma diferença
+-- própria — a view não expõe `loja_online`, que existe na tabela. São três
+-- formatos para a mesma view, herdados de bootstraps de turma feitos em
+-- momentos diferentes.
+--
+-- Por isso a lista das colunas antigas é LIDA DO PRÓPRIO BANCO em vez de
+-- escrita aqui: cada projeto reconstrói a view com a ordem que já tinha, e as
+-- quatro colunas de custo entram no fim. Reexecutar é seguro — as novas são
+-- excluídas da leitura e recolocadas no mesmo lugar.
+--
+-- `security_invoker` vai declarado dentro do CREATE: sem isso o REPLACE
+-- devolve a view ao padrão (security definer) e o custo vazaria para quem a
+-- RLS barra.
 -- ────────────────────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE VIEW public.produtos_com_custo
-WITH (security_invoker = true) AS
-  SELECT p.id,
-         p.codigo,
-         p.nome,
-         p.estoque,
-         p.preco,
-         p.unidade,
-         p.status,
-         p.created_at,
-         p.categoria,
-         p.estoque_minimo,
-         p.ean,
-         p.fornecedor,
-         p.ativo,
-         p.filial,
-         p.imagem_url,
-         p.tipo,
-         p.patrimonio_numero,
-         p.patrimonio_responsavel,
-         p.patrimonio_localizacao,
-         p.criado_por,
-         p.atualizado_por,
-         p.updated_at,
-         p.elegivel_beneficios,
-         p.vitrine_publica,
-         p.categoria_id,
-         p.subcategoria_id,
-         p.marca,
-         p.peso,
-         p.atributos,
-         p.imagem_url_2,
-         p.imagem_url_3,
-         p.codigo_seq,
-         c.preco_custo,
-         c.origem              AS custo_origem,
-         c.ultima_compra_em    AS custo_ultima_compra_em,
-         c.ultimo_custo_compra AS custo_ultima_compra_valor
-    FROM public.produtos p
-    LEFT JOIN public.produtos_custo c ON c.produto_id = p.id;
+DO $$
+DECLARE
+  v_cols text;
+BEGIN
+  SELECT string_agg(format('p.%I', column_name), ', ' ORDER BY ordinal_position)
+    INTO v_cols
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND table_name   = 'produtos_com_custo'
+     AND column_name NOT IN ('preco_custo', 'custo_origem',
+                             'custo_ultima_compra_em', 'custo_ultima_compra_valor');
+
+  IF v_cols IS NULL THEN
+    RAISE EXCEPTION 'View produtos_com_custo não existe neste banco — aplique a migração 262 antes desta.';
+  END IF;
+
+  EXECUTE format(
+    'CREATE OR REPLACE VIEW public.produtos_com_custo WITH (security_invoker = true) AS '
+    'SELECT %s, c.preco_custo, '
+    '       c.origem              AS custo_origem, '
+    '       c.ultima_compra_em    AS custo_ultima_compra_em, '
+    '       c.ultimo_custo_compra AS custo_ultima_compra_valor '
+    '  FROM public.produtos p '
+    '  LEFT JOIN public.produtos_custo c ON c.produto_id = p.id',
+    v_cols);
+END $$;
 
 COMMIT;
 
