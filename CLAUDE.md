@@ -32,7 +32,8 @@ Endpoints Vercel (Node). Tudo precisa de service-role + checagem RBAC manual:
 **Fonte da verdade do schema atual.** Arquivos `YYYYMMDD_*.sql` em ordem cronológica. Antes de gerar SQL novo, conferir se já há migração para o assunto — vide [[feedback_migration_nao_aplicada]]. RLS, RPCs (`criar_venda_pdv`, `confirmar_pix_pendente`, `responder_pesquisa`, `dar_feedback_arte`, `reverter_promocoes_expiradas`, `notificar_setor`, `atualizar_avaliacao` etc.) e índices vivem aqui.
 
 ### Config e infra
-- **`package.json`** — scripts (`dev`, `build`, `lint` = `tsc --noEmit`, `test` = vitest).
+- **`package.json`** — scripts (`dev`, `build`, `lint` = `tsc --noEmit`, `test` = vitest, `drift` = checador de schema).
+- **`scripts/schema-drift.mjs`** — `npm run drift` compara o schema das 4 turmas (tabelas, colunas, views, funções, triggers, policies, RLS, grants, constraints, índices, realtime) e sai 1 se algo divergir. Rodar **antes** de escrever migração que dependa de estrutura existente e **depois** de aplicar nos 4. Precisa de `SUPABASE_ACCESS_TOKEN` no `.env`.
 - **`vite.config.ts`** — PWA, code-splitting, plugin React, visualizer.
 - **`tsconfig.json`**, **`vitest.config.ts`**.
 - **`vercel.json`** — rewrites/headers.

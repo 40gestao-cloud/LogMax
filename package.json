@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "drift": "node scripts/schema-drift.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.53.1",
