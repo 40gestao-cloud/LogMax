@@ -16,6 +16,17 @@ import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros'
 import { periodoRangeBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 
+// Quanto ainda se cobra deste título. Conta com baixa parcial (migr. 422) já
+// teve parte do principal recebida; o `valor` da linha continua sendo o do
+// documento, que não encolhe porque o cliente pagou metade.
+const saldoEmAberto = (c: any): number =>
+  c?.status === 'Parcial'
+    ? Math.max(Number(c.valor ?? 0) - Number(c.valor_pago ?? 0), 0)
+    : Number(c?.valor ?? 0);
+
+// Status em que ainda cabe receber. 'Parcial' é o que a migr. 422 acrescentou.
+const RECEBIVEL = new Set(['Aberto', 'Atrasado', 'Parcial']);
+
 // `filial` inclui 'Matriz': o rateio administrativo (migr. 323) gera uma conta
 // a receber da holding contra cada unidade, e ela precisa de onde ser cobrada.
 const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial: FilialSelectorValue }) => {
@@ -53,6 +64,9 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [recBankId, setRecBankId] = useState('');
   const [recSaving, setRecSaving] = useState(false);
+  // Valor da baixa. Nasce preenchido com o total devido — quitar continua sendo
+  // dois cliques —, mas agora é editável, que é o ponto desta tela.
+  const [recValor, setRecValor] = useState('');
 
   // Mesma régua da ContasPagarView: o crédito entra no caixa da unidade dona
   // da conta. A migr. 325 recusa a combinação errada no banco de dados.
@@ -76,13 +90,15 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
     // desta tela usa. A correção anterior trocou para 'Pendente' — vocabulário
     // de contas_pagar — e o card seguiu em R$ 0,00 por outro motivo. O recorte
     // por filial, esse sim, faltava mesmo.
-    supabase.from('contas_receber').select('valor, vencimento, status')
-      .eq('status', 'Aberto').eq('ativo', true).eq('filial', filial)
+    // 'Parcial' entra junto (migr. 422): conta que recebeu metade continua
+    // sendo dinheiro a receber, e some do card se o filtro só olhar 'Aberto'.
+    supabase.from('contas_receber').select('valor, valor_pago, vencimento, status')
+      .in('status', ['Aberto', 'Parcial']).eq('ativo', true).eq('filial', filial)
       .then(({ data: rows }) => {
         if (cancelled) return;
         // Soma valor atualizado (com juros/multa pra vencidas) — total real esperado a receber.
         const total = (rows ?? []).reduce((s: number, c: any) => {
-          const b = calcularJuros(c.valor, c.vencimento, c.status, jurosCfg);
+          const b = calcularJuros(saldoEmAberto(c), c.vencimento, c.status, jurosCfg);
           return s + b.total;
         }, 0);
         setTotalAberto(total);
@@ -93,7 +109,11 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
   const enriched = data.map((c: any) => ({
     ...c,
     cliente: clientes.find((cl: any) => cl.id === c.cliente_id),
-    juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
+    // Juros correm sobre o SALDO, não sobre o valor cheio (migr. 422). Em
+    // 'Parcial' o `valor_pago` é só principal — a baixa parcial não carrega
+    // encargos —, então a subtração fecha com o que o banco calcula.
+    juros: calcularJuros(saldoEmAberto(c), c.vencimento, c.status, jurosCfg),
+    recebido: c.status === 'Parcial' ? Number(c.valor_pago ?? 0) : 0,
   }));
 
   // Período e busca já vêm filtrados do servidor. O filtro que existia aqui
@@ -230,43 +250,58 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
     }
   };
 
-  const openReceber = (id: string) => {
-    setReceivingId(id);
+  const openReceber = (conta: any) => {
+    setReceivingId(conta.id);
     setRecBankId('');
+    setRecValor(formatBRL(Number(conta.juros?.total ?? conta.valor ?? 0)));
   };
 
   const closeReceber = () => {
     setReceivingId(null);
     setRecBankId('');
+    setRecValor('');
   };
 
   const handleConfirmarRecebimento = async (conta: any) => {
     if (!recBankId) { showToast('Selecione a conta bancária de crédito.', 'error', true); return; }
     const banco = bancos.find((b: any) => b.id === recBankId);
     if (!banco) { showToast('Conta bancária não encontrada.', 'error', true); return; }
+    const valorInformado = parseBRL(recValor);
+    if (!(valorInformado > 0)) { showToast('Informe o valor recebido.', 'error', true); return; }
     if (!supabase) return;
     setRecSaving(true);
     try {
-      // Juros/multa calculados e gravados pelo BANCO (RPC
-      // registrar_pagamento_conta, migr. 267). Antes o cliente calculava o
-      // total, anunciava "inclui juros" e gravava só status='Pago' — o trigger
-      // creditava o principal e o cliente pagava a menos sem ninguém notar.
-      const { data: breakdown, error } = await supabase.rpc('registrar_pagamento_conta', {
-        p_tipo:     'receber',
+      // Juros/multa continuam calculados pelo BANCO (migr. 267); a diferença é
+      // que agora o valor recebido vai junto e pode ser menor que o devido —
+      // a RPC decide se quita ou deixa a conta em 'Parcial' (migr. 422).
+      const { data: baixa, error } = await supabase.rpc('baixar_conta_receber', {
         p_conta_id: conta.id,
         p_banco_id: recBankId,
+        p_valor:    valorInformado,
       });
       if (error) throw new Error(error.message);
 
-      const valor = Number((breakdown as any)?.total ?? 0);
-      const juros = Number((breakdown as any)?.juros ?? 0);
-      const multa = Number((breakdown as any)?.multa ?? 0);
+      const quitada  = !!(baixa as any)?.quitada;
+      const entrou   = Number((baixa as any)?.recebido_agora ?? 0);
+      const total    = Number((baixa as any)?.recebido_total ?? entrou);
+      const juros    = Number((baixa as any)?.juros ?? 0);
+      const multa    = Number((baixa as any)?.multa ?? 0);
+      const restante = Number((baixa as any)?.saldo_restante ?? 0);
 
       setData((prev: any[]) => prev.map(d => d.id === conta.id
-        ? { ...d, status: 'Pago', banco_id: recBankId, valor_pago: valor, juros_pago: juros, multa_pago: multa }
+        ? {
+            ...d,
+            status:     quitada ? 'Pago' : 'Parcial',
+            banco_id:   recBankId,
+            valor_pago: total,
+            juros_pago: Number(d.juros_pago ?? 0) + juros,
+            multa_pago: Number(d.multa_pago ?? 0) + multa,
+          }
         : d));
+      // O saldo do banco anda pelo que entrou AGORA — o trigger credita a
+      // diferença, não o acumulado.
       setBancos((prev: any[]) => prev.map((b: any) => b.id === recBankId
-        ? { ...b, saldo: Number(b.saldo ?? 0) + valor }
+        ? { ...b, saldo: Number(b.saldo ?? 0) + entrou }
         : b,
       ));
 
@@ -274,7 +309,9 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
         ? ` (inclui R$ ${(juros + multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
         : '';
       showToast(
-        `Recebimento de R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} creditado em ${banco.banco ?? banco.conta}.`,
+        quitada
+          ? `Recebimento de R$ ${entrou.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} creditado em ${banco.banco ?? banco.conta}. Conta quitada.`
+          : `Baixa parcial de R$ ${entrou.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} creditada em ${banco.banco ?? banco.conta}. Restam R$ ${restante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em aberto.`,
         'success', true,
       );
       closeReceber();
@@ -395,6 +432,12 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.cliente?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
                           <div>R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                          {item.recebido > 0 && (
+                            <div className="text-[10px] text-emerald-400 mt-0.5"
+                              title="Já recebido em baixas anteriores. O valor acima é o do documento e não muda.">
+                              − R$ {item.recebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} recebido
+                            </div>
+                          )}
                           {item.juros.vencido && (item.juros.juros + item.juros.multa) > 0 && (
                             <div className="text-[10px] text-red-400 mt-0.5" title={`${item.juros.dias_atraso} dia(s) de atraso · multa R$ ${item.juros.multa.toFixed(2)} + juros R$ ${item.juros.juros.toFixed(2)}`}>
                               + R$ {(item.juros.juros + item.juros.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} mora
@@ -417,8 +460,10 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           <HistoricoOperacoes entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} />
-                            {item.status === 'Aberto' && (
-                              <button onClick={() => openReceber(item.id)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Receber</button>
+                            {RECEBIVEL.has(item.status) && (
+                              <button onClick={() => openReceber(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
+                                <Check size={11} /> {item.status === 'Parcial' ? 'Receber saldo' : 'Receber'}
+                              </button>
                             )}
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
@@ -430,6 +475,31 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <td colSpan={6} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}>
+                                {/* A conta da baixa, aberta: documento, o que já
+                                    entrou, encargos e quanto se cobra hoje. */}
+                                <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 -mt-1">
+                                  <span>Documento: <strong className="text-gray-200">R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  {item.recebido > 0 && (
+                                    <span>Já recebido: <strong className="text-emerald-300">R$ {item.recebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  )}
+                                  {(item.juros.juros + item.juros.multa) > 0 && (
+                                    <span>Juros + multa: <strong className="text-red-300">R$ {(item.juros.juros + item.juros.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  )}
+                                  <span>Devido hoje: <strong className="text-accent">R$ {Number(item.juros.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                </div>
+                                <div className="flex flex-col gap-1 sm:w-44">
+                                  <label htmlFor={`rec-valor-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor recebido *</label>
+                                  <input id={`rec-valor-${item.id}`} type="text" inputMode="numeric"
+                                    className="neu-input py-2 px-3 rounded-xl text-xs w-full text-right tabular-nums font-bold"
+                                    value={recValor}
+                                    onChange={e => setRecValor(formatBRL(e.target.value))}
+                                    onKeyDown={handleMoneyKeyDown} />
+                                  <span className="text-[10px] text-gray-500">
+                                    {parseBRL(recValor) > 0 && parseBRL(recValor) < Number(item.juros.total ?? 0) - 0.005
+                                      ? `Baixa parcial — restam R$ ${(Number(item.juros.total ?? 0) - parseBRL(recValor)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+                                      : 'Recebe tudo e quita a conta.'}
+                                  </span>
+                                </div>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[220px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Landmark size={11} /> Conta bancária de crédito *</label>
                                   <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={recBankId} onChange={e => setRecBankId(e.target.value)}>

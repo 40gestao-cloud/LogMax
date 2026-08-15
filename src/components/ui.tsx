@@ -10,6 +10,11 @@ export const StatusBadge = ({ status }: { status: string }) => {
   if (['Aprovado','Atendida','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
     colorClass = 'bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]';
     style = {};
+  } else if (['Parcial'].includes(status)) {
+    // Meio do caminho (migr. 422): recebeu parte e ainda deve. Âmbar próprio
+    // para não se confundir nem com "em aberto" nem com "quitado".
+    colorClass = 'bg-amber-400/15 text-amber-400 font-bold';
+    style = {};
   } else if (['Em Cotação','Aguardando Financeiro','Em Entrega','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
     colorClass = 'bg-accent/10 text-accent';
     style = {};
