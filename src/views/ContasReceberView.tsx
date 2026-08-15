@@ -279,6 +279,30 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
         p_banco_id: recBankId,
         p_valor:    valorInformado,
       });
+
+      // Turma com a migr. 422 ainda pendente: a RPC não existe. Em vez de
+      // deixar o caixa sem botão, cai no caminho antigo quando o valor é o
+      // total — que é exatamente o que ele sabia fazer. Baixa parcial aí não
+      // tem como acontecer, e dizer isso é melhor que um erro de PostgREST.
+      if (error && /baixar_conta_receber/i.test(error.message ?? '')) {
+        const quitandoTudo = valorInformado >= Number(conta.juros?.total ?? 0) - 0.005;
+        if (!quitandoTudo) {
+          throw new Error('Baixa parcial ainda não está disponível nesta turma (migração 422 pendente). Receba o valor total ou peça ao professor para aplicar a migração.');
+        }
+        const { data: legado, error: erroLegado } = await supabase.rpc('registrar_pagamento_conta', {
+          p_tipo: 'receber', p_conta_id: conta.id, p_banco_id: recBankId,
+        });
+        if (erroLegado) throw new Error(erroLegado.message);
+        const total = Number((legado as any)?.total ?? 0);
+        setData((prev: any[]) => prev.map(d => d.id === conta.id
+          ? { ...d, status: 'Pago', banco_id: recBankId, valor_pago: total }
+          : d));
+        setBancos((prev: any[]) => prev.map((b: any) => b.id === recBankId
+          ? { ...b, saldo: Number(b.saldo ?? 0) + total } : b));
+        showToast(`Recebimento de R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} creditado em ${banco.banco ?? banco.conta}. Conta quitada.`, 'success', true);
+        closeReceber();
+        return;
+      }
       if (error) throw new Error(error.message);
 
       const quitada  = !!(baixa as any)?.quitada;
