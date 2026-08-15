@@ -223,22 +223,19 @@ Adicionar aqui quaisquer ideias que aparecerem durante a trava.
 
 - (vazio por enquanto)
 
-## Achados de auditoria ainda abertos (2026-08-14)
+## Achados de auditoria — fechados em 2026-08-14 (migr. 428)
 
-Encontrados na revisão das migrações 416–427, **não corrigidos** porque são
-anteriores a este trabalho e pertencem a outra frente:
+Os quatro estavam anotados como "anteriores a este trabalho". Saíram todos:
 
-- **`gerar_painel_bi` soma `contas_pagar` com `status = 'Aberto'`** para a linha
-  "a pagar". Esse status não existe em `contas_pagar` (o vocabulário é
-  'Pendente'), então a linha provavelmente sempre foi R$ 0,00. Bug pré-existente
-  do Painel BI, independente da baixa parcial.
-- **Cancelar/inativar conta já recebida ou paga estorna o saldo do banco** pelo
-  trigger de sync. É o comportamento antigo, mas ficou mais fácil de alcançar
-  agora que existe o status `Parcial`. O botão Excluir das telas de Contas ainda
-  faz isso sem avisar.
-- **Selo de fornecedor mede pontualidade, não qualidade.** Pedido que chegou no
-  prazo e foi devolvido inteiro conta como entrega pontual. Falta a taxa de
-  devolução em `v_fornecedor_desempenho` — é barato, mas é indicador novo.
-- **Lote não acompanha devolução ao fornecedor** (migr. 423/424): devolver não
-  reduz o lote registrado; a tela de Validades sinaliza a divergência em âmbar e
-  o ajuste é manual.
+- ~~`gerar_painel_bi` somava `contas_pagar` com `status = 'Aberto'`~~ — status
+  inexistente nessa tabela, então "a pagar" mostrava R$ 0,00 desde sempre. Pesava
+  mais do que parecia: a RPC alimenta `api/ai-bi.ts` e `api/ai-briefing.ts`.
+- ~~Excluir conta já paga estornava o saldo do banco em silêncio~~ — agora é
+  trava, com admin como exceção.
+- ~~Selo de fornecedor media só pontualidade~~ — ganhou taxa de devolução.
+- ~~Lote não acompanhava devolução ao fornecedor~~ — agora baixa em ordem FEFO.
+
+**Fica em aberto, deliberadamente:** no bloco de realizados do Painel BI o
+recorte é por `vencimento`, não por data de pagamento. É discutível, mas é o
+critério que os dois períodos comparados já usavam — mudar isso altera todo o
+histórico do painel e merece decisão própria.
