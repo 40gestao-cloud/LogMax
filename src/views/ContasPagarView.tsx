@@ -18,6 +18,16 @@ import { useConfirm } from '../contexts/ConfirmContext';
 
 // `filial` inclui 'Matriz': a holding tem despesa própria — a folha da
 // diretoria e o custo corporativo — e precisava de uma tela para pagá-la.
+// Quanto ainda se deve nesta conta. Conta com baixa parcial (migr. 427) já
+// teve parte do principal paga; o `valor` continua sendo o do documento.
+const saldoEmAberto = (c: any): number =>
+  c?.status === 'Parcial'
+    ? Math.max(Number(c.valor ?? 0) - Number(c.valor_pago ?? 0), 0)
+    : Number(c?.valor ?? 0);
+
+// Status em que ainda cabe pagar. 'Parcial' é o que a migr. 427 acrescentou.
+const PAGAVEL = new Set(['Pendente', 'Atrasado', 'Parcial']);
+
 const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: FilialSelectorValue }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
@@ -75,6 +85,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payBankId, setPayBankId] = useState('');
   const [paySaving, setPaySaving] = useState(false);
+  // Valor da baixa (migr. 427). Nasce com o total devido — quitar segue sendo
+  // dois cliques —, mas é editável: "metade agora, metade no dia 30" é rotina
+  // com fornecedor.
+  const [payValor, setPayValor] = useState('');
 
   // A origem do dinheiro é da própria unidade: conta da Matriz debita caixa da
   // Matriz, conta da filial debita caixa da filial. Antes o seletor listava
@@ -107,7 +121,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     ...c,
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
     ped:  c.pedido_id ? pedidoPorId.get(c.pedido_id) : undefined,
-    juros: calcularJuros(c.valor, c.vencimento, c.status, jurosCfg),
+    // Juros sobre o SALDO, não sobre o valor cheio (migr. 427). Em 'Parcial' o
+    // `valor_pago` é só principal — a baixa parcial não carrega encargos.
+    juros: calcularJuros(saldoEmAberto(c), c.vencimento, c.status, jurosCfg),
+    pago:  c.status === 'Parcial' ? Number(c.valor_pago ?? 0) : 0,
   }));
 
   // Quantidade só aparece quando o pedido a tem. `item_qtd` fracionário existe
@@ -270,44 +287,79 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     }
   };
 
-  const openPay = (id: string) => {
-    setPayingId(id);
+  const openPay = (conta: any) => {
+    setPayingId(conta.id);
     setPayBankId('');
+    setPayValor(formatBRL(Number(conta.juros?.total ?? conta.valor ?? 0)));
   };
 
   const closePay = () => {
     setPayingId(null);
     setPayBankId('');
+    setPayValor('');
   };
 
   const handleConfirmarPagamento = async (conta: any) => {
     if (!payBankId) { showToast('Selecione a conta bancária de débito.', 'error', true); return; }
     const banco = bancos.find((b: any) => b.id === payBankId);
     if (!banco) { showToast('Conta bancária não encontrada.', 'error', true); return; }
+    const valorInformado = parseBRL(payValor);
+    if (!(valorInformado > 0)) { showToast('Informe o valor pago.', 'error', true); return; }
     if (!supabase) return;
     setPaySaving(true);
     try {
-      // O valor com juros/multa é calculado e gravado pelo BANCO (RPC
-      // registrar_pagamento_conta, migr. 267), não aqui. Antes o cliente
-      // calculava o total, anunciava "R$ X debitado (inclui juros)" e gravava
-      // só status='Pago' — o trigger debitava o principal e os juros não saíam
-      // de lugar nenhum. Agora o número do toast é o número que foi gravado.
-      const { data: breakdown, error } = await supabase.rpc('registrar_pagamento_conta', {
-        p_tipo:     'pagar',
+      // Juros/multa continuam calculados pelo BANCO (migr. 267); o valor pago
+      // vai junto e pode ser menor que o devido — a RPC decide se quita ou
+      // deixa a conta em 'Parcial' (migr. 427). As travas de folha, rescisão,
+      // capital e conferência de recebimento continuam valendo: quem as aciona
+      // é o UPDATE que a RPC faz.
+      const { data: baixa, error } = await supabase.rpc('baixar_conta_pagar', {
         p_conta_id: conta.id,
         p_banco_id: payBankId,
+        p_valor:    valorInformado,
       });
+
+      // Turma com a migr. 427 pendente: cai no caminho antigo quando o valor é
+      // o total, que é o que ele sabia fazer.
+      if (error && /baixar_conta_pagar/i.test(error.message ?? '')) {
+        const quitandoTudo = valorInformado >= Number(conta.juros?.total ?? 0) - 0.005;
+        if (!quitandoTudo) {
+          throw new Error('Pagamento parcial ainda não está disponível nesta turma (migração 427 pendente). Pague o valor total ou peça ao professor para aplicar a migração.');
+        }
+        const { data: legado, error: erroLegado } = await supabase.rpc('registrar_pagamento_conta', {
+          p_tipo: 'pagar', p_conta_id: conta.id, p_banco_id: payBankId,
+        });
+        if (erroLegado) throw new Error(erroLegado.message);
+        const total = Number((legado as any)?.total ?? 0);
+        setData((prev: any[]) => prev.map(d => d.id === conta.id
+          ? { ...d, status: 'Pago', banco_id: payBankId, valor_pago: total } : d));
+        setBancos((prev: any[]) => prev.map((b: any) => b.id === payBankId
+          ? { ...b, saldo: Number(b.saldo ?? 0) - total } : b));
+        showToast(`Pagamento de R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} debitado de ${banco.banco ?? banco.conta}. Conta quitada.`, 'success', true);
+        closePay();
+        return;
+      }
       if (error) throw new Error(error.message);
 
-      const valor = Number((breakdown as any)?.total ?? 0);
-      const juros = Number((breakdown as any)?.juros ?? 0);
-      const multa = Number((breakdown as any)?.multa ?? 0);
+      const quitada  = !!(baixa as any)?.quitada;
+      const saiu     = Number((baixa as any)?.pago_agora ?? 0);
+      const total    = Number((baixa as any)?.pago_total ?? saiu);
+      const juros    = Number((baixa as any)?.juros ?? 0);
+      const multa    = Number((baixa as any)?.multa ?? 0);
+      const restante = Number((baixa as any)?.saldo_restante ?? 0);
 
       setData((prev: any[]) => prev.map(d => d.id === conta.id
-        ? { ...d, status: 'Pago', banco_id: payBankId, valor_pago: valor, juros_pago: juros, multa_pago: multa }
+        ? {
+            ...d,
+            status:     quitada ? 'Pago' : 'Parcial',
+            banco_id:   payBankId,
+            valor_pago: total,
+            juros_pago: Number(d.juros_pago ?? 0) + juros,
+            multa_pago: Number(d.multa_pago ?? 0) + multa,
+          }
         : d));
       setBancos((prev: any[]) => prev.map((b: any) => b.id === payBankId
-        ? { ...b, saldo: Number(b.saldo ?? 0) - valor }
+        ? { ...b, saldo: Number(b.saldo ?? 0) - saiu }
         : b,
       ));
 
@@ -315,7 +367,9 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
         ? ` (inclui R$ ${(juros + multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de juros/multa)`
         : '';
       showToast(
-        `Pagamento de R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} debitado de ${banco.banco ?? banco.conta}.`,
+        quitada
+          ? `Pagamento de R$ ${saiu.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${msgJuros} debitado de ${banco.banco ?? banco.conta}. Conta quitada.`
+          : `Pagamento parcial de R$ ${saiu.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} debitado de ${banco.banco ?? banco.conta}. Restam R$ ${restante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} a pagar.`,
         'success', true,
       );
       closePay();
@@ -478,8 +532,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           <HistoricoOperacoes entidade="contas_pagar" entidadeId={item.id} titulo={item.descricao} />
-                            {item.status === 'Pendente' && (
-                              <button onClick={() => openPay(item.id)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"><Check size={11} /> Pagar</button>
+                            {PAGAVEL.has(item.status) && (
+                              <button onClick={() => openPay(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
+                                <Check size={11} /> {item.status === 'Parcial' ? 'Pagar saldo' : 'Pagar'}
+                              </button>
                             )}
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
@@ -491,6 +547,31 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                           <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <td colSpan={6} className="pb-3 px-4">
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}>
+                                {/* A conta da baixa, aberta: documento, o que já
+                                    saiu, encargos e quanto se deve hoje. */}
+                                <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 -mt-1">
+                                  <span>Documento: <strong className="text-gray-200">R$ {Number(item.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  {item.pago > 0 && (
+                                    <span>Já pago: <strong className="text-emerald-300">R$ {item.pago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  )}
+                                  {(item.juros.juros + item.juros.multa) > 0 && (
+                                    <span>Juros + multa: <strong className="text-red-300">R$ {(item.juros.juros + item.juros.multa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                  )}
+                                  <span>Devido hoje: <strong className="text-accent">R$ {Number(item.juros.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                                </div>
+                                <div className="flex flex-col gap-1 sm:w-44">
+                                  <label htmlFor={`pag-valor-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor pago *</label>
+                                  <input id={`pag-valor-${item.id}`} type="text" inputMode="numeric"
+                                    className="neu-input py-2 px-3 rounded-xl text-xs w-full text-right tabular-nums font-bold"
+                                    value={payValor}
+                                    onChange={e => setPayValor(formatBRL(e.target.value))}
+                                    onKeyDown={handleMoneyKeyDown} />
+                                  <span className="text-[10px] text-gray-500">
+                                    {parseBRL(payValor) > 0 && parseBRL(payValor) < Number(item.juros.total ?? 0) - 0.005
+                                      ? `Pagamento parcial — restam R$ ${(Number(item.juros.total ?? 0) - parseBRL(payValor)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+                                      : 'Paga tudo e quita a conta.'}
+                                  </span>
+                                </div>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[220px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Landmark size={11} /> Conta bancária de débito *</label>
                                   <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={payBankId} onChange={e => setPayBankId(e.target.value)}>
