@@ -10,7 +10,7 @@
 // fechada não tem nota: aparece como "sem histórico", que é diferente de ruim.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Clock, TriangleAlert } from 'lucide-react';
+import { Clock, TriangleAlert, PackageX } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export type FornecedorDesempenho = {
@@ -27,6 +27,11 @@ export type FornecedorDesempenho = {
   pedidos_em_aberto: number;
   ultima_entrega_em: string | null;
   total_comprado:    number;
+  /** Pedidos deste fornecedor que geraram devolução (migr. 428). */
+  pedidos_com_devolucao: number;
+  devolucoes_valor:      number;
+  /** % dos pedidos recebidos que tiveram devolução. null = sem base. */
+  taxa_devolucao_pct:    number | null;
 };
 
 /**
@@ -62,6 +67,11 @@ export function useFornecedorDesempenho(filial?: string) {
           pontualidade_pct:  linha.pontualidade_pct  == null ? null : Number(linha.pontualidade_pct),
           atraso_medio_dias: linha.atraso_medio_dias == null ? null : Number(linha.atraso_medio_dias),
           total_comprado:    Number(linha.total_comprado ?? 0),
+          // Colunas da migr. 428. Turma que ainda não aplicou devolve undefined
+          // e o selo de qualidade simplesmente não aparece.
+          pedidos_com_devolucao: Number(linha.pedidos_com_devolucao ?? 0),
+          devolucoes_valor:      Number(linha.devolucoes_valor ?? 0),
+          taxa_devolucao_pct:    linha.taxa_devolucao_pct == null ? null : Number(linha.taxa_devolucao_pct),
         };
       }
       setMapa(out);
@@ -123,9 +133,21 @@ export const SeloDesempenho = ({ d, compacto = false }: {
         {pct}%{compacto ? '' : ' no prazo'} ({d.entregas})
       </span>
       {atrasoAgora > 0 && <SeloAtrasoAgora n={atrasoAgora} />}
+      {/* Pontualidade e qualidade são defeitos diferentes: quem entrega no dia
+          e manda avariado tinha selo verde até a migr. 428. */}
+      {(d.taxa_devolucao_pct ?? 0) > 0 && (
+        <span title={`${d.pedidos_com_devolucao} pedido(s) deste fornecedor geraram devolução, somando ${brl(d.devolucoes_valor)}. Entregar no prazo não é o mesmo que entregar certo.`}
+          className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] font-bold uppercase tracking-widest border text-orange-400 border-orange-400/30 bg-orange-400/5">
+          <PackageX size={9} />
+          {d.taxa_devolucao_pct}% devolvido
+        </span>
+      )}
     </span>
   );
 };
+
+const brl = (v: number) =>
+  `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * Pedido em aberto com a data prometida vencida. Fica separado da pontualidade
