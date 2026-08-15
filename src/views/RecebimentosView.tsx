@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X, Lock } from 'lucide-react';
+import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X, Lock, PackageX } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -25,6 +25,11 @@ type SaldoPedido = { qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: 
 // deixava o recebimento impossível de confirmar — sem produto pra selecionar,
 // não havia como dar entrada no estoque. Padrão "select + Outro" do projeto.
 const PRODUTO_NOVO = '__novo__';
+
+// Motivos de devolução ao fornecedor (migr. 423). Lista fechada de propósito:
+// texto livre aqui viraria "problema" em 90% das linhas, e o que Compras
+// precisa levar para o fornecedor é a categoria.
+const MOTIVOS_DEVOLUCAO = ['Avaria', 'Item errado', 'Quantidade a maior', 'Fora da validade', 'Outro'] as const;
 
 const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -72,6 +77,36 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     (p: any) => p.status === 'Em Entrega' &&
       !todosRecebimentos.some((r: any) => r.pedido_id === p.id)).length;
   const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
+
+  // Devoluções ao fornecedor por recebimento (migr. 423). Guarda quanto já
+  // saiu de volta, para o teto do formulário e para o selo na linha.
+  const [devolvido, setDevolvido] = useState<Record<string, number>>({});
+  const [devolvendo, setDevolvendo] = useState<any | null>(null);
+  // Turma com a migr. 423 pendente: o botão some em vez de abrir um modal que
+  // termina em erro de PostgREST. O deploy do front chega antes do SQL.
+  const [devolucaoDisponivel, setDevolucaoDisponivel] = useState(true);
+  const reloadDevolucoes = useCallback(async () => {
+    if (!supabase) return;
+    const { data: rows, error } = await supabase
+      .from('devolucoes_fornecedor')
+      .select('recebimento_id, qtd')
+      .eq('filial', filial)
+      .eq('ativo', true);
+    if (error) {
+      // Migração pendente nesta turma: o botão some e o resto da tela segue.
+      console.warn('[Recebimentos] devoluções indisponíveis:', error.message);
+      setDevolvido({});
+      setDevolucaoDisponivel(false);
+      return;
+    }
+    setDevolucaoDisponivel(true);
+    const map: Record<string, number> = {};
+    (rows ?? []).forEach((d: any) => {
+      map[d.recebimento_id] = (map[d.recebimento_id] ?? 0) + Number(d.qtd ?? 0);
+    });
+    setDevolvido(map);
+  }, [filial]);
+  useEffect(() => { reloadDevolucoes(); }, [reloadDevolucoes, data.length]);
 
   // Cache de saldo por pedido — recarrega quando a lista de pedidos ou de
   // recebimentos muda (usuário registra/inativa/confirma → saldo mexe).
@@ -335,13 +370,31 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{item.qtd_recebida ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                          {item.qtd_recebida ?? '—'}
+                          {(devolvido[item.id] ?? 0) > 0 && (
+                            <div className="text-[10px] text-amber-400 mt-0.5" title="Devolvido ao fornecedor por divergência.">
+                              − {devolvido[item.id]} devolvido
+                            </div>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
                           <HistoricoOperacoes entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} />
+                            {devolucaoDisponivel
+                              && (item.status === 'Concluído' || item.status === 'Parcial')
+                              && (Number(item.qtd_recebida ?? 0) - (devolvido[item.id] ?? 0)) > 0 && (
+                              <button
+                                onClick={() => setDevolvendo(item)}
+                                title="Chegou avariado, errado ou a mais? Devolva ao fornecedor."
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1"
+                              >
+                                <PackageX size={11} /> Divergência
+                              </button>
+                            )}
                             {item.status === 'Pendente' && (
                               <button
                                 onClick={() => {
@@ -455,6 +508,23 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <AnimatePresence>
+        {devolvendo && (
+          <ModalDevolucao
+            item={devolvendo}
+            disponivel={Number(devolvendo.qtd_recebida ?? 0) - (devolvido[devolvendo.id] ?? 0)}
+            produtoNome={produtos.find((p: any) => p.id === produtoDoPedido(devolvendo.pedido_id))?.nome
+              ?? descricaoDoPedido(devolvendo.pedido_id)}
+            showToast={showToast}
+            onClose={() => setDevolvendo(null)}
+            onFeito={async () => {
+              setDevolvendo(null);
+              await Promise.all([reload(), reloadDevolucoes(), reloadSaldos()]);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {novoProdutoNome !== null && (
           <ModalProdutoRapido
             nomeInicial={novoProdutoNome}
@@ -466,6 +536,142 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           />
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+};
+
+// ─── Devolução ao fornecedor ─────────────────────────────────────────
+// A conferência que dá consequência a "chegou errado" (migr. 423). Toda a
+// regra — teto pela quantidade recebida, baixa de estoque, abatimento da conta
+// a pagar e encerramento do pedido — vive na RPC; aqui é só a conversa.
+const ModalDevolucao = ({ item, disponivel, produtoNome, showToast, onClose, onFeito }: {
+  item: any;
+  disponivel: number;
+  produtoNome?: string;
+  showToast: any;
+  onClose: () => void;
+  onFeito: () => void | Promise<void>;
+}) => {
+  const [qtd, setQtd] = useState(String(disponivel));
+  const [motivo, setMotivo] = useState<string>(MOTIVOS_DEVOLUCAO[0]);
+  const [reenvio, setReenvio] = useState(true);
+  const [observacao, setObservacao] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const qtdNum = Number(qtd);
+  const qtdValida = Number.isFinite(qtdNum) && qtdNum > 0 && qtdNum <= disponivel;
+
+  const enviar = async () => {
+    if (!supabase) return;
+    if (!qtdValida) { showToast(`Informe uma quantidade entre 1 e ${disponivel}.`, 'error', true); return; }
+    setSaving(true);
+    try {
+      const { data: res, error } = await supabase.rpc('registrar_devolucao_fornecedor', {
+        p_recebimento_id:   item.id,
+        p_qtd:              Math.trunc(qtdNum),
+        p_motivo:           motivo,
+        p_reenvio_esperado: reenvio,
+        p_observacao:       observacao || null,
+      });
+      if (error) throw new Error(error.message);
+
+      const r = (res ?? {}) as any;
+      // Cada efeito vira uma frase: o aluno precisa ver que devolver mexe em
+      // estoque, financeiro e no pedido ao mesmo tempo.
+      const partes = [
+        `${r.qtd} unidade(s) devolvida(s) ao fornecedor.`,
+        r.estoque_baixado ? 'Estoque baixado.' : 'Sem baixa de estoque (o recebimento não tinha produto vinculado).',
+        r.conta_efeito === 'abatida'   ? `Conta a pagar abatida em R$ ${Number(r.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+        : r.conta_efeito === 'cancelada' ? 'A conta a pagar do pedido foi cancelada — nada mais a pagar.'
+        : r.conta_efeito === 'ja_paga'   ? 'ATENÇÃO: a conta deste pedido já foi paga. O crédito precisa ser negociado com o fornecedor.'
+        : null,
+        r.pedido_fechado ? 'Pedido encerrado.'
+          : reenvio ? `Saldo do pedido voltou para ${r.saldo_pedido} unidade(s) — aguardando reposição.` : null,
+      ].filter(Boolean);
+
+      showToast(partes.join(' '), r.conta_efeito === 'ja_paga' ? 'info' : 'success', true);
+      await onFeito();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao registrar a devolução.', 'error', true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="neu-flat rounded-2xl border border-amber-400/20 p-5 sm:p-6 w-full max-w-lg my-6 flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-amber-400/15 flex items-center justify-center ring-1 ring-amber-400/25 shrink-0">
+              <PackageX size={16} className="text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-black text-gray-100">Devolver ao fornecedor</h3>
+              <p className="text-[11px] text-gray-500 truncate">
+                {produtoNome || 'Item do pedido'} · recebido {item.qtd_recebida} · disponível {disponivel}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="shrink-0 neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <FormField label={`Quantidade * (máx. ${disponivel})`}>
+            <input type="number" min={1} max={disponivel}
+              className="neu-input py-2 px-3 rounded-xl text-sm"
+              value={qtd} onChange={e => setQtd(e.target.value)} />
+          </FormField>
+          <FormField label="Motivo *">
+            <select className="neu-input py-2 px-3 rounded-xl text-sm" value={motivo} onChange={e => setMotivo(e.target.value)}>
+              {MOTIVOS_DEVOLUCAO.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="Observação">
+          <input className="neu-input py-2 px-3 rounded-xl text-sm" value={observacao}
+            onChange={e => setObservacao(e.target.value)}
+            placeholder="O que aconteceu, para Compras cobrar o fornecedor" />
+        </FormField>
+
+        {/* A pergunta que decide o destino do pedido. */}
+        <div className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)' }}>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" className="mt-0.5" checked={reenvio} onChange={e => setReenvio(e.target.checked)} />
+            <span className="text-xs text-gray-300">
+              O fornecedor vai repor esta quantidade
+              <span className="block text-[10px] text-gray-500 mt-0.5">
+                {reenvio
+                  ? 'O saldo do pedido reabre e o Estoque volta a esperar a carga.'
+                  : 'O pedido encerra com o que chegou — não haverá reposição.'}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <p className="text-[10px] text-gray-500 leading-snug">
+          Ao confirmar: sai do estoque, a conta a pagar do pedido é abatida pelo valor devolvido
+          (se ainda estiver pendente) e o pedido é encerrado ou reaberto conforme a escolha acima.
+        </p>
+
+        <div className="flex gap-3 justify-end pt-1 border-t border-white/5">
+          <button onClick={onClose} disabled={saving} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+          <NeuButtonAccent onClick={enviar} isLoading={saving} disabled={!qtdValida}>
+            <PackageX size={14} /> Registrar devolução
+          </NeuButtonAccent>
+        </div>
+      </motion.div>
     </motion.div>
   );
 };
