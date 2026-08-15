@@ -189,9 +189,15 @@ correr sobre o saldo; o trigger de saldo bancário aprendeu 'Parcial'; e
 `cliente_saldo_devedor` (migr. 416) desconta o que já foi recebido, então pagar
 volta a liberar limite de crédito no PDV.
 
-**Contas a PAGAR continua tudo-ou-nada** — a mesma necessidade existe do outro
-lado (pagar fornecedor em duas parcelas) e o desenho já está pronto para copiar:
-tabela irmã `contas_pagar_baixas` + o mesmo status + a mesma RPC espelhada.
+~~Contas a PAGAR continua tudo-ou-nada~~ — **feito em 2026-08-14 (migr. 427)**:
+`contas_pagar_baixas` + status `Parcial` + RPC `baixar_conta_pagar`. As cinco
+travas do lado de pagar foram decididas uma a uma — conferência de recebimento e
+capital estourado passam a valer para a baixa parcial; folha e rescisão **não**,
+porque o crédito na carteira só acontece na quitação.
+
+Corrigidas junto, todas do mesmo tipo de armadilha ("status novo quebra função
+antiga"): o card Total pendente, `cancelar_pedido_compra`,
+`registrar_devolucao_fornecedor` e `calcular_saldo_capital`.
 
 ### ~~#9 — DRE / resultado~~ — feito em 2026-08-14 (migr. 425)
 Tela `Financeiro → DRE` + RPC `gerar_dre(filial, início, fim)`. Receita bruta →
@@ -216,3 +222,23 @@ impostos — a plataforma é didática e não tem apuração fiscal.
 Adicionar aqui quaisquer ideias que aparecerem durante a trava.
 
 - (vazio por enquanto)
+
+## Achados de auditoria ainda abertos (2026-08-14)
+
+Encontrados na revisão das migrações 416–427, **não corrigidos** porque são
+anteriores a este trabalho e pertencem a outra frente:
+
+- **`gerar_painel_bi` soma `contas_pagar` com `status = 'Aberto'`** para a linha
+  "a pagar". Esse status não existe em `contas_pagar` (o vocabulário é
+  'Pendente'), então a linha provavelmente sempre foi R$ 0,00. Bug pré-existente
+  do Painel BI, independente da baixa parcial.
+- **Cancelar/inativar conta já recebida ou paga estorna o saldo do banco** pelo
+  trigger de sync. É o comportamento antigo, mas ficou mais fácil de alcançar
+  agora que existe o status `Parcial`. O botão Excluir das telas de Contas ainda
+  faz isso sem avisar.
+- **Selo de fornecedor mede pontualidade, não qualidade.** Pedido que chegou no
+  prazo e foi devolvido inteiro conta como entrega pontual. Falta a taxa de
+  devolução em `v_fornecedor_desempenho` — é barato, mas é indicador novo.
+- **Lote não acompanha devolução ao fornecedor** (migr. 423/424): devolver não
+  reduz o lote registrado; a tela de Validades sinaliza a divergência em âmbar e
+  o ajuste é manual.
