@@ -161,13 +161,16 @@ cotação, coluna nova do comparativo e formulário de nova proposta. Pedido em
 aberto com prazo vencido conta à parte (`em_atraso_agora`), e fornecedor sem
 entrega fechada mostra "sem histórico" em vez de 0%.
 
-### #6 — Lote e validade (FEFO)
-`vencimentos_estoque` tem tabela, policy (010) e endpoint mapeado, e não tem
-tela, submenu nem rota. Sem isso a SuperMax — que é mercearia — não tem alerta
-de vencimento nem perda por validade.
+### ~~#6 — Lote e validade (FEFO)~~ — feito em 2026-08-14 (migr. 424)
+Tela `Estoque → Validades` ordenada por FEFO, com fila de vencidos / 7 / 30
+dias, baixa de perda (Ajuste −) e encerramento de lote consumido. Lote nasce no
+Confirmar do Recebimento. A RLS da tabela, que era cross-filial desde a 010,
+foi corrigida junto.
 
-Escopo: médio (tela nova + integração na saída de estoque). É feature, não
-refino: esperar a janela.
+**Fica declarado como limitação:** a venda no PDV **não escolhe lote**. O
+controle é de validade e perda, não um segundo saldo — a tela mostra lote e
+saldo do produto lado a lado para a divergência aparecer. Consumo automático por
+lote no PDV é outro projeto (exigiria o balcão perguntar o lote a cada item).
 
 ### ~~#7 — Divergência de recebimento vira ocorrência~~ — feito em 2026-08-14 (migr. 423)
 Tabela `devolucoes_fornecedor` + RPC `registrar_devolucao_fornecedor`: baixa
