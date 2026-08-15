@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Building, Package, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
+import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
+import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
@@ -27,6 +29,8 @@ const makeEmptyExtras = (filial: string) => ({
   // Só cliente (migr. 416). Vazio = sem limite cadastrado, que é diferente de
   // zero: zero é "não leva fiado".
   limite_credito: '',
+  // Só fornecedor (migr. 429).
+  logo_url: '',
   filial,
   atributos: {} as Record<string, any>,
 });
@@ -79,6 +83,9 @@ const CRMViewInner = ({ type, showToast, filial }: {
   const [editItem, setEditItem] = useState<any | null>(null);
   const [form, setForm] = useState({ nome: '' });
   const [extras, setExtras] = useState(() => makeEmptyExtras(filial));
+  // Logo do fornecedor: o arquivo fica pendente até o save. Subir a cada troca
+  // de arquivo encheria o bucket de logo de cadastro que o usuário cancelou.
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const title = isClientes ? `Clientes — ${filial}` : `Fornecedores — ${filial}`;
@@ -109,26 +116,57 @@ const CRMViewInner = ({ type, showToast, filial }: {
       categoria:   item.categoria  ?? '',
       prazo_entrega_dias: item.prazo_entrega_dias == null ? '' : String(item.prazo_entrega_dias),
       limite_credito: item.limite_credito == null ? '' : formatBRL(Number(item.limite_credito)),
+      logo_url:    item.logo_url ?? '',
       filial,
       atributos:   (item.atributos && typeof item.atributos === 'object') ? { ...item.atributos } : {},
     });
+    setLogoFile(null);
     setErrors({});
     setShowForm(false);
   };
 
   const closeForm = () => {
+    // Cancelar também precisa liberar o blob — só `trocar` e `limpar` faziam
+    // isso, então quem escolhia um arquivo e desistia deixava a URL viva.
+    if (extras.logo_url.startsWith('blob:')) URL.revokeObjectURL(extras.logo_url);
     setShowForm(false);
     setEditItem(null);
     setForm({ nome: '' });
     setExtras(makeEmptyExtras(filial));
+    setLogoFile(null);
     setErrors({});
+  };
+
+  const handleLogoPreview = (file: File, url: string) => {
+    // Libera o blob anterior antes de trocar — senão cada arquivo escolhido
+    // fica preso na memória da aba até o reload.
+    if (extras.logo_url.startsWith('blob:')) URL.revokeObjectURL(extras.logo_url);
+    setLogoFile(file);
+    setExtras(x => ({ ...x, logo_url: url }));
+  };
+
+  const handleLogoClear = () => {
+    if (extras.logo_url.startsWith('blob:')) URL.revokeObjectURL(extras.logo_url);
+    setLogoFile(null);
+    setExtras(x => ({ ...x, logo_url: '' }));
   };
 
   const handleSave = async () => {
     if (!validate()) return;
     setIsSaving(true);
     showToast('Salvando...', 'info', false);
+    // Fora do try porque o catch precisa saber o que apagar se o insert falhar.
+    let logoNova: string | null = null;
     try {
+      // Sobe a logo antes de gravar a linha: sem URL definitiva não há o que
+      // salvar. Se o insert/update falhar depois, o arquivo é removido abaixo.
+      let logoUrl = extras.logo_url;
+      if (!isClientes && logoFile) {
+        logoUrl = await uploadImagem(CADASTRO_IMAGEM_BUCKET, logoFile, editItem?.id);
+        logoNova = logoUrl;
+      }
+      const logoAntiga = editItem?.logo_url ?? '';
+
       const base = {
         nome:        form.nome,
         pessoa_tipo: extras.pessoa_tipo,
@@ -145,6 +183,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
         } : {
           prazo_entrega_dias: extras.prazo_entrega_dias.trim() === ''
             ? null : Number(extras.prazo_entrega_dias),
+          logo_url: logoUrl || null,
         }),
       };
       // Atributos JSONB (fornecedor apenas). Filtra pra manter só campos
@@ -176,8 +215,14 @@ const CRMViewInner = ({ type, showToast, filial }: {
         setData([saved ?? { id: Date.now(), ...payload }, ...data]);
         showToast('Registro criado com sucesso!', 'success', true);
       }
+      // A logo antiga só sai depois que a linha confirmou a nova — o contrário
+      // deixaria o card sem imagem se o update falhasse.
+      if (!isClientes && logoAntiga && logoAntiga !== logoUrl) {
+        removerImagem(CADASTRO_IMAGEM_BUCKET, logoAntiga);
+      }
       closeForm();
     } catch (err: any) {
+      if (logoNova) removerImagem(CADASTRO_IMAGEM_BUCKET, logoNova);
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[CRM] erro ao salvar:', err);
       showToast(`Erro ao salvar: ${msg}`, 'error', true);
@@ -186,12 +231,15 @@ const CRMViewInner = ({ type, showToast, filial }: {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (item: any) => {
     const label = isClientes ? 'cliente' : 'fornecedor';
     if (!await confirm(`Excluir este ${label}?`)) return;
     try {
-      await dbDelete(endpoint, id);
-      setData((prev: any[]) => prev.filter(d => d.id !== id));
+      // `fornecedores` está em TABLES_WITH_ATIVO: dbDelete inativa a linha em
+      // vez de apagá-la. A logo fica no bucket de propósito — o registro ainda
+      // existe e pode ser reativado, e arquivo apagado não volta.
+      await dbDelete(endpoint, item.id);
+      setData((prev: any[]) => prev.filter(d => d.id !== item.id));
       showToast('Registro excluído.', 'success', true);
     } catch (err: any) {
       const msg = err?.message ?? 'verifique o console';
@@ -236,6 +284,25 @@ const CRMViewInner = ({ type, showToast, filial }: {
               <h3 className="text-sm font-bold text-gray-200">
                 {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
               </h3>
+
+              {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
+                  monograma, que não precisa de campo. */}
+              {!isClientes && (
+                <div className="flex flex-wrap items-center gap-5">
+                  <FormField label="Logo do fornecedor">
+                    <ImagemUploader
+                      imagemUrl={extras.logo_url} rotulo="logo"
+                      onPreview={handleLogoPreview} onClear={handleLogoClear} />
+                  </FormField>
+                  <div className="flex items-center gap-3 pt-4">
+                    <LogoCadastro imagemUrl={extras.logo_url} nome={form.nome} size={44} />
+                    <p className="text-[10px] text-gray-500 max-w-[16rem] leading-relaxed">
+                      Sem logo, o card usa as iniciais do nome sobre uma cor fixa — já dá para
+                      distinguir na lista. A logo só melhora o reconhecimento.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Toggle Empresa / Pessoa Física */}
               <div>
@@ -389,25 +456,28 @@ const CRMViewInner = ({ type, showToast, filial }: {
               <motion.div key={item.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.03 }}
                 className="neu-flat p-6 rounded-3xl flex flex-col border border-white/5 gap-4 group">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-200 mb-2 tracking-wide">{item.nome}</h3>
-                    <div className="flex gap-2 items-center flex-wrap">
-                      <span className="text-[10px] uppercase px-2 py-0.5 rounded text-gray-400 tracking-widest neu-pressed" style={{ background: 'var(--color-badge-neutral-bg)' }}>{pessoaTipo}</span>
-                      <FilialBadge filial={item.filial} />
-                      <span className="w-1 h-1 rounded-full bg-accent"></span>
-                      <span className="text-xs text-accent font-medium">{item.status}</span>
+                <div className="flex justify-between items-start gap-3">
+                  {/* A identidade veio para a esquerda, ao lado do nome. Ficava
+                      solta na direita, com o mesmo ícone em todos os cards —
+                      trinta fornecedores eram trinta caixas idênticas. */}
+                  <div className="flex items-start gap-3 min-w-0">
+                    <LogoCadastro imagemUrl={item.logo_url} nome={item.nome} size={44} />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-gray-200 mb-2 tracking-wide">{item.nome}</h3>
+                      <div className="flex gap-2 items-center flex-wrap">
+                        <span className="text-[10px] uppercase px-2 py-0.5 rounded text-gray-400 tracking-widest neu-pressed" style={{ background: 'var(--color-badge-neutral-bg)' }}>{pessoaTipo}</span>
+                        <FilialBadge filial={item.filial} />
+                        <span className="w-1 h-1 rounded-full bg-accent"></span>
+                        <span className="text-xs text-accent font-medium">{item.status}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                      <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                      <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
-                    </div>
-                    <div className="w-10 h-10 neu-circle flex items-center justify-center bg-accent/5 shrink-0">
-                      {isClientes ? <Building size={16} className="text-accent" /> : <Package size={16} className="text-accent" />}
-                    </div>
+                  {/* No toque não existe hover: as ações ficavam invisíveis e
+                      inalcançáveis no celular. Escondidas só a partir de md. */}
+                  <div className="flex gap-1 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                    <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                    <button onClick={() => handleDelete(item)} className="action-btn-delete"><Trash2 size={12} /></button>
                   </div>
                 </div>
 

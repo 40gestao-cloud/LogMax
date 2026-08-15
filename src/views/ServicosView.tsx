@@ -8,6 +8,8 @@ import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
+import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
+import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 
 type AtributoDef = {
   key: string;
@@ -53,6 +55,7 @@ const EMPTY_FORM = {
   tipo: '',
   valor: '',
   status: 'Ativo',
+  imagem_url: '',
   atributos: {} as Record<string, any>,
 };
 
@@ -65,6 +68,8 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  // Arquivo escolhido mas ainda não enviado — sobe só no save.
+  const [imagemFile, setImagemFile] = useState<File | null>(null);
 
   const { data: rawData, setData, isLoading } = useFetchData<any>('/api/servicosview');
 
@@ -94,7 +99,12 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
         endpoint="/api/servicosview"
         colunas={[
           { key: 'codigo', label: 'Código', render: r => <span className="font-mono text-xs text-accent">{r.codigo ?? '—'}</span> },
-          { key: 'nome', label: 'Nome', render: r => <span className="font-semibold text-gray-100">{r.nome ?? '—'}</span> },
+          { key: 'nome', label: 'Nome', render: r => (
+            <span className="flex items-center gap-2">
+              <LogoCadastro imagemUrl={r.imagem_url} nome={r.nome} size={24} ajuste="cover" />
+              <span className="font-semibold text-gray-100">{r.nome ?? '—'}</span>
+            </span>
+          ) },
           { key: 'tipo', label: 'Tipo' },
           { key: 'valor', label: 'Valor', render: r => r.valor != null ? `R$ ${Number(r.valor).toFixed(2).replace('.', ',')}` : '—' },
           { key: 'status', label: 'Status' },
@@ -108,8 +118,23 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
   const openNew = () => {
     setEditItem(null);
     setForm({ ...EMPTY_FORM });
+    setImagemFile(null);
     setErrors({});
     setShowForm(true);
+  };
+
+  const handleImagemPreview = (file: File, url: string) => {
+    // Libera o blob anterior antes de trocar — senão cada arquivo escolhido
+    // fica preso na memória da aba até o reload.
+    if (form.imagem_url.startsWith('blob:')) URL.revokeObjectURL(form.imagem_url);
+    setImagemFile(file);
+    setForm(f => ({ ...f, imagem_url: url }));
+  };
+
+  const handleImagemClear = () => {
+    if (form.imagem_url.startsWith('blob:')) URL.revokeObjectURL(form.imagem_url);
+    setImagemFile(null);
+    setForm(f => ({ ...f, imagem_url: '' }));
   };
 
   const openEdit = (item: any) => {
@@ -130,16 +155,22 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
       tipo:   item.tipo   ?? '',
       valor:  item.valor != null ? formatBRL(Number(item.valor)) : '',
       status: item.status ?? 'Ativo',
+      imagem_url: item.imagem_url ?? '',
       atributos: atrs,
     });
+    setImagemFile(null);
     setErrors({});
     setShowForm(true);
   };
 
   const closeForm = () => {
+    // Cancelar também precisa liberar o blob — só `trocar` e `limpar` faziam
+    // isso, então quem escolhia um arquivo e desistia deixava a URL viva.
+    if (form.imagem_url.startsWith('blob:')) URL.revokeObjectURL(form.imagem_url);
     setShowForm(false);
     setEditItem(null);
     setForm({ ...EMPTY_FORM });
+    setImagemFile(null);
     setErrors({});
   };
 
@@ -165,7 +196,17 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
       return;
     }
     setIsSaving(true);
+    // Fora do try porque o catch precisa saber o que apagar se a linha falhar.
+    let imagemNova: string | null = null;
     try {
+      // Sobe a imagem antes de gravar: sem URL definitiva não há o que salvar.
+      let imagemUrl = form.imagem_url;
+      if (imagemFile) {
+        imagemUrl = await uploadImagem(CADASTRO_IMAGEM_BUCKET, imagemFile, editItem?.id);
+        imagemNova = imagemUrl;
+      }
+      const imagemAntiga = editItem?.imagem_url ?? '';
+
       // Filtra atributos apenas com campos declarados na filial atual —
       // evita salvar lixo se filial mudou no meio do fluxo.
       const atributos: Record<string, any> = {};
@@ -180,6 +221,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
         tipo:   form.tipo || null,
         valor:  parseBRL(form.valor),
         status: form.status,
+        imagem_url: imagemUrl || null,
         filial,
         atributos,
       };
@@ -192,8 +234,13 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
         if (saved) setData((prev: any[]) => [saved, ...prev]);
         showToast('Serviço cadastrado!', 'success', true);
       }
+      // A imagem antiga só sai depois que a linha confirmou a nova.
+      if (imagemAntiga && imagemAntiga !== imagemUrl) {
+        removerImagem(CADASTRO_IMAGEM_BUCKET, imagemAntiga);
+      }
       closeForm();
     } catch (err: any) {
+      if (imagemNova) removerImagem(CADASTRO_IMAGEM_BUCKET, imagemNova);
       showToast(err?.message ?? 'Erro ao salvar.', 'error', true);
     } finally {
       setIsSaving(false);
@@ -249,6 +296,10 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-2">
+                {/* Imagem do serviço, ou as iniciais sobre uma cor derivada do
+                    nome. O card era só texto: numa grade de doze, achar "troca
+                    de bateria" exigia ler os doze. */}
+                <LogoCadastro imagemUrl={s.imagem_url} nome={s.nome} size={44} ajuste="cover" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest">{s.codigo}</span>
@@ -295,6 +346,21 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-black text-accent">{editItem ? 'Editar serviço' : 'Novo serviço'} — {filial}</h3>
                 <button onClick={closeForm} className="text-xs text-gray-500 hover:text-white">Fechar</button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-5">
+                <FormField label="Imagem do serviço">
+                  <ImagemUploader
+                    imagemUrl={form.imagem_url} rotulo="imagem"
+                    onPreview={handleImagemPreview} onClear={handleImagemClear} />
+                </FormField>
+                <div className="flex items-center gap-3 pt-4">
+                  <LogoCadastro imagemUrl={form.imagem_url} nome={form.nome} size={44} ajuste="cover" />
+                  <p className="text-[10px] text-gray-500 max-w-[16rem] leading-relaxed">
+                    Sem imagem, o card usa as iniciais do nome sobre uma cor fixa. Uma foto do
+                    serviço pronto ajuda o cliente a entender o que está comprando.
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
