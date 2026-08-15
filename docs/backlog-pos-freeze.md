@@ -169,12 +169,15 @@ de vencimento nem perda por validade.
 Escopo: médio (tela nova + integração na saída de estoque). É feature, não
 refino: esperar a janela.
 
-### #7 — Divergência de recebimento vira ocorrência
-Recebimento parcial funciona (`v_pedido_saldo`), mas item avariado ou errado não
-gera devolução ao fornecedor — o saldo fica aberto para sempre e "chegou errado"
-não tem consequência nenhuma.
+### ~~#7 — Divergência de recebimento vira ocorrência~~ — feito em 2026-08-14 (migr. 423)
+Tabela `devolucoes_fornecedor` + RPC `registrar_devolucao_fornecedor`: baixa
+estoque, abate a conta a pagar do pedido e encerra ou reabre o pedido conforme
+`reenvio_esperado`. `v_pedido_saldo` desconta só a devolução com reposição
+prometida — é o que impede o pedido de ficar pendente para sempre.
 
-Escopo: médio.
+Ficou de fora, e é o próximo passo natural do assunto: **conta a pagar já paga
+não gera crédito** (a RPC avisa e alguém negocia com o fornecedor). Um
+`creditos_fornecedor` abatendo a próxima compra fecharia o ciclo.
 
 ### ~~#8 — Baixa parcial em Contas a Receber~~ — feito em 2026-08-14 (migr. 422)
 Tabela `contas_receber_baixas` (uma linha por recebimento) + status `Parcial` +
