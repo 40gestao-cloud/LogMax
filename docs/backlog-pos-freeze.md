@@ -193,10 +193,23 @@ volta a liberar limite de crédito no PDV.
 lado (pagar fornecedor em duas parcelas) e o desenho já está pronto para copiar:
 tabela irmã `contas_pagar_baixas` + o mesmo status + a mesma RPC espelhada.
 
-### #9 — DRE / resultado
-Ver #7 da auditoria de 2026-06-19, acima. Continua sendo o item grande. Ficou
-mais viável depois da migr. 417: com custo apurado da compra, o CMV deixa de ser
-chute.
+### ~~#9 — DRE / resultado~~ — feito em 2026-08-14 (migr. 425)
+Tela `Financeiro → DRE` + RPC `gerar_dre(filial, início, fim)`. Receita bruta →
+descontos → devoluções → receita líquida → CMV → lucro bruto → despesas →
+resultado, com margens e quebra de despesa por grupo.
+
+Veio junto: `itens_venda.custo_unitario` carimbado por trigger na venda (sem
+isso o resultado do mês passado mudaria quando o fornecedor reajustasse), e
+`centros_custo.grupo_dre`, que **nasce vazio** — o não classificado aparece como
+linha própria no relatório e classificar é a aula.
+
+Duas regras no cabeçalho da migração, que é onde a discussão fica: compra de
+mercadoria não é despesa (vira estoque, entra no resultado pelo CMV), e o regime
+é competência, não caixa.
+
+**Limitações declaradas:** não há plano de contas contábil (o agrupamento é por
+centro de custo), nem período comparativo lado a lado, nem separação de
+impostos — a plataforma é didática e não tem apuração fiscal.
 
 ## Pedidos novos (não-auditoria)
 
