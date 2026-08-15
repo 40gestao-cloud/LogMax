@@ -221,7 +221,38 @@ impostos — a plataforma é didática e não tem apuração fiscal.
 
 Adicionar aqui quaisquer ideias que aparecerem durante a trava.
 
-- (vazio por enquanto)
+### ~~Cadastros → Categorias: refino de UX~~ — feito em 2026-08-15
+
+Pedido do usuário ("nem parece um sistema premium"). Sem migração — só tela.
+O hexadecimal da cor saiu da lista (virou barra de cor na lateral da linha +
+contagem de subcategorias); as ações deixaram de sumir na categoria
+selecionada e de ser botão dentro de botão; o formulário ganhou prévia ao vivo
+e catálogo de ícones no lugar do campo livre de emoji.
+
+Junto vieram quatro defeitos: `CatThumb` montava classe Tailwind por
+interpolação (`w-${size}`, que só funcionava por acidente), erro de save morria
+como unhandled rejection, ordenação era por `created_at` e o toque no celular
+parecia não fazer nada.
+
+### ~~Logo de fornecedor e imagem de serviço~~ — feito em 2026-08-15 (migr. 429)
+
+`fornecedores.logo_url` + `servicos.imagem_url` + bucket público
+`cadastro-imagens`. A régua: **ninguém fica com quadrado cinza** — sem imagem,
+o card mostra as iniciais do nome sobre uma cor derivada de um hash do próprio
+nome. A imagem só melhora o que já funciona. Vale também para cliente, sem
+mexer no schema.
+
+**Limitações declaradas:**
+- Logo de fornecedor inativado **fica** no bucket. É o preço de o registro
+  poder voltar (`dbDelete` é soft delete nas duas tabelas); não há faxina.
+- A policy de upload não recorta por filial. O gate real é o RLS da linha:
+  sem conseguir gravar a URL no fornecedor da outra unidade, o arquivo não
+  vira nada.
+- O modelo de planilha não traz a imagem — cadastro importado em lote entra
+  com monograma.
+- Só Cadastros mostra a logo. Cotações, Pedidos e Contas a Pagar continuam
+  citando o fornecedor por nome; levar o selo para os pontos de decisão é o
+  próximo passo natural, na linha do que a migr. 421 fez com pontualidade.
 
 ## Achados de auditoria — fechados em 2026-08-14 (migr. 428)
 
