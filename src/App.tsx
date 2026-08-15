@@ -101,6 +101,7 @@ const HistoricoVendasView                  = lazy(() => import('./views/Historic
 const DevolucoesView                       = lazy(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
 const PedidosOnlineView                    = lazy(() => import('./views/PedidosOnlineView').then(m => ({ default: m.PedidosOnlineView })));
 const AlcadasView                          = lazy(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
+const DREView                              = lazy(() => import('./views/DREView').then(m => ({ default: m.DREView })));
 const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
 const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
@@ -228,6 +229,10 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // que foi feito com ela. Fica em Financeiro e não em Empresa porque
       // Empresa é parametrização — foi por isso que Requisições saiu de lá.
       'Prestação de Contas',
+      // DRE (migr. 425). Fica antes das aprovações porque é leitura de
+      // resultado, não fila de trabalho — e é a tela que responde "deu lucro?",
+      // que o resto do módulo não respondia.
+      'DRE',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
@@ -1067,8 +1072,12 @@ function LogMaxAppInner() {
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
       // da holding inteira e todo authenticated lê (policy read_authenticated).
-      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Catálogo de centros de custo usado nas requisições e no rateio." endpoint="/api/centroscustoview"
-        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
+      case 'financeiro-dre':                  return <DREView showToast={st} />;
+      // `grupo_dre` (migr. 425) é o que o DRE usa para agrupar despesa. Nasce
+      // vazio de propósito: o que ninguém classificou aparece como linha
+      // "Não classificado" no relatório, e classificar é a aula.
+      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Catálogo de centros de custo usado nas requisições, no rateio e no agrupamento de despesas do DRE." endpoint="/api/centroscustoview"
+        fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'grupo_dre', label: 'Grupo no DRE', type: 'select', options: ['Pessoal', 'Comerciais', 'Administrativas', 'Ocupação', 'Outras'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
