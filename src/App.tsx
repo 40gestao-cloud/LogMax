@@ -67,6 +67,7 @@ const RequisicoesEstoqueView  = lazy(() => import('./views/RequisicoesEstoqueVie
 const AprovacoesEstoqueView   = lazy(() => import('./views/AprovacoesEstoqueView').then(m => ({ default: m.AprovacoesEstoqueView })));
 const ExpedicaoView           = lazy(() => import('./views/ExpedicaoView').then(m => ({ default: m.ExpedicaoView })));
 const InventariosView         = lazy(() => import('./views/InventariosView').then(m => ({ default: m.InventariosView })));
+const ValidadesView           = lazy(() => import('./views/ValidadesView').then(m => ({ default: m.ValidadesView })));
 const RelatoriosComprasView        = lazy(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
 const RelatoriosVendasView         = lazy(() => import('./views/RelatoriosVendasView').then(m => ({ default: m.RelatoriosVendasView })));
 const RelatoriosEstoqueView        = lazy(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
@@ -203,7 +204,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // 'Requisições de Material' (conferir/corrigir) x 'Liberar Requisições'
     // (dar baixa). São etapas diferentes do mesmo documento, e o nome antigo
     // — 'Requisições Recebidas' — colidia com o submenu de Compras.
-    submenus: ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Inventários',
+    submenus: ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Validades', 'Inventários',
       { label: 'Pedidos de Venda', requireSetor: ['logistica'] },
       'Gerenciamento', 'Relatórios']
   },
@@ -1088,6 +1089,7 @@ function LogMaxAppInner() {
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
       case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;
+      case 'estoque-validades':               return <ValidadesView showToast={st} />;
       case 'estoque-inventários':             return <InventariosView showToast={st} />;
       case 'estoque-gerenciamento':            return <GerenciamentoEstoqueView />;
       case 'estoque-relatórios':              return <RelatoriosEstoqueView showToast={st} />;

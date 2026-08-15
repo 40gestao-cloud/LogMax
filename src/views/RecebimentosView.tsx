@@ -61,6 +61,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [confirmProduto, setConfirmProduto] = useState('');
+  // Lote e validade da carga (migr. 424). Opcionais: parafuso não vence, e
+  // exigir data em tudo faria a turma digitar lixo para passar da tela.
+  const [confirmLote, setConfirmLote] = useState('');
+  const [confirmValidade, setConfirmValidade] = useState('');
   const [confirmStatus, setConfirmStatus] = useState('Concluído');
   const [confirmSaving, setConfirmSaving] = useState(false);
   // Guard sincrônico — `disabled={confirmSaving}` depende de state React
@@ -279,6 +283,27 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           if (!isDuplicate) throw movErr;
         }
       }
+      // Lote com validade (migr. 424). Depois da entrada e fora do caminho
+      // crítico: se falhar, o estoque já subiu e o lote pode ser registrado
+      // depois em Estoque → Validades — travar a confirmação por causa disto
+      // seria pior que o problema.
+      if (confirmValidade && confirmProduto && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+        try {
+          await dbInsert('/api/vencimentosestoqueview', {
+            produto_id:     confirmProduto,
+            lote:           confirmLote.trim() || null,
+            vencimento:     confirmValidade,
+            qtd:            Number(item.qtd_recebida) || 0,
+            status:         'OK',
+            recebimento_id: item.id,
+            filial,
+          });
+        } catch (loteErr: any) {
+          console.warn('[Recebimentos] lote não registrado:', loteErr?.message);
+          showToast('Entrada confirmada, mas o lote/validade não foi gravado. Registre em Estoque → Validades.', 'info', true);
+        }
+      }
+
       await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
       await reloadSaldos();
@@ -295,6 +320,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       setConfirmando(null);
       setConfirmProduto('');
+      setConfirmLote('');
+      setConfirmValidade('');
       setConfirmStatus('Concluído');
       showToast(
         confirmStatus === 'Concluído'
@@ -472,6 +499,20 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   </p>
                                 </div>
                                 )}
+                                {/* Validade da carga (migr. 424). Preenchido
+                                    aqui, o lote entra na fila do FEFO já com a
+                                    origem — depois vira digitação retroativa. */}
+                                <div className="flex flex-col gap-1 sm:w-32">
+                                  <label htmlFor={`receb-lote-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Lote</label>
+                                  <input id={`receb-lote-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full"
+                                    value={confirmLote} onChange={e => setConfirmLote(e.target.value)} placeholder="opcional" />
+                                </div>
+                                <div className="flex flex-col gap-1 sm:w-40">
+                                  <label htmlFor={`receb-validade-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Validade</label>
+                                  <input id={`receb-validade-${item.id}`} type="date" className="neu-input py-2 px-3 rounded-xl text-xs w-full"
+                                    value={confirmValidade} onChange={e => setConfirmValidade(e.target.value)} />
+                                  <span className="text-[10px] text-gray-500">Só para perecível.</span>
+                                </div>
                                 <div className="flex flex-col gap-1">
                                   <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
                                   <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
