@@ -176,13 +176,16 @@ não tem consequência nenhuma.
 
 Escopo: médio.
 
-### #8 — Baixa parcial em Contas a Receber
-`ContasReceberView` grava `status: 'Pago'` com o valor cheio. Cliente que paga
-metade não tem representação no sistema — e é o caso mais comum de cobrança.
-Casa com o limite de crédito da migr. 416: enquanto a baixa for tudo-ou-nada, o
-saldo devedor que trava o Fiado é grosseiro.
+### ~~#8 — Baixa parcial em Contas a Receber~~ — feito em 2026-08-14 (migr. 422)
+Tabela `contas_receber_baixas` (uma linha por recebimento) + status `Parcial` +
+RPC `baixar_conta_receber`. O título mantém o valor do documento; juros passam a
+correr sobre o saldo; o trigger de saldo bancário aprendeu 'Parcial'; e
+`cliente_saldo_devedor` (migr. 416) desconta o que já foi recebido, então pagar
+volta a liberar limite de crédito no PDV.
 
-Escopo: pequeno-médio.
+**Contas a PAGAR continua tudo-ou-nada** — a mesma necessidade existe do outro
+lado (pagar fornecedor em duas parcelas) e o desenho já está pronto para copiar:
+tabela irmã `contas_pagar_baixas` + o mesmo status + a mesma RPC espelhada.
 
 ### #9 — DRE / resultado
 Ver #7 da auditoria de 2026-06-19, acima. Continua sendo o item grande. Ficou
