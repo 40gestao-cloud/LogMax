@@ -1,5 +1,10 @@
 -- 433_20260816_o_aluno_batia_o_proprio_ponto.sql
 --
+-- (O nome do arquivo ficou com o vocabulário antigo, "batia o ponto". Desde
+-- 2026-07-29 o módulo é **Registro de Ponto** — Ponto Eletrônico e Frequência
+-- de Trabalho viraram abas dele —, e o ato se chama registro de ponto. O nome
+-- não muda porque a migração já foi aplicada nas 4 turmas.)
+--
 -- Achado da varredura função a função de 16/08, na parte das funções de
 -- TRIGGER — as únicas que faltavam depois das RPCs de escrita e de leitura.
 --
@@ -49,16 +54,17 @@
 --
 -- Mesma conclusão do QR: superfície não usada. Nenhuma tela insere direto em
 -- `ponto_eletronico` — o caminho do app é a RPC `registrar_ponto_manual`
--- (`FrequenciaTrabalhoView`), que tem `_assert_rpc` e régua de RH, e o totem
--- entra pelos endpoints com service-role, que não passam por RLS.
+-- (`FrequenciaTrabalhoView`, hoje uma aba de **Registro de Ponto**), que tem
+-- `_assert_rpc` e régua de RH, e o totem entra pelos endpoints com
+-- service-role, que não passam por RLS.
 --
 -- O SELECT do próprio ponto fica: ver a própria frequência é direito de quem
--- bate ponto. O que sai é só a escrita.
+-- tem o ponto registrado. O que sai é só a escrita.
 --
 -- ────────────────────────────────────────────────────────────────────────────
 -- Três travas, porque nenhuma sozinha basta:
 --
---   • a policy perde o ramo do próprio usuário — quem bate ponto é o totem,
+--   • a policy perde o ramo do próprio usuário — quem registra o ponto é o totem,
 --     pelo endpoint, com service-role. RH continua podendo lançar (é a mesma
 --     régua de `ponto_eletronico`, onde `ponto_rh_insert` já existe);
 --   • um gatilho BEFORE carimba `registrado_em := now()` para qualquer chamador
@@ -78,7 +84,7 @@
 
 BEGIN;
 
--- 1. Bater ponto é ato do totem, não da tela.
+-- 1. Registrar ponto é ato do totem, não da tela.
 DROP POLICY IF EXISTS "pontoqr_insert" ON public.ponto_qr_registros;
 CREATE POLICY "pontoqr_insert" ON public.ponto_qr_registros
   FOR INSERT TO authenticated
