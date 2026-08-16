@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../components/ui';
 import { isConselheiro, isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Prestação de contas — quem executa volta para explicar (migração 379).
@@ -83,9 +84,16 @@ export function PrestacaoContasView({
   const podeDeliberar = isConselho(profile);
   // Conselho enxerga tudo, inclusive a Matriz — que é justamente de quem o
   // CEO presta contas. A unidade enxerga só a própria.
+  //
+  // Mas quem escolheu uma unidade no seletor está operando aquela unidade,
+  // mesmo sendo do Conselho: papel é o que se PODE ver, filial da sessão é o
+  // que se está vendo agora. `filialAtiva = null` é o modo Matriz.
+  const { filialAtiva } = useFilial();
   const filiaisVisiveis = useMemo(
-    () => (conselho ? [...FILIAIS_OP, 'Matriz'] : profile?.filial ? [profile.filial] : []),
-    [conselho, profile?.filial],
+    () => (filialAtiva
+      ? [filialAtiva]
+      : conselho ? [...FILIAIS_OP, 'Matriz'] : profile?.filial ? [profile.filial] : []),
+    [filialAtiva, conselho, profile?.filial],
   );
 
   const [lista, setLista]       = useState<Prestacao[]>([]);

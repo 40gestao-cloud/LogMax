@@ -5,6 +5,7 @@ import { EmptyState, LoadingSpinner, FilialBadge } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Destinação do resultado (migração 381) — fecha o trio com Orçamento (378)
@@ -55,11 +56,26 @@ export function DestinacaoResultadoView({
   const [loading, setLoading]     = useState(true);
   const [salvando, setSalvando]   = useState(false);
 
+  // Operando dentro de uma unidade, a destinação é dela — o seletor some e o
+  // valor fica travado. Só no modo Matriz o Conselho escolhe entre as três.
+  const { filialAtiva } = useFilial();
+  const filiaisVisiveis: string[] = filialAtiva ? [filialAtiva] : [...FILIAIS_OP];
+
   const ano = new Date().getFullYear();
-  const [filial, setFilial]   = useState<string>(FILIAIS_OP[0]);
+  const [filial, setFilial]   = useState<string>(filiaisVisiveis[0]);
   const [inicio, setInicio]   = useState(`${ano}-01-01`);
   const [fim, setFim]         = useState(`${ano}-12-31`);
   const [apuracao, setApuracao] = useState<{ receitas: number; despesas: number; lucro: number } | null>(null);
+
+  // Troca de unidade no seletor global: realinha a filial escolhida e descarta
+  // a apuração, que é da unidade anterior.
+  useEffect(() => {
+    if (!filiaisVisiveis.includes(filial)) {
+      setFilial(filiaisVisiveis[0]);
+      setApuracao(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filialAtiva]);
 
   const [reserva, setReserva]           = useState('');
   const [reinvestido, setReinvestido]   = useState('');
@@ -72,9 +88,12 @@ export function DestinacaoResultadoView({
     if (!supabase) { setLoading(false); return; }
     setLoading(true);
     const [{ data: dests }, { data: bcs }] = await Promise.all([
+      // O histórico segue a unidade da sessão: operando a SuperMax não se
+      // enxerga a destinação de resultado da MaxLook.
       supabase.from('destinacoes_resultado')
         .select('id, filial, periodo_inicio, periodo_fim, lucro_apurado, valor_reserva, valor_reinvestido, valor_distribuido, justificativa, deliberado_por_nome, deliberado_em')
         .eq('ativo', true)
+        .in('filial', filiaisVisiveis)
         .order('deliberado_em', { ascending: false }),
       supabase.from('caixa_bancos')
         .select('id, banco, conta, filial, saldo')
@@ -84,7 +103,10 @@ export function DestinacaoResultadoView({
     setHistorico((dests ?? []) as Destinacao[]);
     setBancos((bcs ?? []) as Banco[]);
     setLoading(false);
-  }, []);
+  // filialAtiva e não filiaisVisiveis: o array é recriado a cada render e
+  // deixaria o efeito em laço.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filialAtiva]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -157,7 +179,7 @@ export function DestinacaoResultadoView({
               <label className="text-xs text-gray-500 block mb-1">Unidade</label>
               <select value={filial} onChange={e => { setFilial(e.target.value); setApuracao(null); }}
                 className="neu-input w-full px-3 py-2 rounded-xl text-sm">
-                {FILIAIS_OP.map(f => <option key={f} value={f}>{f}</option>)}
+                {filiaisVisiveis.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
             <div>

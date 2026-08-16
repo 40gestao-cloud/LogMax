@@ -4,6 +4,7 @@ import { Save, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, FormField, NeuButtonAccent } from '../components/ui';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Alçada de aprovação de cotações por filial (migração 204).
@@ -18,6 +19,13 @@ const FILIAIS_OPERACIONAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 
 export const AlcadasView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const podeEditar = profile.role === 'admin' || profile.role === 'ceo';
+  // Operando dentro de uma unidade, só a alçada dela aparece. O painel com as
+  // três é do modo Matriz — configurar limite de aprovação da MaxLook estando
+  // na SuperMax é ato de outra unidade.
+  const { filialAtiva } = useFilial();
+  const filiaisVisiveis = filialAtiva
+    ? FILIAIS_OPERACIONAIS.filter(f => f === filialAtiva)
+    : [...FILIAIS_OPERACIONAIS];
 
   const [alcadas, setAlcadas] = useState<Record<string, Alcada>>({});
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -122,7 +130,7 @@ export const AlcadasView = ({ showToast, profile }: { showToast: any; profile: U
 
       {loading ? <LoadingSpinner /> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FILIAIS_OPERACIONAIS.map(filial => (
+          {filiaisVisiveis.map(filial => (
             <div key={filial} className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3">
               <div className="flex items-baseline justify-between">
                 <h3 className="text-base font-bold text-gray-200">{filial}</h3>

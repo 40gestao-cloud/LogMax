@@ -5,6 +5,7 @@ import { EmptyState, FilialBadge, LoadingSpinner, StatusBadge } from '../compone
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { isConselheiro, isConselho } from '../lib/rbac';
 import { FILIAIS_OP } from './AvaliacoesView';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Orçamento do período — a filial propõe, o Conselho delibera, o gasto responde.
@@ -80,9 +81,18 @@ export function OrcamentoView({
   // não é quem a concede. Quem barra de verdade é a RPC.
   const conselho = isConselheiro(profile) || profile?.role === 'admin' || profile?.role === 'ceo';
   const podeDeliberar = isConselho(profile);
+
+  // O papel diz o que a pessoa PODE ver; a filial da sessão diz o que ela está
+  // vendo AGORA. Quem escolheu SuperMax no seletor está operando a SuperMax —
+  // mesmo sendo admin —, e não pode propor orçamento em nome da MaxLook por
+  // engano. `filialAtiva = null` é o modo Matriz: aí sim o Conselho enxerga as
+  // três para deliberar.
+  const { filialAtiva } = useFilial();
   const filiaisVisiveis = useMemo(
-    () => (conselho ? [...FILIAIS_OP] : profile?.filial ? [profile.filial] : []),
-    [conselho, profile?.filial],
+    () => (filialAtiva
+      ? [filialAtiva]
+      : conselho ? [...FILIAIS_OP] : profile?.filial ? [profile.filial] : []),
+    [filialAtiva, conselho, profile?.filial],
   );
 
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
