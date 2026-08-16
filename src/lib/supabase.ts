@@ -1,4 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { purgarSessaoSeExpirada } from './sessaoGuard';
+
+// Camada 2 do guard de sessão (ver `sessaoGuard.ts`): em máquina compartilhada,
+// derruba a sessão que ficou da turma anterior.
+//
+// Roda AQUI, e não no main.tsx, porque precisa acontecer ANTES do createClient
+// abaixo — o GoTrueClient lê o token do localStorage já no construtor. Com o
+// token removido antes, `getSession()` devolve null e o app pinta o LoginScreen
+// direto; feito num efeito do React, haveria um flash com a tela do usuário
+// anterior. `sessaoGuard` só importa `dates` e `pontoHorarios`, então não há
+// ciclo de import com este módulo.
+purgarSessaoSeExpirada();
 
 const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL  as string | undefined;
 const supabaseKey  = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;

@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Loader2, AlertCircle, Eye, EyeOff, LogIn, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { consumirMotivoSaida } from '../lib/sessaoGuard';
 import { VitrineCarousel } from './VitrineCarousel';
+
+const TEXTO_MOTIVO_SAIDA = {
+  inatividade: 'Sua sessão foi encerrada por inatividade. Entre novamente para continuar.',
+  'fim-turno': 'Sua sessão foi encerrada no fim do turno. Entre novamente para continuar.',
+} as const;
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
@@ -23,6 +29,16 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sem isto o logout automático parece bug: o aluno volta do intervalo e o app
+  // "desfez o login sozinho".
+  //
+  // Ref, e não `useState(consumirMotivoSaida)`: o StrictMode do dev invoca o
+  // inicializador duas vezes e a segunda chamada já viria vazia (o motivo é
+  // consumido na leitura). O ref sobrevive à dupla renderização.
+  const motivoRef = useRef<ReturnType<typeof consumirMotivoSaida> | undefined>(undefined);
+  if (motivoRef.current === undefined) motivoRef.current = consumirMotivoSaida();
+  const motivoSaida = motivoRef.current;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +122,25 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         {/* Form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          {/* Motivo do logout automático. Some assim que o usuário começa a
+              digitar (o erro de credencial ocupa o mesmo espaço logo abaixo). */}
+          {motivoSaida && !error && (
+            <div
+              style={{
+                background: 'rgba(212,175,55,0.07)',
+                border: '1px solid rgba(212,175,55,0.22)',
+                borderRadius: '0.75rem',
+                padding: '0.75rem 1rem',
+                display: 'flex', alignItems: 'center', gap: '0.55rem',
+              }}
+            >
+              <Clock size={14} style={{ color: '#D4AF37', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.75rem', color: '#d6bd6a', fontWeight: 600, lineHeight: 1.45 }}>
+                {TEXTO_MOTIVO_SAIDA[motivoSaida]}
+              </span>
+            </div>
+          )}
+
           {/* Email */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" style={{

@@ -3,6 +3,9 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
+import { useIdleLogout } from './hooks/useIdleLogout';
+import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
+import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
@@ -820,6 +823,26 @@ function LogMaxAppInner() {
   const { atividades: atividadesAula, naoLidas: atividadesNaoLidas } = useAulaAtividades(profile);
   const { blackout } = useBlackout();
 
+  // ── Guard de sessão (lab compartilhado) ──────────────────────────────────
+  // Camadas 1 e 3; a 2 roda no boot, em src/lib/sessaoGuard.ts. Fica AQUI em
+  // cima, junto dos outros hooks, pelo mesmo motivo do useAulaAtividades: daqui
+  // até o render há seis `return`, e hook depois deles muda a contagem de hooks
+  // entre renders — React #310, tela preta em produção.
+  const encerrarSessaoAutomatica = useCallback(async (motivo: 'inatividade' | 'fim-turno') => {
+    limparEstadoDeSessao();
+    limparCarimbos();
+    // Antes do signOut: ele dispara onAuthStateChange e o LoginScreen pode
+    // montar (e ler o motivo) antes deste `await` resolver.
+    registrarMotivoSaida(motivo);
+    clearFilial();
+    await signOut();
+  }, [clearFilial, signOut]);
+
+  const { expiraEm: sessaoExpiraEm, continuar: continuarSessao } = useIdleLogout({
+    enabled: isAuthenticated,
+    onExpirar: encerrarSessaoAutomatica,
+  });
+
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
   // corpo do render (não em efeito) porque as views chamam `hasSetor` durante o
   // próprio render — um useEffect chegaria um frame atrasado e a primeira
@@ -867,6 +890,20 @@ function LogMaxAppInner() {
       }, 3000);
     }
   }, []);
+
+  // Definido aqui em cima, antes dos early returns, porque as telas de "acesso
+  // não configurado" e "aguardando alocação" também precisam dele — chamavam
+  // `signOut` cru e deixavam os carimbos de sessão para trás.
+  const handleSignOut = async () => {
+    showToast("Saindo...", 'info', true);
+    limparEstadoDeSessao();
+    // Sem isto o carimbo de atividade sobrevive à saída manual e o próximo boot
+    // acha que uma sessão expirou — o LoginScreen mostraria "sessão encerrada
+    // por inatividade" para quem simplesmente clicou em Sair.
+    limparCarimbos();
+    clearFilial();
+    await signOut();
+  };
 
   // Supabase não configurado: sistema fora do ar. Tela específica
   // antes do LoginScreen porque o form de login não consegue chamar
@@ -917,19 +954,10 @@ function LogMaxAppInner() {
         <p className="text-sm text-gray-500 max-w-sm text-center">
           Seu usuário ainda não possui um perfil de acesso. Solicite ao administrador do sistema.
         </p>
-        <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
+        <button onClick={handleSignOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
       </div>
     );
   }
-
-  const handleSignOut = async () => {
-    showToast("Saindo...", 'info', true);
-    try {
-      sessionStorage.removeItem('logmax:activeView');
-      sessionStorage.removeItem('logmax:viewHistory');
-    } catch {}
-    await signOut();
-  };
 
   const podeEscolherFilial = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
 
@@ -978,7 +1006,7 @@ function LogMaxAppInner() {
           Sua conta foi criada, mas você ainda não está em nenhuma unidade.
           O administrador vai alocar você em uma filial.
         </p>
-        <button onClick={signOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
+        <button onClick={handleSignOut} className="mt-2 text-xs text-gray-600 hover:text-red-500 transition-colors">Sair</button>
       </div>
     );
   }
@@ -1227,6 +1255,17 @@ function LogMaxAppInner() {
         quebrada. `fixed` não é afetado por isto, os FABs seguem iguais. */}
     <div className="relative flex h-screen w-full bg-base overflow-hidden" style={{ color: 'var(--color-text-primary)', height: '100dvh' }}>
       <Toast message={toast.message} visible={toast.show} type={toast.type} />
+      {/* Aviso dos 60s finais antes do logout por inatividade. Renderizado só
+          aqui, na shell do app: nas telas dos early returns (seletor de filial,
+          "aguardando alocação") a sessão simplesmente cai para o login — não há
+          formulário nem trabalho em andamento para o aviso proteger. */}
+      {sessaoExpiraEm !== null && (
+        <SessaoExpirandoModal
+          expiraEm={sessaoExpiraEm}
+          onContinuar={continuarSessao}
+          onSairAgora={handleSignOut}
+        />
+      )}
       {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
           (migr. 307). Ver o comentário no próprio componente. */}
       <DesligamentoAviso profile={profile} />

@@ -15,14 +15,14 @@ export default defineConfig({
       {
         test: {
           name: 'estatico',
-          include: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts'],
+          include: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts', 'tests/sessaoGuard.test.ts'],
         },
       },
       {
         test: {
           name: 'integracao',
           include: ['tests/**/*.test.ts'],
-          exclude: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts'],
+          exclude: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts', 'tests/sessaoGuard.test.ts'],
           setupFiles: ['./tests/setup.ts'],
           testTimeout: 30_000,
           fileParallelism: false,
