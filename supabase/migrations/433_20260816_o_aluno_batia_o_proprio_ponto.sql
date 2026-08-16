@@ -36,7 +36,27 @@
 -- nas 4 turmas); as 50 linhas de `ponto_eletronico` vieram por outro caminho.
 -- É buraco aberto, não incidente.
 --
--- Duas travas, porque uma só não basta:
+-- ────────────────────────────────────────────────────────────────────────────
+-- E TEM O CAMINHO CURTO: ESCREVER DIRETO NO PONTO
+--
+-- Fechar só o QR não resolveria. `ponto_eletronico` tem `ponto_self_insert`
+-- com `WITH CHECK (funcionario_id = <o meu>)` — o aluno insere direto, sem
+-- passar pelo QR, escolhendo `data`, `entrada`, `status` e
+-- `horas_trabalhadas`. O `UNIQUE (funcionario_id, data)` impede sobrescrever
+-- um dia já lançado, mas não impede CRIAR um dia que ainda não existe: falta
+-- não registrada vira presença. E `horas_trabalhadas` alimenta a folha, então
+-- não para na frequência.
+--
+-- Mesma conclusão do QR: superfície não usada. Nenhuma tela insere direto em
+-- `ponto_eletronico` — o caminho do app é a RPC `registrar_ponto_manual`
+-- (`FrequenciaTrabalhoView`), que tem `_assert_rpc` e régua de RH, e o totem
+-- entra pelos endpoints com service-role, que não passam por RLS.
+--
+-- O SELECT do próprio ponto fica: ver a própria frequência é direito de quem
+-- bate ponto. O que sai é só a escrita.
+--
+-- ────────────────────────────────────────────────────────────────────────────
+-- Três travas, porque nenhuma sozinha basta:
 --
 --   • a policy perde o ramo do próprio usuário — quem bate ponto é o totem,
 --     pelo endpoint, com service-role. RH continua podendo lançar (é a mesma
@@ -45,7 +65,9 @@
 --     autenticado. Assim, mesmo que alguém devolva o INSERT à tela um dia, a
 --     hora deixa de ser palpite do cliente. service-role segue livre, senão o
 --     endpoint do totem (que precisa registrar o instante da leitura do QR) e a
---     manutenção pelo SQL Editor quebram.
+--     manutenção pelo SQL Editor quebram;
+--   • `ponto_self_insert` sai de `ponto_eletronico`. Sem isso as duas primeiras
+--     só empurram o problema uma tabela adiante.
 --
 -- NÃO mexido de propósito: `fn_sync_ponto_eletronico` continua gravando
 -- 'Normal' fixo em vez de calcular 'Atrasado' a partir da jornada
@@ -88,6 +110,11 @@ CREATE TRIGGER trg_ponto_qr_carimba_hora
 
 REVOKE ALL ON FUNCTION public.ponto_qr_carimba_hora() FROM public, anon;
 
+-- 3. Ninguém lança o próprio ponto direto na tabela. RH e gerente da filial
+--    continuam pela `ponto_rh_insert`, que já existe e não é tocada aqui.
+--    O SELECT do próprio ponto (`ponto_self_select`) fica de pé.
+DROP POLICY IF EXISTS "ponto_self_insert" ON public.ponto_eletronico;
+
 COMMIT;
 
 NOTIFY pgrst, 'reload schema';
@@ -103,7 +130,14 @@ NOTIFY pgrst, 'reload schema';
 --    WHERE c.relname='ponto_qr_registros' AND t.tgname='trg_ponto_qr_carimba_hora';
 --   -- espera 1
 --
+--   SELECT count(*) FROM pg_policies
+--    WHERE tablename='ponto_eletronico' AND cmd='INSERT' AND with_check ~ 'auth.uid';
+--   -- espera 0 (só sobra ponto_rh_insert)
+--
 -- TESTE MANUAL (F12, aluno colaborador):
---   insert em ponto_qr_registros com o próprio user_id → deve dar 42501
---   totem/endpoint de ponto → continua registrando normalmente
+--   insert em ponto_qr_registros com o próprio user_id  → deve dar 42501
+--   insert em ponto_eletronico com o próprio func_id    → deve dar 42501
+--   ver a própria frequência na tela                    → continua funcionando
+--   RH lança presença por Frequência de Trabalho        → continua funcionando
+--   totem/endpoint de ponto                             → continua registrando
 -- ════════════════════════════════════════════════════════════════════════════
