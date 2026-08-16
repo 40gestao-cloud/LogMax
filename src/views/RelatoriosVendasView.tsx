@@ -144,8 +144,8 @@ export const RelatoriosVendasView = ({ showToast: _showToast }: any) => {
         </div>
       </div>
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
-        <div className="overflow-x-auto overflow-y-auto h-full main-scrollbar">
+      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
+        <div className="overflow-x-auto main-scrollbar">
           {isLoading ? <LoadingSpinner /> : activeData.length === 0 ? <EmptyState /> : (
             <table className="w-full text-left border-collapse">
               {activeTab === 'orcamentos' && (

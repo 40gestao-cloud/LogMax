@@ -318,13 +318,13 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       )}
 
       {/* Histórico */}
-      <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-h-0">
+      <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2"><RotateCcw size={14} /> Últimas devoluções</h3>
           <span className="text-[10px] text-gray-500 uppercase tracking-widest">{historico.length} registro(s)</span>
         </div>
         {carregandoHistorico ? <LoadingSpinner /> : historico.length === 0 ? <EmptyState message="Nenhuma devolução registrada." /> : (
-          <div className="overflow-auto main-scrollbar">
+          <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">

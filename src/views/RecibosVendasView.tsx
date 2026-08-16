@@ -118,8 +118,8 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
       </div>
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? <EmptyState message="Nenhuma venda concluída." /> : (
-        <div className="neu-flat rounded-3xl p-3 sm:p-6 border border-white/5 flex flex-col flex-1 min-h-0">
-          <div className="overflow-x-auto overflow-y-auto h-full main-scrollbar">
+        <div className="neu-flat rounded-3xl p-3 sm:p-6 border border-white/5 flex flex-col">
+          <div className="overflow-x-auto main-scrollbar">
             {/* Mobile: cards */}
             <div className="sm:hidden flex flex-col gap-3">
               {enriched.map((v: any) => (

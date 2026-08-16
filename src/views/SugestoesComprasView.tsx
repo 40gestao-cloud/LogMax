@@ -205,8 +205,8 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
         )}
       </AnimatePresence>
 
-      <div className="neu-flat rounded-3xl p-3 sm:p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
-        <div className="overflow-x-auto overflow-y-auto h-full main-scrollbar">
+      <div className="neu-flat rounded-3xl p-3 sm:p-6 border border-white/5 flex flex-col mb-6">
+        <div className="overflow-x-auto main-scrollbar">
           {isLoading ? <LoadingSpinner /> : sugestoes.length === 0 ? (
             <EmptyState message={filtroMode === 'zerados' ? 'Nenhum produto com estoque zerado.' : 'Nenhum produto com estoque crítico ou baixo.'} />
           ) : (

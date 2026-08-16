@@ -615,8 +615,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6 flex-1 min-h-0">
-          <div className="overflow-auto main-scrollbar">
+        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
+          <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
@@ -797,6 +797,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 </button>
               </div>
 
+              {/* Modal tem altura travada em 85vh: aqui o scroll interno é o
+                  certo, diferente da lista da página. */}
               <div className="overflow-auto main-scrollbar flex-1">
                 <table className="w-full text-left border-collapse">
                   <thead>
