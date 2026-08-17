@@ -123,6 +123,9 @@ const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 // turma já tinha) mas é exceção, e exceção se escolhe com o nome dela na tela.
 const SEM_COMPRA = '__sem_compra__';
 
+// Sentinel do "Outro…" nos campos de lista da ficha (tamanho, cor).
+const OUTRO = '__outro__';
+
 // A conta vive em src/lib/precificacao.ts — estava duplicada aqui e no
 // Catálogo, e as duas calculavam MARKUP sob o rótulo "Margem".
 
@@ -283,6 +286,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // select precisa voltar para o vazio quando o formulário fecha — senão o
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
+
+  // Campos da ficha em modo "Outro": o valor digitado não está na lista, mas o
+  // select precisa continuar mostrando "Outro…" enquanto o campo está vazio.
+  const [atrLivre, setAtrLivre] = useState<Set<string>>(new Set());
 
   const [gradeItem, setGradeItem]     = useState<any | null>(null);
   const [gradeTamanhos, setGradeTam]  = useState('');
@@ -608,6 +615,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setItemCompradoSel('');
+    setAtrLivre(new Set());
     setShowForm(false);
   };
 
@@ -615,6 +623,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
+    setAtrLivre(new Set());
     setForm({ codigo: '', nome: '', preco: '' });
     setExtras({ ...EMPTY_EXTRAS, filial });
     setImagens(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
@@ -754,6 +763,21 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       return;
     }
     setExtrasErrors({});
+
+    // Vender abaixo do custo salvava calado, e o prejuízo só aparecia no DRE
+    // semanas depois, como lucro bruto negativo que ninguém sabe de onde veio.
+    // Avisa e deixa seguir: queima de estoque e isca de vitrine existem, e são
+    // decisão de quem vende — o que não pode é ser sem querer.
+    const custoNum = parseBRL(extras.preco_custo);
+    const vendaNum = parseBRL(form.preco);
+    if (vendavel && custoNum > 0 && vendaNum > 0 && vendaNum < custoNum) {
+      const segue = await confirm(
+        `O preço de venda (R$ ${formatBRL(vendaNum)}) está abaixo do custo (R$ ${formatBRL(custoNum)}).\n\n`
+        + `Cada unidade vendida dá um prejuízo de R$ ${formatBRL(custoNum - vendaNum)}, e isso entra no DRE `
+        + 'como lucro bruto negativo.\n\nÉ intencional (queima de estoque, isca de vitrine)?');
+      if (!segue) return;
+    }
+
     setIsSaving(true);
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
@@ -1128,6 +1152,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                             fornecedor:  x.fornecedor  || comprado.fornecedor,
                             preco_custo: x.preco_custo || (comprado.custo != null
                               ? formatBRL(comprado.custo) : ''),
+                            // O saldo passa a vir do recebimento; o que estava
+                            // digitado aqui iria junto, escondido, e dobraria
+                            // a entrada.
+                            estoque: '',
                           }));
                         }}>
                         <option value="">— Selecione o item recebido —</option>
@@ -1330,14 +1358,39 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           );
                         }
                         if (d.type === 'select' && d.options) {
+                          // `livre`: a lista cobre o comum e "Outro" abre um
+                          // campo para o resto. Fechar de vez travaria a peça
+                          // importada; deixar livre multiplica grafia — e é
+                          // grafia que fabrica variante duplicada na grade.
+                          const v = String(val);
+                          const naLista = (d.options as readonly string[]).includes(v);
+                          const emOutro = !!d.livre && (atrLivre.has(d.key) || (v !== '' && !naLista));
                           return (
                             <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
                               <FormField label={d.label} error={err}>
                                 <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                                  value={String(val)} onChange={e => setAtr(e.target.value)}>
+                                  value={emOutro ? OUTRO : v}
+                                  onChange={e => {
+                                    if (e.target.value === OUTRO) {
+                                      setAtrLivre(prev => new Set(prev).add(d.key));
+                                      setAtr('');
+                                      return;
+                                    }
+                                    setAtrLivre(prev => {
+                                      const n = new Set(prev); n.delete(d.key); return n;
+                                    });
+                                    setAtr(e.target.value);
+                                  }}>
                                   <option value="">— Selecione —</option>
                                   {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                  {d.livre && <option value={OUTRO}>Outro…</option>}
                                 </select>
+                                {emOutro && (
+                                  <input autoFocus
+                                    className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${err ? 'border border-red-500/40' : ''}`}
+                                    value={v} onChange={e => setAtr(e.target.value)}
+                                    placeholder={d.placeholder ?? 'Digite o valor'} />
+                                )}
                               </FormField>
                               {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
                             </div>
@@ -1598,6 +1651,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       nativo descarta o valor inteiro quando ela chega. A máscara
                       só aceita fração se a unidade for fracionária — meio pacote
                       não existe, meio quilo existe. */}
+                  {/* Saldo de abertura só existe fora do fluxo de compra. Com o
+                      produto vindo de um pedido, o saldo entra pelo Recebimento
+                      — digitar aqui geraria uma Entrada de implantação que soma
+                      com a do recebimento, e o estoque vai ao dobro. É o mesmo
+                      erro que a migr. 438 removeu ao tirar "Quantidade Comprada"
+                      do cadastro, entrando por outra porta. */}
+                  {(editItem || itemCompradoSel === SEM_COMPRA || itensComprados.length === 0) ? (
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
                     <input
                       type="text" inputMode="decimal"
@@ -1623,6 +1683,17 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       </p>
                     )}
                   </FormField>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                        Saldo inicial
+                      </span>
+                      <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-400 border border-white/5 leading-snug">
+                        Este produto veio de uma compra — o saldo entra quando você confirmar o
+                        recebimento, com documento e custo. Digitar aqui contaria a mesma mercadoria duas vezes.
+                      </div>
+                    </div>
+                  )}
                   <FormField label={`Estoque Mínimo (${extras.unidade}) *`} error={extrasErrors.estoque_minimo}>
                     <input type="text" inputMode="decimal"
                       className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.estoque_minimo ? 'border border-red-500/40' : ''}`}

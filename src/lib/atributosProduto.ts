@@ -30,12 +30,28 @@ export type AtributoDef = {
   reqSe?: boolean;
   /** Restringe a digitação a dígitos (prazo em dias, garantia). */
   soDigitos?: boolean;
+  /**
+   * Só para `type='select'`: além das opções, oferece "Outro" e abre um campo
+   * de texto. Existe para o caso em que a lista cobre 95% e engessar o resto
+   * seria pior — tamanho de peça importada, cor de coleção. Sem isto a escolha
+   * é entre lista fechada (que trava) e texto livre (que multiplica grafia).
+   */
+  livre?: boolean;
 };
 
 export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
   MaxLook: [
-    { key: 'tamanho',  label: 'Tamanho *',   placeholder: 'Ex: P, M, G, 38, 40', req: true },
-    { key: 'cor',      label: 'Cor *',       placeholder: 'Ex: Preto, Azul Marinho', req: true },
+    // Texto livre aqui era o que estragava a grade: "M", "Média" e "Medio"
+    // viram três variantes do mesmo tamanho, e o índice único da migr. 445 não
+    // tem como saber que são a mesma coisa (ele normaliza caixa e espaço, não
+    // vocabulário). Lista + "Outro" para o que a lista não cobre.
+    { key: 'tamanho', label: 'Tamanho *', type: 'select', req: true, livre: true,
+      options: ['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único',
+                '36', '38', '40', '42', '44', '46', '48'] as const,
+      dica: 'A grade se monta a partir daqui — escrever o mesmo tamanho de dois jeitos cria duas variantes.' },
+    { key: 'cor', label: 'Cor *', type: 'select', req: true, livre: true,
+      options: ['Preto', 'Branco', 'Cinza', 'Bege', 'Marrom', 'Azul', 'Azul Marinho',
+                'Vermelho', 'Verde', 'Amarelo', 'Rosa', 'Roxo', 'Estampado'] as const },
     { key: 'genero',   label: 'Gênero *',    type: 'select', req: true,
       options: ['Feminino', 'Masculino', 'Unissex', 'Infantil'] as const },
     { key: 'colecao',  label: 'Coleção',     placeholder: 'Ex: Verão 2026' },
@@ -43,6 +59,13 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
   ],
   TechMax: [
     { key: 'modelo',        label: 'Modelo *',        placeholder: 'Ex: iPhone 13, Galaxy S23', req: true },
+    // Estava sendo escrito à mão em "Informações adicionais", onde nada
+    // consegue ler. Novo, seminovo e vitrine mudam preço, garantia e a conversa
+    // da venda — e o seminovo é justamente o caso em que saber QUAL aparelho
+    // saiu (migr. 444) vale mais.
+    { key: 'estado', label: 'Estado *', type: 'select', req: true,
+      options: ['Novo', 'Seminovo', 'Vitrine', 'Recondicionado'] as const,
+      dica: 'Vitrine é aparelho novo que ficou exposto. Recondicionado passou por reparo do fabricante.' },
     { key: 'cor',           label: 'Cor',             placeholder: 'Ex: Meia-noite, Titânio' },
     { key: 'memoria',       label: 'Memória',         placeholder: 'Ex: 128 GB, 256 GB' },
     { key: 'tela',          label: 'Tela',            placeholder: 'Ex: 6.1"' },
