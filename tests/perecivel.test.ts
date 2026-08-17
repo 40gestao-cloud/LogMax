@@ -29,6 +29,16 @@ describe('ehPerecivel', () => {
     expect(ehPerecivel(prod({}))).toBe(false);
   });
 
+  it('lê a resposta Sim/Não que substituiu o checkbox', () => {
+    // O campo virou pergunta obrigatória para "não é perecível" deixar de ser
+    // igual a "ninguém respondeu". Turma que ainda não recadastrou continua com
+    // booleano gravado — as duas formas precisam valer ao mesmo tempo.
+    expect(ehPerecivel(prod({ perecivel: 'Sim' }))).toBe(true);
+    expect(ehPerecivel(prod({ perecivel: 'sim' }))).toBe(true);
+    expect(ehPerecivel(prod({ perecivel: 'Não' }))).toBe(false);
+    expect(ehPerecivel(prod({ perecivel: '' }))).toBe(false);
+  });
+
   it('produto sem ficha não é "não perecível" — é desconhecido, e não trava nada', () => {
     expect(ehPerecivel(prod(null))).toBe(false);
     expect(ehPerecivel(undefined)).toBe(false);

@@ -25,8 +25,19 @@ export const ARMAZENAGENS: readonly Armazenagem[] = ['Ambiente', 'Refrigerado', 
 const atr = (produto: any): Record<string, any> =>
   produto?.atributos && typeof produto.atributos === 'object' ? produto.atributos : {};
 
-/** O checkbox da ficha. Produto sem ficha não é perecível — é desconhecido. */
-export const ehPerecivel = (produto: any): boolean => atr(produto)[ATR_PERECIVEL] === true;
+/**
+ * A resposta da ficha. Aceita as duas formas: o checkbox antigo (`true`) e a
+ * pergunta Sim/Não que o substituiu — turma que ainda não recadastrou continua
+ * com booleano gravado, e ler só uma das duas apagaria metade da fila de
+ * Validades sem avisar.
+ *
+ * Produto sem ficha continua não sendo perecível aqui — mas agora isso é
+ * "ninguém respondeu", e a listagem acusa a ficha vazia.
+ */
+export const ehPerecivel = (produto: any): boolean => {
+  const v = atr(produto)[ATR_PERECIVEL];
+  return v === true || String(v ?? '').trim().toLowerCase() === 'sim';
+};
 
 /**
  * Prazo em dias, ou null. O campo é texto no cadastro (a turma digita "30",

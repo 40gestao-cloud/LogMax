@@ -748,7 +748,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       // devolve o cálculo da validade para a digitação à mão no recebimento —
       // que é exatamente o que a ficha existe para evitar.
       const dependente = !!d.dependeDe;
-      const paiMarcado = dependente && extras.atributos?.[d.dependeDe!] === true;
+      const paiValor   = dependente ? extras.atributos?.[d.dependeDe!] : undefined;
+      const paiMarcado = dependente && (d.dependeDeValor !== undefined
+        ? String(paiValor ?? '') === d.dependeDeValor
+        : paiValor === true);
       const exigido = d.req || (d.reqSe && paiMarcado);
       if (!exigido) continue;
       if (dependente && !paiMarcado) continue;
@@ -1191,9 +1194,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                         ))}
                       </select>
                     ) : (
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.categoria} onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
-                        placeholder={`Ex: ${exProd.categoria}`} />
+                      // Era um input livre, e ele levava a um beco: o produto
+                      // nascia com `categoria_id` nulo — sem markup-alvo, sem a
+                      // sugestão de preço — e, em mercadoria, a validação exige
+                      // categoria_id, então o salvar era barrado apontando para
+                      // um select que nem estava na tela. A dependência passa a
+                      // ser dita em voz alta.
+                      <>
+                        <select className={`neu-input py-2 px-3 rounded-xl text-sm opacity-60 ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
+                          value="" disabled>
+                          <option value="">— Nenhuma categoria cadastrada —</option>
+                        </select>
+                        <p className="text-[10px] text-amber-400/90 mt-1 leading-snug">
+                          A <span className="font-bold">{filial}</span> ainda não tem categoria. Cadastre em{' '}
+                          <span className="text-gray-300 font-semibold">Cadastros → Categorias</span> antes do produto —
+                          é a categoria que carrega o markup-alvo usado para sugerir o preço de venda.
+                        </p>
+                      </>
                     )}
                   </FormField>
                   {extras.categoria_id && (() => {
@@ -1306,10 +1323,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
-                        // Campo dependente some quando o pai está desmarcado —
-                        // era assim que "Validade (dias)" ficava aberto para
-                        // detergente.
-                        if (d.dependeDe && extras.atributos?.[d.dependeDe] !== true) return null;
+                        // Campo dependente some quando o pai não está na
+                        // resposta que o libera — era assim que "Validade
+                        // (dias)" ficava aberto para detergente. `dependeDeValor`
+                        // existe porque o pai deixou de ser checkbox: em
+                        // perecível a resposta é 'Sim', não `true`.
+                        if (d.dependeDe) {
+                          const pai = extras.atributos?.[d.dependeDe];
+                          const libera = d.dependeDeValor !== undefined
+                            ? String(pai ?? '') === d.dependeDeValor
+                            : pai === true;
+                          if (!libera) return null;
+                        }
 
                         const errKey = `atr_${d.key}`;
                         const err = extrasErrors[errKey];
@@ -1379,7 +1404,24 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                                     setAtrLivre(prev => {
                                       const n = new Set(prev); n.delete(d.key); return n;
                                     });
-                                    setAtr(e.target.value);
+                                    const novo = e.target.value;
+                                    // Pai de campos dependentes: mudar a
+                                    // resposta apaga os filhos. Deixar
+                                    // "Validade: 5" num item que passou a não
+                                    // ser perecível põe o iogurte fantasma na
+                                    // fila de vencimento — mesmo motivo do
+                                    // checkbox, agora no select.
+                                    setExtras(x => {
+                                      const atrs = { ...(x.atributos ?? {}), [d.key]: novo };
+                                      for (const f of (ATRIBUTOS_PRODUTO[filial] ?? [])) {
+                                        if (f.dependeDe === d.key
+                                            && String(novo) !== (f.dependeDeValor ?? '')) {
+                                          delete atrs[f.key];
+                                        }
+                                      }
+                                      return { ...x, atributos: atrs };
+                                    });
+                                    setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
                                   }}>
                                   <option value="">— Selecione —</option>
                                   {d.options.map((o) => <option key={o} value={o}>{o}</option>)}

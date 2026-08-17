@@ -28,6 +28,12 @@ export type AtributoDef = {
   dependeDe?: string;
   /** Obrigatório apenas quando o campo de `dependeDe` está marcado. */
   reqSe?: boolean;
+  /**
+   * Valor do pai que libera este campo. Sem isto, o pai precisa ser `true`
+   * (checkbox). Existe desde que "Produto perecível" deixou de ser checkbox:
+   * caixa desmarcada nunca distinguiu "não é perecível" de "ninguém respondeu".
+   */
+  dependeDeValor?: string;
   /** Restringe a digitação a dígitos (prazo em dias, garantia). */
   soDigitos?: boolean;
   /**
@@ -95,20 +101,27 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
   // exigente dos três, porque é o único onde a mercadoria estraga. É isto que
   // faz o supermercado trabalhar com PEPS e a loja de roupa não precisar.
   //
-  // Nenhum campo é obrigatório de propósito: 149 produtos já estão cadastrados
-  // e virariam incompletos de um dia para o outro. Campo que trava sem informar
-  // é como nasce o "nao temos ou acabou" da migr. 358 — a listagem avisa quem
-  // está sem ficha, e isso basta.
+  // "Produto perecível" era checkbox e nenhum campo era obrigatório, porque 149
+  // produtos já cadastrados virariam incompletos de um dia para o outro. Com a
+  // base zerada para a turma nova, esse argumento venceu — e o checkbox tinha um
+  // defeito que ele escondia: desmarcado nunca distinguiu "não é perecível" de
+  // "ninguém respondeu". Na única filial onde a mercadoria estraga, essa
+  // diferença é a fila de Validades inteira: item perecível que ninguém marcou
+  // não entra na fila, não é remarcado e a perda aparece no inventário.
+  //
+  // Vira pergunta de resposta obrigatória. Sim/Não, sem meio-termo.
   SuperMax: [
-    { key: 'perecivel', label: 'Produto perecível', type: 'bool', wide: true },
+    { key: 'perecivel', label: 'Produto perecível *', type: 'select', req: true, wide: true,
+      options: ['Não', 'Sim'] as const,
+      dica: 'Estraga com o tempo? Leite, frios e hortifruti sim; sabão em pó e enlatado não.' },
     // Os dois passam a depender do checkbox, e a validade vira obrigatória
     // quando ele está marcado: perecível sem prazo é o cadastro que impede o
     // recebimento de calcular a data e devolve o problema para a digitação à
     // mão — que é de onde a migr. 424 estava tentando sair.
     { key: 'validade_dias', label: 'Validade (dias)', placeholder: 'Ex: 5, 30, 180',
-      dependeDe: 'perecivel', reqSe: true, soDigitos: true,
+      dependeDe: 'perecivel', dependeDeValor: 'Sim', reqSe: true, soDigitos: true,
       dica: 'Prazo desde o recebimento. O Recebimento usa isto para calcular a data de vencimento do lote, e é ela que ordena a fila de Validades.' },
-    { key: 'armazenagem', label: 'Armazenagem', type: 'select', dependeDe: 'perecivel',
+    { key: 'armazenagem', label: 'Armazenagem', type: 'select', dependeDe: 'perecivel', dependeDeValor: 'Sim',
       options: ['Ambiente', 'Refrigerado', 'Congelado'] as const,
       dica: 'Aparece como selo na fila de Validades — é o que decide o que se resolve primeiro.' },
   ],
