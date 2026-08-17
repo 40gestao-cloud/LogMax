@@ -23,6 +23,9 @@ type Dre = {
   receita_bruta: number; descontos: number; devolucoes: number; receita_liquida: number;
   cmv: number; lucro_bruto: number; margem_bruta_pct: number | null;
   despesas: number; despesas_grupos: { grupo: string; valor: number }[];
+  // Migr. 442. `consumo_material` já está DENTRO de `despesas` e dos grupos —
+  // aqui ele vem separado só para a tela poder dizer de onde veio aquele pedaço.
+  consumo_material?: number; consumos_sem_custo?: number;
   resultado: number; margem_liquida_pct: number | null;
   itens_vendidos: number; itens_sem_custo: number;
 };
@@ -79,6 +82,8 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
       setDre({
         ...d,
         despesas_grupos: (d?.despesas_grupos ?? []).map((g: any) => ({ grupo: g.grupo, valor: Number(g.valor ?? 0) })),
+        consumo_material:   Number(d?.consumo_material ?? 0),
+        consumos_sem_custo: Number(d?.consumos_sem_custo ?? 0),
       });
     }
     setCarregando(false);
@@ -102,7 +107,9 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
     { rotulo: '(−) CMV — custo da mercadoria vendida', valor: -dre.cmv,  nivel: 'item' as const },
     { rotulo: '= Lucro bruto',               valor: dre.lucro_bruto,     nivel: 'subtotal' as const,
       extra: dre.margem_bruta_pct !== null ? `margem ${dre.margem_bruta_pct}%` : undefined },
-    { rotulo: '(−) Despesas operacionais',   valor: -dre.despesas,       nivel: 'item' as const },
+    { rotulo: '(−) Despesas operacionais',   valor: -dre.despesas,       nivel: 'item' as const,
+      extra: Number(dre.consumo_material ?? 0) > 0
+        ? `inclui ${brl(Number(dre.consumo_material))} de material de consumo` : undefined },
     { rotulo: '= Resultado do período',      valor: dre.resultado,       nivel: 'total' as const,
       extra: dre.margem_liquida_pct !== null ? `margem ${dre.margem_liquida_pct}%` : undefined },
   ];
@@ -243,6 +250,22 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
               Compra de mercadoria não entra como despesa: ela vira estoque e só afeta o resultado
               pelo CMV, quando o produto é vendido.
             </p>
+            {/* Migr. 442. A outra ponta da mesma regra: material de consumo
+                também não é despesa na compra, é despesa quando sai do
+                almoxarifado — e é aqui que a turma vê isso acontecer. */}
+            {Number(dre.consumo_material ?? 0) > 0 && (
+              <p className="text-[10px] text-gray-600 mt-2 leading-snug">
+                Material de consumo entra pelo valor que <span className="text-gray-400">saiu do almoxarifado</span> no
+                período ({brl(Number(dre.consumo_material))}), pelo custo médio, no centro de custo de quem requisitou.
+              </p>
+            )}
+            {Number(dre.consumos_sem_custo ?? 0) > 0 && (
+              <p className="text-[11px] text-amber-400/90 mt-2 flex items-start gap-1.5">
+                <TriangleAlert size={12} className="shrink-0 mt-0.5" />
+                {dre.consumos_sem_custo} saída(s) de material sem custo apurado entraram por R$ 0,00 —
+                o produto nunca foi comprado pelo fluxo de Compras.
+              </p>
+            )}
           </div>
         </div>
       )}

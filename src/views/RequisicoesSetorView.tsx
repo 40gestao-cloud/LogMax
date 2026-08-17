@@ -90,7 +90,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
 
   const [tipo, setTipo] = useState<TipoReq>('reposicao');
-  const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '' });
+  const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
   // Reposição: catálogo com multi-seleção. `Map<produto_id, qtd>` porque a
   // ordem não importa e a pergunta que a tela faz o tempo todo é "este já está
   // no carrinho?".
@@ -234,7 +234,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     setCab({ urgencia: 'Normal', centro_custo: '', justificativa: '', data_necessidade: '' });
     setItens([linhaVazia()]);
     setJustAberta({});
-    setEstoqueForm({ produto_id: '', qtd: '1', destino: '' });
+    setEstoqueForm({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
     setRepo(new Map());
     setBuscaCat('');
     setSoAbaixoMin(false);
@@ -264,6 +264,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         p_qtd:         parseQtd(estoqueForm.qtd) || 1,
         p_destino:     estoqueForm.destino.trim() || null,
         p_filial:      filial,
+        // Migr. 442: o que sai do almoxarifado vira despesa no centro de custo
+        // de quem pediu. Vazio é aceito — cai em "Não classificado" no DRE.
+        p_centro_custo_id: estoqueForm.centro_custo_id || null,
       });
       if (error) { showToast(error.message, 'error', true); return; }
       if (saved) setReqEstoque((prev: any[]) => [saved, ...prev]);
@@ -436,7 +439,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     ? 'Reposição não pede justificativa escrita: o motivo é o saldo, e o sistema grava o saldo e o mínimo do produto no momento do pedido.'
                     : tipo === 'eventual'
                       ? 'Compra eventual pede justificativa: Compras não tem histórico deste item para decidir sozinho.'
-                      : 'Sai do almoxarifado, sem passar por Compras.'}
+                      : 'Sai do almoxarifado, sem passar por Compras. Quando o Estoque liberar, o material vira despesa do centro de custo escolhido, pelo custo médio.'}
                 </p>
               </div>
 
@@ -477,6 +480,23 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       value={estoqueForm.destino}
                       onChange={e => setEstoqueForm(f => ({ ...f, destino: e.target.value }))}
                     />
+                  </FormField>
+
+                  {/* Migr. 442. Este campo é o que faz a resma aparecer no DRE:
+                      o material sai do estoque valorizado pelo custo médio e
+                      vira despesa no centro de custo escolhido aqui. Sem ele o
+                      gasto existe, mas entra como "Não classificado". */}
+                  <FormField label="Centro de custo">
+                    <select
+                      className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={estoqueForm.centro_custo_id}
+                      onChange={e => setEstoqueForm(f => ({ ...f, centro_custo_id: e.target.value }))}
+                    >
+                      <option value="">Não informar</option>
+                      {centrosOrdenados.map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))}
+                    </select>
                   </FormField>
                 </div>
               ) : (
