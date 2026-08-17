@@ -541,9 +541,9 @@ export const AULA_FLUXOS: AulaFluxo[] = [
   // a turma é treinada na operação da filial, não na pauta da holding. O
   // fluxo "Verba pedida, gasta e prestada" (mandato → orçamento anual →
   // prestação de contas) viveu aqui até esta data e foi removido por isso —
-  // não por defeito. As telas e as RPCs continuam de pé para o Conselho usar
-  // fora da aula, com a segregação toda no banco (`deliberar_orcamento` e
-  // `dar_parecer_prestacao` recusam quem propôs).
+  // não por defeito. Em 2026-08-17 as telas e as RPCs saíram também (migr.
+  // 441): a deliberação de valores deixou de existir no produto, e só Mandatos
+  // sobrou do bloco de governança.
   //
   // Se um dia entrar de novo, lembrar do que tornava esse fluxo diferente:
   // `rh-mandatos` é a única view do app com `requireMatriz`, e a whitelist do

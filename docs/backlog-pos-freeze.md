@@ -65,7 +65,12 @@ Todo o resto pendura nisso.
 As descrições abaixo ficam como registro do que foi pedido e por quê — o que
 vale como especificação é o cabeçalho de cada migration.
 
-### #G1 — Orçamento anual (maior lacuna)
+### #G1 — Orçamento anual — ~~feito~~ **removido em 2026-08-17**
+Foi implementado (migr. 378) e retirado do produto junto com #G3 e #G4: não há
+mais deliberação de conselho sobre valores. Não reabrir sem pedido explícito —
+a decisão foi de escopo, não de bug. As tabelas continuam no banco sem tela e
+sem porta de escrita (migr. 441), mesma situação de #G2 e #G5.
+
 Real: cada unidade propõe orçamento do período por centro de custo; o Conselho
 aprova, corta ou devolve; durante o ciclo, gasto é confrontado com o aprovado
 e estouro exige aprovação suplementar.
@@ -91,7 +96,9 @@ As tabelas continuam no banco (`politicas_remuneracao`, `apuracoes_bonus`,
 `apuracao_bonus_itens`), sem tela — mesma situação de `riscos` e
 `auditoria_revisoes` depois do #G5/#G8.
 
-### #G3 — Prestação de contas do CEO ao Conselho
+### #G3 — Prestação de contas do CEO ao Conselho — ~~feito~~ **removido em 2026-08-17**
+Foi implementado (migr. 379) e retirado com o resto do trio (migr. 441).
+
 Real: reunião periódica em que o CEO apresenta resultados e o Conselho aprova,
 aprova com ressalva ou reprova — ressalva vira plano de ação com prazo.
 - Tabelas: `prestacoes_contas` (ciclo, autor, indicadores, anexo) +
@@ -102,7 +109,9 @@ aprova com ressalva ou reprova — ressalva vira plano de ação com prazo.
 
 Escopo: médio. 1 migration + 1 tela com duas faces (submeter / deliberar).
 
-### #G4 — Destinação do resultado
+### #G4 — Destinação do resultado — ~~feito~~ **removido em 2026-08-17**
+Foi implementado (migr. 381) e retirado com o resto do trio (migr. 441).
+
 Real: apurado o lucro do ciclo, decide-se entre reinvestir, formar reserva ou
 distribuir.
 - Tabela: `destinacoes_resultado` (ciclo, lucro apurado, rateio das 3 vias)

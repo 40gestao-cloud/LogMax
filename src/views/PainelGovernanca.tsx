@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, Gavel, Landmark } from 'lucide-react';
+import { ArrowRight, Gavel } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isConselho } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
@@ -10,30 +10,25 @@ import type { UserProfile } from '../hooks/useUserProfile';
 // O problema que ele resolve: depois do bloco G1–G8 o sistema passou a ter
 // doze atos deliberativos espalhados por seis telas, e ninguém sabia qual
 // deles era seu. Dizer isso por texto nas telas já tinha sido tentado e não
-// resolveu — o que resolve é o número: se há 1 orçamento esperando parecer,
-// o conselheiro vê "1" e clica.
-//
-// Duas colunas porque são dois papéis (migrs. 386/387):
-//   • EXECUTAR  — CEO e gerente. Propor verba e prestar contas dela. É o lado
-//     que age e depois explica.
-//   • DELIBERAR — Conselho. Conceder verba, julgar as contas, decidir mandato
-//     vencido, pagar bônus.
-//
-// Quem acumula os dois papéis (o admin/professor) vê as duas colunas, e é
-// exatamente o que ele precisa para conduzir a aula.
+// resolveu — o que resolve é o número: se há 1 mandato vencido, o conselheiro
+// vê "1" e clica.
 //
 // Some inteiro quando não há nada pendente: painel de zeros vira ruído e
 // ensina a ignorar a tela.
 
 type Pendencia = { label: string; count: number; view: string; hint: string };
 
-// Auditoria (Comitê + trilha) e Matriz de Riscos saíram em 2026-08-08, e a
-// Remuneração Variável em 2026-08-09: as pendências que apontavam para essas
-// telas saíram junto.
+// O painel encolheu com o produto. Saíram: Auditoria (Comitê + trilha) e
+// Matriz de Riscos em 2026-08-08, Remuneração Variável em 2026-08-09 e, em
+// 2026-08-17, os três atos de deliberação de VALOR — Orçamento Anual,
+// Prestação de Contas e Destinação do Resultado (migr. 441). Com eles saiu a
+// coluna "Executar" inteira: propor verba e prestar contas dela eram as duas
+// pendências que o CEO/gerente tinha aqui.
 //
-// `matrizMode` voltou por causa de Mandatos: a tela virou Matriz-only em
-// 2026-08-09, então a pendência que aponta pra ela não pode aparecer com
-// filial ativa — daria um clique que o próprio guarda de modo desfaz.
+// Sobra Mandatos, que é ato de Conselho sobre o posto, não sobre dinheiro.
+// `matrizMode` existe por causa dele: a tela virou Matriz-only em 2026-08-09,
+// então a pendência que aponta pra ela não pode aparecer com filial ativa —
+// daria um clique que o próprio guarda de modo desfaz.
 export function PainelGovernanca({
   profile,
   onNavigate,
@@ -43,81 +38,38 @@ export function PainelGovernanca({
   onNavigate?: (view: string) => void;
   matrizMode?: boolean;
 }) {
-  const conselho  = isConselho(profile);
-  // Executor = quem responde por uma unidade e presta contas dela.
-  const executor  = profile?.role === 'ceo' || profile?.role === 'gerente' || profile?.role === 'admin';
+  const conselho = isConselho(profile);
 
-  const [exec, setExec]   = useState<Pendencia[]>([]);
   const [delib, setDelib] = useState<Pendencia[]>([]);
 
   const carregar = useCallback(async () => {
     if (!supabase || !profile?.id) return;
+    if (!conselho || !matrizMode) { setDelib([]); return; }
+
     const hoje = todayBR();
     // `head: true` + `count: 'exact'`: só o número volta pela rede. A RLS já
     // recorta por filial, então a conta é a de quem está olhando.
-    const contar = (q: any) => q.then((r: any) => r.count ?? 0);
+    // Mandato vencido não cai sozinho: fica aqui até alguém decidir. O próprio
+    // titular não se reconduz — some da conta, como em todo ato de Conselho.
+    const { count } = await supabase.from('mandatos')
+      .select('id', { count: 'exact', head: true })
+      .eq('ativo', true).eq('status', 'vigente').lt('data_fim', hoje)
+      .neq('user_profile_id', profile.id);
 
-    if (executor) {
-      const [orc, prest] = await Promise.all([
-        contar(supabase.from('orcamentos_periodo').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).in('status', ['rascunho', 'devolvido'])),
-        contar(supabase.from('prestacoes_contas').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).eq('status', 'rascunho')),
-      ]);
-      setExec([
-        { label: 'Orçamento a propor',      count: orc,   view: 'financeiro-orçamentoanual',
-          hint: 'Rascunho ou devolvido pelo Conselho — monte as rubricas e submeta.' },
-        { label: 'Contas a prestar',        count: prest, view: 'financeiro-prestaçãodecontas',
-          hint: 'Rascunho aberto. Enquanto não submeter, o Conselho não tem o que julgar.' },
-      ].filter(p => p.count > 0));
-    } else {
-      setExec([]);
-    }
-
-    if (conselho) {
-      const [orc, prest, mand] = await Promise.all([
-        // Quem propôs não delibera (migr. 386) — o próprio some da conta.
-        contar(supabase.from('orcamentos_periodo').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).eq('status', 'submetido')
-          .or(`proposto_por.is.null,proposto_por.neq.${profile.id}`)),
-        contar(supabase.from('prestacoes_contas').select('id', { count: 'exact', head: true })
-          .eq('ativo', true).eq('status', 'submetida')
-          .or(`autor_id.is.null,autor_id.neq.${profile.id}`)),
-        // Mandato vencido não cai sozinho: fica aqui até alguém decidir.
-        // Só na Matriz — é de lá que se nomeia (ver MATRIZ_ONLY_VIEWS).
-        matrizMode
-          ? contar(supabase.from('mandatos').select('id', { count: 'exact', head: true })
-              .eq('ativo', true).eq('status', 'vigente').lt('data_fim', hoje)
-              .neq('user_profile_id', profile.id))
-          : Promise.resolve(0),
-      ]);
-      setDelib([
-        { label: 'Orçamento a deliberar',   count: orc,   view: 'financeiro-orçamentoanual',
-          hint: 'A unidade pediu a verba. Corte linha a linha e decida.' },
-        { label: 'Contas a julgar',         count: prest, view: 'financeiro-prestaçãodecontas',
-          hint: 'Aprovar, ressalvar ou reprovar. Ressalva vira tarefa com prazo.' },
-        { label: 'Mandato vencido',         count: mand,  view: 'rh-mandatos',
-          hint: 'Passou do prazo. Reconduza, substitua ou encerre o posto.' },
-      ].filter(p => p.count > 0));
-    } else {
-      setDelib([]);
-    }
-  }, [profile?.id, conselho, executor, matrizMode]);
+    setDelib([
+      { label: 'Mandato vencido', count: count ?? 0, view: 'rh-mandatos',
+        hint: 'Passou do prazo. Reconduza, substitua ou encerre o posto.' },
+    ].filter(p => p.count > 0));
+  }, [profile?.id, conselho, matrizMode]);
 
   useEffect(() => { void carregar(); }, [carregar]);
 
-  if (exec.length === 0 && delib.length === 0) return null;
+  if (delib.length === 0) return null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2 shrink-0">
-      {exec.length > 0 && (
-        <Bloco titulo="Executar" subtitulo="Você propõe, executa e explica."
-          icone={<Landmark size={16} />} itens={exec} onNavigate={onNavigate} />
-      )}
-      {delib.length > 0 && (
-        <Bloco titulo="Deliberar" subtitulo="O Conselho concede, julga e fiscaliza."
-          icone={<Gavel size={16} />} itens={delib} onNavigate={onNavigate} />
-      )}
+      <Bloco titulo="Deliberar" subtitulo="O Conselho decide quem responde pelo posto."
+        icone={<Gavel size={16} />} itens={delib} onNavigate={onNavigate} />
     </div>
   );
 }

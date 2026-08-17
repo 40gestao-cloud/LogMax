@@ -128,9 +128,6 @@ const MetricasRedesSociaisView             = lazy(() => import('./views/Metricas
 const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
-const OrcamentoView                        = lazy(() => import('./views/OrcamentoView').then(m => ({ default: m.OrcamentoView })));
-const PrestacaoContasView                  = lazy(() => import('./views/PrestacaoContasView').then(m => ({ default: m.PrestacaoContasView })));
-const DestinacaoResultadoView              = lazy(() => import('./views/DestinacaoResultadoView').then(m => ({ default: m.DestinacaoResultadoView })));
 const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
@@ -223,15 +220,12 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // select de centro de custo da Requisição só mostrava "Não informar".
       // Escrita é admin/CEO porque a policy de centros_custo é auth_is_admin().
       { label: 'Centros de Custo', requireRole: ['admin', 'ceo'] },
-      // 'Orçamento Anual' (migr. 378) é o teto deliberado pelo Conselho, não
-      // confundir com 'Aprovações de Orçamento' logo abaixo, que é cotação de
-      // compra. Sem requireRole: o gerente da filial precisa propor, e quem
-      // delibera é filtrado dentro da view (e pela RLS, que é quem barra).
-      'Orçamento Anual',
-      // Par do Orçamento (migr. 379): lá o Conselho dá a verba, aqui cobra o
-      // que foi feito com ela. Fica em Financeiro e não em Empresa porque
-      // Empresa é parametrização — foi por isso que Requisições saiu de lá.
-      'Prestação de Contas',
+      // Orçamento Anual (378) e Prestação de Contas (379) saíram em 2026-08-17
+      // com a deliberação de valores do Conselho (migr. 441). Aprovações de
+      // Orçamento, logo abaixo, é outra coisa: cotação de compra, e continua.
+      // (Sem aspas nos nomes de propósito: o parser do tests/rotas.test.ts lê
+      // este bloco como texto e leria label entre aspas como submenu real.)
+      //
       // DRE (migr. 425). Fica antes das aprovações porque é leitura de
       // resultado, não fila de trabalho — e é a tela que responde "deu lucro?",
       // que o resto do módulo não respondia.
@@ -243,10 +237,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
       'Notas Emitidas',
       'Capital',
-      // Fecha o trio com Orçamento e Prestação de Contas (migr. 381). Fica
-      // colado em Capital porque é lá que mora o piso de reserva que a
-      // deliberação passa a cobrar.
-      { label: 'Destinação do Resultado', requireRole: ['admin', 'ceo', 'conselheiro'] },
+      // Destinação do Resultado (381) saiu junto com o resto do trio: repartir
+      // o lucro entre reserva, reinvestimento e distribuição era deliberação do
+      // Conselho (migr. 441).
       'Gerenciamento', 'Relatórios']
   },
   {
@@ -687,6 +680,12 @@ function LogMaxAppInner() {
         // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
         // uma linha em nenhuma das 4 turmas.
         .replace(/^politicas$/,                'inicio')
+        // Deliberação de valores sai (2026-08-17, migr. 441): o Conselho não
+        // delibera mais verba, contas nem repartição de lucro. Mandatos e o
+        // Painel de Governança ficam.
+        .replace(/^financeiro-orçamentoanual$/,        'inicio')
+        .replace(/^financeiro-prestaçãodecontas$/,     'inicio')
+        .replace(/^financeiro-destinaçãodoresultado$/, 'inicio')
         // Votações removida; Feedback + Requerimentos unificados numa só tela com abas.
         .replace(/^votacoes$/,                 'inicio')
         .replace(/^matriz-votacoes$/,          'inicio')
@@ -1139,9 +1138,6 @@ function LogMaxAppInner() {
       // Só no hub da Matriz (migr. 323): distribui o custo da holding entre as
       // 3 unidades e gera o par conta a pagar (filial) / conta a receber (Matriz).
       case 'financeiro-rateioadministrativo':  return <RateioAdministrativoView showToast={st} profile={profile} />;
-      case 'financeiro-orçamentoanual':        return <OrcamentoView showToast={st} profile={profile} />;
-      case 'financeiro-prestaçãodecontas':     return <PrestacaoContasView showToast={st} profile={profile} />;
-      case 'financeiro-destinaçãodoresultado': return <DestinacaoResultadoView showToast={st} profile={profile} />;
       case 'rh-mandatos':                      return <MandatosView showToast={st} profile={profile} />;
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
