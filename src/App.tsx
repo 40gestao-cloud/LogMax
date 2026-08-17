@@ -120,6 +120,7 @@ const RegistroPontoExpressView             = lazy(() => import('./views/Registro
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
+const LixeiraView                          = lazy(() => import('./views/LixeiraView').then(m => ({ default: m.LixeiraView })));
 const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
 const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
 const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
@@ -182,7 +183,11 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // em Vendas; Centros de custo agora pertence ao Financeiro. Categorias
     // veio de Empresa — é pré-requisito de Produto, faz mais sentido aqui.
     id: 'cadastros', label: 'Cadastros', icon: Database,
-    submenus: ['Categorias', 'Produtos', 'Fornecedores', 'Serviços']
+    // Lixeira é do administrador do sistema, não do setor: restaurar e apagar
+    // de vez cadastro alheio não é jogada de competição. `requireRole` literal
+    // porque auth_is_admin() inclui CEO e conselheiro, que são alunos.
+    submenus: ['Categorias', 'Produtos', 'Fornecedores', 'Serviços',
+               { label: 'Lixeira', requireRole: ['admin'] }]
   },
   {
     // Compras compra: cota, emite pedido e lança a nota. NÃO aprova (a
@@ -1095,6 +1100,7 @@ function LogMaxAppInner() {
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
+      case 'cadastros-lixeira':               return <LixeiraView showToast={st} profile={profile} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
