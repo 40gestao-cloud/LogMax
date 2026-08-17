@@ -209,10 +209,29 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     }
   );
 
+  // Nomes do catálogo INTEIRO da filial, não só da página carregada. `data` é
+  // paginado no servidor (50 por vez) e ainda por cima filtrado pela busca:
+  // comparar contra ele fazia um item já cadastrado na página 2 continuar
+  // aparecendo como "a cadastrar", e o aluno cadastrava de novo — a duplicata
+  // que a lista existia para evitar.
+  const [nomesCatalogo, setNomesCatalogo] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelado = false;
+    supabase.from('produtos').select('nome').eq('filial', filial).eq('ativo', true)
+      .then(({ data: rows }) => {
+        if (cancelado) return;
+        setNomesCatalogo(new Set(
+          (rows ?? []).map((r: any) => String(r.nome ?? '').trim().toLowerCase()).filter(Boolean),
+        ));
+      });
+    return () => { cancelado = true; };
+    // `data.length` na dependência: recarrega a régua quando um produto novo é
+    // cadastrado nesta mesma tela, sem esperar um F5.
+  }, [filial, data.length]);
+
   const itensComprados = useMemo(() => {
-    const jaNoCatalogo = new Set(
-      data.map((p: any) => String(p.nome ?? '').trim().toLowerCase()).filter(Boolean),
-    );
+    const jaNoCatalogo = nomesCatalogo;
     const vistos = new Set<string>();
     // Pedidos cuja carga já foi lançada no Recebimento. Registrar o recebimento
     // não exige o produto (a tabela só guarda pedido e quantidade) — quem exige
@@ -248,7 +267,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         return true;
       })
       .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
-  }, [pedidosDaFilial, recebimentosDaFilial, fornecedoresList, data]);
+  }, [pedidosDaFilial, recebimentosDaFilial, fornecedoresList, nomesCatalogo]);
   // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
   // listagem é paginada no servidor, então um item escolhido na página 1 some
   // de `data` ao navegar para a página 2 — sem o snapshot não dá para gerar a

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
+import { ATRIBUTOS_PRODUTO, rotuloParaCliente } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, corDoMarkup, fmtPct } from '../lib/precificacao';
 import {
   LoadingSpinner,
@@ -24,25 +25,22 @@ import type { UserProfile } from '../hooks/useUserProfile';
 // Catálogo é vitrine read-only para todos os setores. CRUD continua em
 // Empresa → Produtos (ProdutosView). Bloco financeiro (custo + markup/margem) é
 // gated por admin/CEO/financeiro/marketing — demais setores só veem preço de venda.
-// Rótulos legíveis dos atributos JSONB (produtos.atributos). Mesmas chaves
-// declaradas em ProdutosView.ATRIBUTOS_PRODUTO — duplicadas aqui para não
-// criar dependência circular entre views. Se um atributo novo aparecer sem
-// mapa, cai no fallback (chave capitalizada).
-const ATRIBUTO_LABEL: Record<string, string> = {
-  tamanho: 'Tamanho',
-  cor: 'Cor',
-  genero: 'Gênero',
-  colecao: 'Coleção',
-  material: 'Material',
-  modelo: 'Modelo',
-  memoria: 'Memória',
-  tela: 'Tela',
-  bateria: 'Bateria',
-  camera: 'Câmera',
-  garantia_dias: 'Garantia (dias)',
-  requer_imei: 'Requer IMEI/Serial',
-  informacoes_adicionais: 'Informações adicionais',
-};
+// Rótulo legível de cada chave de `produtos.atributos`. Derivado da ficha, não
+// copiado dela: era um mapa escrito à mão aqui, com a justificativa de "evitar
+// dependência circular entre views" — justificativa que venceu quando a ficha
+// saiu de ProdutosView para `src/lib/atributosProduto.ts`, que é lib e não
+// importa view nenhuma.
+//
+// E a cópia já tinha ficado para trás: faltavam `perecivel`, `validade_dias` e
+// `armazenagem` (a ficha da mercearia inteira), que apareciam em caixa baixa
+// pelo fallback, e faltaria `estado` no dia em que ele entrasse na TechMax.
+// É a mesma duplicação que o modelo de planilha tinha e deixou de ter.
+const ATRIBUTO_LABEL: Record<string, string> = Object.fromEntries(
+  Object.values(ATRIBUTOS_PRODUTO)
+    .flat()
+    .map(d => [d.key, rotuloParaCliente(d.label)]),
+);
+
 const formatAtributoValor = (v: any): string => {
   if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
   return String(v);
