@@ -4,14 +4,14 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3 } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
-import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
+import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc, gerarEanInterno } from '../lib/barcode';
 import { FILIAL_DEFAULT } from '../lib/filiais';
 import {
   validarImagemProduto,
@@ -32,8 +32,9 @@ import {
   temConteudoDeEmbalagem,
   normalizarUnidade,
   formatarConteudo,
+  exemploProduto,
 } from '../lib/unidades';
-import { ATRIBUTOS_PRODUTO, type AtributoDef } from '../lib/atributosProduto';
+import { ATRIBUTOS_PRODUTO, rotuloVariante, type AtributoDef } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
@@ -117,6 +118,11 @@ const fichaVazia = (item: any, filial: string): boolean => {
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
+// Sentinel do select "Item comprado". Produto nasce de uma compra; o cadastro
+// sem pedido existe (saldo de abertura do primeiro dia, doação, item que a
+// turma já tinha) mas é exceção, e exceção se escolhe com o nome dela na tela.
+const SEM_COMPRA = '__sem_compra__';
+
 // A conta vive em src/lib/precificacao.ts — estava duplicada aqui e no
 // Catálogo, e as duas calculavam MARKUP sob o rótulo "Margem".
 
@@ -155,6 +161,21 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     [fornecedoresList]
   );
 
+  // Itens que a unidade comprou e que ainda não existem no catálogo.
+  //
+  // O pedido nasce da requisição com `item_descricao` em texto livre e nunca
+  // aponta para `produtos` — por isso o Recebimento tem o "➕ Produto novo".
+  // Aqui é a outra ponta do mesmo buraco: quem cadastra pelo módulo de
+  // Cadastros redigitava o nome que já foi escrito três vezes (requisição,
+  // cotação, pedido), com grafia nova em cada uma, e o catálogo terminava com
+  // "Cabo HDMI 2m" e "cabo hdmi 2 metros" como produtos diferentes.
+  //
+  // É SUGESTÃO, não lista fechada: o catálogo inicial da turma nasce antes de
+  // qualquer compra (saldo de abertura), e material de consumo e patrimônio
+  // entram sem pedido. Fechar aqui travaria o primeiro cadastro do curso.
+  const { data: pedidosDaFilial } = useFetchData<any>('/api/pedidosview', { filial });
+
+
 
   const { data, setData, isLoading, totalCount, reload, error } = useFetchData<any>(
     // Leitura pela view mascarada (migr. 262). Escrita segue em
@@ -178,6 +199,36 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       ascending: false,
     }
   );
+
+  const itensComprados = useMemo(() => {
+    const jaNoCatalogo = new Set(
+      data.map((p: any) => String(p.nome ?? '').trim().toLowerCase()).filter(Boolean),
+    );
+    const vistos = new Set<string>();
+    return pedidosDaFilial
+      // Pedido cancelado não vira cadastro: sugerir o item dele seria mandar a
+      // turma cadastrar o que a unidade decidiu não comprar.
+      .filter((p: any) => p.status !== 'Cancelado')
+      .map((p: any) => {
+        const desc = String(p.item_descricao ?? '').trim();
+        const qtd  = Number(p.item_qtd ?? 0);
+        const val  = Number(p.valor_total ?? 0);
+        return {
+          descricao: desc,
+          fornecedor: fornecedoresList.find((f: any) => f.id === p.fornecedor_id)?.nome ?? '',
+          // Custo unitário do próprio pedido — a mesma conta que a migr. 417 faz
+          // no recebimento. Melhor que o número inventado que o campo exige.
+          custo: qtd > 0 && val > 0 ? val / qtd : null,
+        };
+      })
+      .filter(i => {
+        const k = i.descricao.toLowerCase();
+        if (!k || jaNoCatalogo.has(k) || vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+      })
+      .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+  }, [pedidosDaFilial, fornecedoresList, data]);
   // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
   // listagem é paginada no servidor, então um item escolhido na página 1 some
   // de `data` ao navegar para a página 2 — sem o snapshot não dá para gerar a
@@ -192,6 +243,89 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       else next.set(item.id, item);
       return next;
     });
+  };
+
+  // Exemplo de produto do nicho para os placeholders do formulário. Ferragem e
+  // mercearia na tela de uma boutique confundem quem cadastra — o exemplo
+  // existe para tirar dúvida, não para criar uma.
+  const exProd = exemploProduto(filial);
+
+  // Grade de variantes (migr. 445). Existe onde a ficha do nicho tem tamanho E
+  // cor — hoje só a MaxLook, mas a régua é a ficha, não o nome da filial: se um
+  // dia a TechMax ganhar cor, a grade aparece lá sem ninguém mexer aqui.
+  const temGrade = useMemo(() => {
+    const keys = (ATRIBUTOS_PRODUTO[filial] ?? []).map(d => d.key);
+    return keys.includes('tamanho') && keys.includes('cor');
+  }, [filial]);
+  // Sugestão de código interno. Lê o maior `codigo_seq` da filial (coluna
+  // gerada da migr. 265) e devolve o próximo com prefixo da unidade. Consulta
+  // direta em vez de olhar `data`: a listagem é paginada e filtrada, então o
+  // maior da tela não é o maior da filial.
+  const [sugerindoCodigo, setSugerindoCodigo] = useState(false);
+  const sugerirCodigo = async () => {
+    if (!supabase) return;
+    setSugerindoCodigo(true);
+    try {
+      const { data: topo } = await supabase
+        .from('produtos').select('codigo_seq')
+        .eq('filial', filial).eq('ativo', true)
+        .order('codigo_seq', { ascending: false }).limit(1);
+      const ultimo = Number(topo?.[0]?.codigo_seq ?? 0);
+      // Sem prefixo: o código é só o número, sequencial dentro da filial.
+      setForm(f => ({ ...f, codigo: String(ultimo + 1).padStart(3, '0') }));
+      clearError('codigo');
+    } finally {
+      setSugerindoCodigo(false);
+    }
+  };
+
+  // Item de compra escolhido como origem do cadastro. Estado próprio porque o
+  // select precisa voltar para o vazio quando o formulário fecha — senão o
+  // próximo cadastro abre com a escolha do anterior.
+  const [itemCompradoSel, setItemCompradoSel] = useState('');
+
+  const [gradeItem, setGradeItem]     = useState<any | null>(null);
+  const [gradeTamanhos, setGradeTam]  = useState('');
+  const [gradeCores, setGradeCores]   = useState('');
+  const [gradeSalvando, setGradeSalv] = useState(false);
+
+  const abrirGrade = (item: any) => {
+    setGradeItem(item);
+    // A variante que o produto já é entra pré-marcada: a grade se abre A PARTIR
+    // dela, e deixá-la de fora faria a primeira geração parecer que perdeu uma
+    // combinação.
+    setGradeTam(String(item?.atributos?.tamanho ?? '').trim());
+    setGradeCores(String(item?.atributos?.cor ?? '').trim());
+  };
+
+  const gerarGrade = async () => {
+    if (!supabase || !gradeItem) return;
+    const tamanhos = gradeTamanhos.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    const cores    = gradeCores.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    if (tamanhos.length === 0 || cores.length === 0) {
+      showToast('Informe ao menos um tamanho e uma cor.', 'error', true);
+      return;
+    }
+    setGradeSalv(true);
+    try {
+      const { data: res, error } = await supabase.rpc('gerar_grade_variantes', {
+        p_produto_id: gradeItem.id,
+        p_tamanhos:   tamanhos,
+        p_cores:      cores,
+      });
+      if (error) { showToast(error.message, 'error', true); return; }
+      const criadas = Number((res as any)?.criadas ?? 0);
+      setGradeItem(null);
+      await reload();
+      showToast(
+        criadas === 0
+          ? 'A grade já estava completa — nenhuma variante nova.'
+          : `${criadas} variante(s) criada(s). Cada uma nasce com saldo zero e sem EAN: a entrada é por Compras → Recebimentos.`,
+        'success', true,
+      );
+    } finally {
+      setGradeSalv(false);
+    }
   };
 
   const [isSaving, setIsSaving]   = useState(false);
@@ -358,10 +492,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       });
 
       const etiquetaInput = todos.map((p: any) => ({
-        nome:   p.nome,
-        ean:    p.ean,
-        codigo: p.codigo,
-        preco:  p.preco != null ? parseNum(p.preco) : null,
+        nome:     p.nome,
+        ean:      p.ean,
+        codigo:   p.codigo,
+        preco:    p.preco != null ? parseNum(p.preco) : null,
+        // Sem tamanho/cor, as 6 etiquetas de uma grade saem iguais (migr. 445).
+        variante: rotuloVariante(p),
       }));
       drawEtiquetasGridOnDoc(doc, etiquetaInput, {
         titulo: 'Etiquetas EAN-13 — Produtos',
@@ -397,10 +533,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       const desenhadas = drawEtiquetasGridOnDoc(
         doc,
         alvo.map((p: any) => ({
-          nome:   p.nome,
-          ean:    p.ean,
-          codigo: p.codigo,
-          preco:  p.preco != null ? parseNum(p.preco) : null,
+          nome:     p.nome,
+          ean:      p.ean,
+          codigo:   p.codigo,
+          preco:    p.preco != null ? parseNum(p.preco) : null,
+          variante: rotuloVariante(p),
         })),
         {
           titulo: selecionados.size > 0
@@ -470,12 +607,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setImagensAnteriores(imagensItem);
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
+    setItemCompradoSel('');
     setShowForm(false);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditItem(null);
+    setItemCompradoSel('');
     setForm({ codigo: '', nome: '', preco: '' });
     setExtras({ ...EMPTY_EXTRAS, filial });
     setImagens(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
@@ -563,6 +702,34 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
       ee.estoque_minimo = 'Obrigatório';
     }
+    // Cadastro novo nasce de uma compra. Só se cobra quando há o que escolher:
+    // com a lista vazia (nenhum pedido ainda) o campo nem aparece, e travar aí
+    // seria impedir o primeiro cadastro do curso. Editar produto existente
+    // também não passa por aqui — a origem dele já é história.
+    if (!editItem && itensComprados.length > 0 && !itemCompradoSel) {
+      ee.origem_compra = 'Escolha o item comprado — ou marque "Cadastro sem compra".';
+    }
+
+    // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":
+    // a etiqueta é descartada em silêncio na hora de imprimir e o leitor do PDV
+    // nunca acha o produto — o erro aparece dias depois, longe de onde foi
+    // cometido.
+    const eanDigitado = extras.ean.replace(/\D/g, '');
+    // Mercadoria sem código de barras é digitação à mão na fila do caixa —
+    // exatamente a etapa que o PDV existe para eliminar. Patrimônio e material
+    // de consumo não passam pelo caixa e seguem opcionais. Mesma régua da
+    // migr. 443, que é quem barra de verdade.
+    if (vendavel && eanDigitado.length === 0) {
+      ee.ean = 'Obrigatório em mercadoria — use “Gerar” se não houver o do fabricante.';
+    }
+    if (eanDigitado.length > 0) {
+      const n = normalizeEan13(extras.ean);
+      if (!n.valid) {
+        ee.ean = eanDigitado.length === 13
+          ? 'Dígito verificador não confere — confira o número.'
+          : `EAN-13 tem 12 ou 13 dígitos (você digitou ${eanDigitado.length}).`;
+      }
+    }
     // Ficha do nicho só se cobra de mercadoria. Era bloqueio duro: cadastrar um
     // manequim como patrimônio na MaxLook exigia Tamanho, Cor e Gênero, porque
     // este loop nunca olhou o tipo.
@@ -610,7 +777,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         // mercearia, e o integer anterior o arredondava.
         estoque_minimo:         parseQtd(extras.estoque_minimo),
         unidade:                extras.unidade || 'UN',
-        ean:                    extras.ean,
+        // Normalizado: quem digita os 12 dígitos do fornecedor tem o dígito
+        // verificador calculado e gravado. Guardar o que foi digitado deixava o
+        // banco com EAN de 12 dígitos que a etiqueta e o scanner não aceitam.
+        // Fora de mercadoria o campo nem aparece: um EAN que sobrou de quando o
+        // item era mercadoria iria junto, e código de barras de patrimônio
+        // acabaria lido no caixa.
+        ean:                    vendavel && eanDigitado ? normalizeEan13(extras.ean).value : '',
         fornecedor:             extras.fornecedor,
         marca:                  extras.marca || null,
         // Conteúdo da embalagem viaja em par: valor + medida, ou nada. Granel
@@ -783,13 +956,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     }
   }, [isFormOpen, eanNorm.value, eanNorm.valid]);
 
-  const downloadLabelFor = async (item: { ean?: string; nome?: string; codigo?: string; preco?: any }) => {
+  const downloadLabelFor = async (item: { ean?: string; nome?: string; codigo?: string; preco?: any; atributos?: any }) => {
     try {
       await downloadEan13LabelPdf({
         ean: item.ean ?? '',
         nome: item.nome,
         codigo: item.codigo,
         preco: item.preco != null ? parseNum(item.preco) : null,
+        variante: rotuloVariante(item),
         filename: `etiqueta-${item.codigo || normalizeEan13(item.ean).value}`,
       });
       showToast('Etiqueta gerada!', 'success', true);
@@ -846,22 +1020,133 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Produto' : 'Novo Produto'}</h3>
 
+              {/* Tipo = DESTINO do item (migr. 440). É a primeira pergunta do
+                  cadastro, não a última: ela decide o que o resto do formulário
+                  ainda faz sentido perguntar. Antes eram dois valores e material
+                  de consumo não cabia em nenhum — resma de papel virava
+                  mercadoria e ia para o caixa. */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <FormField label="Tipo *">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.tipo}
+                      onChange={e => setExtras(x => ({ ...x, tipo: normalizarTipo(e.target.value) }))}>
+                      {TIPOS_PRODUTO.map(t => (
+                        <option key={t} value={t}>{TIPO_LABEL[t]}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      {/* Patrimônio é criado SÓ aqui — Financeiro > Patrimônio é
+                          só leitura —, mas a listagem filtra `tipo neq
+                          patrimonio` no servidor. Dizer antes do clique, não
+                          depois do sumiço. */}
+                      {extras.tipo === 'patrimonio' && (
+                        <span className="text-amber-400/90 font-bold">Não aparece nesta lista. </span>
+                      )}
+                      {TIPO_AJUDA[extras.tipo]}
+                    </p>
+                  </FormField>
+                </div>
+                {extras.tipo === 'patrimonio' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 rounded-2xl neu-pressed border border-accent/20">
+                    <FormField label="Nº de Patrimônio (tag)">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
+                        value={extras.patrimonio_numero}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_numero: e.target.value }))}
+                        placeholder="Ex: TAG-2026-001" />
+                    </FormField>
+                    <FormField label="Responsável">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.patrimonio_responsavel}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_responsavel: e.target.value }))}
+                        placeholder="Ex: Ana Clara Campos" />
+                    </FormField>
+                    <FormField label="Localização">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.patrimonio_localizacao}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_localizacao: e.target.value }))}
+                        placeholder="Ex: Sala TI - Rio Branco" />
+                    </FormField>
+                  </div>
+                )}
+              </div>
+
               {/* Identificação */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Identificação</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Código *" error={errors.codigo}>
-                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
-                      value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
-                      placeholder="Ex: 001" />
+                    <div className="flex gap-2">
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 font-mono ${errors.codigo ? 'border border-red-500/40' : ''}`}
+                        value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
+                        placeholder="Ex: 001" />
+                      {/* Código à mão foi como "ML-004" e "ML-31" passaram a
+                          conviver na mesma coluna — o problema que a migr. 265
+                          teve de contornar com `codigo_seq`. Sugerir o próximo
+                          é mais barato que ordenar o que já saiu torto. */}
+                      <button type="button" onClick={sugerirCodigo} disabled={sugerindoCodigo}
+                        title={`Sugerir o próximo código da ${filial}`}
+                        className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0 disabled:opacity-50">
+                        {sugerindoCodigo ? '…' : 'Gerar'}
+                      </button>
+                    </div>
                     <p className="text-[10px] text-gray-500 mt-1">
                       Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.
                     </p>
                   </FormField>
+                  {/* Produto nasce de uma compra: requisição → cotação → pedido →
+                      recebimento. O item chega aqui com o nome que a requisição
+                      escreveu, o fornecedor que a cotação escolheu e o custo que
+                      o pedido fechou — redigitar os três é o que fazia o mesmo
+                      item nascer com grafia nova, sem dono e com custo chutado.
+                      Primeiro campo do formulário porque é ele que preenche o
+                      resto.
+
+                      O sentinel de exceção fica visível de propósito: cadastrar
+                      sem compra tem de ser um ato consciente, não o caminho de
+                      menor resistência. (Era um <datalist> no campo de nome, que
+                      não reabria depois de escolher — datalist filtra as opções
+                      pelo texto digitado.) */}
+                  {itensComprados.length > 0 && (
+                    <FormField label="Item comprado *" error={extrasErrors.origem_compra}>
+                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.origem_compra ? 'border border-red-500/40' : ''}`}
+                        value={itemCompradoSel}
+                        onChange={e => {
+                          const desc = e.target.value;
+                          setItemCompradoSel(desc);
+                          setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
+                          if (!desc || desc === SEM_COMPRA) return;
+                          const comprado = itensComprados.find(i => i.descricao === desc);
+                          if (!comprado) return;
+                          setForm(f => ({ ...f, nome: comprado.descricao }));
+                          clearError('nome');
+                          // Só preenche o que está vazio: quem já digitou o
+                          // fornecedor não perde o que digitou.
+                          setExtras(x => ({
+                            ...x,
+                            fornecedor:  x.fornecedor  || comprado.fornecedor,
+                            preco_custo: x.preco_custo || (comprado.custo != null
+                              ? formatBRL(comprado.custo) : ''),
+                          }));
+                        }}>
+                        <option value="">— Selecione o item recebido —</option>
+                        {itensComprados.map(i => (
+                          <option key={i.descricao} value={i.descricao}>{i.descricao}</option>
+                        ))}
+                        <option value={SEM_COMPRA}>Cadastro sem compra (exceção)</option>
+                      </select>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que a unidade
+                        comprou e ainda não estão no catálogo. Escolher traz nome, fornecedor e custo do pedido.
+                      </p>
+                    </FormField>
+                  )}
                   <FormField label="Nome do produto *" error={errors.nome}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                      value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
-                      placeholder="Ex: Parafuso M6" />
+                      value={form.nome}
+                      onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
+                      placeholder={`Ex: ${exProd.nome}`} />
                   </FormField>
                   <FormField label={ehVendavel(extras.tipo) ? 'Categoria *' : 'Categoria'} error={extrasErrors.categoria_id}>
                     {categoriasDaFilial.length > 0 ? (
@@ -880,7 +1165,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     ) : (
                       <input className="neu-input py-2 px-3 rounded-xl text-sm"
                         value={extras.categoria} onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
-                        placeholder="Ex: Fixadores, Eletrônicos" />
+                        placeholder={`Ex: ${exProd.categoria}`} />
                     )}
                   </FormField>
                   {extras.categoria_id && (() => {
@@ -898,11 +1183,37 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       </FormField>
                     ) : null;
                   })()}
-                  <FormField label="Cód. Barras EAN">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
-                      value={extras.ean} onChange={e => setExtras(x => ({ ...x, ean: e.target.value }))}
-                      placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
+                  {/* Só mercadoria tem código de barras. Patrimônio se
+                      identifica pela plaqueta e material de consumo sai por
+                      requisição — nenhum dos dois passa pelo leitor do caixa, e
+                      o campo em branco na tela deles só sugeria que faltava
+                      preencher alguma coisa. */}
+                  {ehVendavel(extras.tipo) && (
+                  <FormField label="Cód. Barras EAN *" error={extrasErrors.ean}>
+                    <div className="flex gap-2">
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono flex-1 min-w-0 ${extrasErrors.ean ? 'border border-red-500/40' : ''}`}
+                        value={extras.ean}
+                        onChange={e => { setExtras(x => ({ ...x, ean: e.target.value })); setExtrasErrors(ev => ({ ...ev, ean: '' })); }}
+                        placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
+                      {/* Sem o código do fabricante, o aluno inventava dígitos e
+                          o verificador não fechava. O interno é legítimo:
+                          prefixo 2 é o que a GS1 reserva para a loja. */}
+                      <button type="button"
+                        onClick={() => { setExtras(x => ({ ...x, ean: gerarEanInterno() })); setExtrasErrors(ev => ({ ...ev, ean: '' })); }}
+                        title="Gerar código interno da loja (prefixo 2)"
+                        className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
+                        Gerar
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      É o que o PDV lê no caixa, e não se repete dentro da unidade. Produto registrado no Brasil
+                      começa com <span className="font-mono text-gray-400">789</span> ou{' '}
+                      <span className="font-mono text-gray-400">790</span>; importado tem o prefixo do país de
+                      origem. Não tem o código do fabricante? Use “Gerar” — sai um interno da loja, prefixo{' '}
+                      <span className="font-mono text-gray-400">2</span>.
+                    </p>
                   </FormField>
+                  )}
                   <FormField label="Fornecedor *" error={extrasErrors.fornecedor}>
                     <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.fornecedor ? 'border border-red-500/40' : ''}`}
                       value={extras.fornecedor}
@@ -917,7 +1228,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.marca ? 'border border-red-500/40' : ''}`}
                       value={extras.marca}
                       onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
-                      placeholder="Ex: Samsung, Nestlé, 3M" />
+                      placeholder={`Ex: ${exProd.marca}`} />
                   </FormField>
                   {/* Peso/Volume é o CONTEÚDO da embalagem, e tem medida própria
                       (migr. 438). Antes o sufixo era `extras.unidade` — a medida
@@ -1158,58 +1469,6 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   </div>
                 </div>
               )}
-
-              {/* Tipo = DESTINO do item (migr. 440). É a primeira pergunta do
-                  cadastro, não a última: ela decide o que o resto do formulário
-                  ainda faz sentido perguntar. Antes eram dois valores e material
-                  de consumo não cabia em nenhum — resma de papel virava
-                  mercadoria e ia para o caixa. */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Tipo *">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.tipo}
-                      onChange={e => setExtras(x => ({ ...x, tipo: normalizarTipo(e.target.value) }))}>
-                      {TIPOS_PRODUTO.map(t => (
-                        <option key={t} value={t}>{TIPO_LABEL[t]}</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                      {/* Patrimônio é criado SÓ aqui — Financeiro > Patrimônio é
-                          só leitura —, mas a listagem filtra `tipo neq
-                          patrimonio` no servidor. Dizer antes do clique, não
-                          depois do sumiço. */}
-                      {extras.tipo === 'patrimonio' && (
-                        <span className="text-amber-400/90 font-bold">Não aparece nesta lista. </span>
-                      )}
-                      {TIPO_AJUDA[extras.tipo]}
-                    </p>
-                  </FormField>
-                </div>
-                {extras.tipo === 'patrimonio' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 rounded-2xl neu-pressed border border-accent/20">
-                    <FormField label="Nº de Patrimônio (tag)">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
-                        value={extras.patrimonio_numero}
-                        onChange={e => setExtras(x => ({ ...x, patrimonio_numero: e.target.value }))}
-                        placeholder="Ex: TAG-2026-001" />
-                    </FormField>
-                    <FormField label="Responsável">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.patrimonio_responsavel}
-                        onChange={e => setExtras(x => ({ ...x, patrimonio_responsavel: e.target.value }))}
-                        placeholder="Ex: Igor Neri" />
-                    </FormField>
-                    <FormField label="Localização">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.patrimonio_localizacao}
-                        onChange={e => setExtras(x => ({ ...x, patrimonio_localizacao: e.target.value }))}
-                        placeholder="Ex: Sala TI - Rio Branco" />
-                    </FormField>
-                  </div>
-                )}
-              </div>
 
               {/* Preços. Quem não vende tem só o lado do custo: o que a empresa
                   pagou. Preço de venda e margem saem da tela em vez de pedir um
@@ -1564,6 +1823,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                                 <Barcode size={12} />
                               </button>
                             )}
+                            {/* Grade de variantes (migr. 445). Só onde tamanho e
+                                cor existem na ficha — abrir grade de saco de
+                                arroz não quer dizer nada. */}
+                            {temGrade && ehVendavel(item.tipo) && (
+                              <button onClick={() => abrirGrade(item)}
+                                title="Abrir grade de tamanhos e cores"
+                                className="action-btn-neutral">
+                                <Grid3x3 size={12} />
+                              </button>
+                            )}
                             <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
@@ -1585,6 +1854,72 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
           />
         </div>
       )}
+
+      {/* Grade de variantes (migr. 445) — o cadastro do modelo abre os
+          tamanhos × cores de uma vez, em vez de seis cadastros à mão. */}
+      <AnimatePresence>
+        {gradeItem && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !gradeSalvando && setGradeItem(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg flex flex-col gap-4"
+            >
+              <div>
+                <h3 className="text-sm font-bold text-gray-200">Grade de tamanhos e cores</h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  A partir de <span className="text-gray-300 font-semibold">{gradeItem.nome}</span>.
+                  Cada combinação vira uma variante com código próprio, herdando preço, custo, categoria e fotos.
+                </p>
+              </div>
+
+              <FormField label="Tamanhos">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={gradeTamanhos} onChange={e => setGradeTam(e.target.value)}
+                  placeholder="P, M, G, GG" />
+                <p className="text-[10px] text-gray-500 mt-1">Separe por vírgula. Numeração também vale: 38, 40, 42.</p>
+              </FormField>
+
+              <FormField label="Cores">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={gradeCores} onChange={e => setGradeCores(e.target.value)}
+                  placeholder="Preto, Branco" />
+              </FormField>
+
+              {(() => {
+                const t = gradeTamanhos.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).length;
+                const c = gradeCores.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).length;
+                return (
+                  <p className="text-[11px] text-gray-400">
+                    {t * c > 0
+                      ? <><span className="text-accent font-bold">{t * c}</span> combinação(ões). O que já existe não é recriado.</>
+                      : 'Informe tamanhos e cores para ver quantas variantes serão abertas.'}
+                  </p>
+                );
+              })()}
+
+              <p className="text-[10px] text-gray-600 leading-snug">
+                Cada variante nasce com <span className="text-gray-400">saldo zero</span> e{' '}
+                <span className="text-gray-400">sem EAN</span>: mercadoria entra por Compras → Recebimentos, e
+                código de barras repetido faria o PDV vender o tamanho errado.
+              </p>
+
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setGradeItem(null)} disabled={gradeSalvando}
+                  className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400">Cancelar</button>
+                <button onClick={gerarGrade} disabled={gradeSalvando}
+                  className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold disabled:opacity-50">
+                  {gradeSalvando ? 'Abrindo…' : 'Abrir grade'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

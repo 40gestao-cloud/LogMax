@@ -91,6 +91,61 @@ export const EXEMPLO_ITEM_REQUISICAO: Record<string, string> = {
 export const itemExemploDaFilial = (filial: string): string =>
   EXEMPLO_ITEM_REQUISICAO[filial] ?? EXEMPLO_ITEM_REQUISICAO.Matriz;
 
+/**
+ * Exemplo de PRODUTO por nicho — placeholder do cadastro e célula de exemplo do
+ * modelo de planilha.
+ *
+ * O formulário mostrava "Ex: Parafuso M6" e "Ex: Samsung, Nestlé, 3M" nas três
+ * filiais, e o modelo de planilha vinha com arroz e "Tio João" para todo mundo.
+ * Quem cadastra numa boutique lê exemplo de ferragem e de mercearia e para para
+ * entender se está na tela certa — o exemplo, que existe para tirar dúvida,
+ * criava uma. Nicho diferente, catálogo diferente.
+ *
+ * Continua sendo AJUDA, não regra: o formulário é o mesmo nos três, como na
+ * requisição de compra acima.
+ */
+export type ExemploProduto = {
+  nome: string;
+  marca: string;
+  categoria: string;
+  subcategoria: string;
+  fornecedor: string;
+};
+
+export const EXEMPLO_PRODUTO: Record<string, ExemploProduto> = {
+  SuperMax: {
+    nome: 'Arroz Branco Tipo 1 — 5 kg',
+    marca: 'Tio João',
+    categoria: 'Mercearia',
+    subcategoria: 'Grãos',
+    fornecedor: 'Distribuidora Central Ltda',
+  },
+  MaxLook: {
+    nome: 'Camiseta Básica Gola Careca',
+    marca: 'Hering',
+    categoria: 'Camisetas',
+    subcategoria: 'Manga curta',
+    fornecedor: 'Confecções Modelo Ltda',
+  },
+  TechMax: {
+    nome: 'Fone Bluetooth TWS',
+    marca: 'JBL',
+    categoria: 'Áudio',
+    subcategoria: 'Fones sem fio',
+    fornecedor: 'Distribuidora Tech Sul Ltda',
+  },
+  Matriz: {
+    nome: 'Papel A4 75g — resma 500 folhas',
+    marca: 'Report',
+    categoria: 'Material de escritório',
+    subcategoria: 'Papelaria',
+    fornecedor: 'Papelaria Central Ltda',
+  },
+};
+
+export const exemploProduto = (filial: string): ExemploProduto =>
+  EXEMPLO_PRODUTO[filial] ?? EXEMPLO_PRODUTO.Matriz;
+
 /** Com prefixo: serve de placeholder do input. */
 export const exemploItemRequisicao = (filial: string): string =>
   `ex.: ${itemExemploDaFilial(filial).toLowerCase()}`;

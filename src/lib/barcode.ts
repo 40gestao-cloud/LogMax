@@ -15,6 +15,20 @@ export function calcEan13Checksum(digits12: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
+/**
+ * EAN-13 de uso interno da loja, para produto sem código do fabricante — roupa
+ * sem etiqueta, seminovo, item a granel.
+ *
+ * Prefixo 2 é o que a GS1 reserva para isso: não colide com código de
+ * fabricante nenhum. Gêmea de `ean13_interno()` no banco (migr. 443), que é
+ * quem gera o das variantes abertas pela grade.
+ */
+export function gerarEanInterno(): string {
+  let base = '2';
+  for (let i = 0; i < 11; i++) base += Math.floor(Math.random() * 10);
+  return base + calcEan13Checksum(base);
+}
+
 export type NormalizedEan = { digits: string; value: string; valid: boolean; autoCompleted: boolean };
 
 // Aceita 12 (completa checksum) ou 13 (valida checksum). Filtra não-dígitos.
@@ -123,6 +137,12 @@ export async function downloadEan13LabelPdf(opts: {
   codigo?: string;
   preco?: number | null;
   filename?: string;
+  /**
+   * Tamanho/cor da variante (migr. 445). Sem isto as 6 etiquetas de uma grade
+   * saem idênticas — mesmo nome, mesmo preço — e quem etiqueta a arara não tem
+   * como saber qual adesivo é do P e qual é do GG.
+   */
+  variante?: string | null;
 }) {
   const norm = normalizeEan13(opts.ean);
   if (!norm.valid) throw new Error('EAN-13 inválido — informe 12 ou 13 dígitos.');
@@ -141,8 +161,9 @@ export async function downloadEan13LabelPdf(opts: {
     doc.text(opts.nome.length > 42 ? opts.nome.slice(0, 41) + '…' : opts.nome, W / 2, 6, { align: 'center' });
   }
 
-  // Sub-linha: código interno + preço.
+  // Sub-linha: variante + código interno + preço.
   const metaParts: string[] = [];
+  if (opts.variante) metaParts.push(opts.variante);
   if (opts.codigo) metaParts.push(opts.codigo);
   if (opts.preco != null && !Number.isNaN(opts.preco)) metaParts.push(fmtBRL(opts.preco));
   if (metaParts.length) {
@@ -193,7 +214,7 @@ export async function downloadEan13LabelPdf(opts: {
 // primeira etiqueta (use quando o doc já tem conteúdo prévio na página atual).
 export function drawEtiquetasGridOnDoc(
   doc: any,
-  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>,
+  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null; variante?: string | null }>,
   opts: { titulo?: string; startOnNewPage?: boolean } = {},
 ): number {
   const items = produtos
@@ -240,6 +261,7 @@ export function drawEtiquetasGridOnDoc(
     }
 
     const metaParts: string[] = [];
+    if (item.variante) metaParts.push(item.variante);
     if (item.codigo) metaParts.push(item.codigo);
     if (item.preco != null) metaParts.push(fmtBRL(Number(item.preco)));
     if (metaParts.length) {
@@ -303,7 +325,7 @@ export function drawEtiquetasGridOnDoc(
 // numérico e a etiqueta visual com as barras. Produtos sem EAN válido
 // são silenciosamente omitidos (não há etiqueta a renderizar).
 export async function downloadCatalogoEan13Pdf(opts: {
-  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null }>;
+  produtos: Array<{ nome?: string | null; ean?: string | null; codigo?: string | null; preco?: number | null; variante?: string | null }>;
   filename?: string;
   titulo?: string;
 }) {

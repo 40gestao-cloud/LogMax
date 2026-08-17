@@ -281,6 +281,19 @@ export type ReciboVenda = {
   total: number;
   formaPagamento: string;
   operador?: string | null;
+  /**
+   * Garantia por item, já calculada (data da venda + `garantia_dias` da ficha
+   * do produto). Vazio some do recibo. Existe porque o campo era preenchido no
+   * cadastro da TechMax e não chegava a lugar nenhum: garantia que o cliente
+   * não leva escrita não é garantia, é anotação interna.
+   */
+  garantias?: { nome: string; ate: string }[];
+  /**
+   * IMEI/serial dos aparelhos que saíram nesta venda (migr. 444). A loja
+   * escolhe pelo FIFO, não o operador — o recibo é onde o número aparece, e é
+   * ele que prova qual aparelho é do cliente quando a garantia for cobrada.
+   */
+  series?: { nome: string; imei: string }[];
 };
 
 /**
@@ -363,6 +376,36 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
   doc.text(`Forma de pagamento: ${venda.formaPagamento}`, 14, cursorY);
+
+  if (venda.series?.length) {
+    cursorY += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text('IMEI / Número de série', 14, cursorY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    for (const s of venda.series) {
+      cursorY += 5;
+      doc.text(`${s.nome} — ${s.imei}`, 14, cursorY);
+    }
+  }
+
+  if (venda.garantias?.length) {
+    cursorY += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Garantia', 14, cursorY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    for (const g of venda.garantias) {
+      cursorY += 5;
+      doc.text(`${g.nome} — coberto até ${g.ate}`, 14, cursorY);
+    }
+  }
 
   doc.setFontSize(7);
   doc.setTextColor(140, 140, 140);

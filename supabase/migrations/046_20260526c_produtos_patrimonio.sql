@@ -59,5 +59,5 @@ COMMIT;
 --   SELECT tipo, count(*) FROM produtos GROUP BY 1;
 --   -- esperado: tudo em 'estoque_venda' até que alguém marque algo como patrimônio.
 --   INSERT INTO produtos (codigo, nome, preco, tipo, patrimonio_numero, patrimonio_responsavel, patrimonio_localizacao)
---     VALUES ('PAT-001', 'Notebook Dell Latitude', 5500.00, 'patrimonio', 'TAG-2026-001', 'Igor Neri', 'Sala TI - Rio Branco');
+--     VALUES ('PAT-001', 'Notebook Dell Latitude', 5500.00, 'patrimonio', 'TAG-2026-001', 'Ana Clara Campos', 'Sala TI - Rio Branco');
 -- =================================================================

@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, PackagePlus, X, Lock, PackageX } from 'lucide-react';
+import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, X, Lock, PackageX } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -13,6 +13,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useFormValidation, formatBRL, parseBRL, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
+import { requerImei } from '../lib/atributosProduto';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -21,12 +22,17 @@ import { useConfirm } from '../contexts/ConfirmContext';
 // que ultrapasse o pedido (defesa em INSERT + Confirmar).
 type SaldoPedido = { qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: number };
 
-// Sentinel do <select> de produto. Compra de item novo é a regra, não a
-// exceção: o pedido nasce da requisição com `item_descricao` em texto livre e
-// nunca aponta pra `produtos`. Antes disto, chegar com item fora do catálogo
-// deixava o recebimento impossível de confirmar — sem produto pra selecionar,
-// não havia como dar entrada no estoque. Padrão "select + Outro" do projeto.
-const PRODUTO_NOVO = '__novo__';
+// O cadastro rápido saiu daqui (2026-08-17). Ele existia porque compra de item
+// novo é a regra — o pedido nasce da requisição com `item_descricao` em texto
+// livre e nunca aponta para `produtos` —, mas resolvia o impasse criando
+// meio-produto: sem categoria, sem marca, sem tipo, sem ficha do nicho. Ninguém
+// voltava para completar, e o catálogo enchia de item pela metade que depois
+// não entra no PDV nem no DRE direito.
+//
+// O caminho passa a ser o processo: o item comprado aparece como sugestão em
+// Cadastros > Produtos (com fornecedor e custo do pedido já preenchidos), o
+// aluno cadastra por inteiro lá e volta para confirmar a entrada. Uma volta a
+// mais, e o cadastro sai certo — que é a aula.
 
 /** ISO (YYYY-MM-DD) para dd/mm/aaaa. Data de recebimento é data, não timestamp. */
 const fmtDataBR = (iso?: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
@@ -52,7 +58,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // o pedido "Em entrega" noutra tela. Sem realtime o almoxarifado recarregava a
   // página no escuro, à espera de um pedido que já estava lá.
   const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial }, true);
-  const { data: produtos, setData: setProdutos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pedido_id: '' });
@@ -61,14 +67,16 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // escolhia o produto e tinha de escolher de novo no Confirmar. A escolha
   // agora vive só onde de fato move estoque (o painel Confirmar).
   const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '' });
-  // Cadastro rápido de produto disparado pelo sentinel PRODUTO_NOVO.
-  const [novoProdutoNome, setNovoProdutoNome] = useState<string | null>(null);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [confirmProduto, setConfirmProduto] = useState('');
   // Lote e validade da carga (migr. 424). Opcionais: parafuso não vence, e
   // exigir data em tudo faria a turma digitar lixo para passar da tela.
   const [confirmLote, setConfirmLote] = useState('');
+  // Um IMEI/serial por linha (migr. 444). Só aparece para produto marcado como
+  // "cada unidade tem IMEI/Serial" — é aqui que o número existe: a caixa está
+  // aberta na frente do conferente. Depois vira caça ao aparelho na prateleira.
+  const [confirmImeis, setConfirmImeis] = useState('');
   const [confirmValidade, setConfirmValidade] = useState('');
   const [confirmStatus, setConfirmStatus] = useState('Concluído');
   const [confirmSaving, setConfirmSaving] = useState(false);
@@ -178,14 +186,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '' }); setErrors({}); };
 
-  // Produto recém-criado entra na lista local e já fica selecionado — sem
-  // isso o usuário voltaria pro select e não encontraria o que acabou de
-  // cadastrar (useFetchData só recarrega no mount).
-  const handleProdutoCriado = (produto: any) => {
-    setProdutos((prev: any[]) => [produto, ...prev]);
-    setConfirmProduto(produto.id);
-    setNovoProdutoNome(null);
-  };
 
   // Descrição do item do pedido — pré-preenche o nome no cadastro rápido.
   const descricaoDoPedido = (pedidoId: string): string => {
@@ -298,6 +298,26 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       if (!segue) return;
     }
 
+    // Aparelho com número de série: um IMEI por unidade recebida (migr. 444).
+    // Divergência entre a contagem e a quantidade avisa e deixa seguir — a
+    // carga pode ter chegado com 8 de 10, e é isso que "Parcial" quer dizer.
+    const imeisInformados = confirmImeis
+      .split(/[\n,;]/).map(s => s.trim()).filter(Boolean);
+    if (requerImei(prodConfirm) && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+      if (imeisInformados.length === 0) {
+        const segue = await confirm(
+          `"${prodConfirm?.nome ?? 'Este produto'}" tem número de série por unidade e nenhum foi informado.\n\n`
+          + 'Sem os números, a loja não sabe qual aparelho vendeu para quem: garantia, recall e '
+          + 'procedência ficam sem resposta.\n\nConfirmar mesmo assim?');
+        if (!segue) return;
+      } else if (imeisInformados.length !== Math.floor(qtdItem)) {
+        const segue = await confirm(
+          `Você informou ${imeisInformados.length} número(s) para ${qtdBR(qtdItem)} unidade(s) recebida(s).\n\n`
+          + 'Confirmar assim mesmo?');
+        if (!segue) return;
+      }
+    }
+
     // Guard sincrônico contra double-click (vide ref acima).
     if (confirmingRef.current === item.id) return;
     confirmingRef.current = item.id;
@@ -349,6 +369,23 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         }
       }
 
+      // Unidades com número de série (migr. 444). Fora do caminho crítico, como
+      // o lote: se a RPC recusar um IMEI repetido, o estoque já subiu e o
+      // conferente corrige o número — travar a entrada da carga por causa de um
+      // dígito seria devolver ao almoxarifado um problema de digitação.
+      if (imeisInformados.length > 0 && requerImei(prodConfirm) && supabase
+          && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+        const { error: imeiErr } = await supabase.rpc('registrar_unidades_recebidas', {
+          p_recebimento_id: item.id,
+          p_produto_id:     confirmProduto,
+          p_filial:         filial,
+          p_imeis:          imeisInformados,
+        });
+        if (imeiErr) {
+          showToast(`Entrada confirmada, mas os IMEIs não foram gravados: ${imeiErr.message}`, 'error', true);
+        }
+      }
+
       await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
       await reloadSaldos();
@@ -366,6 +403,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setConfirmando(null);
       setConfirmProduto('');
       setConfirmLote('');
+      setConfirmImeis('');
       setConfirmValidade('');
       setConfirmStatus('Concluído');
       showToast(
@@ -551,10 +589,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     value={confirmProduto}
                                     onChange={e => {
-                                      if (e.target.value === PRODUTO_NOVO) {
-                                        setNovoProdutoNome(descricaoDoPedido(item.pedido_id));
-                                        return;  // não fixa o sentinel como valor
-                                      }
                                       setConfirmProduto(e.target.value);
                                       // Compra eventual: a ficha só é conhecida
                                       // depois de o produto ser escolhido, então
@@ -566,11 +600,12 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   >
                                     <option value="">Selecione o produto...</option>
                                     {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
-                                    <option value={PRODUTO_NOVO}>➕ Produto novo — cadastrar agora…</option>
                                   </select>
-                                  <p className="text-[10px] text-gray-500">
+                                  <p className="text-[10px] text-gray-500 leading-snug">
                                     Compra eventual não vem do catálogo, então o produto é escolhido aqui.
-                                    Não está cadastrado? Use “Produto novo” — o cadastro mínimo abre aqui e o item já entra selecionado.
+                                    Não está cadastrado? Cadastre em <span className="text-gray-300 font-semibold">Cadastros &gt; Produtos</span> —
+                                    “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” já aparece lá como sugestão, com o fornecedor
+                                    e o custo deste pedido. Depois volte e confirme a entrada.
                                   </p>
                                 </div>
                                 )}
@@ -615,6 +650,28 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 </div>
                                   );
                                 })()}
+                                {/* IMEI/serial por unidade (migr. 444). Só para
+                                    produto marcado no cadastro: pedir número de
+                                    série de saco de arroz seria ruído. */}
+                                {requerImei(produtoDoPainel(item)) && (
+                                  <div className="flex flex-col gap-1 sm:w-56">
+                                    <label htmlFor={`receb-imei-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                                      IMEI / Série
+                                      <span className="normal-case tracking-normal text-[9px] font-black px-1.5 py-0.5 rounded bg-sky-400/15 text-sky-400 border border-sky-400/25">
+                                        1 por unidade
+                                      </span>
+                                    </label>
+                                    <textarea id={`receb-imei-${item.id}`} rows={3}
+                                      className="neu-input py-2 px-3 rounded-xl text-xs w-full font-mono"
+                                      placeholder={'359123456789012\n359123456789013'}
+                                      value={confirmImeis}
+                                      onChange={e => setConfirmImeis(e.target.value)} />
+                                    <span className="text-[10px] text-gray-500 leading-snug">
+                                      Um número por linha. É o que liga o aparelho ao cliente na venda — sem ele,
+                                      garantia e recall não têm resposta.
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="flex flex-col gap-1">
                                   <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
                                   <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
@@ -670,16 +727,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </AnimatePresence>
 
       <AnimatePresence>
-        {novoProdutoNome !== null && (
-          <ModalProdutoRapido
-            nomeInicial={novoProdutoNome}
-            filial={filial}
-            produtos={produtos}
-            showToast={showToast}
-            onClose={() => setNovoProdutoNome(null)}
-            onCriado={handleProdutoCriado}
-          />
-        )}
       </AnimatePresence>
     </motion.div>
   );
@@ -822,128 +869,6 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, unidade, showToast, onC
           <NeuButtonAccent onClick={enviar} isLoading={saving} disabled={!qtdValida}>
             <PackageX size={14} /> Registrar devolução
           </NeuButtonAccent>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
-// ─── Cadastro rápido de produto ──────────────────────────────────────
-// Mínimo que o banco exige (codigo + nome) mais o que o estoque precisa pra
-// não nascer mentindo (unidade e preço). O restante — categoria, marca,
-// fornecedor, custo — fica pro Cadastros > Produtos completar depois: travar
-// o recebimento até o cadastro completo é o que causava o impasse.
-const ModalProdutoRapido = ({ nomeInicial, filial, produtos, showToast, onClose, onCriado }: {
-  nomeInicial: string;
-  filial: FilialOp;
-  produtos: any[];
-  showToast: any;
-  onClose: () => void;
-  onCriado: (produto: any) => void;
-}) => {
-  // Sugere o próximo código numérico livre da filial. Códigos são únicos por
-  // filial e a base tem formatos mistos (ML-004 convive com 31) — por isso só
-  // olhamos a parte numérica.
-  const sugestao = useMemo(() => {
-    const maior = produtos.reduce((max: number, p: any) => {
-      const n = parseInt(String(p.codigo ?? '').replace(/\D/g, ''), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return String(maior + 1).padStart(3, '0');
-  }, [produtos]);
-
-  const [codigo, setCodigo] = useState(sugestao);
-  const [nome, setNome] = useState(nomeInicial);
-  const [unidade, setUnidade] = useState('UN');
-  const [preco, setPreco] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const salvar = async () => {
-    if (!codigo.trim()) return showToast('Informe o código do produto.', 'error', true);
-    if (!nome.trim()) return showToast('Informe o nome do produto.', 'error', true);
-    const duplicado = produtos.some((p: any) =>
-      String(p.codigo ?? '').trim().toLowerCase() === codigo.trim().toLowerCase());
-    if (duplicado) return showToast(`Código ${codigo} já existe nesta filial.`, 'error', true);
-
-    setSaving(true);
-    try {
-      // estoque começa em 0 de propósito: quem move o saldo é a movimentação
-      // gerada pelo Confirmar, logo em seguida. Semear a quantidade aqui
-      // contaria a entrada duas vezes.
-      const criado = await dbInsert('/api/produtosview', {
-        codigo:   codigo.trim(),
-        nome:     nome.trim(),
-        unidade:  unidade || 'UN',
-        preco:    preco ? parseBRL(preco) : 0,
-        estoque:  0,
-        filial,
-        status:   'Ativo',
-      });
-      showToast('Produto cadastrado e selecionado. Complete o cadastro depois em Cadastros > Produtos.', 'success', true);
-      onCriado(criado);
-    } catch (err: any) {
-      showToast(`Erro ao cadastrar produto: ${err?.message ?? 'verifique o console'}`, 'error', true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 overflow-y-auto"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        className="neu-flat rounded-2xl border border-accent/20 p-5 sm:p-6 w-full max-w-lg my-6 flex flex-col gap-4"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center ring-1 ring-accent/25 shrink-0">
-              <PackagePlus size={16} className="text-accent" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-black text-gray-100">Cadastro rápido de produto</h3>
-              <p className="text-[11px] text-gray-500">Entra no catálogo da {filial} com saldo zero.</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="shrink-0 neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="Código *">
-            <input className="neu-input py-2 px-3 rounded-xl text-sm" value={codigo}
-              onChange={e => setCodigo(e.target.value)} placeholder="Ex: 001" />
-          </FormField>
-          <FormField label="Unidade">
-            <select className="neu-input py-2 px-3 rounded-xl text-sm" value={unidade} onChange={e => setUnidade(e.target.value)}>
-              {['UN', 'CX', 'KG', 'L', 'M', 'PC'].map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </FormField>
-        </div>
-
-        <FormField label="Nome do produto *">
-          <input className="neu-input py-2 px-3 rounded-xl text-sm" value={nome}
-            onChange={e => setNome(e.target.value)} placeholder="Ex: Parafuso M6" />
-        </FormField>
-
-        <FormField label="Preço de venda">
-          <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-            value={preco} onChange={e => setPreco(formatBRL(e.target.value))} placeholder="0,00" />
-        </FormField>
-
-        <p className="text-[10px] text-gray-500 leading-snug">
-          Categoria, marca, fornecedor e preço de custo ficam pendentes — complete em
-          <span className="text-gray-300 font-semibold"> Cadastros &gt; Produtos</span> quando der.
-        </p>
-
-        <div className="flex gap-3 justify-end pt-1 border-t border-white/5">
-          <button onClick={onClose} disabled={saving} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-          <NeuButtonAccent onClick={salvar} isLoading={saving}><Save size={14} /> Cadastrar e selecionar</NeuButtonAccent>
         </div>
       </motion.div>
     </motion.div>

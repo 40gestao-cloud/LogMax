@@ -132,6 +132,6 @@ COMMIT;
 -- =================================================================
 -- VERIFICAÇÃO
 --   INSERT INTO desenvolvimentos_ia (nome, ferramenta, data, hora_inicio, hora_fim, nome_criador)
---   VALUES ('Automação com Gemini', 'Gemini 2.5', current_date + 3, '14:00', '16:00', 'Igor');
+--   VALUES ('Automação com Gemini', 'Gemini 2.5', current_date + 3, '14:00', '16:00', 'Ana Clara Campos');
 --   SELECT * FROM desenvolvimentos_ia ORDER BY data;
 -- =================================================================

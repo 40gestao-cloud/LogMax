@@ -7,6 +7,7 @@ import { exportToExcel, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
+import { garantiaAte } from '../lib/atributosProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 export const RecibosVendasView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
@@ -32,16 +33,42 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
 
   const [itens, setItens] = useState<any[]>([]);
   const [loadingI, setLoadingI] = useState(false);
+  // Ficha dos produtos vendidos, só para a garantia (TechMax). Vem em consulta
+  // própria porque `itens_venda` guarda nome e preço, não a ficha do produto —
+  // e a ficha muda depois da venda sem reescrever a linha vendida.
+  const [fichas, setFichas] = useState<Record<string, any>>({});
+  const [unidades, setUnidades] = useState<any[]>([]);
   const vendaIdsKey = vendas.map((v: any) => v.id).join(',');
   useEffect(() => {
-    if (!supabase || vendas.length === 0) { setItens([]); return; }
+    if (!supabase || vendas.length === 0) { setItens([]); setFichas({}); setUnidades([]); return; }
     let cancelled = false;
     setLoadingI(true);
     const ids = vendas.map((v: any) => v.id);
-    supabase.from('itens_venda').select('*').in('venda_id', ids).then(({ data }) => {
+    supabase.from('itens_venda').select('*').in('venda_id', ids).then(async ({ data }) => {
       if (cancelled) return;
-      setItens(data ?? []);
-      setLoadingI(false);
+      const linhas = data ?? [];
+      setItens(linhas);
+      const produtoIds = [...new Set(linhas.map((i: any) => i.produto_id).filter(Boolean))];
+      if (produtoIds.length && supabase) {
+        const { data: prods } = await supabase
+          .from('produtos').select('id, atributos').in('id', produtoIds);
+        if (!cancelled) {
+          setFichas(Object.fromEntries((prods ?? []).map((p: any) => [p.id, p.atributos])));
+        }
+      } else if (!cancelled) {
+        setFichas({});
+      }
+      // Aparelhos com número de série que saíram nestas vendas (migr. 444).
+      // Tabela nova: turma com a migração pendente devolve erro, e aí o recibo
+      // sai sem o bloco em vez de não sair.
+      if (supabase) {
+        const { data: uns, error: unsErr } = await supabase
+          .from('produto_unidades')
+          .select('venda_id, imei, produto_id')
+          .in('venda_id', ids);
+        if (!cancelled) setUnidades(unsErr ? [] : (uns ?? []));
+      }
+      if (!cancelled) setLoadingI(false);
     });
     return () => { cancelled = true; };
   }, [vendaIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -82,6 +109,20 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
       desconto: Number(v.desconto ?? 0),
       total: Number(v.total_final ?? 0),
       formaPagamento: v.forma_pagamento ?? '—',
+      // Garantia (dias) da ficha do produto vira data no papel que o cliente
+      // leva. Item sem garantia cadastrada simplesmente não aparece aqui.
+      garantias: v.itens
+        .map((i: any) => {
+          const ate = garantiaAte(fichas[i.produto_id], created);
+          return ate ? { nome: i.nome_produto ?? '—', ate } : null;
+        })
+        .filter(Boolean) as { nome: string; ate: string }[],
+      series: unidades
+        .filter((u: any) => u.venda_id === v.id)
+        .map((u: any) => ({
+          nome: v.itens.find((i: any) => i.produto_id === u.produto_id)?.nome_produto ?? '—',
+          imei: u.imei,
+        })),
     });
   };
 

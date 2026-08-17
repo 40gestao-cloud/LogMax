@@ -48,8 +48,19 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
     { key: 'tela',          label: 'Tela',            placeholder: 'Ex: 6.1"' },
     { key: 'bateria',       label: 'Bateria',         placeholder: 'Ex: 3240 mAh' },
     { key: 'camera',        label: 'Câmera',          placeholder: 'Ex: 12 MP + 12 MP' },
-    { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365', type: 'text' },
-    { key: 'requer_imei',   label: 'Requer IMEI/Serial no fechamento', type: 'bool', wide: true },
+    // Era texto livre: entrava "1 ano", "12 meses" e "90 dias" na mesma coluna,
+    // e aí nada consegue calcular data nenhuma. Só dígitos, como `validade_dias`
+    // da mercearia — é o que faz o recibo de venda saber até quando o aparelho
+    // está coberto.
+    { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365',
+      type: 'text', soDigitos: true,
+      dica: 'Em dias, contados da data da venda. O recibo mostra a data-limite da garantia a partir daqui.' },
+    // O rótulo dizia "no fechamento" e prometia o que o PDV não faz: quem pede
+    // o número é o RECEBIMENTO, um por aparelho, e a venda baixa o mais antigo
+    // sozinha (migr. 444). O PDV não escolhe IMEI pela mesma razão que não
+    // escolhe lote (migr. 424) — fila do caixa não é lugar de decidir isso.
+    { key: 'requer_imei', label: 'Cada unidade tem IMEI/Serial', type: 'bool', wide: true,
+      dica: 'Marque para aparelho com número de série. O Recebimento passa a pedir um número por unidade, e a venda registra qual aparelho saiu.' },
     // Eletrônico raramente cabe nos campos fixos: acessório que acompanha,
     // estado de seminovo, restrição de operadora, condição da assistência.
     // Campo livre no fim da ficha em vez de mais seis colunas fixas.
@@ -78,6 +89,61 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
       options: ['Ambiente', 'Refrigerado', 'Congelado'] as const,
       dica: 'Aparece como selo na fila de Validades — é o que decide o que se resolve primeiro.' },
   ],
+};
+
+/**
+ * `'P / Preto'` — o que distingue esta variante das outras do mesmo modelo
+ * (migr. 445), ou null quando o produto não tem grade.
+ *
+ * Existe para a etiqueta e para a listagem: sem isto, as 6 etiquetas de uma
+ * camiseta P/M/G × 2 cores saem idênticas, porque a etiqueta imprime nome e
+ * preço e os dois são iguais nas 6.
+ */
+export const rotuloVariante = (produto: unknown): string | null => {
+  const a = (produto as any)?.atributos ?? {};
+  const partes = [a.tamanho, a.cor].map(v => String(v ?? '').trim()).filter(Boolean);
+  return partes.length ? partes.join(' / ') : null;
+};
+
+/**
+ * True quando cada unidade do produto tem número próprio (IMEI/serial).
+ *
+ * Marcado no cadastro da TechMax, o campo passou a significar alguma coisa na
+ * migr. 444: o Recebimento pede um número por aparelho e a venda baixa o mais
+ * antigo (FIFO), gravando em `produto_unidades`. Antes disso o campo existia e
+ * não fazia nada — não havia onde guardar cinco IMEIs de cinco iPhones.
+ */
+export const requerImei = (produto: unknown): boolean =>
+  (produto as any)?.atributos?.requer_imei === true;
+
+/**
+ * Dias de garantia da ficha do produto, ou null quando não há número utilizável.
+ *
+ * A ficha guardava texto livre e a turma escrevia "1 ano", "12 meses" e "90".
+ * O campo passou a aceitar só dígitos (`soDigitos`), mas o histórico continua
+ * no banco — daí o parse tolerante aqui em vez de `Number()` seco.
+ */
+export const garantiaDias = (atributos: unknown): number | null => {
+  const bruto = String((atributos as any)?.garantia_dias ?? '').trim();
+  const m = bruto.match(/^\d+/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/**
+ * Data-limite da garantia: data da venda + dias da ficha, em `dd/mm/aaaa`.
+ * Null quando o produto não tem garantia cadastrada — e aí o recibo não fala
+ * de garantia nenhuma, em vez de imprimir uma linha vazia.
+ */
+export const garantiaAte = (atributos: unknown, dataVenda: string | Date): string | null => {
+  const dias = garantiaDias(atributos);
+  if (dias === null) return null;
+  const base = dataVenda instanceof Date ? dataVenda : new Date(dataVenda);
+  if (Number.isNaN(base.getTime())) return null;
+  const fim = new Date(base.getTime());
+  fim.setDate(fim.getDate() + dias);
+  return fim.toLocaleDateString('pt-BR');
 };
 
 /** Rótulo sem o asterisco de obrigatório — o cliente não precisa ver a regra do cadastro. */

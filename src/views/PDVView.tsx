@@ -20,6 +20,7 @@ import type { Produto, Cliente } from '../types/domain';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { consultarCreditoCliente, bloqueioFiado, type CreditoCliente } from '../lib/credito';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
+import { rotuloVariante } from '../lib/atributosProduto';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
@@ -1493,7 +1494,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             onClick={async () => {
               try {
                 await downloadCatalogoEan13Pdf({
-                  produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0) })),
+                  produtos: filtered.map((p: any) => ({ nome: p.nome, ean: p.ean, codigo: p.codigo, preco: Number(p.preco || 0), variante: rotuloVariante(p) })),
                   titulo: `Catálogo PDV — ${filialFiltro}`,
                   filename: `logmax-catalogo-pdv-${filialFiltro.toLowerCase()}`,
                 });

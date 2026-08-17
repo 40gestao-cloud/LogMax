@@ -16,13 +16,15 @@
 //
 // Os campos aqui são mantidos à mão em espelho dos forms:
 //   clientes/fornecedores → CRMView.tsx
-//   produtos              → ProdutosView.tsx
+//   produtos              → ProdutosView.tsx (mas a ficha por nicho NÃO: ela é
+//                           derivada de `atributosProduto.ts`, ver abaixo)
 //   servicos              → ServicosView.tsx
 //   requisicoes           → RequisicoesSetorView.tsx
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
-import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, UNIDADES_CONTEUDO } from './unidades';
+import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, UNIDADES_CONTEUDO } from './unidades';
+import { ATRIBUTOS_PRODUTO as ATRIBUTOS_FICHA, rotuloParaCliente, type AtributoDef } from './atributosProduto';
 import { supabase } from './supabase';
 
 export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
@@ -101,35 +103,56 @@ const ATRIBUTOS_FORNECEDOR: Record<string, ModeloCampo[]> = {
   ],
 };
 
-const ATRIBUTOS_PRODUTO: Record<string, ModeloCampo[]> = {
-  // Mercearia é o único nicho onde a mercadoria estraga — e era o único sem
-  // ficha. Opcional de propósito: 149 produtos já cadastrados não podem virar
-  // incompletos de um dia para o outro.
-  SuperMax: [
-    { col: 'Produto perecível', lista: SIM_NAO, exemplo: 'Sim' },
-    { col: 'Validade (dias)', formato: 'inteiro', exemplo: '30',
-      dica: 'Prazo desde o recebimento. É o que decide remarcação e ordem de saída.' },
-    { col: 'Armazenagem', lista: ['Ambiente', 'Refrigerado', 'Congelado'], exemplo: 'Refrigerado' },
-  ],
-  MaxLook: [
-    { col: 'Tamanho', obrigatorio: true, exemplo: 'M', dica: 'P, M, G ou numeração (38, 40).' },
-    { col: 'Cor', obrigatorio: true, exemplo: 'Azul Marinho' },
-    { col: 'Gênero', obrigatorio: true, lista: ['Feminino', 'Masculino', 'Unissex', 'Infantil'], exemplo: 'Unissex' },
-    { col: 'Coleção', exemplo: 'Verão 2026' },
-    { col: 'Composição / Material', exemplo: '100% Algodão' },
-  ],
-  TechMax: [
-    { col: 'Modelo', obrigatorio: true, exemplo: 'iPhone 13' },
-    { col: 'Cor', exemplo: 'Meia-noite' },
-    { col: 'Memória', exemplo: '128 GB' },
-    { col: 'Tela', exemplo: '6.1"' },
-    { col: 'Bateria', exemplo: '3240 mAh' },
-    { col: 'Câmera', exemplo: '12 MP + 12 MP' },
-    { col: 'Garantia (dias)', formato: 'inteiro', exemplo: '365' },
-    { col: 'Requer IMEI/Serial', lista: SIM_NAO, exemplo: 'Sim', dica: 'Se "Sim", o PDV pede o IMEI no fechamento da venda.' },
-    { col: 'Informações adicionais', exemplo: 'Acompanha carregador e capa.' },
-  ],
+// A ficha de produto por nicho é UMA lista só: `ATRIBUTOS_PRODUTO` em
+// `atributosProduto.ts`, que é o que a tela de cadastro preenche e o PDV
+// exibe. Aqui ela é TRADUZIDA para coluna de planilha, não copiada.
+//
+// Havia uma segunda cópia à mão neste arquivo, com os mesmos campos escritos
+// de novo — exatamente a duplicação que o cabeçalho de `atributosProduto.ts`
+// diz ter eliminado. Ela já tinha começado a divergir (a dica do IMEI prometia
+// um comportamento que o PDV não tem), e um campo novo na ficha nascia fora do
+// modelo sem ninguém perceber.
+const campoDaFicha = (a: AtributoDef, filial: string): ModeloCampo => {
+  const col = rotuloParaCliente(a.label);
+  const dicas: string[] = [];
+  if (a.dica) dicas.push(a.dica);
+  // A planilha é plana: não tem como esconder coluna filha. O que a tela faz
+  // com `dependeDe`/`reqSe` vira instrução escrita.
+  if (a.dependeDe) {
+    const pai = rotuloParaCliente(
+      (ATRIBUTOS_FICHA[filial] ?? []).find(x => x.key === a.dependeDe)?.label ?? a.dependeDe,
+    );
+    dicas.push(a.reqSe
+      ? `Obrigatório quando "${pai}" for Sim; deixe vazio quando for Não.`
+      : `Só se aplica quando "${pai}" for Sim.`);
+  }
+  const dica = dicas.join(' ') || undefined;
+
+  if (a.type === 'bool')   return { col, lista: SIM_NAO, exemplo: 'Sim', dica };
+  if (a.type === 'select') return { col, obrigatorio: a.req, lista: a.options, exemplo: a.options?.[0], dica };
+  return {
+    col,
+    obrigatorio: a.req,
+    formato: a.soDigitos ? 'inteiro' : undefined,
+    exemplo: exemploDoPlaceholder(a.placeholder),
+    dica,
+  };
 };
+
+/** `'Ex: P, M, G, 38, 40'` → `'P'`. Sem placeholder, sem exemplo. */
+const exemploDoPlaceholder = (ph?: string): string | undefined => {
+  if (!ph) return undefined;
+  const semPrefixo = ph.replace(/^\s*ex\.?:?\s*/i, '');
+  const primeiro = semPrefixo.split(/[,;]/)[0].trim();
+  return primeiro || undefined;
+};
+
+const ATRIBUTOS_PRODUTO: Record<string, ModeloCampo[]> = Object.fromEntries(
+  Object.entries(ATRIBUTOS_FICHA).map(([filial, defs]) => [
+    filial,
+    defs.map(d => campoDaFicha(d, filial)),
+  ]),
+);
 
 const ATRIBUTOS_SERVICO: Record<string, ModeloCampo[]> = {
   MaxLook: [
@@ -194,18 +217,23 @@ const modeloPessoa = (filial: string, isCliente: boolean): Modelo => {
 
 const modeloProdutos = (filial: string): Modelo => {
   const isSuper = filial === 'SuperMax';
+  // Exemplos do nicho, não da mercearia. O modelo saía com arroz e "Tio João"
+  // para as três filiais — quem baixa o da boutique lia exemplo de supermercado
+  // e parava para entender se tinha baixado o arquivo certo.
+  const ex = exemploProduto(filial);
   const campos: ModeloCampo[] = [
     { col: 'Código', obrigatorio: true, exemplo: '001',
       dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
-    { col: 'Nome do produto', obrigatorio: true, exemplo: 'Arroz Branco 5kg' },
-    { col: 'Categoria', obrigatorio: true, exemplo: 'Mercearia', fonte: 'categorias',
+    { col: 'Nome do produto', obrigatorio: true, exemplo: ex.nome },
+    { col: 'Categoria', obrigatorio: true, exemplo: ex.categoria, fonte: 'categorias',
       dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega o markup-alvo usado para sugerir o preço de venda.' },
-    { col: 'Subcategoria', exemplo: 'Grãos', fonte: 'subcategorias',
+    { col: 'Subcategoria', exemplo: ex.subcategoria, fonte: 'subcategorias',
       dica: 'Opcional. Também vem do cadastro de categorias.' },
-    { col: 'Cód. Barras EAN', exemplo: '7891234567895', dica: 'EAN-13, 13 dígitos. Deixe em branco se não houver.' },
-    { col: 'Fornecedor', obrigatorio: true, exemplo: 'Distribuidora Central Ltda', fonte: 'fornecedores',
+    { col: 'Cód. Barras EAN', obrigatorio: true, exemplo: '7891234567895',
+      dica: 'EAN-13, 13 dígitos — é o que o PDV lê no caixa. Sem o código do fabricante, o cadastro gera um interno da loja (prefixo 2).' },
+    { col: 'Fornecedor', obrigatorio: true, exemplo: ex.fornecedor, fonte: 'fornecedores',
       dica: 'Precisa estar cadastrado em Fornecedores antes.' },
-    { col: 'Marca', obrigatorio: true, exemplo: 'Tio João', fonte: 'marcas',
+    { col: 'Marca', obrigatorio: true, exemplo: ex.marca, fonte: 'marcas',
       dica: 'A lista traz as marcas já usadas nesta filial. Marca nova pode ser digitada.' },
   ];
   if (isSuper) {
