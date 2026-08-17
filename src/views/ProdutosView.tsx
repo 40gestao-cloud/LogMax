@@ -177,6 +177,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // qualquer compra (saldo de abertura), e material de consumo e patrimônio
   // entram sem pedido. Fechar aqui travaria o primeiro cadastro do curso.
   const { data: pedidosDaFilial } = useFetchData<any>('/api/pedidosview', { filial });
+  // A carga precisa ter CHEGADO. Pedido gerado é compromisso de compra, não
+  // mercadoria na mão: pode ser cancelado, pode não vir, e — o que decide — o
+  // codigo de barras, o peso da embalagem e a validade estao na CAIXA. Cadastrar
+  // antes da chegada obriga a inventar EAN interno para um produto que traz o
+  // do fabricante impresso, e ninguem volta para corrigir.
+  const { data: recebimentosDaFilial } = useFetchData<any>('/api/recebimentosview', { filial });
 
 
 
@@ -208,10 +214,21 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       data.map((p: any) => String(p.nome ?? '').trim().toLowerCase()).filter(Boolean),
     );
     const vistos = new Set<string>();
+    // Pedidos cuja carga já foi lançada no Recebimento. Registrar o recebimento
+    // não exige o produto (a tabela só guarda pedido e quantidade) — quem exige
+    // é o Confirmar, que baixa o estoque. A ordem da aula fica: chegou →
+    // registra → cadastra o produto → confirma a entrada.
+    const chegaram = new Set(
+      recebimentosDaFilial
+        .filter((r: any) => r.ativo !== false)
+        .map((r: any) => r.pedido_id)
+        .filter(Boolean),
+    );
     return pedidosDaFilial
       // Pedido cancelado não vira cadastro: sugerir o item dele seria mandar a
       // turma cadastrar o que a unidade decidiu não comprar.
       .filter((p: any) => p.status !== 'Cancelado')
+      .filter((p: any) => chegaram.has(p.id))
       .map((p: any) => {
         const desc = String(p.item_descricao ?? '').trim();
         const qtd  = Number(p.item_qtd ?? 0);
@@ -231,7 +248,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         return true;
       })
       .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
-  }, [pedidosDaFilial, fornecedoresList, data]);
+  }, [pedidosDaFilial, recebimentosDaFilial, fornecedoresList, data]);
   // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
   // listagem é paginada no servidor, então um item escolhido na página 1 some
   // de `data` ao navegar para a página 2 — sem o snapshot não dá para gerar a
@@ -1166,10 +1183,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           <option key={i.descricao} value={i.descricao}>{i.descricao}</option>
                         ))}
                         <option value={SEM_COMPRA}>Cadastro sem compra (exceção)</option>
+                        {/* Item comprado mas ainda não recebido não aparece: a
+                            ficha do produto (EAN, peso, validade) está na caixa
+                            que ainda não chegou. */}
                       </select>
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que a unidade
-                        comprou e ainda não estão no catálogo. Escolher traz nome, fornecedor e custo do pedido.
+                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que
+                        <span className="text-gray-400"> chegaram no Recebimento</span> e ainda não estão no catálogo.
+                        Escolher traz nome, fornecedor e custo do pedido.
                       </p>
                     </FormField>
                   )}
