@@ -12,7 +12,10 @@ import { useAIContext } from '../contexts/AIAssistantContext';
 // competição. O guard existe aqui e, de novo, dentro de cada RPC: a tela é
 // conveniência, a regra é do banco.
 
-type Vinculo = { tabela: string; linhas: number };
+// `satelite` (migr. 452): relação 1:1 em cascata — a ficha de custo do produto,
+// por exemplo. É parte do registro, vai junto no DELETE e não impede nada.
+// Contá-la como vínculo deixava o botão "apagar de vez" travado para sempre.
+type Vinculo = { tabela: string; linhas: number; satelite?: boolean };
 type Item = {
   tabela: string;
   id: string;
@@ -36,6 +39,9 @@ const ROTULO: Record<string, string> = {
 };
 
 const rotulo = (t: string) => ROTULO[t] ?? t;
+
+/** Só o que é fato de terceiro segura o expurgo. */
+const bloqueantes = (v: Vinculo[]) => v.filter(x => !x.satelite);
 
 // A tabela de vínculo aparece para o admin com o nome que ela tem no banco —
 // quem abre esta tela é quem lê migração.
@@ -89,10 +95,10 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     data: {
       total: itens.length,
       // O que trava o expurgo é a pergunta que o admin faz aqui.
-      presos: itens.filter(i => i.vinculos.length > 0).length,
+      presos: itens.filter(i => bloqueantes(i.vinculos).length > 0).length,
       itens: filtrados.slice(0, 20).map(i => ({
         tipo: rotulo(i.tabela), nome: i.nome, filial: i.filial,
-        apagado_em: i.excluido_em, vinculos: descreveVinculos(i.vinculos),
+        apagado_em: i.excluido_em, vinculos: descreveVinculos(bloqueantes(i.vinculos)),
       })),
     },
   }), [itens, filtrados]));
@@ -141,7 +147,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     );
   }
 
-  const presos = itens.filter(i => i.vinculos.length > 0).length;
+  const presos = itens.filter(i => bloqueantes(i.vinculos).length > 0).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -186,7 +192,8 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {filtrados.map(item => {
-              const travado = item.vinculos.length > 0;
+              const trava = bloqueantes(item.vinculos);
+              const travado = trava.length > 0;
               const ocupado = agindo === item.id;
               return (
                 <motion.div
@@ -211,7 +218,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
                     {travado && (
                       <div className="text-[11px] mt-1 flex items-start gap-1.5 opacity-80">
                         <Link2 size={13} className="mt-0.5 shrink-0" />
-                        <span>Preso por: {descreveVinculos(item.vinculos)}</span>
+                        <span>Preso por: {descreveVinculos(trava)}</span>
                       </div>
                     )}
                   </div>
