@@ -66,15 +66,21 @@ BEGIN
   FOR v_fk IN
     SELECT c.conrelid::regclass::text AS tabela_filha,
            a.attname                  AS coluna,
-           -- Satélite: 1:1 em cascata. O índice tem de ser único, de uma
-           -- coluna só, sobre a própria coluna da FK e sem WHERE — índice
-           -- parcial não garante unicidade da relação.
+           -- Satélite: 1:1 em cascata. O índice tem de ser único, VÁLIDO, com
+           -- uma coluna de chave só, sobre a própria coluna da FK e sem WHERE.
+           --
+           -- `indnkeyatts`, não `indnatts`: o segundo conta também as colunas
+           -- INCLUDE, que não participam da unicidade — um índice
+           -- `UNIQUE (produto_id) INCLUDE (preco_custo)` deixaria de ser
+           -- reconhecido e o satélite voltaria a travar o expurgo, calado.
+           -- `indisvalid` porque índice em construção ainda não garante nada.
            (pg_get_constraintdef(c.oid) LIKE '%ON DELETE CASCADE%'
             AND EXISTS (
               SELECT 1 FROM pg_index i
                WHERE i.indrelid = c.conrelid
                  AND i.indisunique
-                 AND i.indnatts = 1
+                 AND i.indisvalid
+                 AND i.indnkeyatts = 1
                  AND i.indkey[0] = c.conkey[1]
                  AND i.indpred IS NULL)) AS satelite
       FROM pg_constraint c
@@ -179,7 +185,8 @@ NOTIFY pgrst, 'reload schema';
 --          (pg_get_constraintdef(c.oid) LIKE '%ON DELETE CASCADE%'
 --           AND EXISTS (SELECT 1 FROM pg_index i
 --                        WHERE i.indrelid = c.conrelid AND i.indisunique
---                          AND i.indnatts = 1 AND i.indkey[0] = c.conkey[1]
+--                          AND i.indisvalid AND i.indnkeyatts = 1
+--                          AND i.indkey[0] = c.conkey[1]
 --                          AND i.indpred IS NULL)) AS satelite
 --     FROM pg_constraint c
 --    WHERE c.contype = 'f' AND c.confrelid = 'public.produtos'::regclass
