@@ -79,7 +79,9 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [form, setForm] = useState({ descricao: '' });
-  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: filial as string });
+  // `natureza` (migr. 447): no que este pagamento se transforma. Só existe na
+  // conta AVULSA — a de pedido é sempre estoque, e o gatilho do banco força.
+  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: filial as string, natureza: 'despesa' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   // Diálogo inline de pagamento: pede o banco de débito antes de confirmar.
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -234,7 +236,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ descricao: item.descricao ?? '' });
-    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial });
+    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial, natureza: item.natureza ?? 'despesa' });
     setErrors({});
     setShowForm(false);
   };
@@ -243,7 +245,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     setShowForm(false);
     setEditItem(null);
     setForm({ descricao: '' });
-    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial });
+    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial, natureza: 'despesa' });
     setErrors({});
   };
 
@@ -257,6 +259,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
       vencimento: extras.vencimento || null,
       fornecedor_id: extras.fornecedor_id || null,
       filial: filialTarget,
+      natureza: extras.natureza || 'despesa',
     };
     try {
       // Verificar saldo de capital antes de criar nova despesa
@@ -462,6 +465,31 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                     ))}
                   </select>
                 </FormField>
+
+                {/* Migr. 447. O DRE decidia despesa por proxy ("não tem pedido,
+                    logo é despesa") e errava em dois casos: material comprado
+                    por conta avulsa virava despesa aqui e DE NOVO na requisição,
+                    e freezer comprado assim afundava o mês inteiro como se
+                    fosse gasto. Conta de pedido não mostra este campo — ela é
+                    estoque por definição, e o gatilho do banco cobra. */}
+                {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
+                  <FormField label="No que este pagamento vira?">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.natureza}
+                      onChange={e => setExtras(x => ({ ...x, natureza: e.target.value }))}>
+                      <option value="despesa">Despesa — consumo do mês (luz, aluguel, serviço)</option>
+                      <option value="estoque">Estoque — vira mercadoria ou material na prateleira</option>
+                      <option value="imobilizado">Imobilizado — bem que fica (freezer, balcão, computador)</option>
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      {extras.natureza === 'despesa'
+                        ? 'Entra no DRE no mês do vencimento.'
+                        : extras.natureza === 'estoque'
+                          ? 'Não entra no DRE agora: vira resultado quando o produto for vendido (CMV) ou requisitado pelo setor.'
+                          : 'Não entra no DRE: bem não é gasto. Cadastre o item em Produtos como Patrimônio.'}
+                    </p>
+                  </FormField>
+                )}
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
