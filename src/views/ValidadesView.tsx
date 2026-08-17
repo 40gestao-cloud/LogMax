@@ -16,6 +16,10 @@ import { Search, Plus, Save, X, CalendarClock, TriangleAlert, PackageMinus, Chec
 import { useFilial } from '../contexts/FilialContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbInsert } from '../hooks/useSupabaseData';
+import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { temEstoque } from '../lib/tipoProduto';
+import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -75,10 +79,22 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
 
   const { data, setData, isLoading, totalCount, reload } =
     useFetchData<any>('/api/vencimentosestoqueview', { filial }, true, { page });
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: produtosBrutos } = useFetchData<any>('/api/produtosview', { filial });
+  // Patrimônio não vence nem tem lote. Consumo vence — álcool, desinfetante e
+  // água têm validade tanto quanto iogurte (migr. 440).
+  const produtos = useMemo(
+    () => produtosBrutos.filter((p: any) => temEstoque(p.tipo)),
+    [produtosBrutos],
+  );
 
   const nomeProduto = (id: string) => produtos.find((p: any) => p.id === id)?.nome ?? '—';
   const saldoProduto = (id: string) => Number(produtos.find((p: any) => p.id === id)?.estoque ?? 0);
+  const unidadeDoProduto = (id: string) =>
+    normalizarUnidade(produtos.find((p: any) => p.id === id)?.unidade);
+
+  // O lote herda a unidade do produto: queijo entra a KG, refrigerante a UN.
+  const unidadeSel = form.produto_id ? unidadeDoProduto(form.produto_id) : '';
+  const loteFrac = UNIDADES_FRACIONARIAS.has(unidadeSel);
 
   // FEFO: o que vence primeiro aparece primeiro. Lote encerrado desce, porque
   // já não é decisão de ninguém.
@@ -122,7 +138,7 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
   const salvarLote = async () => {
     if (!form.produto_id)  { showToast('Selecione o produto.', 'error', true); return; }
     if (!form.vencimento)  { showToast('Informe a data de validade.', 'error', true); return; }
-    const qtd = Number(form.qtd);
+    const qtd = parseQtd(form.qtd);
     if (!(qtd > 0))        { showToast('Informe a quantidade do lote.', 'error', true); return; }
     setSaving(true);
     try {
@@ -235,10 +251,22 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FormField label="Produto *">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={form.produto_id}
-                    onChange={e => setForm(f => ({ ...f, produto_id: e.target.value }))}>
+                    onChange={e => {
+                      // A ficha do produto sugere a data: hoje + validade_dias
+                      // (migr. 360). Era o dado que o cadastro guardava e que
+                      // esta tela pedia de novo, digitado. Continua editável —
+                      // o lote que chega perto do fim do prazo é comum.
+                      const prod = produtos.find((p: any) => p.id === e.target.value);
+                      const sugerida = prod ? vencimentoPrevisto(prod, hoje) : null;
+                      setForm(f => ({
+                        ...f,
+                        produto_id: e.target.value,
+                        vencimento: sugerida ?? f.vencimento,
+                      }));
+                    }}>
                     <option value="">Selecione...</option>
                     {[...produtos].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
-                      .map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo {p.estoque ?? 0})</option>)}
+                      .map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
                   </select>
                 </FormField>
                 <FormField label="Lote">
@@ -248,10 +276,25 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                 <FormField label="Validade *">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={form.vencimento}
                     onChange={e => setForm(f => ({ ...f, vencimento: e.target.value }))} />
+                  {(() => {
+                    const prod = produtos.find((p: any) => p.id === form.produto_id);
+                    if (!prod) return null;
+                    const dias = validadeDias(prod);
+                    if (dias !== null) {
+                      return <p className="text-[10px] text-gray-500 mt-1">Sugerida pelo cadastro: {dias} dia(s) a partir de hoje.</p>;
+                    }
+                    if (ehPerecivel(prod)) {
+                      return <p className="text-[10px] text-amber-400/90 mt-1">Perecível sem prazo no cadastro — a data vai à mão.</p>;
+                    }
+                    return <p className="text-[10px] text-gray-500 mt-1">Este produto não está marcado como perecível no cadastro.</p>;
+                  })()}
                 </FormField>
-                <FormField label="Quantidade *">
-                  <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm" value={form.qtd}
-                    onChange={e => setForm(f => ({ ...f, qtd: e.target.value }))} placeholder="0" />
+                {/* Frios e laticínios são loteados a peso — 12,5 KG de queijo é
+                    um lote (migr. 439). A unidade é a do produto escolhido. */}
+                <FormField label={`Quantidade *${unidadeSel ? ` (${unidadeSel})` : ''}`}>
+                  <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums" value={form.qtd}
+                    onChange={e => setForm(f => ({ ...f, qtd: formatQtd(e.target.value, loteFrac) }))}
+                    onKeyDown={handleQtdKeyDown(loteFrac)} placeholder="0" />
                 </FormField>
               </div>
               <div className="flex gap-3 justify-end">
@@ -302,6 +345,17 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                         className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${l.status !== 'OK' ? 'opacity-50' : ''}`}>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           {nomeProduto(l.produto_id)}
+                          {/* Armazenagem decide o que se resolve primeiro: um
+                              congelado vencendo é outra urgência que uma caixa
+                              de bolacha. Era campo gravado e nunca lido. */}
+                          {(() => {
+                            const arm = armazenagemDe(produtos.find((p: any) => p.id === l.produto_id));
+                            return arm && arm !== 'Ambiente' ? (
+                              <span className={`ml-1.5 align-middle text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${ARMAZENAGEM_ESTILO[arm]}`}>
+                                {arm}
+                              </span>
+                            ) : null;
+                          })()}
                           <span className="sm:hidden block text-[10px] font-mono text-gray-500 mt-0.5">{l.lote || 'sem lote'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{l.lote || '—'}</td>
@@ -318,10 +372,10 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                             {l.status === 'OK' ? l.situacao : l.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right tabular-nums">{l.qtd ?? 0}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right tabular-nums">{qtdBR(l.qtd ?? 0)}</td>
                         <td className="py-3 px-4 text-xs font-mono text-right tabular-nums hidden md:table-cell">
                           <span className={divergente ? 'text-amber-400' : 'text-gray-400'}>
-                            {saldoProduto(l.produto_id)}
+                            {qtdBR(saldoProduto(l.produto_id))}
                           </span>
                           {divergente && (
                             <span title="Os lotes deste produto somam mais que o saldo. A venda no PDV não escolhe lote — quando isso acontece, encerre o lote consumido ou ajuste a quantidade."

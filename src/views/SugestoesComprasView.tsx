@@ -4,6 +4,9 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ShoppingCart, AlertTriangle, X, Save } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { parseQtd, qtdBR, formatQtd, handleQtdKeyDown } from '../lib/viewUtils';
+import { normalizarUnidade, UNIDADES_FRACIONARIAS } from '../lib/unidades';
+import { temEstoque } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
@@ -25,11 +28,16 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
 
   const openSolicitar = (p: any) => {
     setRequestingItem(p);
-    setQtdSolicitada(String(p.qtd_sugerida));
+    setQtdSolicitada(qtdBR(p.qtd_sugerida));
   };
 
-  const ativos = produtos.filter((p: any) => p.status === 'Ativo');
+  // Patrimônio não se repõe: um freezer com saldo 0 não é ruptura de estoque.
+  // Material de uso e consumo SIM — resma acabando é exatamente o caso de uso
+  // desta tela. Por isso `temEstoque`, não `ehVendavel` (migr. 440).
+  const ativos = produtos.filter((p: any) => p.status === 'Ativo' && temEstoque(p.tipo));
   const limiteMin = (p: any) => Number(p.estoque_minimo ?? 0) || 10;
+  // A unidade do item em pauta decide se a quantidade pedida aceita fração.
+  const sugFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(requestingItem?.unidade));
   const criticos = ativos.filter((p: any) => p.estoque === 0);
   const baixos = ativos.filter((p: any) => p.estoque > 0 && p.estoque <= limiteMin(p));
 
@@ -38,7 +46,10 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
     .filter((p: any) => filtroMode === 'zerados' ? p.estoque === 0 : true)
     .filter((p: any) => [p.codigo, p.nome, p.categoria].some((v: any) => v?.toLowerCase().includes(search.toLowerCase())))
     .map((p: any) => {
-      const qtd_sugerida = Math.max((limiteMin(p) * 2) - p.estoque, limiteMin(p));
+      // `estoque_minimo` e `estoque` são numeric(15,3) — sem arredondar, a
+      // sugestão sai como 12,333333333 e vira o texto da requisição.
+      const qtd_sugerida = Math.round(
+        Math.max((limiteMin(p) * 2) - Number(p.estoque ?? 0), limiteMin(p)) * 1000) / 1000;
       const custo = Number(p.preco_custo ?? 0);
       // Custo desconhecido (não cadastrado, ou usuário sem permissão de ver)
       // não vira zero nem cai no preço de venda: fica nulo e some do total.
@@ -57,8 +68,8 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
 
   const handleSolicitar = async () => {
     if (!requestingItem) return;
-    const qtdNum = Number(qtdSolicitada);
-    if (!Number.isFinite(qtdNum) || qtdNum <= 0) {
+    const qtdNum = parseQtd(qtdSolicitada);
+    if (qtdNum <= 0) {
       showToast("Informe uma quantidade válida.", 'error', true);
       return;
     }
@@ -80,11 +91,11 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
       const saldoAtual = Number(requestingItem.estoque ?? 0);
       const minimo     = limiteMin(requestingItem);
       const justificativa = saldoAtual === 0
-        ? `Reposição automática: ${requestingItem.nome} está ZERADO em ${filial} (estoque mínimo ${minimo} ${requestingItem.unidade ?? 'un'}). Sem saldo para atender a operação.`
-        : `Reposição automática: saldo atual ${saldoAtual} ${requestingItem.unidade ?? 'un'} contra estoque mínimo de ${minimo} em ${filial}. Ponto de pedido atingido.`;
+        ? `Reposição automática: ${requestingItem.nome} está ZERADO em ${filial} (estoque mínimo ${qtdBR(minimo)} ${normalizarUnidade(requestingItem.unidade)}). Sem saldo para atender a operação.`
+        : `Reposição automática: saldo atual ${qtdBR(saldoAtual)} ${normalizarUnidade(requestingItem.unidade)} contra estoque mínimo de ${qtdBR(minimo)} em ${filial}. Ponto de pedido atingido.`;
 
       const { error } = await supabase.rpc('criar_requisicoes_compra_lote', {
-        p_itens:        [{ item: requestingItem.nome, qtd: qtdNum, unidade: requestingItem.unidade ?? 'un' }],
+        p_itens:        [{ item: requestingItem.nome, qtd: qtdNum, unidade: normalizarUnidade(requestingItem.unidade) }],
         p_solicitante:  '',
         p_urgencia:     urgencia,
         p_centro_custo: '',
@@ -107,9 +118,9 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
 
   const exportCols = ['Código', 'Produto', 'Estoque Atual', 'Unidade', 'Situação', 'Qtd Sugerida', 'Custo Est.'];
   const exportRows = () => sugestoes.map((p: any) => [
-    p.codigo ?? '', p.nome ?? '', String(p.estoque ?? 0), p.unidade ?? '',
+    p.codigo ?? '', p.nome ?? '', qtdBR(p.estoque ?? 0), normalizarUnidade(p.unidade, ''),
     situacao(p.estoque).label,
-    String(p.qtd_sugerida),
+    qtdBR(p.qtd_sugerida),
     fmtValor(p.valor_est),
   ]);
 
@@ -176,11 +187,13 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="sug-qtd" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                    Quantidade <span className="text-gray-600 normal-case font-medium tracking-normal">(sugerido: {requestingItem.qtd_sugerida} {requestingItem.unidade})</span>
+                    Quantidade <span className="text-gray-600 normal-case font-medium tracking-normal">(sugerido: {qtdBR(requestingItem.qtd_sugerida)} {normalizarUnidade(requestingItem.unidade)})</span>
                   </label>
                   <input id="sug-qtd" type="text" inputMode="decimal"
                     className="neu-input py-2 px-3 rounded-xl text-sm text-accent font-mono font-bold"
-                    value={qtdSolicitada} onChange={e => setQtdSolicitada(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))} />
+                    value={qtdSolicitada}
+                    onChange={e => setQtdSolicitada(formatQtd(e.target.value, sugFrac))}
+                    onKeyDown={handleQtdKeyDown(sugFrac)} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="sug-urgencia" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Urgência</label>
@@ -233,7 +246,7 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                           </div>
                           <div>
                             <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Sugerido</p>
-                            <p className="text-sm font-mono font-bold text-gray-200">{p.qtd_sugerida}</p>
+                            <p className="text-sm font-mono font-bold text-gray-200">{qtdBR(p.qtd_sugerida)}</p>
                           </div>
                           <div>
                             <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Custo est.</p>
@@ -273,7 +286,7 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                           <td className={`py-3 px-4 text-xs font-mono font-bold text-right ${p.estoque === 0 ? 'text-red-500' : 'text-yellow-400'}`}>{p.estoque}</td>
                           <td className="py-3 px-4 text-xs text-gray-400">{p.unidade ?? '—'}</td>
                           <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sit.cls}`}>{sit.label}</span></td>
-                          <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{p.qtd_sugerida}</td>
+                          <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{qtdBR(p.qtd_sugerida)}</td>
                           <td className={`py-3 px-4 text-xs font-mono text-right ${p.valor_est === null ? 'text-gray-600' : 'text-gray-200'}`}
                               title={p.valor_est === null ? 'Produto sem preço de custo cadastrado — o custo passa a vir sozinho no primeiro recebimento de compra deste item.' : `Custo unitário R$ ${p.custo.toFixed(2)}`}>
                             {fmtValor(p.valor_est)}

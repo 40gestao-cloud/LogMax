@@ -10,6 +10,7 @@ import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
+import { qtdBR } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 
@@ -110,7 +111,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
           p_titulo:    `Carga a caminho — ${numeroPedido(pedido)}`,
           p_mensagem:  [
             item ? `Item: ${item}.` : null,
-            pedido.item_qtd ? `Qtd: ${pedido.item_qtd}.` : null,
+            pedido.item_qtd ? `Qtd: ${qtdBR(pedido.item_qtd)}.` : null,
             forn ? `Fornecedor: ${forn}.` : null,
             'Registre a chegada em Estoque > Recebimentos.',
           ].filter(Boolean).join(' '),

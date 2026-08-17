@@ -10,7 +10,9 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -25,6 +27,9 @@ type SaldoPedido = { qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: 
 // deixava o recebimento impossível de confirmar — sem produto pra selecionar,
 // não havia como dar entrada no estoque. Padrão "select + Outro" do projeto.
 const PRODUTO_NOVO = '__novo__';
+
+/** ISO (YYYY-MM-DD) para dd/mm/aaaa. Data de recebimento é data, não timestamp. */
+const fmtDataBR = (iso?: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
 
 // Motivos de devolução ao fornecedor (migr. 423). Lista fechada de propósito:
 // texto livre aqui viraria "problema" em 90% das linhas, e o que Compras
@@ -151,6 +156,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     return s.qtd_saldo + qtdAtualDoItem;
   };
   const semSaldoConhecido = (max: number) => Number.isNaN(max);
+  // Com quantidade fracionária (migr. 439) a comparação exata trai: 12,5 lido do
+  // banco e 12,5 digitado podem diferir na última casa do float e o teto acusa
+  // excesso de nada. A escala do banco é 3 casas, então meia milésima de
+  // tolerância é menor que qualquer valor representável ali.
+  const excedeSaldo = (qtd: number, max: number) => qtd > max + 0.0005;
   const produtosOrdenados = useMemo(() => {
     // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
     // Sem normalizar, `localeCompare` deixa itens com leading whitespace
@@ -192,21 +202,41 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const produtoDoPedido = (pedidoId: string): string | null =>
     pedidos.find((x: any) => x.id === pedidoId)?.produto_id ?? null;
 
+  /**
+   * Produto do painel de confirmação: vem do pedido (reposição) ou do select
+   * (compra eventual). A ficha de perecível é lida daqui.
+   */
+  const produtoDoPainel = (item: any) => {
+    const pid = produtoDoPedido(item.pedido_id) ?? confirmProduto;
+    return pid ? produtos.find((x: any) => x.id === pid) ?? null : null;
+  };
+
+  // Unidade do produto do pedido selecionado. Manda no campo de quantidade:
+  // recebimento de granel aceita fração, de caixa não (migr. 439). Pedido sem
+  // produto vinculado (item livre) cai em vazio e o campo trata como discreto —
+  // não há catálogo para dizer o contrário.
+  const unidadePedidoSel = useMemo(() => {
+    const pid = produtoDoPedido(form.pedido_id);
+    const p = pid ? produtos.find((x: any) => x.id === pid) : null;
+    return p ? normalizarUnidade(p.unidade) : '';
+  }, [pedidos, produtos, form.pedido_id]);
+  const recebFrac = UNIDADES_FRACIONARIAS.has(unidadePedidoSel);
+
   const handleSave = async () => {
     if (!validate()) return;
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
       const today = todayBR();
-      const qtd = Number(extras.qtd_recebida) || 0;
+      const qtd = parseQtd(extras.qtd_recebida);
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
       const maxAceito = maxPermitido(form.pedido_id, 0);
       if (semSaldoConhecido(maxAceito)) {
         showToast('Não foi possível ler o saldo do pedido. Recarregue a tela antes de registrar.', 'error', true);
         return;
       }
-      if (qtd > maxAceito) {
-        showToast(`Excede o saldo do pedido — máximo ${maxAceito} unidades.`, 'error', true);
+      if (excedeSaldo(qtd, maxAceito)) {
+        showToast(`Excede o saldo do pedido — máximo ${qtdBR(maxAceito)} ${unidadePedidoSel || 'un'}.`, 'error', true);
         return;
       }
       // `filial` é obrigatório: a coluna é NOT NULL DEFAULT 'SuperMax', então
@@ -240,7 +270,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const handleConfirmar = async (item: any) => {
     if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
-    const qtdItem = Number(item.qtd_recebida) || 0;
+    const qtdItem = parseQtd(item.qtd_recebida);
     if (!(qtdItem > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
     // Defesa em profundidade — bloqueia se o pedido foi editado depois do
     // registro e agora o total ficou acima do pedido.
@@ -249,10 +279,25 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       showToast('Não foi possível ler o saldo do pedido. Recarregue a tela antes de confirmar.', 'error', true);
       return;
     }
-    if (qtdItem > maxAceito) {
-      showToast(`Recebimento excede o saldo do pedido — máximo ${maxAceito} unidades. Ajuste antes de confirmar.`, 'error', true);
+    if (excedeSaldo(qtdItem, maxAceito)) {
+      showToast(`Recebimento excede o saldo do pedido — máximo ${qtdBR(maxAceito)}. Ajuste antes de confirmar.`, 'error', true);
       return;
     }
+    // Perecível entrando sem data é o buraco que a migr. 424 abriu a tela para
+    // fechar: sem lote não há fila de vencimento, não há remarcação e a perda
+    // por validade — a segunda maior sangria de uma mercearia — continua
+    // invisível. Avisa e deixa seguir: travar o almoxarifado por causa de um
+    // campo do cadastro seria devolver a ele um problema de Cadastros.
+    const prodConfirm = produtos.find((p: any) => p.id === confirmProduto);
+    if (ehPerecivel(prodConfirm) && !confirmValidade
+        && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+      const segue = await confirm(
+        `"${prodConfirm?.nome ?? 'Este produto'}" é perecível e está entrando sem data de validade.\n\n`
+        + 'Sem ela o lote não é criado: o item não aparece na fila de Validades, ninguém é avisado '
+        + 'antes de vencer e a perda não entra em lugar nenhum.\n\nConfirmar mesmo assim?');
+      if (!segue) return;
+    }
+
     // Guard sincrônico contra double-click (vide ref acima).
     if (confirmingRef.current === item.id) return;
     confirmingRef.current = item.id;
@@ -266,7 +311,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           await dbInsert('/api/movimentacoesestoqueview', {
             produto_id:     confirmProduto,
             tipo:           'Entrada',
-            qtd:            Number(item.qtd_recebida) || 0,
+            qtd:            parseQtd(item.qtd_recebida),
             origem:         numeroPedido(item.ped ?? { id: item.pedido_id }),
             destino:        'Almoxarifado',
             data:           today,
@@ -293,7 +338,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             produto_id:     confirmProduto,
             lote:           confirmLote.trim() || null,
             vencimento:     confirmValidade,
-            qtd:            Number(item.qtd_recebida) || 0,
+            qtd:            parseQtd(item.qtd_recebida),
             status:         'OK',
             recebimento_id: item.id,
             filial,
@@ -373,7 +418,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   const esgotado = s && s.qtd_saldo <= 0;
                   return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
                 })}</select></FormField>
-                <FormField label="Qtd Recebida"><input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_recebida} onChange={e => setExtras(x => ({ ...x, qtd_recebida: e.target.value }))} placeholder="0" /></FormField>
+                {/* A unidade é a do produto do pedido — mercearia recebe 12,5 KG
+                    (migr. 439). `type=number` recusava a vírgula do teclado pt-BR
+                    e devolvia campo vazio. */}
+                <FormField label={`Qtd Recebida${unidadePedidoSel ? ` (${unidadePedidoSel})` : ''}`}>
+                  <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                    value={extras.qtd_recebida}
+                    onChange={e => setExtras(x => ({ ...x, qtd_recebida: formatQtd(e.target.value, recebFrac) }))}
+                    onKeyDown={handleQtdKeyDown(recebFrac)} placeholder="0" />
+                </FormField>
                 <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
               </div>
               <div className="flex gap-3 justify-end">
@@ -398,7 +451,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
-                          {item.qtd_recebida ?? '—'}
+                          {item.qtd_recebida != null ? qtdBR(item.qtd_recebida) : '—'}
                           {(devolvido[item.id] ?? 0) > 0 && (
                             <div className="text-[10px] text-amber-400 mt-0.5" title="Devolvido ao fornecedor por divergência.">
                               − {devolvido[item.id]} devolvido
@@ -413,7 +466,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                           <HistoricoOperacoes entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} />
                             {devolucaoDisponivel
                               && (item.status === 'Concluído' || item.status === 'Parcial')
-                              && (Number(item.qtd_recebida ?? 0) - (devolvido[item.id] ?? 0)) > 0 && (
+                              && (parseQtd(item.qtd_recebida) - (devolvido[item.id] ?? 0)) > 0 && (
                               <button
                                 onClick={() => setDevolvendo(item)}
                                 title="Chegou avariado, errado ou a mais? Devolva ao fornecedor."
@@ -425,7 +478,23 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                             {item.status === 'Pendente' && (
                               <button
                                 onClick={() => {
-                                  setConfirmando(confirmando === item.id ? null : item.id);
+                                  const abrindo = confirmando !== item.id;
+                                  setConfirmando(abrindo ? item.id : null);
+                                  // A ficha de perecível (migr. 360) prometia
+                                  // "prazo desde o recebimento" e nunca era
+                                  // lida: a data era digitada à mão, lote a
+                                  // lote. Aqui ela vira conta — data da carga +
+                                  // validade_dias — e continua editável, porque
+                                  // o prazo do cadastro é o padrão do produto,
+                                  // não a validade impressa naquela caixa.
+                                  if (abrindo) {
+                                    const pid = produtoDoPedido(item.pedido_id);
+                                    const prod = pid ? produtos.find((x: any) => x.id === pid) : null;
+                                    const prevista = prod
+                                      ? vencimentoPrevisto(prod, item.data ?? todayBR())
+                                      : null;
+                                    setConfirmValidade(prevista ?? '');
+                                  }
                                   // Pedido com produto declarado já abre resolvido: não há
                                   // escolha a fazer, e deixar o campo vazio faria o almoxarife
                                   // procurar no catálogo o que o pedido já diz.
@@ -453,7 +522,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 {saldos[item.pedido_id] && (
                                   <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 -mt-1 mb-1">
                                     <span>Pedido: <strong className="text-gray-200">{saldos[item.pedido_id].qtd_pedida}</strong></span>
-                                    <span>Já recebido: <strong className="text-gray-200">{saldos[item.pedido_id].qtd_recebida_total}</strong></span>
+                                    <span>Já recebido: <strong className="text-gray-200">{qtdBR(saldos[item.pedido_id].qtd_recebida_total)}</strong></span>
                                     <span>Saldo restante: <strong className={saldos[item.pedido_id].qtd_saldo > 0 ? 'text-amber-300' : 'text-emerald-300'}>{saldos[item.pedido_id].qtd_saldo}</strong></span>
                                   </div>
                                 )}
@@ -487,10 +556,16 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                         return;  // não fixa o sentinel como valor
                                       }
                                       setConfirmProduto(e.target.value);
+                                      // Compra eventual: a ficha só é conhecida
+                                      // depois de o produto ser escolhido, então
+                                      // a data prevista é calculada aqui.
+                                      const prod = produtos.find((x: any) => x.id === e.target.value);
+                                      setConfirmValidade(
+                                        (prod ? vencimentoPrevisto(prod, item.data ?? todayBR()) : null) ?? '');
                                     }}
                                   >
                                     <option value="">Selecione o produto...</option>
-                                    {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {p.estoque ?? 0})</option>)}
+                                    {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
                                     <option value={PRODUTO_NOVO}>➕ Produto novo — cadastrar agora…</option>
                                   </select>
                                   <p className="text-[10px] text-gray-500">
@@ -507,12 +582,39 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   <input id={`receb-lote-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     value={confirmLote} onChange={e => setConfirmLote(e.target.value)} placeholder="opcional" />
                                 </div>
-                                <div className="flex flex-col gap-1 sm:w-40">
-                                  <label htmlFor={`receb-validade-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Validade</label>
+                                {(() => {
+                                  const prod = produtoDoPainel(item);
+                                  const perec = ehPerecivel(prod);
+                                  const dias  = validadeDias(prod);
+                                  const arm   = armazenagemDe(prod);
+                                  const sugerida = prod ? vencimentoPrevisto(prod, item.data ?? todayBR()) : null;
+                                  return (
+                                <div className="flex flex-col gap-1 sm:w-44">
+                                  <label htmlFor={`receb-validade-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                                    Validade
+                                    {perec && (
+                                      <span className="normal-case tracking-normal text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-400 border border-amber-400/25">
+                                        perecível
+                                      </span>
+                                    )}
+                                    {arm && arm !== 'Ambiente' && (
+                                      <span className={`normal-case tracking-normal text-[9px] font-black px-1.5 py-0.5 rounded ${ARMAZENAGEM_ESTILO[arm]}`}>
+                                        {arm}
+                                      </span>
+                                    )}
+                                  </label>
                                   <input id={`receb-validade-${item.id}`} type="date" className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     value={confirmValidade} onChange={e => setConfirmValidade(e.target.value)} />
-                                  <span className="text-[10px] text-gray-500">Só para perecível.</span>
+                                  <span className="text-[10px] text-gray-500 leading-snug">
+                                    {dias !== null && sugerida
+                                      ? <>Calculada: {dias} dia(s) do cadastro a partir de {fmtDataBR(item.data)}. Ajuste se a caixa vier com outra.</>
+                                      : perec
+                                        ? <span className="text-amber-400/90">Perecível sem prazo no cadastro — informe a data à mão.</span>
+                                        : <>Só para perecível.</>}
+                                  </span>
                                 </div>
+                                  );
+                                })()}
                                 <div className="flex flex-col gap-1">
                                   <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
                                   <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
@@ -552,9 +654,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         {devolvendo && (
           <ModalDevolucao
             item={devolvendo}
-            disponivel={Number(devolvendo.qtd_recebida ?? 0) - (devolvido[devolvendo.id] ?? 0)}
+            disponivel={parseQtd(devolvendo.qtd_recebida) - (devolvido[devolvendo.id] ?? 0)}
             produtoNome={produtos.find((p: any) => p.id === produtoDoPedido(devolvendo.pedido_id))?.nome
               ?? descricaoDoPedido(devolvendo.pedido_id)}
+            unidade={normalizarUnidade(
+              produtos.find((p: any) => p.id === produtoDoPedido(devolvendo.pedido_id))?.unidade)}
             showToast={showToast}
             onClose={() => setDevolvendo(null)}
             onFeito={async () => {
@@ -585,31 +689,36 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 // A conferência que dá consequência a "chegou errado" (migr. 423). Toda a
 // regra — teto pela quantidade recebida, baixa de estoque, abatimento da conta
 // a pagar e encerramento do pedido — vive na RPC; aqui é só a conversa.
-const ModalDevolucao = ({ item, disponivel, produtoNome, showToast, onClose, onFeito }: {
+const ModalDevolucao = ({ item, disponivel, produtoNome, unidade, showToast, onClose, onFeito }: {
   item: any;
   disponivel: number;
   produtoNome?: string;
+  /** Unidade do produto devolvido — decide se a quantidade aceita fração. */
+  unidade?: string;
   showToast: any;
   onClose: () => void;
   onFeito: () => void | Promise<void>;
 }) => {
-  const [qtd, setQtd] = useState(String(disponivel));
+  const frac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(unidade));
+  const [qtd, setQtd] = useState(qtdBR(disponivel));
   const [motivo, setMotivo] = useState<string>(MOTIVOS_DEVOLUCAO[0]);
   const [reenvio, setReenvio] = useState(true);
   const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const qtdNum = Number(qtd);
-  const qtdValida = Number.isFinite(qtdNum) && qtdNum > 0 && qtdNum <= disponivel;
+  const qtdNum = parseQtd(qtd);
+  const qtdValida = qtdNum > 0 && qtdNum <= disponivel;
 
   const enviar = async () => {
     if (!supabase) return;
-    if (!qtdValida) { showToast(`Informe uma quantidade entre 1 e ${disponivel}.`, 'error', true); return; }
+    if (!qtdValida) { showToast(`Informe uma quantidade entre ${frac ? '0,001' : '1'} e ${qtdBR(disponivel)}.`, 'error', true); return; }
     setSaving(true);
     try {
       const { data: res, error } = await supabase.rpc('registrar_devolucao_fornecedor', {
         p_recebimento_id:   item.id,
-        p_qtd:              Math.trunc(qtdNum),
+        // Era Math.trunc: devolver 12,5 KG registrava 12 e deixava meio quilo
+        // fantasma no estoque e na conta a pagar (migr. 439).
+        p_qtd:              qtdNum,
         p_motivo:           motivo,
         p_reenvio_esperado: reenvio,
         p_observacao:       observacao || null,
@@ -620,14 +729,14 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, showToast, onClose, onF
       // Cada efeito vira uma frase: o aluno precisa ver que devolver mexe em
       // estoque, financeiro e no pedido ao mesmo tempo.
       const partes = [
-        `${r.qtd} unidade(s) devolvida(s) ao fornecedor.`,
+        `${qtdBR(r.qtd)} ${normalizarUnidade(unidade, 'un')} devolvida(s) ao fornecedor.`,
         r.estoque_baixado ? 'Estoque baixado.' : 'Sem baixa de estoque (o recebimento não tinha produto vinculado).',
         r.conta_efeito === 'abatida'   ? `Conta a pagar abatida em R$ ${Number(r.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
         : r.conta_efeito === 'cancelada' ? 'A conta a pagar do pedido foi cancelada — nada mais a pagar.'
         : r.conta_efeito === 'ja_paga'   ? 'ATENÇÃO: a conta deste pedido já foi paga. O crédito precisa ser negociado com o fornecedor.'
         : null,
         r.pedido_fechado ? 'Pedido encerrado.'
-          : reenvio ? `Saldo do pedido voltou para ${r.saldo_pedido} unidade(s) — aguardando reposição.` : null,
+          : reenvio ? `Saldo do pedido voltou para ${qtdBR(r.saldo_pedido)} — aguardando reposição.` : null,
       ].filter(Boolean);
 
       showToast(partes.join(' '), r.conta_efeito === 'ja_paga' ? 'info' : 'success', true);
@@ -658,7 +767,7 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, showToast, onClose, onF
             <div className="min-w-0">
               <h3 className="text-sm font-black text-gray-100">Devolver ao fornecedor</h3>
               <p className="text-[11px] text-gray-500 truncate">
-                {produtoNome || 'Item do pedido'} · recebido {item.qtd_recebida} · disponível {disponivel}
+                {produtoNome || 'Item do pedido'} · recebido {qtdBR(item.qtd_recebida)} · disponível {qtdBR(disponivel)}
               </p>
             </div>
           </div>
@@ -668,10 +777,12 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, showToast, onClose, onF
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label={`Quantidade * (máx. ${disponivel})`}>
-            <input type="number" min={1} max={disponivel}
-              className="neu-input py-2 px-3 rounded-xl text-sm"
-              value={qtd} onChange={e => setQtd(e.target.value)} />
+          <FormField label={`Quantidade * (máx. ${qtdBR(disponivel)}${unidade ? ` ${unidade}` : ''})`}>
+            <input type="text" inputMode="decimal"
+              className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+              value={qtd}
+              onChange={e => setQtd(formatQtd(e.target.value, frac))}
+              onKeyDown={handleQtdKeyDown(frac)} />
           </FormField>
           <FormField label="Motivo *">
             <select className="neu-input py-2 px-3 rounded-xl text-sm" value={motivo} onChange={e => setMotivo(e.target.value)}>

@@ -11,7 +11,8 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
-import { useFormValidation } from '../lib/viewUtils';
+import { useFormValidation, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
@@ -99,6 +100,8 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const [produtoSel, setProdutoSel] = useState<string>('');
   const [form, setForm] = useState({ item: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
+  // A unidade vem da requisição em edição — quem corrige não escolhe a medida.
+  const editFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(editItem?.unidade));
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   // Criação em lote: N linhas de {produto/item, qtd} compartilhando
@@ -109,7 +112,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ item: item.item ?? '' });
-    setExtras({ qtd: String(item.qtd ?? 1), urgencia: item.urgencia ?? 'Normal', centro_custo: item.centro_custo ?? '' });
+    setExtras({ qtd: qtdBR(item.qtd ?? 1), urgencia: item.urgencia ?? 'Normal', centro_custo: item.centro_custo ?? '' });
     // Pré-seleciona o produto se o item gravado bater com algum do catálogo;
     // senão cai em "Outro" pra preservar o texto histórico.
     const match = produtosOrdenados.find((p: any) => p.nome === item.item);
@@ -149,7 +152,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const handleSave = async () => {
     if (!validate() || !editItem || !supabase) return;
 
-    const qtd = parseInt(extras.qtd) || 1;
+    const qtd = parseQtd(extras.qtd) || 1;
     const mudouDecisao = form.item.trim() !== (editItem.item ?? '') || qtd !== Number(editItem.qtd);
     if (editItem.status === 'Aprovado' && mudouDecisao) {
       const ok = await confirm(
@@ -315,9 +318,14 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         )}
                       </div>
                     </FormField>
-                    <FormField label="Quantidade">
-                      <input type="number" min="1" className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} />
+                    {/* A unidade é a que o solicitante escolheu na requisição —
+                        Compras corrige a quantidade, não a medida. Fração só se a
+                        unidade for fracionária (migr. 439). */}
+                    <FormField label={`Quantidade (${normalizarUnidade(editItem?.unidade)})`}>
+                      <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                        value={extras.qtd}
+                        onChange={e => setExtras(x => ({ ...x, qtd: formatQtd(e.target.value, editFrac) }))}
+                        onKeyDown={handleQtdKeyDown(editFrac)} />
                     </FormField>
                     <FormField label="Urgência">
                       <select className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -379,7 +387,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         </span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">{item.qtd}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">{qtdBR(item.qtd)}</td>
                       <td className="py-3 px-4 text-center"><UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} /></td>
                       <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.centro_custo || '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">

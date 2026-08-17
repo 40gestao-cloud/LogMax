@@ -22,7 +22,7 @@
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
-import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial } from './unidades';
+import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, UNIDADES_CONTEUDO } from './unidades';
 import { supabase } from './supabase';
 
 export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
@@ -199,7 +199,7 @@ const modeloProdutos = (filial: string): Modelo => {
       dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
     { col: 'Nome do produto', obrigatorio: true, exemplo: 'Arroz Branco 5kg' },
     { col: 'Categoria', obrigatorio: true, exemplo: 'Mercearia', fonte: 'categorias',
-      dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega a margem-alvo usada para sugerir o preço de venda.' },
+      dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega o markup-alvo usado para sugerir o preço de venda.' },
     { col: 'Subcategoria', exemplo: 'Grãos', fonte: 'subcategorias',
       dica: 'Opcional. Também vem do cadastro de categorias.' },
     { col: 'Cód. Barras EAN', exemplo: '7891234567895', dica: 'EAN-13, 13 dígitos. Deixe em branco se não houver.' },
@@ -209,21 +209,35 @@ const modeloProdutos = (filial: string): Modelo => {
       dica: 'A lista traz as marcas já usadas nesta filial. Marca nova pode ser digitada.' },
   ];
   if (isSuper) {
-    campos.push({ col: 'Peso / Volume', obrigatorio: true, formato: 'decimal', exemplo: '5',
-      dica: 'Na unidade escolhida mais adiante (5 para "5 KG").' });
+    // Duas colunas, não uma. A dica antiga ("na unidade escolhida mais adiante")
+    // mandava usar a unidade de ESTOQUE para medir o CONTEÚDO — e é assim que a
+    // coluna `peso` acumulou 900 e 0,5 sem ninguém saber se era grama ou quilo
+    // (migr. 438). Só é obrigatório para embalagem fechada: granel não tem
+    // conteúdo por embalagem, a unidade de estoque já é a medida.
+    campos.push(
+      { col: 'Peso / Volume por embalagem', formato: 'decimal', exemplo: '5',
+        dica: 'O que vem dentro de UMA embalagem. Deixe em branco se o produto é vendido a granel (Unidade em KG ou L).' },
+      { col: 'Medida do conteúdo', lista: UNIDADES_CONTEUDO, exemplo: 'KG',
+        dica: 'A medida do conteúdo — nada a ver com a Unidade de estoque. Arroz de 5 kg em pacote: conteúdo 5 KG, Unidade UN.' },
+    );
   }
   campos.push(
     ...(ATRIBUTOS_PRODUTO[filial] ?? []),
     { col: 'Preço de Custo (R$)', obrigatorio: true, formato: 'moeda', exemplo: '18,90',
       dica: 'Quanto a empresa paga. No LogMax só admin/CEO/Financeiro enxergam.' },
     { col: 'Preço de Venda (R$)', obrigatorio: true, formato: 'moeda', exemplo: '24,90',
-      dica: 'Se a Categoria tiver margem-alvo cadastrada, o LogMax sugere este valor a partir do custo — a sugestão é um clique, e o preço continua editável.' },
-    { col: 'Unidade', lista: unidadesDeProduto(filial), exemplo: 'UN' },
-    { col: 'Estoque Inicial', formato: 'decimal', exemplo: '40' },
-    { col: 'Quantidade Comprada', formato: 'decimal', exemplo: '40',
-      dica: 'Quanto entrou na compra que originou este cadastro.' },
+      dica: 'Se a Categoria tiver markup-alvo cadastrado, o LogMax sugere este valor a partir do custo — a sugestão é um clique, e o preço continua editável. Markup é sobre o custo; margem é sobre a venda.' },
+    { col: 'Unidade', lista: unidadesDeProduto(filial), exemplo: 'UN',
+      dica: isSuper
+        ? 'Como o item entra e sai do estoque. 50 pacotes de arroz são 50 UN; banana pesada no caixa é KG.'
+        : 'Como o item entra e sai do estoque.' },
+    // "Quantidade Comprada" saiu: era uma segunda entrada de estoque no mesmo
+    // cadastro, e quem preenchia as duas com 40 terminava com 80. Compra tem
+    // documento — vai por Compras → Recebimentos.
+    { col: 'Saldo de Abertura', formato: 'decimal', exemplo: '40',
+      dica: 'O que já está na prateleira hoje. Não é compra: não gera conta a pagar. Fração só faz sentido se a Unidade for KG ou L (12,5 KG) — em UN, CX, PC e PCT vai inteiro.' },
     { col: 'Estoque Mínimo', obrigatorio: true, formato: 'decimal', exemplo: '10',
-      dica: 'Abaixo disso o produto aparece em Sugestões de Compra.' },
+      dica: 'Abaixo disso o produto aparece em Sugestões de Compra. Aceita fração para item vendido a peso (migr. 438).' },
   );
   if (isSuper) {
     campos.push({ col: 'Elegível a benefícios', lista: SIM_NAO, exemplo: 'Não',

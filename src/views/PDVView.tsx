@@ -12,6 +12,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { UNIDADES_FRACIONARIAS } from '../lib/unidades';
+import { ehVendavel } from '../lib/tipoProduto';
 import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
@@ -385,10 +386,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     }));
   }, [produtos]);
 
-  // Patrimônio (tipo='patrimonio') é classificado em Compras e gerenciado pelo
-  // Financeiro — não pode vir pra venda. Default ausente = estoque_venda (legado).
+  // Só mercadoria para revenda entra no PDV. A pergunta é AFIRMATIVA de
+  // propósito (migr. 440): a versão anterior era `tipo !== 'patrimonio'`, e
+  // blacklist faz tipo novo nascer vendável — material de uso e consumo
+  // (resma, água, limpeza) teria entrado no caixa por omissão. O banco repete
+  // a regra em `fn_item_venda_so_mercadoria`, então a tela é conveniência, não
+  // a trava.
   const produtosAtivos = produtos.filter((p: any) =>
-    (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio'
+    (p.status === 'Ativo' || !p.status) && ehVendavel(p.tipo)
   );
   // Filial filter primeiro, depois busca textual. Critério: igual exato a `filial`
   // (campo na tabela `produtos`). Produto com filial='Matriz' ou ausente fica

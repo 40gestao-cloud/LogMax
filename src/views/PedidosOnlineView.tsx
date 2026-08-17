@@ -4,6 +4,7 @@ import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, E
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { ehVendavel } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -405,6 +406,11 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   ];
 
   const produtosFiltrados = (produtos ?? [])
+    // Patrimônio e material de uso e consumo não vão para a loja pública
+    // (migr. 440). A lista oferecia TODOS os produtos da filial, então dava
+    // para publicar o freezer. O banco recusa em `fn_produto_publicavel`; aqui
+    // o item nem aparece com botão de publicar.
+    .filter((p: any) => ehVendavel(p.tipo))
     .filter((p: any) => {
       const q = buscaProd.trim().toLowerCase();
       if (!q) return true;

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { ehVendavel } from '../lib/tipoProduto';
+import { calcMarkup, calcMargem, corDoMarkup, fmtPct } from '../lib/precificacao';
 import {
   LoadingSpinner,
   EmptyState,
@@ -16,13 +18,11 @@ import { hasSetor, isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-const calcMargem = (venda: number, custo: number): number | null => {
-  if (!custo || !venda) return null;
-  return ((venda - custo) / custo) * 100;
-};
+// Markup e margem vêm de src/lib/precificacao.ts — esta era a segunda cópia
+// da fórmula, e ela calculava markup sob o rótulo "Margem".
 
 // Catálogo é vitrine read-only para todos os setores. CRUD continua em
-// Empresa → Produtos (ProdutosView). Bloco financeiro (custo + margem) é
+// Empresa → Produtos (ProdutosView). Bloco financeiro (custo + markup/margem) é
 // gated por admin/CEO/financeiro/marketing — demais setores só veem preço de venda.
 // Rótulos legíveis dos atributos JSONB (produtos.atributos). Mesmas chaves
 // declaradas em ProdutosView.ATRIBUTOS_PRODUTO — duplicadas aqui para não
@@ -112,7 +112,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   const produtosVisiveis = useMemo(
     () => data.filter((p: any) =>
       (p.status === 'Ativo' || !p.status) &&
-      p.tipo !== 'patrimonio' &&
+      ehVendavel(p.tipo) &&
       (categoriaFiltro === 'todas' || p.categoria === categoriaFiltro)
     ).slice().sort((a: any, b: any) => {
       const ra = filialRank(a.filial);
@@ -124,12 +124,13 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   );
 
   // Categorias do filtro saem só dos itens que o catálogo realmente mostra —
-  // senão categoria exclusiva de patrimônio aparece no dropdown e, ao ser
-  // escolhida, devolve lista vazia (o filtro de tipo acima já removeu os itens).
+  // senão categoria exclusiva de patrimônio ou de material de consumo aparece
+  // no dropdown e, ao ser escolhida, devolve lista vazia (o filtro de tipo
+  // acima já removeu os itens).
   const categorias = useMemo(() => {
     const set = new Set<string>();
     data.forEach((p: any) => {
-      if (p.tipo === 'patrimonio') return;
+      if (!ehVendavel(p.tipo)) return;
       if (p.categoria) set.add(p.categoria);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -432,16 +433,28 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Margem</span>
+                      {/* Markup em destaque (é o que sempre esteve aqui, com o
+                          nome errado) e a margem logo abaixo, menor: quem abre
+                          a ficha no Catálogo está conferindo preço, não fechando
+                          o resultado do mês. */}
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Markup</span>
                       {(() => {
-                        const m = calcMargem(Number(selecionado.preco ?? 0), Number(selecionado.preco_custo ?? 0));
-                        if (m === null) return <span className="text-base font-bold text-gray-600">—</span>;
-                        const cls = m >= 30 ? 'text-emerald-400' : m >= 10 ? 'text-yellow-400' : 'text-red-400';
+                        const v  = Number(selecionado.preco ?? 0);
+                        const c  = Number(selecionado.preco_custo ?? 0);
+                        const mk = calcMarkup(v, c);
+                        if (mk === null) return <span className="text-base font-bold text-gray-600">—</span>;
                         return (
-                          <span className={`text-base font-bold tabular-nums flex items-center gap-1 ${cls}`}>
-                            <TrendingUp size={13} />
-                            {m.toFixed(1)}%
-                          </span>
+                          <>
+                            <span className={`text-base font-bold tabular-nums flex items-center gap-1 ${corDoMarkup(mk)}`}
+                              title="Markup: quanto foi acrescentado ao custo para chegar ao preço.">
+                              <TrendingUp size={13} />
+                              {fmtPct(mk)}
+                            </span>
+                            <span className="text-[10px] text-gray-500 tabular-nums"
+                              title="Margem: quanto sobra da venda. É a conta do DRE.">
+                              margem {fmtPct(calcMargem(v, c))}
+                            </span>
+                          </>
                         );
                       })()}
                     </div>
@@ -452,7 +465,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
               {!podeVerCusto && (
                 <div className="flex items-center gap-2 text-[10px] text-gray-500">
                   <AlertCircle size={11} />
-                  <span>Informações de custo e margem ficam disponíveis para Financeiro, Marketing, admin e CEO.</span>
+                  <span>Informações de custo, markup e margem ficam disponíveis para Financeiro, Marketing, admin e CEO.</span>
                 </div>
               )}
             </motion.div>

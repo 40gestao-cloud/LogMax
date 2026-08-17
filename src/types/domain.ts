@@ -13,7 +13,13 @@ export interface Produto {
   ean?: string | null;
   preco: number;
   estoque: number;
+  /** Medida do ESTOQUE (UN, KG, CX...) — como o item entra e sai. */
   unidade: string;
+  /** Quantidade do CONTEÚDO da embalagem. NULL em granel. Migr. 438. */
+  peso?: number | null;
+  /** Medida do conteúdo (G/KG/ML/L). NULL nas linhas herdadas sem medida. */
+  peso_unidade?: string | null;
+  estoque_minimo?: number | null;
   filial?: string | null;
   status: 'Ativo' | 'Inativo' | string;
   tipo?: string | null;

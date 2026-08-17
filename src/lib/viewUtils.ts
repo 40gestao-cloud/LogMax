@@ -115,6 +115,68 @@ export const parseBRL = (v: string | number | null | undefined): number => {
   return Number(digits) / 100;
 };
 
+/**
+ * Máscara de QUANTIDADE — não é dinheiro, então não é cents-builder.
+ *
+ * `type="number"` não serve aqui: o teclado pt-BR produz vírgula, e o browser
+ * descarta o valor inteiro do input quando ela aparece (`e.target.value` volta
+ * ''). Era metade do motivo de o cadastro de produto só aceitar inteiro —
+ * a outra metade era o `parseInt` no save, que truncava 12,5 para 12 em
+ * silêncio numa coluna numeric(15,3).
+ *
+ * `fracionario=false` (UN, CX, PC, PCT) recusa o separador: não existe meio
+ * pacote. `true` (KG, L, M...) aceita um separador e até 3 decimais, a mesma
+ * escala de `produtos.estoque` e `movimentacoes_estoque.qtd` (migr. 079).
+ */
+export const formatQtd = (v: string | number | null | undefined, fracionario: boolean): string => {
+  if (v === null || v === undefined) return '';
+  const bruto = String(v).replace(/\./g, ',');
+  const [int, ...resto] = bruto.split(',');
+  const inteiro = int.replace(/\D/g, '');
+  // Discreta TRUNCA no separador, não o apaga. Apagar transformaria "12,5" em
+  // "125" — e isso não é hipótese de digitação: é o que acontece quando o
+  // operador troca a unidade de KG para UN com o campo já preenchido. Errar
+  // para 12 é aceitável; errar para 125 é um zero a mais no estoque.
+  if (!fracionario) return inteiro;
+  if (resto.length === 0) return inteiro;
+  return `${inteiro},${resto.join('').replace(/\D/g, '').slice(0, 3)}`;
+};
+
+/**
+ * onKeyDown dos inputs de quantidade. Em unidade discreta bloqueia o separador
+ * — mesma razão do `handleMoneyKeyDown`: sem isso, quem digita "12,5" num campo
+ * que só aceita inteiro vê o campo montar "125" tecla a tecla. Em fracionária
+ * deixa passar um separador só.
+ */
+export const handleQtdKeyDown = (fracionario: boolean) => (e: KeyboardEvent<HTMLInputElement>): void => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key.length !== 1) return;
+  if (/[0-9]/.test(e.key)) return;
+  const separador = e.key === ',' || e.key === '.';
+  const jaTem = (e.currentTarget.value ?? '').includes(',');
+  if (!separador || !fracionario || jaTem) e.preventDefault();
+};
+
+/**
+ * Quantidade como se lê em português. `numeric` do Postgres chega com a escala
+ * inteira ("12.500" para 12,5) — jogado direto na tela, o leitor brasileiro vê
+ * doze mil e quinhentos. Serve tanto para exibir quanto para preencher input.
+ */
+export const qtdBR = (v: string | number | null | undefined): string => {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n)) return '';
+  return String(n).replace('.', ',');
+};
+
+/** Inverte formatQtd: "12,5" → 12.5 ; "" → 0. Aceita vírgula e ponto. */
+export const parseQtd = (v: string | number | null | undefined): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (!v) return 0;
+  const n = parseFloat(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+
 // Converte string vazia em chaves UUID-like (`_id`) para `null`. Postgres
 // rejeita '' como UUID; o front frequentemente envia '' quando o select
 // está em "Nenhum/Selecione...". Em vez de tratar caso a caso em cada view,

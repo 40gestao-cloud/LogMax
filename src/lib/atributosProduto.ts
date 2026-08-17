@@ -19,6 +19,17 @@ export type AtributoDef = {
   wide?: boolean; // ocupa linha inteira no grid
   /** Explica o campo quando o rótulo não basta. Vai abaixo do input. */
   dica?: string;
+  /**
+   * Só aparece quando o campo booleano nomeado aqui estiver marcado. Nasceu da
+   * ficha de perecível: "Validade (dias)" e "Armazenagem" ficavam habilitados
+   * mesmo com "Produto perecível" desmarcado, e a turma preenchia validade de
+   * detergente. Ao desmarcar o pai, o formulário limpa os filhos.
+   */
+  dependeDe?: string;
+  /** Obrigatório apenas quando o campo de `dependeDe` está marcado. */
+  reqSe?: boolean;
+  /** Restringe a digitação a dígitos (prazo em dias, garantia). */
+  soDigitos?: boolean;
 };
 
 export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
@@ -56,10 +67,16 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
   // está sem ficha, e isso basta.
   SuperMax: [
     { key: 'perecivel', label: 'Produto perecível', type: 'bool', wide: true },
+    // Os dois passam a depender do checkbox, e a validade vira obrigatória
+    // quando ele está marcado: perecível sem prazo é o cadastro que impede o
+    // recebimento de calcular a data e devolve o problema para a digitação à
+    // mão — que é de onde a migr. 424 estava tentando sair.
     { key: 'validade_dias', label: 'Validade (dias)', placeholder: 'Ex: 5, 30, 180',
-      dica: 'Prazo desde o recebimento. É o que decide remarcação e ordem de saída.' },
-    { key: 'armazenagem', label: 'Armazenagem', type: 'select',
-      options: ['Ambiente', 'Refrigerado', 'Congelado'] as const },
+      dependeDe: 'perecivel', reqSe: true, soDigitos: true,
+      dica: 'Prazo desde o recebimento. O Recebimento usa isto para calcular a data de vencimento do lote, e é ela que ordena a fila de Validades.' },
+    { key: 'armazenagem', label: 'Armazenagem', type: 'select', dependeDe: 'perecivel',
+      options: ['Ambiente', 'Refrigerado', 'Congelado'] as const,
+      dica: 'Aparece como selo na fila de Validades — é o que decide o que se resolve primeiro.' },
   ],
 };
 

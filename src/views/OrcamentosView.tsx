@@ -5,6 +5,7 @@ import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { ehVendavel } from '../lib/tipoProduto';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -119,7 +120,7 @@ const OrcamentosViewInner = ({
   const [detalhes, setDetalhes] = useState<any | null>(null);
 
   const produtosAtivos = useMemo(
-    () => produtos.filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && p.tipo !== 'patrimonio'),
+    () => produtos.filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && ehVendavel(p.tipo)),
     [produtos]
   );
 

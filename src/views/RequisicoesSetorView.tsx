@@ -12,7 +12,9 @@ import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
-import { unidadesDeRequisicao, exemploItemRequisicao } from '../lib/unidades';
+import { unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
+import { temEstoque } from '../lib/tipoProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
@@ -122,7 +124,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const catalogoRepo = useMemo(() => {
     const termo = buscaCat.trim().toLowerCase();
     return [...produtos]
-      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo')
+      // Patrimônio não se repõe (migr. 440). Consumo sim — é a reposição de
+      // resma e material de limpeza, que antes não tinha como ser cadastrada.
+      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && temEstoque(p.tipo))
       .map((p: any) => {
         const saldo = Number(p.estoque ?? 0);
         const minimo = Number(p.estoque_minimo ?? 0);
@@ -142,6 +146,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // requisição de compra é documento corporativo único.
   const unidadesReq = useMemo(() => unidadesDeRequisicao(filial), [filial]);
 
+  // Quantidade fracionária atravessa a cadeia de compra desde a migr. 439. Cada
+  // linha decide sozinha: a unidade da linha (compra eventual) ou a do produto
+  // (reposição e material de almoxarifado) é que diz se cabe vírgula. Meia caixa
+  // não existe; meio quilo é o dia a dia da mercearia.
+  const ehFracionaria = (u: string | null | undefined) =>
+    UNIDADES_FRACIONARIAS.has(normalizarUnidade(u));
+
+  const unidadeEstoqueSel = useMemo(() => {
+    const p = produtos.find((x: any) => x.id === estoqueForm.produto_id);
+    return p ? normalizarUnidade(p.unidade) : '';
+  }, [produtos, estoqueForm.produto_id]);
+  const estoqueFrac = ehFracionaria(unidadeEstoqueSel);
+
   const qtdAbaixoMin = useMemo(
     () => produtos.filter((p: any) => {
       const min = Number(p.estoque_minimo ?? 0);
@@ -153,7 +170,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // Só se pede do almoxarifado o que o almoxarifado tem.
   const produtosEmEstoque = useMemo(
     () => [...produtos]
-      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && Number(p.estoque ?? 0) > 0)
+      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo'
+        && temEstoque(p.tipo) && Number(p.estoque ?? 0) > 0)
       .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
     [produtos],
   );
@@ -176,7 +194,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const materiais = reqEstoque.map((r: any) => ({
       id: r.id, tipo: 'estoque' as TipoReq, tipoLabel: 'Estoque', numero: null as string | null,
       item: produtos.find((p: any) => p.id === r.produto_id)?.nome ?? 'Produto',
-      qtd: r.qtd, unidade: 'UN',
+      // 'UN' fixo mentia para o queijo: `requisicoes_estoque` não guarda unidade
+      // porque a unidade é a do produto pedido. Lê de lá.
+      qtd: r.qtd,
+      unidade: normalizarUnidade(produtos.find((p: any) => p.id === r.produto_id)?.unidade),
       complemento: r.destino, prazo: null, urgencia: 'Normal',
       abertura: (r.created_at ?? '').slice(0, 10), status: r.status,
       justificativa: null, solicitante: r.solicitante,
@@ -240,7 +261,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       const { data: saved, error } = await supabase.rpc('criar_requisicao_estoque', {
         p_produto_id:  estoqueForm.produto_id,
         p_solicitante: profile.nome,
-        p_qtd:         parseInt(estoqueForm.qtd, 10) || 1,
+        p_qtd:         parseQtd(estoqueForm.qtd) || 1,
         p_destino:     estoqueForm.destino.trim() || null,
         p_filial:      filial,
       });
@@ -298,11 +319,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       // daqui seria deixar o navegador escrever o que o comprador vai ler.
       const p_itens = ehRepo
         ? [...repo.entries()].map(([produto_id, qtd]) => ({
-            produto_id, qtd: parseInt(qtd, 10) || 1,
+            produto_id, qtd: parseQtd(qtd) || 1,
           }))
         : itens.map(r => ({
             item:    r.item.trim(),
-            qtd:     parseInt(r.qtd, 10) || 1,
+            qtd:     parseQtd(r.qtd) || 1,
             unidade: r.unidade,
             // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
             justificativa: r.justificativa.trim() || null,
@@ -430,18 +451,22 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       <option value="">Selecione o produto em estoque…</option>
                       {produtosEmEstoque.map((p: any) => (
                         <option key={p.id} value={p.id}>
-                          {p.nome}{p.codigo ? ` (${p.codigo})` : ''} — saldo {p.estoque ?? 0}
+                          {p.nome}{p.codigo ? ` (${p.codigo})` : ''} — saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)}
                         </option>
                       ))}
                     </select>
                   </FormField>
 
-                  <FormField label="Quantidade">
+                  {/* A unidade é a do produto escolhido, não uma escolha à
+                      parte: quem pede queijo do almoxarifado pede em KG porque
+                      é assim que o queijo está lá. */}
+                  <FormField label={`Quantidade${unidadeEstoqueSel ? ` (${unidadeEstoqueSel})` : ''}`}>
                     <input
-                      type="number" min="1"
-                      className="neu-input py-2 px-3 rounded-xl text-sm"
+                      type="text" inputMode="decimal"
+                      className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
                       value={estoqueForm.qtd}
-                      onChange={e => setEstoqueForm(f => ({ ...f, qtd: e.target.value }))}
+                      onChange={e => setEstoqueForm(f => ({ ...f, qtd: formatQtd(e.target.value, estoqueFrac) }))}
+                      onKeyDown={handleQtdKeyDown(estoqueFrac)}
                     />
                   </FormField>
 
@@ -549,8 +574,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           <button onClick={() => toggleRepo(p.id)} className="flex-1 min-w-0 text-left">
                             <span className="block text-xs font-semibold text-gray-200 truncate">{p.nome}</span>
                             <span className="block text-[10px] text-gray-500">
-                              {p.codigo ? `${p.codigo} · ` : ''}saldo {p.saldo}
-                              {p.minimo > 0 ? ` · mínimo ${p.minimo}` : ''}
+                              {p.codigo ? `${p.codigo} · ` : ''}saldo {qtdBR(p.saldo)}
+                              {p.minimo > 0 ? ` · mínimo ${qtdBR(p.minimo)}` : ''}
                               {' '}{p.unidade ?? 'un'}
                             </span>
                           </button>
@@ -561,11 +586,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           )}
                           {marcado && (
                             <input
-                              type="number" min="1"
-                              className="neu-input py-1 px-2 rounded-lg text-xs w-20 shrink-0"
+                              type="text" inputMode="decimal"
+                              className="neu-input py-1 px-2 rounded-lg text-xs w-20 shrink-0 tabular-nums"
                               value={repo.get(p.id) ?? '1'}
-                              onChange={e => setQtdRepo(p.id, e.target.value)}
-                              title="Quantidade a repor"
+                              onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, ehFracionaria(p.unidade)))}
+                              onKeyDown={handleQtdKeyDown(ehFracionaria(p.unidade))}
+                              title={`Quantidade a repor (${normalizarUnidade(p.unidade)})`}
                             />
                           )}
                         </div>
@@ -632,15 +658,21 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         )}
                       </div>
                       <input
-                        type="number" min="1"
-                        className="neu-input py-2 px-3 rounded-xl text-sm w-20"
+                        type="text" inputMode="decimal"
+                        className="neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums"
                         value={row.qtd}
-                        onChange={e => updateLinha(i, { qtd: e.target.value })}
+                        onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
+                        onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
                       />
                       <select
                         className="neu-input py-2 px-3 rounded-xl text-sm w-24"
                         value={row.unidade}
-                        onChange={e => updateLinha(i, { unidade: e.target.value })}
+                        onChange={e => {
+                          // Trocar a unidade remascara a quantidade da linha —
+                          // "12,5" digitado em KG não pode virar 125 em UN.
+                          const u = e.target.value;
+                          updateLinha(i, { unidade: u, qtd: formatQtd(row.qtd, ehFracionaria(u)) });
+                        }}
                       >
                         {unidadesReq.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
@@ -754,7 +786,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <td className="py-3 px-4 text-xs text-gray-300 capitalize">
                       {r.solicitante ?? '—'}
                     </td>
-                    <td className="py-3 px-4 text-xs font-mono text-gray-300">{r.qtd} {r.unidade ?? ''}</td>
+                    <td className="py-3 px-4 text-xs font-mono text-gray-300">{qtdBR(r.qtd)} {r.unidade ?? ''}</td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-400">{r.prazo ?? '—'}</td>
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-500">{r.abertura || '—'}</td>

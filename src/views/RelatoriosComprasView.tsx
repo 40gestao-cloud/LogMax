@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, ClipboardList, ShoppingCart, Package, FileText } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { qtdBR } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, UrgenciaBadge } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
@@ -62,7 +63,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
   const handleExportPDF = () => {
     if (activeTab === 'requisicoes') {
       exportToPDF('Relatório de Requisições', ['Item', 'Qtd', 'Solicitante', 'Urgência', 'Centro Custo', 'Status', 'Data'],
-        filteredReq.map((r: any) => [r.item ?? '', String(r.qtd ?? ''), r.solicitante ?? '', r.urgencia ?? '', r.centro_custo ?? '', r.status ?? '', r.data ?? '']),
+        filteredReq.map((r: any) => [r.item ?? '', qtdBR(r.qtd), r.solicitante ?? '', r.urgencia ?? '', r.centro_custo ?? '', r.status ?? '', r.data ?? '']),
         'logmax-requisicoes');
     } else if (activeTab === 'pedidos') {
       exportToPDF('Relatório de Pedidos', ['Fornecedor', 'Valor Total', 'Prazo Entrega', 'Cond. Pgto', 'Status'],
@@ -70,7 +71,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
         'logmax-pedidos');
     } else if (activeTab === 'recebimentos') {
       exportToPDF('Relatório de Recebimentos', ['Data', 'Pedido', 'Qtd Recebida', 'Observação', 'Status'],
-        filteredRec.map((r: any) => [r.data ?? '', `#${String(r.pedido_id ?? '').slice(0, 8)}`, String(r.qtd_recebida ?? ''), r.observacao ?? '', r.status ?? '']),
+        filteredRec.map((r: any) => [r.data ?? '', `#${String(r.pedido_id ?? '').slice(0, 8)}`, qtdBR(r.qtd_recebida), r.observacao ?? '', r.status ?? '']),
         'logmax-recebimentos');
     } else {
       exportToPDF('Relatório de Notas Fiscais', ['Número NF', 'Fornecedor', 'Valor Total', 'Emissão', 'Status'],
@@ -171,7 +172,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
                     {filteredReq.map((r: any) => (
                       <motion.tr key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{r.item ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{r.qtd ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">{r.qtd != null ? qtdBR(r.qtd) : '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{r.solicitante ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{r.centro_custo ?? '—'}</td>
                         <td className="py-3 px-4 text-center"><UrgenciaBadge urgencia={r.urgencia} /></td>
@@ -214,7 +215,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
                       <motion.tr key={r.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{r.data ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-300">#{String(r.pedido_id ?? '').slice(0, 8)}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{r.qtd_recebida ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">{r.qtd_recebida != null ? qtdBR(r.qtd_recebida) : '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{r.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={r.status} /></td>
                       </motion.tr>

@@ -225,7 +225,7 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId, comMargem, nome
           /* Markup por linha de produto — é o que faz a categoria deixar de
              ser cor e ícone. Com o custo preenchido, o cadastro de produto
              sugere o preço de venda; vazio, o preço fica livre. */
-          <FormField label="Margem-alvo">
+          <FormField label="Markup-alvo">
             <div className="relative">
               <input className="neu-input w-full text-sm pr-9" inputMode="decimal" value={f.margem_alvo}
                 onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
@@ -325,7 +325,7 @@ function PainelCategorias({
     if (!filial) return;
     setSaving(true);
     try {
-      // String vazia vira NULL: "sem margem" é ausência de regra, não zero por
+      // String vazia vira NULL: "sem markup" é ausência de regra, não zero por
       // cento — zero faria o produto sugerir preço igual ao custo.
       const margem = f.margem_alvo.trim() === '' ? null : Number(f.margem_alvo.replace(',', '.'));
       const base = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, margem_alvo: margem };
@@ -452,7 +452,7 @@ function PainelCategorias({
                             {nSubs === 0 ? 'sem subcategorias' : `${nSubs} subcategoria${nSubs > 1 ? 's' : ''}`}
                           </span>
                           {cat.margem_alvo != null && (
-                            <span className="text-[10px] text-gray-500">· margem {cat.margem_alvo}%</span>
+                            <span className="text-[10px] text-gray-500" title="Markup-alvo: percentual acrescentado ao custo para sugerir o preço de venda.">· markup {cat.margem_alvo}%</span>
                           )}
                           {!filial && <FilialBadge filial={cat.filial} />}
                         </div>
@@ -666,7 +666,7 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
           <h1 className="text-2xl font-black text-gray-100">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
           <p className="text-sm text-gray-500 mt-1 max-w-2xl">
             Dois níveis: a <strong className="text-gray-400 font-semibold">categoria</strong> agrupa a linha de produto
-            e define a margem-alvo; a <strong className="text-gray-400 font-semibold">subcategoria</strong> refina dentro dela.
+            e define o markup-alvo; a <strong className="text-gray-400 font-semibold">subcategoria</strong> refina dentro dela.
             Usadas em Produtos, Orçamento e Marketing.
             {!filial && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
           </p>

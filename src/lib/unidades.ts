@@ -21,6 +21,38 @@ const UNIDADE_SERVICO = 'SV';
 export const UNIDADES_FRACIONARIAS = new Set(['KG', 'L', 'M', 'M²', 'M³']);
 
 /**
+ * Medida do CONTEÚDO da embalagem — outra coisa que a unidade de estoque.
+ *
+ * Arroz 5 kg em pacote: o estoque conta 50 UN, o conteúdo é 5 KG. O cadastro
+ * amarrava as duas ao mesmo seletor, então o aluno lia "Peso / Volume (UN)" e
+ * digitava um número sem medida. Nas quatro turmas isso produziu peso 900 e
+ * peso 0,5 na mesma coluna — grama e quilo convivendo sem rótulo (migr. 438).
+ */
+export const UNIDADES_CONTEUDO = ['G', 'KG', 'ML', 'L'] as const;
+
+/**
+ * Item vendido a granel não tem conteúdo de embalagem: a unidade de estoque JÁ
+ * É a medida. Banana a KG não tem "peso por embalagem" — pedir isso é o que
+ * fazia o campo virar `1` repetido.
+ */
+export const temConteudoDeEmbalagem = (unidade: string): boolean =>
+  !UNIDADES_FRACIONARIAS.has(normalizarUnidade(unidade));
+
+/** Rótulo de prateleira: "5 KG", ou vazio quando não há conteúdo declarado. */
+export const formatarConteudo = (
+  peso: number | string | null | undefined,
+  pesoUnidade: string | null | undefined,
+): string => {
+  const n = typeof peso === 'number' ? peso : parseFloat(String(peso ?? '').replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const qtd = String(Number(n.toFixed(3))).replace('.', ',');
+  const u = normalizarUnidade(pesoUnidade, '');
+  // Sem unidade é o passivo herdado da migr. 438 — dizer "5" e calar a medida
+  // é o que causou o problema; melhor a tela admitir que não sabe.
+  return u === '' ? `${qtd} (unidade não informada)` : `${qtd} ${u}`;
+};
+
+/**
  * Vocabulário canônico: sempre MAIÚSCULA, sem espaço. É o que o catálogo já
  * gravava e o que o PDV já assume (`String(p.unidade).toUpperCase()`), então
  * normalizar para cá não muda comportamento de nada que já funcionava.

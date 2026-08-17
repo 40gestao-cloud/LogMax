@@ -4,13 +4,13 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2 } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import { FILIAL_DEFAULT } from '../lib/filiais';
 import {
@@ -24,8 +24,18 @@ import {
   PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { UNIDADES_PRODUTO, unidadesDeProduto } from '../lib/unidades';
+import {
+  UNIDADES_PRODUTO,
+  unidadesDeProduto,
+  UNIDADES_CONTEUDO,
+  UNIDADES_FRACIONARIAS,
+  temConteudoDeEmbalagem,
+  normalizarUnidade,
+  formatarConteudo,
+} from '../lib/unidades';
 import { ATRIBUTOS_PRODUTO, type AtributoDef } from '../lib/atributosProduto';
+import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
+import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -58,15 +68,18 @@ const EMPTY_EXTRAS = {
   subcategoria_id:        '' as string,
   preco_custo:            '',
   estoque:                '',
-  qtd_comprada:           '',
   estoque_minimo:         '',
   unidade:                'UN' as string,
   ean:                    '',
   fornecedor:             '',
   marca:                  '',
   peso:                   '',
+  // Medida do CONTEÚDO da embalagem, independente de `unidade` (que é a medida
+  // do estoque). Arroz 5 KG em pacote: peso=5, peso_unidade=KG, unidade=UN.
+  // Migr. 438 — antes o rótulo usava `unidade` e produzia "Peso / Volume (UN)".
+  peso_unidade:           'KG' as string,
   filial:                 FILIAL_DEFAULT as string,
-  tipo:                   'estoque_venda' as 'estoque_venda' | 'patrimonio',
+  tipo:                   'estoque_venda' as TipoProduto,
   patrimonio_numero:      '',
   patrimonio_responsavel: '',
   patrimonio_localizacao: '',
@@ -84,6 +97,7 @@ const EMPTY_EXTRAS = {
 
 const parseNum = (v: string | number | undefined | null): number =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;
+
 
 /**
  * Produto sem nenhum campo da ficha do nicho preenchido. Só conta para filial
@@ -103,18 +117,26 @@ const fichaVazia = (item: any, filial: string): boolean => {
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
-const calcMargem = (venda: string | number, custo: string | number): number | null => {
-  const v = parseNum(venda);
-  const c = parseNum(custo);
-  if (!c || !v) return null;
-  return ((v - c) / c) * 100;
-};
+// A conta vive em src/lib/precificacao.ts — estava duplicada aqui e no
+// Catálogo, e as duas calculavam MARKUP sob o rótulo "Margem".
 
-const MargemBadge = ({ venda, custo }: { venda: string | number; custo: string | number }) => {
-  const m = calcMargem(venda, custo);
-  if (m === null) return <span className="text-gray-600">—</span>;
-  const cls = m >= 30 ? 'text-emerald-400' : m >= 10 ? 'text-yellow-400' : 'text-red-400';
-  return <span className={`font-bold tabular-nums ${cls}`}>{m.toFixed(1)}%</span>;
+/**
+ * Selo da grade. Mostra MARKUP, que é o que sempre mostrou — só o nome estava
+ * errado. A margem real vai no title, porque a coluna não comporta as duas e
+ * quem decide preço na listagem está olhando formação, não resultado.
+ */
+const MarkupBadge = ({ venda, custo }: { venda: string | number; custo: string | number }) => {
+  const v  = parseNum(venda);
+  const c  = parseNum(custo);
+  const mk = calcMarkup(v, c);
+  if (mk === null) return <span className="text-gray-600">—</span>;
+  const mg = calcMargem(v, c);
+  return (
+    <span className={`font-bold tabular-nums ${corDoMarkup(mk)}`}
+      title={`Markup ${fmtPct(mk)} (sobre o custo) · Margem ${fmtPct(mg)} (sobre a venda)`}>
+      {fmtPct(mk)}
+    </span>
+  );
 };
 
 const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
@@ -178,11 +200,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
   const [extras, setExtras] = useState(EMPTY_EXTRAS);
 
+  // As duas medidas do produto, que o formulário confundia (migr. 438):
+  //
+  //   `fracionario`        → o estoque anda em fração (KG, L, M...). Manda nos
+  //                          campos de quantidade: 12,5 KG é saldo legítimo, e
+  //                          `produtos.estoque` é numeric(15,3) desde a 079.
+  //   `mostraPesoConteudo` → a embalagem tem conteúdo a declarar. Granel não
+  //                          tem: a unidade de estoque já é a medida.
+  const fracionario = UNIDADES_FRACIONARIAS.has(normalizarUnidade(extras.unidade));
+  const mostraPesoConteudo = filial === 'SuperMax'
+    && temEstoque(extras.tipo)
+    && temConteudoDeEmbalagem(extras.unidade);
+
   // A RLS de `categorias_produto` é `auth_pode_filial(filial)` — admin/CEO
   // satisfaz para as três, então sem este filtro o select do produto oferece o
   // catálogo inteiro da holding a quem opera a demo. Era inofensivo enquanto
   // categoria era só rótulo; virou preço errado quando ela passou a carregar a
-  // margem-alvo. A categoria já gravada entra mesmo se for de outra filial,
+  // markup-alvo. A categoria já gravada entra mesmo se for de outra filial,
   // senão editar um produto legado esvaziaria o campo em silêncio.
   const categoriasDaFilial = useMemo(
     () => categoriasProduto.filter((c: any) =>
@@ -190,22 +224,25 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     [categoriasProduto, filial, extras.categoria_id],
   );
 
-  // Markup da categoria escolhida (migr. 360). `preco = custo * (1 + margem/100)`
-  // — é markup sobre o custo, que é como o varejo forma preço na ponta. Margem
-  // sobre a venda daria outra conta, e o rótulo diz qual das duas é.
-  const margemCategoria = useMemo(() => {
+  // Markup da categoria (migr. 360). A coluna se chama `margem_alvo` por
+  // legado, mas o COMMENT dela no banco já diz "Markup-alvo" — e é markup que
+  // ela guarda. O rótulo da tela agora concorda com o banco.
+  const markupCategoria = useMemo(() => {
     const cat = categoriasProduto.find((c: any) => c.id === extras.categoria_id);
     const m = cat?.margem_alvo;
     return m == null || Number(m) <= 0 ? null : Number(m);
   }, [categoriasProduto, extras.categoria_id]);
 
   const precoSugerido = useMemo(() => {
-    if (margemCategoria === null) return null;
+    if (markupCategoria === null) return null;
     const custo = parseBRL(extras.preco_custo);
     if (!custo || custo <= 0) return null;
-    return Math.round(custo * (1 + margemCategoria / 100) * 100) / 100;
-  }, [margemCategoria, extras.preco_custo]);
-  const { errors, validate, clearError, setErrors } = useFormValidation(form);
+    return precoPorMarkup(custo, markupCategoria);
+  }, [markupCategoria, extras.preco_custo]);
+  // `validate` fica de fora: ele cobra toda chave de `form`, e `preco` deixou de
+  // ser obrigatório para item que não se vende (migr. 440). A checagem base vive
+  // em handleSave.
+  const { errors, clearError, setErrors } = useFormValidation(form);
   const [extrasErrors, setExtrasErrors] = useState<Record<string, string>>({});
 
   // Imagens do produto — até PRODUTO_IMAGEM_MAX_SLOTS (capa + extras).
@@ -257,15 +294,29 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     return ordenarPorCodigoDesc(rows ?? []);
   };
 
-  const exportCols = ['Código', 'Nome', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Margem', 'Estoque', 'Est. Mín', 'EAN', 'Status'];
+  // "Conteúdo" sai com a medida junto ("5 KG"). A coluna antiga não existia, e
+  // o peso solto na planilha reproduziria fora do sistema a ambiguidade que a
+  // migr. 438 acabou de fechar dentro dele.
+  // Markup E margem: a planilha tem espaço para as duas, e é onde a turma
+  // compara linha a linha. Antes saía uma coluna "Margem" com valor de markup.
+  const exportCols = ['Código', 'Nome', 'Conteúdo', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Markup %', 'Margem %', 'Estoque', 'Un.', 'Est. Mín', 'EAN', 'Status'];
   const buildExportRows = (rows: any[]) => rows.map((d: any) => {
-    const m = calcMargem(d.preco, d.preco_custo);
+    const mk = calcMarkup(parseNum(d.preco), parseNum(d.preco_custo));
+    const mg = calcMargem(parseNum(d.preco), parseNum(d.preco_custo));
+    const qtd = (v: any) => {
+      const n = parseNum(v);
+      return Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+    };
     return [
-      d.codigo ?? '', d.nome ?? '', d.categoria ?? '', d.fornecedor ?? '',
+      d.codigo ?? '', d.nome ?? '',
+      formatarConteudo(d.peso, d.peso_unidade),
+      d.categoria ?? '', d.fornecedor ?? '',
       d.preco_custo ? fmtBRL(parseNum(d.preco_custo)) : '',
       d.preco ? fmtBRL(parseNum(d.preco)) : '',
-      m !== null ? `${m.toFixed(1)}%` : '',
-      String(d.estoque ?? 0), String(d.estoque_minimo ?? 0),
+      mk !== null ? fmtPct(mk) : '',
+      mg !== null ? fmtPct(mg) : '',
+      qtd(d.estoque), normalizarUnidade(d.unidade),
+      qtd(d.estoque_minimo),
       d.ean ?? '', d.status ?? '',
     ];
   });
@@ -386,16 +437,28 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       categoria_id:           item.categoria_id   ?? '',
       subcategoria_id:        item.subcategoria_id ?? '',
       preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
-      estoque:                item.estoque        !== undefined ? String(item.estoque)        : '',
-      qtd_comprada:           '', // sempre vazio na edição — é movimentação one-shot, não persiste
-      estoque_minimo:         item.estoque_minimo !== undefined ? String(item.estoque_minimo) : '',
+      // numeric chega com escala fixa ("12.500"); `Number()` derruba o padding e
+      // a máscara devolve a vírgula. Sem isso o campo mostrava 12.500 e o
+      // operador lia doze mil e quinhentos.
+      estoque:                item.estoque        != null ? qtdBR(item.estoque)        : '',
+      estoque_minimo:         item.estoque_minimo != null ? qtdBR(item.estoque_minimo) : '',
       unidade:                item.unidade ?? 'UN',
       ean:                    item.ean            ?? '',
       fornecedor:             item.fornecedor     ?? '',
       marca:                  item.marca          ?? '',
-      peso:                   item.peso != null   ? String(item.peso) : '',
+      // `Number()` derruba o zero-padding que o numeric(10,3) devolve ("5.000"
+       // → 5); a vírgula é a que o operador digitou.
+      peso:                   item.peso != null   ? String(Number(item.peso)).replace('.', ',') : '',
+      // Vazio de propósito quando o banco não sabe: são as linhas herdadas em
+      // que peso foi gravado sem medida (migr. 438 não adivinha g vs kg). O
+      // select mostra "— Selecione —" e a validação cobra na primeira edição.
+      peso_unidade:           item.peso_unidade ?? '',
       filial:                 filial,
-      tipo:                   (item.tipo === 'patrimonio' ? 'patrimonio' : 'estoque_venda'),
+      // `normalizarTipo`, não o ternário que estava aqui: ele mapeava tudo que
+      // não fosse 'patrimonio' para 'estoque_venda', então abrir um item de
+      // consumo para editar o RECLASSIFICAVA como mercadoria em silêncio — e
+      // salvar o mandava para o PDV.
+      tipo:                   normalizarTipo(item.tipo),
       patrimonio_numero:      item.patrimonio_numero      ?? '',
       patrimonio_responsavel: item.patrimonio_responsavel ?? '',
       patrimonio_localizacao: item.patrimonio_localizacao ?? '',
@@ -457,20 +520,62 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    // `validate()` do useFormValidation cobra TODA chave de `form`, e `preco` é
+    // uma delas — era isso que forçava o aluno a inventar um preço de venda para
+    // resma de papel e para freezer. A régua passou a depender do tipo (migr.
+    // 440), então a checagem base é escrita aqui.
+    const vendavel = ehVendavel(extras.tipo);
+    const eb: Record<string, string> = {};
+    if (!form.codigo.trim())            eb.codigo = 'Campo obrigatório';
+    if (!form.nome.trim())              eb.nome   = 'Campo obrigatório';
+    if (vendavel && !form.preco.trim()) eb.preco  = 'Campo obrigatório';
+    if (Object.keys(eb).length) {
+      setErrors(eb);
+      showToast('Preencha todos os campos obrigatórios.', 'error', true);
+      return;
+    }
+    setErrors({});
+
     // Validação de campos obrigatórios extras (não gerenciados por useFormValidation)
     const ee: Record<string, string> = {};
-    if (!extras.marca.trim())        ee.marca         = 'Obrigatório';
-    // Peso só faz sentido em supermercado (KG/L); em roupa e eletrônico é dispensável.
-    if (filial === 'SuperMax' && !extras.peso.trim()) ee.peso = 'Obrigatório';
-    if (!extras.categoria_id)        ee.categoria_id  = 'Selecione uma categoria';
+    // Marca só se cobra de embalagem fechada de revenda. Hortifruti não tem
+    // marca — banana, tomate, alface —, e o campo obrigatório só produzia
+    // "Diversos" em 61% do catálogo da mercearia. Mesma régua do peso (438):
+    // quem é vendido a granel não tem rótulo para declarar.
+    if (vendavel && temConteudoDeEmbalagem(extras.unidade) && !extras.marca.trim()) {
+      ee.marca = 'Obrigatório';
+    }
+    // Conteúdo da embalagem: cobrado só de quem tem embalagem (migr. 438).
+    // Antes era obrigatório em toda a SuperMax, inclusive no granel — e é por
+    // isso que a coluna acumulou `1` como valor mais comum.
+    if (mostraPesoConteudo) {
+      if (!extras.peso.trim())        ee.peso = 'Obrigatório';
+      // Número sem medida é o defeito que a 438 veio desfazer: não deixa nascer
+      // um valor novo sem unidade, mesmo que exista dado herdado assim.
+      else if (!extras.peso_unidade)  ee.peso = 'Informe a medida (G, KG, ML ou L)';
+    }
+    // Categoria carrega o markup-alvo que sugere o preço de venda: não faz
+    // sentido exigi-la de quem não vende.
+    if (vendavel && !extras.categoria_id) ee.categoria_id = 'Selecione uma categoria';
     if (!extras.fornecedor)          ee.fornecedor    = 'Selecione um fornecedor';
     if (!extras.preco_custo.trim())  ee.preco_custo   = 'Obrigatório';
-    if (extras.estoque_minimo === '') ee.estoque_minimo = 'Obrigatório';
-    // Valida campos nicho-específicos declarados como req=true.
-    const atrDefs = ATRIBUTOS_PRODUTO[filial] ?? [];
+    // Patrimônio não tem ponto de reposição — não se repõe um freezer.
+    if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
+      ee.estoque_minimo = 'Obrigatório';
+    }
+    // Ficha do nicho só se cobra de mercadoria. Era bloqueio duro: cadastrar um
+    // manequim como patrimônio na MaxLook exigia Tamanho, Cor e Gênero, porque
+    // este loop nunca olhou o tipo.
+    const atrDefs = vendavel ? (ATRIBUTOS_PRODUTO[filial] ?? []) : [];
     for (const d of atrDefs) {
-      if (!d.req) continue;
+      // `reqSe`: obrigatório só quando o pai está marcado. Perecível sem prazo
+      // devolve o cálculo da validade para a digitação à mão no recebimento —
+      // que é exatamente o que a ficha existe para evitar.
+      const dependente = !!d.dependeDe;
+      const paiMarcado = dependente && extras.atributos?.[d.dependeDe!] === true;
+      const exigido = d.req || (d.reqSe && paiMarcado);
+      if (!exigido) continue;
+      if (dependente && !paiMarcado) continue;
       const v = extras.atributos?.[d.key];
       if (v === undefined || v === null || String(v).trim() === '') {
         ee[`atr_${d.key}`] = 'Obrigatório';
@@ -485,23 +590,36 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setIsSaving(true);
     showToast(editItem ? 'Atualizando produto...' : 'Salvando produto...', 'info', false);
     try {
-      const estoqueInicial = extras.estoque !== '' ? parseInt(extras.estoque, 10) : 0;
-      const qtdComprada    = extras.qtd_comprada !== '' ? parseInt(extras.qtd_comprada, 10) : 0;
+      // parseQtd, não parseInt: `produtos.estoque` e `movimentacoes_estoque.qtd`
+      // são numeric(15,3) desde a migr. 079 justamente para a mercearia receber
+      // 12,5 KG. O parseInt daqui truncava para 12 sem avisar ninguém.
+      const estoqueInicial = parseQtd(extras.estoque);
       // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
       // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
       const isPatrimonio = extras.tipo === 'patrimonio';
       const custoValor   = extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : 0;
       const basePayload = {
         ...form,
-        preco:                  parseBRL(form.preco),
+        // Zero, não o que sobrou digitado: se o aluno preencheu o preço e
+        // depois trocou o tipo para consumo, persistir o valor deixaria a resma
+        // com etiqueta de venda. A coluna é NOT NULL DEFAULT 0.
+        preco:                  vendavel ? parseBRL(form.preco) : 0,
         categoria:              extras.categoria,
         // preco_custo saiu daqui: vai para produtos_custo via salvarPrecoCusto().
-        estoque_minimo:         extras.estoque_minimo !== '' ? parseInt(extras.estoque_minimo, 10) : 0,
+        // numeric(15,3) desde a migr. 438 — mínimo de 2,5 KG é legítimo numa
+        // mercearia, e o integer anterior o arredondava.
+        estoque_minimo:         parseQtd(extras.estoque_minimo),
         unidade:                extras.unidade || 'UN',
         ean:                    extras.ean,
         fornecedor:             extras.fornecedor,
         marca:                  extras.marca || null,
-        peso:                   extras.peso !== '' ? parseFloat(extras.peso.replace(',', '.')) : null,
+        // Conteúdo da embalagem viaja em par: valor + medida, ou nada. Granel
+        // limpa os dois — se o aluno digitou 5 KG e depois trocou a unidade de
+        // estoque para KG, o "5 KG por embalagem" deixou de existir e ficaria
+        // mentindo na ficha. O CHECK chk_produtos_peso_unidade_orfa (migr. 438)
+        // barra unidade sem valor no banco; aqui a regra é a mesma, antes.
+        peso:                   mostraPesoConteudo && extras.peso !== '' ? parseQtd(extras.peso) : null,
+        peso_unidade:           mostraPesoConteudo && extras.peso !== '' ? (extras.peso_unidade || null) : null,
         filial:                 filial,
         categoria_id:           extras.categoria_id || null,
         subcategoria_id:        extras.subcategoria_id || null,
@@ -517,12 +635,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         // Patrimônio não vai pro PDV, então força elegivel_beneficios=false.
         // Elegível benefícios só se aplica ao SuperMax (supermercado) — MaxLook
         // e TechMax não têm itens elegíveis por natureza (roupa, eletrônico).
-        elegivel_beneficios:    isPatrimonio || filial !== 'SuperMax' ? false : !!extras.elegivel_beneficios,
+        elegivel_beneficios:    !vendavel || filial !== 'SuperMax' ? false : !!extras.elegivel_beneficios,
         // Atributos JSONB por nicho (só campos declarados em ATRIBUTOS_PRODUTO
         // pra filial atual — evita salvar lixo se o operador trocou de filial
         // no meio do fluxo).
         atributos: (() => {
-          const defs = ATRIBUTOS_PRODUTO[filial] ?? [];
+          const defs = vendavel ? (ATRIBUTOS_PRODUTO[filial] ?? []) : [];
           const out: Record<string, any> = {};
           for (const d of defs) {
             const v = extras.atributos?.[d.key];
@@ -535,12 +653,19 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
         await salvarPrecoCusto(editItem.id, custoValor);
-        // `updated` vem de `produtos` e não traz preco_custo — reinjeta o valor
-        // salvo para a grade refletir a edição sem esperar um reload.
-        setData((prev: any[]) => prev.map(d =>
-          d.id === editItem.id
-            ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoValor }
-            : d));
+        // Virou patrimônio: sai desta listagem, que filtra `tipo neq patrimonio`
+        // no servidor. Antes ele continuava na grade até o próximo reload e
+        // então desaparecia sem explicação.
+        if (isPatrimonio) {
+          setData((prev: any[]) => prev.filter(d => d.id !== editItem.id));
+        } else {
+          // `updated` vem de `produtos` e não traz preco_custo — reinjeta o valor
+          // salvo para a grade refletir a edição sem esperar um reload.
+          setData((prev: any[]) => prev.map(d =>
+            d.id === editItem.id
+              ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoValor }
+              : d));
+        }
         // Best-effort cleanup: se alguma imagem foi trocada ou removida,
         // apaga a antiga do bucket. Falha aqui não bloqueia o sucesso do UPDATE.
         imagensAnteriores.forEach((urlAntiga, i) => {
@@ -548,11 +673,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             removerImagemAntiga(urlAntiga).catch(() => {});
           }
         });
-        showToast('Produto atualizado!', 'success', true);
+        showToast(
+          isPatrimonio
+            ? 'Item atualizado como Patrimônio — ele sai desta lista e passa a ser gerido em Financeiro > Patrimônio.'
+            : 'Produto atualizado!',
+          'success', true);
       } else {
-        // Cria com estoque = 0 e gera movimentação Entrada (Saldo Inicial) se
-        // o operador informou abertura > 0. O trigger fn_atualiza_estoque_produto
-        // soma a quantidade ao saldo do produto recém-criado.
+        // Cria com estoque = 0 e gera UMA movimentação de Entrada (Saldo
+        // Inicial) se o operador informou abertura > 0. O trigger
+        // fn_atualiza_estoque_produto soma a quantidade ao saldo.
+        //
+        // Havia um segundo campo aqui, "Quantidade Comprada", que gerava outra
+        // Entrada com origem 'Compra inicial'. Duas coisas erradas de uma vez:
+        // quem entendia "comprei 50 para abrir" preenchia os dois e ficava com
+        // 100 no saldo; e a tal compra não gerava conta a pagar nem apuração de
+        // custo — o oposto do fluxo de Recebimentos que a migr. 417 tornou
+        // obrigatório para todo o resto do sistema. Compra entra por Compras.
         const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
         const saved = await dbInsert<any>('/api/produtosview', insertPayload);
         const novoId = saved?.id;
@@ -576,30 +712,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             showToast('Produto criado, mas saldo inicial não foi registrado. Verifique movimentações.', 'error', true);
           }
         }
-        // Quantidade comprada: entrada adicional documentando a compra que
-        // está sendo registrada junto ao cadastro. Separa do "Saldo Inicial"
-        // pra ficar claro no histórico que veio de uma compra, não de
-        // implantação. Trigger faz a soma no saldo do produto.
-        if (novoId && qtdComprada > 0) {
-          try {
-            await dbInsert('/api/movimentacoesestoqueview', {
-              produto_id: novoId,
-              tipo:       'Entrada',
-              qtd:        qtdComprada,
-              origem:     'Compra inicial',
-              destino:    'Almoxarifado',
-              data:       hoje,
-              filial:     basePayload.filial,
-            });
-            saldoFinal += qtdComprada;
-          } catch (movErr: any) {
-            console.warn('[Produtos] Falha ao registrar quantidade comprada:', movErr?.message ?? movErr);
-            showToast('Produto criado, mas quantidade comprada não foi registrada. Verifique movimentações.', 'error', true);
-          }
-        }
         if (saved) { saved.estoque = saldoFinal; saved.preco_custo = custoValor; }
-        setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoValor }, ...data]);
-        showToast('Produto criado com sucesso!', 'success', true);
+        // Patrimônio não entra na grade: o filtro server-side (`tipo neq
+        // patrimonio`) o excluiria no reload. Empurrar para `data` fazia o item
+        // aparecer, o aluno ler "criado com sucesso" e o produto evaporar no F5.
+        if (!isPatrimonio) {
+          setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoValor }, ...data]);
+        }
+        showToast(
+          isPatrimonio
+            ? 'Patrimônio cadastrado! Ele não aparece nesta lista — está em Financeiro > Patrimônio.'
+            : 'Produto criado com sucesso!',
+          'success', true);
       }
       closeForm();
     } catch (err: any) {
@@ -625,6 +749,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   };
 
   // Margem calculada ao vivo no formulário (parseBRL desempacota a máscara)
+  const markupAoVivo = calcMarkup(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const margemAoVivo = calcMargem(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const isFormOpen = showForm || !!editItem;
 
@@ -738,7 +863,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
                       placeholder="Ex: Parafuso M6" />
                   </FormField>
-                  <FormField label="Categoria *" error={extrasErrors.categoria_id}>
+                  <FormField label={ehVendavel(extras.tipo) ? 'Categoria *' : 'Categoria'} error={extrasErrors.categoria_id}>
                     {categoriasDaFilial.length > 0 ? (
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
                         value={extras.categoria_id}
@@ -794,23 +919,35 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
                       placeholder="Ex: Samsung, Nestlé, 3M" />
                   </FormField>
-                  {/* Peso/Volume só faz sentido em supermercado (KG/L/M vendável).
-                      Em roupa e eletrônico é informação irrelevante pro cadastro.
-                      A unidade vem do seletor `Unidade` mais abaixo — mostramos
-                      inline como sufixo pra o operador não digitar "1 kg" e o
-                      "kg" ser descartado pela máscara decimal. */}
-                  {filial === 'SuperMax' && (
-                    <FormField label={`Peso / Volume (${extras.unidade || 'UN'}) *`} error={extrasErrors.peso}>
+                  {/* Peso/Volume é o CONTEÚDO da embalagem, e tem medida própria
+                      (migr. 438). Antes o sufixo era `extras.unidade` — a medida
+                      do estoque — então arroz de 5 kg vendido em pacote lia
+                      "Peso / Volume (UN)" e não havia como dizer "5 KG, 50 UN".
+
+                      Só aparece em supermercado, e só quando a embalagem tem
+                      conteúdo: item vendido a granel (KG/L) já É a medida, e
+                      pedir peso dele era o que enchia a coluna de `1`. */}
+                  {mostraPesoConteudo && (
+                    <FormField label="Peso / Volume por embalagem *" error={extrasErrors.peso}>
                       <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}>
                         <input className="flex-1 bg-transparent py-2 pl-3 pr-2 outline-none"
                           value={extras.peso} inputMode="decimal"
-                          onChange={e => { setExtras(x => ({ ...x, peso: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
-                          placeholder="Ex: 1,5" />
-                        <span className="text-xs font-bold text-accent px-3 py-2 border-l border-white/5 bg-white/[0.02] shrink-0">
-                          {extras.unidade || 'UN'}
-                        </span>
+                          onChange={e => { setExtras(x => ({ ...x, peso: formatQtd(e.target.value, true) })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
+                          onKeyDown={handleQtdKeyDown(true)}
+                          placeholder="Ex: 5" />
+                        <select
+                          className="bg-transparent text-xs font-bold text-accent px-2 py-2 border-l border-white/5 outline-none shrink-0"
+                          value={extras.peso_unidade}
+                          onChange={e => { setExtras(x => ({ ...x, peso_unidade: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
+                          title="Medida do conteúdo da embalagem — nada a ver com a unidade de estoque">
+                          <option value="">— ? —</option>
+                          {UNIDADES_CONTEUDO.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-1">Unidade vem do seletor <span className="font-bold text-gray-400">Unidade</span> logo abaixo.</p>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        O que vem dentro de uma embalagem — <span className="text-gray-400">5 KG</span> de arroz.
+                        Quantas embalagens entram no estoque é a <span className="font-bold text-gray-400">Unidade</span> ({extras.unidade || 'UN'}), lá em Estoque.
+                      </p>
                     </FormField>
                   )}
                 </div>
@@ -818,7 +955,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                 {/* ── Atributos por nicho (JSONB em produtos.atributos) ──────
                     Só aparece em MaxLook (moda) e TechMax (eletrônico). Cada
                     filial mostra os campos definidos em ATRIBUTOS_PRODUTO. */}
-                {(ATRIBUTOS_PRODUTO[filial] ?? []).length > 0 && (
+                {ehVendavel(extras.tipo) && (ATRIBUTOS_PRODUTO[filial] ?? []).length > 0 && (
                   <div className="mt-6 pt-6 border-t border-white/5">
                     <div className="flex items-center gap-2 mb-3">
                       <Tag size={12} className="text-accent" />
@@ -830,6 +967,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
+                        // Campo dependente some quando o pai está desmarcado —
+                        // era assim que "Validade (dias)" ficava aberto para
+                        // detergente.
+                        if (d.dependeDe && extras.atributos?.[d.dependeDe] !== true) return null;
+
                         const errKey = `atr_${d.key}`;
                         const err = extrasErrors[errKey];
                         const val = extras.atributos?.[d.key] ?? '';
@@ -842,7 +984,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                             <label key={d.key}
                               className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
                               <input type="checkbox" checked={!!val}
-                                onChange={e => setAtr(e.target.checked)}
+                                onChange={e => {
+                                  const marcado = e.target.checked;
+                                  setExtras(x => {
+                                    const atrs = { ...(x.atributos ?? {}), [d.key]: marcado };
+                                    // Desmarcar o pai apaga os filhos: deixar
+                                    // "Validade: 5" gravado num item que não é
+                                    // mais perecível põe o iogurte fantasma na
+                                    // fila de vencimento.
+                                    if (!marcado) {
+                                      for (const f of (ATRIBUTOS_PRODUTO[filial] ?? [])) {
+                                        if (f.dependeDe === d.key) delete atrs[f.key];
+                                      }
+                                    }
+                                    return { ...x, atributos: atrs };
+                                  });
+                                  setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
+                                }}
                                 className="accent-accent w-4 h-4" />
                               <span className="text-xs font-bold text-gray-200">{d.label}</span>
                             </label>
@@ -876,9 +1034,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                         }
                         return (
                           <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                            <FormField label={d.label} error={err}>
+                            <FormField label={d.reqSe ? `${d.label} *` : d.label} error={err}>
                               <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                                value={String(val)} onChange={e => setAtr(e.target.value)}
+                                value={String(val)} inputMode={d.soDigitos ? 'numeric' : undefined}
+                                onChange={e => setAtr(d.soDigitos ? e.target.value.replace(/\D/g, '') : e.target.value)}
                                 placeholder={d.placeholder} />
                             </FormField>
                             {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
@@ -1000,17 +1159,32 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                 </div>
               )}
 
-              {/* Tipo do produto — separa item de revenda (PDV) de patrimônio (Financeiro) */}
+              {/* Tipo = DESTINO do item (migr. 440). É a primeira pergunta do
+                  cadastro, não a última: ela decide o que o resto do formulário
+                  ainda faz sentido perguntar. Antes eram dois valores e material
+                  de consumo não cabia em nenhum — resma de papel virava
+                  mercadoria e ia para o caixa. */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Tipo *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.tipo}
-                      onChange={e => setExtras(x => ({ ...x, tipo: e.target.value as 'estoque_venda' | 'patrimonio' }))}>
-                      <option value="estoque_venda">Estoque / Venda</option>
-                      <option value="patrimonio">Patrimônio</option>
+                      onChange={e => setExtras(x => ({ ...x, tipo: normalizarTipo(e.target.value) }))}>
+                      {TIPOS_PRODUTO.map(t => (
+                        <option key={t} value={t}>{TIPO_LABEL[t]}</option>
+                      ))}
                     </select>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      {/* Patrimônio é criado SÓ aqui — Financeiro > Patrimônio é
+                          só leitura —, mas a listagem filtra `tipo neq
+                          patrimonio` no servidor. Dizer antes do clique, não
+                          depois do sumiço. */}
+                      {extras.tipo === 'patrimonio' && (
+                        <span className="text-amber-400/90 font-bold">Não aparece nesta lista. </span>
+                      )}
+                      {TIPO_AJUDA[extras.tipo]}
+                    </p>
                   </FormField>
                 </div>
                 {extras.tipo === 'patrimonio' && (
@@ -1037,11 +1211,19 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                 )}
               </div>
 
-              {/* Preços */}
+              {/* Preços. Quem não vende tem só o lado do custo: o que a empresa
+                  pagou. Preço de venda e margem saem da tela em vez de pedir um
+                  número inventado (migr. 440). */}
               <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Preços</p>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">
+                  {ehVendavel(extras.tipo) ? 'Preços' : 'Valor de aquisição'}
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Preço de Custo (R$) *" error={extrasErrors.preco_custo}>
+                  <FormField
+                    label={extras.tipo === 'patrimonio' ? 'Valor de Aquisição (R$) *'
+                      : extras.tipo === 'consumo'       ? 'Custo Unitário (R$) *'
+                      : 'Preço de Custo (R$) *'}
+                    error={extrasErrors.preco_custo}>
                     <input type="text" inputMode="numeric"
                       className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.preco_custo ? 'border border-red-500/40' : ''}`}
                       value={extras.preco_custo}
@@ -1060,6 +1242,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       </p>
                     )}
                   </FormField>
+                  {ehVendavel(extras.tipo) && (
                   <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
                     <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
                       value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
@@ -1071,7 +1254,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       <button type="button"
                         onClick={() => { setForm(f => ({ ...f, preco: formatBRL(precoSugerido) })); clearError('preco'); }}
                         className="text-[10px] text-accent hover:underline mt-1 text-left block">
-                        Sugerido pela margem de {margemCategoria}%: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
+                        Sugerido pelo markup de {markupCategoria}%: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
                       </button>
                     )}
                     {extras.unidade && extras.unidade !== 'UN' && (
@@ -1080,82 +1263,120 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       </p>
                     )}
                   </FormField>
-                  {/* Margem calculada ao vivo */}
+                  )}
+                  {/* As DUAS contas, lado a lado. Antes havia uma só, rotulada
+                      "Margem de Lucro" e calculando markup — custo 10 e venda 20
+                      exibiam 100%, e a margem real é 50%. Mostrar as duas juntas
+                      é mais barato que escolher uma: são perguntas diferentes, e
+                      é a diferença entre elas que o curso quer ensinar.
+
+                      A cor fica no markup, com a régua de sempre e os mesmos
+                      valores — margem saudável depende do ramo, e inventar um
+                      corte único para as três filiais ensinaria outro erro. */}
+                  {ehVendavel(extras.tipo) && (
                   <div className="flex flex-col gap-1.5">
-                    {/* Margem é texto calculado read-only, sem input — span em vez de label */}
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Margem de Lucro</span>
-                    <div className={`neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 ${
-                      margemAoVivo === null ? 'text-gray-600' :
-                      margemAoVivo >= 30 ? 'text-emerald-400' :
-                      margemAoVivo >= 10 ? 'text-yellow-400' : 'text-red-400'
-                    }`}>
+                    {/* Calculado read-only, sem input — span em vez de label */}
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                      Markup <span className="normal-case tracking-normal text-gray-600 font-medium">(sobre o custo)</span>
+                    </span>
+                    <div className={`neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 ${corDoMarkup(markupAoVivo)}`}>
                       <TrendingUp size={13} className="shrink-0 opacity-60" />
-                      <span className="font-bold tabular-nums">
-                        {margemAoVivo !== null ? `${margemAoVivo.toFixed(1)}%` : '—'}
-                      </span>
-                      {margemAoVivo !== null && margemAoVivo < 10 && (
-                        <span className="text-[10px] text-red-400/70 ml-auto">Margem baixa</span>
+                      <span className="font-bold tabular-nums">{fmtPct(markupAoVivo)}</span>
+                      {markupAoVivo !== null && markupAoVivo < 10 && (
+                        <span className="text-[10px] text-red-400/70 ml-auto">Markup baixo</span>
                       )}
                     </div>
                   </div>
+                  )}
+                  {ehVendavel(extras.tipo) && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                      Margem <span className="normal-case tracking-normal text-gray-600 font-medium">(sobre a venda)</span>
+                    </span>
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 text-gray-300">
+                      <Percent size={13} className="shrink-0 opacity-60" />
+                      <span className="font-bold tabular-nums">{fmtPct(margemAoVivo)}</span>
+                      <span className="text-[10px] text-gray-600 ml-auto">é a do DRE</span>
+                    </div>
+                  </div>
+                  )}
                 </div>
+                {ehVendavel(extras.tipo) && (
+                  <p className="text-[10px] text-gray-500 mt-2 leading-snug">{EXPLICA_MARKUP_MARGEM}</p>
+                )}
               </div>
 
-              {/* Estoque */}
+              {/* Estoque. Patrimônio não tem saldo: um freezer não se repõe,
+                  não tem estoque mínimo e não gera movimentação. A seção inteira
+                  sai da tela em vez de pedir zeros (migr. 440). */}
+              {temEstoque(extras.tipo) && (
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Unidade">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.unidade}
-                      onChange={e => setExtras(x => ({ ...x, unidade: e.target.value }))}>
+                      onChange={e => setExtras(x => {
+                        const u = e.target.value;
+                        // Trocar a unidade muda o que os outros campos aceitam.
+                        // Sem remascarar, "12,5" digitado em KG sobrevive à troca
+                        // para UN e vira meia caixa no save.
+                        const frac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(u));
+                        return {
+                          ...x,
+                          unidade:        u,
+                          estoque:        formatQtd(x.estoque, frac),
+                          estoque_minimo: formatQtd(x.estoque_minimo, frac),
+                        };
+                      })}>
                       {/* Régua única (src/lib/unidades.ts): KG/L/M só em mercearia.
                           Esta era a última das cinco cópias da lista. */}
                       {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </FormField>
-                  <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Estoque Inicial (${extras.unidade})`}>
+                  {/* Quantidade é `type=text inputMode=decimal`, não `type=number`
+                      (migr. 438): o teclado pt-BR digita vírgula e o número
+                      nativo descarta o valor inteiro quando ela chega. A máscara
+                      só aceita fração se a unidade for fracionária — meio pacote
+                      não existe, meio quilo existe. */}
+                  <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
                     <input
-                      type="number" min="0" step="1"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      type="text" inputMode="decimal"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
                       value={extras.estoque}
-                      onChange={e => setExtras(x => ({ ...x, estoque: e.target.value }))}
+                      onChange={e => setExtras(x => ({ ...x, estoque: formatQtd(e.target.value, fracionario) }))}
+                      onKeyDown={handleQtdKeyDown(fracionario)}
                       placeholder="0"
                       disabled={!!editItem}
                       readOnly={!!editItem}
                       title={editItem ? 'Saldo só altera via Recebimentos / Movimentações de Estoque.' : 'Saldo de abertura — gera movimentação de Entrada.'}
                     />
-                    {editItem && (
+                    {editItem ? (
                       <p className="text-[10px] text-gray-500 mt-1">Saldo controlado por Movimentações / Recebimentos.</p>
-                    )}
-                  </FormField>
-                  <FormField label={`Quantidade Comprada (${extras.unidade})`}>
-                    <input
-                      type="number" min="0" step="1"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      value={extras.qtd_comprada}
-                      onChange={e => setExtras(x => ({ ...x, qtd_comprada: e.target.value }))}
-                      placeholder="0"
-                      disabled={!!editItem}
-                      readOnly={!!editItem}
-                      title={editItem ? 'Compras posteriores são registradas via Recebimentos.' : 'Compra inicial — gera movimentação de Entrada além do saldo de abertura.'}
-                    />
-                    {!editItem && (
-                      <p className="text-[10px] text-gray-500 mt-1">Compra que está sendo registrada junto ao cadastro.</p>
+                    ) : (
+                      // Implantação não é compra: entra mercadoria e não sai
+                      // dinheiro. Dizer isso aqui é o que impede o campo de
+                      // virar atalho para "comprar" sem fornecedor nem conta.
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        O que já está na prateleira hoje. Gera uma Entrada de implantação —
+                        <span className="text-gray-400"> não cria conta a pagar</span>. Compra de verdade
+                        entra por <span className="font-bold text-gray-400">Compras → Recebimentos</span>.
+                      </p>
                     )}
                   </FormField>
                   <FormField label={`Estoque Mínimo (${extras.unidade}) *`} error={extrasErrors.estoque_minimo}>
-                    <input type="number" min="0" step="1"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.estoque_minimo ? 'border border-red-500/40' : ''}`}
+                    <input type="text" inputMode="decimal"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.estoque_minimo ? 'border border-red-500/40' : ''}`}
                       value={extras.estoque_minimo}
-                      onChange={e => { setExtras(x => ({ ...x, estoque_minimo: e.target.value })); setExtrasErrors(ev => ({ ...ev, estoque_minimo: '' })); }}
+                      onChange={e => { setExtras(x => ({ ...x, estoque_minimo: formatQtd(e.target.value, fracionario) })); setExtrasErrors(ev => ({ ...ev, estoque_minimo: '' })); }}
+                      onKeyDown={handleQtdKeyDown(fracionario)}
                       placeholder="0" />
                   </FormField>
                 </div>
 
                 {/* MaxBank Benefícios só faz sentido no SuperMax (só supermercado
                     tem itens elegíveis a vale-alimentação). Fora dele, escondido. */}
-                {extras.tipo !== 'patrimonio' && filial === 'SuperMax' && (
+                {ehVendavel(extras.tipo) && filial === 'SuperMax' && (
                   <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 mt-4">
                     <input type="checkbox" checked={extras.elegivel_beneficios}
                       onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
@@ -1167,6 +1388,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   </label>
                 )}
               </div>
+              )}
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -1212,7 +1434,8 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   <th className="pb-4 font-bold px-4 text-center hidden md:table-cell">Filial</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">P. Custo</th>
                   <th className="pb-4 font-bold px-4 text-right">P. Venda</th>
-                  <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">Margem</th>
+                  <th className="pb-4 font-bold px-4 text-right hidden md:table-cell"
+                      title="Markup: quanto foi acrescentado ao custo. A margem sobre a venda aparece ao passar o mouse no valor.">Markup</th>
                   <th className="pb-4 font-bold px-4 text-center">Estoque</th>
                   <th className="pb-4 font-bold px-4 text-center hidden sm:table-cell">Status</th>
                   <th className="pb-4 font-bold px-4 text-right">Ações</th>
@@ -1244,6 +1467,16 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
                           <p className="text-sm font-semibold text-gray-200 flex items-center gap-1.5">
                             {item.nome}
+                            {/* Consumo divide a lista com mercadoria — ambos
+                                têm estoque e ambos se repõem. Sem o selo, "Papel
+                                A4" e "Arroz 5kg" são indistinguíveis na grade, e
+                                a diferença é justamente não ir para o caixa. */}
+                            {normalizarTipo(item.tipo) === 'consumo' && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-400 border border-sky-600/30"
+                                title="Material de uso e consumo — não vai para o PDV. Sai por Estoque > Requisições de Material.">
+                                Consumo
+                              </span>
+                            )}
                             {item.elegivel_beneficios && (
                               <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400 border border-emerald-600/30" title="Aceita MaxBank Benefícios">
                                 Benef
@@ -1260,7 +1493,26 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                               </span>
                             )}
                           </p>
-                          {item.fornecedor && <p className="text-[10px] text-gray-600 mt-0.5">{item.fornecedor}</p>}
+                          {/* Conteúdo da embalagem ao lado do fornecedor: é onde
+                              o passivo da migr. 438 fica visível — quem tem peso
+                              sem medida aparece como "5 (unidade não informada)"
+                              até alguém abrir e escolher entre G e KG. */}
+                          {(() => {
+                            const conteudo = formatarConteudo(item.peso, item.peso_unidade);
+                            const semMedida = !!conteudo && !item.peso_unidade;
+                            return (item.fornecedor || conteudo) ? (
+                              <p className="text-[10px] text-gray-600 mt-0.5">
+                                {item.fornecedor}
+                                {item.fornecedor && conteudo && ' • '}
+                                {conteudo && (
+                                  <span className={semMedida ? 'text-amber-500/80' : ''}
+                                    title={semMedida ? 'Peso gravado sem medida (cadastro antigo) — abra o produto e informe se é G, KG, ML ou L.' : 'Conteúdo da embalagem'}>
+                                    {conteudo}
+                                  </span>
+                                )}
+                              </p>
+                            ) : null;
+                          })()}
                         </td>
                         <td className="py-4 px-4 hidden lg:table-cell">
                           {item.categoria
@@ -1278,7 +1530,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           )}
                         </td>
                         <td className="py-4 px-4 text-xs text-right hidden md:table-cell">
-                          <MargemBadge venda={item.preco} custo={item.preco_custo} />
+                          <MarkupBadge venda={item.preco} custo={item.preco_custo} />
                         </td>
                         <td className="py-4 px-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">
@@ -1293,7 +1545,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                               <span className="text-[9px] text-gray-600">{item.unidade}</span>
                             )}
                             {estMin > 0 && (
-                              <span className="text-[10px] text-gray-600">/ {estMin}</span>
+                              // Mínimo virou numeric(15,3) na migr. 438 — sem
+                              // toLocaleString sairia "2.5" com ponto.
+                              <span className="text-[10px] text-gray-600">
+                                / {Number.isInteger(estMin) ? estMin : estMin.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                              </span>
                             )}
                           </div>
                         </td>

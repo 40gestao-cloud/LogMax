@@ -6,6 +6,7 @@ import {
   Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { ehVendavel } from '../lib/tipoProduto';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
@@ -287,7 +288,7 @@ export const PDVViewSupermax = ({
   // "001" em filiais distintas, e o match por código em processCode/scanner
   // não teria como escolher o certo.
   const produtosDisponiveis = useMemo(() => produtos
-    .filter((p: any) => (p.status === 'Ativo' || !p.status) && p.tipo !== 'patrimonio')
+    .filter((p: any) => (p.status === 'Ativo' || !p.status) && ehVendavel(p.tipo))
     .filter((p: any) => p.filial === filial),
   [produtos]);
 
