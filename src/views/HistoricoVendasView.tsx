@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet, Trash2, Store } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { useFetchData, dbUpdate, dbInsert, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -133,45 +133,18 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
       showToast('Esta venda já está cancelada.', 'info', true);
       return;
     }
-    if (!await confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque automaticamente.')) return;
+    if (!await confirm('Cancelar esta venda? O estoque, o aparelho serializado e a cobrança do cliente voltam atrás automaticamente.')) return;
     setCanceling(venda.id);
     try {
+      // O desfazimento inteiro é do banco (migr. 448): a mesma transação que
+      // marca 'Cancelada' estorna o estoque, devolve a unidade com IMEI para
+      // 'Em estoque' e cancela as contas a receber sem dinheiro movimentado.
+      // Antes isto era um loop de inserts aqui: falha no meio deixava metade do
+      // estoque de volta, e cancelamento por qualquer outro caminho não
+      // estornava nada.
       await dbUpdate('/api/vendasview', venda.id, { status: 'Cancelada' });
-      // Estorna os itens: cria uma movimentação de Entrada para cada produto vendido.
-      // Itens órfãos (produto deletado/inválido) são pulados silenciosamente — o
-      // cancelamento da venda não pode falhar por causa de dados antigos.
-      const today = todayBR();
-      const itensVenda = venda.itens ?? [];
-      let estornados = 0;
-      let orfaos = 0;
-      for (const item of itensVenda) {
-        if (!item.produto_id || !item.qtd) { orfaos++; continue; }
-        try {
-          await dbInsert('/api/movimentacoesestoqueview', {
-            produto_id: item.produto_id,
-            tipo: 'Entrada',
-            qtd: Number(item.qtd),
-            origem: `Estorno — Venda #${venda.id.slice(-6).toUpperCase()} cancelada`,
-            destino: 'Almoxarifado',
-            data: today,
-            filial: venda.filial ?? 'SuperMax',
-          });
-          estornados++;
-        } catch (estornoErr: any) {
-          // Falha de FK (produto removido após a venda) ou similar: registra
-          // no console mas não interrompe o cancelamento.
-          console.warn(`[Estorno] item ${item.id} ignorado:`, estornoErr?.message ?? estornoErr);
-          orfaos++;
-        }
-      }
       setVendas((prev: any[]) => prev.map(v => v.id === venda.id ? { ...v, status: 'Cancelada' } : v));
-      if (orfaos > 0 && estornados > 0) {
-        showToast(`Venda cancelada. ${estornados} item(ns) estornado(s) ao estoque; ${orfaos} pulado(s) (produto removido).`, 'info', true);
-      } else if (orfaos > 0 && estornados === 0) {
-        showToast('Venda cancelada. Estoque não foi estornado (produtos removidos do catálogo).', 'info', true);
-      } else {
-        showToast('Venda cancelada e estoque estornado.', 'success', true);
-      }
+      showToast('Venda cancelada: estoque estornado e cobrança encerrada.', 'success', true);
     } catch (err: any) {
       showToast(`Erro ao cancelar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
