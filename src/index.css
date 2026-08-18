@@ -379,6 +379,24 @@ select:-webkit-autofill:focus {
               0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
 }
 
+/* ── Opções de <select> ──
+   A lista suspensa é desenhada pelo sistema, e as <option> herdam o fundo do
+   próprio <select>. Quando ele é `bg-transparent` — o caso de todo select
+   embutido num `neu-input`, como a medida do Peso/Volume no cadastro de
+   produto — o popup cai no branco do sistema, e o texto claro do tema escuro
+   some sobre ele.
+
+   `--color-bg-base` é a única cor de fundo OPACA por tema (#000 no escuro,
+   #FFF no claro); `--color-surface` não serve aqui, é translúcida e o popup
+   nativo não compõe com o que está atrás. Regra global em vez de `style` por
+   option: o PDV já tinha resolvido o mesmo problema com `#0a0a0a` cravado,
+   que ficava preto no tema claro. Uma régua só. */
+select option,
+select optgroup {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
 /* ── Calendar/date picker indicator ──
    No dark mode (default), o ícone nativo do <input type="date"> renderiza
    preto e fica quase invisível. Usamos mask-image com SVG + background-color

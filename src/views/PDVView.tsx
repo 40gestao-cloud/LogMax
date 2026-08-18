@@ -1440,9 +1440,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer"
                 style={{ color: '#f5f5f5' }}
                 title="Vendedor(a) associado(a) a esta venda">
-                <option value="" style={{ background: '#0a0a0a' }}>Sem vendedor</option>
+                {/* Fundo das options vem da regra global em index.css: cravar
+                    '#0a0a0a' aqui deixava o popup preto no tema claro. */}
+                <option value="">Sem vendedor</option>
                 {vendedores.map(v => (
-                  <option key={v.id} value={v.id} style={{ background: '#0a0a0a' }}>{v.nome}</option>
+                  <option key={v.id} value={v.id}>{v.nome}</option>
                 ))}
               </select>
             </div>
