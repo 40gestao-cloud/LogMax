@@ -39,6 +39,40 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
   const [expedindo, setExpedindo] = useState<string | null>(null);
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
+  // Quais requisições já saíram numa expedição. `expedir` (migr. 268) não
+  // mexe no status da requisição, e `data` é paginada — sem esta consulta a
+  // requisição já atendida voltava ao dropdown idêntica a quem nunca foi
+  // atendido, e nada na tela dizia o que ainda faltava expedir.
+  const [requisicoesExpedidas, setRequisicoesExpedidas] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('expedicao')
+      .select('requisicao_id, status')
+      .eq('ativo', true)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        const m = new Map<string, number>();
+        (rows ?? []).forEach((e: any) => {
+          if (!e.requisicao_id || e.status === 'Cancelado') return;
+          m.set(e.requisicao_id, (m.get(e.requisicao_id) ?? 0) + 1);
+        });
+        setRequisicoesExpedidas(m);
+      });
+    return () => { cancelled = true; };
+  }, [data]);
+
+  // Duas listas: o que ainda não saiu e o que já saiu. Não sumimos com as
+  // atendidas porque uma requisição pode render mais de uma expedição
+  // (entrega parcial) — mas quem já saiu desce e vem com a contagem.
+  const requisicoesParaExpedir = useMemo(() => {
+    const aprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
+    return {
+      pendentes: aprovadas.filter((r: any) => !requisicoesExpedidas.has(r.id)),
+      expedidas: aprovadas.filter((r: any) => requisicoesExpedidas.has(r.id)),
+    };
+  }, [requisicoes, requisicoesExpedidas]);
+
   const enriched = data.map((e: any) => ({ ...e, prod: produtos.find((p: any) => p.id === e.produto_id) }));
   // Busca já resolvida no servidor (produto_id IN ...).
   const filtered = enriched;
@@ -114,7 +148,21 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
               <h3 className="text-sm font-bold text-gray-200">Nova Expedição</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>{produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></FormField>
-                <FormField label="Requisição (opcional)"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.requisicao_id} onChange={e => setExtras(x => ({ ...x, requisicao_id: e.target.value }))}><option value="">Nenhuma</option>{requisicoes.filter((r: any) => r.status === 'Aprovado').map((r: any) => <option key={r.id} value={r.id}>{r.solicitante} — {r.destino}</option>)}</select></FormField>
+                <FormField label="Requisição (opcional)"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.requisicao_id} onChange={e => setExtras(x => ({ ...x, requisicao_id: e.target.value }))}><option value="">Nenhuma</option>
+                  {requisicoesParaExpedir.pendentes.length > 0 && (
+                    <optgroup label={`Ainda sem expedição (${requisicoesParaExpedir.pendentes.length})`}>
+                      {requisicoesParaExpedir.pendentes.map((r: any) => <option key={r.id} value={r.id}>{r.solicitante} — {r.destino}</option>)}
+                    </optgroup>
+                  )}
+                  {requisicoesParaExpedir.expedidas.length > 0 && (
+                    <optgroup label={`Já expedidas (${requisicoesParaExpedir.expedidas.length})`}>
+                      {requisicoesParaExpedir.expedidas.map((r: any) => {
+                        const n = requisicoesExpedidas.get(r.id) ?? 0;
+                        return <option key={r.id} value={r.id}>{r.solicitante} — {r.destino} · {n} expediç{n === 1 ? 'ão' : 'ões'}</option>;
+                      })}
+                    </optgroup>
+                  )}
+                </select></FormField>
                 <FormField label="Qtd Expedida"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_expedida} onChange={e => setExtras(x => ({ ...x, qtd_expedida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Data Expedição"><input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.data_expedicao} onChange={e => setExtras(x => ({ ...x, data_expedicao: e.target.value }))} /></FormField>
               </div>

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Landmark, Package as PackageIcon, Paperclip, FileText, X, ExternalLink } from 'lucide-react';
@@ -9,6 +9,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } f
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { supabase } from '../lib/supabase';
 import {
   NOTA_ANEXO_ACCEPT, NOTA_ANEXO_MAX_LABEL,
   uploadAnexoNota, removerAnexoNota, validarAnexoNota, formatarTamanhoAnexo,
@@ -29,6 +30,22 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
   const confirm = useConfirm();
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   const { data: contasPagar } = useFetchData<any>('/api/contaspagarview', { filial });
+  // Contas a pagar que já têm nota amarrada. `data` é paginada, então esta
+  // consulta é a única forma de saber o que já foi usado fora da página 1.
+  const [contasComNota, setContasComNota] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('notas_recebidas')
+      .select('conta_pagar_id')
+      .eq('ativo', true)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setContasComNota(new Set(
+          (rows ?? []).map((n: any) => n.conta_pagar_id).filter(Boolean) as string[]));
+      });
+    return () => { cancelled = true; };
+  }, [data]);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -275,11 +292,33 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                     value={extras.conta_pagar_id}
                     onChange={e => setExtras(x => ({ ...x, conta_pagar_id: e.target.value }))}>
                     <option value="">Não amarrar</option>
-                    {contasPagar.slice(0, 200).map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {(c.descricao ?? '—').slice(0, 60)} · R$ {formatBRL(Number(c.valor ?? 0))}
-                      </option>
-                    ))}
+                    {/* A conta que já tem nota amarrada continuava na lista sem
+                        nenhum sinal — dava para amarrar a mesma despesa duas
+                        vezes e ninguém percebia. Vai para o 2º grupo,
+                        desabilitada, exceto a da própria nota em edição. */}
+                    {(() => {
+                      const livres = contasPagar.filter((c: any) => !contasComNota.has(c.id) || c.id === extras.conta_pagar_id);
+                      const usadas = contasPagar.filter((c: any) => contasComNota.has(c.id) && c.id !== extras.conta_pagar_id);
+                      const rotulo = (c: any) => `${(c.descricao ?? '—').slice(0, 60)} · R$ ${formatBRL(Number(c.valor ?? 0))}`;
+                      return (
+                        <>
+                          {livres.length > 0 && (
+                            <optgroup label={`Sem nota vinculada (${livres.length})`}>
+                              {livres.slice(0, 200).map((c: any) => (
+                                <option key={c.id} value={c.id}>{rotulo(c)}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {usadas.length > 0 && (
+                            <optgroup label={`Já vinculadas a outra nota (${usadas.length})`}>
+                              {usadas.slice(0, 200).map((c: any) => (
+                                <option key={c.id} value={c.id} disabled>{rotulo(c)}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      );
+                    })()}
                   </select>
                 </FormField>
                 <FormField label="Origem do valor">

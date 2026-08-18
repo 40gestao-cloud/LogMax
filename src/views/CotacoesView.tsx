@@ -261,6 +261,31 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const contarVivos = (reqId: string) =>
     (propostasPorRequisicao.get(reqId) ?? []).filter((c: any) => STATUS_VIVOS.has(c.status)).length;
 
+  // A lista de "Nova cotação" não pode ser só "toda requisição aprovada":
+  // cotar não é ato único (a régua é 3 propostas), então a requisição
+  // continua 'Aprovado' depois da 1ª proposta e voltava para o dropdown
+  // exatamente igual às que ninguém tocou. O aluno relia a lista inteira sem
+  // ter como saber o que ainda faltava.
+  //
+  // Em vez de sumir com o item — o que impediria a 2ª e a 3ª proposta —, o
+  // dropdown separa em dois grupos e diz quantas propostas já foram. Quem já
+  // teve cotação aprovada sai de circulação (`disabled`): o próximo passo
+  // dela é gerar o pedido, não cotar de novo.
+  const requisicoesParaCotar = useMemo(() => {
+    const anotadas = requisicoesAprovadaOrdenadas.map((r: any) => {
+      const propostas = propostasPorRequisicao.get(r.id) ?? [];
+      return {
+        r,
+        vivas: propostas.filter((c: any) => STATUS_VIVOS.has(c.status)).length,
+        aprovada: propostas.some((c: any) => c.status === 'Aprovado'),
+      };
+    });
+    return {
+      pendentes: anotadas.filter(a => a.vivas === 0),
+      cotadas:   anotadas.filter(a => a.vivas > 0),
+    };
+  }, [requisicoesAprovadaOrdenadas, propostasPorRequisicao]);
+
   // Modal de comparação — chave = requisicao_id.
   const [comparando, setComparando] = useState<string | null>(null);
   const propostasDoModal = useMemo(() => {
@@ -536,14 +561,36 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 <p className="text-sm text-yellow-400/80 text-center py-4">Nenhuma requisição aprovada disponível. Aprove uma requisição primeiro.</p>
               ) : (
                 <>
+                  {/* Fila zerada some do FilaDeTrabalho, então sem esta linha a
+                      tela ficava idêntica com tudo cotado e com nada cotado. */}
+                  {requisicoesParaCotar.pendentes.length === 0 && (
+                    <p className="text-[11px] text-emerald-400/80 -mt-2">
+                      Todas as requisições aprovadas já têm proposta. Escolha uma de "Já cotadas" só se for
+                      acrescentar outra proposta concorrente.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField label="Requisição *" error={errors.requisicao_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.requisicao_id ? 'border border-red-500/40' : ''}`}
                         value={form.requisicao_id} onChange={e => { setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
                         <option value="">Selecione...</option>
-                        {requisicoesAprovadaOrdenadas.map((r: any) => (
-                          <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
-                        ))}
+                        {requisicoesParaCotar.pendentes.length > 0 && (
+                          <optgroup label={`Ainda sem cotação (${requisicoesParaCotar.pendentes.length})`}>
+                            {requisicoesParaCotar.pendentes.map(({ r }) => (
+                              <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {requisicoesParaCotar.cotadas.length > 0 && (
+                          <optgroup label={`Já cotadas (${requisicoesParaCotar.cotadas.length})`}>
+                            {requisicoesParaCotar.cotadas.map(({ r, vivas, aprovada }) => (
+                              <option key={r.id} value={r.id} disabled={aprovada}>
+                                {r.item} (Qtd: {r.qtd}) — {vivas} proposta{vivas === 1 ? '' : 's'}
+                                {aprovada ? ' · aprovada, gere o pedido' : ''}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </FormField>
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
