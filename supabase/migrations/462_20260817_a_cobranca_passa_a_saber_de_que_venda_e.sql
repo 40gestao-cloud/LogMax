@@ -73,7 +73,9 @@ COMMENT ON COLUMN public.contas_receber.venda_id IS
 UPDATE public.contas_receber cr
    SET venda_id = sub.vid
   FROM (
-    SELECT c.id AS cid, min(v.id) AS vid, count(*) AS n
+    -- `array_agg(...)[1]` porque não existe `min(uuid)` no Postgres. Qual
+    -- elemento não importa: a linha só é usada quando `n = 1`.
+    SELECT c.id AS cid, (array_agg(v.id))[1] AS vid, count(*) AS n
       FROM public.contas_receber c
       JOIN public.vendas v
         ON c.descricao LIKE '%#' || upper(right(v.id::text, 6)) || '%'
