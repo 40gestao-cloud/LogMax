@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trash2, RotateCcw, Search, ShieldAlert, Link2, Flame } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, SelecioneUnidade } from '../components/ui';
+import { useFilial } from '../contexts/FilialContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAIContext } from '../contexts/AIAssistantContext';
@@ -11,6 +12,11 @@ import { useAIContext } from '../contexts/AIAssistantContext';
 // conselheiro são alunos, e restaurar cadastro alheio não é jogada da
 // competição. O guard existe aqui e, de novo, dentro de cada RPC: a tela é
 // conveniência, a regra é do banco.
+//
+// Migr. 454: a unidade ativa é PARÂMETRO das três RPCs, não filtro daqui.
+// Papel não é contexto de filial — mesmo o admin opera dentro de uma unidade,
+// e a SuperMax não vê o que a TechMax apagou. Filtrar só no React deixaria o
+// F12 alcançando o cadastro das outras.
 
 // `satelite` (migr. 452): relação 1:1 em cascata — a ficha de custo do produto,
 // por exemplo. É parte do registro, vai junto no DELETE e não impede nada.
@@ -56,6 +62,7 @@ const dataBR = (iso: string | null) => {
 
 export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: any }) => {
   const confirm = useConfirm();
+  const { filialAtiva } = useFilial();
   const [itens, setItens] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -66,10 +73,10 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
   const ehAdmin = profile?.role === 'admin';
 
   const carregar = useCallback(async () => {
-    if (!supabase || !ehAdmin) { setLoading(false); return; }
+    if (!supabase || !ehAdmin || !filialAtiva) { setLoading(false); return; }
     setLoading(true);
     setErro(null);
-    const { data, error } = await supabase.rpc('lixeira_listar');
+    const { data, error } = await supabase.rpc('lixeira_listar', { p_filial: filialAtiva });
     if (error) {
       setErro(error.message);
       setItens([]);
@@ -77,7 +84,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
       setItens((data ?? []) as Item[]);
     }
     setLoading(false);
-  }, [ehAdmin]);
+  }, [ehAdmin, filialAtiva]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -108,7 +115,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     if (!await confirm(`Restaurar "${item.nome ?? rotulo(item.tabela)}"? Ele volta a aparecer na operação.`)) return;
     setAgindo(item.id);
     const { error } = await supabase.rpc('lixeira_restaurar', {
-      p_tabela: item.tabela, p_id: item.id,
+      p_filial: filialAtiva, p_tabela: item.tabela, p_id: item.id,
     });
     setAgindo(null);
     if (error) { showToast(error.message, 'error', true); return; }
@@ -125,7 +132,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     if (!ok) return;
     setAgindo(item.id);
     const { error } = await supabase.rpc('lixeira_expurgar', {
-      p_tabela: item.tabela, p_id: item.id,
+      p_filial: filialAtiva, p_tabela: item.tabela, p_id: item.id,
     });
     setAgindo(null);
     if (error) { showToast(error.message, 'error', true); return; }
@@ -147,6 +154,10 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     );
   }
 
+  // Matriz não tem catálogo próprio, logo não tem lixeira: cadastro é da
+  // unidade que compra, recebe e vende.
+  if (!filialAtiva) return <SelecioneUnidade oQue="A lixeira de cadastros" />;
+
   const presos = itens.filter(i => bloqueantes(i.vinculos).length > 0).length;
 
   return (
@@ -157,7 +168,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
             <Trash2 size={22} /> Lixeira
           </h1>
           <p className="text-xs opacity-70 mt-1">
-            Cadastros apagados do catálogo. Restaurar traz de volta; apagar de vez remove do banco.
+            Cadastros apagados da {filialAtiva}. Restaurar traz de volta; apagar de vez remove do banco.
           </p>
         </div>
         <div className="relative">
