@@ -316,7 +316,12 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
                   onChange={e => setForm(f => ({ ...f, campanha_id: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Sem campanha</option>
-                  {(campanhas ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  {/* Mesma régua de Promoções: campanha cancelada sai da lista e
+                      o status vem no rótulo — sem ele dava para pendurar cupom
+                      novo numa campanha já encerrada sem perceber. */}
+                  {(campanhas ?? [])
+                    .filter((c: any) => c.status !== 'Cancelada')
+                    .map((c: any) => <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5 lg:col-span-3">

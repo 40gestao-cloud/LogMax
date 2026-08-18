@@ -41,6 +41,30 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [fechando, setFechando] = useState<string | null>(null);
 
+  // Produtos com contagem aberta. A lista da tela é paginada, então a única
+  // forma de saber que um produto já foi contado é perguntar ao banco — sem
+  // isso o dropdown oferecia o mesmo produto de novo e a turma abria duas
+  // contagens concorrentes do mesmo item.
+  const [produtosEmContagem, setProdutosEmContagem] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('inventarios')
+      .select('produto_id')
+      .eq('status', 'Em Andamento')
+      .eq('filial', filial)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setProdutosEmContagem(new Set((rows ?? []).map((i: any) => i.produto_id).filter(Boolean)));
+      });
+    return () => { cancelled = true; };
+  }, [data, filial]);
+
+  const produtosParaContar = useMemo(() => ({
+    livres:      produtos.filter((p: any) => !produtosEmContagem.has(p.id)),
+    emContagem:  produtos.filter((p: any) => produtosEmContagem.has(p.id)),
+  }), [produtos, produtosEmContagem]);
+
   const saldoAtualDoForm = Number(produtos.find((p: any) => p.id === form.produto_id)?.estoque ?? 0);
 
   const enriched = data.map((i: any) => ({ ...i, prod: produtos.find((p: any) => p.id === i.produto_id) }));
@@ -131,7 +155,18 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Contagem</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>{produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></FormField>
+                <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>
+                  {produtosParaContar.livres.length > 0 && (
+                    <optgroup label={`Sem contagem aberta (${produtosParaContar.livres.length})`}>
+                      {produtosParaContar.livres.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </optgroup>
+                  )}
+                  {produtosParaContar.emContagem.length > 0 && (
+                    <optgroup label={`Já em contagem — feche o inventário antes (${produtosParaContar.emContagem.length})`}>
+                      {produtosParaContar.emContagem.map((p: any) => <option key={p.id} value={p.id} disabled>{p.nome}</option>)}
+                    </optgroup>
+                  )}
+                </select></FormField>
                 <FormField label="Qtd Contada *"><input type="number" min="0" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
                 {form.produto_id && (
                   <div className="neu-pressed rounded-xl px-3 py-2 self-end">

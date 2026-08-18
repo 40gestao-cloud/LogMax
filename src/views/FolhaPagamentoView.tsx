@@ -150,6 +150,21 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const funcsAtivos = funcionarios.filter(fn => fn.status === 'Ativo').length;
   const funcsComFolha = new Set(folhasFiltradas.map(f => f.funcionario_id)).size;
 
+  // Quem já tem folha no mês que o formulário está preenchendo. O KPI lá em
+  // cima dá o total, mas era o dropdown que precisava dizer QUEM — sem isso o
+  // aluno lançava a segunda folha do mesmo mês para a mesma pessoa e só
+  // descobria conferindo a lista linha a linha.
+  const mesDoForm = form.mes_ref || mesFiltro;
+  const folhaDoMesPorFunc = new Map<string, FolhaPagamento>();
+  folhas.forEach(f => {
+    if (f.mes_ref !== mesDoForm) return;
+    if (editId && f.id === editId) return;  // a folha em edição não bloqueia
+    if (!folhaDoMesPorFunc.has(f.funcionario_id)) folhaDoMesPorFunc.set(f.funcionario_id, f);
+  });
+  const funcAtivosFolha = funcionarios.filter((f: any) => f.status === 'Ativo');
+  const funcSemFolhaNoMes = funcAtivosFolha.filter((f: any) => !folhaDoMesPorFunc.has(f.id));
+  const funcComFolhaNoMes = funcAtivosFolha.filter((f: any) => folhaDoMesPorFunc.has(f.id));
+
   const parseCreditError = (msg: string): string => {
     if (msg.includes('sem conta de colaborador') || msg.includes('user_profile_id')) {
       return 'Funcionário sem vínculo no MaxBank. Verifique se o e-mail cadastrado em RH é idêntico ao do usuário no sistema.';
@@ -634,9 +649,25 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                 <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
                 <select id="folha-funcionario" value={form.funcionario_id} onChange={e => handleFuncionarioChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
-                  {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
-                    <option key={f.id} value={f.id}>{f.nome}</option>
-                  ))}
+                  {funcSemFolhaNoMes.length > 0 && (
+                    <optgroup label={`Sem folha em ${mesDoForm} (${funcSemFolhaNoMes.length})`}>
+                      {funcSemFolhaNoMes.map((f: any) => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {funcComFolhaNoMes.length > 0 && (
+                    <optgroup label={`Já com folha em ${mesDoForm} (${funcComFolhaNoMes.length})`}>
+                      {funcComFolhaNoMes.map((f: any) => {
+                        const fp = folhaDoMesPorFunc.get(f.id)!;
+                        return (
+                          <option key={f.id} value={f.id} disabled>
+                            {f.nome} — folha {fp.status ?? 'lançada'}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               {/* Campos de R$ usam text + formatBRL/parseBRL, não type="number" —

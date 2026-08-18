@@ -114,6 +114,27 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
     [funcionarios],
   );
 
+  // Quem já está afastado hoje (ou tem afastamento pendente de decisão) não
+  // pode aparecer na lista igual a quem nunca se afastou: o registro duplicado
+  // reescreve o ponto do mesmo período duas vezes e ninguém percebe pela tela.
+  // Negado não conta — aí a pessoa está mesmo trabalhando.
+  const afastamentoVigente = useMemo(() => {
+    const hoje = todayBR();
+    const m = new Map<string, Afastamento>();
+    (afastamentos ?? []).forEach(a => {
+      if (a.status === 'Negado') return;
+      if (a.data_fim < hoje) return;
+      const atual = m.get(a.funcionario_id);
+      if (!atual || a.data_fim > atual.data_fim) m.set(a.funcionario_id, a);
+    });
+    return m;
+  }, [afastamentos]);
+
+  const colaboradoresParaAfastar = useMemo(() => ({
+    livres:    funcionariosAtivos.filter((f: any) => !afastamentoVigente.has(f.id)),
+    afastados: funcionariosAtivos.filter((f: any) => afastamentoVigente.has(f.id)),
+  }), [funcionariosAtivos, afastamentoVigente]);
+
   const resetForm = () => { setForm(EMPTY_FORM); setShowForm(false); };
 
   const handleSave = async () => {
@@ -291,7 +312,24 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
                   onChange={e => setForm(f => ({ ...f, funcionario_id: e.target.value }))}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecione...</option>
-                  {funcionariosAtivos.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  {colaboradoresParaAfastar.livres.length > 0 && (
+                    <optgroup label={`Trabalhando (${colaboradoresParaAfastar.livres.length})`}>
+                      {colaboradoresParaAfastar.livres.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    </optgroup>
+                  )}
+                  {colaboradoresParaAfastar.afastados.length > 0 && (
+                    <optgroup label={`Já com afastamento em aberto (${colaboradoresParaAfastar.afastados.length})`}>
+                      {colaboradoresParaAfastar.afastados.map((f: any) => {
+                        const a = afastamentoVigente.get(f.id)!;
+                        return (
+                          <option key={f.id} value={f.id}>
+                            {f.nome} — {a.tipo} até {a.data_fim}
+                            {a.status === 'Pendente' ? ' (aguardando decisão)' : ''}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">

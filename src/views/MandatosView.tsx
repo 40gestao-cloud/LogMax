@@ -104,6 +104,19 @@ export function MandatosView({
     [mandatos],
   );
 
+  // `nomear_mandato` (migr. 383) recusa quem já tem mandato vigente: "Encerre
+  // o atual antes". A lista de nomeação mostrava essas pessoas iguais às
+  // livres, então o erro só aparecia depois de preencher o formulário inteiro.
+  const mandatoVigentePorPessoa = useMemo(() => {
+    const m = new Map<string, Mandato>();
+    vigentes.forEach(v => { if (!m.has(v.user_profile_id)) m.set(v.user_profile_id, v); });
+    return m;
+  }, [vigentes]);
+  const pessoasLivres = useMemo(
+    () => pessoas.filter(p => !mandatoVigentePorPessoa.has(p.id)), [pessoas, mandatoVigentePorPessoa]);
+  const pessoasComMandato = useMemo(
+    () => pessoas.filter(p => mandatoVigentePorPessoa.has(p.id)), [pessoas, mandatoVigentePorPessoa]);
+
   const nomear = async () => {
     if (!supabase) return;
     if (!form.user_profile_id || !form.cargo || !form.data_fim) {
@@ -234,9 +247,25 @@ export function MandatosView({
                       onChange={e => setForm(f => ({ ...f, user_profile_id: e.target.value }))}
                       className="neu-input w-full px-3 py-2 rounded-xl text-sm">
                       <option value="">Selecione…</option>
-                      {pessoas.map(p => (
-                        <option key={p.id} value={p.id}>{p.nome} — {p.role}{p.filial ? ` · ${p.filial}` : ''}</option>
-                      ))}
+                      {pessoasLivres.length > 0 && (
+                        <optgroup label={`Sem mandato vigente (${pessoasLivres.length})`}>
+                          {pessoasLivres.map(p => (
+                            <option key={p.id} value={p.id}>{p.nome} — {p.role}{p.filial ? ` · ${p.filial}` : ''}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {pessoasComMandato.length > 0 && (
+                        <optgroup label={`Já com mandato vigente — encerre antes (${pessoasComMandato.length})`}>
+                          {pessoasComMandato.map(p => {
+                            const md = mandatoVigentePorPessoa.get(p.id)!;
+                            return (
+                              <option key={p.id} value={p.id} disabled>
+                                {p.nome} — {md.cargo}{md.filial ? ` · ${md.filial}` : ''} até {md.data_fim}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      )}
                     </select>
                   </Campo>
                   <Campo rotulo="Cargo">

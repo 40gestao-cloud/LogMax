@@ -35,6 +35,20 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
     func: funcionarios.find((fn: any) => fn.id === f.funcionario_id),
   }));
 
+  // Férias em aberto por funcionário (solicitada, aprovada ou em curso).
+  // Sem isto o dropdown mostrava quem já está de férias exatamente igual a
+  // quem nunca pediu, e a turma abria a segunda solicitação sem perceber.
+  // Concluída/Cancelada não contam — essas já são história.
+  const feriasEmAberto = new Map<string, any>();
+  ferias.forEach((f: any) => {
+    if (!['Solicitada', 'Aprovado', 'Em Andamento'].includes(f.status)) return;
+    if (editId && f.id === editId) return;  // a que está sendo editada não bloqueia
+    if (!feriasEmAberto.has(f.funcionario_id)) feriasEmAberto.set(f.funcionario_id, f);
+  });
+  const funcionariosAtivosFerias = funcionarios.filter((f: any) => f.status === 'Ativo');
+  const funcSemFerias = funcionariosAtivosFerias.filter((f: any) => !feriasEmAberto.has(f.id));
+  const funcComFerias = funcionariosAtivosFerias.filter((f: any) => feriasEmAberto.has(f.id));
+
   const solicitadas = ferias.filter((f: any) => f.status === 'Solicitada').length;
   const aprovadas = ferias.filter((f: any) => f.status === 'Aprovado').length;
   const emAndamento = ferias.filter((f: any) => f.status === 'Em Andamento').length;
@@ -157,9 +171,25 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
                 <label htmlFor="ferias-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
                 <select id="ferias-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
                   <option value="">Selecionar...</option>
-                  {funcionarios.filter((f: any) => f.status === 'Ativo').map((f: any) => (
-                    <option key={f.id} value={f.id}>{f.nome}</option>
-                  ))}
+                  {funcSemFerias.length > 0 && (
+                    <optgroup label={`Sem férias em aberto (${funcSemFerias.length})`}>
+                      {funcSemFerias.map((f: any) => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {funcComFerias.length > 0 && (
+                    <optgroup label={`Já com férias em aberto (${funcComFerias.length})`}>
+                      {funcComFerias.map((f: any) => {
+                        const ff = feriasEmAberto.get(f.id);
+                        return (
+                          <option key={f.id} value={f.id}>
+                            {f.nome} — {ff.status} · {ff.data_inicio}{ff.data_fim ? ` a ${ff.data_fim}` : ''}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               {[
