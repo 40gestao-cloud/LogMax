@@ -38,6 +38,70 @@ export const UNIDADES_CONTEUDO = ['G', 'KG', 'ML', 'L'] as const;
 export const temConteudoDeEmbalagem = (unidade: string): boolean =>
   !UNIDADES_FRACIONARIAS.has(normalizarUnidade(unidade));
 
+/**
+ * O conteúdo que o NOME do produto anuncia — "Arroz Tio João 1kg" → 1 KG.
+ *
+ * O aluno digita o nome com a medida dentro, porque é assim que a embalagem
+ * vem escrita, e depois preenche os dois campos ao lado. Quando os dois
+ * discordam, um dos dois está errado, e é barato perguntar na hora: depois de
+ * gravado vira preço por quilo errado, comparação de fornecedor errada e ficha
+ * de prateleira mentindo.
+ *
+ * Aviso, nunca bloqueio. O nome é texto livre e a heurística erra: "Kit 2
+ * unidades 500ml" tem duas medidas, e quem decide é quem está olhando a
+ * embalagem.
+ *
+ * Duas armadilhas, as duas encontradas por teste e não por leitura:
+ *
+ *   "256GB" — o `\b` depois da medida resolve: vem `B` depois do `G`, não casa.
+ *   "A56 5G" — esse passou pelo `\b` (o G tem espaço depois) e virava 5 gramas
+ *              em todo celular do catálogo. `G` colado num número de um dígito
+ *              é geração de rede, não peso: fermento de 5 g escreve "5 g", com
+ *              espaço. Só `G` é ambíguo assim — KG, ML e L não colidem com
+ *              nada.
+ *
+ * O custo de errar para menos é não avisar; para mais, é avisar errado em
+ * produto certo. Na dúvida, cala.
+ */
+export const conteudoNoNome = (
+  nome: string | null | undefined,
+): { valor: number; unidade: string } | null => {
+  const txt = String(nome ?? '').toUpperCase();
+  for (const m of txt.matchAll(/(\d+(?:[.,]\d+)?)(\s*)(KG|ML|G|L)\b/g)) {
+    const valor = parseFloat(m[1].replace(',', '.'));
+    const colado = m[2].length === 0;
+    const unidade = m[3];
+    if (!Number.isFinite(valor) || valor <= 0) continue;
+    if (unidade === 'G' && colado && valor < 10) continue;   // 3G, 4G, 5G
+    return { valor, unidade };
+  }
+  return null;
+};
+
+/**
+ * Compara o que o nome anuncia com o que foi digitado. Devolve o aviso pronto,
+ * ou null quando batem (ou quando não há o que comparar).
+ */
+export const divergenciaDeConteudo = (
+  nome: string | null | undefined,
+  peso: string | number | null | undefined,
+  pesoUnidade: string | null | undefined,
+): string | null => {
+  const doNome = conteudoNoNome(nome);
+  if (!doNome) return null;
+
+  const n = typeof peso === 'number' ? peso : parseFloat(String(peso ?? '').replace(',', '.'));
+  const u = normalizarUnidade(pesoUnidade, '');
+  // Campo ainda em branco não é divergência — é formulário pela metade.
+  if (!Number.isFinite(n) || n <= 0 || u === '') return null;
+
+  if (doNome.unidade === u && Math.abs(doNome.valor - n) < 0.001) return null;
+
+  const digitado = `${String(Number(n.toFixed(3))).replace('.', ',')} ${u}`;
+  const anunciado = `${String(doNome.valor).replace('.', ',')} ${doNome.unidade}`;
+  return `O nome diz ${anunciado} e você preencheu ${digitado}. Confira qual está certo.`;
+};
+
 /** Rótulo de prateleira: "5 KG", ou vazio quando não há conteúdo declarado. */
 export const formatarConteudo = (
   peso: number | string | null | undefined,

@@ -10,6 +10,8 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  conteudoNoNome,
+  divergenciaDeConteudo,
   UNIDADES_CONTEUDO,
   UNIDADES_DISCRETAS,
   UNIDADES_FRACIONARIAS,
@@ -172,5 +174,76 @@ describe('handleQtdKeyDown', () => {
   it('barra letra em qualquer caso', () => {
     expect(tecla('a', '12')).toBe(true);
     expect(teclaDiscreta('a')).toBe(true);
+  });
+});
+
+// ── Leitura da medida anunciada no nome (migr. 456) ────────────────────────
+//
+// O aluno escreve "Arroz Tio João 1kg" e depois preenche os dois campos ao
+// lado. Quando discordam, um dos dois está errado. A heurística existe para
+// perguntar na hora — e o risco dela é o falso positivo, então é isso que
+// estes casos guardam.
+describe('conteúdo anunciado no nome', () => {
+  it('lê a medida escrita no nome, com e sem espaço', () => {
+    expect(conteudoNoNome('Arroz Tio João 1kg')).toEqual({ valor: 1, unidade: 'KG' });
+    expect(conteudoNoNome('Refrigerante 2 L')).toEqual({ valor: 2, unidade: 'L' });
+    expect(conteudoNoNome('Shampoo 500ml')).toEqual({ valor: 500, unidade: 'ML' });
+    expect(conteudoNoNome('Café 250 G')).toEqual({ valor: 250, unidade: 'G' });
+  });
+
+  it('aceita decimal com vírgula', () => {
+    expect(conteudoNoNome('Óleo 0,9 L')).toEqual({ valor: 0.9, unidade: 'L' });
+  });
+
+  // Os dois falsos positivos que derrubariam a TechMax inteira, ambos achados
+  // por este teste: "256GB" (o  depois da medida resolve) e "5G", que passou
+  // pelo  e virava cinco gramas em todo celular do catálogo.
+  it('não confunde armazenamento nem geração de rede com grama', () => {
+    expect(conteudoNoNome('Iphone 17 Pro Max 256GB')).toBeNull();
+    expect(conteudoNoNome('Samsung Galaxy A56 5G 256 GB')).toBeNull();
+    expect(conteudoNoNome('Notebook 8GB RAM 512GB SSD')).toBeNull();
+    expect(conteudoNoNome('Modem 4G')).toBeNull();
+  });
+
+  // O outro lado da mesma régua: grama de verdade continua sendo lida, com
+  // espaço em qualquer valor, e colada quando o número não é de geração.
+  it('ainda lê grama de verdade', () => {
+    expect(conteudoNoNome('Fermento 5 G')).toEqual({ valor: 5, unidade: 'G' });
+    expect(conteudoNoNome('Café 500G')).toEqual({ valor: 500, unidade: 'G' });
+  });
+
+  it('devolve null quando o nome não anuncia medida', () => {
+    expect(conteudoNoNome('Camiseta Básica Feminina')).toBeNull();
+    expect(conteudoNoNome('')).toBeNull();
+    expect(conteudoNoNome(null)).toBeNull();
+  });
+});
+
+describe('divergência entre o nome e o que foi preenchido', () => {
+  it('cala quando batem', () => {
+    expect(divergenciaDeConteudo('Arroz 1kg', '1', 'KG')).toBeNull();
+    expect(divergenciaDeConteudo('Refrigerante 2L', 2, 'L')).toBeNull();
+  });
+
+  it('avisa quando a medida difere — grama no lugar de quilo', () => {
+    const aviso = divergenciaDeConteudo('Arroz Tio João 1kg', '1', 'G');
+    expect(aviso).toContain('1 KG');
+    expect(aviso).toContain('1 G');
+  });
+
+  it('avisa quando o número difere', () => {
+    expect(divergenciaDeConteudo('Arroz 5kg', '1', 'KG')).toContain('5 KG');
+  });
+
+  // Formulário pela metade não é erro: o aviso só aparece quando há os dois
+  // lados para comparar.
+  it('cala com o campo em branco, zerado ou sem medida', () => {
+    expect(divergenciaDeConteudo('Arroz 1kg', '', '')).toBeNull();
+    expect(divergenciaDeConteudo('Arroz 1kg', '1', '')).toBeNull();
+    expect(divergenciaDeConteudo('Arroz 1kg', '0', 'KG')).toBeNull();
+  });
+
+  it('cala quando o nome não anuncia nada', () => {
+    expect(divergenciaDeConteudo('Arroz Branco', '5', 'KG')).toBeNull();
   });
 });

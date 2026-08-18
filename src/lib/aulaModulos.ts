@@ -69,7 +69,10 @@ export const AULA_ROLES_ALVO: { id: string; label: string; hint?: string }[] = [
 export const AULA_SUBMENUS: Record<string, string[]> = {
   empresa:     ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos'],
   requisicoes: ['Do Setor', 'Aprovações'],
-  cadastros:  ['Categorias', 'Produtos', 'Fornecedores', 'Serviços'],
+  // 'Lixeira' entra no espelho como qualquer outro submenu. Continua invisível
+  // para o aluno: `requireRole: ['admin']` vale na aula também — a whitelist
+  // escolhe QUAIS telas existem no exercício, não promove ninguém a admin.
+  cadastros:  ['Categorias', 'Produtos', 'Fornecedores', 'Serviços', 'Lixeira'],
   compras:    ['Requisições de Compra', 'Cotações', 'Pedidos', 'Notas recebidas', 'Sugestões de compras', 'Gerenciamento', 'Relatórios'],
   estoque:    ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Validades', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios'],
   financeiro: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio', 'Centros de Custo', 'DRE', 'Juros & Multa', 'Alçadas', 'Notas Emitidas', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Pedidos de Venda', 'Recibos de Vendas', 'Capital', 'Gerenciamento', 'Relatórios'],

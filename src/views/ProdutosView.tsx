@@ -28,6 +28,7 @@ import {
   UNIDADES_PRODUTO,
   unidadesDeProduto,
   UNIDADES_CONTEUDO,
+  divergenciaDeConteudo,
   UNIDADES_FRACIONARIAS,
   temConteudoDeEmbalagem,
   normalizarUnidade,
@@ -1340,6 +1341,20 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           {UNIDADES_CONTEUDO.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
+                      {/* O nome do produto costuma trazer a medida ("Arroz 1kg").
+                          Quando ela discorda do que foi preenchido, um dos dois
+                          está errado — e perguntar agora custa menos que
+                          descobrir no preço por quilo. Aviso, não bloqueio: o
+                          nome é texto livre e a leitura dele erra. */}
+                      {(() => {
+                        const aviso = divergenciaDeConteudo(form.nome, extras.peso, extras.peso_unidade);
+                        return aviso ? (
+                          <p className="text-[10px] text-amber-500 mt-1 leading-snug flex items-start gap-1">
+                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                            <span>{aviso}</span>
+                          </p>
+                        ) : null;
+                      })()}
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                         O que vem dentro de uma embalagem — <span className="text-gray-400">5 KG</span> de arroz.
                         Quantas embalagens entram no estoque é a <span className="font-bold text-gray-400">Unidade</span> ({extras.unidade || 'UN'}), lá em Estoque.
