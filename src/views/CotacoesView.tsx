@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban } from 'lucide-react';
+import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil } from 'lucide-react';
 import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
@@ -20,7 +20,10 @@ import { useFilial } from '../contexts/FilialContext';
 
 // Status considerados "propostas vivas" para contagem de concorrentes.
 // Cancelado/Negado são histórico — aparecem na comparação mas não contam.
-const STATUS_VIVOS = new Set(['Aguardando Financeiro', 'Aprovado']);
+// 'Em correção' (migr. 467) conta: a proposta voltou para quem a cadastrou,
+// mas continua de pé — tratá-la como morta faria a requisição reaparecer como
+// "sem nenhuma cotação" e o aluno cotaria de novo em cima da mesma coisa.
+const STATUS_VIVOS = new Set(['Aguardando Financeiro', 'Em correção', 'Aprovado']);
 
 // notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -102,10 +105,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  // Decisão Financeiro: modal de aprovar/reprovar.
-  const [decisao, setDecisao] = useState<{ cot: any; tipo: 'aprovar' | 'reprovar' } | null>(null);
+  // Decisão Financeiro: modal de aprovar/reprovar/devolver.
+  const [decisao, setDecisao] = useState<{ cot: any; tipo: 'aprovar' | 'reprovar' | 'devolver' } | null>(null);
   const [feedbackInput, setFeedbackInput] = useState('');
   const [decidindo, setDecidindo] = useState(false);
+
+  // Correção (migr. 467): quem cadastrou arruma o que o decisor apontou.
+  // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
+  // proposta, não correção desta.
+  const [correcao, setCorrecao] = useState<any | null>(null);
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
+  const [reenviando, setReenviando] = useState(false);
 
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
   // recebimentos/movimentações) cria/envia/gera pedido; Financeiro / gerente
@@ -166,6 +176,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       : profile.role === 'gerente'; // acima da alçada → Gerente da filial
   };
 
+  // Quem corrige a proposta devolvida: quem a cadastrou, ou Compras/Logística
+  // da filial (o colaborador pode ter sido desligado no meio). Mesma régua da
+  // RPC `reenviar_cotacao_corrigida` — o guard de verdade está lá.
+  const podeCorrigir = (cot: any): boolean =>
+    cot.criado_por === profile.id || hasAnySetor(profile, 'compras', 'logistica');
+
   const alcadaLabel = (cot: any): { label: string; color: string } => (
     Number(cot.valor_total ?? 0) <= limiteEfetivo
       ? { label: 'Financeiro',  color: 'text-cyan-300 border-cyan-400/20' }
@@ -203,13 +219,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // feito. Só entra quem ainda não recebeu nenhuma proposta em pé.
   const comCotacaoViva = new Set(
     todasCotacoes
-      .filter((c: any) => ['Aguardando Financeiro', 'Aprovado'].includes(c.status))
+      .filter((c: any) => STATUS_VIVOS.has(c.status))
       .map((c: any) => c.requisicao_id));
   const semNenhumaCotacao = requisicoesAprovadas.filter((r: any) => !comCotacaoViva.has(r.id)).length;
+  // Devolvida para correção é trabalho parado na mão de Compras — sem esta
+  // linha a proposta sai da fila do Financeiro e não entra em fila nenhuma.
+  const emCorrecao = todasCotacoes.filter((c: any) => c.status === 'Em correção').length;
   const filaDaTela = modoFinanceiro
     ? [{ label: 'cotação(ões) aguardando sua decisão', count: aguardandoFinanceiro, hint: 'aprovar libera Compras a gerar o pedido' }]
     : [
         { label: 'requisição(ões) aprovada(s) sem cotação', count: semNenhumaCotacao, hint: 'use "Nova cotação" para pedir preço ao fornecedor' },
+        { label: 'cotação(ões) devolvida(s) para correção', count: emCorrecao, hint: 'clique em "Corrigir" na linha para ajustar e reenviar' },
         { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'clique em "Gerar pedido" na linha da cotação' },
       ];
 
@@ -383,8 +403,50 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     const { cot, tipo } = decisao;
     const feedback = feedbackInput.trim();
 
-    if (tipo === 'reprovar' && !feedback) {
-      showToast('Feedback é obrigatório para reprovar.', 'error', true);
+    if (tipo !== 'aprovar' && !feedback) {
+      showToast(tipo === 'reprovar'
+        ? 'Feedback é obrigatório para reprovar.'
+        : 'Diga o que corrigir — é o que Compras lê para arrumar a proposta.', 'error', true);
+      return;
+    }
+
+    // Devolver não é decisão sobre a compra, é devolver o papel para quem o
+    // preencheu: a proposta continua viva, não cancela concorrente nenhuma e
+    // ninguém vira aprovador dela por ter apontado o erro (migr. 467).
+    if (tipo === 'devolver') {
+      if (!supabase) return;
+      setDecidindo(true);
+      try {
+        const { error } = await supabase.rpc('devolver_cotacao_para_correcao', {
+          p_cotacao_id: cot.id,
+          p_motivo:     feedback,
+        });
+        if (error) throw error;
+        setData((prev: any[]) => prev.map(c => c.id === cot.id
+          ? { ...c, status: 'Em correção', feedback, aprovado_por: null, aprovado_em: null }
+          : c));
+
+        const reqItem  = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
+        const fornNome = cot.forn?.nome ?? fornecedores.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? 'fornecedor';
+        await notificarSetor({
+          setor:     'compras',
+          tipo:      'reprovado',
+          titulo:    'Cotação devolvida para correção',
+          mensagem:  `${reqItem} — ${fornNome}`,
+          link_view: 'compras-cotações',
+          urgencia:  'Alta',
+          ref_id:    cot.id,
+          motivo:    feedback,
+        });
+
+        showToast('Cotação devolvida. Compras corrige e reenvia — a proposta não foi recusada.', 'success', true);
+        setDecisao(null);
+        setFeedbackInput('');
+      } catch (err: any) {
+        showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
+      } finally {
+        setDecidindo(false);
+      }
       return;
     }
 
@@ -479,6 +541,61 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setGenerating(null);
+    }
+  };
+
+  // Compras corrige o que foi devolvido e devolve para a fila do Financeiro.
+  // A RPC guarda a régua (só quem cadastrou ou Compras da filial, e só em
+  // 'Em correção'); aqui é só o formulário.
+  const abrirCorrecao = (cot: any) => {
+    setCorrecao(cot);
+    setCorrecaoForm({
+      valor_total:   formatBRL(Number(cot.valor_total ?? 0)),
+      prazo_entrega: cot.prazo_entrega ?? '',
+      validade:      cot.validade ?? '',
+    });
+  };
+
+  const handleReenviarCorrigida = async () => {
+    if (!correcao || !supabase) return;
+    const valorNum = parseBRL(correcaoForm.valor_total);
+    if (!(valorNum > 0)) {
+      showToast('Informe o valor da proposta.', 'error', true);
+      return;
+    }
+    setReenviando(true);
+    try {
+      const { error } = await supabase.rpc('reenviar_cotacao_corrigida', {
+        p_cotacao_id:    correcao.id,
+        p_valor_total:   valorNum,
+        p_prazo_entrega: correcaoForm.prazo_entrega || null,
+        p_validade:      correcaoForm.validade || null,
+      });
+      if (error) throw error;
+      setData((prev: any[]) => prev.map(c => c.id === correcao.id
+        ? { ...c, status: 'Aguardando Financeiro', feedback: null,
+            valor_total: valorNum, prazo_entrega: correcaoForm.prazo_entrega || c.prazo_entrega,
+            validade: correcaoForm.validade || null }
+        : c));
+
+      const reqItem  = correcao.req?.item ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id)?.item ?? 'item';
+      const fornNome = correcao.forn?.nome ?? fornecedores.find((f: any) => f.id === correcao.fornecedor_id)?.nome ?? 'fornecedor';
+      await notificarSetor({
+        setor:     'financeiro',
+        tipo:      'aprovacao_pendente',
+        titulo:    'Cotação corrigida voltou para decisão',
+        mensagem:  `${reqItem} — ${fornNome} (R$ ${formatBRL(valorNum)})`,
+        link_view: 'financeiro-aprovaçõesdecotação',
+        urgencia:  'Média',
+        ref_id:    correcao.id,
+      });
+
+      showToast('Cotação corrigida e reenviada — está de volta na fila do Financeiro.', 'success', true);
+      setCorrecao(null);
+    } catch (err: any) {
+      showToast(`Erro ao reenviar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setReenviando(false);
     }
   };
 
@@ -754,10 +871,34 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-1">
                                 <X size={11} /> Reprovar
                               </button>
+                              {/* Erro de digitação não é recusa do fornecedor:
+                                  devolve para quem cadastrou em vez de matar a
+                                  proposta (migr. 467). */}
+                              <button onClick={() => { setDecisao({ cot: item, tipo: 'devolver' }); setFeedbackInput(''); }}
+                                title="Devolver para Compras corrigir — a proposta continua viva"
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1">
+                                <CornerUpLeft size={11} /> Devolver
+                              </button>
                             </>
                           )}
-                          {/* Compras: cancelar se ainda aguardando */}
-                          {item.status === 'Aguardando Financeiro' && isCompras && (
+                          {/* Devolvida: quem cadastrou corrige e reenvia */}
+                          {item.status === 'Em correção' && podeCorrigir(item) && (
+                            <button onClick={() => abrirCorrecao(item)}
+                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 border border-amber-400/15 transition-colors flex items-center gap-1">
+                              <Pencil size={11} /> Corrigir
+                            </button>
+                          )}
+                          {item.status === 'Em correção' && item.feedback && (
+                            <button onClick={() => setFeedbackAberto(item.feedback)}
+                              title="Ver o que pediram para corrigir"
+                              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-400">
+                              <MessageSquare size={12} />
+                            </button>
+                          )}
+                          {/* Compras: cancelar enquanto a proposta está viva e
+                              sem decisão — inclui a devolvida, senão a que
+                              nasceu errada ficaria presa em correção. */}
+                          {['Aguardando Financeiro', 'Em correção'].includes(item.status) && isCompras && (
                             <button onClick={() => handleCancelar(item.id)} title="Cancelar envio"
                               className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-yellow-400">
                               <Ban size={12} />
@@ -932,7 +1073,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
               className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-bold text-gray-300">
-                  {decisao.tipo === 'aprovar' ? 'Aprovar cotação' : 'Reprovar cotação'}
+                  {decisao.tipo === 'aprovar' ? 'Aprovar cotação'
+                    : decisao.tipo === 'reprovar' ? 'Reprovar cotação'
+                    : 'Devolver para correção'}
                   <span className="text-accent ml-2">— {decisao.cot.forn?.nome ?? 'fornecedor'}</span>
                 </h3>
                 <button onClick={() => !decidindo && setDecisao(null)}
@@ -944,17 +1087,23 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
               <p className="text-xs text-gray-500 mb-4">
                 {decisao.tipo === 'aprovar'
                   ? 'Aprovar enviará a cotação para o setor de Compras para gerar o pedido. Cotações concorrentes da mesma requisição serão automaticamente canceladas.'
-                  : 'Informe o motivo da reprovação. O setor de Compras será notificado para ajustar e criar uma nova cotação.'}
+                  : decisao.tipo === 'reprovar'
+                  ? 'Informe o motivo da reprovação. O setor de Compras será notificado para ajustar e criar uma nova cotação.'
+                  : 'A proposta volta para quem a cadastrou, que corrige e reenvia — nada é recusado e nenhuma concorrente é cancelada. Use quando o problema é o preenchimento (valor digitado errado, prazo em branco), não a oferta do fornecedor.'}
               </p>
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cot-feedback" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  {decisao.tipo === 'reprovar' ? 'Motivo da reprovação *' : 'Observação (opcional)'}
+                  {decisao.tipo === 'reprovar' ? 'Motivo da reprovação *'
+                    : decisao.tipo === 'devolver' ? 'O que corrigir *'
+                    : 'Observação (opcional)'}
                 </label>
                 <textarea id="cot-feedback" rows={3}
                   value={feedbackInput} onChange={e => setFeedbackInput(e.target.value)}
                   placeholder={decisao.tipo === 'reprovar'
                     ? 'Ex.: valor acima do orçamento previsto para este trimestre.'
+                    : decisao.tipo === 'devolver'
+                    ? 'Ex.: o valor está R$ 1.200,00 e a proposta do fornecedor é R$ 120,00 — confira a vírgula.'
                     : 'Ex.: prazo conforme combinado, fornecedor confiável.'}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
               </div>
@@ -967,7 +1116,79 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 <NeuButtonAccent onClick={handleConfirmDecisao} disabled={decidindo}>
                   {decidindo
                     ? 'Salvando...'
-                    : decisao.tipo === 'aprovar' ? 'Confirmar aprovação' : 'Confirmar reprovação'}
+                    : decisao.tipo === 'aprovar' ? 'Confirmar aprovação'
+                    : decisao.tipo === 'reprovar' ? 'Confirmar reprovação'
+                    : 'Devolver para correção'}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de correção — Compras arruma o que foi devolvido */}
+      <AnimatePresence>
+        {correcao && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !reenviando && setCorrecao(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-bold text-gray-300">
+                  Corrigir e reenviar
+                  <span className="text-accent ml-2">— {correcao.forn?.nome ?? 'fornecedor'}</span>
+                </h3>
+                <button onClick={() => !reenviando && setCorrecao(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              {correcao.feedback && (
+                <div className="neu-inset rounded-xl p-3 mb-4 border border-amber-400/15">
+                  <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold mb-1">O que pediram para corrigir</p>
+                  <p className="text-xs text-gray-300 whitespace-pre-wrap">{correcao.feedback}</p>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500 mb-4">
+                Fornecedor e requisição não mudam aqui: trocar de fornecedor é outra proposta, não
+                correção desta. Ao reenviar, a cotação volta para a fila do Financeiro.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="Valor Total (R$)">
+                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.valor_total}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="0,00" />
+                </FormField>
+                <FormField label="Prazo de Entrega">
+                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.prazo_entrega}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, prazo_entrega: e.target.value }))} />
+                </FormField>
+                <FormField label="Validade da Proposta">
+                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.validade}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
+                </FormField>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={() => setCorrecao(null)} disabled={reenviando}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={handleReenviarCorrigida} isLoading={reenviando}>
+                  <Send size={14} /> Reenviar ao Financeiro
                 </NeuButtonAccent>
               </div>
             </motion.div>
