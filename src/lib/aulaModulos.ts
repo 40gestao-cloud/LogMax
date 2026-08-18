@@ -17,6 +17,10 @@ export const AULA_MODULOS: AulaModuloDef[] = [
   { id: 'usuarios',          label: 'Usuários',         grupo: 'Geral' },
   { id: 'catalogo-produtos', label: 'Catálogo',         grupo: 'Geral' },
   { id: 'avaliacoes',        label: 'Avaliações',       grupo: 'Geral' },
+  // Demandas é a caixa de entrada do que a Matriz mandou pra filial (metas
+  // estratégicas + tarefas do ciclo). Ficava de fora do catálogo, então uma
+  // demanda enviada durante a aula não tinha como ser aberta pela turma.
+  { id: 'demandas',          label: 'Demandas',         grupo: 'Geral' },
   { id: 'feedback-org',      label: 'Feedback & Requerimentos', grupo: 'Geral' },
   { id: 'metas',             label: 'Metas',            grupo: 'Geral' },
   { id: 'empresa',           label: 'Empresa',          grupo: 'Operacional' },
