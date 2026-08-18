@@ -55,6 +55,14 @@ const formatQtd = (qtd: number, unidade: string): string => {
 const podeAlternarFilial = (profile: any): boolean =>
   profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
+// Devolução é ato de alçada (migr. 459): mexe em estoque, dinheiro e cobrança
+// na mesma transação. Espelha o guard de `criar_devolucao_venda` —
+// `auth_is_admin() OR auth_gerente_da(filial)`. A tela só evita o erro seco; a
+// regra que vale é a do banco.
+const podeDevolver = (profile: any, filial: string): boolean =>
+  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
+  || (profile?.role === 'gerente' && profile?.filial === filial);
+
 interface CartItem {
   produto_id: string;
   nome_produto: string;
@@ -237,7 +245,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const [defeitoRelatado, setDefeitoRelatado] = useState<string>('');
   // MaxLook: modal de Troca/Devolução — busca uma venda concluída da
   // filial pelos 6 últimos caracteres do id (mesmo formato do recibo),
-  // deixa escolher item(ns) + quantidade e chama a RPC estornar_venda_pdv.
+  // deixa escolher item(ns) + quantidade e chama `criar_devolucao_venda` —
+  // uma porta só para a devolução, seja pelo caixa ou pela tela (migr. 459).
   const [devolucao, setDevolucao] = useState<{
     busca: string;
     buscando: boolean;
@@ -1152,27 +1161,32 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         return;
       }
 
-      const [{ data: itens, error: itensErr }, { data: devolucoesExistentes, error: devErr }] = await Promise.all([
-        supabase.from('itens_venda').select('produto_id, nome_produto, qtd, preco_unitario').eq('venda_id', match.id),
-        supabase.from('devolucoes_pdv').select('itens').eq('venda_id', match.id),
-      ]);
-      if (itensErr) throw itensErr;
-      if (devErr) throw devErr;
+      // `v_venda_saldo_devolucao` e a MESMA fonte que `criar_devolucao_venda`
+      // usa para recusar excesso (migr. 459). Antes a tela somava
+      // `devolucoes_pdv` e a RPC olhava `itens_devolucao`: duas contas do mesmo
+      // saldo, que divergiam assim que a devolucao entrasse pela outra porta.
+      const { data: saldos, error: saldoErr } = await supabase
+        .from('v_venda_saldo_devolucao')
+        .select('produto_id, nome_produto, qtd_vendida, qtd_devolvida, preco_unitario')
+        .eq('venda_id', match.id);
+      if (saldoErr) throw saldoErr;
 
-      const jaDevolvidoPorProduto = new Map<string, number>();
-      for (const dv of devolucoesExistentes ?? []) {
-        for (const it of (dv.itens as any[]) ?? []) {
-          const pid = it.produto_id as string;
-          jaDevolvidoPorProduto.set(pid, (jaDevolvidoPorProduto.get(pid) ?? 0) + Number(it.qtd ?? 0));
-        }
-      }
-
-      const itensAgrupados = new Map<string, { produto_id: string; nome_produto: string; qtd: number; preco_unitario: number }>();
-      for (const it of itens ?? []) {
+      const itensAgrupados = new Map<string, { produto_id: string; nome_produto: string; qtd: number; preco_unitario: number; jaDevolvido: number }>();
+      for (const it of saldos ?? []) {
         const pid = it.produto_id as string;
         const existente = itensAgrupados.get(pid);
-        if (existente) existente.qtd += Number(it.qtd ?? 0);
-        else itensAgrupados.set(pid, { produto_id: pid, nome_produto: it.nome_produto, qtd: Number(it.qtd ?? 0), preco_unitario: Number(it.preco_unitario ?? 0) });
+        if (existente) {
+          existente.qtd += Number(it.qtd_vendida ?? 0);
+          existente.jaDevolvido += Number(it.qtd_devolvida ?? 0);
+        } else {
+          itensAgrupados.set(pid, {
+            produto_id: pid,
+            nome_produto: it.nome_produto,
+            qtd: Number(it.qtd_vendida ?? 0),
+            preco_unitario: Number(it.preco_unitario ?? 0),
+            jaDevolvido: Number(it.qtd_devolvida ?? 0),
+          });
+        }
       }
 
       setDevolucao(d => d ? {
@@ -1183,10 +1197,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
           id: match.id,
           shortId: termo,
           formaPagamento: match.forma_pagamento,
-          itens: Array.from(itensAgrupados.values()).map(it => ({
-            ...it,
-            jaDevolvido: jaDevolvidoPorProduto.get(it.produto_id) ?? 0,
-          })),
+          itens: Array.from(itensAgrupados.values()),
         },
       } : d);
     } catch (err: any) {
@@ -1219,17 +1230,28 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         preco_unitario: it.preco_unitario,
         subtotal: Math.round(it.qtdDevolver * it.preco_unitario * 100) / 100,
       }));
-      const { data, error } = await supabase.rpc('estornar_venda_pdv', {
+      // Migr. 459: uma porta so. Esta RPC grava em `devolucoes`/`itens_devolucao`
+      // - entra no DRE, devolve a unidade com IMEI ao estoque (446) e encerra a
+      // cobranca -, e lanca a sangria quando o dinheiro sai da gaveta (450).
+      //
+      // A forma do estorno sai da forma de pagamento em vez de virar pergunta
+      // no caixa: venda a prazo se desfaz cancelando a pendencia; venda ja paga
+      // devolve dinheiro. E a mesma leitura que a porta antiga fazia para
+      // decidir `requer_ajuste_financeiro`, agora com consequencia real.
+      const aPrazo = ['Fiado', 'Cartão Crédito'].includes(devolucao.venda.formaPagamento);
+      const { data, error } = await supabase.rpc('criar_devolucao_venda', {
         p_venda_id: devolucao.venda.id,
         p_itens: payload,
-        p_motivo: devolucao.motivo.trim() || null,
+        p_motivo: devolucao.motivo.trim() || 'Devolução no caixa',
+        p_forma_estorno: aPrazo ? 'cancela_pendencias' : 'devolve_caixa',
+        p_filial: filialFiltro,
       });
       if (error) throw error;
-      const valorTotal = Number(data?.valor_total ?? 0);
-      showToast?.(`Devolução registrada — ${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de volta ao estoque.`, 'success', true);
-      if (data?.requer_ajuste_financeiro) {
-        showToast?.('Venda era Fiado/Cartão Crédito — ajuste o valor manualmente em Financeiro → Contas a Receber.', 'error', true);
-      }
+      const valorTotal = payload.reduce((acc, it) => acc + Number(it.subtotal ?? 0), 0);
+      showToast?.(`Devolução ${String(data ?? '').slice(-6).toUpperCase()} registrada — ${valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de volta ao estoque.`, 'success', true);
+      showToast?.(aPrazo
+        ? 'A cobrança em aberto desta venda foi baixada automaticamente.'
+        : 'A saída do dinheiro entrou como sangria no caixa do dia.', 'info', true);
       setDevolucao(null);
     } catch (err: any) {
       showToast?.(`Erro ao registrar devolução: ${err?.message ?? '—'}`, 'error', true);
@@ -1449,9 +1471,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               </select>
             </div>
           )}
-          {/* MaxLook: abre o modal de Troca/Devolução — devolve item(ns) de uma
-              venda concluída anterior ao estoque via RPC estornar_venda_pdv. */}
-          {filialFiltro === 'MaxLook' && (
+          {/* MaxLook: abre o modal de Troca/Devolução. Só para quem pode
+              autorizar (migr. 459) — o operador de caixa chama o gerente, como
+              na loja. Esconder é melhor que deixar clicar e tomar 42501. */}
+          {filialFiltro === 'MaxLook' && podeDevolver(profile, filialFiltro) && (
             <button
               onClick={() => setDevolucao({ busca: '', buscando: false, erro: null, venda: null, qtds: {}, motivo: '', processando: false })}
               className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5"
@@ -2558,8 +2581,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       </AnimatePresence>
 
       {/* Modal Troca/Devolução (MaxLook) — busca venda concluída pelos 6
-          últimos caracteres do id, escolhe item(ns)+qtd e chama a RPC
-          estornar_venda_pdv (repõe estoque, registra em devolucoes_pdv). */}
+          últimos caracteres do id, escolhe item(ns)+qtd e chama
+          `criar_devolucao_venda`, a mesma RPC da tela de Devoluções
+          (migr. 459). */}
       <AnimatePresence>
         {devolucao && (
           <motion.div
