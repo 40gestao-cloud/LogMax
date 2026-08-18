@@ -48,7 +48,12 @@ const BADGE_DEFS: BadgeDef[] = [
   { viewId: 'compras-requisiçõesdecompra', modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' }, filialColumn: 'filial' },
   { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  // Recebimentos tem DUAS filas e a bolinha soma as duas — é o mesmo par que a
+  // faixa de fila de trabalho mostra dentro da tela. A primeira é a carga que
+  // ainda não chegou ao sistema; a segunda, a entrada lançada que ninguém
+  // confirmou. Contar só a segunda escondia justamente a que ninguém avisava.
   { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' } },
+  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'pedidos',              filters: { status: 'Em Entrega' }, isNull: ['recebido_em'], filialColumn: 'filial' },
 
   // ─── Requisições ──────────────────────────────────────────────────────────
   // Caixa de decisão do gerente. Mora no módulo Requisições desde que ele
@@ -185,9 +190,16 @@ export function useSidebarBadges(
     if (onlyTables) {
       // Considera listenTables (default = [table]) — assim mudanças na tabela
       // pai (via inner-join) também disparam re-fetch do badge filho.
-      eligible = eligible.filter(def =>
-        (def.listenTables ?? [def.table]).some(t => onlyTables.has(t)),
+      //
+      // O alvo é o viewId, não a def: quando um badge soma mais de uma fonte
+      // (Recebimentos = recebimentos + pedidos em entrega), refazer só a fonte
+      // que mudou daria um total pela metade. Recalcula o grupo inteiro.
+      const viewsAlvo = new Set(
+        BADGE_DEFS
+          .filter(def => (def.listenTables ?? [def.table]).some(t => onlyTables.has(t)))
+          .map(def => def.viewId),
       );
+      eligible = eligible.filter(def => viewsAlvo.has(def.viewId));
     }
     if (eligible.length === 0) return;
 
@@ -231,16 +243,15 @@ export function useSidebarBadges(
     // Fetch parcial: merge no estado existente (preserva badges de outras
     // tabelas). Fetch full: substitui o objeto inteiro (badges que sumiram
     // do gate por mudança de usuário também somem).
+    // Soma as fontes DENTRO deste lote antes de gravar. Acumular sobre o
+    // estado anterior contaria em dobro a cada realtime.
+    const somado: Record<string, number> = {};
+    for (const [id, n] of results) somado[id] = (somado[id] ?? 0) + n;
+
     if (onlyTables) {
-      setBadges(prev => {
-        const next = { ...prev };
-        for (const [id, n] of results) next[id] = n;
-        return next;
-      });
+      setBadges(prev => ({ ...prev, ...somado }));
     } else {
-      const next: Record<string, number> = {};
-      for (const [id, n] of results) next[id] = n;
-      setBadges(next);
+      setBadges(somado);
     }
   }, []);
 

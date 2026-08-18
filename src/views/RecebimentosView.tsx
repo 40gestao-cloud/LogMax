@@ -90,9 +90,14 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // Lista sem paginação só para os contadores: a tabela mostra 50 por vez e um
   // "nada a fazer" calculado sobre a página 1 é pior que contador nenhum.
   const { data: todosRecebimentos } = useFetchData<any>('/api/recebimentosview', { filial }, true);
-  const pedidosSemRecebimento = pedidos.filter(
-    (p: any) => p.status === 'Em Entrega' &&
-      !todosRecebimentos.some((r: any) => r.pedido_id === p.id)).length;
+  // `recebido_em` é carimbado só na virada para 'Recebido' (migr. 421), então
+  // "em entrega e sem essa data" é exatamente o que falta receber — e inclui o
+  // pedido parcialmente recebido, que a régua anterior ("nenhum recebimento
+  // ainda") deixava sumir da fila com saldo em aberto. É a mesma pergunta que
+  // a bolinha da barra lateral faz (migr. 457): badge e lista discordando
+  // sobre a mesma fila é bolinha que vira mentira.
+  const pedidosAReceber = pedidos.filter(
+    (p: any) => p.status === 'Em Entrega' && !p.recebido_em).length;
   const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
 
   // Devoluções ao fornecedor por recebimento (migr. 423). Guarda quanto já
@@ -436,7 +441,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <FilaDeTrabalho itens={[
-        { label: 'pedido(s) em entrega sem recebimento', count: pedidosSemRecebimento, hint: 'clique em "Registrar" quando a carga chegar' },
+        { label: 'pedido(s) em entrega a receber', count: pedidosAReceber, hint: 'clique em "Registrar" quando a carga chegar' },
         { label: 'recebimento(s) aguardando confirmação', count: aguardandoConfirmacao, hint: 'até confirmar, o estoque não mudou' },
       ]} />
 
