@@ -2390,7 +2390,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
               <div className="flex items-center gap-2 text-[11px] text-gray-500 text-center max-w-[18rem]">
                 <Smartphone size={12} className="shrink-0 text-accent" />
-                <span>Peça ao cliente para escanear este código no <span className="font-bold text-gray-300">simulador de pagamento</span>.</span>
+                <span>
+                  Cliente escaneia este código no <span className="font-bold text-gray-300">MaxBank</span> ou no
+                  simulador de pagamento. A <span className="font-bold text-gray-300">maquininha MaxPay</span> não
+                  entra no Pix — ela é só para cartão.
+                </span>
               </div>
 
               <div className="flex items-center gap-2 text-[10px] text-gray-600 font-mono">

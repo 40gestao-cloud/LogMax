@@ -2552,6 +2552,10 @@ export const PDVViewSupermax = ({
               ) : (
                 <p className="text-sm text-gray-700 leading-relaxed">
                   Cliente lê o QR no <b>MaxBank</b>. A venda fecha sozinha quando o pagamento for confirmado.
+                  {/* A maquininha só existe no caminho do cartão. Sem esta linha o
+                      operador ia procurar o QR na MaxPay, que fica em "aguardando"
+                      para sempre porque o Pix nunca chega nela. */}
+                  <br /><span className="text-gray-600">A <b>MaxPay</b> não participa do Pix — ela é só para cartão.</span>
                 </p>
               )}
               <button
