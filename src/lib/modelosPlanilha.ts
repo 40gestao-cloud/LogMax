@@ -10,9 +10,11 @@
 // aba de preenchimento (uma coluna por campo, com linha de exemplo) e a aba
 // oculta "Listas", que alimenta os dropdowns.
 //
-// IMPORTANTE: isto é SÓ download. Não existe import de volta — preencher a
-// planilha não cria nada no banco. Se um dia houver import, ele precisa passar
-// pelas mesmas RPC/RLS do form; não confie no arquivo.
+// PRODUTOS tem import de volta desde 2026-08-19 (`importarProdutos.ts`), e ele
+// lê as colunas DESTE arquivo, via `getModelo` — mexer na ordem ou no rótulo de
+// uma coluna muda o que o leitor espera. O leitor não confia no arquivo: valida
+// linha a linha com as mesmas regras do form e grava pelas mesmas tabelas e RLS.
+// As demais entidades continuam só download.
 //
 // Os campos aqui são mantidos à mão em espelho dos forms:
 //   clientes/fornecedores → CRMView.tsx
@@ -275,7 +277,7 @@ const modeloProdutos = (filial: string): Modelo => {
     acao: 'Produto',
     titulo: `Produtos — ${filial}`,
     arquivo: `modelo-produtos-${filial.toLowerCase()}`,
-    intro: 'Uma linha por produto. Categoria e Fornecedor vêm em lista suspensa com o que já existe no LogMax — se o que você precisa não está lá, cadastre primeiro. Depois de conferir, cadastre um a um em Cadastros > Produtos.',
+    intro: 'Uma linha por produto. Categoria e Fornecedor vêm em lista suspensa com o que já existe no LogMax — se o que você precisa não está lá, cadastre primeiro. Preenchido o arquivo, volte em Cadastros > Produtos e use "Importar planilha": o LogMax confere linha a linha e mostra o que entra antes de gravar.',
     campos,
   };
 };

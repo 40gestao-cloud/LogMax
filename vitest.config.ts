@@ -22,6 +22,8 @@ const ESTATICOS = [
   'tests/botoesPadrao.test.ts',
   'tests/confirm.test.ts',
   'tests/fichaProduto.test.ts',
+  'tests/imei.test.ts',
+  'tests/importarProdutos.test.ts',
   'tests/perecivel.test.ts',
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',

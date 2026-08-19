@@ -4,9 +4,10 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3 } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3, Upload } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
+import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -230,6 +231,25 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // `data.length` na dependência: recarrega a régua quando um produto novo é
     // cadastrado nesta mesma tela, sem esperar um F5.
   }, [filial, data.length]);
+
+  // Import da planilha (2026-08-19). O modelo era só ida desde 04/08: a turma
+  // montava no Excel e redigitava no LogMax. Com o catálogo nascendo do zero na
+  // implantação — 56 itens só numa turma — a volta digitada era o gargalo.
+  const [importando, setImportando] = useState(false);
+  // Códigos do catálogo INTEIRO, não da página: `data` é paginado no servidor, e
+  // conferir repetido contra ele deixaria passar o código que está na página 2.
+  // Mesmo motivo do `nomesCatalogo` acima.
+  const [codigosCatalogo, setCodigosCatalogo] = useState<string[]>([]);
+  useEffect(() => {
+    if (!supabase || !importando) return;
+    let cancelado = false;
+    supabase.from('produtos').select('codigo').eq('filial', filial).eq('ativo', true)
+      .then(({ data: rows }) => {
+        if (cancelado) return;
+        setCodigosCatalogo((rows ?? []).map((r: any) => String(r.codigo ?? '')).filter(Boolean));
+      });
+    return () => { cancelado = true; };
+  }, [filial, importando]);
 
   const itensComprados = useMemo(() => {
     const jaNoCatalogo = nomesCatalogo;
@@ -1059,6 +1079,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           <BotaoModeloPlanilha entidade="produtos" filial={filial} showToast={showToast} />
+          <button
+            type="button"
+            onClick={() => setImportando(true)}
+            title="Ler um arquivo preenchido e cadastrar em lote"
+            className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-2"
+          >
+            <Upload size={14} /> Importar planilha
+          </button>
           {data.length > 0 && (
             <>
               <ExportButton
@@ -2115,6 +2143,26 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {importando && (
+          <ImportarProdutosModal
+            filial={filial}
+            showToast={showToast}
+            contexto={{
+              categorias: categoriasDaFilial.map((c: any) => ({ id: c.id, nome: c.nome })),
+              subcategorias: subcategoriasProduto.map((sc: any) => ({
+                id: sc.id, nome: sc.nome, categoria_id: sc.categoria_id,
+              })),
+              fornecedores: fornecedoresList.map((f: any) => f.nome).filter(Boolean),
+              codigosExistentes: codigosCatalogo,
+              nomesExistentes: [...nomesCatalogo],
+            }}
+            onFechar={() => setImportando(false)}
+            onImportou={() => { reload(); }}
+          />
         )}
       </AnimatePresence>
     </motion.div>
