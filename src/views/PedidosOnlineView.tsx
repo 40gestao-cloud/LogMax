@@ -639,7 +639,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                           onClick={() => excluirPedido(p)}
                           disabled={excluindo === p.id}
                           title="Excluir pedido (some da lista)"
-                          className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-600 border border-white/5 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition disabled:opacity-40"
+                          className="action-btn-delete"
                         >
                           <Trash2 size={11} />
                         </button>

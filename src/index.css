@@ -1425,6 +1425,44 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
 }
 .action-btn-success:disabled::before { animation-play-state: paused; }
 
+/* ── Action button "Reabrir" — glass amarelo + shimmer ──
+   Ação que devolve o documento para a fila anterior (reabrir requisição,
+   cotação, requisição de estoque). Amarelo porque não é criação nem
+   destruição: é volta atrás, e quem lê a linha precisa distinguir isso de
+   Excluir num relance. Mesmo molde dos demais .action-btn-*. */
+.action-btn-warning {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: rgba(234, 179, 8, 0.14);
+  border: 1px solid rgba(234, 179, 8, 0.30);
+  color: rgb(250, 204, 21);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-warning:hover { background: rgba(234, 179, 8, 0.24); border-color: rgba(234, 179, 8, 0.48); color: rgb(253, 224, 71); }
+.action-btn-warning:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-warning::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(253, 224, 71, 0.20) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-warning:disabled::before { animation-play-state: paused; }
+
+/* Light mode: amarelo puro some no branco — escurece para âmbar. */
+[data-theme="light"] .action-btn-warning {
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(202, 138, 4, 0.38);
+  color: rgb(161, 98, 7);
+}
+[data-theme="light"] .action-btn-warning:hover {
+  background: rgba(234, 179, 8, 0.20);
+  color: rgb(133, 77, 14);
+}
+[data-theme="light"] .action-btn-warning::before {
+  background: linear-gradient(to right, transparent 0%, rgba(202, 138, 4, 0.14) 50%, transparent 100%);
+}
+
 /* ── Action button "Pausar" — glass roxo + shimmer ── */
 .action-btn-purple {
   position: relative; overflow: hidden;

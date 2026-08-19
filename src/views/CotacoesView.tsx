@@ -898,7 +898,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               nasceu errada ficaria presa em correção. */}
                           {['Aguardando Financeiro', 'Em correção'].includes(item.status) && isCompras && (
                             <button onClick={() => handleCancelar(item.id)} title="Cancelar envio"
-                              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-yellow-400">
+                              className="action-btn-warning">
                               <Ban size={12} />
                             </button>
                           )}
@@ -928,7 +928,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           {podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status) && (
                             <button onClick={() => handleReabrirCot(item)} disabled={reabrindoCot === item.id}
                               title="Reabrir — volta para a fila do Financeiro"
-                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition disabled:opacity-40">
+                              className="action-btn-warning">
                               <RotateCcw size={12} />
                             </button>
                           )}

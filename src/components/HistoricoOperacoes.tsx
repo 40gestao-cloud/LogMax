@@ -95,11 +95,16 @@ export function HistoricoOperacoes({ entidade, entidadeId, titulo, criadoEm, atu
 
   return (
     <>
+      {/* `.action-btn-neutral` é a classe da casa para ação auxiliar que não é
+          Editar nem Excluir: mesma caixa de 2rem, mesmo raio e mesmo shimmer dos
+          vizinhos na linha. Enquanto este botão dividia espaço com o ícone de
+          autoria ele era menor de propósito; sozinho, o tamanho fora de padrão
+          só parecia defeito. */}
       <button
         onClick={e => { e.stopPropagation(); setOpen(true); }}
         title="Histórico deste documento"
         aria-label="Ver histórico deste documento"
-        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-accent hover:border-accent/30 transition"
+        className="action-btn-neutral"
       >
         <History size={12} />
       </button>

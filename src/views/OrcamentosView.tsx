@@ -698,7 +698,7 @@ const OrcamentosViewInner = ({
                             )}
                             {(o.status === 'Rascunho' || o.status === 'Aguardando Financeiro') && isVendas && (
                               <button onClick={() => handleCancelar(o.id)} title="Cancelar"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-yellow-400">
+                                className="action-btn-warning">
                                 <X size={12} />
                               </button>
                             )}

@@ -153,7 +153,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
                           )}
                           {item.status === 'Negado' && (
                             <button onClick={() => handleReabrir(item)} title="Reabrir — volta para a fila do Estoque"
-                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition">
+                              className="action-btn-warning">
                               <RotateCcw size={12} />
                             </button>
                           )}

@@ -457,7 +457,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                           <HistoricoOperacoes entidade="funcionarios" entidadeId={f.id} titulo={f.nome ?? 'Funcionário'} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
                           <button onClick={() => setBeneficiosDe({ id: f.id, nome: f.nome ?? '—' })}
                             title="Benefícios do funcionário"
-                            className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-blue-400 transition-colors">
+                            className="action-btn-blue">
                             <Gift size={12} />
                           </button>
                           <button onClick={() => openEdit(f)} className="action-btn-edit"><Pencil size={12} /></button>

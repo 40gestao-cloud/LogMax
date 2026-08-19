@@ -852,7 +852,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                         <div className="flex justify-end gap-2">
                           <HistoricoOperacoes entidade="controle_caixa" entidadeId={h.id} titulo={`Caixa ${h.data ?? ''} · ${h.filial ?? ''}`} criadoEm={h.created_at} atualizadoEm={h.updated_at} />
                           {podeReabrir && (
-                            <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500"><RotateCcw size={12} /></button>
+                            <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="action-btn-warning"><RotateCcw size={12} /></button>
                           )}
                           <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>

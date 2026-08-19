@@ -49,7 +49,7 @@ export function ExcluirAdmin({ endpoint, id, rotulo, alternativa, showToast, onE
 
   return (
     <button onClick={excluir} disabled={indo} title="Excluir (admin)"
-      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-600 border border-white/5 hover:text-red-400 hover:border-red-500/30 transition disabled:opacity-40">
+      className="action-btn-delete">
       <Trash2 size={12} />
     </button>
   );

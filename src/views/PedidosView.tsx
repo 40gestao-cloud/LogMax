@@ -255,7 +255,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                             {item.status !== 'Cancelado' && item.status !== 'Recebido' && (
                               <button onClick={() => handleCancelar(item)} disabled={processing === item.id}
                                 title="Cancelar pedido — o documento fica, marcado como cancelado"
-                                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-red-400 hover:border-red-500/30 transition disabled:opacity-40">
+                                className="action-btn-delete">
                                 <Ban size={12} />
                               </button>
                             )}

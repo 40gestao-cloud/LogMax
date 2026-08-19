@@ -429,7 +429,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                           {podeReabrir && ['Aprovado', 'Negado'].includes(item.status) && item.ativo !== false && (
                             <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
                               title="Reabrir para correção — volta para Pendente e para a fila do gerente"
-                              className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 border border-white/5 hover:text-yellow-400 hover:border-yellow-500/30 transition disabled:opacity-40">
+                              className="action-btn-warning">
                               <RotateCcw size={12} />
                             </button>
                           )}
@@ -442,7 +442,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                           {podeReabrir && item.ativo === false && (
                             <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
                               title="Restaurar esta requisição excluída"
-                              className="px-2 h-7 rounded-md flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 disabled:opacity-40">
+                              className="px-2.5 h-8 rounded-lg flex items-center gap-1 shrink-0 text-[10px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 transition-colors disabled:opacity-50">
                               <RotateCcw size={11} />Restaurar
                             </button>
                           )}

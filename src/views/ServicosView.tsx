@@ -313,8 +313,8 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                   )}
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <button onClick={() => openEdit(s)} className="neu-button p-1.5 rounded-lg text-gray-400 hover:text-accent"><Edit2 size={12} /></button>
-                  <button onClick={() => handleDelete(s.id, s.nome)} className="neu-button p-1.5 rounded-lg text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                  <button onClick={() => openEdit(s)} className="action-btn-edit"><Edit2 size={12} /></button>
+                  <button onClick={() => handleDelete(s.id, s.nome)} className="action-btn-delete"><Trash2 size={12} /></button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
