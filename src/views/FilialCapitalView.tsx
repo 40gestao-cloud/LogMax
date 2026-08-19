@@ -51,6 +51,11 @@ type Parcela = {
   valor_parcela: number;
   data_vencimento: string;
   status: 'Pendente' | 'Paga';
+  // Migr. 473. NULL em parcela anterior à separação — nesse caso a tela não
+  // mostra a decomposição em vez de mostrar zero, que seria mentira.
+  juros: number | null;
+  amortizacao: number | null;
+  saldo_devedor: number | null;
 };
 
 const BRL = (v: number) =>
@@ -385,7 +390,7 @@ export function FilialCapitalView({
 
           {/* Abaixo da linha operacional */}
           <div className="flex justify-between items-baseline py-2">
-            <span className="text-xs text-gray-300">(−) Despesas Financeiras <span className="text-gray-500">(parcelas de empréstimo)</span></span>
+            <span className="text-xs text-gray-300">(−) Despesas Financeiras <span className="text-gray-500">(juros do empréstimo)</span></span>
             <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_financeiras)}</span>
           </div>
           <div className="flex justify-between items-baseline py-2 border-b border-white/5">
@@ -451,7 +456,7 @@ export function FilialCapitalView({
                   <span className="text-sm font-bold text-gray-100 tabular-nums">{BRL(emp.valor)}</span>
                   <span className="text-xs text-gray-500">{emp.num_parcelas}x</span>
                   {emp.taxa_juros > 0 && (
-                    <span className="text-xs text-gray-500">{emp.taxa_juros}% juros</span>
+                    <span className="text-xs text-gray-500">{emp.taxa_juros}% a.m.</span>
                   )}
                   {emp.banco_nome && (
                     <span className="text-xs text-gray-500 truncate ml-auto">{emp.banco_nome}</span>
@@ -482,14 +487,24 @@ export function FilialCapitalView({
           {parcelasPendentes.map(p => {
             const vencido = new Date(p.data_vencimento) < new Date();
             return (
-              <div key={p.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">Parcela {p.num_parcela}</span>
-                <span className={`font-bold tabular-nums ${vencido ? 'text-red-400' : 'text-gray-200'}`}>
-                  {BRL(p.valor_parcela)}
-                </span>
-                <span className={`text-xs ${vencido ? 'text-red-400' : 'text-gray-500'}`}>
-                  {fmtDate(p.data_vencimento)}{vencido ? ' — VENCIDA' : ''}
-                </span>
+              <div key={p.id} className="flex flex-col gap-0.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Parcela {p.num_parcela}</span>
+                  <span className={`font-bold tabular-nums ${vencido ? 'text-red-400' : 'text-gray-200'}`}>
+                    {BRL(p.valor_parcela)}
+                  </span>
+                  <span className={`text-xs ${vencido ? 'text-red-400' : 'text-gray-500'}`}>
+                    {fmtDate(p.data_vencimento)}{vencido ? ' — VENCIDA' : ''}
+                  </span>
+                </div>
+                {/* Onde a aula acontece: da parcela, só o juro é custo. O
+                    resto é o próprio dinheiro voltando pra Matriz. */}
+                {p.juros !== null && (
+                  <span className="text-[10px] text-gray-600 tabular-nums">
+                    juros {BRL(p.juros)} · amortização {BRL(p.amortizacao ?? 0)}
+                    {p.saldo_devedor !== null && ` · resta ${BRL(p.saldo_devedor)}`}
+                  </span>
+                )}
               </div>
             );
           })}

@@ -7,6 +7,7 @@ import {
   Settings, BarChart3, CreditCard, ShieldAlert, Info,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { tabelaPrice } from '../lib/mutuo';
 import { LoadingSpinner, NeuButtonAccent, FormField } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -299,8 +300,11 @@ function ModalAprovarEmprestimo({
   const [justResp, setJustResp] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const valorComJuros = emp.valor * (1 + (parseFloat(taxa) || 0) / 100);
-  const valorParcela = valorComJuros / (parseInt(parcelas) || 1);
+  // Espelho da conta que a RPC faz no banco (migr. 473): Price, taxa AO MÊS.
+  // A versão anterior era `valor * (1 + taxa/100)` dividido pelas parcelas —
+  // cobrava a taxa uma vez sobre o contrato inteiro, então "2,3" em 12x saía
+  // por R$ 1.150 de juros em vez de R$ 7.786.
+  const mutuo = tabelaPrice(emp.valor, parseFloat(taxa) || 0, parseInt(parcelas) || 1);
   // `aprovar_emprestimo` CREDITA o banco escolhido: é a conta onde o dinheiro
   // do empréstimo cai, ou seja, uma conta da filial que pediu — não da Matriz.
   // Desde que a holding passou a ter caixa próprio (migr. 325) essa lista
@@ -440,7 +444,9 @@ function ModalAprovarEmprestimo({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Taxa de juros (%)</label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Taxa de juros (% ao mês)
+              </label>
               <input
                 type="number" min="0" step="0.1" value={taxa}
                 onChange={e => setTaxa(e.target.value)}
@@ -457,10 +463,26 @@ function ModalAprovarEmprestimo({
             </div>
           </div>
 
-          {/* Preview */}
-          <div className="neu-pressed rounded-xl p-3 text-xs text-gray-400 flex justify-between">
-            <span>Total com juros: <strong className="text-gray-200 tabular-nums">{BRL(valorComJuros)}</strong></span>
-            <span>Parcela: <strong className="text-gray-200 tabular-nums">{BRL(valorParcela)}</strong></span>
+          {/* Preview — o custo do dinheiro tem que aparecer ANTES de aprovar.
+              É a diferença entre "emprestei 50 mil" e "emprestei 50 mil que
+              voltam 57.786,23". */}
+          <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5">
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>Parcela fixa ({parcelas || 1}x)</span>
+              <strong className="text-gray-200 tabular-nums">{BRL(mutuo.valorParcela)}</strong>
+            </div>
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>Total que a filial devolve</span>
+              <strong className="text-gray-200 tabular-nums">{BRL(mutuo.totalPago)}</strong>
+            </div>
+            <div className="flex justify-between text-xs text-gray-400 border-t border-white/5 pt-1.5">
+              <span>Juros — o que a Matriz ganha</span>
+              <strong className="text-accent tabular-nums">{BRL(mutuo.totalJuros)}</strong>
+            </div>
+            <p className="text-[10px] text-gray-600 leading-relaxed">
+              Tabela Price: a parcela é fixa, mas dentro dela o juro cai e a devolução do
+              principal sobe. Só o juro é despesa da filial — devolver o principal não é custo.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -540,7 +562,7 @@ function ModalConfig({
           <div className="text-xs text-gray-500 neu-pressed rounded-xl p-3">
             Ativo desde {fmtDate(config.data_inicio)}
             {config.data_fim ? ` até ${fmtDate(config.data_fim)}` : ' (sem prazo)'}
-            {' · '}Reserva {config.reserva_min_pct}% · Juros padrão {config.taxa_juros_padrao}%
+            {' · '}Reserva {config.reserva_min_pct}% · Juros padrão {config.taxa_juros_padrao}% a.m.
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -563,7 +585,7 @@ function ModalConfig({
               className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Taxa juros padrão (%)</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Taxa juros padrão (% a.m.)</label>
             <input type="number" min="0" step="0.1" value={taxaPadrao}
               onChange={e => setTaxaPadrao(e.target.value)}
               className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none" />

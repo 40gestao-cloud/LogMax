@@ -279,3 +279,35 @@ Os quatro estavam anotados como "anteriores a este trabalho". Saíram todos:
 recorte é por `vencimento`, não por data de pagamento. É discutível, mas é o
 critério que os dois períodos comparados já usavam — mudar isso altera todo o
 histórico do painel e merece decisão própria.
+
+## A Matriz originar o mútuo — anotado em 2026-08-19 (fora da migr. 473)
+
+A 473 consertou o mútuo Matriz→filial: taxa **ao mês** com Tabela Price, e
+juro separado do principal para a DRE não contar amortização como despesa. O
+que ficou de fora é a **iniciativa**.
+
+Hoje o empréstimo nasce de uma solicitação da filial
+(`emprestimos_filial.solicitado_por`) e a Matriz aprova, definindo banco, taxa
+e prazo. O professor descreveu o movimento ao contrário: «hoje eu faço
+transferência de capital para as filiais» — quem decide aplicar é ele. Para
+isso, o único instrumento que a holding origina é o aporte, que por definição
+não rende.
+
+Falta uma RPC que crie o `emprestimos_filial` já aprovado a partir da Matriz —
+algo como `conceder_mutuo_capital(filial, valor, taxa_mensal, parcelas,
+banco_origem, banco_destino)`, reaproveitando o corpo da `aprovar_emprestimo`.
+Dois cuidados que a régua atual impõe:
+
+- `_assert_nao_e_o_solicitante` não se aplica quando não houve solicitante.
+  Sem repensar isso, a segregação de funções vira letra morta nesse caminho —
+  ou o mútuo originado passa a exigir um segundo aprovador.
+- A filial precisa ficar sabendo: hoje ela pede e recebe. Receber dívida que
+  não pediu, com parcela vencendo, é uma conversa (e provavelmente um aviso da
+  Matriz, migr. 263).
+
+É caminho novo, não conserto — por isso ficou fora da trava.
+
+**Também em aberto, do mesmo assunto:** distribuição de lucro. Se o aporte não
+rende juros de propósito, o retorno dele deveria existir em algum lugar —
+dividendo sobre o resultado da filial, decidido pela Matriz. Sem isso o aluno
+aprende metade da história: que dívida custa, mas não que capital cobra.
