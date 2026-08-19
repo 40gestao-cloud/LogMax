@@ -95,8 +95,12 @@ export const ProdutoDetalheModal = ({
           <span className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: accent }}>
             {filial} · Ficha do produto
           </span>
+          {/* NÃO usa `.modal-close-btn`: este modal é a ficha da loja online e
+              tem `bg-white` fixo, fora do tema do ERP. A classe pinta o fundo
+              com `var(--color-bg-base)`, que no tema escuro ficaria preto sobre
+              o card branco. Redondo e transparente é o desenho da vitrine. */}
           <button onClick={onClose} aria-label="Fechar"
-            className="modal-close-btn"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 transition-colors"
             style={{ color: '#525252' }}>
             <X size={16} />
           </button>
