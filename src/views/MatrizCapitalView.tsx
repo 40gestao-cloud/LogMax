@@ -24,6 +24,8 @@ type CapitalRow = {
   registrado_por_nome: string | null;
   observacao: string | null;
   created_at: string;
+  banco_origem_id: string | null;
+  banco_destino_id: string | null;
 };
 
 type CapitalConfig = {
@@ -614,12 +616,134 @@ function ModalConfig({
   );
 }
 
+// ── Modal: Estornar aporte ────────────────────────────────────────────────
+// Aporte não é lançamento contábil solto: ele DEBITOU uma conta da Matriz e
+// CREDITOU uma da unidade. Por isso apagar a linha nunca foi opção (migr. 326)
+// — e por isso, até a 475, também não havia saída nenhuma. O estorno desfaz o
+// caminho inteiro na mesma transação.
+//
+// A tela mostra as duas contas e o saldo atual da que recebeu, porque é esse
+// número que decide se o estorno passa: se a unidade já gastou parte, o banco
+// recusa. Melhor o usuário ver isso antes de clicar do que depois do erro.
+function ModalEstornoAporte({
+  registro, bancos, onClose, onSaved, showToast,
+}: {
+  registro: CapitalRow; bancos: Banco[]; onClose: () => void; onSaved: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const contaDe = (id: string | null) => bancos.find(b => b.id === id) ?? null;
+  const destino = contaDe(registro.banco_destino_id);
+  const origem = contaDe(registro.banco_origem_id);
+  const saldoDestino = Number(destino?.saldo ?? 0);
+  const semCaixa = !!destino && saldoDestino < Number(registro.valor);
+
+  const handleEstornar = async () => {
+    if (!supabase) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc('estornar_aporte_capital', {
+        p_aporte_id: registro.id,
+        p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      showToast(`Aporte de ${BRL(registro.valor)} estornado.`, 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao estornar.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
+        className="neu-flat rounded-3xl p-6 w-full max-w-sm border border-red-500/30 flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-100">Estornar Aporte</h2>
+            <span className="text-xs font-bold text-red-400">
+              {BRL(registro.valor)} · {registro.filial}
+            </span>
+          </div>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+        </div>
+
+        <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5 text-[11px] text-gray-400">
+          <div className="flex justify-between gap-3">
+            <span>Registrado em</span>
+            <span className="text-gray-300">{fmtDateTime(registro.created_at)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Saiu de</span>
+            <span className="text-gray-300 text-right">
+              {origem ? `${origem.banco} — ${origem.conta}` : 'Capital próprio (sem conta)'}
+            </span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Entrou em</span>
+            <span className="text-gray-300 text-right">
+              {destino ? `${destino.banco} — ${destino.conta}` : '—'}
+            </span>
+          </div>
+          {destino && (
+            <div className="flex justify-between gap-3">
+              <span>Saldo atual dessa conta</span>
+              <span className={`tabular-nums ${semCaixa ? 'text-red-400' : 'text-gray-300'}`}>
+                {BRL(saldoDestino)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {semCaixa ? (
+          <div className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              A conta que recebeu tem menos do que o aporte — a unidade já usou parte do dinheiro.
+              Estornar deixaria o saldo negativo. Para trazer capital de volta depois de usado,
+              o caminho é <b>Distribuição de Lucro</b>.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 text-[11px] text-gray-400 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+            <Info size={13} className="shrink-0 mt-0.5 text-accent" />
+            <span>
+              {BRL(registro.valor)} sai da conta de {registro.filial}
+              {origem ? ` e volta para ${origem.banco}` : ' e sai do grupo'}. O registro de capital
+              é apagado, mas fica no histórico de operações.
+            </span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Motivo do estorno</label>
+          <textarea
+            value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
+            className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
+            placeholder="Ex.: aporte lançado na unidade errada"
+          />
+        </div>
+
+        <NeuButtonAccent onClick={handleEstornar} isLoading={saving} disabled={semCaixa}>
+          Estornar Aporte
+        </NeuButtonAccent>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Card por filial (Aportes) ──────────────────────────────────────────────
 function FilialCapitalCard({
   filial, registros, saldo, profile, onNovo, onExcluir,
 }: {
   filial: UnidadeCapital; registros: CapitalRow[]; saldo: SaldoFilial | null;
-  profile: UserProfile | null; onNovo: (f: UnidadeCapital) => void; onExcluir: (id: string, filial: string) => void;
+  profile: UserProfile | null; onNovo: (f: UnidadeCapital) => void; onExcluir: (r: CapitalRow) => void;
 }) {
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const cor = FILIAL_COLOR[filial];
@@ -731,7 +855,8 @@ function FilialCapitalCard({
                       </div>
                       {podeExcluir(profile) && (
                         <button
-                          onClick={() => onExcluir(r.id, filial)}
+                          onClick={() => onExcluir(r)}
+                          title="Estornar aporte — devolve o dinheiro para a conta da Matriz"
                           className="action-btn-delete opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 size={12} />
@@ -1915,6 +2040,7 @@ export function MatrizCapitalView({
 }) {
   const [tab, setTab] = useState<Tab>('geral');
   const [modalFilial, setModalFilial] = useState<UnidadeCapital | null>(null);
+  const [estornoAlvo, setEstornoAlvo] = useState<CapitalRow | null>(null);
   const [modalConfig, setModalConfig] = useState(false);
   const [saldos, setSaldos] = useState<Record<UnidadeCapital, SaldoFilial | null>>({
     SuperMax: null, MaxLook: null, TechMax: null, Matriz: null,
@@ -1959,13 +2085,17 @@ export function MatrizCapitalView({
   const totalSaldo = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.saldo_livre ?? 0), 0);
   const pendentesCount = emprestimos.filter(e => e.status === 'Pendente').length;
 
-  const handleExcluir = async (id: string, filial: string) => {
+  // Aporte antigo (anterior à migr. 326) não tem conta nenhuma: nunca moveu
+  // dinheiro, então apagar a linha basta. Do 326 em diante o aporte é uma
+  // transferência, e desfazer exige a RPC de estorno — daí o modal.
+  const handleExcluir = async (r: CapitalRow) => {
+    if (r.banco_origem_id || r.banco_destino_id) { setEstornoAlvo(r); return; }
     const ok = await confirm({
-      message: `Excluir este registro de capital de ${filial}? Esta ação não pode ser desfeita.`,
+      message: `Excluir este registro de capital de ${r.filial}? Esta ação não pode ser desfeita.`,
       danger: true,
     });
     if (!ok || !supabase) return;
-    const { error } = await supabase.from('capital_filial').delete().eq('id', id);
+    const { error } = await supabase.from('capital_filial').delete().eq('id', r.id);
     if (error) { showToast(error.message, 'error'); return; }
     showToast('Registro excluído.', 'success');
     reload();
@@ -2147,6 +2277,14 @@ export function MatrizCapitalView({
           <ModalCapital
             filial={modalFilial} bancos={bancos} profile={profile}
             onClose={() => setModalFilial(null)}
+            onSaved={() => { reload(); carregarSaldos(); reloadBancos(); }}
+            showToast={showToast}
+          />
+        )}
+        {estornoAlvo && (
+          <ModalEstornoAporte
+            registro={estornoAlvo} bancos={bancos}
+            onClose={() => setEstornoAlvo(null)}
             onSaved={() => { reload(); carregarSaldos(); reloadBancos(); }}
             showToast={showToast}
           />
