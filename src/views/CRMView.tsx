@@ -3,7 +3,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
@@ -475,7 +475,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
                   {/* No toque não existe hover: as ações ficavam invisíveis e
                       inalcançáveis no celular. Escondidas só a partir de md. */}
                   <div className="flex gap-1 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                    <HistoricoOperacoes entidade={type} entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                     <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
                     <button onClick={() => handleDelete(item)} className="action-btn-delete"><Trash2 size={12} /></button>
                   </div>

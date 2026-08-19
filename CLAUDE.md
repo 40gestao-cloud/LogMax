@@ -8,8 +8,8 @@ ERP PWA didático (React 19 + Vite + Tailwind v4 + Supabase + Vercel). Deploy au
 - **`src/App.tsx`** — shell do app: roteamento por `activeView`, sidebar, topbar, sino de notificações, theme toggle, FABs.
 - **`src/main.tsx`** + **`src/index.css`** — bootstrap React + estilos globais (variáveis de tema, classes `neu-*` flat, `sidebar-dark`, máscara do ícone de calendário em dark).
 - **`src/views/`** — uma view por tela/submenu (~60 arquivos). Cada `*View.tsx` é o ponto de entrada de um módulo (PDV, ControleCaixa, Pedidos, MaxBank/Carteira, Metas, RH, Cadastros, TI etc.). **Comece sempre por aqui** ao mexer numa tela.
-- **`src/components/`** — peças globais reutilizadas: `ui.tsx` (design system), `LoginScreen`, `NotificationBell`, `AIAssistantFAB`, `PontoFAB`, `QRScanner`, `PwaUpdatePrompt`, `ErrorBoundary`, `PerfilFotoModal`, `AuditoriaInspect`.
-- **`src/contexts/`** — estado global: `ThemeContext` (dark/light/premium + brightness), `AIAssistantContext` (injeção de contexto da tela no MaxAI), `AuditoriaContext`.
+- **`src/components/`** — peças globais reutilizadas: `ui.tsx` (design system), `LoginScreen`, `NotificationBell`, `AIAssistantFAB`, `PontoFAB`, `QRScanner`, `PwaUpdatePrompt`, `ErrorBoundary`, `PerfilFotoModal`, `HistoricoOperacoes` (trilha do documento — botão único de auditoria, migr. 331/468).
+- **`src/contexts/`** — estado global: `ThemeContext` (dark/light/premium + brightness), `AIAssistantContext` (injeção de contexto da tela no MaxAI).
 - **`src/hooks/`** — hooks compartilhados: `useAuth`, `useUserProfile`, `useSupabaseData` (atenção: hard-coded `order('created_at', desc)`), `useNotificacoes` (realtime), `useCaixaAberto`, `useSidebarBadges`, `useGeminiChat`, `useDebouncedValue`.
 - **`src/lib/`** — utilitários de domínio. **Ler antes de duplicar lógica**:
   - `supabase.ts` (cliente), `rbac.ts` (`hasSetor`, `hasRole`), `setores.ts`, `sectorAccess.ts`

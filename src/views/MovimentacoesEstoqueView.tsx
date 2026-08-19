@@ -3,7 +3,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, Trash2 } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, Pagination } from '../components/ui';
@@ -195,7 +195,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
                         <td className="py-3 px-4 text-xs text-gray-400">{item.destino || '—'}</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                            <HistoricoOperacoes entidade="movimentacoes_estoque" entidadeId={item.id} titulo={`${item.tipo ?? 'Movimentação'} · ${item.data ?? ''}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>

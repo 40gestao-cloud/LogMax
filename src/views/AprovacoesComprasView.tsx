@@ -182,7 +182,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             este documento — inclusive se ele voltou para cá
                             porque Compras corrigiu o item depois de aprovado. */}
                         <div className="flex items-center gap-2">
-                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={`${numeroRequisicao(req)} · ${req.item}`} />
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={`${numeroRequisicao(req)} · ${req.item}`} criadoEm={req.created_at} atualizadoEm={req.updated_at} />
                           <span className="text-[10px] text-gray-500">Histórico desta requisição</span>
                         </div>
                         {/* A decisão fica mais fácil quando se vê o que ela

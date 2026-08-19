@@ -188,6 +188,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       numero: numeroRequisicao(r),
       complemento: r.centro_custo, prazo: r.data_necessidade, urgencia: r.urgencia ?? 'Normal',
       abertura: r.data ?? (r.created_at ?? '').slice(0, 10), status: r.status,
+      // `abertura` é só a data, e o rodapé do histórico quer data e hora.
+      criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: r.justificativa, solicitante: r.solicitante,
       saldo: r.saldo_no_pedido, minimo: r.minimo_no_pedido,
     }));
@@ -200,6 +202,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       unidade: normalizarUnidade(produtos.find((p: any) => p.id === r.produto_id)?.unidade),
       complemento: r.destino, prazo: null, urgencia: 'Normal',
       abertura: (r.created_at ?? '').slice(0, 10), status: r.status,
+      criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: null, solicitante: r.solicitante,
       saldo: null as number | null, minimo: null as number | null,
     }));
@@ -818,6 +821,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
                         entidadeId={r.id}
                         titulo={r.numero ? `${r.numero} · ${r.item}` : r.item}
+                        criadoEm={r.criadoEm}
+                        atualizadoEm={r.atualizadoEm}
                       />
                     </td>
                   </tr>

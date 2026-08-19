@@ -4,7 +4,6 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ChevronDown, X, FileDown, Sheet, Trash2, Store } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
@@ -288,8 +287,7 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
                             <div className="flex items-center gap-2">
-                              <AuditoriaInspect criadoPor={v.criado_por} criadoEm={v.created_at} atualizadoPor={v.atualizado_por} atualizadoEm={v.updated_at} />
-                          <HistoricoOperacoes entidade="vendas" entidadeId={v.id} titulo={`Venda ${String(v.id).slice(-6).toUpperCase()}`} />
+                              <HistoricoOperacoes entidade="vendas" entidadeId={v.id} titulo={`Venda ${String(v.id).slice(-6).toUpperCase()}`} criadoEm={v.created_at} atualizadoEm={v.updated_at} />
                               {v.status !== 'Cancelada' && (
                                 <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
                                   className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">

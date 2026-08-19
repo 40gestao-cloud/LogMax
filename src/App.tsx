@@ -40,7 +40,6 @@ import { ConviteVagaFAB } from './components/ConviteVagaFAB';
 import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
-import { AuditoriaProvider } from './contexts/AuditoriaContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PromptProvider } from './contexts/PromptContext';
 
@@ -1249,7 +1248,6 @@ function LogMaxAppInner() {
 
   return (
     <AIAssistantProvider>
-    <AuditoriaProvider>
     {/* `relative` não é cosmético: sem ancestral posicionado, qualquer
         descendente `absolute` (um `sr-only`, um badge esquecido) resolve o
         bloco contêiner no documento, escapa do `overflow-hidden` daqui e
@@ -1434,7 +1432,6 @@ function LogMaxAppInner() {
           chamou. Mesmo motivo dos outros para sumir no Modo Aula. */}
       {!aulaFiltro && <ConviteVagaFAB profile={profile} showToast={showToast} />}
     </div>
-    </AuditoriaProvider>
     </AIAssistantProvider>
   );
 }

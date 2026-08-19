@@ -3,7 +3,6 @@ import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
@@ -482,8 +481,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} />
+                            <HistoricoOperacoes entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             {RECEBIVEL.has(item.status) && (
                               <button onClick={() => openReceber(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
                                 <Check size={11} /> {item.status === 'Parcial' ? 'Receber saldo' : 'Receber'}

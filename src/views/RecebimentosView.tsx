@@ -4,7 +4,6 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, CheckCircle2, ChevronDown, Trash2, X, Lock, PackageX } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -505,8 +504,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} />
+                            <HistoricoOperacoes entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             {devolucaoDisponivel
                               && (item.status === 'Concluído' || item.status === 'Parcial')
                               && (parseQtd(item.qtd_recebida) - (devolvido[item.id] ?? 0)) > 0 && (

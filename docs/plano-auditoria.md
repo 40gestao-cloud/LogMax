@@ -1,5 +1,13 @@
 # Plano — Auditoria de quem fez a ação (LogMax)
 
+> **Estado em 2026-08-18 (migr. 468).** As colunas de auditoria descritas aqui
+> (`criado_por`, `atualizado_por`, `updated_at`) continuam em uso e valendo. O
+> **componente `AuditoriaInspect` foi aposentado**: a trilha
+> `historico_operacoes` (migr. 331/332/337/468) cobre todas as tabelas que ele
+> atendia, já traz a criação como primeira linha e é lida por quem opera a
+> unidade — e não só pela Matriz. Quem for implementar autoria numa tela nova
+> deve usar `<HistoricoOperacoes>`, não recriar o popover deste plano.
+
 ## Contexto e decisões já tomadas
 
 - **Escopo**: módulos críticos primeiro — Financeiro, Vendas/PDV, Estoque, Compras. Marketing/RH/TI ficam para uma fase posterior.

@@ -27,6 +27,7 @@ type NotaEmitida = {
   venda_id: string | null;
   conta_receber_id: string | null;
   created_at: string;
+  updated_at?: string | null;
   ativo: boolean;
 };
 
@@ -316,7 +317,8 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
                         <td className="py-3 px-4 text-right">
                           <span className="inline-flex items-center gap-1.5 align-middle mr-1.5">
                             <HistoricoOperacoes entidade="notas_emitidas" entidadeId={n.id}
-                              titulo={`Nota ${n.numero ?? String(n.id).slice(-6).toUpperCase()}`} />
+                              titulo={`Nota ${n.numero ?? String(n.id).slice(-6).toUpperCase()}`}
+                              criadoEm={n.created_at} atualizadoEm={n.updated_at} />
                           </span>
                           <button onClick={() => baixarPDF(n)}
                             className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors">

@@ -136,6 +136,7 @@ export interface Requisicao {
   data_necessidade?: string | null;
   unidade?: string | null;
   created_at?: string;
+  updated_at?: string | null;
 }
 
 export interface AprovacaoCompras {

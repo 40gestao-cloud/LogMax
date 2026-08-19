@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { ENDPOINT_TABLE_MAP } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
 import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -32,6 +33,10 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
   const escopo = filialScoped ? (filialAtiva ?? (permiteMatriz ? 'Matriz' : null)) : null;
   const canWrite = !filialScoped || !!escopo;
   const { data, setData, isLoading } = useFetchData<any>(endpoint, escopo ? { filial: escopo } : undefined);
+  // A trilha é indexada por (entidade, entidade_id), e `entidade` é o nome da
+  // tabela — que aqui só se conhece pelo endpoint. Endpoint fora do mapa não
+  // renderiza o botão: melhor sem botão que um botão que abre vazio sempre.
+  const entidade = ENDPOINT_TABLE_MAP[endpoint];
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
@@ -254,7 +259,15 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                         )}
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
+                            {entidade && (
+                              <HistoricoOperacoes
+                                entidade={entidade}
+                                entidadeId={item.id}
+                                titulo={String(item[fields[0].key] ?? title)}
+                                criadoEm={item.created_at}
+                                atualizadoEm={item.updated_at}
+                              />
+                            )}
                             {canWrite && (
                               <>
                                 <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>

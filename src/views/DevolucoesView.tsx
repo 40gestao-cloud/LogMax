@@ -49,7 +49,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     setCarregandoHistorico(true);
     const { data: rows } = await supabase
       .from('devolucoes')
-      .select('id, venda_id, motivo, tipo, valor_devolvido, forma_estorno, status, created_at')
+      .select('id, venda_id, motivo, tipo, valor_devolvido, forma_estorno, status, created_at, updated_at')
       .eq('filial', filial)
       .eq('ativo', true)
       .order('created_at', { ascending: false })
@@ -354,7 +354,8 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                     <td className="py-2 px-3 text-center"><StatusBadge status={d.status} /></td>
                     <td className="py-2 px-3 text-right">
                       <HistoricoOperacoes entidade="devolucoes" entidadeId={d.id}
-                        titulo={`Devolução ${String(d.id).slice(-6).toUpperCase()}`} />
+                        titulo={`Devolução ${String(d.id).slice(-6).toUpperCase()}`}
+                        criadoEm={d.created_at} atualizadoEm={d.updated_at} />
                     </td>
                   </tr>
                 ))}

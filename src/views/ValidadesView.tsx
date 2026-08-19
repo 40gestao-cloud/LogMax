@@ -23,7 +23,7 @@ import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAG
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import {
   LoadingSpinner, EmptyState, FormField, NeuButtonAccent,
   Pagination, SelecioneUnidade, FilaDeTrabalho,
@@ -384,7 +384,7 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={l.criado_por} criadoEm={l.created_at} atualizadoPor={l.atualizado_por} atualizadoEm={l.updated_at} />
+                            <HistoricoOperacoes entidade="vencimentos_estoque" entidadeId={l.id} titulo={`Lote ${l.lote ?? '—'}`} criadoEm={l.created_at} atualizadoEm={l.updated_at} />
                             {l.status === 'OK' && (
                               <>
                                 <button onClick={() => encerrarConsumido(l)} disabled={acaoId === l.id}

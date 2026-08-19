@@ -3,7 +3,6 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Plus, Save, ChevronRight, RotateCcw } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
@@ -419,8 +418,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                             prometia correção e não mostrava sequer o botão. */}
                         <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity"
                           onClick={e => e.stopPropagation()}>
-                          <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} />
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                           {['Pendente', 'Aprovado'].includes(item.status) && (
                             <button onClick={() => openEdit(item)}
                               title={item.status === 'Aprovado'

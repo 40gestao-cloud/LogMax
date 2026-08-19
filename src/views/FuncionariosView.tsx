@@ -4,7 +4,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -454,7 +454,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                       <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-end">
-                          <AuditoriaInspect criadoPor={f.criado_por} criadoEm={f.created_at} atualizadoPor={f.atualizado_por} atualizadoEm={f.updated_at} />
+                          <HistoricoOperacoes entidade="funcionarios" entidadeId={f.id} titulo={f.nome ?? 'Funcionário'} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
                           <button onClick={() => setBeneficiosDe({ id: f.id, nome: f.nome ?? '—' })}
                             title="Benefícios do funcionário"
                             className="w-7 h-7 flex items-center justify-center rounded-lg neu-button text-gray-600 hover:text-blue-400 transition-colors">

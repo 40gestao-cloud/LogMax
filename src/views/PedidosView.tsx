@@ -4,7 +4,6 @@ import { useFilial } from '../contexts/FilialContext';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Loader2, Ban, Clock } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
@@ -239,8 +238,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={item.criado_por} criadoEm={item.created_at} atualizadoPor={item.atualizado_por} atualizadoEm={item.updated_at} />
-                          <HistoricoOperacoes entidade="pedidos" entidadeId={item.id} titulo={item.item_descricao ?? item.req?.item ?? 'Pedido'} />
+                            <HistoricoOperacoes entidade="pedidos" entidadeId={item.id} titulo={item.item_descricao ?? item.req?.item ?? 'Pedido'} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             {flow && (
                               <button onClick={() => handleAvance(item)} disabled={isProc}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1.5 disabled:opacity-50">

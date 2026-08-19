@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
-import { AuditoriaInspect } from '../components/AuditoriaInspect';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -660,8 +659,7 @@ const OrcamentosViewInner = ({
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <AuditoriaInspect criadoPor={o.criado_por} criadoEm={o.created_at} atualizadoPor={o.atualizado_por} atualizadoEm={o.updated_at} />
-                          <HistoricoOperacoes entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} />
+                            <HistoricoOperacoes entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} criadoEm={o.created_at} atualizadoEm={o.updated_at} />
                             <button onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
                               className="action-btn-neutral">
                               <Eye size={12} />

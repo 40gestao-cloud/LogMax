@@ -1,9 +1,15 @@
 // Trilha de um documento: quem fez o quê, quando, e de onde para onde.
 //
-// Complementa o <AuditoriaInspect> em vez de substituí-lo. Aquele responde
-// "quem criou e quem mexeu por último" e só aparece para a Matriz; este conta a
-// história inteira e aparece para quem opera a unidade — que é quem estava com
-// a dúvida (migr. 331).
+// Substitui o <AuditoriaInspect> nas tabelas que têm `trg_historico`. Aquele
+// mostrava "criado por / alterado por último", e a trilha já traz isso na
+// primeira linha (o trigger grava o evento `Criado`, e a migr. 333 fez backfill
+// do que é anterior). Dois ícones de relógio lado a lado, contando a mesma
+// coisa com regras de visibilidade diferentes, só confundiam.
+//
+// Sobrava um caso que a trilha não conta: UPDATE em coluna fora do TG_ARGV do
+// trigger (mexer só na observação, por exemplo) move `updated_at` sem gerar
+// evento. Por isso `criadoEm` / `atualizadoEm` entram como props e viram o
+// rodapé de datas — incluindo o aviso quando houve edição sem trilha.
 //
 // Lê no clique, não no render: uma tabela com 60 linhas não deve fazer 60
 // consultas de histórico para mostrar um ícone.
@@ -45,10 +51,14 @@ const COR_EVENTO: Record<string, string> = {
   Inativado: 'text-red-400 border-red-500/30',
 };
 
-export function HistoricoOperacoes({ entidade, entidadeId, titulo }: {
+export function HistoricoOperacoes({ entidade, entidadeId, titulo, criadoEm, atualizadoEm }: {
   entidade: string;
   entidadeId: string;
   titulo?: string;
+  /** `created_at` da linha — carimba o cabeçalho mesmo se a trilha estiver vazia. */
+  criadoEm?: string | null;
+  /** `updated_at` da linha — revela edição que o trigger não registra. */
+  atualizadoEm?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [eventos, setEventos] = useState<Evento[] | null>(null);
@@ -68,6 +78,13 @@ export function HistoricoOperacoes({ entidade, entidadeId, titulo }: {
   }, [entidade, entidadeId]);
 
   useEffect(() => { if (open) void carregar(); }, [open, carregar]);
+
+  // Margem de 2s: o trigger é AFTER e grava na mesma transação, então o evento
+  // sai microssegundos depois do `updated_at`. Sem a folga, todo documento
+  // acusaria edição sem trilha.
+  const ultimoEvento = eventos?.length ? eventos[eventos.length - 1].created_at : null;
+  const edicaoSemTrilha = !!atualizadoEm && !!ultimoEvento &&
+    new Date(atualizadoEm).getTime() - new Date(ultimoEvento).getTime() > 2000;
 
   useEffect(() => {
     if (!open) return;
@@ -151,6 +168,25 @@ export function HistoricoOperacoes({ entidade, entidadeId, titulo }: {
                   </div>
                 ))}
               </div>
+
+              {(criadoEm || atualizadoEm) && (
+                <div className="shrink-0 border-t border-white/5 pt-3 flex flex-wrap gap-x-6 gap-y-1 text-[10px] text-gray-500">
+                  {criadoEm && (
+                    <span>Criado em <span className="tabular-nums text-gray-400">{formatDataHoraBR(criadoEm)}</span></span>
+                  )}
+                  {atualizadoEm && atualizadoEm !== criadoEm && (
+                    <span>Última alteração <span className="tabular-nums text-gray-400">{formatDataHoraBR(atualizadoEm)}</span></span>
+                  )}
+                </div>
+              )}
+
+              {edicaoSemTrilha && (
+                <p className="text-[10px] text-yellow-400/80 leading-relaxed shrink-0 flex items-start gap-1.5">
+                  <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                  Houve edição depois do último evento acima. A trilha só registra status, inativação
+                  e os campos que valem como decisão — ajuste em outro campo move a data sem gerar linha.
+                </p>
+              )}
 
               <p className="text-[10px] text-gray-500 leading-relaxed shrink-0">
                 O histórico não pode ser editado nem apagado por ninguém pela aplicação — é o que o
