@@ -956,10 +956,17 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         if (!isPatrimonio) {
           setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoValor }, ...data]);
         }
+        // Veio de item comprado: o cadastro é o MEIO do fluxo, não o fim. Sem
+        // dizer para onde ir agora, o aluno fecha a tela achando que terminou —
+        // e o recebimento fica pendente, esperando um Confirmar que ninguém
+        // sabe que falta.
+        const veioDeCompra = !!itemCompradoSel && itemCompradoSel !== SEM_COMPRA;
         showToast(
           isPatrimonio
             ? 'Patrimônio cadastrado! Ele não aparece nesta lista — está em Financeiro > Patrimônio.'
-            : 'Produto criado com sucesso!',
+            : veioDeCompra
+              ? 'Produto criado com saldo zero. Agora volte em Estoque > Recebimentos e clique em Confirmar na linha deste pedido — é lá que a quantidade entra no estoque.'
+              : 'Produto criado com sucesso!',
           'success', true);
       }
       closeForm();
@@ -1785,9 +1792,26 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                         Saldo inicial
                       </span>
-                      <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-400 border border-white/5 leading-snug">
-                        Este produto veio de uma compra — o saldo entra quando você confirmar o
-                        recebimento, com documento e custo. Digitar aqui contaria a mesma mercadoria duas vezes.
+                      {/* Dizia só por que o campo NÃO está aqui, e o professor
+                          leu as duas telas como um círculo: "para confirmar o
+                          recebimento preciso do produto, e o saldo do produto
+                          depende do recebimento". Não é círculo, é fila — mas
+                          quem lê precisa ver a fila inteira, com o passo em que
+                          está. Salvar com zero é o certo, e é isso que faltava
+                          estar escrito. */}
+                      <div className="neu-pressed py-2.5 px-3 rounded-xl text-[11px] text-gray-400 border border-white/5 leading-snug flex flex-col gap-1.5">
+                        <span>
+                          <span className="font-bold text-gray-300">Salve assim mesmo.</span> Este produto
+                          nasce com saldo <span className="font-bold text-gray-300">zero</span> — e é o certo:
+                          digitar aqui contaria a mesma mercadoria duas vezes.
+                        </span>
+                        <span className="text-gray-500">
+                          A ordem é: <span className="text-gray-400">a carga chega</span> →
+                          <span className="text-gray-400"> registra o recebimento</span> →
+                          <span className="text-accent font-bold"> cadastra o produto (você está aqui)</span> →
+                          <span className="text-gray-400"> volta em Estoque &gt; Recebimentos e clica Confirmar</span>.
+                          É o Confirmar que dá entrada na quantidade, com documento e custo.
+                        </span>
                       </div>
                     </div>
                   )}

@@ -616,19 +616,29 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       abaixo era um parágrafo cinza de rodapé que ninguém lia.
                                       Sem produto no catálogo não há o que escolher, e a tela
                                       passa a dizer isso primeiro. */}
+                                  {/* "já aparece lá como sugestão" foi lido como
+                                      "o produto já está cadastrado, é só escolher" —
+                                      e não é: a sugestão é do campo "Item comprado"
+                                      DENTRO do formulário de cadastro, que preenche
+                                      nome, fornecedor e custo. Ainda há uma ficha a
+                                      completar. O texto agora diz o caminho na
+                                      ordem em que se clica. */}
                                   {catalogoVazio ? (
                                   <p className="text-[10px] leading-snug text-amber-300/90">
-                                    O catálogo desta unidade ainda está vazio — por isso a lista abre sem opção.
-                                    Cadastre o produto em <span className="font-semibold">Cadastros &gt; Produtos</span> —
-                                    “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” já aparece lá como sugestão, com o fornecedor
-                                    e o custo deste pedido. Depois volte e confirme a entrada.
+                                    O catálogo desta unidade ainda está vazio — não há o que listar aqui.
+                                    Vá em <span className="font-semibold">Cadastros &gt; Produtos &gt; Novo</span>,
+                                    escolha “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” no campo
+                                    <span className="font-semibold"> Item comprado</span> (ele traz nome, fornecedor e custo deste pedido),
+                                    complete a ficha e salve — o produto nasce com saldo zero, e é o certo.
+                                    Depois volte nesta linha e clique em Confirmar: é aqui que a quantidade entra no estoque.
                                   </p>
                                   ) : (
                                   <p className="text-[10px] text-gray-500 leading-snug">
                                     Compra eventual não vem do catálogo, então o produto é escolhido aqui.
-                                    Não está cadastrado? Cadastre em <span className="text-gray-300 font-semibold">Cadastros &gt; Produtos</span> —
-                                    “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” já aparece lá como sugestão, com o fornecedor
-                                    e o custo deste pedido. Depois volte e confirme a entrada.
+                                    Não está na lista? Cadastre em <span className="text-gray-300 font-semibold">Cadastros &gt; Produtos &gt; Novo</span>,
+                                    escolhendo “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” no campo
+                                    <span className="text-gray-300 font-semibold"> Item comprado</span> — ele já traz fornecedor e custo deste pedido.
+                                    Salve com saldo zero e volte aqui para confirmar a entrada.
                                   </p>
                                   )}
                                 </div>
