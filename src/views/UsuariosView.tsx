@@ -1133,8 +1133,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   Editar Usuário <span className="text-accent">— {editingUser.nome}</span>
                 </h3>
                 <button onClick={closeEdit}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
+                  className="modal-close-btn">
+                  <X size={16} />
                 </button>
               </div>
 

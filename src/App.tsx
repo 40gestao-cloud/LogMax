@@ -380,7 +380,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         />
       </div>
       {onClose && (
-        <button onClick={onClose} className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+        <button onClick={onClose} className="absolute right-0 top-1/2 -translate-y-1/2 modal-close-btn">
           <X size={16} />
         </button>
       )}

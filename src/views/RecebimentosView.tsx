@@ -821,7 +821,7 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, unidade, showToast, onC
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="shrink-0 neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="shrink-0 modal-close-btn">
             <X size={16} />
           </button>
         </div>

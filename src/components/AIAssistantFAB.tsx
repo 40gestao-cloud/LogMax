@@ -142,9 +142,9 @@ export const AIAssistantFAB = () => {
                 <button
                   onClick={close}
                   aria-label="Fechar"
-                  className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  className="modal-close-btn"
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
               </div>
 

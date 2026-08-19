@@ -455,8 +455,8 @@ function ResultadosModal({ pesquisa, onClose }: { pesquisa: any; onClose: () => 
             <h3 className="text-lg font-bold text-accent">{pesquisa.titulo}</h3>
             <p className="text-xs text-gray-500 mt-1">{respostas.length} {respostas.length === 1 ? 'resposta' : 'respostas'}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-            <X size={14} />
+          <button onClick={onClose} className="modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 

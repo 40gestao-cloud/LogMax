@@ -746,8 +746,8 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   </h3>
                 </div>
                 <button onClick={closeArteModal}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
+                  className="modal-close-btn">
+                  <X size={16} />
                 </button>
               </div>
               <p className="text-xs text-gray-500 mb-3">

@@ -251,8 +251,8 @@ export function ModalAvaliacao({
               {' '}· Ciclo {ciclo.nome}
             </p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-            <X size={14} />
+          <button onClick={onClose} className="modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 
@@ -367,8 +367,8 @@ function ModalNovoCiclo({ onClose, onSaved, showToast, filial, cicloEditar }: { 
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-lg font-bold text-accent">{isEdit ? 'Editar Ciclo de Avaliação' : 'Novo Ciclo de Avaliação'}</h3>
-          <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-            <X size={14} />
+          <button onClick={onClose} className="modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 
@@ -504,7 +504,7 @@ const CardAvaliacao: React.FC<{
             <button
               onClick={onExportPDF}
               title="Baixar PDF desta avaliação"
-              className="w-7 h-7 neu-button rounded-md flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+              className="action-btn-pdf"
             >
               <FileDown size={12} />
             </button>

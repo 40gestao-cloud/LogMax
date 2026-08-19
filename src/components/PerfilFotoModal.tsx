@@ -122,7 +122,7 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
                 <h3 className="text-sm font-bold text-accent">Foto de perfil</h3>
                 <p className="text-[10px] text-gray-500 mt-0.5">{profile.nome}</p>
               </div>
-              <button onClick={fechar} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <button onClick={fechar} className="modal-close-btn"><X size={16} /></button>
             </div>
 
             <div className="flex flex-col items-center gap-4 py-4">

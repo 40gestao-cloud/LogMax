@@ -676,7 +676,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
             className="neu-flat rounded-2xl p-5 sm:p-6 w-full max-w-3xl my-auto border border-white/10">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2"><Briefcase size={16} className="text-accent" />Nova vaga</h3>
-              <button onClick={closeForm} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {emMatriz && (

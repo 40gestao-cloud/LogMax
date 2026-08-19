@@ -128,7 +128,7 @@ export function MinhasPlanilhasModal({
             </p>
           </div>
           <button onClick={onClose}
-            className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white shrink-0">
+            className="shrink-0 modal-close-btn">
             <X size={16} />
           </button>
         </div>

@@ -198,8 +198,8 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId, comMargem, nome
     >
       <div className="px-4 py-2 border-b border-white/5 flex items-center justify-between">
         <p className="text-[10px] font-bold text-accent uppercase tracking-widest">{titulo}</p>
-        <button onClick={onCancel} className="text-gray-600 hover:text-gray-300" title="Fechar (Esc)">
-          <X size={13} />
+        <button onClick={onCancel} className="modal-close-btn" title="Fechar (Esc)">
+          <X size={16} />
         </button>
       </div>
 
@@ -278,16 +278,16 @@ function AcoesLinha({ ativo, onToggle, onEdit, onDelete }: {
   return (
     <div className="flex gap-0.5 shrink-0 pr-1.5">
       <button onClick={onToggle} title={ativo ? 'Desativar (some das listas de produto)' : 'Reativar'}
-        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${ativo ? 'text-gray-500 hover:text-accent hover:bg-white/5' : 'text-amber-400 hover:bg-amber-400/10'}`}>
-        {ativo ? <Eye size={13} /> : <EyeOff size={13} />}
+        className={ativo ? 'action-btn-neutral' : 'action-btn-warning'}>
+        {ativo ? <Eye size={12} /> : <EyeOff size={12} />}
       </button>
       <button onClick={onEdit} title="Editar"
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent hover:bg-white/5 transition-colors">
-        <Edit2 size={13} />
+        className="action-btn-edit">
+        <Edit2 size={12} />
       </button>
       <button onClick={onDelete} title="Excluir"
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors">
-        <Trash2 size={13} />
+        className="action-btn-delete">
+        <Trash2 size={12} />
       </button>
     </div>
   );

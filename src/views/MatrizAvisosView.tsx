@@ -262,7 +262,7 @@ function ModalNovoAviso({ profile: _profile, onClose, onCriado, showToast }: {
           <h3 className="text-lg font-black text-gray-100 flex items-center gap-2">
             <Megaphone size={17} className="text-amber-300" /> Novo Aviso
           </h3>
-          <button onClick={onClose} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="modal-close-btn">
             <X size={16} />
           </button>
         </div>

@@ -82,8 +82,8 @@ const ReaberturaModal = ({ caixa, saving, onClose, onConfirm }: {
             </div>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white shrink-0 disabled:opacity-50">
-            <X size={14} />
+            className="shrink-0 modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 

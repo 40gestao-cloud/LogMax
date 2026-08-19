@@ -126,7 +126,7 @@ function ModalSolicitar({
             <h2 className="text-base font-bold text-gray-100">Solicitar Empréstimo</h2>
             <span className="text-xs text-gray-500">Será analisado pela Matriz</span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
         <div className="neu-pressed rounded-xl p-3 flex items-start gap-2 text-xs text-gray-400">

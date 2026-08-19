@@ -265,8 +265,8 @@ export const TreinamentoInscricoesModal: React.FC<{
             </p>
           </div>
           <button onClick={onClose}
-            className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-            <X size={14} />
+            className="modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 

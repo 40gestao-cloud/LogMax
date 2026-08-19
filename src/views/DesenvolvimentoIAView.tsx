@@ -510,8 +510,8 @@ function ModalAvaliarParticipante({
               <span className="font-bold text-gray-300">{auxiliar.nome}</span> · {sessao.nome}
             </p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-            <X size={14} />
+          <button onClick={onClose} className="modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 
@@ -601,9 +601,9 @@ function FormModal({ show, editing, onClose, form, setForm, saving, onSave, peop
               </h3>
               <button
                 onClick={onClose}
-                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white"
+                className="modal-close-btn"
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             </div>
 

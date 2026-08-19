@@ -165,7 +165,7 @@ function ModalNovoRequerimento({
       >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-100">Novo Requerimento</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
         <div className="flex flex-col gap-1">

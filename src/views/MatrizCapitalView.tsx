@@ -202,7 +202,7 @@ function ModalCapital({
             </h2>
             <span className={`text-xs font-bold ${cor.accent}`}>{filial}</span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Valor (R$) *</label>
@@ -369,7 +369,7 @@ function ModalAprovarEmprestimo({
             <h2 className="text-base font-bold text-gray-100">Analisar Empréstimo</h2>
             <span className={`text-xs font-bold ${cor.accent}`}>{emp.filial}</span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
         {/* Resumo da solicitação */}
@@ -534,7 +534,7 @@ function ModalConfig({
       >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-100">Configuração de Período</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
         {config && (
           <div className="text-xs text-gray-500 neu-pressed rounded-xl p-3">

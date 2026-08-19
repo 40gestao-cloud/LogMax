@@ -698,7 +698,7 @@ function ModalDemanda({ ciclo, tarefa, profile, participantesAtuais, avaliadores
             </h3>
             <p className="text-[11px] text-gray-500 mt-0.5">Ciclo {ciclo.nome}</p>
           </div>
-          <button onClick={onClose} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="modal-close-btn">
             <X size={16} />
           </button>
         </div>

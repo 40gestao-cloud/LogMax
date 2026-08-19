@@ -96,9 +96,9 @@ export const ProdutoDetalheModal = ({
             {filial} · Ficha do produto
           </span>
           <button onClick={onClose} aria-label="Fechar"
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5"
+            className="modal-close-btn"
             style={{ color: '#525252' }}>
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 

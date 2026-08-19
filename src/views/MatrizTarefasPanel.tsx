@@ -1100,7 +1100,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
               <span className="text-xs text-gray-500 truncate">{tarefa.nome}</span>
             </div>
           </div>
-          <button onClick={onFechar} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200 shrink-0">
+          <button onClick={onFechar} className="shrink-0 modal-close-btn">
             <X size={16} />
           </button>
         </div>
@@ -1358,7 +1358,7 @@ function ModalCriarTarefa({ tipoConfig, competicao, onClose, onCriada, showToast
       >
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-black text-gray-100">{tipoConfig.novoLabel}</h3>
-          <button onClick={onClose} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="modal-close-btn">
             <X size={16} />
           </button>
         </div>
@@ -1553,7 +1553,7 @@ function ModalEditarTarefa({ tipoConfig: _tipoConfig, tarefa, participantes, onC
       >
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-black text-gray-100">Editar tarefa</h3>
-          <button onClick={onClose} className="neu-button rounded-lg p-1.5 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="modal-close-btn">
             <X size={16} />
           </button>
         </div>
@@ -1747,7 +1747,7 @@ function ModalBriefingIa({ tarefa, competicao, onClose, onAprovada, showToast }:
               <p className="text-[11px] text-gray-400 truncate">Sub-tarefas sugeridas para apoiar: <span className="text-gray-200 font-bold">{tarefa.nome}</span></p>
             </div>
           </div>
-          <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} className="shrink-0 modal-close-btn">
             <X size={16} />
           </button>
         </div>

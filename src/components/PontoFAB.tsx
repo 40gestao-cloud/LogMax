@@ -90,8 +90,8 @@ export const PontoFAB = () => {
                   <h3 className="text-sm font-bold text-gray-200">Registrar Ponto</h3>
                   <p className="text-[11px] text-gray-500 mt-0.5">Aponte para o QR Code exibido pelo administrador.</p>
                 </div>
-                <button onClick={close} className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
+                <button onClick={close} className="modal-close-btn">
+                  <X size={16} />
                 </button>
               </div>
 

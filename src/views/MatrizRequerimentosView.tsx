@@ -133,7 +133,7 @@ function ModalResponder({
               {r.filial ?? '—'} · {r.criado_por_nome ?? '—'}
             </span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors"><X size={18} /></button>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
         {/* Detalhes do requerimento */}

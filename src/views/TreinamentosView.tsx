@@ -347,7 +347,7 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Treinamento' : 'Novo Treinamento'}</h3>
-              <button onClick={closeForm} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

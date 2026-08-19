@@ -211,8 +211,8 @@ export const AulaAtividadeModal: React.FC<Props> = ({
             <p className="text-[11px] text-gray-500 mt-0.5">{fluxo.nome}</p>
           </div>
           <button type="button" onClick={onClose}
-            className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-200 shrink-0">
-            <X size={15} />
+            className="shrink-0 modal-close-btn">
+            <X size={16} />
           </button>
         </div>
 
