@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { supabase } from './setup';
+import { supabase, TEM_BANCO } from './setup';
 
 const PREFIX = `__TEST_APROV_${Date.now()}__`;
 
@@ -11,6 +11,7 @@ const movIds: string[] = [];
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  if (!TEM_BANCO) return;
   // Produto com estoque suficiente
   const { data: prod, error: pe } = await supabase
     .from('produtos')
@@ -37,6 +38,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!TEM_BANCO) return;
   if (movIds.length) await supabase.from('movimentacoes_estoque').delete().in('id', movIds);
   if (aprovId) await supabase.from('aprovacoes_estoque').delete().eq('id', aprovId);
   if (reqId)   await supabase.from('requisicoes_estoque').delete().eq('id', reqId);
@@ -66,7 +68,7 @@ async function insertMovimentacao() {
 
 // ── Testes ─────────────────────────────────────────────────────────────────
 
-describe('AprovacoesEstoque — idempotência de movimentação', () => {
+describe.skipIf(!TEM_BANCO)('AprovacoesEstoque — idempotência de movimentação', () => {
   it('primeiro insert de movimentacao_estoque é aceito', async () => {
     const { data, error } = await insertMovimentacao();
     expect(error).toBeNull();

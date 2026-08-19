@@ -693,7 +693,7 @@ function FilialCapitalCard({
                       {podeExcluir(profile) && (
                         <button
                           onClick={() => onExcluir(r.id, filial)}
-                          className="shrink-0 p-1 rounded-lg text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          className="action-btn-delete opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 size={12} />
                         </button>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { supabase } from './setup';
+import { supabase, TEM_BANCO } from './setup';
 
 // Sentinel único por run para não colidir com dados reais.
 const PREFIX = `__TEST_FOLHA_${Date.now()}__`;
@@ -35,6 +35,7 @@ async function insertFolha(overrides: Record<string, unknown> = {}) {
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  if (!TEM_BANCO) return;
   const { data, error } = await supabase
     .from('funcionarios')
     .insert({
@@ -51,6 +52,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!TEM_BANCO) return;
   if (folhaIds.length) {
     await supabase.from('folha_pagamento').delete().in('id', folhaIds);
   }
@@ -61,7 +63,7 @@ afterAll(async () => {
 
 // ── Testes ─────────────────────────────────────────────────────────────────
 
-describe('FolhaPagamento — insert com filial', () => {
+describe.skipIf(!TEM_BANCO)('FolhaPagamento — insert com filial', () => {
   it('grava filial corretamente (SuperMax)', async () => {
     const row = await insertFolha({ filial: 'SuperMax' });
     expect(row.filial).toBe('SuperMax');

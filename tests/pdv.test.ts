@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { supabase } from './setup';
+import { supabase, TEM_BANCO } from './setup';
 
 // Sentinel único por run — evita conflito se rodar simultâneo em CI + local.
 const TEST_PREFIX = `__TEST_PDV_${Date.now()}__`;
@@ -58,6 +58,7 @@ function diasEntre(a: string | null, b: string): number {
 // ----------------------------------------------------------------------
 
 beforeAll(async () => {
+  if (!TEM_BANCO) return;
   const { data, error } = await supabase
     .from('produtos')
     .insert({
@@ -74,6 +75,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!TEM_BANCO) return;
   // Cleanup em ordem de dependência (FK).
   for (const vendaId of createdVendaIds) {
     const shortId = vendaId.slice(-6).toUpperCase();
@@ -91,7 +93,7 @@ afterAll(async () => {
 // Testes
 // ----------------------------------------------------------------------
 
-describe('PDV — criar_venda_pdv RPC', () => {
+describe.skipIf(!TEM_BANCO)('PDV — criar_venda_pdv RPC', () => {
   it('Dinheiro à vista: 1 contas_receber Pago vencimento=hoje', async () => {
     const hoje = new Date().toISOString().slice(0, 10);
     const vendaId = await fecharVenda('Dinheiro');

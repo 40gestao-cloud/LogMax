@@ -557,7 +557,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                           <td className="py-3 px-4 text-right">
                             <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity items-center">
                               <button onClick={() => setModalCamp(c)} title="Produtos da campanha"
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent hover:bg-accent/10 transition-colors">
+                                className="action-btn-neutral">
                                 <Package size={12} />
                               </button>
                               {canCRUD && (

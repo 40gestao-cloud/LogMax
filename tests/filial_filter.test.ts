@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { supabase } from './setup';
+import { supabase, TEM_BANCO } from './setup';
 
 // Valida o comportamento que useFetchData replica internamente:
 // .from(table).select('*').eq('filial', filial)
@@ -12,6 +12,7 @@ const funcIds: string[] = [];
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  if (!TEM_BANCO) return;
   const rows = [
     { nome: `${PREFIX} SM1`, cargo: 'Teste', salario: 1000, status: 'Ativo', filial: 'SuperMax' },
     { nome: `${PREFIX} SM2`, cargo: 'Teste', salario: 1000, status: 'Ativo', filial: 'SuperMax' },
@@ -27,6 +28,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!TEM_BANCO) return;
   if (funcIds.length) {
     await supabase.from('funcionarios').delete().in('id', funcIds);
   }
@@ -34,7 +36,7 @@ afterAll(async () => {
 
 // ── Testes ─────────────────────────────────────────────────────────────────
 
-describe('useFetchData — extraFilter de filial', () => {
+describe.skipIf(!TEM_BANCO)('useFetchData — extraFilter de filial', () => {
   it('filial=SuperMax retorna só registros SuperMax do sentinel', async () => {
     const { data, error } = await supabase
       .from('funcionarios')

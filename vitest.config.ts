@@ -3,11 +3,34 @@ import { defineConfig } from 'vitest/config';
 // Dois grupos com necessidades opostas:
 //
 //   • integracao — fala com o Supabase de verdade. Precisa de `.env.test` e
-//     roda serial: os testes disputam o mesmo produto sentinel.
-//   • estatico   — só lê arquivos-fonte (consistência de rotas/menu). Não pode
-//     exigir credenciais: um guarda que só roda com banco à mão é um guarda
-//     que ninguém roda, e este existe justamente para pegar divergência de
-//     menu no CI.
+//     roda serial: os testes disputam o mesmo produto sentinel. Sem `.env.test`
+//     as suítes se pulam sozinhas (ver tests/setup.ts) — mas não no CI, onde
+//     pular em silêncio seria um verde mentiroso.
+//   • estatico   — só lê arquivos-fonte (consistência de rotas/menu, padrão de
+//     botões, regras de domínio puras). Não pode exigir credenciais: um guarda
+//     que só roda com banco à mão é um guarda que ninguém roda, e este existe
+//     justamente para pegar divergência no CI.
+//
+// A lista mora numa constante só: quando estava duplicada em `include` e
+// `exclude`, acrescentar um teste puro e esquecer da segunda lista o mandava
+// para o grupo errado — foi o que aconteceu com produtoBusca.test.ts, que não
+// toca no banco e mesmo assim exigia `.env.test` para rodar.
+const ESTATICOS = [
+  'tests/rotas.test.ts',
+  'tests/aulaFluxos.test.ts',
+  'tests/aulaPapel.test.ts',
+  'tests/botoesPadrao.test.ts',
+  'tests/confirm.test.ts',
+  'tests/fichaProduto.test.ts',
+  'tests/perecivel.test.ts',
+  'tests/precificacao.test.ts',
+  'tests/produtoBusca.test.ts',
+  'tests/schemaDrift.test.ts',
+  'tests/sessaoGuard.test.ts',
+  'tests/tipoProduto.test.ts',
+  'tests/unidadesConteudo.test.ts',
+];
+
 export default defineConfig({
   test: {
     testTimeout: 30_000,
@@ -15,14 +38,14 @@ export default defineConfig({
       {
         test: {
           name: 'estatico',
-          include: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts', 'tests/sessaoGuard.test.ts', 'tests/unidadesConteudo.test.ts', 'tests/tipoProduto.test.ts', 'tests/precificacao.test.ts', 'tests/perecivel.test.ts', 'tests/fichaProduto.test.ts'],
+          include: ESTATICOS,
         },
       },
       {
         test: {
           name: 'integracao',
           include: ['tests/**/*.test.ts'],
-          exclude: ['tests/rotas.test.ts', 'tests/aulaFluxos.test.ts', 'tests/aulaPapel.test.ts', 'tests/confirm.test.ts', 'tests/schemaDrift.test.ts', 'tests/sessaoGuard.test.ts', 'tests/unidadesConteudo.test.ts', 'tests/tipoProduto.test.ts', 'tests/precificacao.test.ts', 'tests/perecivel.test.ts', 'tests/fichaProduto.test.ts'],
+          exclude: ESTATICOS,
           setupFiles: ['./tests/setup.ts'],
           testTimeout: 30_000,
           fileParallelism: false,

@@ -1508,6 +1508,34 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: linear-gradient(to right, transparent 0%, rgba(202, 138, 4, 0.14) 50%, transparent 100%);
 }
 
+/* ── Action button "IA" — glass no accent da marca + shimmer ──
+   Ação que chama o MaxAI a partir de uma linha (gerar legenda, sugerir texto).
+   Usa o accent porque é a cor que o ERP inteiro associa à IA — e o accent muda
+   com o tema (dourado no premium), então a regra le a variavel em vez de fixar
+   o amarelo. */
+.action-btn-accent {
+  position: relative; overflow: hidden;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-accent);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+}
+.action-btn-accent:hover {
+  background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 48%, transparent);
+}
+.action-btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-accent::before {
+  content: ''; position: absolute; inset: 0; width: 50%;
+  background: linear-gradient(to right, transparent 0%,
+              color-mix(in srgb, var(--color-accent) 20%, transparent) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 4s ease-in-out infinite; pointer-events: none;
+}
+.action-btn-accent:disabled::before { animation-play-state: paused; }
+
 /* ── Action button "Pausar" — glass roxo + shimmer ── */
 .action-btn-purple {
   position: relative; overflow: hidden;

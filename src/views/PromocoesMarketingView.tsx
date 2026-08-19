@@ -708,8 +708,8 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             {canPublicarArte && (
                               <button onClick={() => gerarLegenda({ promocao: p })} title="Gerar legenda com IA"
-                                className="w-7 h-7 flex items-center justify-center rounded-lg border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors">
-                                <Sparkles size={11} />
+                                className="action-btn-accent">
+                                <Sparkles size={12} />
                               </button>
                             )}
                             <button onClick={() => handleDelete(p.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>

@@ -676,10 +676,10 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
                             {/* Editar/Descartar individual sempre disponível pra admin/CEO.
                                 Em rascunho: muda só local. Em aprovado: RPC propaga pra tarefas/marketing_tarefas. */}
                             <div className="flex items-center gap-1 shrink-0">
-                              <button onClick={() => abrirEdicao(t)} title={isAprovado ? 'Editar (propaga pro setor)' : 'Editar'} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-accent transition-colors">
+                              <button onClick={() => abrirEdicao(t)} title={isAprovado ? 'Editar (propaga pro setor)' : 'Editar'} className="action-btn-edit">
                                 <Edit3 size={12} />
                               </button>
-                              <button onClick={() => descartar(t._id)} title={isAprovado ? 'Descartar (remove do setor)' : 'Descartar'} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
+                              <button onClick={() => descartar(t._id)} title={isAprovado ? 'Descartar (remove do setor)' : 'Descartar'} className="action-btn-delete">
                                 <X size={12} />
                               </button>
                             </div>

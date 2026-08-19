@@ -120,8 +120,8 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
                   <ClipboardCheck size={16} className="text-accent" />
                   <h3 className="text-sm font-bold text-gray-100">Encerrar caixa — {caixa.filial}</h3>
                 </div>
-                <button onClick={() => setOpen(false)} disabled={saving} className="text-gray-500 hover:text-gray-300 disabled:opacity-50">
-                  <X size={18} />
+                <button onClick={() => setOpen(false)} disabled={saving} className="modal-close-btn">
+                  <X size={16} />
                 </button>
               </div>
 

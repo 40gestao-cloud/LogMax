@@ -1569,7 +1569,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               style={{ background: 'radial-gradient(circle at top, rgba(16,185,129,0.15), transparent 70%)' }}
             >
               <button onClick={() => setModalParabens(null)}
-                className="absolute top-4 right-4 text-gray-500 hover:text-white">
+                className="absolute top-4 right-4 modal-close-btn">
                 <X size={18} />
               </button>
               <div className="text-7xl mb-3">🏆</div>
@@ -1612,7 +1612,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               <button
                 onClick={() => setEditando(null)}
                 disabled={salvandoEdicao}
-                className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                className="absolute top-4 right-4 modal-close-btn"
               >
                 <X size={18} />
               </button>

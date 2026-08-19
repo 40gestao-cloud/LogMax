@@ -333,7 +333,7 @@ export const TreinamentoInscricoesModal: React.FC<{
                       </button>
                     )}
                     <button onClick={() => handleRemover(insc)} title="Remover inscrição"
-                      className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
+                      className="action-btn-delete">
                       <UserMinus size={12} />
                     </button>
                   </div>

@@ -338,8 +338,8 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                             ))}
                             <td className="px-3 py-2.5 text-right">
                               {canDel && (
-                                <button onClick={() => excluir(r.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-600 hover:text-red-400 transition-colors">
-                                  <Trash2 size={11}/>
+                                <button onClick={() => excluir(r.id)} className="action-btn-delete">
+                                  <Trash2 size={12}/>
                                 </button>
                               )}
                             </td>

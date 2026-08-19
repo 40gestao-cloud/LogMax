@@ -553,7 +553,7 @@ const OrcamentosViewInner = ({
                         <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
                           R$ {formatBRL(it.subtotal)}
                         </span>
-                        <button onClick={() => removeItem(idx)} className="col-span-1 w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-500 mx-auto">
+                        <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
                           <Trash2 size={12} />
                         </button>
                       </div>
