@@ -31,11 +31,12 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation,
+  Presentation, FileText,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
+import { NovoDocumentoModal } from './components/NovoDocumentoModal';
 import { ConviteVagaFAB } from './components/ConviteVagaFAB';
 import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
@@ -135,6 +136,7 @@ const HubView                              = lazy(() => import('./views/SessoesG
 const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
 const AulaAtividadeView                    = lazy(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
 const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
+const DocumentosView                       = lazy(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -447,6 +449,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <BookOpen size={18} /><span>Catálogo</span>
           </button>
         )}
+        {/* Documentos da Matriz: mão única — o professor publica, todo mundo
+            baixa. Sem aulaAllow de propósito: o roteiro da atividade costuma
+            ser um PDF, e some-lo no Modo Aula tiraria o módulo justamente da
+            hora em que ele serve. */}
+        <button onClick={() => { navigate('documentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'documentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <FileText size={18} /><span>Documentos</span>
+        </button>
         {/* Central de Avaliação (modo filial): hub com abas Padrão/Metas.
             No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
         {!matrizMode && aulaAllow('avaliacoes') && (
@@ -1224,6 +1233,7 @@ function LogMaxAppInner() {
       // recarregaria num switch sem case. Vide o mesmo caso na Vitrine.
       case 'max-work-show':
       case 'max-show':                     return <MaxShowsView showToast={st} profile={profile} />;
+      case 'documentos':                   return <DocumentosView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">
@@ -1422,6 +1432,12 @@ function LogMaxAppInner() {
           Ciente. Oculto no Modo Aula pela mesma razão do sino — nada de
           conteúdo fora da aula na sessão do aluno. */}
       {!aulaFiltro && <AvisoMatrizFAB profile={profile} showToast={showToast} />}
+
+      {/* Documento novo da Matriz: mesma mecânica do aviso, e some quando a
+          pessoa confirma. Vale TAMBÉM no Modo Aula — o roteiro da atividade
+          costuma ser justamente um PDF, e escondê-lo ali derrubaria o caso de
+          uso principal do módulo. */}
+      <NovoDocumentoModal profile={profile} showToast={showToast} />
 
       {/* Pedido da loja online: some da fila quando vira venda ou é cancelado,
           então não há botão de "já vi" — dar ciência sem atender deixaria o
