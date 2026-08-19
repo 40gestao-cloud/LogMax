@@ -223,15 +223,21 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
 
   const baixar = async (doc: Documento) => {
     setBaixando(doc.id);
-    const { error } = await baixarDocumento(doc);
+    const { error, sumiu } = await baixarDocumento(doc);
     setBaixando(null);
-    if (error) { showToast(error, 'error'); return; }
+    if (error) {
+      showToast(error, 'error');
+      // Sumiu do bucket = sumiu do sistema. Relê a lista pra tirar da tela o
+      // que já não existe, em vez de deixar o aluno clicando de novo.
+      if (sumiu) recarregar();
+      return;
+    }
     if (idsNaoLidos.has(doc.id)) marcarLido(doc.id);
   };
 
   const excluir = async (doc: Documento) => {
     const ok = await confirm({
-      message: `Excluir "${doc.titulo}"? O arquivo sai do sistema e ninguém mais consegue baixar.`,
+      message: `Excluir "${doc.titulo}"? Ele some na hora da tela de todas as unidades e o arquivo sai do sistema — ninguém mais consegue baixar.`,
       danger: true,
     });
     if (!ok || !supabase) return;

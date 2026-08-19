@@ -82,7 +82,7 @@ function digitandoAgora(): boolean {
 export function NovoDocumentoModal({ profile, showToast, activeView }: {
   profile: UserProfile; showToast?: any; activeView?: string;
 }) {
-  const { naoLidos, marcarLido } = useDocumentos(profile);
+  const { naoLidos, marcarLido, recarregar } = useDocumentos(profile);
   const [open, setOpen] = useState(false);
   const [indice, setIndice] = useState(0);
   const [salvando, setSalvando] = useState(false);
@@ -134,9 +134,14 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
   const baixar = async () => {
     if (!doc) return;
     setBaixando(true);
-    const { error } = await baixarDocumento(doc);
+    const { error, sumiu } = await baixarDocumento(doc);
     setBaixando(false);
-    if (error) return showToast?.(error, 'error');
+    if (error) {
+      // Excluído pela Matriz enquanto o modal estava aberto: fecha, porque
+      // insistir num documento que não existe mais não leva a lugar nenhum.
+      if (sumiu) { setOpen(false); recarregar(); }
+      return showToast?.(error, 'error');
+    }
   };
 
   const confirmar = async () => {

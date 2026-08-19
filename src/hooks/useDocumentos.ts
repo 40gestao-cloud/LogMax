@@ -42,12 +42,29 @@ const CAMPOS =
  *    await, e popup aberto fora do gesto do usuário é bloqueado por padrão em
  *    boa parte dos navegadores — o clique simplesmente não faria nada.
  */
-export async function baixarDocumento(doc: Pick<Documento, 'arquivo_path' | 'arquivo_nome'>): Promise<{ error?: string }> {
+export async function baixarDocumento(
+  doc: Pick<Documento, 'arquivo_path' | 'arquivo_nome'>,
+): Promise<{ error?: string; sumiu?: boolean }> {
   if (!supabase) return { error: 'Sem conexão.' };
   const { data, error } = await supabase.storage
     .from('documentos')
     .createSignedUrl(doc.arquivo_path, 60, { download: doc.arquivo_nome });
-  if (error || !data?.signedUrl) return { error: error?.message ?? 'Não foi possível gerar o link.' };
+
+  // Excluído pela Matriz entre o carregamento da lista e o clique. A policy de
+  // leitura resolve pela linha em `documentos`, então some a linha, some o
+  // acesso — e o erro cru do storage ("Object not found") não diz isso a
+  // ninguém. Vale a tradução: quem lê a tela precisa saber que o documento
+  // saiu de circulação, não que o sistema quebrou.
+  if (error || !data?.signedUrl) {
+    const cru = error?.message ?? '';
+    const sumiu = /not found|does not exist|404/i.test(cru);
+    return {
+      error: sumiu
+        ? 'Este documento foi removido pela Matriz e não está mais disponível.'
+        : (cru || 'Não foi possível gerar o link.'),
+      sumiu,
+    };
+  }
 
   const a = document.createElement('a');
   a.href = data.signedUrl;
@@ -96,7 +113,10 @@ export function useDocumentos(profile: UserProfile | null) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  // Realtime: documento publicado pela Matriz chega sem F5.
+  // Realtime: o que a Matriz publica CHEGA, e o que ela exclui SOME — nos dois
+  // sentidos sem F5. O evento é ignorado de propósito (só serve de gatilho) e a
+  // lista é relida inteira: no DELETE o payload traz apenas a chave primária,
+  // então reconciliar item a item seria trabalho a mais para o mesmo resultado.
   //
   // Nome de canal ÚNICO por instância. Este hook roda em dois lugares ao mesmo
   // tempo (a tela e o modal global), e `supabase.channel(nome)` devolve o canal
@@ -111,8 +131,25 @@ export function useDocumentos(profile: UserProfile | null) {
     const canal = supabase
       .channel(`documentos-matriz-${canalId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos' }, () => { carregar(); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+      .subscribe(status => {
+        // Reconexão do websocket é ponto cego: o que mudou enquanto o socket
+        // esteve fora não é reenviado. Sem esta releitura, quem fechou a tampa
+        // do notebook volta com documento já excluído ainda na tela — e clica
+        // em Baixar num arquivo que não existe mais.
+        if (status === 'SUBSCRIBED') carregar();
+      });
+
+    // Mesma janela pelo lado do navegador: aba em segundo plano suspende o
+    // socket sem avisar, e voltar pra aba não dispara reassinatura sozinho.
+    const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    window.addEventListener('online', carregar);
+
+    return () => {
+      document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('online', carregar);
+      supabase!.removeChannel(canal);
+    };
   }, [carregar, profile]);
 
   const marcarLido = useCallback(async (documentoId: string) => {
