@@ -101,18 +101,25 @@ export async function exportPendenciasPDF(
   // ─── 1. Painel de números (apuração) ──────────────────────────────
   const urgentes = rel.linhas.filter(l => l.gravidade === 'alta').length;
   const atencao  = rel.linhas.filter(l => l.gravidade === 'media').length;
-  const soma     = rel.linhas.reduce((t, l) => t + (Number(l.valor) || 0), 0);
   const maisAntiga = rel.linhas.reduce((m, l) => Math.max(m, l.dias_parado || 0), 0);
+
+  // Dinheiro somado por NATUREZA, nunca tudo junto: dívida, crédito,
+  // compromisso de compra e troco de caixa não se somam. O total único que
+  // existia aqui parecia autoritativo e não significava nada.
+  const somaDe = (prefixo: string) => rel.linhas
+    .filter(l => l.etapa.startsWith(prefixo))
+    .reduce((t, l) => t + (Number(l.valor) || 0), 0);
 
   const cards: [string, string][] = [
     ['Paradas', String(rel.linhas.length)],
     ['Urgentes', String(urgentes)],
     ['Atenção', String(atencao)],
-    ['Valor envolvido', BRL(soma)],
-    ['Parada há mais tempo', `${maisAntiga} dia(s)`],
+    ['A pagar parado', BRL(somaDe('Conta a pagar'))],
+    ['A receber parado', BRL(somaDe('Conta a receber'))],
+    ['Há mais tempo', `${maisAntiga} dia(s)`],
   ];
 
-  const cardW = (pageWidth - margin * 2 - 4 * 3) / 5;
+  const cardW = (pageWidth - margin * 2 - 3 * 5) / 6;
   cards.forEach(([rotulo, valor], i) => {
     const x = margin + i * (cardW + 3);
     doc.setFillColor(...GOLD_TINT);
@@ -121,7 +128,7 @@ export async function exportPendenciasPDF(
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'normal');
     doc.text(rotulo.toUpperCase(), x + 2, cursorY + 5);
-    doc.setFontSize(valor.length > 12 ? 8 : 11);
+    doc.setFontSize(valor.length > 11 ? 7.5 : 10.5);
     doc.setTextColor(...GRAY_INK);
     doc.setFont('helvetica', 'bold');
     doc.text(valor, x + 2, cursorY + 12);

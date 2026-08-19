@@ -64,7 +64,12 @@ DECLARE
   v_nomes   text;
   v_setores text[];
 BEGIN
-  IF p_papel = 'matriz' THEN
+  -- A Matriz não tem colaborador nem gerente: por régua de RBAC ela é só
+  -- admin/CEO/conselheiro. Sem esta saída, toda pendência da holding — e elas
+  -- existem desde o mútuo da 473/474, que cria conta a receber com
+  -- filial = 'Matriz' — sairia com "ninguém alocado", acusando de abandono uma
+  -- fila que tem dono. Qualquer papel pedido na Matriz resolve na Matriz.
+  IF p_filial = 'Matriz' OR p_papel = 'matriz' THEN
     SELECT string_agg(u.nome, ', ' ORDER BY u.nome) INTO v_nomes
       FROM public.user_profiles u
      WHERE u.role IN ('admin', 'ceo')
@@ -93,13 +98,30 @@ BEGIN
                    ELSE ARRAY[p_papel]
                  END;
 
-    -- Setor principal OU extra: multi-setor é a regra aqui, não a exceção.
+    -- TITULAR PRIMEIRO, reserva só se não houver titular.
+    --
+    -- O dado real cobrou de novo: 6 dos 8 alunos da SuperMax têm 'logistica'
+    -- em `setores_extras`. Somando titulares e extras numa lista só, "quem
+    -- decide" saía com quase a filial inteira — e lista com seis nomes não
+    -- responsabiliza ninguém, que é o oposto do que esta coluna existe para
+    -- fazer. Ter a chave da sala não é ser o dono da cadeira.
     SELECT string_agg(u.nome, ', ' ORDER BY u.nome) INTO v_nomes
       FROM public.user_profiles u
      WHERE u.filial = p_filial
-       AND (u.setor = ANY(v_setores) OR COALESCE(u.setores_extras, '{}') && v_setores)
+       AND u.setor = ANY(v_setores)
        AND u.role IN ('colaborador', 'gerente')
        AND COALESCE(u.ativo, true) AND u.desligado_em IS NULL;
+
+    -- Sem titular, quem acumula o setor como extra responde — é melhor cobrar
+    -- de quem tem o acesso do que declarar a fila órfã.
+    IF COALESCE(v_nomes, '') = '' THEN
+      SELECT string_agg(u.nome, ', ' ORDER BY u.nome) INTO v_nomes
+        FROM public.user_profiles u
+       WHERE u.filial = p_filial
+         AND COALESCE(u.setores_extras, '{}') && v_setores
+         AND u.role IN ('colaborador', 'gerente')
+         AND COALESCE(u.ativo, true) AND u.desligado_em IS NULL;
+    END IF;
   END IF;
 
   -- Fila órfã: o documento fica parado para sempre e ninguém é cobrado. Dizer

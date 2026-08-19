@@ -136,13 +136,24 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
   }, [linhas, leitura, filial, modeloIA, lidasIA, profile, showToast]);
 
   // Números da tela saem daqui — das linhas do SQL, nunca do texto da IA.
+  //
+  // Dinheiro NÃO se soma tudo junto. Uma versão anterior mostrava "valor
+  // envolvido" somando conta a pagar (dívida), conta a receber (crédito),
+  // pedido (compromisso de compra) e o troco do caixa. O número ficava enorme
+  // e não significava nada — e número que parece autoridade sem significar
+  // nada é pior que número nenhum. Agora são dois totais, cada um de uma
+  // natureza só, e o resto continua no valor de cada linha.
   const resumo = useMemo(() => {
     const l = linhas ?? [];
+    const somaDe = (etapaInclui: string) => l
+      .filter(x => x.etapa.startsWith(etapaInclui))
+      .reduce((t, x) => t + (Number(x.valor) || 0), 0);
     return {
       total: l.length,
       urgentes: l.filter(x => x.gravidade === 'alta').length,
       atencao: l.filter(x => x.gravidade === 'media').length,
-      valor: l.reduce((t, x) => t + (Number(x.valor) || 0), 0),
+      aPagar: somaDe('Conta a pagar'),
+      aReceber: somaDe('Conta a receber'),
       maisAntiga: l.reduce((m, x) => Math.max(m, x.dias_parado || 0), 0),
     };
   }, [linhas]);
@@ -234,17 +245,18 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
       {!!linhas?.length && (
         <>
           {/* Painel de números — apuração, não opinião */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
             {[
               { label: 'Paradas', valor: String(resumo.total), cor: 'text-gray-100' },
               { label: 'Urgentes', valor: String(resumo.urgentes), cor: 'text-red-400' },
               { label: 'Atenção', valor: String(resumo.atencao), cor: 'text-yellow-400' },
-              { label: 'Valor envolvido', valor: BRL(resumo.valor), cor: 'text-accent' },
+              { label: 'A pagar parado', valor: BRL(resumo.aPagar), cor: 'text-red-300' },
+              { label: 'A receber parado', valor: BRL(resumo.aReceber), cor: 'text-emerald-300' },
               { label: 'Há mais tempo', valor: `${resumo.maisAntiga}d`, cor: 'text-gray-100' },
             ].map(c => (
               <div key={c.label} className="neu-pressed rounded-xl p-3">
                 <div className="text-[9px] font-black uppercase tracking-widest text-gray-500">{c.label}</div>
-                <div className={`text-lg font-black tabular-nums mt-0.5 ${c.cor}`}>{c.valor}</div>
+                <div className={`text-base font-black tabular-nums mt-0.5 ${c.cor}`}>{c.valor}</div>
               </div>
             ))}
           </div>
