@@ -12,7 +12,8 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useFormValidation, formatBRL, parseBRL, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
-import { requerImei } from '../lib/atributosProduto';
+import { requerImei, ATRIBUTOS_PRODUTO } from '../lib/atributosProduto';
+import { gerarImeis } from '../lib/imei';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -195,6 +196,20 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // Catálogo vazio da unidade: não é erro de carregamento, é turma que ainda
   // não cadastrou produto. Quem confirma recebimento precisa ver a diferença.
   const catalogoVazio = produtosOrdenados.length === 0;
+  // Lote e validade só existem onde a mercadoria estraga. A régua é a FICHA do
+  // nicho, não o nome da filial (mesmo critério de `temGrade` em Produtos): se
+  // um dia outra unidade ganhar `perecivel`, os campos aparecem lá sem ninguém
+  // mexer aqui. Hoje isso é só a mercearia.
+  //
+  // Não era cosmético: `ehPerecivel` é sempre falso fora do SuperMax, porque a
+  // ficha nem tem o campo — o bloco ficava na tela dizendo "Só para perecível"
+  // em toda linha da TechMax. E Lote era pior que inútil: ele só é gravado
+  // JUNTO com a validade (o insert em vencimentos_estoque exige a data), então
+  // lote digitado sem data era descartado em silêncio.
+  const filialTemValidade = useMemo(
+    () => (ATRIBUTOS_PRODUTO[filial] ?? []).some(d => d.key === 'perecivel'),
+    [filial],
+  );
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
 
@@ -215,6 +230,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // saldo, o produto contra nada.
   const produtoDoPedido = (pedidoId: string): string | null =>
     pedidos.find((x: any) => x.id === pedidoId)?.produto_id ?? null;
+
+  /** O que chegou, em palavras. Produto do catálogo quando o pedido o carrega;
+   *  senão a descrição que a requisição escreveu. Espaço em branco colapsado —
+   *  as descrições vêm de planilha e trazem TAB no meio. */
+  const nomeDoItem = (pedidoId: string): string => {
+    const pid = produtoDoPedido(pedidoId);
+    const doCatalogo = pid ? produtos.find((x: any) => x.id === pid)?.nome : null;
+    return String(doCatalogo ?? descricaoDoPedido(pedidoId) ?? '').replace(/\s+/g, ' ').trim();
+  };
 
   /**
    * Produto do painel de confirmação: vem do pedido (reposição) ou do select
@@ -501,7 +525,18 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     <React.Fragment key={item.id}>
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data || '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</td>
+                        {/* O código do pedido sozinho não diz o que chegou:
+                            a tela listava PC-TM-2026-0011 e o conferente tinha
+                            de abrir o Confirmar para descobrir se era o tablet
+                            ou o roteador. O nome vem do produto quando o pedido
+                            o carrega (Reposição) e da descrição da requisição
+                            quando é compra eventual. */}
+                        <td className="py-3 px-4 text-xs">
+                          <span className="font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</span>
+                          {nomeDoItem(item.pedido_id) && (
+                            <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{nomeDoItem(item.pedido_id)}</div>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
                           {item.qtd_recebida != null ? qtdBR(item.qtd_recebida) : '—'}
                           {(devolvido[item.id] ?? 0) > 0 && (
@@ -650,6 +685,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   )}
                                 </div>
                                 )}
+                                {filialTemValidade && (<>
                                 {/* Validade da carga (migr. 424). Preenchido
                                     aqui, o lote entra na fila do FEFO já com a
                                     origem — depois vira digitação retroativa. */}
@@ -691,6 +727,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 </div>
                                   );
                                 })()}
+                                </>)}
                                 {/* IMEI/serial por unidade (migr. 444). Só para
                                     produto marcado no cadastro: pedir número de
                                     série de saco de arroz seria ruído. */}
@@ -707,9 +744,30 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       placeholder={'359123456789012\n359123456789013'}
                                       value={confirmImeis}
                                       onChange={e => setConfirmImeis(e.target.value)} />
+                                    {/* O número mora na caixa, e a caixa está
+                                        aqui — por isso o campo continua no
+                                        recebimento. O que não cabe na aula é
+                                        digitar 30 números de 15 dígitos: o botão
+                                        gera a lista inteira do tamanho da carga,
+                                        com TAC do modelo e dígito de Luhn, igual
+                                        ao "Gerar" do EAN em Cadastros. */}
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const qtd = Math.floor(parseQtd(item.qtd_recebida)) || 0;
+                                        if (qtd <= 0) { showToast('Quantidade recebida inválida.', 'error', true); return; }
+                                        if (confirmImeis.trim() && !await confirm(
+                                          `Substituir os números já digitados por ${qtd} gerado(s)?`)) return;
+                                        setConfirmImeis(gerarImeis(qtd, confirmProduto).join('\n'));
+                                      }}
+                                      className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-sky-400 hover:bg-sky-400/10 transition-colors self-start"
+                                    >
+                                      Gerar {Math.floor(parseQtd(item.qtd_recebida)) || 0} número(s)
+                                    </button>
                                     <span className="text-[10px] text-gray-500 leading-snug">
                                       Um número por linha. É o que liga o aparelho ao cliente na venda — sem ele,
-                                      garantia e recall não têm resposta.
+                                      garantia e recall não têm resposta. Sem as caixas na mão, use o Gerar: os 8
+                                      primeiros dígitos são do modelo, como no aparelho de verdade.
                                     </span>
                                   </div>
                                 )}
