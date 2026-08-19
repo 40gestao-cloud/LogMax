@@ -26,10 +26,14 @@
 //     mantém sozinha: cadastro novo que aparecer amanhã já nasce protegido,
 //     sem ninguém precisar lembrar de adicioná-lo a lista nenhuma.
 //
-// Adiar não é descartar. O documento continua na fila, o FAB continua pulsando,
-// e o modal aparece assim que a pessoa sai da tela travada ou tira o cursor do
-// campo — a recheca acontece a cada troca de view e a cada 30s enquanto houver
-// algo represado.
+// Adiar não é descartar. O documento continua na fila e o modal aparece assim
+// que a pessoa sai da tela travada ou tira o cursor do campo — a recheca
+// acontece a cada troca de view e a cada 30s enquanto houver algo represado.
+//
+// No PDV o FAB também some: ali a tela é usada com cliente na frente, e botão
+// flutuante piscando disputa atenção com a venda. Nas demais telas ele fica,
+// porque é o único jeito de a pessoa saber que chegou documento sem ter que
+// lembrar de abrir o módulo.
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -38,11 +42,17 @@ import { formatDataHoraBR } from '../lib/dates';
 import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-/** Telas onde o modal nunca se abre sozinho. O FAB continua lá. */
+/** Telas onde o modal nunca se abre sozinho. */
 const VIEWS_SEM_AUTO_ABRIR = new Set([
   'vendas-pdv',
   'financeiro-controledecaixa',
 ]);
+
+// No PDV nem o FAB fica: a tela é usada com cliente na frente e o botão
+// flutuante disputa espaço e atenção com a venda. Nas outras telas ele
+// permanece — é por onde a pessoa abre o documento quando estiver livre, e sem
+// ele quem passa a aula inteira no caixa não saberia que chegou algo.
+const VIEWS_SEM_FAB = new Set(['vendas-pdv']);
 
 /** Alguém está digitando? Vale em qualquer tela, inclusive dentro de modal. */
 function digitandoAgora(): boolean {
@@ -123,26 +133,28 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
 
   return (
     <>
-      <motion.button
-        onClick={() => { setIndice(0); setOpen(true); }}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileTap={{ scale: 0.95 }}
-        aria-label="Ver documentos novos"
-        className="fixed bottom-72 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-sky-400/40 flex items-center gap-2 text-sky-200 hover:border-sky-400 hover:text-sky-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-        style={{ background: 'var(--color-card-bg)' }}
-      >
-        <span className="relative flex items-center justify-center">
-          <span className="absolute inline-flex w-5 h-5 rounded-full bg-sky-400/30 animate-ping" />
-          <FileText size={18} className="relative" />
-        </span>
-        <span className="text-xs font-black uppercase tracking-widest">Novo Documento</span>
-        {naoLidos.length > 1 && (
-          <span className="text-[10px] font-black tabular-nums w-5 h-5 rounded-full bg-sky-400/20 border border-sky-400/40 flex items-center justify-center">
-            {naoLidos.length}
+      {!(activeView && VIEWS_SEM_FAB.has(activeView)) && (
+        <motion.button
+          onClick={() => { setIndice(0); setOpen(true); }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileTap={{ scale: 0.95 }}
+          aria-label="Ver documentos novos"
+          className="fixed bottom-72 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-sky-400/40 flex items-center gap-2 text-sky-200 hover:border-sky-400 hover:text-sky-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          style={{ background: 'var(--color-card-bg)' }}
+        >
+          <span className="relative flex items-center justify-center">
+            <span className="absolute inline-flex w-5 h-5 rounded-full bg-sky-400/30 animate-ping" />
+            <FileText size={18} className="relative" />
           </span>
-        )}
-      </motion.button>
+          <span className="text-xs font-black uppercase tracking-widest">Novo Documento</span>
+          {naoLidos.length > 1 && (
+            <span className="text-[10px] font-black tabular-nums w-5 h-5 rounded-full bg-sky-400/20 border border-sky-400/40 flex items-center justify-center">
+              {naoLidos.length}
+            </span>
+          )}
+        </motion.button>
+      )}
 
       <AnimatePresence>
         {open && doc && (
