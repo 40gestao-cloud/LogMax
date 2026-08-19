@@ -31,7 +31,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText,
+  Presentation, FileText, Hourglass,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -137,6 +137,7 @@ const AulaModoView                         = lazy(() => import('./views/AulaModo
 const AulaAtividadeView                    = lazy(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
 const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 const DocumentosView                       = lazy(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
+const PendenciasView                       = lazy(() => import('./views/PendenciasView').then(m => ({ default: m.PendenciasView })));
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -447,6 +448,16 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {aulaAllow('catalogo-produtos') && (
           <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BookOpen size={18} /><span>Catálogo</span>
+          </button>
+        )}
+        {/* Pendências (migr. 477): nasceu como aba do Modo Aula, mas a pergunta
+            "o que está parado e com quem?" é de qualquer terça-feira, não só de
+            dia de aula. Primeiro nível, e só para o professor: a tela atravessa
+            as três unidades e diz o nome de quem está devendo.
+            Mesmo componente da aba — uma tela, duas portas. */}
+        {profile?.role === 'admin' && (
+          <button onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <Hourglass size={18} /><span>Pendências</span>
           </button>
         )}
         {/* Documentos da Matriz: mão única — o professor publica, todo mundo
@@ -1234,6 +1245,7 @@ function LogMaxAppInner() {
       case 'max-work-show':
       case 'max-show':                     return <MaxShowsView showToast={st} profile={profile} />;
       case 'documentos':                   return <DocumentosView showToast={st} profile={profile} />;
+      case 'pendencias':                   return <PendenciasView showToast={st} profile={profile} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

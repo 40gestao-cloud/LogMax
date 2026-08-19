@@ -165,8 +165,12 @@ export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[
 //   aula costuma ser justamente o PDF publicado pela Matriz, e a regra padrão
 //   (split('-')[0] = 'documentos') não bate com módulo nenhum da whitelist —
 //   sem esta linha o item da sidebar existe mas o guard devolve pra Início.
+// - 'pendencias': é do professor (a própria view e a RPC exigem role='admin'),
+//   e a regra padrão daria 'pendencias' como módulo, que não existe. Mesmo
+//   defeito que 'documentos' teve: botão na sidebar e guard devolvendo pra
+//   Início.
 const SEMPRE_LIBERADO = new Set([
-  'inicio', 'aula-modo', 'aula-atividade', 'documentos',
+  'inicio', 'aula-modo', 'aula-atividade', 'documentos', 'pendencias',
   'sessoes-gerais', 'analise-ia', 'comparativos-matriz',
   'painel-bi', 'briefing-diario', 'central-tempo',
 ]);

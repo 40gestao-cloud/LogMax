@@ -16,7 +16,7 @@ import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import { AulaFluxoProjecao } from './AulaFluxoProjecao';
 import { AulaPainelControle } from './AulaPainelControle';
 import { AulaConferenciaFluxo } from './AulaConferenciaFluxo';
-import { AulaPendencias } from './AulaPendencias';
+import { PendenciasView } from './PendenciasView';
 import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
@@ -1008,7 +1008,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       )}
 
       {aba === 'pendencias' && profile?.role === 'admin' && (
-        <AulaPendencias showToast={showToast} profile={profile} />
+        <PendenciasView showToast={showToast} profile={profile} />
       )}
 
       {aba === 'historico' && <AulaHistorico showToast={showToast} />}

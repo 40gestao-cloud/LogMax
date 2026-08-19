@@ -1,10 +1,14 @@
 // Pendências — o que está parado, onde, e esperando quem (migr. 477).
 //
-// A Conferência ao lado responde "o que a turma fez errado hoje". Esta aba
-// responde a outra pergunta, que não cabe no recorte de sessão de aula: "o que
-// ficou para trás?". Por isso ela NÃO filtra por sessão — filtra por unidade, e
-// o dado que importa é há quantos dias o documento está parado, o que atravessa
-// várias aulas.
+// A Conferência responde "o que a turma fez errado hoje". Esta tela responde a
+// outra pergunta, que não cabe no recorte de sessão de aula: "o que ficou para
+// trás?". Por isso ela NÃO filtra por sessão — filtra por unidade, e o dado que
+// importa é há quantos dias o documento está parado, o que atravessa aulas.
+//
+// Vive em DOIS lugares, e é o mesmo componente nos dois: item de primeiro nível
+// na sidebar (é pergunta de qualquer terça-feira, não só de dia de aula) e aba
+// ao lado da Conferência dentro do Modo Aula, que é onde a mão vai durante a
+// aula. Uma tela, duas portas — como a Central de Avaliação já faz.
 //
 // Duas camadas, e a separação é a mesma da 471/472:
 //
@@ -45,7 +49,7 @@ interface Props {
   profile: UserProfile | null;
 }
 
-export const AulaPendencias: React.FC<Props> = ({ showToast, profile }) => {
+export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
   const [filial, setFilial] = useState<string>('');
   const [linhas, setLinhas] = useState<PendenciaLinha[] | null>(null);
   const [loading, setLoading] = useState(false);
