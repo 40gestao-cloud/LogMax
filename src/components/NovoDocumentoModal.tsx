@@ -8,15 +8,53 @@
 // Diferença: aqui o modal ABRE sozinho na primeira vez que a fila aparece. Um
 // aviso pode esperar o clique; um documento que a turma precisa baixar antes
 // da atividade, não. Fechado sem confirmar, vira FAB e continua cobrando.
+//
+// ─── MAS NUNCA POR CIMA DE OPERAÇÃO EM CURSO ────────────────────────────────
+//
+// Isto é um recado, não uma tarefa: ele espera. Abrir sozinho no meio de uma
+// venda rouba o foco do leitor de código de barras (que digita direto na tela)
+// e sequestra o Escape com um cliente na frente do caixa. No meio de um
+// cadastro, cobre o formulário que a pessoa está preenchendo.
+//
+// Duas travas, porque uma só não cobre o caso real:
+//
+//   · LISTA DE TELAS — PDV e Controle de Caixa. São operação com terceiro
+//     esperando; interromper ali não é inconveniência, é erro de operação.
+//
+//   · CAMPO EM FOCO — se o cursor está num input, textarea, select ou área
+//     editável, alguém está digitando, em QUALQUER tela. Esta trava é a que se
+//     mantém sozinha: cadastro novo que aparecer amanhã já nasce protegido,
+//     sem ninguém precisar lembrar de adicioná-lo a lista nenhuma.
+//
+// Adiar não é descartar. O documento continua na fila, o FAB continua pulsando,
+// e o modal aparece assim que a pessoa sai da tela travada ou tira o cursor do
+// campo — a recheca acontece a cada troca de view e a cada 30s enquanto houver
+// algo represado.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Check, Download, Building2, Loader2 } from 'lucide-react';
 import { formatDataHoraBR } from '../lib/dates';
 import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-export function NovoDocumentoModal({ profile, showToast }: { profile: UserProfile; showToast?: any }) {
+/** Telas onde o modal nunca se abre sozinho. O FAB continua lá. */
+const VIEWS_SEM_AUTO_ABRIR = new Set([
+  'vendas-pdv',
+  'financeiro-controledecaixa',
+]);
+
+/** Alguém está digitando? Vale em qualquer tela, inclusive dentro de modal. */
+function digitandoAgora(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
+export function NovoDocumentoModal({ profile, showToast, activeView }: {
+  profile: UserProfile; showToast?: any; activeView?: string;
+}) {
   const { naoLidos, marcarLido } = useDocumentos(profile);
   const [open, setOpen] = useState(false);
   const [indice, setIndice] = useState(0);
@@ -29,16 +67,33 @@ export function NovoDocumentoModal({ profile, showToast }: { profile: UserProfil
 
   const doc = naoLidos[indice];
 
+  const tentarAbrir = useCallback(() => {
+    const primeiro = naoLidos[0]?.id ?? null;
+    if (!primeiro || primeiro === jaAbriuPara) return;
+    if (activeView && VIEWS_SEM_AUTO_ABRIR.has(activeView)) return;
+    if (digitandoAgora()) return;
+    // Só marca como "já mostrado" quando de fato mostrou. Marcar antes da hora
+    // faria o documento perder o auto-abrir para sempre por ter chegado no
+    // instante errado.
+    setJaAbriuPara(primeiro);
+    setIndice(0);
+    setOpen(true);
+  }, [naoLidos, jaAbriuPara, activeView]);
+
   useEffect(() => {
     if (naoLidos.length === 0) { setOpen(false); return; }
     if (indice > naoLidos.length - 1) setIndice(Math.max(0, naoLidos.length - 1));
+    tentarAbrir();
+  }, [naoLidos, indice, tentarAbrir]);
+
+  // Represado: recheca sozinho enquanto houver documento esperando. Sem isto,
+  // quem passa a aula inteira no PDV só veria o modal ao trocar de tela.
+  useEffect(() => {
     const primeiro = naoLidos[0]?.id ?? null;
-    if (primeiro && primeiro !== jaAbriuPara) {
-      setJaAbriuPara(primeiro);
-      setIndice(0);
-      setOpen(true);
-    }
-  }, [naoLidos, indice, jaAbriuPara]);
+    if (!primeiro || primeiro === jaAbriuPara) return;
+    const t = window.setInterval(tentarAbrir, 30000);
+    return () => window.clearInterval(t);
+  }, [naoLidos, jaAbriuPara, tentarAbrir]);
 
   useEffect(() => {
     if (!open) return;

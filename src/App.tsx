@@ -1436,8 +1436,10 @@ function LogMaxAppInner() {
       {/* Documento novo da Matriz: mesma mecânica do aviso, e some quando a
           pessoa confirma. Vale TAMBÉM no Modo Aula — o roteiro da atividade
           costuma ser justamente um PDF, e escondê-lo ali derrubaria o caso de
-          uso principal do módulo. */}
-      <NovoDocumentoModal profile={profile} showToast={showToast} />
+          uso principal do módulo.
+          `activeView` vai junto porque o modal se recusa a abrir sozinho por
+          cima de operação em curso (PDV, caixa) — ele adia, não desiste. */}
+      <NovoDocumentoModal profile={profile} showToast={showToast} activeView={activeView} />
 
       {/* Pedido da loja online: some da fila quando vira venda ou é cancelado,
           então não há botão de "já vi" — dar ciência sem atender deixaria o
