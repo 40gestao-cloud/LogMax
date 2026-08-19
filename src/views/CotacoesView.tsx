@@ -82,6 +82,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   );
   const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial }, true);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  // Catálogo da unidade: é aqui que o comprador amarra o texto livre da
+  // requisição a um item de verdade (migr. 480). Realtime porque o produto
+  // pode estar sendo cadastrado noutra tela, agora, exatamente para este
+  // pedido sair.
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial }, true);
+  const produtosOrdenados = useMemo(
+    () => [...produtos].sort((a: any, b: any) =>
+      String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
+    [produtos],
+  );
+
   // Pontualidade por fornecedor (migr. 421). Vive ao lado do preço porque é
   // aqui que a escolha é feita — no relatório, chegaria tarde.
   const { desempenho, desempenhoDisponivel } = useFornecedorDesempenho(filial);
@@ -519,12 +530,29 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // requisição para 'Atendida' no mesmo COMMIT. Antes isso era insert solto no
   // cliente com guard só por cotação — foi assim que uma requisição de 24
   // unidades virou 2 pedidos e 2 contas a pagar em produção.
-  const handleGerarPedido = async (cotacao: any) => {
+  // Cotação esperando o vínculo com o catálogo, e o produto escolhido no modal.
+  const [vinculando, setVinculando] = useState<any | null>(null);
+  const [produtoVinculo, setProdutoVinculo] = useState('');
+
+  const handleGerarPedido = async (cotacao: any, produtoId?: string) => {
     if (!supabase) return;
+    // Compra eventual nasce de texto livre — quem pede não conhece o catálogo,
+    // e isso é realista. O que não era realista é ninguém normalizar depois: o
+    // item chegava na doca sem código e o conferente é que cadastrava. Em ERP
+    // real o código existe ANTES do pedido, e quem amarra é o comprador.
+    // A RPC recusa de qualquer jeito (migr. 480); isto aqui é só perguntar
+    // antes, em vez de deixar o erro estourar depois do clique.
+    const jaTemProduto = !!cotacao.req?.produto_id;
+    if (!jaTemProduto && !produtoId) {
+      setProdutoVinculo('');
+      setVinculando(cotacao);
+      return;
+    }
     setGenerating(cotacao.id);
     try {
       const { data: pedido, error } = await supabase.rpc('gerar_pedido_de_cotacao', {
         p_cotacao_id: cotacao.id,
+        p_produto_id: produtoId ?? null,
       });
       if (error) throw new Error(error.message);
       setCotacoesComPedido(prev => new Set(prev).add(cotacao.id));
@@ -535,6 +563,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
       }
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
+      setVinculando(null);
+      setProdutoVinculo('');
       showToast(`${numeroPedido(novo)} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`, 'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -1187,6 +1217,94 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 </button>
                 <NeuButtonAccent onClick={handleReenviarCorrigida} isLoading={reenviando}>
                   <Send size={14} /> Reenviar ao Financeiro
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Vínculo com o catálogo (migr. 480) ──────────────────────────────
+          O item chega aqui como a frase que o setor escreveu na requisição.
+          Quem compra é que sabe — e é quem tem de dizer — qual item de catálogo
+          é aquilo, porque é o código que entra no pedido. Feito isto, o pedido
+          nasce amarrado, o Recebimento abre com o produto travado e ninguém
+          cadastra nada na doca.
+
+          Só aparece na compra Eventual: Reposição já veio do catálogo. */}
+      <AnimatePresence>
+        {vinculando && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !generating && setVinculando(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-bold text-gray-300">
+                  Qual item do catálogo?
+                  <span className="text-accent ml-2">— {vinculando.forn?.nome ?? 'fornecedor'}</span>
+                </h3>
+                <button onClick={() => !generating && setVinculando(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="neu-inset rounded-xl p-3 mb-4 border border-white/5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">O que a requisição pediu</p>
+                <p className="text-xs text-gray-200">
+                  {String(vinculando.req?.item ?? 'item').replace(/\s+/g, ' ').trim()}
+                  {vinculando.req?.qtd != null && (
+                    <span className="text-gray-500"> · {vinculando.req.qtd} {vinculando.req.unidade ?? ''}</span>
+                  )}
+                </p>
+              </div>
+
+              <FormField label="Produto do catálogo *">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                  value={produtoVinculo}
+                  onChange={e => setProdutoVinculo(e.target.value)}>
+                  <option value="">
+                    {produtosOrdenados.length === 0
+                      ? 'Nenhum produto cadastrado nesta unidade'
+                      : 'Selecione o produto...'}
+                  </option>
+                  {produtosOrdenados.map((pr: any) => (
+                    <option key={pr.id} value={pr.id}>{pr.nome}</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <p className="text-[11px] text-gray-500 leading-snug mt-3">
+                O setor pede em português; quem compra amarra ao catálogo, porque é o código que
+                entra no pedido. Feito isso, a carga chega com o item já definido e o Recebimento
+                só confere — ninguém cadastra produto na doca.
+                <span className="block mt-1.5 text-gray-400">
+                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Produtos</span> e
+                  volte aqui — a tela atualiza sozinha.
+                </span>
+              </p>
+
+              <p className="text-[11px] text-emerald-400/80 leading-snug mt-3">
+                A requisição guarda esse vínculo: a próxima compra do mesmo item já nasce como
+                Reposição, escolhida do catálogo, sem passar por aqui.
+              </p>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={() => setVinculando(null)} disabled={!!generating}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <NeuButtonAccent
+                  onClick={() => handleGerarPedido(vinculando, produtoVinculo)}
+                  isLoading={generating === vinculando.id}
+                  disabled={!produtoVinculo}>
+                  <ShoppingBag size={14} /> Gerar Pedido
                 </NeuButtonAccent>
               </div>
             </motion.div>
