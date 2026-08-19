@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
+import { codigoCobranca } from '../lib/cobranca';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
   Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
@@ -2528,6 +2529,10 @@ export const PDVViewSupermax = ({
                 <div className="text-4xl font-black tabular-nums" style={{ color: MONEY }}>
                   R$ {fmt(pixModal.valor)}
                 </div>
+                {/* O mesmo número que a MaxPay mostra no desempate. */}
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
+                  Cobrança nº <span className="font-mono tracking-normal" style={{ color: NAVY_DARK }}>{codigoCobranca(pixModal.id)}</span>
+                </div>
               </div>
               {pixError ? (
                 <div className="border-2 p-4 space-y-3 text-left" style={{ borderColor: RED }}>
@@ -2555,7 +2560,8 @@ export const PDVViewSupermax = ({
                   {/* A MaxPay acha a cobrança pelo VALOR (janela de 5 min), não pelo
                       QR: sem dizer isso, o operador digita um valor arredondado,
                       a maquininha não casa nada e fica em "aguardando" para sempre. */}
-                  <br /><span className="text-gray-600">Pela <b>MaxPay</b>, cobre <b>este mesmo valor</b> — é assim que ela acha a cobrança.</span>
+                  <br /><span className="text-gray-600">Pela <b>MaxPay</b>, cobre <b>este mesmo valor</b> — é assim que ela acha a cobrança.
+                  Havendo outra do mesmo valor, ela pergunta qual: informe o <b>nº acima</b>.</span>
                 </p>
               )}
               <button
@@ -2653,9 +2659,13 @@ export const PDVViewSupermax = ({
                 <div className="text-4xl font-black tabular-nums" style={{ color: MONEY }}>
                   R$ {fmt(cartaoModal.valor)}
                 </div>
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
+                  Cobrança nº <span className="font-mono tracking-normal" style={{ color: NAVY_DARK }}>{codigoCobranca(cartaoModal.id)}</span>
+                </div>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">
                 Operador digita o valor na <b>MaxPay</b> e o cliente aproxima o cartão (lendo o QR no <b>MaxBank</b>). A venda fecha sozinha quando for autorizado.
+                Se a maquininha perguntar qual cobrança é, informe o <b>nº acima</b>.
               </p>
               <button
                 onClick={() => setConfirmCartaoCancel(true)}

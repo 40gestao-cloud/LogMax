@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store, Undo2, Wrench, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { codigoCobranca } from '../lib/cobranca';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
@@ -2373,6 +2374,12 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <p className="text-3xl font-black text-gray-100 tabular-nums tracking-tight mt-1">
                   {pixPendente.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </p>
+                {/* O mesmo número que a MaxPay mostra quando duas cobranças do
+                    mesmo valor coexistem. Sem ele, o aluno não sabe qual é a
+                    dele e o operador escolhe no chute. */}
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-2">
+                  Cobrança nº <span className="font-mono text-accent tracking-normal">{codigoCobranca(pixPendente.id)}</span>
+                </p>
               </div>
 
               {/* QR sempre preto-sobre-branco com quiet zone — exigência dos scanners,
@@ -2394,7 +2401,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   Cliente escaneia este código no <span className="font-bold text-gray-300">MaxBank</span> ou no
                   simulador de pagamento. Pela <span className="font-bold text-gray-300">maquininha MaxPay</span>, o
                   operador cobra informando <span className="font-bold text-gray-300">este mesmo valor</span> — é por
-                  ele que ela acha a cobrança.
+                  ele que ela acha a cobrança. Se houver outra cobrança do mesmo valor, ela pergunta qual:
+                  informe o <span className="font-bold text-gray-300">nº acima</span>.
                 </span>
               </div>
 
@@ -2756,6 +2764,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <p className="text-3xl font-black tabular-nums tracking-tight mt-1" style={{ color: '#0a0a0a' }}>
                   {cartaoModal.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </p>
+                <p className="text-[10px] uppercase tracking-widest font-bold mt-2" style={{ color: '#737373' }}>
+                  Cobrança nº <span className="font-mono tracking-normal" style={{ color: 'var(--color-accent)' }}>{codigoCobranca(cartaoModal.id)}</span>
+                </p>
               </div>
 
               <div className="rounded-2xl px-4 py-4 flex flex-col items-center gap-2"
@@ -2773,6 +2784,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <Smartphone size={12} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
                 <span>
                   Cliente abre o <span className="font-bold" style={{ color: '#0a0a0a' }}>MaxBank → Escanear QR</span> e autoriza o pagamento.
+                  Se a MaxPay perguntar qual cobrança é, informe o <span className="font-bold" style={{ color: '#0a0a0a' }}>nº acima</span>.
                 </span>
               </div>
 
