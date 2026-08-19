@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus, FileWarning } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -15,6 +15,7 @@ import { AulaAtividadeModal } from './AulaAtividadeModal';
 import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import { AulaFluxoProjecao } from './AulaFluxoProjecao';
 import { AulaPainelControle } from './AulaPainelControle';
+import { AulaConferenciaFluxo } from './AulaConferenciaFluxo';
 import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
@@ -29,11 +30,15 @@ const arraysIguais = (a: string[], b: string[]) =>
 
 // As três coisas que esta tela faz, na ordem em que a aula acontece: montar o
 // recorte, enviar o enunciado, acompanhar quem fez.
-type AbaId = 'montagem' | 'atividades' | 'controle' | 'historico';
+type AbaId = 'montagem' | 'atividades' | 'controle' | 'conferencia' | 'historico';
 const ABAS: { id: AbaId; label: string; icone: any }[] = [
   { id: 'montagem',   label: 'Montagem',   icone: Workflow },
   { id: 'atividades', label: 'Atividades', icone: ClipboardList },
   { id: 'controle',   label: 'Controle',   icone: ClipboardCheck },
+  // Controle conta quem FEZ; Conferência conta COMO foi feito. Separadas de
+  // propósito: juntar "o Joel parou na etapa 3" com "o valor do pedido não bate
+  // com a cotação" faria uma tela responder mal as duas perguntas.
+  { id: 'conferencia', label: 'Conferência', icone: FileWarning },
   { id: 'historico',  label: 'Histórico',  icone: History },
 ];
 
@@ -341,7 +346,12 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           de oito cards. A barra de acoes fica FORA das abas: alteracao nao
           salva nao pode sumir porque o professor foi conferir outra coisa. */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {ABAS.map(t => (
+        {/* Conferência só para o professor. Modo Aula abre para admin E ceo,
+            mas o CEO é aluno (a régua de sempre: `auth_is_admin()` inclui
+            alunos, `role='admin'` é o professor e só) — e é justamente ele um
+            dos auditados. Sem este filtro, o CEO veria a aba e levaria um erro
+            de permissão vindo da RPC, que é a pior forma de descobrir isso. */}
+        {ABAS.filter(t => t.id !== 'conferencia' || profile?.role === 'admin').map(t => (
           <button
             key={t.id}
             type="button"
@@ -985,6 +995,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
 
       {aba === 'controle' && (
         <AulaPainelControle showToast={showToast} recarregarEm={atividadesVersao} />
+      )}
+
+      {aba === 'conferencia' && profile?.role === 'admin' && (
+        <AulaConferenciaFluxo showToast={showToast} />
       )}
 
       {aba === 'historico' && <AulaHistorico showToast={showToast} />}
