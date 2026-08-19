@@ -56,8 +56,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // Realtime nos dois: quem avisa que a carga está a caminho é Compras, marcando
   // o pedido "Em entrega" noutra tela. Sem realtime o almoxarifado recarregava a
   // página no escuro, à espera de um pedido que já estava lá.
+  //
+  // O comentário acima dizia "nos dois" desde sempre e o `true` só estava em
+  // pedidos. Sozinho na tela não aparecia: sair para Cadastros desmonta a view
+  // e o retorno refaz o fetch. Com a turma inteira junto, aparecia — o aluno
+  // que cadastra o produto não é o mesmo que confirma a entrada, e quem estava
+  // com o Confirmar aberto continuava vendo o catálogo de um minuto atrás, sem
+  // nada na tela sugerindo F5.
   const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial }, true);
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pedido_id: '' });
