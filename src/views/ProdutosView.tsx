@@ -250,7 +250,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       .filter((p: any) => p.status !== 'Cancelado')
       .filter((p: any) => chegaram.has(p.id))
       .map((p: any) => {
-        const desc = String(p.item_descricao ?? '').trim();
+        // Colapsa espaco em branco interno: 25 das 57 descricoes da turma de
+        // Contabilidade trazem um TAB entre o produto e a marca — heranca de
+        // quem montou a requisicao colando de planilha. Sem normalizar, o TAB
+        // ia inteiro para `produtos.nome`: some na tela, aparece na etiqueta e
+        // no PDV, e ninguem consegue redigitar aquele nome numa busca.
+        const desc = String(p.item_descricao ?? '').replace(/\s+/g, ' ').trim();
         const qtd  = Number(p.item_qtd ?? 0);
         const val  = Number(p.valor_total ?? 0);
         return {
