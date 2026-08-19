@@ -30,14 +30,32 @@ const CAMPOS =
   'id,titulo,descricao,arquivo_path,arquivo_nome,arquivo_mime,arquivo_tamanho,' +
   'filial_alvo,publicado_por,publicado_por_nome,ativo,created_at';
 
-/** URL assinada de 60s — tempo de o navegador começar o download e nada além. */
-export async function urlAssinadaDocumento(path: string): Promise<{ url?: string; error?: string }> {
+/**
+ * Baixa o documento.
+ *
+ * Duas armadilhas evitadas aqui, as duas já pagas em `planilhasTrabalho.ts`:
+ *
+ * 1. `download: nome` em vez de `download: true`. Com `true`, o Content-
+ *    Disposition usa o caminho do bucket — o aluno salvaria
+ *    "1755-regulamento.pdf" em vez de "Regulamento.pdf".
+ * 2. Âncora clicada em vez de `window.open`. A URL assinada só existe depois do
+ *    await, e popup aberto fora do gesto do usuário é bloqueado por padrão em
+ *    boa parte dos navegadores — o clique simplesmente não faria nada.
+ */
+export async function baixarDocumento(doc: Pick<Documento, 'arquivo_path' | 'arquivo_nome'>): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sem conexão.' };
-  const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 60, {
-    download: true,
-  });
-  if (error) return { error: error.message };
-  return { url: data?.signedUrl };
+  const { data, error } = await supabase.storage
+    .from('documentos')
+    .createSignedUrl(doc.arquivo_path, 60, { download: doc.arquivo_nome });
+  if (error || !data?.signedUrl) return { error: error?.message ?? 'Não foi possível gerar o link.' };
+
+  const a = document.createElement('a');
+  a.href = data.signedUrl;
+  a.download = doc.arquivo_nome;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  return {};
 }
 
 export function useDocumentos(profile: UserProfile | null) {
@@ -79,10 +97,19 @@ export function useDocumentos(profile: UserProfile | null) {
   useEffect(() => { carregar(); }, [carregar]);
 
   // Realtime: documento publicado pela Matriz chega sem F5.
+  //
+  // Nome de canal ÚNICO por instância. Este hook roda em dois lugares ao mesmo
+  // tempo (a tela e o modal global), e `supabase.channel(nome)` devolve o canal
+  // já assinado quando o nome se repete — o segundo `.on()` estoura "cannot add
+  // postgres_changes callbacks after subscribe()" e o realtime morre calado.
+  // Mesma armadilha já documentada em `useAulaConfig`.
   useEffect(() => {
     if (!supabase || !profile) return;
+    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
     const canal = supabase
-      .channel('documentos-matriz')
+      .channel(`documentos-matriz-${canalId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos' }, () => { carregar(); })
       .subscribe();
     return () => { supabase!.removeChannel(canal); };

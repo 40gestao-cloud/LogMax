@@ -161,8 +161,12 @@ export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[
 // - 'aula-atividade': é o enunciado da aula em curso (migr. 403). Uma
 //   atividade que a própria whitelist esconde seria pior que não existir —
 //   e o aluno não teria como descobrir o que fazer nas telas liberadas.
+// - 'documentos': mesmo motivo da atividade (migr. 476). O roteiro impresso da
+//   aula costuma ser justamente o PDF publicado pela Matriz, e a regra padrão
+//   (split('-')[0] = 'documentos') não bate com módulo nenhum da whitelist —
+//   sem esta linha o item da sidebar existe mas o guard devolve pra Início.
 const SEMPRE_LIBERADO = new Set([
-  'inicio', 'aula-modo', 'aula-atividade',
+  'inicio', 'aula-modo', 'aula-atividade', 'documentos',
   'sessoes-gerais', 'analise-ia', 'comparativos-matriz',
   'painel-bi', 'briefing-diario', 'central-tempo',
 ]);

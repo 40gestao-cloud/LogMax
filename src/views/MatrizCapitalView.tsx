@@ -688,7 +688,10 @@ function ModalEstornoAporte({
           <div className="flex justify-between gap-3">
             <span>Entrou em</span>
             <span className="text-gray-300 text-right">
-              {destino ? `${destino.banco} — ${destino.conta}` : '—'}
+              {/* A lista de contas vem filtrada por status Ativo. Conta
+                  desativada depois do aporte some daqui, mas o estorno segue
+                  possível — quem confere o saldo dela é o banco. */}
+              {destino ? `${destino.banco} — ${destino.conta}` : 'conta inativa ou removida'}
             </span>
           </div>
           {destino && (

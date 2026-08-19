@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { useDocumentos, urlAssinadaDocumento, type Documento } from '../hooks/useDocumentos';
+import { useDocumentos, baixarDocumento, type Documento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -30,6 +30,22 @@ const MIMES_ACEITOS = [
   'application/msword',
 ];
 const TETO_BYTES = 10 * 1024 * 1024;
+
+// `File.type` vem do registro do sistema operacional, não do conteúdo — em
+// máquina sem Office instalado ele volta vazio para .docx. Confiar só nele
+// rejeitaria arquivo legítimo, e mandar string vazia no upload faria o bucket
+// recusar (ele valida `allowed_mime_types`). A extensão é o desempate.
+const MIME_POR_EXTENSAO: Record<string, string> = {
+  pdf:  'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc:  'application/msword',
+};
+
+function mimeDoArquivo(f: File): string | null {
+  if (MIMES_ACEITOS.includes(f.type)) return f.type;
+  const ext = f.name.slice(f.name.lastIndexOf('.') + 1).toLowerCase();
+  return MIME_POR_EXTENSAO[ext] ?? null;
+}
 
 function extensaoDe(nome: string): string {
   const i = nome.lastIndexOf('.');
@@ -46,11 +62,12 @@ function tamanhoLegivel(bytes: number | null): string {
 // Nome de arquivo dentro do bucket: sem acento, sem espaço, com carimbo de
 // tempo. O nome bonito que o aluno vê no download vem de `arquivo_nome`.
 function pathSeguro(nome: string): string {
-  // O `[^a-zA-Z0-9._-]` sozinho já derruba acento, espaço e cedilha — o NFD
-  // antes dele preserva a letra base ("relatório" vira "relatorio", não
-  // "relat-rio"), que é o que faz o caminho continuar legível no bucket.
+  // NFD separa "ó" em "o" + acento; `\p{M}` joga fora só o acento. Sem esse
+  // passo o filtro seguinte trocaria o acento solto por hífen e "relatório"
+  // viraria "relato-rio" em vez de "relatorio".
   const limpo = nome
     .normalize('NFD')
+    .replace(/\p{M}/gu, '')
     .replace(/[^a-zA-Z0-9._-]/g, '-')
     .replace(/-+/g, '-')
     .slice(-80);
@@ -68,12 +85,14 @@ function ModalPublicar({
   const [descricao, setDescricao] = useState('');
   const [filialAlvo, setFilialAlvo] = useState('');
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [mime, setMime] = useState('');
   const [salvando, setSalvando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const escolher = (f: File | null) => {
-    if (!f) { setArquivo(null); return; }
-    if (!MIMES_ACEITOS.includes(f.type)) {
+    if (!f) { setArquivo(null); setMime(''); return; }
+    const tipo = mimeDoArquivo(f);
+    if (!tipo) {
       showToast('Formato não aceito. Envie PDF ou Word (.docx / .doc).', 'error');
       return;
     }
@@ -82,6 +101,7 @@ function ModalPublicar({
       return;
     }
     setArquivo(f);
+    setMime(tipo);
     if (!titulo.trim()) setTitulo(f.name.replace(/\.[^.]+$/, ''));
   };
 
@@ -95,7 +115,7 @@ function ModalPublicar({
     try {
       const { error: upErro } = await supabase.storage
         .from('documentos')
-        .upload(path, arquivo, { contentType: arquivo.type, upsert: false });
+        .upload(path, arquivo, { contentType: mime, upsert: false });
       if (upErro) throw upErro;
 
       const { error } = await supabase.from('documentos').insert({
@@ -103,7 +123,7 @@ function ModalPublicar({
         descricao: descricao.trim() || null,
         arquivo_path: path,
         arquivo_nome: arquivo.name,
-        arquivo_mime: arquivo.type,
+        arquivo_mime: mime,
         arquivo_tamanho: arquivo.size,
         filial_alvo: filialAlvo || null,
         publicado_por: profile?.id ?? null,
@@ -203,10 +223,9 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
 
   const baixar = async (doc: Documento) => {
     setBaixando(doc.id);
-    const { url, error } = await urlAssinadaDocumento(doc.arquivo_path);
+    const { error } = await baixarDocumento(doc);
     setBaixando(null);
-    if (error || !url) { showToast(error ?? 'Não foi possível abrir o arquivo.', 'error'); return; }
-    window.open(url, '_blank', 'noopener');
+    if (error) { showToast(error, 'error'); return; }
     if (idsNaoLidos.has(doc.id)) marcarLido(doc.id);
   };
 

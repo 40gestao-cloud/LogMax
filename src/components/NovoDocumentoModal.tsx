@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Check, Download, Building2, Loader2 } from 'lucide-react';
 import { formatDataHoraBR } from '../lib/dates';
-import { useDocumentos, urlAssinadaDocumento } from '../hooks/useDocumentos';
+import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 export function NovoDocumentoModal({ profile, showToast }: { profile: UserProfile; showToast?: any }) {
@@ -52,10 +52,9 @@ export function NovoDocumentoModal({ profile, showToast }: { profile: UserProfil
   const baixar = async () => {
     if (!doc) return;
     setBaixando(true);
-    const { url, error } = await urlAssinadaDocumento(doc.arquivo_path);
+    const { error } = await baixarDocumento(doc);
     setBaixando(false);
-    if (error || !url) return showToast?.(error ?? 'Não foi possível abrir o arquivo.', 'error');
-    window.open(url, '_blank', 'noopener');
+    if (error) return showToast?.(error, 'error');
   };
 
   const confirmar = async () => {
@@ -75,7 +74,7 @@ export function NovoDocumentoModal({ profile, showToast }: { profile: UserProfil
         animate={{ opacity: 1, y: 0 }}
         whileTap={{ scale: 0.95 }}
         aria-label="Ver documentos novos"
-        className="fixed bottom-40 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-sky-400/40 flex items-center gap-2 text-sky-200 hover:border-sky-400 hover:text-sky-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+        className="fixed bottom-72 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-sky-400/40 flex items-center gap-2 text-sky-200 hover:border-sky-400 hover:text-sky-100 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
         style={{ background: 'var(--color-card-bg)' }}
       >
         <span className="relative flex items-center justify-center">
