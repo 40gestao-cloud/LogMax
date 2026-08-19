@@ -10,6 +10,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "doc:fluxo": "node scripts/gerar-pdf-fluxo.mjs docs/LogMax-Fluxo-Compras-Estoque.pdf",
     "drift": "node scripts/schema-drift.mjs"
   },
   "dependencies": {
