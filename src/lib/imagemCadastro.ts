@@ -37,6 +37,26 @@ function extrairPath(bucket: string, url: string | null | undefined): string | n
   return idx === -1 ? null : url.slice(idx + marker.length);
 }
 
+// O erro do storage chegava cru: "new row violates row-level security policy".
+// Numa tela de categoria, o aluno lê "política de segurança" e não faz ideia de
+// que o problema é a IMAGEM, nem que o setor dele é que decide. Aconteceu na
+// turma de Contabilidade (migr. 479) e o relato que chegou foi "deu erro de
+// segurança, algo sobre a imagem" — que é exatamente o que a mensagem permitia
+// entender.
+function traduzErroDeUpload(msg: string): string {
+  if (/row-level security|violates row-level|Unauthorized|403/i.test(msg)) {
+    return 'Sem permissão para enviar imagem aqui — normalmente é o setor do seu '
+         + 'cadastro. Salve a categoria sem imagem (o resto grava normal) e chame o professor.';
+  }
+  if (/exceeded the maximum allowed size|payload too large|413/i.test(msg)) {
+    return 'Imagem grande demais para este cadastro — o limite é 1 MB.';
+  }
+  if (/mime type|not supported/i.test(msg)) {
+    return 'Formato de imagem não aceito. Use JPG, PNG ou WEBP.';
+  }
+  return `Falha ao enviar imagem: ${msg}`;
+}
+
 export async function uploadImagem(bucket: string, file: File, itemId?: string | null): Promise<string> {
   if (!supabase) throw new Error('Supabase não configurado.');
   const v = validarImagem(file);
@@ -45,7 +65,7 @@ export async function uploadImagem(bucket: string, file: File, itemId?: string |
   const path = `${slug}/${Date.now()}.${v.ext}`;
   const { error } = await supabase.storage.from(bucket)
     .upload(path, file, { contentType: file.type || `image/${v.ext}`, cacheControl: '3600', upsert: false });
-  if (error) throw new Error(`Falha ao enviar imagem: ${error.message}`);
+  if (error) throw new Error(traduzErroDeUpload(error.message));
   const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
   if (!pub?.publicUrl) throw new Error('Imagem enviada, mas URL pública não gerada.');
   return pub.publicUrl;
