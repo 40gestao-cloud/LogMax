@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus, FileWarning } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus, FileWarning, Hourglass } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -16,6 +16,7 @@ import { AulaAtividadesPublicadas } from './AulaAtividadesPublicadas';
 import { AulaFluxoProjecao } from './AulaFluxoProjecao';
 import { AulaPainelControle } from './AulaPainelControle';
 import { AulaConferenciaFluxo } from './AulaConferenciaFluxo';
+import { AulaPendencias } from './AulaPendencias';
 import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
@@ -30,7 +31,7 @@ const arraysIguais = (a: string[], b: string[]) =>
 
 // As três coisas que esta tela faz, na ordem em que a aula acontece: montar o
 // recorte, enviar o enunciado, acompanhar quem fez.
-type AbaId = 'montagem' | 'atividades' | 'controle' | 'conferencia' | 'historico';
+type AbaId = 'montagem' | 'atividades' | 'controle' | 'conferencia' | 'pendencias' | 'historico';
 const ABAS: { id: AbaId; label: string; icone: any }[] = [
   { id: 'montagem',   label: 'Montagem',   icone: Workflow },
   { id: 'atividades', label: 'Atividades', icone: ClipboardList },
@@ -39,6 +40,11 @@ const ABAS: { id: AbaId; label: string; icone: any }[] = [
   // propósito: juntar "o Joel parou na etapa 3" com "o valor do pedido não bate
   // com a cotação" faria uma tela responder mal as duas perguntas.
   { id: 'conferencia', label: 'Conferência', icone: FileWarning },
+  // Pendências é a terceira pergunta e a única que NÃO se recorta por sessão:
+  // "o que ficou para trás" atravessa aulas, e o dado é há quantos dias o
+  // documento está parado. Enfiá-la dentro da Conferência misturaria dois
+  // recortes de tempo na mesma tela.
+  { id: 'pendencias', label: 'Pendências', icone: Hourglass },
   { id: 'historico',  label: 'Histórico',  icone: History },
 ];
 
@@ -351,7 +357,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             alunos, `role='admin'` é o professor e só) — e é justamente ele um
             dos auditados. Sem este filtro, o CEO veria a aba e levaria um erro
             de permissão vindo da RPC, que é a pior forma de descobrir isso. */}
-        {ABAS.filter(t => t.id !== 'conferencia' || profile?.role === 'admin').map(t => (
+        {ABAS.filter(t => !['conferencia', 'pendencias'].includes(t.id) || profile?.role === 'admin').map(t => (
           <button
             key={t.id}
             type="button"
@@ -999,6 +1005,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
 
       {aba === 'conferencia' && profile?.role === 'admin' && (
         <AulaConferenciaFluxo showToast={showToast} />
+      )}
+
+      {aba === 'pendencias' && profile?.role === 'admin' && (
+        <AulaPendencias showToast={showToast} profile={profile} />
       )}
 
       {aba === 'historico' && <AulaHistorico showToast={showToast} />}
