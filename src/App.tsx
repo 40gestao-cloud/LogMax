@@ -896,6 +896,15 @@ function LogMaxAppInner() {
     const f = profile.filial as FilialOp | undefined;
     if (f === 'SuperMax' || f === 'MaxLook' || f === 'TechMax') {
       setFilialAtiva(f);
+    } else {
+      // Perfil SEM unidade e sessionStorage com uma unidade antiga (outra conta
+      // logada antes nesta aba, ou sessão que expirou sem passar pelo Sair):
+      // sem este else o carimbo velho sobrevive, a tela "Aguardando alocação"
+      // não aparece e a pessoa opera uma unidade que o banco não reconhece como
+      // dela. Ler volta vazio e TODA gravação morre em RLS — foi assim que uma
+      // aluna da MaxLook levou "erro de política de segurança" ao salvar
+      // categoria, enquanto o resto da turma salvava normal.
+      clearFilial();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);

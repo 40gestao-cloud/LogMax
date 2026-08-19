@@ -204,6 +204,24 @@ export function useFetchData<T = any>(
   return { data, setData, isLoading, error, reload: load, totalCount };
 }
 
+// Erro de RLS chegava cru na tela: "new row violates row-level security policy
+// for table \"categorias_produto\"". O aluno lê "política de segurança" e acha
+// que quebrou o sistema; o professor recebe o print sem saber o que olhar.
+//
+// Na prática, quase sempre é a UNIDADE: conta sem filial no perfil (criada numa
+// leva e ainda não distribuída, migr. 411) ou operando uma unidade que não é a
+// dela. `auth_pode_filial(NULL)` devolve NULL, e NULL numa policy é recusa —
+// idêntica a "não pode", sem dizer por quê.
+function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
+  const msg = error?.message ?? '';
+  const ehRls = error?.code === '42501' || /row-level security|violates row-level/i.test(msg);
+  if (!ehRls) return msg;
+  return 'Sem permissão para gravar neste registro. Quase sempre é a unidade: '
+       + 'confira se você está operando a sua unidade e se o seu cadastro tem uma '
+       + 'unidade definida — conta sem unidade não grava em lugar nenhum. '
+       + 'Persistindo, chame o professor.';
+}
+
 export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): Promise<T | null> {
   if (!supabase) throw new Error('Supabase não configurado');
   const table = ENDPOINT_TABLE_MAP[endpoint];
@@ -220,7 +238,7 @@ export async function dbInsert<T = any>(endpoint: string, payload: Partial<T>): 
 
   if (error) {
     console.error(`[dbInsert] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
-    throw new Error(error.message);
+    throw new Error(traduzErroDeGravacao(error));
   }
 
   console.debug(`[dbInsert] ✓ ${table}`, data);
@@ -241,7 +259,10 @@ export async function dbUpdate<T = any>(endpoint: string, id: string, payload: P
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error(`[dbUpdate] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
+    throw new Error(traduzErroDeGravacao(error));
+  }
   return data as T;
 }
 
@@ -272,7 +293,7 @@ export async function dbDelete(endpoint: string, id: string): Promise<void> {
   const { data, error } = await supabase.from(table).delete().eq('id', id).select();
   if (error) {
     console.error(`[dbDelete:hard] ✗ ${table}:`, error.message, '| código:', error.code, '| detalhe:', error.details);
-    throw new Error(error.message);
+    throw new Error(traduzErroDeGravacao(error));
   }
   if (!data || data.length === 0) {
     throw new Error('Nenhum registro removido. Permissão (RLS) negada ou registro já não existe.');
