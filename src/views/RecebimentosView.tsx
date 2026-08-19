@@ -185,6 +185,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         .toLowerCase();
     return [...produtos].sort((a: any, b: any) => chave(a).localeCompare(chave(b), 'pt-BR'));
   }, [produtos]);
+  // Catálogo vazio da unidade: não é erro de carregamento, é turma que ainda
+  // não cadastrou produto. Quem confirma recebimento precisa ver a diferença.
+  const catalogoVazio = produtosOrdenados.length === 0;
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
 
@@ -450,13 +453,13 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <p className="text-[11px] text-gray-500 -mt-2">
-                O produto que entra no estoque é escolhido na hora de confirmar — inclusive se for item novo, que dá pra cadastrar ali mesmo.
+                O produto que entra no estoque é escolhido na hora de confirmar. Item que ainda não existe no catálogo precisa ser cadastrado antes, em Cadastros &gt; Produtos — o item deste pedido já aparece lá como sugestão.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
                   const desc = p.item_descricao ?? p.req?.item ?? '';
                   const s = saldos[p.id];
-                  const sufSaldo = s ? ` — falta ${s.qtd_saldo}/${s.qtd_pedida}` : '';
+                  const sufSaldo = s ? ` — falta ${qtdBR(s.qtd_saldo)}/${qtdBR(s.qtd_pedida)}` : '';
                   const esgotado = s && s.qtd_saldo <= 0;
                   return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
                 })}</select></FormField>
@@ -496,7 +499,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                           {item.qtd_recebida != null ? qtdBR(item.qtd_recebida) : '—'}
                           {(devolvido[item.id] ?? 0) > 0 && (
                             <div className="text-[10px] text-amber-400 mt-0.5" title="Devolvido ao fornecedor por divergência.">
-                              − {devolvido[item.id]} devolvido
+                              − {qtdBR(devolvido[item.id] ?? 0)} devolvido
                             </div>
                           )}
                         </td>
@@ -562,9 +565,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.12)' }}>
                                 {saldos[item.pedido_id] && (
                                   <div className="basis-full flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 -mt-1 mb-1">
-                                    <span>Pedido: <strong className="text-gray-200">{saldos[item.pedido_id].qtd_pedida}</strong></span>
+                                    <span>Pedido: <strong className="text-gray-200">{qtdBR(saldos[item.pedido_id].qtd_pedida)}</strong></span>
                                     <span>Já recebido: <strong className="text-gray-200">{qtdBR(saldos[item.pedido_id].qtd_recebida_total)}</strong></span>
-                                    <span>Saldo restante: <strong className={saldos[item.pedido_id].qtd_saldo > 0 ? 'text-amber-300' : 'text-emerald-300'}>{saldos[item.pedido_id].qtd_saldo}</strong></span>
+                                    <span>Saldo restante: <strong className={saldos[item.pedido_id].qtd_saldo > 0 ? 'text-amber-300' : 'text-emerald-300'}>{qtdBR(saldos[item.pedido_id].qtd_saldo)}</strong></span>
                                   </div>
                                 )}
                                 {/* Pedido de Reposição já sabe o produto: o campo vira leitura.
@@ -601,15 +604,33 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                         (prod ? vencimentoPrevisto(prod, item.data ?? todayBR()) : null) ?? '');
                                     }}
                                   >
-                                    <option value="">Selecione o produto...</option>
+                                    <option value="">
+                                      {catalogoVazio ? 'Nenhum produto cadastrado nesta unidade' : 'Selecione o produto...'}
+                                    </option>
                                     {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
                                   </select>
+                                  {/* Catálogo vazio é o estado normal de turma nova: nenhum
+                                      produto cadastrado ainda, e todo pedido é compra eventual.
+                                      A lista abria muda e o conferente ficava clicando no
+                                      <select> sem entender por que não havia opção — o aviso
+                                      abaixo era um parágrafo cinza de rodapé que ninguém lia.
+                                      Sem produto no catálogo não há o que escolher, e a tela
+                                      passa a dizer isso primeiro. */}
+                                  {catalogoVazio ? (
+                                  <p className="text-[10px] leading-snug text-amber-300/90">
+                                    O catálogo desta unidade ainda está vazio — por isso a lista abre sem opção.
+                                    Cadastre o produto em <span className="font-semibold">Cadastros &gt; Produtos</span> —
+                                    “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” já aparece lá como sugestão, com o fornecedor
+                                    e o custo deste pedido. Depois volte e confirme a entrada.
+                                  </p>
+                                  ) : (
                                   <p className="text-[10px] text-gray-500 leading-snug">
                                     Compra eventual não vem do catálogo, então o produto é escolhido aqui.
                                     Não está cadastrado? Cadastre em <span className="text-gray-300 font-semibold">Cadastros &gt; Produtos</span> —
                                     “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” já aparece lá como sugestão, com o fornecedor
                                     e o custo deste pedido. Depois volte e confirme a entrada.
                                   </p>
+                                  )}
                                 </div>
                                 )}
                                 {/* Validade da carga (migr. 424). Preenchido
