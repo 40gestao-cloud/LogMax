@@ -18,22 +18,18 @@
 //
 // Duas travas, porque uma só não cobre o caso real:
 //
-//   · LISTA DE TELAS — PDV e Controle de Caixa. São operação com terceiro
-//     esperando; interromper ali não é inconveniência, é erro de operação.
+//   · TELAS DE OPERAÇÃO (lista abaixo) — ali o módulo some por inteiro: nem
+//     modal, nem FAB. Interromper não é inconveniência, é erro de operação.
 //
 //   · CAMPO EM FOCO — se o cursor está num input, textarea, select ou área
-//     editável, alguém está digitando, em QUALQUER tela. Esta trava é a que se
-//     mantém sozinha: cadastro novo que aparecer amanhã já nasce protegido,
-//     sem ninguém precisar lembrar de adicioná-lo a lista nenhuma.
+//     editável, alguém está digitando, em QUALQUER tela. Esta trava vale só
+//     para o auto-abrir (o FAB não cobre nada) e é a que se mantém sozinha:
+//     cadastro novo que aparecer amanhã já nasce protegido, sem ninguém
+//     precisar lembrar de adicioná-lo a lista nenhuma.
 //
-// Adiar não é descartar. O documento continua na fila e o modal aparece assim
-// que a pessoa sai da tela travada ou tira o cursor do campo — a recheca
-// acontece a cada troca de view e a cada 30s enquanto houver algo represado.
-//
-// No PDV o FAB também some: ali a tela é usada com cliente na frente, e botão
-// flutuante piscando disputa atenção com a venda. Nas demais telas ele fica,
-// porque é o único jeito de a pessoa saber que chegou documento sem ter que
-// lembrar de abrir o módulo.
+// Adiar não é descartar. O documento continua na fila e o aviso aparece assim
+// que a pessoa sai da operação ou tira o cursor do campo — a recheca acontece a
+// cada troca de view e a cada 30s enquanto houver algo represado.
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,17 +38,38 @@ import { formatDataHoraBR } from '../lib/dates';
 import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-/** Telas onde o modal nunca se abre sozinho. */
-const VIEWS_SEM_AUTO_ABRIR = new Set([
+// Telas de OPERAÇÃO: nelas o módulo inteiro se cala — nem modal, nem FAB.
+//
+// O critério não é "tela importante" (todas são), é: existe alguém ou alguma
+// coisa esperando do outro lado enquanto a pessoa mexe aqui? Ou o balcão com um
+// cliente parado, ou uma contagem física que perde o fio se for interrompida.
+// Nesses dois casos um botão piscando no canto não é lembrete, é ruído em cima
+// de trabalho que não pode ser refeito.
+//
+//   · vendas-pdv                 venda no balcão, cliente na frente
+//   · vendas-devoluções          troca/devolução, cliente na frente
+//   · vendas-pedidosonline       fila de comprador esperando atendimento
+//   · financeiro-controledecaixa abertura, sangria, suprimento, fechamento
+//   · estoque-recebimentos       conferência da carga contra o pedido
+//   · estoque-expedição          separação e saída da mercadoria
+//   · estoque-inventários        contagem física
+//
+// Fora daqui o FAB fica: é o único jeito de a pessoa saber que chegou documento
+// sem depender de lembrar de abrir o módulo. E a fila não se perde — o que a
+// operação faz é adiar o aviso, não descartá-lo.
+const VIEWS_DE_OPERACAO = new Set([
   'vendas-pdv',
+  'vendas-devoluções',
+  'vendas-pedidosonline',
   'financeiro-controledecaixa',
+  'estoque-recebimentos',
+  'estoque-expedição',
+  'estoque-inventários',
 ]);
 
-// No PDV nem o FAB fica: a tela é usada com cliente na frente e o botão
-// flutuante disputa espaço e atenção com a venda. Nas outras telas ele
-// permanece — é por onde a pessoa abre o documento quando estiver livre, e sem
-// ele quem passa a aula inteira no caixa não saberia que chegou algo.
-const VIEWS_SEM_FAB = new Set(['vendas-pdv']);
+function emOperacao(view?: string): boolean {
+  return !!view && VIEWS_DE_OPERACAO.has(view);
+}
 
 /** Alguém está digitando? Vale em qualquer tela, inclusive dentro de modal. */
 function digitandoAgora(): boolean {
@@ -80,7 +97,7 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
   const tentarAbrir = useCallback(() => {
     const primeiro = naoLidos[0]?.id ?? null;
     if (!primeiro || primeiro === jaAbriuPara) return;
-    if (activeView && VIEWS_SEM_AUTO_ABRIR.has(activeView)) return;
+    if (emOperacao(activeView)) return;
     if (digitandoAgora()) return;
     // Só marca como "já mostrado" quando de fato mostrou. Marcar antes da hora
     // faria o documento perder o auto-abrir para sempre por ter chegado no
@@ -133,7 +150,7 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
 
   return (
     <>
-      {!(activeView && VIEWS_SEM_FAB.has(activeView)) && (
+      {!emOperacao(activeView) && (
         <motion.button
           onClick={() => { setIndice(0); setOpen(true); }}
           initial={{ opacity: 0, y: 12 }}
