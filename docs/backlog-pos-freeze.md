@@ -280,7 +280,7 @@ recorte é por `vencimento`, não por data de pagamento. É discutível, mas é 
 critério que os dois períodos comparados já usavam — mudar isso altera todo o
 histórico do painel e merece decisão própria.
 
-## A Matriz originar o mútuo — anotado em 2026-08-19 (fora da migr. 473)
+## ~~A Matriz originar o mútuo~~ — FECHADO na migr. 474, no mesmo dia
 
 A 473 consertou o mútuo Matriz→filial: taxa **ao mês** com Tabela Price, e
 juro separado do principal para a DRE não contar amortização como despesa. O
@@ -305,9 +305,14 @@ Dois cuidados que a régua atual impõe:
   não pediu, com parcela vencendo, é uma conversa (e provavelmente um aviso da
   Matriz, migr. 263).
 
-É caminho novo, não conserto — por isso ficou fora da trava.
+Era caminho novo, não conserto — ficou fora da trava por algumas horas. O
+usuário abriu exceção no mesmo dia e a migr. 474 fechou os dois: a RPC
+`conceder_mutuo_capital` (que reaproveita `aprovar_emprestimo` em vez de
+duplicar a Price) e `distribuir_lucro_filial`, com teto no lucro apurado e
+exigência de caixa na conta de origem.
 
-**Também em aberto, do mesmo assunto:** distribuição de lucro. Se o aporte não
+**~~Também em aberto, do mesmo assunto:~~ distribuição de lucro** — também
+fechada na 474. Se o aporte não
 rende juros de propósito, o retorno dele deveria existir em algum lugar —
 dividendo sobre o resultado da filial, decidido pela Matriz. Sem isso o aluno
 aprende metade da história: que dívida custa, mas não que capital cobra.

@@ -44,6 +44,16 @@ type Emprestimo = {
   created_at: string;
 };
 
+type Distribuicao = {
+  id: string;
+  filial: string;
+  valor: number;
+  base_lucro: number | null;
+  decidido_por_nome: string | null;
+  observacao: string | null;
+  created_at: string;
+};
+
 type Parcela = {
   id: string;
   emprestimo_id: string;
@@ -199,6 +209,12 @@ export function FilialCapitalView({
 
   const { data: parcelas = [], reload: reloadParcelas } =
     useFetchData<Parcela>('parcelas_emprestimo', undefined, false);
+
+  // Migr. 474 — o lucro que a unidade mandou para a Matriz. Aparece aqui
+  // porque o dinheiro saiu do caixa dela e ninguem deveria descobrir isso por
+  // um saldo que encolheu sem explicacao.
+  const { data: distribuicoes = [] } =
+    useFetchData<Distribuicao>('distribuicoes_lucro', { filial }, false);
 
   const carregarSaldo = useCallback(async () => {
     if (!supabase || !filial) { setLoadingSaldo(false); return; }
@@ -508,6 +524,34 @@ export function FilialCapitalView({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Lucro que foi para a Matriz. Não é despesa — o resultado da unidade
+          continua o mesmo; o que mudou foi o caixa. */}
+      {distribuicoes.length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-accent">
+              Lucro distribuído à Matriz
+            </span>
+            <span className="text-sm font-black text-gray-200 tabular-nums">
+              {BRL(distribuicoes.reduce((a, d) => a + Number(d.valor ?? 0), 0))}
+            </span>
+          </div>
+          {distribuicoes.map(d => (
+            <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-gray-400 truncate flex-1 italic text-xs">
+                {d.observacao ?? 'Distribuição de resultado'}
+              </span>
+              <span className="font-bold text-gray-200 tabular-nums">{BRL(Number(d.valor))}</span>
+              <span className="text-xs text-gray-500">{fmtDate(d.created_at)}</span>
+            </div>
+          ))}
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Isto não é despesa: é o retorno de quem aportou o capital da unidade. O lucro
+            do período não muda — o caixa, sim.
+          </p>
         </div>
       )}
 

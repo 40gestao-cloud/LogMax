@@ -53,6 +53,8 @@
 -- solicitação da filial (`emprestimos_filial.solicitado_por`) e a Matriz
 -- aprova. Dar iniciativa à holding é caminho novo, não conserto — ficou
 -- anotado em `docs/backlog-pos-freeze.md`.
+--   → Durou pouco: a migr. 474, no mesmo dia, deu essa iniciativa à holding
+--     (`conceder_mutuo_capital`) e criou a distribuição de lucro.
 --
 -- IOF e preço de transferência ficam fora: ambiente didático, sem ambição de
 -- compliance bancário.

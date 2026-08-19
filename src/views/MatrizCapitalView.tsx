@@ -40,6 +40,11 @@ type SaldoFilial = {
   capital_total: number;
   despesas_pagas: number;
   receitas_pagas: number;
+  // Declarados a partir da migr. 474: viraram o teto da distribuição de lucro.
+  // A RPC sempre devolveu os três; o tipo é que só listava o que a tela usava.
+  despesas_financeiras: number;
+  lucro_operacional: number;
+  lucro_liquido: number;
   reserva_valor: number;
   reserva_pct: number;
   saldo_livre: number;
@@ -67,6 +72,18 @@ type Emprestimo = {
 };
 
 type Banco = { id: string; banco: string; conta: string; tipo: string; filial: string | null; saldo: number | null };
+
+// Migr. 474 — o retorno do aporte. Aporte não rende juros; o que ele devolve é
+// resultado, quando existe resultado.
+type Distribuicao = {
+  id: string;
+  filial: string;
+  valor: number;
+  base_lucro: number | null;
+  decidido_por_nome: string | null;
+  observacao: string | null;
+  created_at: string;
+};
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type Filial = typeof FILIAIS[number];
@@ -812,6 +829,7 @@ function TabEmprestimos({
   showToast: (msg: string, t?: string) => void;
 }) {
   const [modalEmp, setModalEmp] = useState<Emprestimo | null>(null);
+  const [modalAplicar, setModalAplicar] = useState(false);
   const pendentes = emprestimos.filter(e => e.status === 'Pendente');
   const historico = emprestimos.filter(e => e.status !== 'Pendente');
 
@@ -823,6 +841,27 @@ function TabEmprestimos({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* A holding também origina (migr. 474). Antes ela só respondia a pedido
+          da filial, e o único movimento que ela começava era o aporte — que
+          não rende. */}
+      {podeAprovar(profile) && (
+        <div className="neu-flat rounded-3xl p-4 border border-accent/20 flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-200">Aplicar capital numa unidade</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 max-w-xl">
+              Sem esperar a filial pedir. Vira empréstimo com juros ao mês e parcelas —
+              diferente do aporte, este dinheiro volta.
+            </p>
+          </div>
+          <button
+            onClick={() => setModalAplicar(true)}
+            className="shrink-0 flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
+          >
+            <Plus size={12} /> Aplicar capital
+          </button>
+        </div>
+      )}
+
       {pendentes.length === 0 && (
         <div className="text-center py-8 text-sm text-gray-500">Nenhum empréstimo pendente de análise.</div>
       )}
@@ -900,7 +939,476 @@ function TabEmprestimos({
             showToast={showToast}
           />
         )}
+        {modalAplicar && (
+          <ModalAplicarCapital
+            bancos={bancos} taxaPadrao={taxaPadrao}
+            onClose={() => setModalAplicar(false)}
+            onSaved={onReload}
+            showToast={showToast}
+          />
+        )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Modal: a Matriz aplica capital numa filial ────────────────────────────
+//
+// O caminho inverso do empréstimo comum: aqui não houve pedido da filial, a
+// holding decidiu aplicar. Chama `conceder_mutuo_capital` (migr. 474), que
+// cria o contrato já decidido e delega a Price à mesma `aprovar_emprestimo`.
+function ModalAplicarCapital({
+  bancos, taxaPadrao, onClose, onSaved, showToast,
+}: {
+  bancos: Banco[]; taxaPadrao: number;
+  onClose: () => void; onSaved: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const [filial, setFilial] = useState<Filial>('SuperMax');
+  const [valor, setValor] = useState('');
+  const [taxa, setTaxa] = useState(String(taxaPadrao));
+  const [parcelas, setParcelas] = useState('12');
+  const [origemId, setOrigemId] = useState('');
+  const [destinoId, setDestinoId] = useState('');
+  const [obs, setObs] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const valorNum = parseBRL(valor);
+  const contasMatriz = bancos.filter(b => b.filial === 'Matriz');
+  const contasFilial = bancos.filter(b => bancoDaUnidade(b, filial));
+  const saldoOrigem = Number(contasMatriz.find(b => b.id === origemId)?.saldo ?? 0);
+  const semSaldo = !!origemId && valorNum > saldoOrigem;
+
+  const mutuo = tabelaPrice(valorNum, parseFloat(taxa) || 0, parseInt(parcelas) || 1);
+
+  const aplicar = async () => {
+    if (!supabase) return;
+    if (valorNum <= 0) { showToast('Informe o valor a aplicar.', 'error'); return; }
+    if (!origemId) { showToast('Selecione a conta da Matriz de onde sai o valor.', 'error'); return; }
+    if (!destinoId) { showToast(`Selecione a conta de ${filial} que recebe.`, 'error'); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc('conceder_mutuo_capital', {
+        p_filial: filial,
+        p_valor: valorNum,
+        p_taxa_juros: parseFloat(taxa) || 0,
+        p_num_parcelas: parseInt(parcelas) || 1,
+        p_banco_origem_id: origemId,
+        p_banco_destino_id: destinoId,
+        p_observacao: obs.trim() || null,
+      });
+      if (error) throw error;
+      showToast(`Capital aplicado em ${filial}. As parcelas já estão em Contas a Pagar da unidade.`, 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
+        className="neu-flat rounded-3xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-100">Aplicar capital numa unidade</h2>
+            <span className="text-[11px] text-gray-500">
+              Empréstimo com juros, não aporte — o dinheiro volta.
+            </span>
+          </div>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Unidade *</label>
+            <select
+              value={filial}
+              onChange={e => { setFilial(e.target.value as Filial); setDestinoId(''); }}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Valor *</label>
+            <input
+              type="text" inputMode="numeric" value={valor}
+              onChange={e => setValor(formatBRL(e.target.value))}
+              placeholder="0,00"
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Taxa de juros (% ao mês)
+              </label>
+              <input
+                type="number" min="0" step="0.1" value={taxa}
+                onChange={e => setTaxa(e.target.value)}
+                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nº de parcelas</label>
+              <input
+                type="number" min="1" max="60" value={parcelas}
+                onChange={e => setParcelas(e.target.value)}
+                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
+            <select
+              value={origemId} onChange={e => setOrigemId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasMatriz.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
+                </option>
+              ))}
+            </select>
+            {contasMatriz.length === 0 && (
+              <span className="text-[10px] text-yellow-400">
+                A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
+              </span>
+            )}
+            {semSaldo && (
+              <span className="text-[10px] text-red-400">
+                Saldo insuficiente: a conta tem {BRL(saldoOrigem)} e a aplicação é de {BRL(valorNum)}.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {filial}</span>
+            </label>
+            <select
+              value={destinoId} onChange={e => setDestinoId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasFilial.map(b => (
+                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
+              ))}
+            </select>
+            {contasFilial.length === 0 && (
+              <span className="text-[10px] text-yellow-400">
+                {filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
+              </span>
+            )}
+          </div>
+
+          {valorNum > 0 && (
+            <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Parcela fixa ({parcelas || 1}x)</span>
+                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.valorParcela)}</strong>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Total que {filial} devolve</span>
+                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.totalPago)}</strong>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400 border-t border-white/5 pt-1.5">
+                <span>Juros — o que a Matriz ganha</span>
+                <strong className="text-accent tabular-nums">{BRL(mutuo.totalJuros)}</strong>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Por que está aplicando</label>
+            <textarea
+              value={obs} onChange={e => setObs(e.target.value)} rows={2}
+              className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
+              placeholder="Fica no histórico da unidade. Ex.: reforço de estoque para a alta temporada."
+            />
+          </div>
+        </div>
+
+        <p className="text-[10px] text-gray-500 leading-relaxed">
+          A unidade não pediu este dinheiro — ela será notificada. A primeira parcela vence
+          em 30 dias e aparece em Contas a Pagar dela, com ou sem lucro no mês.
+        </p>
+
+        <NeuButtonAccent onClick={aplicar} isLoading={saving} disabled={semSaldo}>
+          <Landmark size={15} /> Aplicar capital
+        </NeuButtonAccent>
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Tab: Distribuição de Lucro ────────────────────────────────────────────
+//
+// O outro lado da moeda do empréstimo. O aporte não rende juros de propósito —
+// é dinheiro de sócio, e o retorno do sócio é o lucro que a operação gerou.
+// Sem esta tela o aluno aprendia só metade: que dívida custa, mas não que
+// capital cobra.
+function TabLucro({
+  saldos, distribuicoes, bancos, profile, onReload, showToast,
+}: {
+  saldos: Record<UnidadeCapital, SaldoFilial | null>;
+  distribuicoes: Distribuicao[];
+  bancos: Banco[];
+  profile: UserProfile | null;
+  onReload: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const [modalFilial, setModalFilial] = useState<Filial | null>(null);
+
+  // Espelha o teto que a RPC aplica: lucro líquido apurado menos o que já
+  // saiu. Calcular aqui é só para a tela não oferecer um botão que o banco vai
+  // recusar — a decisão continua sendo do banco.
+  const disponivelPor = (f: Filial) => {
+    const lucro = saldos[f]?.lucro_liquido ?? 0;
+    const ja = distribuicoes
+      .filter(d => d.filial === f)
+      .reduce((acc, d) => acc + Number(d.valor ?? 0), 0);
+    return Math.round((lucro - ja) * 100) / 100;
+  };
+
+  const totalDistribuido = distribuicoes.reduce((acc, d) => acc + Number(d.valor ?? 0), 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Landmark size={14} className="text-accent" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Retorno do capital investido
+          </span>
+        </div>
+        <span className="text-3xl font-black text-accent tabular-nums">{BRL(totalDistribuido)}</span>
+        <p className="text-[11px] text-gray-500 leading-relaxed max-w-2xl">
+          O aporte não cobra juros — é dinheiro de sócio, e o retorno dele é o lucro.
+          O empréstimo é o contrário: cobra juros e a parcela vence mesmo no prejuízo.
+          Só se distribui o que a unidade lucrou, e só se houver dinheiro em caixa para pagar.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {FILIAIS.map(f => {
+          const disponivel = disponivelPor(f);
+          const cor = FILIAL_COLOR[f];
+          const jaDist = distribuicoes.filter(d => d.filial === f);
+          return (
+            <div key={f} className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
+              <span className={`text-xs font-bold ${cor.accent}`}>{f}</span>
+              <div>
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 block">
+                  Lucro disponível a distribuir
+                </span>
+                <span className={`text-2xl font-black tabular-nums ${disponivel > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                  {BRL(disponivel)}
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest">
+                Já distribuído: {BRL(jaDist.reduce((a, d) => a + Number(d.valor ?? 0), 0))}
+              </div>
+              {podeAprovar(profile) && (
+                <button
+                  onClick={() => setModalFilial(f)}
+                  disabled={disponivel <= 0}
+                  className="self-start text-xs px-4 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Distribuir
+                </button>
+              )}
+              {disponivel <= 0 && (
+                <span className="text-[10px] text-gray-600 leading-relaxed">
+                  Sem resultado a distribuir no período. Prejuízo não se distribui.
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {distribuicoes.length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Histórico</span>
+          {distribuicoes.map(d => (
+            <div key={d.id} className="flex items-center gap-3 text-sm border-b border-white/5 last:border-0 py-2">
+              <span className={`text-xs font-bold ${(FILIAL_COLOR[d.filial as Filial] ?? FILIAL_COLOR.SuperMax).accent}`}>
+                {d.filial}
+              </span>
+              <span className="font-bold text-gray-200 tabular-nums">{BRL(Number(d.valor))}</span>
+              {d.base_lucro !== null && (
+                <span className="text-[10px] text-gray-600">de {BRL(Number(d.base_lucro))} disponíveis</span>
+              )}
+              <span className="flex-1 text-[11px] text-gray-500 truncate italic">
+                {d.observacao ?? ''}
+              </span>
+              <span className="text-[10px] text-gray-500">{fmtDate(d.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {modalFilial && (
+          <ModalDistribuirLucro
+            filial={modalFilial}
+            disponivel={disponivelPor(modalFilial)}
+            bancos={bancos}
+            onClose={() => setModalFilial(null)}
+            onSaved={onReload}
+            showToast={showToast}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ModalDistribuirLucro({
+  filial, disponivel, bancos, onClose, onSaved, showToast,
+}: {
+  filial: Filial; disponivel: number; bancos: Banco[];
+  onClose: () => void; onSaved: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const [valor, setValor] = useState('');
+  const [origemId, setOrigemId] = useState('');
+  const [destinoId, setDestinoId] = useState('');
+  const [obs, setObs] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const valorNum = parseBRL(valor);
+  const contasFilial = bancos.filter(b => bancoDaUnidade(b, filial));
+  const contasMatriz = bancos.filter(b => b.filial === 'Matriz');
+  const saldoOrigem = Number(contasFilial.find(b => b.id === origemId)?.saldo ?? 0);
+  // Lucro é resultado; caixa é dinheiro. Dá para ter um e não ter o outro, e a
+  // tela precisa dizer qual dos dois está faltando.
+  const semCaixa = !!origemId && valorNum > saldoOrigem;
+  const acimaDoLucro = valorNum > disponivel;
+
+  const distribuir = async () => {
+    if (!supabase) return;
+    if (valorNum <= 0) { showToast('Informe o valor a distribuir.', 'error'); return; }
+    if (!origemId) { showToast(`Selecione a conta de ${filial} de onde sai o dinheiro.`, 'error'); return; }
+    if (!destinoId) { showToast('Selecione a conta da Matriz que recebe.', 'error'); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc('distribuir_lucro_filial', {
+        p_filial: filial,
+        p_valor: valorNum,
+        p_banco_origem_id: origemId,
+        p_banco_destino_id: destinoId,
+        p_observacao: obs.trim() || null,
+      });
+      if (error) throw error;
+      showToast(`Lucro de ${filial} distribuído para a Matriz.`, 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
+        className="neu-flat rounded-3xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-100">Distribuir lucro</h2>
+            <span className={`text-xs font-bold ${FILIAL_COLOR[filial].accent}`}>{filial}</span>
+          </div>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+        </div>
+
+        <div className="neu-pressed rounded-2xl p-4 flex justify-between items-baseline">
+          <span className="text-xs text-gray-500">Disponível a distribuir</span>
+          <span className="text-xl font-black text-green-400 tabular-nums">{BRL(disponivel)}</span>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Valor *</label>
+            <input
+              type="text" inputMode="numeric" value={valor}
+              onChange={e => setValor(formatBRL(e.target.value))}
+              placeholder="0,00"
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            />
+            {acimaDoLucro && (
+              <span className="text-[10px] text-red-400">
+                Acima do lucro apurado. Distribuir mais que o resultado é devolver capital, não lucro.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Sai da conta ({filial}) *
+            </label>
+            <select
+              value={origemId} onChange={e => setOrigemId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasFilial.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
+                </option>
+              ))}
+            </select>
+            {semCaixa && (
+              <span className="text-[10px] text-red-400">
+                A conta tem {BRL(saldoOrigem)}. O lucro existe no resultado, mas o dinheiro não está aqui.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Entra na conta (Matriz) *</label>
+            <select
+              value={destinoId} onChange={e => setDestinoId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasMatriz.map(b => (
+                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Observação</label>
+            <textarea
+              value={obs} onChange={e => setObs(e.target.value)} rows={2}
+              className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
+              placeholder="Ex.: distribuição do resultado do 1º ciclo."
+            />
+          </div>
+        </div>
+
+        <p className="text-[10px] text-gray-500 leading-relaxed">
+          Distribuir lucro não é despesa da unidade: o resultado dela continua o mesmo,
+          o que muda é o caixa. Para a Matriz é receita — o retorno de ter aportado.
+        </p>
+
+        <NeuButtonAccent onClick={distribuir} isLoading={saving} disabled={semCaixa || acimaDoLucro}>
+          <CheckCircle size={15} /> Distribuir
+        </NeuButtonAccent>
+      </motion.div>
     </div>
   );
 }
@@ -1358,7 +1866,7 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
 }
 
 // ── View principal ─────────────────────────────────────────────────────────
-type Tab = 'geral' | 'dre' | 'prestacao' | 'faturamento' | 'emprestimos' | 'config';
+type Tab = 'geral' | 'dre' | 'prestacao' | 'faturamento' | 'emprestimos' | 'lucro' | 'config';
 
 type NotaEmitidaMatriz = {
   id: string;
@@ -1422,6 +1930,7 @@ export function MatrizCapitalView({
   const { data: bancos = [], reload: reloadBancos } = useFetchData<Banco>('caixa_bancos', { status: 'Ativo' }, false);
   const { data: notasRecebidas = [] } = useFetchData<NotaRecebida>('/api/notasrecebidasview', { capital_origem: true }, false);
   const { data: notasEmitidas = [] } = useFetchData<NotaEmitidaMatriz>('/api/notasemitidasview', undefined, false);
+  const { data: distribuicoes = [], reload: reloadDist } = useFetchData<Distribuicao>('distribuicoes_lucro', undefined, false);
 
   const configAtiva = configs[0] ?? null;
   const taxaPadrao = configAtiva?.taxa_juros_padrao ?? 0;
@@ -1444,7 +1953,7 @@ export function MatrizCapitalView({
     setSaldos(results);
   }, []);
 
-  useEffect(() => { carregarSaldos(); }, [carregarSaldos, registros, emprestimos]);
+  useEffect(() => { carregarSaldos(); }, [carregarSaldos, registros, emprestimos, distribuicoes]);
 
   const totalCapital = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.capital_total ?? 0), 0);
   const totalSaldo = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.saldo_livre ?? 0), 0);
@@ -1468,6 +1977,7 @@ export function MatrizCapitalView({
     { id: 'prestacao', label: 'Prestação de Contas' },
     { id: 'faturamento', label: 'Faturamento' },
     { id: 'emprestimos', label: 'Empréstimos', badge: pendentesCount > 0 ? pendentesCount : undefined },
+    { id: 'lucro', label: 'Distribuição de Lucro' },
     { id: 'config', label: 'Config' },
   ];
 
@@ -1577,6 +2087,14 @@ export function MatrizCapitalView({
           emprestimos={emprestimos} bancos={bancos} taxaPadrao={taxaPadrao}
           profile={profile}
           onReload={() => { reloadEmp(); carregarSaldos(); reloadBancos(); }}
+          showToast={showToast}
+        />
+      )}
+
+      {tab === 'lucro' && (
+        <TabLucro
+          saldos={saldos} distribuicoes={distribuicoes} bancos={bancos} profile={profile}
+          onReload={() => { reloadDist(); carregarSaldos(); reloadBancos(); }}
           showToast={showToast}
         />
       )}
