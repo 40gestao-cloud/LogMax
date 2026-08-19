@@ -1220,6 +1220,11 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+.modal-close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Light é flat: sem sombra, hierarquia só por borda (mesma régua do neu-*). */
 [data-theme="light"] .modal-close-btn {
   background-color: #FFFFFF;
@@ -1259,7 +1264,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(239, 68, 68, 0.14);
   border: 1px solid rgba(239, 68, 68, 0.28);
   color: rgb(248, 113, 113);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   cursor: pointer;
 }
 
@@ -1328,7 +1333,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(59, 130, 246, 0.14);
   border: 1px solid rgba(59, 130, 246, 0.28);
   color: rgb(96, 165, 250);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   cursor: pointer;
 }
 
@@ -1397,7 +1402,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(156, 163, 175, 0.12);
   border: 1px solid rgba(156, 163, 175, 0.24);
   color: rgb(156, 163, 175);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   cursor: pointer;
 }
 
@@ -1458,7 +1463,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.32);
   color: rgb(74, 222, 128);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-success:hover { background: rgba(34, 197, 94, 0.26); border-color: rgba(34, 197, 94, 0.5); color: rgb(134, 239, 172); }
 .action-btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1482,7 +1487,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(234, 179, 8, 0.14);
   border: 1px solid rgba(234, 179, 8, 0.30);
   color: rgb(250, 204, 21);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-warning:hover { background: rgba(234, 179, 8, 0.24); border-color: rgba(234, 179, 8, 0.48); color: rgb(253, 224, 71); }
 .action-btn-warning:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1520,7 +1525,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   color: var(--color-accent);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-accent:hover {
   background: color-mix(in srgb, var(--color-accent) 24%, transparent);
@@ -1544,7 +1549,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(139, 92, 246, 0.15);
   border: 1px solid rgba(139, 92, 246, 0.32);
   color: rgb(167, 139, 250);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-purple:hover { background: rgba(139, 92, 246, 0.26); border-color: rgba(139, 92, 246, 0.5); color: rgb(196, 181, 253); }
 .action-btn-purple:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1564,7 +1569,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(59, 130, 246, 0.15);
   border: 1px solid rgba(59, 130, 246, 0.32);
   color: rgb(96, 165, 250);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-blue:hover { background: rgba(59, 130, 246, 0.26); border-color: rgba(59, 130, 246, 0.5); color: rgb(147, 197, 253); }
 .action-btn-blue:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1584,7 +1589,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(107, 114, 128, 0.18);
   border: 1px solid rgba(107, 114, 128, 0.35);
   color: rgb(156, 163, 175);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s; cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s; cursor: pointer;
 }
 .action-btn-gray:hover { background: rgba(107, 114, 128, 0.30); border-color: rgba(107, 114, 128, 0.55); color: rgb(209, 213, 219); }
 .action-btn-gray:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1610,7 +1615,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(240, 180, 41, 0.35);
   color: rgb(240, 180, 41);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   cursor: pointer;
 }
 
@@ -1658,7 +1663,7 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(240, 180, 41, 0.35);
   color: rgb(240, 180, 41);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   cursor: pointer;
 }
 

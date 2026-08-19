@@ -263,7 +263,7 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                               <HistoricoOperacoes
                                 entidade={entidade}
                                 entidadeId={item.id}
-                                titulo={String(item[fields[0].key] ?? title)}
+                                titulo={fields[0] ? String(item[fields[0].key] ?? title) : title}
                                 criadoEm={item.created_at}
                                 atualizadoEm={item.updated_at}
                               />
