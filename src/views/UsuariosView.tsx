@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2 } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -279,6 +279,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         d?.notas_placar_preservadas != null ? `${d.notas_placar_preservadas} nota(s) do placar` : null,
         d?.avaliacoes_matriz_preservadas != null ? `${d.avaliacoes_matriz_preservadas} avaliação(ões) da Matriz` : null,
         d?.tarefas_matriz_preservadas != null ? `${d.tarefas_matriz_preservadas} tarefa(s) da Matriz` : null,
+        // (482) Fundo de cadastro que passou a atravessar o reset.
+        d?.fornecedores_preservados != null ? `${d.fornecedores_preservados} fornecedor(es)` : null,
+        d?.categorias_preservadas   != null ? `${d.categorias_preservadas} categoria(s)`     : null,
       ].filter(Boolean).join(', ');
       showToast(`Reset concluído. Preservados: ${partes}.`, 'success');
       setResetOpen(false);
@@ -289,6 +292,71 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       showToast(`Erro no reset: ${err?.message ?? 'verifique o console'}`, 'error');
     } finally {
       setResetRunning(false);
+    }
+  };
+
+  // ── Reset de UMA unidade (migr. 484) ────────────────────────────────────
+  // O fluxo tem duas etapas de propósito, e a primeira é obrigatória: escolher
+  // a unidade não apaga nada, só chama a RPC em modo ensaio e mostra o que
+  // sairia, tabela por tabela. Só depois de ver a conta é que o campo de
+  // confirmação aparece. Reset global se digita "APAGAR TUDO" no escuro porque
+  // o escopo é óbvio; aqui não é — 130 linhas ou 4 muda tudo, e o professor
+  // precisa reconhecer a unidade pelos números antes de confirmar.
+  const [filialResetOpen, setFilialResetOpen] = useState(false);
+  const [filialAlvo, setFilialAlvo]           = useState<string>('');
+  const [ensaio, setEnsaio]                   = useState<any | null>(null);
+  const [ensaioRunning, setEnsaioRunning]     = useState(false);
+  const [filialConfirm, setFilialConfirm]     = useState('');
+  const [filialRunning, setFilialRunning]     = useState(false);
+
+  const abrirResetFilial = () => {
+    setFilialAlvo(''); setEnsaio(null); setFilialConfirm('');
+    setFilialResetOpen(true);
+  };
+
+  // Ensaio: `p_dry_run` fica no default (true). Nada é apagado.
+  const carregarEnsaio = async (filial: string) => {
+    setFilialAlvo(filial);
+    setEnsaio(null);
+    setFilialConfirm('');
+    if (!supabase || !filial) return;
+    setEnsaioRunning(true);
+    try {
+      const { data, error } = await supabase.rpc('resetar_dados_da_filial', { p_filial: filial });
+      if (error) throw error;
+      setEnsaio(data);
+    } catch (err: any) {
+      showToast(`Não foi possível medir: ${err?.message ?? err}`, 'error');
+    } finally {
+      setEnsaioRunning(false);
+    }
+  };
+
+  const executarResetFilial = async () => {
+    if (!supabase || filialConfirm !== filialAlvo) return;
+    setFilialRunning(true);
+    try {
+      const { data, error } = await supabase.rpc('resetar_dados_da_filial', {
+        p_filial: filialAlvo, p_dry_run: false,
+      });
+      if (error) throw error;
+      const d = data as any;
+      showToast(
+        `${filialAlvo} zerada: ${d?.linhas ?? 0} registro(s) apagado(s)`
+        + (Number(d?.estorno_total) > 0
+            ? `, R$ ${Number(d.estorno_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} devolvidos à Matriz.`
+            : '.'),
+        'success');
+      setFilialResetOpen(false);
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err: any) {
+      // A função aborta a transação inteira quando sobra linha presa por FK —
+      // a mensagem dela diz qual tabela, e é o que o professor precisa mandar
+      // para quem mexe no banco.
+      showToast(`Reset abortado: ${err?.message ?? 'verifique o console'}`, 'error');
+      console.error('[Usuarios] reset por filial:', err);
+    } finally {
+      setFilialRunning(false);
     }
   };
 
@@ -1031,21 +1099,34 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                 Apaga <strong className="text-gray-200">TODOS os dados operacionais</strong> (vendas, estoque, financeiro,
-                folha, ponto, avaliações, marketing, histórico MaxBank, produtos, clientes, fornecedores etc.).
+                folha, ponto, avaliações, marketing, histórico MaxBank, produtos, serviços e clientes).
                 Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial),
                 os <strong className="text-gray-200">funcionários</strong>, o <strong className="text-gray-200">histórico de frequência</strong>,
-                as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais) e as <strong className="text-gray-200">filiais</strong>.
+                as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais), as <strong className="text-gray-200">filiais</strong>
+                e — desde a migr. 482 — os <strong className="text-gray-200">fornecedores</strong> e as{' '}
+                <strong className="text-gray-200">categorias de produto</strong>.
                 Use ao trocar a turma de setor pra começar do zero.
                 Operação irreversível.
               </p>
             </div>
           </div>
-          <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
-                       bg-red-500/10 text-red-400 border border-red-500/30
-                       hover:bg-red-500/20 hover:text-red-300 transition-colors">
-            <Trash2 size={13} /> Apagar tudo (manter usuários)
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
+                         bg-red-500/10 text-red-400 border border-red-500/30
+                         hover:bg-red-500/20 hover:text-red-300 transition-colors">
+              <Trash2 size={13} /> Apagar tudo (manter usuários)
+            </button>
+            {/* Âmbar, não vermelho: apagar uma unidade é menor que apagar a
+                holding, e dar a mesma cor às duas faria a diferença sumir
+                justamente onde ela importa. */}
+            <button onClick={abrirResetFilial}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
+                         bg-amber-500/10 text-amber-400 border border-amber-500/30
+                         hover:bg-amber-500/20 hover:text-amber-300 transition-colors">
+              <Building2 size={13} /> Zerar uma unidade
+            </button>
+          </div>
         </div>
       )}
 
@@ -1075,14 +1156,29 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
                   <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
-                  <li>Cadastros: produtos, serviços, clientes, fornecedores</li>
-                  <li>Configurações, formas de pagamento, categorias de produto</li>
+                  <li>Cadastros: produtos, serviços e clientes</li>
+                  {/* Dizia "configurações, formas de pagamento e categorias de
+                      produto", e as três estão do lado de preservar: as duas
+                      primeiras desde a migr. 377, a categoria desde a 482. A
+                      linha listava como perda o que o reset nunca apagou. */}
+                  <li>Projetos, orçamento por categoria e governança (mandatos, riscos, prestações de contas)</li>
                 </ul>
                 <p className="text-emerald-400 text-xs pt-2">
                   ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial),
                   os <strong>funcionários</strong> e o <strong>histórico de frequência</strong>,
                   as carteiras MaxBank (saldo de salário, benefícios e bonificações)
                   e as <strong>filiais</strong> (com CNPJ e demais cadastros).
+                </p>
+                {/* Migr. 482: fornecedor e categoria mudaram de lado. Ganham
+                    parágrafo próprio porque é a novidade que o professor
+                    precisa ver antes de digitar APAGAR TUDO — se ele espera
+                    banco limpo e encontra 27 fornecedores, a régua é que
+                    parece quebrada. */}
+                <p className="text-emerald-400 text-xs">
+                  ✓ Também preserva os <strong>fornecedores</strong> (CNPJ, prazo, condição de pagamento e logo)
+                  e as <strong>categorias de produto</strong> com suas subcategorias — é a categoria que carrega
+                  o markup-alvo usado para sugerir preço de venda. Montar o <strong>catálogo de produtos</strong> segue
+                  sendo exercício da turma.
                 </p>
               </div>
               <div className="flex flex-col gap-2 mb-4">
@@ -1106,6 +1202,145 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                              bg-red-500 text-white hover:bg-red-600 transition-colors
                              disabled:opacity-30 disabled:cursor-not-allowed">
                   {resetRunning ? 'Apagando...' : 'Confirmar e apagar tudo'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal do reset por unidade (migr. 484) */}
+      <AnimatePresence>
+        {filialResetOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !filialRunning && setFilialResetOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-amber-500/30 w-full max-w-lg max-h-[90vh] overflow-y-auto main-scrollbar">
+              <div className="flex items-center gap-3 mb-4">
+                <Building2 size={20} className="text-amber-400" />
+                <h3 className="text-base font-bold text-amber-400">Zerar uma unidade</h3>
+              </div>
+
+              <p className="text-sm text-gray-300 mb-4 leading-relaxed">
+                Recomeca <strong>uma</strong> unidade sem tocar nas outras. Mesma regua do Apagar tudo:
+                o que ele preserva, este preserva &mdash; usuarios, funcionarios, filiais, carteiras,
+                frequencia, placar da competicao, fornecedores e categorias.
+              </p>
+
+              <div className="flex flex-col gap-2 mb-4">
+                <label htmlFor="filial-alvo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  Unidade
+                </label>
+                <select id="filial-alvo" value={filialAlvo} disabled={filialRunning}
+                  onChange={e => carregarEnsaio(e.target.value)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">&mdash; Selecione &mdash;</option>
+                  {FILIAIS_GERENTE.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <p className="text-[10px] text-gray-500 leading-snug">
+                  A Matriz nao entra aqui: ela e a contraparte de todas as unidades &mdash; zera-la sozinha
+                  deixaria aporte e mutuo das outras apontando para o vazio. Para ela, use o Apagar tudo.
+                </p>
+              </div>
+
+              {ensaioRunning && (
+                <div className="flex items-center gap-2 text-xs text-gray-400 py-4">
+                  <LoadingSpinner /> Medindo o que seria apagado...
+                </div>
+              )}
+
+              {/* O ensaio e leitura pura: a RPC roda com p_dry_run no default. */}
+              {ensaio && !ensaioRunning && (
+                <div className="neu-pressed rounded-2xl p-4 border border-white/5 mb-4 flex flex-col gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-amber-400 tabular-nums">{ensaio.linhas ?? 0}</span>
+                    <span className="text-xs text-gray-400">registro(s) seriam apagados</span>
+                  </div>
+
+                  {Number(ensaio.linhas ?? 0) === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Esta unidade ja esta zerada &mdash; nao ha o que apagar.
+                    </p>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto main-scrollbar">
+                      <table className="w-full text-xs">
+                        <tbody>
+                          {Object.entries(ensaio.por_tabela ?? {})
+                            .sort((a: any, b: any) => Number(b[1]) - Number(a[1]))
+                            .map(([tabela, qtd]: any) => (
+                              <tr key={tabela} className="border-b border-white/5 last:border-0">
+                                <td className="py-1.5 pr-2 font-mono text-gray-400">{tabela}</td>
+                                <td className="py-1.5 text-right tabular-nums text-gray-200 font-bold">{qtd}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {Number(ensaio.contas_zeradas ?? 0) > 0 && (
+                    <p className="text-[11px] text-gray-400">
+                      <strong className="text-gray-200">{ensaio.contas_zeradas}</strong> conta(s) bancaria(s) da unidade
+                      voltam a saldo zero. A conta em si fica cadastrada.
+                    </p>
+                  )}
+
+                  {/* O estorno e a parte que ninguem adivinha olhando a tela:
+                      o dinheiro que a Matriz aplicou volta para ela. */}
+                  {Array.isArray(ensaio.estorno_matriz) && ensaio.estorno_matriz.length > 0 && (
+                    <div className="border-t border-white/5 pt-2.5">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5">
+                        Devolvido a Matriz
+                      </p>
+                      {ensaio.estorno_matriz.map((e: any, i: number) => (
+                        <div key={i} className="flex justify-between text-[11px] text-gray-300">
+                          <span>{e.banco}</span>
+                          <span className="tabular-nums font-bold text-emerald-400">
+                            R$ {Number(e.devolvido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-gray-500 mt-1.5 leading-snug">
+                        Aporte e mutuo sairam do caixa da Matriz. Apagar o registro sem devolver o valor
+                        deixaria a Matriz pobre por causa de um lancamento que nao existe mais.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Confirmacao so aparece depois do ensaio: ninguem digita o nome
+                  de uma unidade sem antes ver o tamanho do estrago. */}
+              {ensaio && !ensaioRunning && Number(ensaio.linhas ?? 0) > 0 && (
+                <div className="flex flex-col gap-2 mb-4">
+                  <label htmlFor="filial-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                    Digite <span className="text-amber-400">{filialAlvo}</span> para liberar o botao
+                  </label>
+                  <input id="filial-confirm" type="text" value={filialConfirm} autoFocus
+                    onChange={e => setFilialConfirm(e.target.value)}
+                    disabled={filialRunning}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono"
+                    placeholder={filialAlvo} />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setFilialResetOpen(false)} disabled={filialRunning}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={executarResetFilial}
+                  disabled={filialRunning || !ensaio || filialConfirm !== filialAlvo || Number(ensaio?.linhas ?? 0) === 0}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest
+                             bg-amber-500 text-black hover:bg-amber-400 transition-colors
+                             disabled:opacity-30 disabled:cursor-not-allowed">
+                  {filialRunning ? "Apagando..." : `Zerar ${filialAlvo || "unidade"}`}
                 </button>
               </div>
             </motion.div>
