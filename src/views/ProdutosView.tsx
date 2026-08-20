@@ -36,7 +36,7 @@ import {
   formatarConteudo,
   exemploProduto,
 } from '../lib/unidades';
-import { ATRIBUTOS_PRODUTO, rotuloVariante, type AtributoDef } from '../lib/atributosProduto';
+import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, type AtributoDef } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
@@ -268,6 +268,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       // Pedido cancelado não vira cadastro: sugerir o item dele seria mandar a
       // turma cadastrar o que a unidade decidiu não comprar.
       .filter((p: any) => p.status !== 'Cancelado')
+      // Pedido que JÁ aponta para um produto não tem o que cadastrar. A lista
+      // comparava só o texto do pedido com os nomes do catálogo, e texto de
+      // requisição quase nunca é igual ao nome cadastrado ("Detergente Ypê
+      // 500ml" x "DETERGENTE YPÊ NEUTRO 500ML") — então o item amarrado pela
+      // migr. 480 continuava aparecendo como "a cadastrar", e quem seguia a
+      // sugestão criava a duplicata que a lista existe para evitar.
+      .filter((p: any) => !p.produto_id)
       .filter((p: any) => chegaram.has(p.id))
       .map((p: any) => {
         // Colapsa espaco em branco interno: 25 das 57 descricoes da turma de
@@ -322,22 +329,38 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     const keys = (ATRIBUTOS_PRODUTO[filial] ?? []).map(d => d.key);
     return keys.includes('tamanho') && keys.includes('cor');
   }, [filial]);
-  // Sugestão de código interno. Lê o maior `codigo_seq` da filial (coluna
-  // gerada da migr. 265) e devolve o próximo com prefixo da unidade. Consulta
-  // direta em vez de olhar `data`: a listagem é paginada e filtrada, então o
-  // maior da tela não é o maior da filial.
+  // Código interno: o clique JÁ RESERVA o número (migr. 481). Antes isto era um
+  // `select max(codigo_seq)` daqui mesmo — e o maior só mudava quando alguém
+  // SALVAVA. Com a turma cadastrando junto, os cinco da unidade ficavam com 001
+  // na tela ao mesmo tempo e descobriam o conflito no fim do preenchimento.
+  // A RPC serializa por filial, conta olhando também as reservas vivas e grava
+  // a nossa antes de responder.
   const [sugerindoCodigo, setSugerindoCodigo] = useState(false);
+  // Número que está reservado em nome deste usuário. Precisa ser devolvido
+  // quando o cadastro termina, é abandonado, ou o operador digita outro por
+  // cima — senão o número fica fora da fila até a reserva vencer.
+  const [codigoReservado, setCodigoReservado] = useState<string | null>(null);
+
+  // Best-effort: falhar em devolver não pode atrapalhar salvar nem fechar o
+  // formulário. O prazo da reserva cobre o que escapar daqui.
+  const liberarCodigo = (codigo: string | null) => {
+    if (!supabase || !codigo) return;
+    supabase.rpc('liberar_codigo_produto', { p_filial: filial, p_codigo: codigo })
+      .then(undefined, () => {});
+  };
+
   const sugerirCodigo = async () => {
     if (!supabase) return;
     setSugerindoCodigo(true);
     try {
-      const { data: topo } = await supabase
-        .from('produtos').select('codigo_seq')
-        .eq('filial', filial).eq('ativo', true)
-        .order('codigo_seq', { ascending: false }).limit(1);
-      const ultimo = Number(topo?.[0]?.codigo_seq ?? 0);
+      const { data: codigo, error } = await supabase.rpc('reservar_codigo_produto', { p_filial: filial });
+      if (error) {
+        showToast(error.message || 'Não foi possível reservar um código agora.', 'error', true);
+        return;
+      }
       // Sem prefixo: o código é só o número, sequencial dentro da filial.
-      setForm(f => ({ ...f, codigo: String(ultimo + 1).padStart(3, '0') }));
+      setCodigoReservado(String(codigo));
+      setForm(f => ({ ...f, codigo: String(codigo) }));
       clearError('codigo');
     } finally {
       setSugerindoCodigo(false);
@@ -401,7 +424,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<any | null>(null);
   const [form, setForm]   = useState({ codigo: '', nome: '', preco: '' });
-  const [extras, setExtras] = useState(EMPTY_EXTRAS);
+  const [extras, setExtras] = useState(() => ({
+    ...EMPTY_EXTRAS, filial, atributos: atributosPadrao(filial),
+  }));
 
   // As duas medidas do produto, que o formulário confundia (migr. 438):
   //
@@ -414,6 +439,25 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const mostraPesoConteudo = filial === 'SuperMax'
     && temEstoque(extras.tipo)
     && temConteudoDeEmbalagem(extras.unidade);
+
+  // Este produto veio de uma compra que já chegou? É o que decide se existe
+  // custo para declarar.
+  const veioDeCompra = !!itemCompradoSel && itemCompradoSel !== SEM_COMPRA;
+
+  // Custo obrigatório: só quando alguém REALMENTE sabe o número.
+  //
+  // A migr. 480 inverteu a ordem do fluxo — o produto passa a existir antes do
+  // pedido, porque é o código que entra na compra. No cadastro antecipado de
+  // mercadoria não há custo nenhum a declarar: a cotação ainda não aconteceu.
+  // Exigir ali só produzia número inventado, e número inventado em preço de
+  // custo vira markup falso na tela e CMV errado no DRE. O custo de verdade é
+  // apurado por média ponderada no recebimento (migr. 417) e sobrescreve o que
+  // estiver aqui.
+  //
+  // Continua obrigatório onde o valor é conhecido: patrimônio e consumo (é o
+  // que se pagou), item que veio de uma compra recebida (o número vem
+  // preenchido do pedido) e edição de produto já existente.
+  const custoObrigatorio = !ehVendavel(extras.tipo) || !!editItem || veioDeCompra;
 
   // A RLS de `categorias_produto` é `auth_pode_filial(filial)` — admin/CEO
   // satisfaz para as três, então sem este filtro o select do produto oferece o
@@ -632,6 +676,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   };
 
   const openEdit = (item: any) => {
+    // Sair de um cadastro novo para editar outro produto abandona o número
+    // gerado tanto quanto fechar o formulário.
+    liberarCodigo(codigoReservado);
+    setCodigoReservado(null);
     setEditItem(item);
     setForm({
       codigo: item.codigo ?? '',
@@ -682,12 +730,19 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   };
 
   const closeForm = () => {
+    // Devolve o número para a fila. Desistir do cadastro não pode custar um
+    // código do catálogo aos colegas — e quem clicar "Gerar" em seguida pega
+    // este mesmo, sem esperar os 30 minutos do prazo da reserva.
+    liberarCodigo(codigoReservado);
+    setCodigoReservado(null);
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
     setAtrLivre(new Set());
     setForm({ codigo: '', nome: '', preco: '' });
-    setExtras({ ...EMPTY_EXTRAS, filial });
+    // `atributosPadrao`: o cadastro novo nasce com o que a lei já responde —
+    // hoje só a garantia de 90 dias da TechMax.
+    setExtras({ ...EMPTY_EXTRAS, filial, atributos: atributosPadrao(filial) });
     setImagens(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
     setImagensAnteriores(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(''));
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
@@ -768,17 +823,19 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // sentido exigi-la de quem não vende.
     if (vendavel && !extras.categoria_id) ee.categoria_id = 'Selecione uma categoria';
     if (!extras.fornecedor)          ee.fornecedor    = 'Selecione um fornecedor';
-    if (!extras.preco_custo.trim())  ee.preco_custo   = 'Obrigatório';
+    if (custoObrigatorio && !extras.preco_custo.trim()) ee.preco_custo = 'Obrigatório';
     // Patrimônio não tem ponto de reposição — não se repõe um freezer.
     if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
       ee.estoque_minimo = 'Obrigatório';
     }
-    // Cadastro novo nasce de uma compra. Só se cobra quando há o que escolher:
-    // com a lista vazia (nenhum pedido ainda) o campo nem aparece, e travar aí
-    // seria impedir o primeiro cadastro do curso. Editar produto existente
-    // também não passa por aqui — a origem dele já é história.
+    // A pergunta não é mais "de qual compra veio", e sim "já chegou ou ainda
+    // vai ser comprado" — a migr. 480 fez do cadastro antecipado a regra. O
+    // campo continua obrigatório enquanto houver carga recebida fora do
+    // catálogo, porque é aí que mora a duplicata: cadastrar do zero um item que
+    // está na doca esperando o Confirmar cria o segundo cadastro do mesmo
+    // produto. Editar produto existente não passa por aqui.
     if (!editItem && itensComprados.length > 0 && !itemCompradoSel) {
-      ee.origem_compra = 'Escolha o item comprado — ou marque "Cadastro sem compra".';
+      ee.origem_compra = 'Escolha um dos itens que já chegaram — ou "não veio de compra recebida".';
     }
 
     // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":
@@ -853,7 +910,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       // payload base — nunca inclui `estoque` no UPDATE (read-only após criação;
       // saldo só muda via movimentacoes_estoque). Trigger SQL também trava.
       const isPatrimonio = extras.tipo === 'patrimonio';
-      const custoValor   = extras.preco_custo !== '' ? parseBRL(extras.preco_custo) : 0;
+      // `null` quando em branco, não 0: o cadastro antecipado ainda não tem
+      // custo, e zero na grade se lê como "custa zero" em vez de "ninguém
+      // apurou ainda".
+      const custoInformado = extras.preco_custo.trim() !== '';
+      const custoValor   = custoInformado ? parseBRL(extras.preco_custo) : 0;
+      const custoNaGrade = custoInformado ? custoValor : null;
       const basePayload = {
         ...form,
         // Zero, não o que sobrou digitado: se o aluno preencheu o preço e
@@ -925,7 +987,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
           // salvo para a grade refletir a edição sem esperar um reload.
           setData((prev: any[]) => prev.map(d =>
             d.id === editItem.id
-              ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoValor }
+              ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoNaGrade }
               : d));
         }
         // Best-effort cleanup: se alguma imagem foi trocada ou removida,
@@ -954,7 +1016,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         const insertPayload = { ...basePayload, estoque: 0, status: 'Ativo' };
         const saved = await dbInsert<any>('/api/produtosview', insertPayload);
         const novoId = saved?.id;
-        if (novoId) await salvarPrecoCusto(novoId, custoValor);
+        // Campo em branco (cadastro antecipado) não vira ficha de custo: gravar
+        // zero com `origem: 'manual'` diria que alguém apurou e chegou a zero.
+        // Sem linha, `custo_origem` fica nulo e a tela mostra "—" até o
+        // recebimento apurar — que é a verdade.
+        if (novoId && extras.preco_custo.trim() !== '') await salvarPrecoCusto(novoId, custoValor);
         const hoje = todayBR();
         let saldoFinal = 0;
         if (novoId && estoqueInicial > 0) {
@@ -974,18 +1040,17 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             showToast('Produto criado, mas saldo inicial não foi registrado. Verifique movimentações.', 'error', true);
           }
         }
-        if (saved) { saved.estoque = saldoFinal; saved.preco_custo = custoValor; }
+        if (saved) { saved.estoque = saldoFinal; saved.preco_custo = custoNaGrade; }
         // Patrimônio não entra na grade: o filtro server-side (`tipo neq
         // patrimonio`) o excluiria no reload. Empurrar para `data` fazia o item
         // aparecer, o aluno ler "criado com sucesso" e o produto evaporar no F5.
         if (!isPatrimonio) {
-          setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoValor }, ...data]);
+          setData([saved ?? { id: Date.now(), ...insertPayload, estoque: saldoFinal, preco_custo: custoNaGrade }, ...data]);
         }
         // Veio de item comprado: o cadastro é o MEIO do fluxo, não o fim. Sem
         // dizer para onde ir agora, o aluno fecha a tela achando que terminou —
         // e o recebimento fica pendente, esperando um Confirmar que ninguém
         // sabe que falta.
-        const veioDeCompra = !!itemCompradoSel && itemCompradoSel !== SEM_COMPRA;
         showToast(
           isPatrimonio
             ? 'Patrimônio cadastrado! Ele não aparece nesta lista — está em Financeiro > Patrimônio.'
@@ -998,7 +1063,15 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
       console.error('[Produtos] erro ao salvar:', err);
-      showToast(`Erro ao salvar: ${msg}`, 'error', true);
+      // A reserva do "Gerar" (migr. 481) fecha o caminho comum, mas não o
+      // código digitado à mão nem a reserva que venceu durante o preenchimento.
+      // Quem cai aqui merece saber o que fazer, não a mensagem do Postgres.
+      if (/duplicate key|23505/i.test(msg) && /codigo/i.test(msg)) {
+        setErrors(e => ({ ...e, codigo: 'Já existe produto com este código nesta unidade' }));
+        showToast(`O código ${form.codigo} já foi usado nesta unidade. Clique em "Gerar" para pegar o próximo livre — o resto do formulário continua preenchido.`, 'error', true);
+      } else {
+        showToast(`Erro ao salvar: ${msg}`, 'error', true);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1183,37 +1256,52 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   <FormField label="Código *" error={errors.codigo}>
                     <div className="flex gap-2">
                       <input className={`neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 font-mono ${errors.codigo ? 'border border-red-500/40' : ''}`}
-                        value={form.codigo} onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); clearError('codigo'); }}
+                        value={form.codigo} onChange={e => {
+                          // Digitou por cima do número gerado: a reserva não é
+                          // mais dele, volta para a fila na hora.
+                          if (codigoReservado && e.target.value !== codigoReservado) {
+                            liberarCodigo(codigoReservado);
+                            setCodigoReservado(null);
+                          }
+                          setForm(f => ({ ...f, codigo: e.target.value }));
+                          clearError('codigo');
+                        }}
                         placeholder="Ex: 001" />
                       {/* Código à mão foi como "ML-004" e "ML-31" passaram a
                           conviver na mesma coluna — o problema que a migr. 265
                           teve de contornar com `codigo_seq`. Sugerir o próximo
                           é mais barato que ordenar o que já saiu torto. */}
                       <button type="button" onClick={sugerirCodigo} disabled={sugerindoCodigo}
-                        title={`Sugerir o próximo código da ${filial}`}
+                        title={`Reservar o próximo código da ${filial}`}
                         className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0 disabled:opacity-50">
                         {sugerindoCodigo ? '…' : 'Gerar'}
                       </button>
                     </div>
                     <p className="text-[10px] text-gray-500 mt-1">
-                      Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.
+                      {codigoReservado === form.codigo && codigoReservado
+                        ? <>O <span className="font-mono text-accent">{codigoReservado}</span> está reservado para você — quem clicar em Gerar agora recebe o próximo. A reserva cai se você fechar o formulário sem salvar.</>
+                        : <>Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.</>}
                     </p>
                   </FormField>
-                  {/* Produto nasce de uma compra: requisição → cotação → pedido →
-                      recebimento. O item chega aqui com o nome que a requisição
-                      escreveu, o fornecedor que a cotação escolheu e o custo que
-                      o pedido fechou — redigitar os três é o que fazia o mesmo
-                      item nascer com grafia nova, sem dono e com custo chutado.
-                      Primeiro campo do formulário porque é ele que preenche o
-                      resto.
+                  {/* A ordem canônica virou a da migr. 480: o produto é
+                      cadastrado ANTES da compra, porque é o código dele que
+                      entra no pedido. Cadastro antecipado é a REGRA, e a tela
+                      chamava isso de exceção.
 
-                      O sentinel de exceção fica visível de propósito: cadastrar
-                      sem compra tem de ser um ato consciente, não o caminho de
-                      menor resistência. (Era um <datalist> no campo de nome, que
-                      não reabria depois de escolher — datalist filtra as opções
-                      pelo texto digitado.) */}
+                      O campo sobrevive à inversão porque continua respondendo a
+                      outra pergunta: existe carga na doca esperando o Confirmar
+                      cujo item não está no catálogo? Se existe, cadastrar do
+                      zero cria o segundo cadastro do mesmo produto — e escolher
+                      da lista traz nome, fornecedor e custo já fechados no
+                      pedido, em vez de grafia nova e custo chutado.
+
+                      A lista se esvazia sozinha: pedido novo já nasce amarrado
+                      ao catálogo (`produto_id`) e nem aparece aqui. O que resta
+                      é o passivo de antes da 480. (Era um <datalist> no campo de
+                      nome, que não reabria depois de escolher — datalist filtra
+                      as opções pelo texto digitado.) */}
                   {itensComprados.length > 0 && (
-                    <FormField label="Item comprado *" error={extrasErrors.origem_compra}>
+                    <FormField label="Origem deste cadastro *" error={extrasErrors.origem_compra}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.origem_compra ? 'border border-red-500/40' : ''}`}
                         value={itemCompradoSel}
                         onChange={e => {
@@ -1238,19 +1326,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                             estoque: '',
                           }));
                         }}>
-                        <option value="">— Selecione o item recebido —</option>
-                        {itensComprados.map(i => (
-                          <option key={i.descricao} value={i.descricao}>{i.descricao}</option>
-                        ))}
-                        <option value={SEM_COMPRA}>Cadastro sem compra (exceção)</option>
+                        <option value="">— Selecione —</option>
+                        <option value={SEM_COMPRA}>Não veio de compra recebida (cadastro antecipado ou saldo de implantação)</option>
                         {/* Item comprado mas ainda não recebido não aparece: a
                             ficha do produto (EAN, peso, validade) está na caixa
                             que ainda não chegou. */}
+                        <optgroup label={`Já chegou e não está no catálogo (${itensComprados.length})`}>
+                          {itensComprados.map(i => (
+                            <option key={i.descricao} value={i.descricao}>{i.descricao}</option>
+                          ))}
+                        </optgroup>
                       </select>
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que
-                        <span className="text-gray-400"> chegaram no Recebimento</span> e ainda não estão no catálogo.
-                        Escolher traz nome, fornecedor e custo do pedido.
+                        O normal é <span className="text-gray-400">cadastrar antes de comprar</span> — é o código
+                        daqui que entra no pedido. A segunda lista são{' '}
+                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que já chegaram
+                        no Recebimento e ainda não têm cadastro: escolher um traz nome, fornecedor e custo do pedido,
+                        em vez de criar um segundo cadastro do mesmo produto.
                       </p>
                     </FormField>
                   )}
@@ -1350,7 +1442,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       ))}
                     </select>
                   </FormField>
-                  <FormField label="Marca *" error={extrasErrors.marca}>
+                  {/* O asterisco seguia a validação de longe: ela só cobra
+                      marca de mercadoria com embalagem (migr. 438), mas o
+                      rótulo pedia sempre — inclusive no granel da mercearia,
+                      onde banana não tem rótulo, e no patrimônio. */}
+                  <FormField
+                    label={ehVendavel(extras.tipo) && temConteudoDeEmbalagem(extras.unidade) ? 'Marca *' : 'Marca'}
+                    error={extrasErrors.marca}>
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.marca ? 'border border-red-500/40' : ''}`}
                       value={extras.marca}
                       onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
@@ -1468,7 +1566,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                         if (d.type === 'textarea') {
                           return (
                             <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                              <FormField label={d.label} error={err}>
+                              <FormField label={rotuloAtributo(d)} error={err}>
                                 <textarea rows={3}
                                   className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${err ? 'border border-red-500/40' : ''}`}
                                   value={String(val)} onChange={e => setAtr(e.target.value)}
@@ -1487,7 +1585,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           const emOutro = !!d.livre && (atrLivre.has(d.key) || (v !== '' && !naLista));
                           return (
                             <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                              <FormField label={d.label} error={err}>
+                              <FormField label={rotuloAtributo(d)} error={err}>
                                 <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
                                   value={emOutro ? OUTRO : v}
                                   onChange={e => {
@@ -1535,7 +1633,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                         }
                         return (
                           <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                            <FormField label={d.reqSe ? `${d.label} *` : d.label} error={err}>
+                            <FormField label={rotuloAtributo(d)} error={err}>
                               <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
                                 value={String(val)} inputMode={d.soDigitos ? 'numeric' : undefined}
                                 onChange={e => setAtr(d.soDigitos ? e.target.value.replace(/\D/g, '') : e.target.value)}
@@ -1671,13 +1769,23 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   <FormField
                     label={extras.tipo === 'patrimonio' ? 'Valor de Aquisição (R$) *'
                       : extras.tipo === 'consumo'       ? 'Custo Unitário (R$) *'
-                      : 'Preço de Custo (R$) *'}
+                      : `Preço de Custo (R$)${custoObrigatorio ? ' *' : ''}`}
                     error={extrasErrors.preco_custo}>
                     <input type="text" inputMode="numeric"
                       className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.preco_custo ? 'border border-red-500/40' : ''}`}
                       value={extras.preco_custo}
                       onChange={e => { setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) })); setExtrasErrors(ev => ({ ...ev, preco_custo: '' })); }}
                       onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+                    {/* Cadastro antecipado: a cotação ainda não aconteceu, e o
+                        campo deixa de cobrar um número que ninguém tem. Dizer
+                        isso na tela é o que impede o aluno de inventar um. */}
+                    {!custoObrigatorio && (
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        Pode ficar em branco: você ainda vai cotar. O custo real é apurado no{' '}
+                        <span className="text-gray-400 font-bold">Recebimento</span>, por média ponderada — e
+                        é ele que vale no DRE.
+                      </p>
+                    )}
                     {/* Custo apurado pela compra (migr. 417). Editar aqui é
                         permitido — mas o próximo recebimento deste produto
                         recalcula a média ponderada e assume de volta. */}

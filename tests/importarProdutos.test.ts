@@ -134,12 +134,24 @@ describe('lerPlanilhaProdutos', () => {
     expect(r.linhas[0].erros.join(' ')).toMatch(/Validade \(dias\)/i);
   });
 
-  it('aceita perecível com prazo e guarda a ficha em atributos', async () => {
+  // Armazenagem entrou para o mesmo time da validade: quem recebe a carga
+  // precisa saber, antes de guardar, se vai para a câmara fria ou para a
+  // prateleira seca.
+  it('cobra armazenagem quando o produto é perecível', async () => {
     const r = await lerPlanilhaProdutos(
       await planilha([{ ...LINHA_BOA, 'Produto perecível': 'Sim', 'Validade (dias)': '30' }]),
       FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/Armazenagem/i);
+  });
+
+  it('aceita perecível com prazo e guarda a ficha em atributos', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([{ ...LINHA_BOA, 'Produto perecível': 'Sim',
+                       'Validade (dias)': '30', 'Armazenagem': 'Refrigerado' }]),
+      FILIAL, CONTEXTO);
     expect(r.linhas[0].erros).toEqual([]);
-    expect(r.linhas[0].payload?.atributos).toMatchObject({ perecivel: 'Sim', validade_dias: '30' });
+    expect(r.linhas[0].payload?.atributos).toMatchObject({
+      perecivel: 'Sim', validade_dias: '30', armazenagem: 'Refrigerado' });
   });
 
   it('avisa (sem impedir) preço de venda abaixo do custo', async () => {

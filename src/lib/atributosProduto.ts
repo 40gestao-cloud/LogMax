@@ -37,6 +37,13 @@ export type AtributoDef = {
   /** Restringe a digitação a dígitos (prazo em dias, garantia). */
   soDigitos?: boolean;
   /**
+   * Valor com que o campo NASCE num cadastro novo. Para o caso em que a lei ou
+   * a prática já respondem a pergunta e deixar em branco só produz variação
+   * sem informação — a garantia de 90 dias do CDC é o exemplo. Continua
+   * editável: é padrão, não trava.
+   */
+  padrao?: string;
+  /**
    * Só para `type='select'`: além das opções, oferece "Outro" e abre um campo
    * de texto. Existe para o caso em que a lista cobre 95% e engessar o resto
    * seria pior — tamanho de peça importada, cor de coleção. Sem isto a escolha
@@ -81,9 +88,14 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
     // e aí nada consegue calcular data nenhuma. Só dígitos, como `validade_dias`
     // da mercearia — é o que faz o recibo de venda saber até quando o aparelho
     // está coberto.
-    { key: 'garantia_dias', label: 'Garantia (dias)', placeholder: 'Ex: 90, 365',
-      type: 'text', soDigitos: true,
-      dica: 'Em dias, contados da data da venda. O recibo mostra a data-limite da garantia a partir daqui.' },
+    // Opcional era ficção: no Brasil não existe eletrônico sem garantia — o CDC
+    // dá 90 dias a todo produto durável, independente do que a loja escreva. O
+    // campo em branco não significava "sem garantia", significava "ninguém
+    // preencheu", e o recibo saía calado sobre um direito que o cliente tem de
+    // qualquer jeito. Nasce com 90 e é obrigatório; quem dá mais, aumenta.
+    { key: 'garantia_dias', label: 'Garantia (dias) *', placeholder: 'Ex: 90, 365',
+      type: 'text', soDigitos: true, req: true, padrao: '90',
+      dica: 'Em dias, contados da data da venda. 90 é o mínimo legal do CDC para produto durável — a garantia do fabricante costuma ser 365. O recibo mostra a data-limite a partir daqui.' },
     // O rótulo dizia "no fechamento" e prometia o que o PDV não faz: quem pede
     // o número é o RECEBIMENTO, um por aparelho, e a venda baixa o mais antigo
     // sozinha (migr. 444). O PDV não escolhe IMEI pela mesma razão que não
@@ -121,11 +133,45 @@ export const ATRIBUTOS_PRODUTO: Record<string, AtributoDef[]> = {
     { key: 'validade_dias', label: 'Validade (dias)', placeholder: 'Ex: 5, 30, 180',
       dependeDe: 'perecivel', dependeDeValor: 'Sim', reqSe: true, soDigitos: true,
       dica: 'Prazo desde o recebimento. O Recebimento usa isto para calcular a data de vencimento do lote, e é ela que ordena a fila de Validades.' },
-    { key: 'armazenagem', label: 'Armazenagem', type: 'select', dependeDe: 'perecivel', dependeDeValor: 'Sim',
+    // Obrigatória junto com a validade, e pela mesma razão: quem recebe a carga
+    // precisa saber ANTES de guardar se aquilo vai para a câmara fria, para o
+    // freezer ou para a prateleira seca. Perecível sem armazenagem devolve a
+    // decisão para o palpite de quem está na doca — e leite fora da geladeira
+    // não espera a próxima aula.
+    { key: 'armazenagem', label: 'Armazenagem', type: 'select',
+      dependeDe: 'perecivel', dependeDeValor: 'Sim', reqSe: true,
       options: ['Ambiente', 'Refrigerado', 'Congelado'] as const,
       dica: 'Aparece como selo na fila de Validades — é o que decide o que se resolve primeiro.' },
   ],
 };
+
+/**
+ * Ficha inicial de um cadastro NOVO nesta filial — só os campos que têm
+ * `padrao`. Vazio para quem não tem nenhum, que é o caso das outras duas.
+ *
+ * Não se aplica ao editar: produto antigo com o campo em branco continua em
+ * branco até alguém responder. Preencher retroativamente seria inventar
+ * garantia que a loja nunca deu.
+ */
+export const atributosPadrao = (filial: string): Record<string, any> => {
+  const out: Record<string, any> = {};
+  for (const d of ATRIBUTOS_PRODUTO[filial] ?? []) {
+    if (d.padrao !== undefined) out[d.key] = d.padrao;
+  }
+  return out;
+};
+
+/**
+ * Rótulo do campo na tela, com o asterisco de obrigatório.
+ *
+ * Campo de `req` fixo já traz o asterisco escrito no próprio label. O de
+ * `reqSe` não pode: ele só é obrigatório quando o pai libera, e o asterisco
+ * precisa aparecer junto com o campo. Sem isto o asterisco saía só nos inputs
+ * de texto — "Armazenagem", que é `select`, ficava sem marca nenhuma e cobrava
+ * no Salvar.
+ */
+export const rotuloAtributo = (d: AtributoDef): string =>
+  d.reqSe && !d.label.trimEnd().endsWith('*') ? `${d.label} *` : d.label;
 
 /**
  * `'P / Preto'` — o que distingue esta variante das outras do mesmo modelo
