@@ -143,6 +143,9 @@ export interface AprovacaoCompras {
   id: string;
   requisicao_id: string;
   status: string;
+  /** Nome de quem decidiu — a RPC carimba, e a direção precisa ler para
+   *  saber de quem é a decisão que está devolvendo. */
+  aprovador?: string | null;
   observacao?: string | null;
   filial?: string | null;
   created_at?: string;
@@ -166,6 +169,7 @@ export interface AprovacaoEstoque {
   id: string;
   requisicao_estoque_id: string;
   status: string;
+  aprovador?: string | null;
   observacao?: string | null;
   filial?: string | null;
   created_at?: string;

@@ -2,10 +2,15 @@ import React, { useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
-import { X, Check, Loader2 } from 'lucide-react';
+import { X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { EmptyState, StatusBadge, SelecioneUnidade } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { usePrompt } from '../contexts/PromptContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
+import { isConselheiro } from '../lib/rbac';
+import type { UserProfile } from '../hooks/useUserProfile';
 import type { AprovacaoEstoque, RequisicaoEstoque, Produto } from '../types/domain';
 
 type EnrichedAp = AprovacaoEstoque & {
@@ -13,13 +18,19 @@ type EnrichedAp = AprovacaoEstoque & {
   prod: Produto | undefined;
 };
 
-const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: string, type: string, persist?: boolean) => void; filial: FilialOp }) => {
-  const { data: aprovacoes, setData: setAprovacoes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
+const AprovacoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp }) => {
+  const { data: aprovacoes, setData: setAprovacoes, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
+  // Decisões já tomadas — a lista de Pendente sozinha faz o card sumir no
+  // clique, e com ele a chance de desfazer o engano do gerente.
+  const { data: decididas, reload: reloadDecididas } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: ['Aprovado', 'Negado'], filial }, true);
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  const [devolvendo, setDevolvendo] = useState<string | null>(null);
   // Guard sincrônico: `processing` (state React) atualiza assíncronamente,
   // então double-click rápido entra no handler 2× antes do disable pintar.
   // O ref tranca instantaneamente.
@@ -89,6 +100,45 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
     }
   };
 
+  // Devolver a decisão do gerente (RPC `reabrir_requisicao_estoque`).
+  //
+  // Vale para a requisição NEGADA. A liberada já tirou material da prateleira:
+  // reabrir contaria a mesma saída duas vezes, e por isso o banco recusa — o
+  // caminho ali é entrada de devolução em Movimentações. A tela diz isso em
+  // vez de oferecer um botão que só vai dar erro.
+  const podeDevolver = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
+  const isProfessor = profile?.role === 'admin';
+
+  const devolver = async (ap: AprovacaoEstoque, nome: string) => {
+    if (!supabase) return;
+    if (!await confirm(
+      `Devolver a requisição de ${nome} para correção?\n\n` +
+      `A decisão de ${ap.aprovador || 'quem decidiu'} é desfeita: a requisição volta para 'Pendente' ` +
+      `e o card reaparece na fila do gerente, com o seu motivo à vista.`)) return;
+
+    const motivo = await prompt({
+      message: 'Por que está voltando? (o gerente lê isto antes de decidir de novo)',
+      placeholder: 'Ex.: negou por engano, o material existe na prateleira',
+      confirmLabel: 'Devolver',
+      maxLength: 200,
+    });
+    if (motivo == null) return;
+
+    setDevolvendo(ap.id);
+    try {
+      const { error } = await supabase.rpc('reabrir_requisicao_estoque', {
+        p_id: ap.requisicao_estoque_id, p_motivo: motivo.trim() || null,
+      });
+      if (error) throw new Error(error.message);
+      showToast('Devolvida — o gerente decide de novo, aqui mesmo, em Pendentes.', 'success', true);
+      await Promise.all([reloadDecididas(), reloadPendentes(), reloadReq()]);
+    } catch (err: unknown) {
+      showToast(`Não foi possível devolver: ${motivoDoErro(err)}`, 'error', true);
+    } finally {
+      setDevolvendo(null);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -123,12 +173,80 @@ const AprovacoesEstoqueViewInner = ({ showToast, filial }: { showToast: (msg: st
           ))}
         </div>
       )}
+
+      {/* Decisões já tomadas — só para a direção. */}
+      {podeDevolver && decididas.length > 0 && (
+        <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
+          <p className="text-xs text-gray-500 mt-1 mb-4">
+            Negada por engano volta para a fila do gerente com o seu motivo. Liberada não volta: o material
+            já saiu da prateleira, e desfazer contaria a mesma saída duas vezes — o caminho é registrar a
+            entrada de devolução em Estoque → Movimentações.
+          </p>
+          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto main-scrollbar pr-1">
+            {decididas.slice(0, 15).map(ap => {
+              const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
+              const prod = req ? produtos.find(p => p.id === req.produto_id) : undefined;
+              const nome = prod?.nome ?? 'material';
+              const liberada = ap.status === 'Aprovado';
+              const indo = devolvendo === ap.id;
+              return (
+                <div key={ap.id} className="neu-pressed rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${liberada
+                        ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
+                        {liberada ? 'Liberado' : 'Negado'}
+                      </span>
+                      <span className="text-[11px] text-gray-500">Qtd: {req?.qtd ?? '—'}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-200 truncate">{nome}</p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      por {ap.aprovador || '—'}
+                      {ap.observacao ? ` · ${ap.observacao}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {liberada ? (
+                      <span className="text-[10px] text-gray-600 max-w-[10rem] text-right leading-tight">
+                        material já saiu — devolução em Movimentações
+                      </span>
+                    ) : (
+                      <button onClick={() => devolver(ap, nome)} disabled={indo}
+                        title="Devolver para correção" className="action-btn-success disabled:opacity-50">
+                        {indo ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                      </button>
+                    )}
+                    {isProfessor && (
+                      <ExcluirAdmin
+                        endpoint="/api/requisicoesestoqueview"
+                        id={ap.requisicao_estoque_id}
+                        rotulo={`a requisição de ${nome}`}
+                        alternativa={liberada
+                          ? 'registre a entrada de devolução em Estoque → Movimentações e abra uma requisição nova.'
+                          : 'use o botão de devolver ao lado: ela volta para Pendente e o gerente decide de novo.'}
+                        showToast={showToast}
+                        onExcluido={() => { reloadDecididas(); reloadReq(); }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {decididas.length > 15 && (
+            <p className="text-[10px] text-gray-600 mt-3">
+              Mostrando as 15 decisões mais recentes.
+            </p>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 };
 
-export const AprovacoesEstoqueView = ({ showToast }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile?: unknown }) => {
+export const AprovacoesEstoqueView = ({ showToast, profile }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A liberação de material do almoxarifado" />;
-  return <AprovacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
+  return <AprovacoesEstoqueViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

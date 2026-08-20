@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react';
+import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { usePrompt } from '../contexts/PromptContext';
+import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
@@ -19,9 +22,16 @@ type ShowToast = (msg: string, type: string, persist?: boolean) => void;
 type EnrichedAp = AprovacaoCompras & { req: Requisicao };
 
 const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast: ShowToast; profile: UserProfile; filial: FilialOp }) => {
-  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes, isLoading: loadingReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
+  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
+  // As decisões já tomadas. A tela só listava 'Pendente', então o card sumia no
+  // instante em que o gerente clicava — e o erro dele virava impasse, porque a
+  // volta só existia em Requisições, outra tela, outro menu.
+  const { data: decididas, reload: reloadDecididas } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: ['Aprovado', 'Negado'], filial }, true);
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [processing, setProcessing] = useState<string | null>(null);
+  const [devolvendo, setDevolvendo] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
 
@@ -120,6 +130,55 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
 
   const handleAprovar = (ap: EnrichedAp) => decidir(ap, 'Aprovado');
   const handleNegar   = (ap: EnrichedAp) => decidir(ap, 'Negado');
+
+  // Devolver a decisão do gerente (migr. 330/340, RPC `reabrir_requisicao`).
+  //
+  // A régua já existia no banco — 'Só a direção reabre uma requisição' — mas o
+  // botão morava em Requisições. Quem trabalha nesta tela via o erro do gerente
+  // e não tinha como desfazer; em aula isso trava a cadeia inteira, porque a
+  // requisição fica 'Aprovado' errada e Compras cota em cima dela.
+  //
+  // Devolver, não editar: a requisição volta para 'Pendente' e a aprovação
+  // volta para a fila do gerente, com o motivo à vista. A alçada continua
+  // sendo dele — a direção desfaz a decisão, não decide no lugar.
+  const podeDevolver = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
+  // Excluir é só do professor: `auth_is_admin()` inclui CEO e conselheiro, que
+  // aqui são alunos. Destruir documento não é atribuição de aluno.
+  const isProfessor = profile.role === 'admin';
+
+  const devolver = async (ap: AprovacaoCompras, req: Requisicao | undefined) => {
+    if (!supabase) return;
+    const rotulo = req ? numeroRequisicao(req) : `#${String(ap.requisicao_id).slice(-6).toUpperCase()}`;
+    if (!await confirm(
+      `Devolver ${rotulo} para correção?\n\n` +
+      `A decisão de ${ap.aprovador || 'quem aprovou'} é desfeita: a requisição volta para 'Pendente' ` +
+      `e o card reaparece na fila de aprovação do gerente, com o seu motivo à vista.\n\n` +
+      `Se já existe cotação ou pedido em cima dela, o banco recusa e diz o que resolver antes.`)) return;
+
+    const motivo = await prompt({
+      message: 'Por que está voltando? (o gerente lê isto antes de decidir de novo)',
+      placeholder: 'Ex.: aprovou 50 onde a requisição pedia 5',
+      confirmLabel: 'Devolver',
+      maxLength: 200,
+    });
+    if (motivo == null) return;
+
+    setDevolvendo(ap.id);
+    try {
+      const { data: res, error } = await supabase.rpc('reabrir_requisicao', {
+        p_id: ap.requisicao_id, p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      showToast((res as any)?.restaurada
+        ? 'Requisição restaurada e devolvida — está na fila do gerente.'
+        : 'Devolvida — o gerente decide de novo, aqui mesmo, em Pendentes.', 'success', true);
+      await Promise.all([reloadDecididas(), reloadPendentes(), reloadReq()]);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível devolver.', 'error', true);
+    } finally {
+      setDevolvendo(null);
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -259,6 +318,68 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {/* Decisões já tomadas — só para a direção. O gerente não desfaz a
+          própria decisão: se pudesse, aprovar deixaria de ser um ato. */}
+      {podeDevolver && decididas.length > 0 && (
+        <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
+          <p className="text-xs text-gray-500 mt-1 mb-4">
+            Erro de gerente não precisa travar a aula: devolver desfaz a decisão e o card volta para a
+            fila dele com o seu motivo. Excluir é o último recurso — some com o documento e com a
+            correspondência dele nas outras telas.
+          </p>
+          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto main-scrollbar pr-1">
+            {decididas.slice(0, 15).map(ap => {
+              const req = requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
+              const negado = ap.status === 'Negado';
+              const indo = devolvendo === ap.id;
+              return (
+                <div key={ap.id} className="neu-pressed rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-gray-500 tracking-wider">
+                        {req ? numeroRequisicao(req) : `#${String(ap.requisicao_id).slice(-6).toUpperCase()}`}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${negado
+                        ? 'text-red-400 border-red-500/30' : 'text-green-400 border-green-500/30'}`}>
+                        {ap.status}
+                      </span>
+                      {!req && <span className="text-[10px] text-yellow-500/80">requisição excluída — devolver restaura</span>}
+                    </div>
+                    <p className="text-sm font-semibold text-gray-200 truncate">{req?.item ?? '—'}</p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      por {ap.aprovador || '—'}
+                      {ap.observacao ? ` · ${ap.observacao}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => devolver(ap, req)} disabled={indo}
+                      title="Devolver para correção" className="action-btn-success disabled:opacity-50">
+                      {indo ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                    </button>
+                    {isProfessor && (
+                      <ExcluirAdmin
+                        endpoint="/api/requisicoesview"
+                        id={ap.requisicao_id}
+                        rotulo={`a requisição ${req ? numeroRequisicao(req) : ''}`.trim()}
+                        alternativa="use o botão de devolver ao lado: ela volta para Pendente e o gerente decide de novo."
+                        showToast={showToast}
+                        onExcluido={() => { reloadDecididas(); reloadReq(); }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {decididas.length > 15 && (
+            <p className="text-[10px] text-gray-600 mt-3">
+              Mostrando as 15 decisões mais recentes. As anteriores continuam em Compras → Requisições.
+            </p>
+          )}
         </div>
       )}
     </motion.div>
