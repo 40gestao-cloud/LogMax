@@ -85,7 +85,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // aberta na frente do conferente. Depois vira caça ao aparelho na prateleira.
   const [confirmImeis, setConfirmImeis] = useState('');
   const [confirmValidade, setConfirmValidade] = useState('');
-  const [confirmStatus, setConfirmStatus] = useState('Concluído');
+  // O status final NÃO é mais escolhido (migr. 489): sai do saldo do pedido. O
+  // que sobrou de decisão humana é encerrar a entrega faltando mercadoria — ato
+  // deliberado, com motivo, e não o default de um select.
+  const [encerrarComSaldo, setEncerrarComSaldo] = useState(false);
+  const [motivoEncerramento, setMotivoEncerramento] = useState('');
   const [confirmSaving, setConfirmSaving] = useState(false);
   // Guard sincrônico — `disabled={confirmSaving}` depende de state React
   // (assíncrono); um double-click rápido entra em handleConfirmar 2× antes
@@ -181,6 +185,22 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // excesso de nada. A escala do banco é 3 casas, então meia milésima de
   // tolerância é menor que qualquer valor representável ali.
   const excedeSaldo = (qtd: number, max: number) => qtd > max + 0.0005;
+
+  /**
+   * Status final da conferência, deduzido do saldo — a MESMA conta que a
+   * trigger `fn_recebimento_status_pelo_saldo` faz (migr. 489). Aqui é só
+   * espelho: quem decide é o banco, e o valor gravado volta no retorno do
+   * update. Devolve também o que falta, porque é o número que a tela precisa
+   * dizer em português.
+   */
+  const conferenciaDo = (item: any) => {
+    const s = saldos[item.pedido_id];
+    if (!s || !(s.qtd_pedida > 0)) {
+      return { conhecido: false, fecha: false, falta: 0 };
+    }
+    // A view já conta este recebimento: a linha existe desde o Registrar.
+    return { conhecido: true, fecha: s.qtd_saldo <= 0.0005, falta: Math.max(s.qtd_saldo, 0) };
+  };
   const produtosOrdenados = useMemo(() => {
     // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
     // Sem normalizar, `localeCompare` deixa itens com leading whitespace
@@ -326,9 +346,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     // por validade — a segunda maior sangria de uma mercearia — continua
     // invisível. Avisa e deixa seguir: travar o almoxarifado por causa de um
     // campo do cadastro seria devolver a ele um problema de Cadastros.
+    const conf = conferenciaDo(item);
+    // Encerrar faltando mercadoria é decisão, não default: sem motivo o banco
+    // recusa (migr. 489), e barrar aqui evita a ida perdida ao servidor.
+    if (!conf.fecha && encerrarComSaldo && !motivoEncerramento.trim()) {
+      showToast('Escreva o que aconteceu com o que falta antes de encerrar a entrega.', 'error', true);
+      return;
+    }
     const prodConfirm = produtos.find((p: any) => p.id === confirmProduto);
-    if (ehPerecivel(prodConfirm) && !confirmValidade
-        && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+    if (ehPerecivel(prodConfirm) && !confirmValidade) {
       const segue = await confirm(
         `"${prodConfirm?.nome ?? 'Este produto'}" é perecível e está entrando sem data de validade.\n\n`
         + 'Sem ela o lote não é criado: o item não aparece na fila de Validades, ninguém é avisado '
@@ -341,7 +367,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     // carga pode ter chegado com 8 de 10, e é isso que "Parcial" quer dizer.
     const imeisInformados = confirmImeis
       .split(/[\n,;]/).map(s => s.trim()).filter(Boolean);
-    if (requerImei(prodConfirm) && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+    if (requerImei(prodConfirm)) {
       if (imeisInformados.length === 0) {
         const segue = await confirm(
           `"${prodConfirm?.nome ?? 'Este produto'}" tem número de série por unidade e nenhum foi informado.\n\n`
@@ -364,7 +390,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       const today = todayBR();
       // Movimentação PRIMEIRO — se falhar, status fica Pendente e o botão "Confirmar" reaparesce para retry.
       // Só atualiza o status após a movimentação estar salva no banco.
-      if (confirmStatus === 'Concluído' || confirmStatus === 'Parcial') {
+      // A entrada acontece sempre: a mercadoria que chegou entrou, seja a
+      // entrega completa ou não. O que o saldo decide é se o PEDIDO fecha.
+      {
         try {
           await dbInsert('/api/movimentacoesestoqueview', {
             produto_id:     confirmProduto,
@@ -390,7 +418,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       // crítico: se falhar, o estoque já subiu e o lote pode ser registrado
       // depois em Estoque → Validades — travar a confirmação por causa disto
       // seria pior que o problema.
-      if (confirmValidade && confirmProduto && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+      if (confirmValidade && confirmProduto) {
         try {
           await dbInsert('/api/vencimentosestoqueview', {
             produto_id:     confirmProduto,
@@ -411,8 +439,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       // o lote: se a RPC recusar um IMEI repetido, o estoque já subiu e o
       // conferente corrige o número — travar a entrada da carga por causa de um
       // dígito seria devolver ao almoxarifado um problema de digitação.
-      if (imeisInformados.length > 0 && requerImei(prodConfirm) && supabase
-          && (confirmStatus === 'Concluído' || confirmStatus === 'Parcial')) {
+      if (imeisInformados.length > 0 && requerImei(prodConfirm) && supabase) {
         const { error: imeiErr } = await supabase.rpc('registrar_unidades_recebidas', {
           p_recebimento_id: item.id,
           p_produto_id:     confirmProduto,
@@ -424,13 +451,22 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         }
       }
 
-      await dbUpdate('/api/recebimentosview', item.id, { status: confirmStatus });
-      setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, status: confirmStatus } : r));
+      // Manda a INTENÇÃO ('Concluído') e a decisão de encerrar; quem grava o
+      // status é a trigger da migr. 489, a partir do saldo. `salvo.status` é o
+      // que de fato ficou no banco — usar o palpite do cliente aqui era como o
+      // bug começava.
+      const salvo = await dbUpdate<any>('/api/recebimentosview', item.id, {
+        status: 'Concluído',
+        encerrado_com_saldo: !conf.fecha && encerrarComSaldo,
+        motivo_encerramento: !conf.fecha && encerrarComSaldo ? motivoEncerramento.trim() : null,
+      });
+      const statusFinal = salvo?.status ?? (conf.fecha ? 'Concluído' : 'Parcial');
+      setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, ...(salvo ?? { status: statusFinal }) } : r));
       await reloadSaldos();
 
       // Sincronia: recebimento "Concluído" fecha o pedido relacionado.
       // "Parcial" deixa o pedido em "Em Entrega" para permitir entregas adicionais.
-      if (confirmStatus === 'Concluído' && item.pedido_id) {
+      if (statusFinal === 'Concluído' && item.pedido_id) {
         const ped = pedidos.find((p: any) => p.id === item.pedido_id);
         if (ped && ped.status !== 'Recebido' && ped.status !== 'Cancelado') {
           try { await dbUpdate('/api/pedidosview', item.pedido_id, { status: 'Recebido' }); }
@@ -443,11 +479,14 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setConfirmLote('');
       setConfirmImeis('');
       setConfirmValidade('');
-      setConfirmStatus('Concluído');
+      setEncerrarComSaldo(false);
+      setMotivoEncerramento('');
       showToast(
-        confirmStatus === 'Concluído'
-          ? 'Recebimento confirmado, estoque atualizado e pedido encerrado. A conta do fornecedor está liberada para pagamento em Financeiro → Contas a pagar.'
-          : 'Recebimento parcial confirmado e estoque atualizado. O pedido segue em entrega, esperando o restante da carga.',
+        statusFinal !== 'Concluído'
+          ? `Entrada confirmada e estoque atualizado. O pedido segue em entrega: faltam ${qtdBR(conf.falta)} para fechar, e a conta do fornecedor só libera quando a entrega fechar.`
+          : encerrarComSaldo && !conf.fecha
+            ? 'Entrega encerrada com saldo em aberto. O que chegou entrou no estoque, o pedido foi fechado e a conta do fornecedor está liberada em Financeiro → Contas a pagar — confira o valor, ele é o do pedido inteiro.'
+            : 'Recebimento confirmado, estoque atualizado e pedido encerrado. A conta do fornecedor está liberada para pagamento em Financeiro → Contas a pagar.',
         'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -585,11 +624,13 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   // escolha a fazer, e deixar o campo vazio faria o almoxarife
                                   // procurar no catálogo o que o pedido já diz.
                                   setConfirmProduto(produtoDoPedido(item.pedido_id) ?? '');
-                                  // Auto-status: soma dos recebimentos ativos (incluindo esse) atinge
-                                  // o pedido → sugere Concluído (fecha pedido). Senão Parcial.
-                                  const s = saldos[item.pedido_id];
-                                  const fecha = s ? s.qtd_recebida_total >= s.qtd_pedida : true;
-                                  setConfirmStatus(fecha ? 'Concluído' : 'Parcial');
+                                  // O auto-status daqui existia e estava certo — só que
+                                  // ia para um <select> que o conferente reabria. Agora a
+                                  // conta é feita no painel (conferenciaDo) e no banco
+                                  // (migr. 489), e o que se limpa aqui é a decisão humana
+                                  // que sobrou: encerrar a entrega faltando mercadoria.
+                                  setEncerrarComSaldo(false);
+                                  setMotivoEncerramento('');
                                 }}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
                               >
@@ -771,12 +812,67 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     </span>
                                   </div>
                                 )}
-                                <div className="flex flex-col gap-1">
-                                  <label htmlFor={`receb-status-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</label>
-                                  <select id={`receb-status-${item.id}`} className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={confirmStatus} onChange={e => setConfirmStatus(e.target.value)}>
-                                    {['Concluído', 'Parcial'].map(s => <option key={s} value={s}>{s}</option>)}
-                                  </select>
-                                </div>
+                                {/* Era um <select> com "Concluído" pré-selecionado,
+                                    logo abaixo do saldo que a própria tela imprime:
+                                    a pergunta já estava respondida ali em cima, e a
+                                    resposta errada ou trancava o pagamento para
+                                    sempre ou fechava o pedido com carga por chegar
+                                    (migr. 489). Agora é leitura. */}
+                                {(() => {
+                                  const conf = conferenciaDo(item);
+                                  if (!conf.conhecido) {
+                                    return (
+                                      <div className="basis-full text-[11px] text-amber-300/90">
+                                        Não foi possível ler o saldo deste pedido — recarregue a tela antes de confirmar.
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div className="flex flex-col gap-1 basis-full sm:basis-auto sm:flex-1 sm:min-w-[220px]">
+                                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status final</span>
+                                      <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-200 flex items-center gap-1.5">
+                                        <Lock size={11} className="text-gray-500 shrink-0" />
+                                        {conf.fecha
+                                          ? 'Concluído — esta entrega fecha o pedido'
+                                          : encerrarComSaldo
+                                            ? 'Concluído — encerrado com falta'
+                                            : `Parcial — faltam ${qtdBR(conf.falta)}`}
+                                      </div>
+                                      <p className="text-[10px] text-gray-500 leading-snug">
+                                        {conf.fecha
+                                          ? 'A quantidade fechou. O pedido encerra e a conta do fornecedor libera para pagamento.'
+                                          : 'Vem do saldo do pedido, não de escolha: o que chegou entra no estoque agora e o pedido continua em entrega, esperando o resto.'}
+                                      </p>
+                                      {/* A saída para o caso real: o fornecedor avisou
+                                          que não manda o resto. Existe, mas é ato
+                                          deliberado e com motivo — não o default. */}
+                                      {!conf.fecha && (
+                                        <div className="mt-1.5 flex flex-col gap-1.5">
+                                          <label className="flex items-start gap-2 cursor-pointer">
+                                            <input type="checkbox" className="mt-0.5 accent-amber-400"
+                                              checked={encerrarComSaldo}
+                                              onChange={e => { setEncerrarComSaldo(e.target.checked); if (!e.target.checked) setMotivoEncerramento(''); }} />
+                                            <span className="text-[10px] text-amber-300/90 leading-snug">
+                                              Encerrar a entrega faltando {qtdBR(conf.falta)} — o resto não vem
+                                            </span>
+                                          </label>
+                                          {encerrarComSaldo && (
+                                            <>
+                                              <textarea rows={2} className="neu-input py-2 px-3 rounded-xl text-xs w-full resize-none"
+                                                value={motivoEncerramento}
+                                                onChange={e => setMotivoEncerramento(e.target.value)}
+                                                placeholder="O que aconteceu com o que falta? Ex.: fornecedor cancelou o saldo, item descontinuado." />
+                                              <p className="text-[10px] text-amber-300/80 leading-snug">
+                                                O pedido fecha assim mesmo e a conta libera pelo valor cheio do pedido —
+                                                se você pagou por mais do que recebeu, ajuste com o fornecedor.
+                                              </p>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 <div className="flex gap-2 sm:contents">
                                   <button onClick={() => handleConfirmar(item)} disabled={confirmSaving}
                                     className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 flex-1 sm:flex-none">
