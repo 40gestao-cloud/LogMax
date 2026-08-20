@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
@@ -90,6 +90,51 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // dois cliques —, mas é editável: "metade agora, metade no dia 30" é rotina
   // com fornecedor.
   const [payValor, setPayValor] = useState('');
+  // Conferência da nota (migr. 491). É a terceira perna do match: pedido (o que
+  // foi combinado) × recebimento (o que chegou) × nota (o que está sendo
+  // cobrado). Sem ela o pagamento é recusado pelo banco — e pagava-se o valor
+  // do PEDIDO, que era só a previsão feita na cotação.
+  const [conferindo, setConferindo] = useState<any | null>(null);
+  const [nfValor, setNfValor] = useState('');
+  const [nfObs, setNfObs] = useState('');
+  const [nfSalvando, setNfSalvando] = useState(false);
+
+  const abrirConferencia = (conta: any) => {
+    setConferindo(conta);
+    // Abre com o valor do pedido: na compra sem intercorrência a nota bate, e
+    // digitar de novo o mesmo número não ensina nada. Quando não bate, o campo
+    // é justamente onde a diferença aparece.
+    setNfValor(formatBRL(Number(conta.ped?.valor_total ?? conta.valor ?? 0)));
+    setNfObs('');
+  };
+
+  const handleConferirNota = async () => {
+    if (!conferindo || !supabase) return;
+    const valor = parseBRL(nfValor);
+    if (!(valor > 0)) { showToast('Informe o valor da nota fiscal.', 'error', true); return; }
+    setNfSalvando(true);
+    try {
+      const { data: conta, error } = await supabase.rpc('conferir_nota_fiscal', {
+        p_conta_id:   conferindo.id,
+        p_nf_valor:   valor,
+        p_observacao: nfObs.trim() || null,
+      });
+      if (error) throw new Error(error.message);
+      setData((prev: any[]) => prev.map(d => d.id === conferindo.id ? { ...d, ...(conta as any ?? {}) } : d));
+      const pedidoValor = Number(conferindo.ped?.valor_total ?? 0);
+      const dif = valor - pedidoValor;
+      setConferindo(null);
+      showToast(
+        Math.abs(dif) > 0.005
+          ? `Nota conferida com divergência de R$ ${Math.abs(dif).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ${dif > 0 ? 'a mais' : 'a menos'} que o pedido. A conta passou a valer o da nota e está liberada para pagamento.`
+          : 'Nota conferida — bate com o pedido. Conta liberada para pagamento.',
+        'success', true);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao conferir a nota.', 'error', true);
+    } finally {
+      setNfSalvando(false);
+    }
+  };
 
   // A origem do dinheiro é da própria unidade: conta da Matriz debita caixa da
   // Matriz, conta da filial debita caixa da filial. Antes o seletor listava
@@ -558,7 +603,18 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="contas_pagar" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                            {PAGAVEL.has(item.status) && (
+                            {/* Conta de pedido só paga depois do three-way match
+                                (migr. 491). O botão aparece antes do "Pagar" porque
+                                é a etapa que vem antes — e some assim que a nota é
+                                conferida. */}
+                            {item.pedido_id && !item.nf_conferida_em && PAGAVEL.has(item.status) && (
+                              <button onClick={() => abrirConferencia(item)}
+                                title="Confronte a nota do fornecedor com o pedido antes de pagar."
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1">
+                                <FileCheck size={11} /> Conferir nota
+                              </button>
+                            )}
+                            {PAGAVEL.has(item.status) && !(item.pedido_id && !item.nf_conferida_em) && (
                               <button onClick={() => openPay(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
                                 <Check size={11} /> {item.status === 'Parcial' ? 'Pagar saldo' : 'Pagar'}
                               </button>
@@ -640,6 +696,93 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
           />
         </div>
       )}
+
+      {/* Three-way match (migr. 491): o que foi combinado, o que chegou e o que
+          está sendo cobrado, lado a lado. Enquanto isto não passar, o pagamento
+          é recusado pelo banco — e o valor da conta continua sendo a PREVISÃO
+          feita na cotação, não a cobrança real. */}
+      <AnimatePresence>
+        {conferindo && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !nfSalvando && setConferindo(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg flex flex-col gap-4 max-h-[88vh] overflow-auto main-scrollbar">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-300">
+                  Conferir nota contra o pedido
+                  <span className="text-accent ml-2">— {conferindo.forn?.nome ?? 'fornecedor'}</span>
+                </h3>
+                <button onClick={() => !nfSalvando && setConferindo(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="neu-inset rounded-xl p-3 border border-white/5 flex flex-col gap-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">O que foi combinado</p>
+                <p className="text-xs text-gray-200">{conferindo.descricao}</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                  <span>Pedido: <strong className="text-gray-200">R$ {Number(conferindo.ped?.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                  {qtdDe(conferindo) != null && (
+                    <span>Quantidade: <strong className="text-gray-200">{qtdDe(conferindo)!.toLocaleString('pt-BR')}</strong></span>
+                  )}
+                  {conferindo.ped?.recebido_em && (
+                    <span>Entregue em: <strong className="text-gray-200">{String(conferindo.ped.recebido_em).split('-').reverse().join('/')}</strong></span>
+                  )}
+                </div>
+              </div>
+
+              <FormField label="Valor da nota fiscal (R$) *">
+                <input type="text" inputMode="numeric"
+                  className="neu-input py-2 px-3 rounded-xl text-sm text-right tabular-nums font-bold"
+                  value={nfValor}
+                  onChange={e => setNfValor(formatBRL(e.target.value))}
+                  onKeyDown={handleMoneyKeyDown} />
+                {(() => {
+                  const dif = parseBRL(nfValor) - Number(conferindo.ped?.valor_total ?? 0);
+                  if (Math.abs(dif) <= 0.005) {
+                    return <p className="text-[10px] text-emerald-400/90 mt-1">Bate com o pedido.</p>;
+                  }
+                  return (
+                    <p className="text-[10px] text-amber-300 mt-1 leading-snug">
+                      Divergência de R$ {Math.abs(dif).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
+                      {dif > 0 ? 'a MAIS' : 'a MENOS'} que o pedido. Acontece em compra real — frete
+                      destacado, imposto, reajuste, entrega a menor. Escreva o motivo abaixo: é ele
+                      que fica no documento.
+                    </p>
+                  );
+                })()}
+              </FormField>
+
+              <FormField label="Motivo da divergência">
+                <textarea rows={2} className="neu-input py-2 px-3 rounded-xl text-sm w-full resize-none"
+                  value={nfObs}
+                  onChange={e => setNfObs(e.target.value)}
+                  placeholder="Ex.: frete de R$ 50,00 destacado na nota; recebemos 5 de 42 e o saldo foi cancelado." />
+              </FormField>
+
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Ao conferir, o valor da conta passa a ser o da NOTA — o do pedido era a previsão
+                feita na cotação. Só depois disso o pagamento é liberado.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setConferindo(null)} disabled={nfSalvando}
+                  className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400 disabled:opacity-50">Cancelar</button>
+                <NeuButtonAccent onClick={handleConferirNota} isLoading={nfSalvando} disabled={!(parseBRL(nfValor) > 0)}>
+                  <FileCheck size={14} /> Conferir e liberar
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

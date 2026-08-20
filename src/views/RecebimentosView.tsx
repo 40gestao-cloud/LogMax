@@ -73,7 +73,16 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // campo "Produto recebido" deste form era descartado no INSERT — o usuário
   // escolhia o produto e tinha de escolher de novo no Confirmar. A escolha
   // agora vive só onde de fato move estoque (o painel Confirmar).
-  const [extras, setExtras] = useState({ qtd_recebida: '', observacao: '' });
+  // `data` era `todayBR()` fixo e a tela não tinha campo: carga que chegou
+  // sexta e foi lançada segunda entrava como segunda — e `recebido_em`, que é a
+  // régua de pontualidade do fornecedor, media o clique (migr. 490).
+  // A nota fiscal veio junto porque ela é o documento que acompanha a carga:
+  // a doca registra número/série/emissão, o financeiro é quem confere o VALOR
+  // contra o pedido (migr. 491). Preço não passa pelo almoxarifado.
+  const [extras, setExtras] = useState({
+    qtd_recebida: '', observacao: '', data: todayBR(),
+    nf_numero: '', nf_serie: '', nf_emissao: '',
+  });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [confirmProduto, setConfirmProduto] = useState('');
@@ -90,6 +99,16 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // deliberado, com motivo, e não o default de um select.
   const [encerrarComSaldo, setEncerrarComSaldo] = useState(false);
   const [motivoEncerramento, setMotivoEncerramento] = useState('');
+  // Nota fiscal da carga (migr. 491). Vive no painel de Confirmar porque é ali
+  // que a mercadoria entra: sem nota não entra, e é o documento que o
+  // financeiro vai confrontar com o pedido.
+  const [confirmNf, setConfirmNf] = useState({ numero: '', serie: '', emissao: '' });
+  // Recebimento confirmado ANTES da 491 não tem nota, e a conta dele não passa
+  // na conferência. Nota que chega depois da mercadoria é rotina — este modal é
+  // a porta para informá-la sem desfazer nada.
+  const [notaAtrasada, setNotaAtrasada] = useState<any | null>(null);
+  const [notaForm, setNotaForm] = useState({ numero: '', serie: '', emissao: '' });
+  const [notaSalvando, setNotaSalvando] = useState(false);
   const [confirmSaving, setConfirmSaving] = useState(false);
   // Guard sincrônico — `disabled={confirmSaving}` depende de state React
   // (assíncrono); um double-click rápido entra em handleConfirmar 2× antes
@@ -233,7 +252,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // Search agora é server-side; o enriched é só para juntar dados do pedido.
   const enriched = data.map((r: any) => ({ ...r, ped: pedidos.find((p: any) => p.id === r.pedido_id) }));
 
-  const closeForm = () => { setShowForm(false); setForm({ pedido_id: '' }); setExtras({ qtd_recebida: '', observacao: '' }); setErrors({}); };
+  const closeForm = () => {
+    setShowForm(false); setForm({ pedido_id: '' });
+    setExtras({ qtd_recebida: '', observacao: '', data: todayBR(), nf_numero: '', nf_serie: '', nf_emissao: '' });
+    setErrors({});
+  };
 
 
   // Descrição do item do pedido — pré-preenche o nome no cadastro rápido.
@@ -285,7 +308,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      const today = todayBR();
       const qtd = parseQtd(extras.qtd_recebida);
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
       const maxAceito = maxPermitido(form.pedido_id, 0);
@@ -299,7 +321,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       }
       // `filial` é obrigatório: a coluna é NOT NULL DEFAULT 'SuperMax', então
       // sem isto todo recebimento da TechMax/MaxLook era gravado como SuperMax.
-      const payload = { pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao, status: 'Pendente', data: today, filial };
+      const payload = {
+        pedido_id: form.pedido_id, qtd_recebida: qtd, observacao: extras.observacao,
+        status: 'Pendente', data: extras.data || todayBR(), filial,
+        // Opcionais no Registrar (a nota pode chegar depois da carga) e
+        // obrigatórios no Confirmar — quem cobra é a trigger da migr. 491.
+        nf_numero:  extras.nf_numero.trim()  || null,
+        nf_serie:   extras.nf_serie.trim()   || null,
+        nf_emissao: extras.nf_emissao        || null,
+      };
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
       await reloadSaldos();
@@ -346,6 +376,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     // por validade — a segunda maior sangria de uma mercearia — continua
     // invisível. Avisa e deixa seguir: travar o almoxarifado por causa de um
     // campo do cadastro seria devolver a ele um problema de Cadastros.
+    if (!confirmNf.numero.trim()) {
+      showToast('Informe o número da nota fiscal que veio com a carga — sem ela a mercadoria não entra no estoque.', 'error', true);
+      return;
+    }
     const conf = conferenciaDo(item);
     // Encerrar faltando mercadoria é decisão, não default: sem motivo o banco
     // recusa (migr. 489), e barrar aqui evita a ida perdida ao servidor.
@@ -459,6 +493,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         status: 'Concluído',
         encerrado_com_saldo: !conf.fecha && encerrarComSaldo,
         motivo_encerramento: !conf.fecha && encerrarComSaldo ? motivoEncerramento.trim() : null,
+        nf_numero:  confirmNf.numero.trim(),
+        nf_serie:   confirmNf.serie.trim() || null,
+        nf_emissao: confirmNf.emissao || null,
       });
       const statusFinal = salvo?.status ?? (conf.fecha ? 'Concluído' : 'Parcial');
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, ...(salvo ?? { status: statusFinal }) } : r));
@@ -481,6 +518,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setConfirmValidade('');
       setEncerrarComSaldo(false);
       setMotivoEncerramento('');
+      setConfirmNf({ numero: '', serie: '', emissao: '' });
       showToast(
         statusFinal !== 'Concluído'
           ? `Entrada confirmada e estoque atualizado. O pedido segue em entrega: faltam ${qtdBR(conf.falta)} para fechar, e a conta do fornecedor só libera quando a entrega fechar.`
@@ -542,6 +580,38 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     onChange={e => setExtras(x => ({ ...x, qtd_recebida: formatQtd(e.target.value, recebFrac) }))}
                     onKeyDown={handleQtdKeyDown(recebFrac)} placeholder="0" />
                 </FormField>
+                <FormField label="Data da chegada">
+                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    max={todayBR()}
+                    value={extras.data}
+                    onChange={e => setExtras(x => ({ ...x, data: e.target.value }))} />
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    Quando a carga chegou de verdade, não quando você está lançando. É esta data
+                    que mede a pontualidade do fornecedor.
+                  </p>
+                </FormField>
+                <FormField label="Nota fiscal — número">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.nf_numero}
+                    onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
+                    placeholder="Ex.: 000123456" />
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    O documento que veio com a carga. Pode ficar em branco agora, mas sem ele a
+                    entrada não é confirmada — e o financeiro não tem o que conferir contra o pedido.
+                  </p>
+                </FormField>
+                <FormField label="Nota — série">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.nf_serie}
+                    onChange={e => setExtras(x => ({ ...x, nf_serie: e.target.value }))}
+                    placeholder="Ex.: 1" />
+                </FormField>
+                <FormField label="Nota — emissão">
+                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    max={todayBR()}
+                    value={extras.nf_emissao}
+                    onChange={e => setExtras(x => ({ ...x, nf_emissao: e.target.value }))} />
+                </FormField>
                 <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
               </div>
               <div className="flex gap-3 justify-end">
@@ -600,6 +670,18 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 <PackageX size={11} /> Divergência
                               </button>
                             )}
+                            {/* Confirmado antes da migr. 491, ou nota que chegou depois
+                                da carga: sem este número a conta do fornecedor não passa
+                                na conferência do financeiro e fica impagável. */}
+                            {(item.status === 'Concluído' || item.status === 'Parcial') && !item.nf_numero && (
+                              <button
+                                onClick={() => { setNotaAtrasada(item); setNotaForm({ numero: '', serie: '', emissao: '' }); }}
+                                title="Este recebimento entrou sem nota fiscal. Informe o número para o financeiro poder conferir e pagar."
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1"
+                              >
+                                Nota pendente
+                              </button>
+                            )}
                             {item.status === 'Pendente' && (
                               <button
                                 onClick={() => {
@@ -631,6 +713,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   // que sobrou: encerrar a entrega faltando mercadoria.
                                   setEncerrarComSaldo(false);
                                   setMotivoEncerramento('');
+                                  setConfirmNf({
+                                    numero:  item.nf_numero  ?? '',
+                                    serie:   item.nf_serie   ?? '',
+                                    emissao: item.nf_emissao ?? '',
+                                  });
                                 }}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
                               >
@@ -812,6 +899,32 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     </span>
                                   </div>
                                 )}
+                                {/* A nota é o documento da carga, e a doca é quem o tem
+                                    na mão. Valor não aparece aqui de propósito: quem
+                                    confere preço é o financeiro, contra o pedido (migr.
+                                    491) — conferente que enxerga valor é conferente que
+                                    "ajusta" a nota para a carga passar. */}
+                                <div className="flex flex-col gap-1 basis-full sm:basis-auto sm:flex-1 sm:min-w-[200px]">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nota fiscal *</span>
+                                  <div className="flex gap-2">
+                                    <input className="neu-input py-2 px-3 rounded-xl text-xs flex-1 min-w-0"
+                                      value={confirmNf.numero}
+                                      onChange={e => setConfirmNf(n => ({ ...n, numero: e.target.value }))}
+                                      placeholder="Número" />
+                                    <input className="neu-input py-2 px-3 rounded-xl text-xs w-16 shrink-0"
+                                      value={confirmNf.serie}
+                                      onChange={e => setConfirmNf(n => ({ ...n, serie: e.target.value }))}
+                                      placeholder="Série" />
+                                  </div>
+                                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-xs w-full"
+                                    max={todayBR()}
+                                    value={confirmNf.emissao}
+                                    onChange={e => setConfirmNf(n => ({ ...n, emissao: e.target.value }))} />
+                                  <p className="text-[10px] text-gray-500 leading-snug">
+                                    Sem nota a mercadoria não entra. O valor não é digitado aqui — quem
+                                    confere quanto está sendo cobrado é o financeiro, contra o pedido.
+                                  </p>
+                                </div>
                                 {/* Era um <select> com "Concluído" pré-selecionado,
                                     logo abaixo do saldo que a própria tela imprime:
                                     a pergunta já estava respondida ali em cima, e a
@@ -901,6 +1014,89 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           onReload={reload}
         />
       </div>
+
+      {/* Nota que chegou depois da carga (migr. 491). Não desfaz a entrada nem
+          mexe no estoque: só preenche o documento que faltava, para o financeiro
+          poder conferir contra o pedido e pagar. */}
+      <AnimatePresence>
+        {notaAtrasada && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !notaSalvando && setNotaAtrasada(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-md flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-300">
+                  Nota fiscal da carga
+                  <span className="text-accent ml-2">— {numeroPedido(notaAtrasada.ped ?? { id: notaAtrasada.pedido_id })}</span>
+                </h3>
+                <button onClick={() => !notaSalvando && setNotaAtrasada(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Esta entrada foi confirmada sem o número da nota. O estoque já subiu e continua como
+                está — o que falta é o documento, e sem ele o financeiro não consegue conferir o que
+                está sendo cobrado contra o pedido. A conta do fornecedor fica impagável até isso.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <FormField label="Número *">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={notaForm.numero}
+                      onChange={e => setNotaForm(n => ({ ...n, numero: e.target.value }))}
+                      placeholder="Ex.: 000123456" />
+                  </FormField>
+                </div>
+                <FormField label="Série">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={notaForm.serie}
+                    onChange={e => setNotaForm(n => ({ ...n, serie: e.target.value }))}
+                    placeholder="1" />
+                </FormField>
+              </div>
+              <FormField label="Emissão">
+                <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                  max={todayBR()}
+                  value={notaForm.emissao}
+                  onChange={e => setNotaForm(n => ({ ...n, emissao: e.target.value }))} />
+              </FormField>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setNotaAtrasada(null)} disabled={notaSalvando}
+                  className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400 disabled:opacity-50">Cancelar</button>
+                <NeuButtonAccent
+                  isLoading={notaSalvando}
+                  disabled={!notaForm.numero.trim()}
+                  onClick={async () => {
+                    setNotaSalvando(true);
+                    try {
+                      const salvo = await dbUpdate<any>('/api/recebimentosview', notaAtrasada.id, {
+                        nf_numero:  notaForm.numero.trim(),
+                        nf_serie:   notaForm.serie.trim() || null,
+                        nf_emissao: notaForm.emissao || null,
+                      });
+                      setData((prev: any[]) => prev.map(r => r.id === notaAtrasada.id ? { ...r, ...(salvo ?? {}) } : r));
+                      setNotaAtrasada(null);
+                      showToast('Nota registrada. O financeiro já pode conferir o valor contra o pedido em Contas a pagar.', 'success', true);
+                    } catch (err: any) {
+                      showToast(`Erro ao gravar a nota: ${err?.message ?? 'verifique o console'}`, 'error', true);
+                    } finally {
+                      setNotaSalvando(false);
+                    }
+                  }}>
+                  <Save size={14} /> Gravar nota
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {devolvendo && (
