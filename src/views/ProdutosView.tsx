@@ -457,7 +457,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // Continua obrigatório onde o valor é conhecido: patrimônio e consumo (é o
   // que se pagou), item que veio de uma compra recebida (o número vem
   // preenchido do pedido) e edição de produto já existente.
-  const custoObrigatorio = !ehVendavel(extras.tipo) || !!editItem || veioDeCompra;
+  // `editItem` sozinho era demais: produto criado antecipadamente nasce SEM
+  // ficha de custo, e abrir para corrigir o nome passava a exigir um numero que
+  // continua nao existindo — de volta ao chute que esta regra veio tirar. Só se
+  // cobra na edicao quando o custo JA foi apurado: aí apagá-lo seria perder
+  // informacao boa.
+  const custoJaApurado = !!editItem
+    && editItem.preco_custo != null && Number(editItem.preco_custo) > 0;
+  const custoObrigatorio = !ehVendavel(extras.tipo) || custoJaApurado || veioDeCompra;
 
   // A RLS de `categorias_produto` é `auth_pode_filial(filial)` — admin/CEO
   // satisfaz para as três, então sem este filtro o select do produto oferece o
