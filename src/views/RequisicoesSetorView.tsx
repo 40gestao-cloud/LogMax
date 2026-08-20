@@ -49,9 +49,15 @@ import type { UserProfile } from '../hooks/useUserProfile';
 //   • Reposição — item do catálogo que acabou ou bateu o mínimo. Escolhe-se da
 //     lista, **sem justificativa escrita**: o motivo é o saldo, e o sistema
 //     grava saldo e mínimo do momento. É o que o comprador lê para decidir.
-//   • Compra eventual — não está no catálogo, é serviço ou foge do normal.
-//     Descrição livre e justificativa obrigatória: aqui o comprador não tem
-//     histórico nenhum, e o texto é o que decide.
+//   • Compra eventual — ainda não existe no catálogo. Descrição livre e
+//     justificativa obrigatória: aqui o comprador não tem histórico nenhum, e o
+//     texto é o que decide. Quem requisita NÃO cadastra produto (nem tem acesso
+//     a Cadastros): o texto é amarrado ao catálogo por Compras na geração do
+//     pedido (migr. 480), e o vínculo volta para a requisição — a compra
+//     seguinte do mesmo item já nasce Reposição.
+//     O hint dizia "é serviço" e isso era promessa falsa: `gerar_pedido_de_cotacao`
+//     exige um item de `produtos`, e serviço não vive lá. Enquanto não houver
+//     rota de serviço, a tela não convida para ela.
 //   • Material do estoque — já existe no almoxarifado. O Estoque libera a
 //     saída; não passa por Compras.
 //
@@ -416,7 +422,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 <div className="flex flex-wrap gap-2">
                   {([
                     { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou ou bateu o mínimo' },
-                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'não está no catálogo, é serviço ou foge do normal' },
+                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'ainda não existe no catálogo — descreva com suas palavras' },
                     { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'já existe no almoxarifado — o Estoque libera' },
                   ]).map(op => (
                     <button
@@ -444,6 +450,23 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       ? 'Compra eventual pede justificativa: Compras não tem histórico deste item para decidir sozinho.'
                       : 'Sai do almoxarifado, sem passar por Compras. Quando o Estoque liberar, o material vira despesa do centro de custo escolhido, pelo custo médio.'}
                 </p>
+                {/* A dúvida que aparecia em sala: "o item não está no catálogo,
+                    tenho de cadastrar antes de pedir?". Não — e o setor
+                    solicitante nem tem acesso a Cadastros. Quem dá código ao
+                    item é quem compra, na geração do pedido (migr. 480). Dizer
+                    isso aqui é mais barato do que deixar o aluno descobrir
+                    esbarrando numa tela que ele não pode abrir. */}
+                {tipo === 'eventual' && (
+                  <div className="neu-inset rounded-xl p-3 border border-white/5">
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                      <span className="font-bold text-gray-200">Você não precisa cadastrar o produto antes.</span>{' '}
+                      Descreva o que precisa em português — "Bolsa feminina transversal Anacapri" já basta.
+                      Quem compra é que amarra sua descrição a um item de catálogo quando o pedido for emitido,
+                      e cadastra o que faltar. Da próxima vez que a unidade pedir o mesmo item, ele já aparece
+                      na <span className="font-bold text-gray-300">Reposição</span>.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {tipo === 'estoque' ? (
