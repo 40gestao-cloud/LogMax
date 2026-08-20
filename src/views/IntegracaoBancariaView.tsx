@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, CheckCircle, AlertTriangle, Clock, Building2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb } from '../components/ui';
+import { useFilial } from '../contexts/FilialContext';
 
 const statusIcon = (s: string) => {
   if (s === 'Processado') return <CheckCircle size={12} className="text-green-400" />;
@@ -13,7 +14,13 @@ const statusIcon = (s: string) => {
 const EMPTY_FORM = { banco: '', arquivo: '', data_import: '', registros: '', status: 'Pendente' };
 
 export const IntegracaoBancariaView = ({ showToast }: any) => {
-  const { data: integracoes, setData: setIntegracoes, isLoading: loadingInt } = useFetchData<any>('/api/integracaobancariaview');
+  // A importação bancária é de UMA unidade — a migr. 483 deu `filial` à tabela
+  // (a RLS era só de setor, e o financeiro de uma filial enxergava a
+  // importação da outra) e a coluna é NOT NULL. Sem isto o INSERT falha, e a
+  // listagem mostraria a importação da unidade vizinha.
+  const { filialAtiva } = useFilial();
+  const { data: integracoes, setData: setIntegracoes, isLoading: loadingInt } =
+    useFetchData<any>('/api/integracaobancariaview', filialAtiva ? { filial: filialAtiva } : undefined);
   const { data: contas, isLoading: loadingContas } = useFetchData<any>('/api/caixabancosview');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY_FORM);
@@ -36,9 +43,10 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!form.banco || !form.arquivo) { showToast('Banco e arquivo são obrigatórios.', 'error'); return; }
+    if (!filialAtiva) { showToast('Escolha a unidade antes de registrar a importação.', 'error'); return; }
     setSaving(true);
     try {
-      const rec = await dbInsert('/api/integracaobancariaview', { ...form, registros: Number(form.registros || 0) });
+      const rec = await dbInsert('/api/integracaobancariaview', { ...form, registros: Number(form.registros || 0), filial: filialAtiva });
       setIntegracoes((prev: any[]) => [rec, ...prev]);
       setForm(EMPTY_FORM);
       setShowForm(false);
