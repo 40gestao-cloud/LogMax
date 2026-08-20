@@ -235,7 +235,25 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                               className="ml-2 text-[10px] text-gray-600">sem prazo</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
+                        <td className="py-3 px-4 text-center">
+                          <StatusBadge status={item.status} />
+                          {/* Quem lê esta tela é Compras, e o passo seguinte quase
+                              nunca é dela. Dizer de quem é a vez evita o pedido
+                              parado por semanas esperando um clique que ninguém
+                              sabia que faltava — e evita a tentativa de carimbar
+                              "Recebido" daqui, que a migr. 492 recusa. */}
+                          {item.status === 'Aprovado' && (
+                            <span className="block text-[10px] text-gray-500 mt-1 leading-snug">
+                              Avise o Estoque marcando <strong className="text-gray-400">Em Entrega</strong>.
+                            </span>
+                          )}
+                          {item.status === 'Em Entrega' && (
+                            <span className="block text-[10px] text-gray-500 mt-1 leading-snug">
+                              Agora é com o Estoque: o pedido encerra quando a carga
+                              for conferida em Recebimentos.
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="pedidos" entidadeId={item.id} titulo={item.item_descricao ?? item.req?.item ?? 'Pedido'} criadoEm={item.created_at} atualizadoEm={item.updated_at} />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
@@ -73,6 +73,49 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     for (const p of pedidosCompra ?? []) m.set(p.id, p);
     return m;
   }, [pedidosCompra]);
+  // Recebimentos do pedido: é o que permite DIZER o que falta antes de pagar,
+  // em vez de deixar o aluno descobrir batendo na trava do banco. Realtime
+  // porque quem destrava é outro setor, noutra máquina — o Estoque confirmando
+  // a carga ou informando a nota.
+  const { data: recebimentos } = useFetchData<any>('/api/recebimentosview', { filial }, true);
+  const recebimentosPorPedido = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const r of recebimentos ?? []) {
+      if (!r.pedido_id || r.ativo === false) continue;
+      const arr = m.get(r.pedido_id) ?? [];
+      arr.push(r);
+      m.set(r.pedido_id, arr);
+    }
+    return m;
+  }, [recebimentos]);
+
+  /**
+   * O que falta antes de esta conta poder ser paga — a mesma ordem que o banco
+   * cobra (recebimento conferido + nota conferida, migr. 491/492), dita ANTES
+   * do clique. Trava sem aviso é armadilha: o aluno tenta, leva um erro que não
+   * pede nada dele e conclui que o sistema quebrou.
+   */
+  const pendenciaDe = (conta: any): { pronta: boolean; acao: 'pagar' | 'conferir' | 'esperar'; aviso?: string } => {
+    if (!conta.pedido_id) return { pronta: true, acao: 'pagar' };
+    if (conta.nf_conferida_em) return { pronta: true, acao: 'pagar' };
+
+    const recs = recebimentosPorPedido.get(conta.pedido_id) ?? [];
+    if (recs.length === 0) {
+      return { pronta: false, acao: 'esperar',
+        aviso: 'A carga ainda não chegou: o Estoque não registrou recebimento deste pedido.' };
+    }
+    const conferidos = recs.filter((r: any) => r.status === 'Concluído');
+    if (conferidos.length === 0) {
+      return { pronta: false, acao: 'esperar',
+        aviso: 'A entrega ainda está parcial. O Estoque precisa fechar a conferência da carga antes de o fornecedor ser pago.' };
+    }
+    if (!conferidos.some((r: any) => r.nf_numero) && !recs.some((r: any) => r.nf_numero)) {
+      return { pronta: false, acao: 'esperar',
+        aviso: 'A carga entrou sem o número da nota fiscal. Peça ao Estoque para informá-la em Recebimentos → "Nota pendente".' };
+    }
+    return { pronta: false, acao: 'conferir' };
+  };
+
   const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview');
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -578,6 +621,14 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                             </span>
                           )}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.forn?.nome ?? '—'}</span>
+                          {/* `title` só aparece ao passar o mouse, e no celular
+                              não aparece nunca. O que falta fica escrito. */}
+                          {PAGAVEL.has(item.status) && (() => {
+                            const pend = pendenciaDe(item);
+                            return pend.aviso
+                              ? <span className="block text-[10px] text-amber-300/80 mt-1 leading-snug max-w-xl">{pend.aviso}</span>
+                              : null;
+                          })()}
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
@@ -603,22 +654,35 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="contas_pagar" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                            {/* Conta de pedido só paga depois do three-way match
-                                (migr. 491). O botão aparece antes do "Pagar" porque
-                                é a etapa que vem antes — e some assim que a nota é
-                                conferida. */}
-                            {item.pedido_id && !item.nf_conferida_em && PAGAVEL.has(item.status) && (
-                              <button onClick={() => abrirConferencia(item)}
-                                title="Confronte a nota do fornecedor com o pedido antes de pagar."
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1">
-                                <FileCheck size={11} /> Conferir nota
-                              </button>
-                            )}
-                            {PAGAVEL.has(item.status) && !(item.pedido_id && !item.nf_conferida_em) && (
-                              <button onClick={() => openPay(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
-                                <Check size={11} /> {item.status === 'Parcial' ? 'Pagar saldo' : 'Pagar'}
-                              </button>
-                            )}
+                            {/* Um botão por vez, e ele diz em que passo a conta
+                                está: esperar o Estoque, conferir a nota, ou pagar.
+                                O banco recusa fora de ordem (migr. 491/492) — aqui
+                                a ordem é DITA, para ninguém descobrir batendo. */}
+                            {PAGAVEL.has(item.status) && (() => {
+                              const pend = pendenciaDe(item);
+                              if (pend.acao === 'esperar') {
+                                return (
+                                  <span title={pend.aviso}
+                                    className="py-1.5 px-3 rounded-lg text-xs font-bold text-gray-500 border border-white/5 flex items-center gap-1 cursor-help">
+                                    <Clock size={11} /> Aguardando o Estoque
+                                  </span>
+                                );
+                              }
+                              if (pend.acao === 'conferir') {
+                                return (
+                                  <button onClick={() => abrirConferencia(item)}
+                                    title="Confronte a nota do fornecedor com o pedido antes de pagar."
+                                    className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1">
+                                    <FileCheck size={11} /> Conferir nota
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button onClick={() => openPay(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
+                                  <Check size={11} /> {item.status === 'Parcial' ? 'Pagar saldo' : 'Pagar'}
+                                </button>
+                              );
+                            })()}
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
