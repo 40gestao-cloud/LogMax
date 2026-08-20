@@ -24,6 +24,12 @@ import { useFilial } from '../contexts/FilialContext';
 // "sem nenhuma cotação" e o aluno cotaria de novo em cima da mesma coisa.
 const STATUS_VIVOS = new Set(['Aguardando Financeiro', 'Em correção', 'Aprovado']);
 
+// `date` do Postgres chega como 'YYYY-MM-DD' puro, sem hora: `new Date()` nele
+// assume UTC e volta um dia no fuso do Acre. Vira dd/mm no texto, e a
+// comparação entre prazo e necessidade é feita na string ISO, que já ordena.
+const dataBR = (iso?: string | null) =>
+  iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '';
+
 // notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
   setor: 'compras' | 'financeiro';
@@ -114,6 +120,37 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+
+  // A requisição do formulário aberto. O `data_necessidade` dela é o alvo do
+  // prazo que o fornecedor promete — sem ele na tela, a data da proposta era
+  // digitada no escuro e lia como repetição do campo da requisição.
+  const reqSelecionada = useMemo(
+    () => requisicoes.find((r: any) => r.id === form.requisicao_id),
+    [requisicoes, form.requisicao_id],
+  );
+  // Prazo prometido depois da data em que o item é necessário: não é erro de
+  // preenchimento (o fornecedor pode mesmo não dar conta), é informação de
+  // decisão — o preço menor não compensa a entrega atrasada.
+  const prazoEstoura = !!(reqSelecionada?.data_necessidade && extras.prazo_entrega
+    && extras.prazo_entrega > reqSelecionada.data_necessidade);
+
+  // Fornecedor habitual do produto (migr. 488) entra pré-selecionado: o cadastro
+  // deixou de exigir a escolha, mas quando ela existe não faz sentido pedir de
+  // novo. Continua trocável — cotar é justamente comparar.
+  useEffect(() => {
+    if (!form.requisicao_id || form.fornecedor_id) return;
+    const prodId = reqSelecionada?.produto_id;
+    if (!prodId) return;
+    const sugerido = produtos.find((p: any) => p.id === prodId)?.fornecedor_id;
+    if (!sugerido) return;
+    const forn = fornecedores.find((f: any) => f.id === sugerido);
+    if (!forn) return;
+    setForm(f => ({
+      ...f,
+      fornecedor_id: forn.id,
+      fornecedor_tipo: (forn.pessoa_tipo ?? 'Empresa') === 'Pessoa Física' ? 'Pessoa Física' : 'Empresa',
+    }));
+  }, [form.requisicao_id, form.fornecedor_id, reqSelecionada, produtos, fornecedores]);
 
   // Decisão Financeiro: modal de aprovar/reprovar/devolver.
   const [decisao, setDecisao] = useState<{ cot: any; tipo: 'aprovar' | 'reprovar' | 'devolver' } | null>(null);
@@ -786,8 +823,24 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         placeholder="0,00" />
                     </FormField>
                     <FormField label="Prazo de Entrega">
-                      <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                      <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
                         value={extras.prazo_entrega} onChange={e => setExtras(x => ({ ...x, prazo_entrega: e.target.value }))} />
+                      {/* Duas datas parecidas viram uma só na cabeça de quem
+                          preenche se o alvo não estiver à vista. A da
+                          requisição é a DEMANDA (quando eu preciso); esta é a
+                          OFERTA (quando o fornecedor promete). Comparar as duas
+                          é metade do critério de compra — a outra é o preço. */}
+                      {reqSelecionada?.data_necessidade ? (
+                        <p className={`text-[10px] mt-1 leading-relaxed ${prazoEstoura ? 'text-red-400' : 'text-gray-500'}`}>
+                          {prazoEstoura
+                            ? `Entrega depois do necessário (${dataBR(reqSelecionada.data_necessidade)}). Dá para enviar assim mesmo — o Financeiro decide se o preço compensa o atraso.`
+                            : `A requisição precisa do item até ${dataBR(reqSelecionada.data_necessidade)}.`}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Quando o fornecedor promete entregar — não é a data em que a requisição precisa do item.
+                        </p>
+                      )}
                     </FormField>
                     <FormField label="Validade da Proposta">
                       <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -877,7 +930,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           })()}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{item.prazo_entrega || '—'}</td>
+                      {/* Prazo em vermelho quando passa da data em que a
+                          requisição precisa do item: é o que separa a proposta
+                          barata da proposta útil. */}
+                      <td className="py-3 px-4 text-xs text-gray-400">
+                        {item.prazo_entrega ? (
+                          <span className={item.req?.data_necessidade && item.prazo_entrega > item.req.data_necessidade
+                            ? 'text-red-400' : ''}
+                            title={item.req?.data_necessidade
+                              ? `Necessário até ${dataBR(item.req.data_necessidade)}` : undefined}>
+                            {dataBR(item.prazo_entrega)}
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.validade || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-xs max-w-xs">
@@ -1005,6 +1070,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   <p className="text-[11px] text-gray-500 mt-1">
                     {propostasDoModal.length} proposta(s) registrada(s). A menor entre as vivas está destacada —
                     confira a coluna de entrega antes de decidir só pelo preço.
+                    {/* O alvo do prazo fica no cabeçalho da comparação, não só
+                        na linha: é aqui que a escolha é feita. */}
+                    {(() => {
+                      const dn = requisicoes.find((r: any) => r.id === comparando)?.data_necessidade;
+                      return dn ? <> Necessário até <span className="text-gray-300 font-bold">{dataBR(dn)}</span> — prazo em vermelho não chega a tempo.</> : null;
+                    })()}
                   </p>
                 </div>
                 <button onClick={() => setComparando(null)}
@@ -1049,7 +1120,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               ? <SeloDesempenho d={desempenho[c.fornecedor_id]} />
                               : <span className="text-[10px] text-gray-600">—</span>}
                           </td>
-                          <td className="py-2.5 px-3 text-xs text-gray-400">{c.prazo_entrega || '—'}</td>
+                          <td className="py-2.5 px-3 text-xs text-gray-400">
+                            {c.prazo_entrega ? (
+                              <span className={c.req?.data_necessidade && c.prazo_entrega > c.req.data_necessidade
+                                ? 'text-red-400' : ''}>
+                                {dataBR(c.prazo_entrega)}
+                              </span>
+                            ) : '—'}
+                          </td>
                           <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{c.validade || '—'}</td>
                           <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} /></td>
                           {podeDecidir && (

@@ -75,6 +75,10 @@ const EMPTY_EXTRAS = {
   unidade:                'UN' as string,
   ean:                    '',
   fornecedor:             '',
+  // Guarda a CHAVE; `fornecedor` acima continua com o nome porque a busca
+  // trigram (migr. 028), o export e a ficha do catálogo leem da coluna de
+  // texto. Migr. 488 — sugestão opcional, não pré-requisito.
+  fornecedor_id:          '',
   marca:                  '',
   peso:                   '',
   // Medida do CONTEÚDO da embalagem, independente de `unidade` (que é a medida
@@ -288,6 +292,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         return {
           descricao: desc,
           fornecedor: fornecedoresList.find((f: any) => f.id === p.fornecedor_id)?.nome ?? '',
+          fornecedor_id: p.fornecedor_id ?? '',
           // Custo unitário do próprio pedido — a mesma conta que a migr. 417 faz
           // no recebimento. Melhor que o número inventado que o campo exige.
           custo: qtd > 0 && val > 0 ? val / qtd : null,
@@ -706,6 +711,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       unidade:                item.unidade ?? 'UN',
       ean:                    item.ean            ?? '',
       fornecedor:             item.fornecedor     ?? '',
+      // Linha anterior à 488 não tem a chave, só o nome: resolve pelo cadastro
+      // da unidade para o select não abrir em branco no primeiro edit.
+      fornecedor_id:          item.fornecedor_id
+        ?? fornecedoresList.find((f: any) => f.nome === item.fornecedor)?.id
+        ?? '',
       marca:                  item.marca          ?? '',
       // `Number()` derruba o zero-padding que o numeric(10,3) devolve ("5.000"
        // → 5); a vírgula é a que o operador digitou.
@@ -829,7 +839,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // Categoria carrega o markup-alvo que sugere o preço de venda: não faz
     // sentido exigi-la de quem não vende.
     if (vendavel && !extras.categoria_id) ee.categoria_id = 'Selecione uma categoria';
-    if (!extras.fornecedor)          ee.fornecedor    = 'Selecione um fornecedor';
+    // Fornecedor NÃO é obrigatório (migr. 488): pós-480 o cadastro vem antes
+    // da compra, e quem fornece é a cotação que decide comparando propostas.
+    // Cobrar aqui só produzia nome escolhido no chute — o mesmo defeito que o
+    // preço de custo obrigatório tinha.
     if (custoObrigatorio && !extras.preco_custo.trim()) ee.preco_custo = 'Obrigatório';
     // Patrimônio não tem ponto de reposição — não se repõe um freezer.
     if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
@@ -943,6 +956,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         // acabaria lido no caixa.
         ean:                    vendavel && eanDigitado ? normalizeEan13(extras.ean).value : '',
         fornecedor:             extras.fornecedor,
+        fornecedor_id:          extras.fornecedor_id || null,
         marca:                  extras.marca || null,
         // Conteúdo da embalagem viaja em par: valor + medida, ou nada. Granel
         // limpa os dois — se o aluno digitou 5 KG e depois trocou a unidade de
@@ -1324,7 +1338,8 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           // fornecedor não perde o que digitou.
                           setExtras(x => ({
                             ...x,
-                            fornecedor:  x.fornecedor  || comprado.fornecedor,
+                            fornecedor:    x.fornecedor    || comprado.fornecedor,
+                            fornecedor_id: x.fornecedor_id || comprado.fornecedor_id,
                             preco_custo: x.preco_custo || (comprado.custo != null
                               ? formatBRL(comprado.custo) : ''),
                             // O saldo passa a vir do recebimento; o que estava
@@ -1439,15 +1454,31 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                     </p>
                   </FormField>
                   )}
-                  <FormField label="Fornecedor *" error={extrasErrors.fornecedor}>
-                    <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.fornecedor ? 'border border-red-500/40' : ''}`}
-                      value={extras.fornecedor}
-                      onChange={e => { setExtras(x => ({ ...x, fornecedor: e.target.value })); setExtrasErrors(ev => ({ ...ev, fornecedor: '' })); }}>
-                      <option value="">— Selecione —</option>
+                  {/* Sem asterisco desde a migr. 488. O produto é cadastrado
+                      ANTES da compra (migr. 480) — nesse momento ninguém sabe
+                      quem vai fornecer, porque é a cotação que decide comparando
+                      propostas. Exigir aqui só rendia nome escolhido no chute,
+                      igual ao preço de custo que a 480 já tinha soltado. O que
+                      for escolhido vira sugestão: a Cotação abre com ele
+                      pré-selecionado, e o comprador troca se a proposta melhor
+                      vier de outro. */}
+                  <FormField label="Fornecedor habitual">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.fornecedor_id}
+                      onChange={e => {
+                        const id = e.target.value;
+                        const nome = fornecedoresOrdenados.find((f: any) => f.id === id)?.nome ?? '';
+                        setExtras(x => ({ ...x, fornecedor_id: id, fornecedor: nome }));
+                      }}>
+                      <option value="">— Ainda não sei (define na cotação) —</option>
                       {fornecedoresOrdenados.map((f: any) => (
-                        <option key={f.id} value={f.nome}>{f.nome}</option>
+                        <option key={f.id} value={f.id}>{f.nome}</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      Opcional. Serve de sugestão na cotação — quem fornece de fato
+                      sai da proposta aprovada, não daqui.
+                    </p>
                   </FormField>
                   {/* O asterisco seguia a validação de longe: ela só cobra
                       marca de mercadoria com embalagem (migr. 438), mas o
