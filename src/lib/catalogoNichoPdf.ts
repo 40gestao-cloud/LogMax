@@ -13,7 +13,7 @@
 // jsPDF/autoTable, rodapé com paginação).
 
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
-import { GOLD, BLACK, GRAY_INK, GRAY_MID, GOLD_TINT } from './pdfPalette';
+import { GOLD, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 import { formatarConteudo } from './unidades';
 import { todayBR } from './dates';
 import type { ItemSorteado } from './sorteioCatalogo';
@@ -25,6 +25,8 @@ export async function exportSorteioCatalogoPDF(
   destino: PdfDestino = 'download',
   profile?: { id: string } | null,
   showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
+  /** Professor removeu linha à mão depois de sortear — a semente deixa de reproduzir ESTA folha. */
+  ajustadoAMao = false,
 ) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
@@ -48,7 +50,7 @@ export async function exportSorteioCatalogoPDF(
   doc.setFont('helvetica', 'bold');
   doc.text('LogMax', margin, 15);
   doc.setFontSize(8.5);
-  doc.setTextColor(...GRAY_MID);
+  doc.setTextColor(...GRAY_SOFT);
   doc.setFont('helvetica', 'normal');
   doc.text('CATÁLOGO — SORTEIO DE CADASTRO', margin, 21);
   doc.setFontSize(10);
@@ -56,14 +58,26 @@ export async function exportSorteioCatalogoPDF(
   doc.text(nichos, margin, 27);
 
   doc.setFontSize(8);
-  doc.setTextColor(...GRAY_MID);
+  doc.setTextColor(...GRAY_SOFT);
   doc.text(`Gerado em: ${todayBR().split('-').reverse().join('/')}`, pageWidth - margin, 27, { align: 'right' });
 
-  const cursorY = 40;
+  let cursorY = 40;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY_INK);
   doc.text(`${itens.length} produto(s) sorteado(s). Marque, cadastre em Cadastros > Produtos e anote código e preço.`, margin, cursorY);
+
+  // A semente é o que permite reimprimir a folha perdida. Se o professor tirou
+  // linhas depois de sortear, ela reproduz o sorteio ORIGINAL — outra folha.
+  // Dizer isso na cara do documento é mais barato que descobrir na aula.
+  if (ajustadoAMao) {
+    cursorY += 5;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...GRAY_MID);
+    doc.text('Lista ajustada à mão após o sorteio — a semente reproduz o sorteio original, não esta folha.', margin, cursorY);
+    doc.setFont('helvetica', 'normal');
+  }
 
   autoTable(doc, {
     startY: cursorY + 5,
@@ -83,15 +97,20 @@ export async function exportSorteioCatalogoPDF(
     styles: { fontSize: 7.5, cellPadding: 2, textColor: GRAY_INK, lineColor: [225, 225, 225] },
     headStyles: { fillColor: BLACK, textColor: GOLD, fontSize: 7.5, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: GOLD_TINT },
+    // A4 retrato com margem 14 dos dois lados = 182 mm úteis. As oito colunas
+    // fixas somam 162 e sobram 20 para "Preço" — as duas últimas são campos
+    // que o ALUNO preenche à caneta, então precisam de espaço de escrita, não
+    // do resto que sobrou. Uma versão anterior somava 176 de largura fixa e
+    // espremia "Preço" em 6 mm.
     columnStyles: {
       0: { cellWidth: 8 },
       1: { cellWidth: 8, halign: 'right' },
-      2: { cellWidth: 48 },
-      3: { cellWidth: 26 },
-      4: { cellWidth: 32 },
-      5: { cellWidth: 20 },
-      6: { cellWidth: 12 },
-      7: { cellWidth: 22 },
+      2: { cellWidth: 46 },
+      3: { cellWidth: 24 },
+      4: { cellWidth: 28 },
+      5: { cellWidth: 16 },
+      6: { cellWidth: 11 },
+      7: { cellWidth: 21 },
       8: { cellWidth: 'auto' },
     },
     margin: { left: margin, right: margin },
@@ -106,7 +125,7 @@ export async function exportSorteioCatalogoPDF(
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...GRAY_MID);
-    doc.text(`LogMax · Sorteio de catálogo · semente ${semente}`, margin, pageHeight - 8);
+    doc.text(`LogMax · Sorteio de catálogo · semente ${semente}${ajustadoAMao ? ' (ajustada)' : ''}`, margin, pageHeight - 8);
     doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
 

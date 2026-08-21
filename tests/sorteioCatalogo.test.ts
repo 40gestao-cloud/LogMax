@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sortear, categoriasDisponiveis } from '../src/lib/sorteioCatalogo';
+import { sortear, categoriasDisponiveis, contarDisponiveis } from '../src/lib/sorteioCatalogo';
 
 describe('sortear', () => {
   it('mesma semente devolve a mesma lista', () => {
@@ -32,6 +32,18 @@ describe('sortear', () => {
     const excluir = new Set([`${primeiro.nome}|${primeiro.marca}`.toLowerCase()]);
     const { itens } = sortear({ nichos: ['SuperMax'], qtd: 1000, semente: 42, excluir });
     expect(itens.some(i => i.nome === primeiro.nome && i.marca === primeiro.marca)).toBe(false);
+  });
+
+  it('contarDisponiveis casa com o teto que o sorteio entrega', () => {
+    const nichos = ['SuperMax', 'MaxLook'] as const;
+    const n = contarDisponiveis({ nichos: [...nichos] });
+    expect(sortear({ nichos: [...nichos], qtd: 10_000, semente: 5 }).itens.length).toBe(n);
+
+    // E acompanha os filtros, que é o ponto de existir.
+    const cat = categoriasDisponiveis([...nichos])[0];
+    const comCat = contarDisponiveis({ nichos: [...nichos], categoria: cat });
+    expect(comCat).toBeGreaterThan(0);
+    expect(comCat).toBeLessThanOrEqual(n);
   });
 
   it('filtra por categoria', () => {

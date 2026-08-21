@@ -19,7 +19,7 @@ import { Dices, Download, RefreshCw, Trash2, Shuffle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { NeuButtonAccent, FormField } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { sortear, categoriasDisponiveis, type NichoCatalogo, type ItemSorteado } from '../lib/sorteioCatalogo';
+import { sortear, categoriasDisponiveis, contarDisponiveis, type NichoCatalogo, type ItemSorteado } from '../lib/sorteioCatalogo';
 import { formatarConteudo } from '../lib/unidades';
 import { exportSorteioCatalogoPDF } from '../lib/catalogoNichoPdf';
 import { todayBR } from '../lib/dates';
@@ -39,9 +39,18 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
   const [cadastrados, setCadastrados] = useState<Set<string> | null>(null);
   const [carregandoCadastrados, setCarregandoCadastrados] = useState(false);
   const [resultado, setResultado] = useState<{ semente: number; itens: ItemSorteado[] } | null>(null);
+  // Removeu linha à mão depois de sortear: a semente continua identificando o
+  // SORTEIO, mas deixa de reproduzir a FOLHA. O PDF avisa (ver catalogoNichoPdf).
+  const [ajustadoAMao, setAjustadoAMao] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
 
   const categorias = useMemo(() => categoriasDisponiveis(nichosSel), [nichosSel]);
+
+  const excluirAtual = pularCadastrados ? cadastrados ?? undefined : undefined;
+  const disponiveis = useMemo(
+    () => contarDisponiveis({ nichos: nichosSel, categoria: categoria || undefined, excluir: excluirAtual }),
+    [nichosSel, categoria, excluirAtual],
+  );
 
   useEffect(() => {
     // Categoria escolhida pode não existir mais depois de trocar nicho.
@@ -59,16 +68,18 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
   // vazia e a checkbox simplesmente não filtra nada (nunca mente dizendo que
   // filtrou).
   const carregarCadastrados = useCallback(async () => {
-    if (!supabase) return;
     setCarregandoCadastrados(true);
     try {
+      if (!supabase) throw new Error('sem conexão');
       const { data, error } = await supabase.from('produtos').select('nome, marca').eq('ativo', true);
       if (error) throw error;
       setCadastrados(new Set((data ?? []).map((p: any) => `${p.nome}|${p.marca ?? ''}`.toLowerCase())));
     } catch {
+      // Desmarca a opção junto: deixar o check ligado com urna cheia diria que
+      // filtrou sem ter filtrado nada.
       setCadastrados(new Set());
-      showToast('Não foi possível checar o que já está cadastrado — a filtragem ficou desativada.', 'error');
       setPularCadastrados(false);
+      showToast('Não foi possível checar o que já está cadastrado — a filtragem ficou desativada.', 'error');
     } finally {
       setCarregandoCadastrados(false);
     }
@@ -83,11 +94,17 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
       showToast('Escolha ao menos um nicho.', 'error');
       return;
     }
+    // Sortear antes da lista chegar filtraria NADA e não diria isso — o
+    // professor leria a folha como "a turma não cadastrou nada ainda".
+    if (pularCadastrados && cadastrados === null) {
+      showToast('Ainda conferindo o que já está cadastrado — tente de novo em um instante.', 'info');
+      return;
+    }
     const r = sortear({
       nichos: nichosSel,
       qtd,
       categoria: categoria || undefined,
-      excluir: pularCadastrados ? cadastrados ?? undefined : undefined,
+      excluir: excluirAtual,
       semente,
     });
     if (r.itens.length === 0) {
@@ -95,11 +112,13 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
       return;
     }
     setResultado(r);
-  }, [nichosSel, qtd, categoria, pularCadastrados, cadastrados, showToast]);
+    setAjustadoAMao(false);
+  }, [nichosSel, qtd, categoria, pularCadastrados, cadastrados, excluirAtual, showToast]);
 
   const removerLinha = (idx: number) => {
     if (!resultado) return;
     setResultado({ ...resultado, itens: resultado.itens.filter((_, i) => i !== idx) });
+    setAjustadoAMao(true);
   };
 
   const baixarPdf = useCallback(async () => {
@@ -113,13 +132,14 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
         'download',
         profile,
         showToast as any,
+        ajustadoAMao,
       );
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Falha ao gerar o PDF.', 'error');
     } finally {
       setGerandoPdf(false);
     }
-  }, [resultado, profile, showToast]);
+  }, [resultado, ajustadoAMao, profile, showToast]);
 
   if (profile?.role !== 'admin') {
     return (
@@ -160,15 +180,20 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
         </FormField>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label="Quantidade">
+          <FormField label={`Quantidade (${disponiveis} disponível(is) no filtro)`}>
             <input
               type="number"
               min={1}
-              max={112}
+              max={disponiveis}
               className="neu-input py-2 px-3 rounded-xl text-sm"
               value={qtd}
               onChange={e => setQtd(Math.max(1, Number(e.target.value) || 1))}
             />
+            {qtd > disponiveis && (
+              <span className="text-xs text-amber-400 mt-1 block">
+                O filtro só tem {disponiveis} item(ns) — a folha sai com {disponiveis}.
+              </span>
+            )}
           </FormField>
 
           <FormField label="Categoria (opcional)">
@@ -209,6 +234,9 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <span className="text-sm text-gray-400">
               {resultado.itens.length} produto(s) sorteado(s) · semente {resultado.semente}
+              {ajustadoAMao && (
+                <span className="text-amber-400"> · lista ajustada à mão (a semente reproduz o sorteio original)</span>
+              )}
             </span>
             <NeuButtonAccent onClick={baixarPdf} isLoading={gerandoPdf}>
               <Download size={16} className="mr-1.5 inline" /> Baixar PDF

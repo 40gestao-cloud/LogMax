@@ -20,6 +20,7 @@ const ESTATICOS = [
   'tests/aulaFluxos.test.ts',
   'tests/aulaPapel.test.ts',
   'tests/botoesPadrao.test.ts',
+  'tests/catalogoNichoPdf.test.ts',
   'tests/confirm.test.ts',
   'tests/fichaProduto.test.ts',
   'tests/imei.test.ts',
@@ -29,6 +30,7 @@ const ESTATICOS = [
   'tests/produtoBusca.test.ts',
   'tests/schemaDrift.test.ts',
   'tests/sessaoGuard.test.ts',
+  'tests/sorteioCatalogo.test.ts',
   'tests/tipoProduto.test.ts',
   'tests/unidadesConteudo.test.ts',
 ];

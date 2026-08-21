@@ -46,6 +46,30 @@ export function gerarSemente(): number {
   return Math.floor(Math.random() * 0x100000000);
 }
 
+/** A urna já filtrada, na ordem do catálogo (antes de embaralhar). */
+function montarUrna(opts: Pick<SorteioOpts, 'nichos' | 'categoria' | 'excluir'>): ItemSorteado[] {
+  const urna: ItemSorteado[] = [];
+  for (const nicho of opts.nichos) {
+    for (const item of CATALOGO_NICHO[nicho]) {
+      if (opts.categoria && item.categoria !== opts.categoria) continue;
+      if (opts.excluir?.has(chaveItem(item))) continue;
+      urna.push({ ...item, nicho });
+    }
+  }
+  return urna;
+}
+
+/**
+ * Quantos itens o filtro atual deixa sorteáveis. A tela usa para não oferecer
+ * um teto que o catálogo não tem — pedir 40 de um nicho com 37 devolveria 37
+ * em silêncio, e o professor leria isso como filtro quebrado.
+ */
+export function contarDisponiveis(
+  opts: Pick<SorteioOpts, 'nichos' | 'categoria' | 'excluir'>,
+): number {
+  return montarUrna(opts).length;
+}
+
 /**
  * Sorteia `qtd` itens (sem repetição) dentre os nichos pedidos, filtrando por
  * categoria e excluindo o que a turma já cadastrou. Se a urna filtrada tiver
@@ -56,14 +80,7 @@ export function sortear(opts: SorteioOpts): ResultadoSorteio {
   const semente = opts.semente ?? gerarSemente();
   const rng = mulberry32(semente);
 
-  const urna: ItemSorteado[] = [];
-  for (const nicho of opts.nichos) {
-    for (const item of CATALOGO_NICHO[nicho]) {
-      if (opts.categoria && item.categoria !== opts.categoria) continue;
-      if (opts.excluir?.has(chaveItem(item))) continue;
-      urna.push({ ...item, nicho });
-    }
-  }
+  const urna = montarUrna(opts);
 
   // Fisher-Yates com o PRNG da semente — reprodutível.
   for (let i = urna.length - 1; i > 0; i--) {
