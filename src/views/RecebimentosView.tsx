@@ -66,6 +66,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // nada na tela sugerindo F5.
   const { data: pedidos } = useFetchData<any>('/api/pedidosview', { filial }, true);
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial }, true);
+  // Catálogo de serviços (migr. 499) — só para dar NOME ao que está sendo
+  // aceito. Sem filtro de filial no fetch porque `servicos.filial` é nulável e
+  // serviço sem unidade vale para todas; aqui a busca é por id, então não há
+  // lista a escopar.
+  const { data: servicos } = useFetchData<any>('/api/servicosview', undefined, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pedido_id: '' });
@@ -274,13 +279,27 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const produtoDoPedido = (pedidoId: string): string | null =>
     pedidos.find((x: any) => x.id === pedidoId)?.produto_id ?? null;
 
+  // Serviço contratado (migr. 499). A categoria do item do pedido — material ou
+  // serviço — é o que decide o que esta tela faz: material ENTRA no estoque,
+  // serviço é ACEITE da execução. Serviço não tem saldo, lote, validade nem
+  // número de série, e o banco recusa movimentação contra ele (trigger
+  // `trg_mov_servico_nao_tem_saldo`); a tela nem tenta.
+  const servicoDoPedido = (pedidoId: string): string | null =>
+    pedidos.find((x: any) => x.id === pedidoId)?.servico_id ?? null;
+  const ehServico = (pedidoId: string): boolean => !!servicoDoPedido(pedidoId);
+  const nomeDoServico = (pedidoId: string): string | null => {
+    const sid = servicoDoPedido(pedidoId);
+    return sid ? servicos.find((s: any) => s.id === sid)?.nome ?? null : null;
+  };
+
   /** O que chegou, em palavras. Produto do catálogo quando o pedido o carrega;
    *  senão a descrição que a requisição escreveu. Espaço em branco colapsado —
    *  as descrições vêm de planilha e trazem TAB no meio. */
   const nomeDoItem = (pedidoId: string): string => {
     const pid = produtoDoPedido(pedidoId);
     const doCatalogo = pid ? produtos.find((x: any) => x.id === pid)?.nome : null;
-    return String(doCatalogo ?? descricaoDoPedido(pedidoId) ?? '').replace(/\s+/g, ' ').trim();
+    return String(doCatalogo ?? nomeDoServico(pedidoId) ?? descricaoDoPedido(pedidoId) ?? '')
+      .replace(/\s+/g, ' ').trim();
   };
 
   /**
@@ -333,7 +352,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       const s = await dbInsert('/api/recebimentosview', payload);
       setData([s ?? { id: Date.now(), ...payload }, ...data]);
       await reloadSaldos();
-      showToast("Recebimento registrado — o estoque ainda NÃO mudou. Clique em Confirmar na linha para dar entrada e liberar o pagamento.", 'success', true);
+      showToast(ehServico(form.pedido_id)
+        ? 'Registrado — o serviço ainda NÃO está aceito. Clique em Confirmar na linha para atestar a execução e liberar o pagamento.'
+        : 'Recebimento registrado — o estoque ainda NÃO mudou. Clique em Confirmar na linha para dar entrada e liberar o pagamento.',
+        'success', true);
       closeForm();
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -357,7 +379,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   };
 
   const handleConfirmar = async (item: any) => {
-    if (!confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
+    // Serviço (migr. 499): não há produto a escolher porque não há nada a
+    // guardar. O que se confirma aqui é que a execução aconteceu — é a folha de
+    // medição do ERP de verdade —, e o efeito é liberar o pagamento.
+    const servico = ehServico(item.pedido_id);
+    if (!servico && !confirmProduto) { showToast('Selecione o produto recebido.', 'error', true); return; }
     const qtdItem = parseQtd(item.qtd_recebida);
     if (!(qtdItem > 0)) { showToast('Quantidade inválida no recebimento.', 'error', true); return; }
     // Defesa em profundidade — bloqueia se o pedido foi editado depois do
@@ -377,7 +403,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     // invisível. Avisa e deixa seguir: travar o almoxarifado por causa de um
     // campo do cadastro seria devolver a ele um problema de Cadastros.
     if (!confirmNf.numero.trim()) {
-      showToast('Informe o número da nota fiscal que veio com a carga — sem ela a mercadoria não entra no estoque.', 'error', true);
+      showToast(servico
+        ? 'Informe o número da nota fiscal do serviço — sem ela o financeiro não tem o que conferir e a conta fica impagável.'
+        : 'Informe o número da nota fiscal que veio com a carga — sem ela a mercadoria não entra no estoque.',
+        'error', true);
       return;
     }
     const conf = conferenciaDo(item);
@@ -387,7 +416,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       showToast('Escreva o que aconteceu com o que falta antes de encerrar a entrega.', 'error', true);
       return;
     }
-    const prodConfirm = produtos.find((p: any) => p.id === confirmProduto);
+    const prodConfirm = servico ? null : produtos.find((p: any) => p.id === confirmProduto);
     if (ehPerecivel(prodConfirm) && !confirmValidade) {
       const segue = await confirm(
         `"${prodConfirm?.nome ?? 'Este produto'}" é perecível e está entrando sem data de validade.\n\n`
@@ -426,7 +455,12 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       // Só atualiza o status após a movimentação estar salva no banco.
       // A entrada acontece sempre: a mercadoria que chegou entrou, seja a
       // entrega completa ou não. O que o saldo decide é se o PEDIDO fecha.
-      {
+      //
+      // Serviço não passa por aqui: não há saldo a mover. O banco recusaria de
+      // qualquer jeito (migr. 499), mas mandar o insert só para ver o erro
+      // voltar seria transformar a régua certa em mensagem vermelha na cara de
+      // quem fez tudo certo.
+      if (!servico) {
         try {
           await dbInsert('/api/movimentacoesestoqueview', {
             produto_id:     confirmProduto,
@@ -452,7 +486,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       // crítico: se falhar, o estoque já subiu e o lote pode ser registrado
       // depois em Estoque → Validades — travar a confirmação por causa disto
       // seria pior que o problema.
-      if (confirmValidade && confirmProduto) {
+      if (!servico && confirmValidade && confirmProduto) {
         try {
           await dbInsert('/api/vencimentosestoqueview', {
             produto_id:     confirmProduto,
@@ -520,7 +554,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setMotivoEncerramento('');
       setConfirmNf({ numero: '', serie: '', emissao: '' });
       showToast(
-        statusFinal !== 'Concluído'
+        servico
+          ? (statusFinal !== 'Concluído'
+              ? `Aceite registrado. O contrato segue em execução: faltam ${qtdBR(conf.falta)} para fechar, e a conta do fornecedor só libera quando fechar.`
+              : 'Serviço aceito. Nada entrou em estoque — serviço não tem saldo. A conta está liberada para pagamento em Financeiro → Contas a pagar, e o custo entra no resultado como despesa do período.')
+        : statusFinal !== 'Concluído'
           ? `Entrada confirmada e estoque atualizado. O pedido segue em entrega: faltam ${qtdBR(conf.falta)} para fechar, e a conta do fornecedor só libera quando a entrega fechar.`
           : encerrarComSaldo && !conf.fecha
             ? 'Entrega encerrada com saldo em aberto. O que chegou entrou no estoque, o pedido foi fechado e a conta do fornecedor está liberada em Financeiro → Contas a pagar — confira o valor, ele é o do pedido inteiro.'
@@ -569,7 +607,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   const s = saldos[p.id];
                   const sufSaldo = s ? ` — falta ${qtdBR(s.qtd_saldo)}/${qtdBR(s.qtd_pedida)}` : '';
                   const esgotado = s && s.qtd_saldo <= 0;
-                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
+                  // Serviço na mesma lista, marcado (migr. 499): quem abre esta
+                  // tela procura "o que chegou", e contratação não chega em
+                  // caixa. O selo evita o susto de não achar a dedetização.
+                  const selo = p.servico_id ? ' [serviço]' : '';
+                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{selo}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
                 })}</select></FormField>
                 {/* A unidade é a do produto do pedido — mercearia recebe 12,5 KG
                     (migr. 439). `type=number` recusava a vírgula do teclado pt-BR
@@ -744,7 +786,24 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     A trava de verdade está na trigger da migr. 396 — esta tela
                                     só evita que o almoxarife tenha de adivinhar (e o F12 não
                                     passa pelo <select> mesmo). */}
-                                {produtoDoPedido(item.pedido_id) ? (
+                                {/* Serviço (migr. 499): não há produto, não há
+                                    lote, não há número de série — há uma
+                                    execução a atestar. O painel diz isso em vez
+                                    de mostrar campos que não se aplicam. */}
+                                {ehServico(item.pedido_id) ? (
+                                <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Serviço contratado</span>
+                                  <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-200 flex items-center gap-1.5">
+                                    <Lock size={11} className="text-gray-500 shrink-0" />
+                                    {nomeDoServico(item.pedido_id) ?? descricaoDoPedido(item.pedido_id) ?? '—'}
+                                  </div>
+                                  <p className="text-[10px] text-gray-500 leading-snug">
+                                    Isto é um <span className="text-gray-300 font-semibold">aceite</span>, não uma entrada:
+                                    você está atestando que o serviço foi executado. Nada entra no estoque —
+                                    serviço não tem saldo. O que a confirmação faz é liberar o pagamento.
+                                  </p>
+                                </div>
+                                ) : produtoDoPedido(item.pedido_id) ? (
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
                                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido</span>
                                   <div className="neu-pressed py-2 px-3 rounded-xl text-xs text-gray-200 flex items-center gap-1.5">
@@ -813,7 +872,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   )}
                                 </div>
                                 )}
-                                {filialTemValidade && (<>
+                                {filialTemValidade && !ehServico(item.pedido_id) && (<>
                                 {/* Validade da carga (migr. 424). Preenchido
                                     aqui, o lote entra na fila do FEFO já com a
                                     origem — depois vira digitação retroativa. */}
@@ -921,8 +980,12 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     value={confirmNf.emissao}
                                     onChange={e => setConfirmNf(n => ({ ...n, emissao: e.target.value }))} />
                                   <p className="text-[10px] text-gray-500 leading-snug">
-                                    Sem nota a mercadoria não entra. O valor não é digitado aqui — quem
-                                    confere quanto está sendo cobrado é o financeiro, contra o pedido.
+                                    {ehServico(item.pedido_id)
+                                      ? <>Serviço também tem nota — sem ela o financeiro não tem o que conferir e a
+                                          conta fica impagável. O valor não é digitado aqui: quem confere quanto está
+                                          sendo cobrado é o financeiro, contra o pedido.</>
+                                      : <>Sem nota a mercadoria não entra. O valor não é digitado aqui — quem
+                                          confere quanto está sendo cobrado é o financeiro, contra o pedido.</>}
                                   </p>
                                 </div>
                                 {/* Era um <select> com "Concluído" pré-selecionado,
@@ -954,7 +1017,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       <p className="text-[10px] text-gray-500 leading-snug">
                                         {conf.fecha
                                           ? 'A quantidade fechou. O pedido encerra e a conta do fornecedor libera para pagamento.'
-                                          : 'Vem do saldo do pedido, não de escolha: o que chegou entra no estoque agora e o pedido continua em entrega, esperando o resto.'}
+                                          : ehServico(item.pedido_id)
+                                            ? 'Vem do saldo do pedido, não de escolha: o que foi executado fica aceito agora e o contrato continua aberto, esperando o resto.'
+                                            : 'Vem do saldo do pedido, não de escolha: o que chegou entra no estoque agora e o pedido continua em entrega, esperando o resto.'}
                                       </p>
                                       {/* A saída para o caso real: o fornecedor avisou
                                           que não manda o resto. Existe, mas é ato
@@ -989,7 +1054,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 <div className="flex gap-2 sm:contents">
                                   <button onClick={() => handleConfirmar(item)} disabled={confirmSaving}
                                     className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 flex-1 sm:flex-none">
-                                    {confirmSaving ? 'Salvando...' : <><Save size={12} /> Confirmar e atualizar estoque</>}
+                                    {confirmSaving ? 'Salvando...'
+                                      : ehServico(item.pedido_id)
+                                        ? <><Save size={12} /> Aceitar o serviço e liberar pagamento</>
+                                        : <><Save size={12} /> Confirmar e atualizar estoque</>}
                                   </button>
                                   <button onClick={() => setConfirmando(null)} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center justify-center">Cancelar</button>
                                 </div>

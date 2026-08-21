@@ -86,6 +86,16 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
     'Aprovado': { next: 'Em Entrega', label: 'Marcar Em Entrega' },
   };
 
+  /** Pedido de serviço (migr. 499) — não tem carga, tem execução. */
+  const ehServico = (pedido: any) => !!pedido?.servico_id;
+
+  // O status 'Em Entrega' continua sendo o passo, porque é ele que põe o
+  // documento na fila do Estoque e é dele que a bolinha da barra lateral vive.
+  // O que muda para serviço é a PALAVRA: "carga a caminho" numa dedetização
+  // manda o almoxarife esperar um caminhão.
+  const rotuloAvance = (pedido: any) =>
+    ehServico(pedido) ? 'Marcar Em Execução' : 'Marcar Em Entrega';
+
   const handleAvance = async (pedido: any) => {
     const flow = STATUS_FLOW[pedido.status];
     if (!flow) return;
@@ -104,15 +114,20 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
       if (flow.next === 'Em Entrega' && supabase) {
         const item = pedido.item_descricao ?? pedido.req?.item ?? '';
         const forn = fornecedores.find((f: any) => f.id === pedido.fornecedor_id)?.nome;
+        const servico = ehServico(pedido);
         const { error: notifErr } = await supabase.rpc('notificar_setor', {
           p_setor:     'logistica',
           p_tipo:      'info',
-          p_titulo:    `Carga a caminho — ${numeroPedido(pedido)}`,
+          p_titulo:    servico
+            ? `Serviço contratado — ${numeroPedido(pedido)}`
+            : `Carga a caminho — ${numeroPedido(pedido)}`,
           p_mensagem:  [
             item ? `Item: ${item}.` : null,
             pedido.item_qtd ? `Qtd: ${qtdBR(pedido.item_qtd)}.` : null,
             forn ? `Fornecedor: ${forn}.` : null,
-            'Registre a chegada em Estoque > Recebimentos.',
+            servico
+              ? 'Quando for executado, registre o aceite em Estoque > Recebimentos — nada entra no estoque.'
+              : 'Registre a chegada em Estoque > Recebimentos.',
           ].filter(Boolean).join(' '),
           p_link_view: 'estoque-recebimentos',
           p_urgencia:  'Média',
@@ -244,13 +259,19 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                               "Recebido" daqui, que a migr. 492 recusa. */}
                           {item.status === 'Aprovado' && (
                             <span className="block text-[10px] text-gray-500 mt-1 leading-snug">
-                              Avise o Estoque marcando <strong className="text-gray-400">Em Entrega</strong>.
+                              Avise o Estoque marcando{' '}
+                              <strong className="text-gray-400">
+                                {ehServico(item) ? 'Em Execução' : 'Em Entrega'}
+                              </strong>.
                             </span>
                           )}
                           {item.status === 'Em Entrega' && (
                             <span className="block text-[10px] text-gray-500 mt-1 leading-snug">
-                              Agora é com o Estoque: o pedido encerra quando a carga
-                              for conferida em Recebimentos.
+                              {ehServico(item)
+                                ? <>Agora é aguardar a execução: o pedido encerra no aceite,
+                                    em Recebimentos. Serviço não entra em estoque.</>
+                                : <>Agora é com o Estoque: o pedido encerra quando a carga
+                                    for conferida em Recebimentos.</>}
                             </span>
                           )}
                         </td>
@@ -261,7 +282,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                               <button onClick={() => handleAvance(item)} disabled={isProc}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                 {isProc ? <Loader2 size={11} className="animate-spin" /> : <ArrowRight size={11} />}
-                                {flow.label}
+                                {rotuloAvance(item)}
                               </button>
                             )}
                             {profile?.role === 'admin' && (

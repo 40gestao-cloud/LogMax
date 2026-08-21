@@ -295,6 +295,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       // migr. 480 continuava aparecendo como "a cadastrar", e quem seguia a
       // sugestão criava a duplicata que a lista existe para evitar.
       .filter((p: any) => !p.produto_id)
+      // Serviço não se cadastra como produto (migr. 499). O pedido de
+      // dedetização tem `produto_id` nulo pela mesma razão que o de mercadoria
+      // tem — mas por ele apontar para `servicos`. Sem esta linha, a lista
+      // mandava cadastrar "Manutenção do ar-condicionado" como mercadoria de
+      // estoque, que é exatamente o beco que a 499 fechou.
+      .filter((p: any) => !p.servico_id)
       .filter((p: any) => chegaram.has(p.id))
       .map((p: any) => {
         // Colapsa espaco em branco interno: 25 das 57 descricoes da turma de
@@ -342,6 +348,12 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     return (requisicoesDaFilial as any[])
       .filter(r => r.ativo !== false)
       .filter(r => !r.produto_id)
+      // Requisição de serviço não espera código de PRODUTO (migr. 499): ela
+      // espera o serviço do catálogo, e quem a amarra é Compras no Gerar
+      // Pedido. `servico_id` cobre a já amarrada; a unidade SV cobre a que
+      // ainda não passou por lá — que é justamente a que apareceria aqui.
+      .filter(r => !r.servico_id)
+      .filter(r => String(r.unidade ?? '').trim().toUpperCase() !== 'SV')
       .filter(r => !['Atendida', 'Negado'].includes(r.status))
       .map(r => {
         // Mesmo colapso de espaço em branco do grupo de cima: requisição colada

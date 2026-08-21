@@ -55,9 +55,13 @@ import type { UserProfile } from '../hooks/useUserProfile';
 //     a Cadastros): o texto é amarrado ao catálogo por Compras na geração do
 //     pedido (migr. 480), e o vínculo volta para a requisição — a compra
 //     seguinte do mesmo item já nasce Reposição.
-//     O hint dizia "é serviço" e isso era promessa falsa: `gerar_pedido_de_cotacao`
-//     exige um item de `produtos`, e serviço não vive lá. Enquanto não houver
-//     rota de serviço, a tela não convida para ela.
+//     Serviço entra por aqui também (migr. 499): manutenção, frete, licença,
+//     dedetização. Basta escolher a unidade SV na linha — o pedido tem duas
+//     categorias de item, material e serviço, e quem compra amarra ao catálogo
+//     de Serviços em vez do de Produtos. Por um tempo esta tela não convidou
+//     para isso, e com razão: `gerar_pedido_de_cotacao` só sabia apontar para
+//     `produtos`, então a requisição de serviço travava no Gerar Pedido sem
+//     saída nenhuma. Agora tem.
 //   • Material do estoque — já existe no almoxarifado. O Estoque libera a
 //     saída; não passa por Compras.
 //
@@ -464,6 +468,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       Quem compra é que amarra sua descrição a um item de catálogo quando o pedido for emitido,
                       e cadastra o que faltar. Da próxima vez que a unidade pedir o mesmo item, ele já aparece
                       na <span className="font-bold text-gray-300">Reposição</span>.
+                    </p>
+                    {/* Serviço deixou de ser beco sem saída (migr. 499): o pedido
+                        tem duas categorias de item, e a unidade SV é a forma de
+                        dizer qual é. Sem esta linha, "troca do compressor" era
+                        pedido em UN e virava mercadoria de estoque — item com
+                        saldo que nunca existiu. */}
+                    <p className="text-[11px] text-gray-400 leading-relaxed mt-2">
+                      <span className="font-bold text-gray-200">Precisa contratar um serviço?</span>{' '}
+                      Manutenção, frete, licença, dedetização — escolha a unidade{' '}
+                      <span className="font-bold text-gray-300">SV</span> na linha do item. Serviço não
+                      entra no estoque: quando for executado, alguém atesta a execução e é isso que
+                      libera o pagamento.
                     </p>
                   </div>
                 )}

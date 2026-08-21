@@ -98,6 +98,24 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
     [produtos],
   );
+  // Catálogo de SERVIÇOS (migr. 499). Serviço é a outra categoria de item do
+  // pedido — manutenção, frete, licença, dedetização —, e sem ela a requisição
+  // de unidade SV chegava aqui sem saída: o select de produto não tinha o que
+  // mostrar e o único caminho era cadastrar "Manutenção do ar" como mercadoria.
+  //
+  // Sem filtro de filial no fetch, de propósito: `servicos.filial` é NULÁVEL, e
+  // serviço sem unidade vale para todas (o que a holding contrata). Um `.eq`
+  // aqui sumiria justamente com esses — o filtro é feito abaixo, com a mesma
+  // régua que a RPC aplica.
+  const { data: servicos } = useFetchData<any>('/api/servicosview', undefined, true);
+  const servicosOrdenados = useMemo(
+    () => servicos
+      .filter((s: any) => (s.filial == null || s.filial === filial)
+                       && (s.status ?? 'Ativo') !== 'Inativo')
+      .sort((a: any, b: any) =>
+        String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
+    [servicos, filial],
+  );
 
   // Pontualidade por fornecedor (migr. 421). Vive ao lado do preço porque é
   // aqui que a escolha é feita — no relatório, chegaria tarde.
@@ -567,21 +585,37 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // requisição para 'Atendida' no mesmo COMMIT. Antes isso era insert solto no
   // cliente com guard só por cotação — foi assim que uma requisição de 24
   // unidades virou 2 pedidos e 2 contas a pagar em produção.
-  // Cotação esperando o vínculo com o catálogo, e o produto escolhido no modal.
+  // Cotação esperando o vínculo com o catálogo, e o item escolhido no modal.
+  //
+  // `categoriaVinculo` é a pergunta que a migr. 499 tornou possível responder:
+  // material ou serviço. Ela nasce lida da unidade que a requisição pediu (SV é
+  // serviço), porque quem escreveu "Manutenção do ar-condicionado" já disse o
+  // que era — o comprador só confirma.
   const [vinculando, setVinculando] = useState<any | null>(null);
+  const [categoriaVinculo, setCategoriaVinculo] = useState<'produto' | 'servico'>('produto');
   const [produtoVinculo, setProdutoVinculo] = useState('');
+  const [servicoVinculo, setServicoVinculo] = useState('');
 
-  const handleGerarPedido = async (cotacao: any, produtoId?: string) => {
+  /** A requisição pediu serviço? A unidade SV é a declaração (src/lib/unidades.ts). */
+  const pediuServico = (cot: any) =>
+    String(cot?.req?.unidade ?? '').trim().toUpperCase() === 'SV';
+
+  const handleGerarPedido = async (
+    cotacao: any,
+    vinculo?: { produtoId?: string; servicoId?: string },
+  ) => {
     if (!supabase) return;
     // Compra eventual nasce de texto livre — quem pede não conhece o catálogo,
     // e isso é realista. O que não era realista é ninguém normalizar depois: o
     // item chegava na doca sem código e o conferente é que cadastrava. Em ERP
     // real o código existe ANTES do pedido, e quem amarra é o comprador.
-    // A RPC recusa de qualquer jeito (migr. 480); isto aqui é só perguntar
+    // A RPC recusa de qualquer jeito (migr. 480/499); isto aqui é só perguntar
     // antes, em vez de deixar o erro estourar depois do clique.
-    const jaTemProduto = !!cotacao.req?.produto_id;
-    if (!jaTemProduto && !produtoId) {
+    const jaVinculada = !!(cotacao.req?.produto_id || cotacao.req?.servico_id);
+    if (!jaVinculada && !vinculo?.produtoId && !vinculo?.servicoId) {
+      setCategoriaVinculo(pediuServico(cotacao) ? 'servico' : 'produto');
       setProdutoVinculo('');
+      setServicoVinculo('');
       setVinculando(cotacao);
       return;
     }
@@ -589,7 +623,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     try {
       const { data: pedido, error } = await supabase.rpc('gerar_pedido_de_cotacao', {
         p_cotacao_id: cotacao.id,
-        p_produto_id: produtoId ?? null,
+        p_produto_id: vinculo?.produtoId ?? null,
+        p_servico_id: vinculo?.servicoId ?? null,
       });
       if (error) throw new Error(error.message);
       setCotacoesComPedido(prev => new Set(prev).add(cotacao.id));
@@ -602,7 +637,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
       setVinculando(null);
       setProdutoVinculo('');
-      showToast(`${numeroPedido(novo)} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`, 'success', true);
+      setServicoVinculo('');
+      // Serviço não chega em caixa: o que fecha o pedido é o aceite da execução,
+      // e é ele que libera o pagamento. Mandar o aluno avisar o Estoque de uma
+      // dedetização seria mandá-lo esperar uma carga que não vem.
+      showToast(
+        novo?.servico_id
+          ? `${numeroPedido(novo)} gerado, com a conta a pagar. Serviço não entra em estoque: quando for executado, registre o aceite em Estoque → Recebimentos — é ele que libera o pagamento.`
+          : `${numeroPedido(novo)} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`,
+        'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -1343,6 +1386,46 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 </p>
               </div>
 
+              {/* A CATEGORIA do item (migr. 499) — a mesma separação que o SAP
+                  faz entre item M de material e item D de serviço. Não é um
+                  detalhe de cadastro: ela decide se aquilo tem saldo, se o
+                  recebimento é entrada ou aceite, e se o custo vira estoque ou
+                  despesa do período. Por isso é a primeira pergunta, e não um
+                  filtro escondido dentro do select. */}
+              <div className="flex gap-2 mb-4">
+                {([
+                  { key: 'produto' as const, rotulo: 'Material',
+                    hint: 'entra no estoque' },
+                  { key: 'servico' as const, rotulo: 'Serviço',
+                    hint: 'não tem saldo — é aceite' },
+                ]).map(op => (
+                  <button key={op.key} type="button"
+                    onClick={() => setCategoriaVinculo(op.key)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-left transition-colors border ${
+                      categoriaVinculo === op.key
+                        ? 'neu-pressed border-accent/40'
+                        : 'neu-button border-transparent'}`}>
+                    <span className={`block text-xs font-bold ${
+                      categoriaVinculo === op.key ? 'text-accent' : 'text-gray-300'}`}>
+                      {op.rotulo}
+                    </span>
+                    <span className="block text-[10px] text-gray-500 leading-tight mt-0.5">{op.hint}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* A unidade que o setor escolheu já responde a pergunta — dizer
+                  isso em voz alta evita o clique errado, que é o que criava
+                  "Manutenção do ar-condicionado" como mercadoria de estoque. */}
+              {pediuServico(vinculando) && categoriaVinculo === 'produto' && (
+                <p className="text-[11px] text-amber-300/90 leading-snug mb-3">
+                  A requisição pediu na unidade <span className="font-bold">SV</span>, que é serviço.
+                  Cadastrar isto como material faria o item ganhar saldo de estoque que nunca vai
+                  existir — e o custo dele sumiria do resultado, esperando uma venda que não vem.
+                </p>
+              )}
+
+              {categoriaVinculo === 'produto' ? (
               <FormField label="Produto do catálogo *">
                 <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
                   value={produtoVinculo}
@@ -1357,7 +1440,26 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   ))}
                 </select>
               </FormField>
+              ) : (
+              <FormField label="Serviço do catálogo *">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                  value={servicoVinculo}
+                  onChange={e => setServicoVinculo(e.target.value)}>
+                  <option value="">
+                    {servicosOrdenados.length === 0
+                      ? 'Nenhum serviço cadastrado'
+                      : 'Selecione o serviço...'}
+                  </option>
+                  {servicosOrdenados.map((sv: any) => (
+                    <option key={sv.id} value={sv.id}>
+                      {sv.nome}{sv.filial ? '' : ' — todas as unidades'}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              )}
 
+              {categoriaVinculo === 'produto' ? (
               <p className="text-[11px] text-gray-500 leading-snug mt-3">
                 O setor pede em português; quem compra amarra ao catálogo, porque é o código que
                 entra no pedido. Feito isso, a carga chega com o item já definido e o Recebimento
@@ -1374,6 +1476,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   o produto já nasce amarrado a ela e este passo aqui deixa de aparecer.
                 </span>
               </p>
+              ) : (
+              <p className="text-[11px] text-gray-500 leading-snug mt-3">
+                Serviço contratado não vira mercadoria: não tem saldo, não tem lote e não tem
+                validade. O “recebimento” dele é o <span className="text-gray-300 font-semibold">aceite</span> —
+                alguém confirma que foi executado —, e é o aceite que libera o pagamento. O custo
+                entra no resultado como despesa do período, no grupo do centro de custo que a
+                requisição informou.
+                <span className="block mt-1.5 text-gray-400">
+                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Serviços &gt; Novo</span> e
+                  volte aqui.
+                </span>
+              </p>
+              )}
 
               <p className="text-[11px] text-emerald-400/80 leading-snug mt-3">
                 A requisição guarda esse vínculo: a próxima compra do mesmo item já nasce como
@@ -1386,9 +1501,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   Cancelar
                 </button>
                 <NeuButtonAccent
-                  onClick={() => handleGerarPedido(vinculando, produtoVinculo)}
+                  onClick={() => handleGerarPedido(vinculando, categoriaVinculo === 'servico'
+                    ? { servicoId: servicoVinculo }
+                    : { produtoId: produtoVinculo })}
                   isLoading={generating === vinculando.id}
-                  disabled={!produtoVinculo}>
+                  disabled={categoriaVinculo === 'servico' ? !servicoVinculo : !produtoVinculo}>
                   <ShoppingBag size={14} /> Gerar Pedido
                 </NeuButtonAccent>
               </div>
