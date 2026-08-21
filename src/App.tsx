@@ -31,7 +31,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText, Hourglass,
+  Presentation, FileText, Hourglass, Dices,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
@@ -129,6 +129,7 @@ const MetricasRedesSociaisView             = lazy(() => import('./views/Metricas
 const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
 const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
 const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
+const MatrizConteudoView                   = lazy(() => import('./views/MatrizConteudoView').then(m => ({ default: m.MatrizConteudoView })));
 const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
 const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
 const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
@@ -362,7 +363,7 @@ const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false, matrizMo
 // as telas que aparecem nos dois modos e se adaptam por dentro (feedback-org,
 // avaliacoes, financeiro-*) ficam de fora de propósito.
 const MATRIZ_ONLY_VIEWS = new Set([
-  'sessoes-gerais', 'analise-ia', 'matriz-capital', 'matriz-competicao',
+  'sessoes-gerais', 'analise-ia', 'matriz-capital', 'matriz-conteudo', 'matriz-competicao',
   'matriz-avaliacoes', 'aula-modo',
   // Único item de submenu com requireMatriz — precisa estar aqui pelo mesmo
   // motivo dos hubs: o menu não é a única porta pra chegar na view.
@@ -522,6 +523,12 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Landmark size={16} /><span>Capital</span>
               </button>
+              {profile?.role === 'admin' && (
+                <button onClick={() => { navigate('matriz-conteudo'); onClose?.(); }}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-conteudo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                  <Dices size={16} /><span>Conteúdo</span>
+                </button>
+              )}
               <button onClick={() => { navigate('matriz-competicao'); onClose?.(); }}
                 className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Trophy size={16} /><span>Competição</span>
@@ -1246,6 +1253,7 @@ function LogMaxAppInner() {
       // Sem o initialTab ele abria em Padrão, que não tem nada a ver.
       case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
+      case 'matriz-conteudo':               return <MatrizConteudoView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
       case 'aula-atividade':               return <AulaAtividadeView profile={profile} showToast={st} />;
       // Rota mudou com o rótulo. A antiga fica de alias porque `activeView` vive
