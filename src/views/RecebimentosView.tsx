@@ -14,6 +14,7 @@ import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
 import { requerImei, ATRIBUTOS_PRODUTO } from '../lib/atributosProduto';
 import { gerarImeis } from '../lib/imei';
+import { proximoNumeroNf } from '../lib/notaFiscal';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -86,7 +87,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // contra o pedido (migr. 491). Preço não passa pelo almoxarifado.
   const [extras, setExtras] = useState({
     qtd_recebida: '', observacao: '', data: todayBR(),
-    nf_numero: '', nf_serie: '', nf_emissao: '',
+    // Série é constante (1) na imensa maioria das empresas — não é sorteio,
+    // por isso não tem botão Gerar como o número tem. Continua editável para
+    // a exceção rara.
+    nf_numero: '', nf_serie: '1', nf_emissao: '',
   });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   const [confirmando, setConfirmando] = useState<string | null>(null);
@@ -134,6 +138,15 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const pedidosAReceber = pedidos.filter(
     (p: any) => p.status === 'Em Entrega' && !p.recebido_em).length;
   const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
+
+  // Fonte do botão "Gerar" do número de NF, nos três formulários que o
+  // digitam (Registrar, Confirmar, Nota pendente). `todosRecebimentos` já vem
+  // sem paginação e filtrado pela filial — é a mesma numeração que não pode
+  // repetir dentro dela.
+  const numerosNfExistentes = useMemo(
+    () => todosRecebimentos.map((r: any) => r.nf_numero).filter(Boolean),
+    [todosRecebimentos],
+  );
 
   // Devoluções ao fornecedor por recebimento (migr. 423). Guarda quanto já
   // saiu de volta, para o teto do formulário e para o selo na linha.
@@ -259,7 +272,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const closeForm = () => {
     setShowForm(false); setForm({ pedido_id: '' });
-    setExtras({ qtd_recebida: '', observacao: '', data: todayBR(), nf_numero: '', nf_serie: '', nf_emissao: '' });
+    setExtras({ qtd_recebida: '', observacao: '', data: todayBR(), nf_numero: '', nf_serie: '1', nf_emissao: '' });
     setErrors({});
   };
 
@@ -633,10 +646,20 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   </p>
                 </FormField>
                 <FormField label="Nota fiscal — número">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.nf_numero}
-                    onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
-                    placeholder="Ex.: 000123456" />
+                  <div className="flex gap-2">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0"
+                      value={extras.nf_numero}
+                      onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
+                      placeholder="Ex.: 000123456" />
+                    {/* Sequencial, não sorteado — lê o maior número já usado
+                        nesta filial e sugere o próximo. Mesma régua do Gerar
+                        de código em Cadastros > Produtos. */}
+                    <button type="button"
+                      onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNf(numerosNfExistentes) }))}
+                      className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
+                      Gerar
+                    </button>
+                  </div>
                   <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
                     O documento que veio com a carga. Pode ficar em branco agora, mas sem ele a
                     entrada não é confirmada — e o financeiro não tem o que conferir contra o pedido.
@@ -717,7 +740,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 na conferência do financeiro e fica impagável. */}
                             {(item.status === 'Concluído' || item.status === 'Parcial') && !item.nf_numero && (
                               <button
-                                onClick={() => { setNotaAtrasada(item); setNotaForm({ numero: '', serie: '', emissao: '' }); }}
+                                onClick={() => { setNotaAtrasada(item); setNotaForm({ numero: '', serie: '1', emissao: '' }); }}
                                 title="Este recebimento entrou sem nota fiscal. Informe o número para o financeiro poder conferir e pagar."
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1"
                               >
@@ -757,7 +780,10 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   setMotivoEncerramento('');
                                   setConfirmNf({
                                     numero:  item.nf_numero  ?? '',
-                                    serie:   item.nf_serie   ?? '',
+                                    // Série é constante em quase toda empresa — 1, salvo
+                                    // exceção rara. O default poupa o clique de digitar
+                                    // o óbvio; continua editável.
+                                    serie:   item.nf_serie   ?? '1',
                                     emissao: item.nf_emissao ?? '',
                                   });
                                 }}
@@ -970,10 +996,16 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       value={confirmNf.numero}
                                       onChange={e => setConfirmNf(n => ({ ...n, numero: e.target.value }))}
                                       placeholder="Número" />
+                                    <button type="button"
+                                      onClick={() => setConfirmNf(n => ({ ...n, numero: proximoNumeroNf(numerosNfExistentes) }))}
+                                      title="Sugerir o próximo número desta filial"
+                                      className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
+                                      Gerar
+                                    </button>
                                     <input className="neu-input py-2 px-3 rounded-xl text-xs w-16 shrink-0"
                                       value={confirmNf.serie}
                                       onChange={e => setConfirmNf(n => ({ ...n, serie: e.target.value }))}
-                                      placeholder="Série" />
+                                      placeholder="1" />
                                   </div>
                                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     max={todayBR()}
@@ -1116,10 +1148,17 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <FormField label="Número *">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={notaForm.numero}
-                      onChange={e => setNotaForm(n => ({ ...n, numero: e.target.value }))}
-                      placeholder="Ex.: 000123456" />
+                    <div className="flex gap-2">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0"
+                        value={notaForm.numero}
+                        onChange={e => setNotaForm(n => ({ ...n, numero: e.target.value }))}
+                        placeholder="Ex.: 000123456" />
+                      <button type="button"
+                        onClick={() => setNotaForm(n => ({ ...n, numero: proximoNumeroNf(numerosNfExistentes) }))}
+                        className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
+                        Gerar
+                      </button>
+                    </div>
                   </FormField>
                 </div>
                 <FormField label="Série">

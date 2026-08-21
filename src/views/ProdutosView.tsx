@@ -4,12 +4,13 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3, Upload } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3, Upload, Lock, Pencil } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
+import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc, gerarEanInterno } from '../lib/barcode';
@@ -373,9 +374,10 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         };
       })
       .filter(i => i.descricao && !nomesCatalogo.has(i.descricao.toLowerCase()))
-      // Cotada primeiro: é a que está travando o Gerar Pedido neste minuto.
-      .sort((a, b) => (Number(b.cotada) - Number(a.cotada))
-        || a.descricao.localeCompare(b.descricao, 'pt-BR'));
+      // A prioridade de "cotada primeiro" não morreu — virou o rótulo do grupo
+      // no select com busca (mais legível que posição numa lista de 46). Aqui
+      // dentro, alfabética pura: é isso que faz achar "Sardinha" rápido.
+      .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
   }, [requisicoesDaFilial, cotacoesDaFilial, fornecedoresList, nomesCatalogo]);
   // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
   // listagem é paginada no servidor, então um item escolhido na página 1 some
@@ -454,6 +456,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // select precisa voltar para o vazio quando o formulário fecha — senão o
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
+
+  // Nome vem travado quando a origem preencheu — o texto da requisição é a
+  // NECESSIDADE escrita em português ("Sardinha em Óleo 125g"), o do catálogo é
+  // a IDENTIFICAÇÃO do item ("SARDINHA EM ÓLEO GOMES DA COSTA 125G"). São
+  // coisas diferentes de propósito. Travar sem saída congelaria na etiqueta e
+  // no PDV o texto colado de planilha; "Refinar nome" destrava para quem sabe
+  // o nome comercial, sem convidar quem não sabe a inventar um do zero.
+  const [nomeDestravado, setNomeDestravado] = useState(false);
 
   // Campos da ficha em modo "Outro": o valor digitado não está na lista, mas o
   // select precisa continuar mostrando "Outro…" enquanto o campo está vazio.
@@ -573,6 +583,94 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     && itensComprados.length === 0
     && itensAguardandoPedido.length === 0
     && !emImplantacao;
+
+  // Grupos do SelectBusca de origem. A prioridade que a ordenação antiga
+  // carregava ("cotada primeiro") virou rótulo de grupo — mais legível que
+  // posição numa lista de dezenas — e o fornecedor entra como `hint`: é ele
+  // que faz achar "Sardinha" buscando por "Gomes da Costa".
+  const gruposOrigem = useMemo((): SelectBuscaGrupo[] => {
+    const cotadas    = itensAguardandoPedido.filter(i => i.cotada);
+    const semCotacao = itensAguardandoPedido.filter(i => !i.cotada);
+    const rotuloReq = (i: typeof itensAguardandoPedido[number]) =>
+      `${i.descricao}${i.qtd > 0 ? ` · ${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : ''} · ${i.numero}`;
+    const grupos: SelectBuscaGrupo[] = [];
+    // Só existe NA janela de implantação: a unidade ainda não tem nenhum
+    // recebimento Concluído ou Parcial. Fora dela, "cadastro por conta
+    // própria" reabriria o beco que a régua do item F existe para fechar.
+    if (emImplantacao) {
+      grupos.push({
+        label: 'Implantação',
+        opcoes: [{ value: SEM_COMPRA, label: 'Saldo de implantação (a unidade está começando agora)' }],
+      });
+    }
+    if (cotadas.length > 0) {
+      grupos.push({
+        label: `Cotação aprovada — travando o Gerar Pedido (${cotadas.length})`,
+        opcoes: cotadas.map(i => ({ value: `${REQ_PREFIX}${i.id}`, label: rotuloReq(i), hint: i.fornecedor })),
+      });
+    }
+    if (semCotacao.length > 0) {
+      grupos.push({
+        label: `Aguardando cotação (${semCotacao.length})`,
+        opcoes: semCotacao.map(i => ({ value: `${REQ_PREFIX}${i.id}`, label: rotuloReq(i), hint: i.fornecedor })),
+      });
+    }
+    // Item comprado mas ainda não recebido não aparece: a ficha do produto
+    // (EAN, peso, validade) está na caixa que ainda não chegou.
+    if (itensComprados.length > 0) {
+      grupos.push({
+        label: `Já chegou e não está no catálogo (${itensComprados.length})`,
+        opcoes: itensComprados.map(i => ({ value: i.descricao, label: i.descricao, hint: i.fornecedor })),
+      });
+    }
+    return grupos;
+  }, [itensAguardandoPedido, itensComprados, emImplantacao]);
+
+  // Escolha no SelectBusca de origem. Mesma lógica de antes (era o onChange
+  // inline do <select>): requisição traz nome/unidade/fornecedor sem custo (a
+  // proposta é preço negociado, não apurado); item já chegado traz nome,
+  // fornecedor e o custo do próprio pedido. Nos dois casos o saldo fica vazio —
+  // ele vem do Confirmar, nunca daqui.
+  const escolherOrigem = (desc: string) => {
+    setItemCompradoSel(desc);
+    setNomeDestravado(false);
+    setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
+    if (!desc || desc === SEM_COMPRA) return;
+    if (desc.startsWith(REQ_PREFIX)) {
+      const req = itensAguardandoPedido.find(i => i.id === desc.slice(REQ_PREFIX.length));
+      if (!req) return;
+      setForm(f => ({ ...f, nome: req.descricao }));
+      clearError('nome');
+      setExtras(x => ({
+        ...x,
+        // A requisição oferece SERV (serviço) além das unidades de produto:
+        // jogar isso no select do cadastro deixaria o campo em branco, com
+        // valor que nenhuma opção representa.
+        unidade: x.unidade === 'UN' && unidadesDeProduto(filial).includes(normalizarUnidade(req.unidade))
+          ? normalizarUnidade(req.unidade) : x.unidade,
+        fornecedor:    x.fornecedor    || req.fornecedor,
+        fornecedor_id: x.fornecedor_id || req.fornecedor_id,
+        // Nada chegou ainda: o saldo entra pelo Recebimento.
+        estoque: '',
+      }));
+      return;
+    }
+    const comprado = itensComprados.find(i => i.descricao === desc);
+    if (!comprado) return;
+    setForm(f => ({ ...f, nome: comprado.descricao }));
+    clearError('nome');
+    // Só preenche o que está vazio: quem já digitou o fornecedor não perde o
+    // que digitou.
+    setExtras(x => ({
+      ...x,
+      fornecedor:    x.fornecedor    || comprado.fornecedor,
+      fornecedor_id: x.fornecedor_id || comprado.fornecedor_id,
+      preco_custo: x.preco_custo || (comprado.custo != null ? formatBRL(comprado.custo) : ''),
+      // O saldo passa a vir do recebimento; o que estava digitado aqui iria
+      // junto, escondido, e dobraria a entrada.
+      estoque: '',
+    }));
+  };
 
   // Custo obrigatório: só quando alguém REALMENTE sabe o número.
   //
@@ -867,6 +965,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setItemCompradoSel('');
+    setNomeDestravado(false);
     setAtrLivre(new Set());
     setShowForm(false);
   };
@@ -880,6 +979,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
+    setNomeDestravado(false);
     setAtrLivre(new Set());
     setForm({ codigo: '', nome: '', preco: '' });
     // `atributosPadrao`: o cadastro novo nasce com o que a lei já responde —
@@ -1528,113 +1628,57 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                   )}
                   {origemExigida && !origemSemOpcoes && (
                     <FormField label="Origem deste cadastro *" error={extrasErrors.origem_compra}>
-                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.origem_compra ? 'border border-red-500/40' : ''}`}
+                      <SelectBusca
                         value={itemCompradoSel}
-                        onChange={e => {
-                          const desc = e.target.value;
-                          setItemCompradoSel(desc);
-                          setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
-                          if (!desc || desc === SEM_COMPRA) return;
-                          // Requisição esperando o pedido (migr. 494): traz nome,
-                          // unidade e o fornecedor já cotado. NÃO traz custo — a
-                          // proposta é preço negociado, não custo apurado, e o
-                          // número real sai da média ponderada no recebimento
-                          // (migr. 417). Preencher aqui gravaria uma ficha de
-                          // custo com origem 'manual' antes de a carga existir.
-                          if (desc.startsWith(REQ_PREFIX)) {
-                            const req = itensAguardandoPedido.find(i => i.id === desc.slice(REQ_PREFIX.length));
-                            if (!req) return;
-                            setForm(f => ({ ...f, nome: req.descricao }));
-                            clearError('nome');
-                            setExtras(x => ({
-                              ...x,
-                              // A requisição oferece SERV (serviço) além das
-                              // unidades de produto: jogar isso no select do
-                              // cadastro deixaria o campo em branco, com valor
-                              // que nenhuma opção representa.
-                              unidade: x.unidade === 'UN' && unidadesDeProduto(filial).includes(normalizarUnidade(req.unidade))
-                                ? normalizarUnidade(req.unidade) : x.unidade,
-                              fornecedor:    x.fornecedor    || req.fornecedor,
-                              fornecedor_id: x.fornecedor_id || req.fornecedor_id,
-                              // Nada chegou ainda: o saldo entra pelo Recebimento.
-                              estoque: '',
-                            }));
-                            return;
-                          }
-                          const comprado = itensComprados.find(i => i.descricao === desc);
-                          if (!comprado) return;
-                          setForm(f => ({ ...f, nome: comprado.descricao }));
-                          clearError('nome');
-                          // Só preenche o que está vazio: quem já digitou o
-                          // fornecedor não perde o que digitou.
-                          setExtras(x => ({
-                            ...x,
-                            fornecedor:    x.fornecedor    || comprado.fornecedor,
-                            fornecedor_id: x.fornecedor_id || comprado.fornecedor_id,
-                            preco_custo: x.preco_custo || (comprado.custo != null
-                              ? formatBRL(comprado.custo) : ''),
-                            // O saldo passa a vir do recebimento; o que estava
-                            // digitado aqui iria junto, escondido, e dobraria
-                            // a entrada.
-                            estoque: '',
-                          }));
-                        }}>
-                        <option value="">— Selecione —</option>
-                        {/* Só existe NA janela de implantação (item E/emImplantacao):
-                            a unidade ainda não tem nenhum recebimento Concluído ou
-                            Parcial. Fora dela, "cadastro por conta própria" reabriria
-                            o beco que esta régua inteira existe para fechar. */}
-                        {emImplantacao && (
-                          <option value={SEM_COMPRA}>Saldo de implantação (a unidade está começando agora)</option>
-                        )}
-                        {/* Primeiro grupo é o caminho NORMAL pós-480: a compra
-                            eventual pediu em português, e o pedido não sai sem
-                            código. Escolher aqui grava o vínculo na requisição
-                            (migr. 494) — o Gerar Pedido daquela cotação deixa de
-                            pedir o catálogo e passa direto, como na Reposição. */}
-                        {itensAguardandoPedido.length > 0 && (
-                          <optgroup label={`Requisição esperando o pedido sair (${itensAguardandoPedido.length})`}>
-                            {itensAguardandoPedido.map(i => (
-                              <option key={i.id} value={`${REQ_PREFIX}${i.id}`}>
-                                {i.descricao}
-                                {i.qtd > 0 ? ` · ${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : ''}
-                                {` · ${i.numero}`}
-                                {i.cotada ? ' · cotação aprovada' : ' · sem cotação aprovada'}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {/* Item comprado mas ainda não recebido não aparece: a
-                            ficha do produto (EAN, peso, validade) está na caixa
-                            que ainda não chegou. */}
-                        <optgroup label={`Já chegou e não está no catálogo (${itensComprados.length})`}>
-                          {itensComprados.map(i => (
-                            <option key={i.descricao} value={i.descricao}>{i.descricao}</option>
-                          ))}
-                        </optgroup>
-                      </select>
+                        onChange={escolherOrigem}
+                        grupos={gruposOrigem}
+                        placeholder="Buscar requisição ou item já chegado..."
+                        vazioTexto="Nada encontrado com esse texto."
+                        error={extrasErrors.origem_compra}
+                      />
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                         O normal é <span className="text-gray-400">cadastrar antes de comprar</span> — é o código
                         daqui que entra no pedido.
                         {itensAguardandoPedido.length > 0 && (
-                          <> A primeira lista são <span className="text-accent font-bold">{itensAguardandoPedido.length}</span>{' '}
-                          requisição(ões) de compra eventual paradas esperando exatamente isto: escolher uma amarra este
+                          <> As requisições paradas esperam exatamente isto: escolher uma amarra este
                           cadastro a ela, e o <span className="text-gray-400">Gerar Pedido</span> em Compras &gt; Cotações
                           passa direto, sem perguntar o item do catálogo.</>
                         )}
                         {itensComprados.length > 0 && (
-                          <> A lista &quot;já chegou&quot; são <span className="text-accent font-bold">{itensComprados.length}</span>{' '}
-                          item(ns) que entraram no Recebimento antes de ter cadastro: escolher um traz nome, fornecedor e
-                          custo do pedido, em vez de criar um segundo cadastro do mesmo produto.</>
+                          <> A lista &quot;já chegou&quot; são item(ns) que entraram no Recebimento antes de ter
+                          cadastro: escolher um traz nome, fornecedor e custo do pedido, em vez de criar um
+                          segundo cadastro do mesmo produto.</>
                         )}
                       </p>
                     </FormField>
                   )}
                   <FormField label="Nome do produto *" error={errors.nome}>
+                    {/* Travado quando a origem preencheu, até "Refinar nome"
+                        destravar. O texto da requisição é a necessidade escrita
+                        em português; o nome do catálogo é a identificação do
+                        item — são coisas diferentes, e é o segundo que sai na
+                        etiqueta e no PDV. */}
+                    {itemCompradoSel && itemCompradoSel !== SEM_COMPRA && !nomeDestravado ? (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-200 flex items-center gap-2">
+                          <Lock size={13} className="text-gray-500 shrink-0" />
+                          <span className="truncate">{form.nome || '—'}</span>
+                          <button type="button" onClick={() => setNomeDestravado(true)}
+                            className="ml-auto shrink-0 flex items-center gap-1 text-[10px] font-bold text-accent hover:opacity-80">
+                            <Pencil size={11} /> Refinar nome
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-gray-500 leading-snug">
+                          Veio da requisição — refine para o nome comercial do item (marca e gramatura) se
+                          souber. É este nome que sai na etiqueta e no PDV.
+                        </p>
+                      </div>
+                    ) : (
                     <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
                       value={form.nome}
                       onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
                       placeholder={`Ex: ${exProd.nome}`} />
+                    )}
                   </FormField>
                   <FormField label={ehVendavel(extras.tipo) ? 'Categoria *' : 'Categoria'} error={extrasErrors.categoria_id}>
                     {categoriasDaFilial.length > 0 ? (
