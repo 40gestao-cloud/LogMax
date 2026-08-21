@@ -417,7 +417,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     if (!supabase) return;
     setSugerindoCodigo(true);
     try {
-      const { data: codigo, error } = await supabase.rpc('reservar_codigo_produto', { p_filial: filial });
+      // `p_codigo_atual` (migr. 498): se já temos um número reservado, a RPC
+      // devolve o MESMO e renova o prazo — reclicar não queima a sequência. Sem
+      // ele, um segundo cadastro aberto em paralelo recebia o número do
+      // primeiro, e uma das duas telas não salvava.
+      const { data: codigo, error } = await supabase.rpc('reservar_codigo_produto', {
+        p_filial: filial,
+        p_codigo_atual: codigoReservado,
+      });
       if (error) {
         showToast(error.message || 'Não foi possível reservar um código agora.', 'error', true);
         return;
@@ -1236,6 +1243,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
     });
   }, [isFormOpen, editItem?.id]);
+
+  // Heartbeat da reserva de código (migr. 498). A reserva vale 30 minutos, e a
+  // ficha longa (grade da MaxLook, garantia/IMEI da TechMax) leva mais que isso
+  // quando o aluno é interrompido no meio — aí o número já era de outro e o
+  // Salvar morria num 23505 que ninguém liga ao tempo parado. A cada 10 minutos
+  // o formulário aberto renova o prazo do número que já tem; a RPC devolve o
+  // mesmo código, então nada muda na tela.
+  useEffect(() => {
+    if (!isFormOpen || !codigoReservado || !supabase) return;
+    const sb = supabase;
+    const id = setInterval(() => {
+      sb.rpc('reservar_codigo_produto', { p_filial: filial, p_codigo_atual: codigoReservado })
+        .then(undefined, () => {});   // best-effort: falhar aqui não atrapalha o cadastro
+    }, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isFormOpen, codigoReservado, filial]);
 
   // EAN-13 — preview ao vivo
   const eanNorm = normalizeEan13(extras.ean);
