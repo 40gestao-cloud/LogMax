@@ -523,6 +523,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     && temEstoque(extras.tipo)
     && temConteudoDeEmbalagem(extras.unidade);
 
+  // A unidade nunca teve um recebimento de verdade (Concluído ou Parcial)?
+  // Então ela está na janela de IMPLANTAÇÃO — o momento único em que existe
+  // mercadoria na prateleira sem ter passado por um pedido deste sistema.
+  // Fora dela, "cadastro por conta própria" deixou de ser opção (abaixo,
+  // `origemSemOpcoes`): mercadoria nova entra pela fila normal, e o saldo
+  // sempre vem de um Confirmar.
+  const emImplantacao = useMemo(
+    () => !recebimentosDaFilial.some((r: any) =>
+      r.ativo !== false && ['Concluído', 'Parcial'].includes(r.status)),
+    [recebimentosDaFilial],
+  );
+
   // Este produto veio de uma compra que já chegou? É o que decide se existe
   // custo para declarar.
   //
@@ -542,9 +554,25 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     [itemCompradoSel, itensAguardandoPedido],
   );
 
-  // O select de origem só se cobra quando existe alguma lista para escolher.
-  const origemExigida = !editItem
-    && (itensComprados.length > 0 || itensAguardandoPedido.length > 0);
+  // Mercadoria para revenda SEMPRE exige origem — mesmo quando as duas listas
+  // estão vazias. "Cadastro por conta própria" deixou de ser saída: fora da
+  // janela de implantação, todo item novo do catálogo nasce de uma requisição
+  // que passou por Compras, senão o texto da requisição fica solto e ninguém
+  // percebe que pulou a fila (era exatamente o furo que os alunos achavam:
+  // a opção "não veio de compra" sempre disponível).
+  //
+  // Patrimônio e consumo continuam livres — não nascem de requisição de compra
+  // e o formulário nem oferece o vínculo para eles.
+  const origemExigida = !editItem && ehVendavel(extras.tipo);
+
+  // A régua acima criaria um beco se não houvesse NADA para escolher: nenhuma
+  // requisição esperando, nenhum item já chegado, e a unidade não está mais em
+  // implantação. Aqui a tela não empurra para um select vazio — mostra o
+  // caminho certo (abrir a requisição) e trava o Salvar.
+  const origemSemOpcoes = origemExigida
+    && itensComprados.length === 0
+    && itensAguardandoPedido.length === 0
+    && !emImplantacao;
 
   // Custo obrigatório: só quando alguém REALMENTE sabe o número.
   //
@@ -951,8 +979,15 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // catálogo, porque é aí que mora a duplicata: cadastrar do zero um item que
     // está na doca esperando o Confirmar cria o segundo cadastro do mesmo
     // produto. Editar produto existente não passa por aqui.
-    if (origemExigida && !itemCompradoSel) {
-      ee.origem_compra = 'Escolha a requisição que este cadastro atende, um dos itens que já chegaram — ou "não veio de compra".';
+    // `origemSemOpcoes` (defesa em profundidade — o botão já vem desabilitado,
+    // mas o F12 não passa pela UI): sem nenhuma opção real, o erro tem de
+    // apontar para fora da tela, não para um select que não tem o que oferecer.
+    if (origemSemOpcoes) {
+      ee.origem_compra = 'Nenhuma requisição está esperando este cadastro. Abra uma em Requisições > Do Setor > Compra eventual.';
+    } else if (origemExigida && !itemCompradoSel) {
+      ee.origem_compra = emImplantacao
+        ? 'Escolha a requisição que este cadastro atende, um dos itens que já chegaram — ou "saldo de implantação".'
+        : 'Escolha a requisição que este cadastro atende, ou um dos itens que já chegaram.';
     }
 
     // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":
@@ -1360,6 +1395,19 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Produto' : 'Novo Produto'}</h3>
 
+              {/* A leitura circular já apareceu em sala: "para confirmar o
+                  recebimento preciso do produto, e o produto depende do
+                  recebimento". Não é círculo, é fila — mas só dentro do painel
+                  de saldo isso não bastava. Aqui em cima, sempre visível, com o
+                  passo atual marcado. */}
+              {origemExigida && (
+                <div className="neu-pressed rounded-xl px-4 py-2.5 border border-white/5 text-[10px] text-gray-500 leading-relaxed">
+                  Requisição → Aprovação → Cotação → Aprovação da cotação →{' '}
+                  <span className="text-accent font-bold">Cadastro (você está aqui)</span> →
+                  Gerar Pedido → Em Entrega → Recebimento → Confirmar
+                </div>
+              )}
+
               {/* Tipo = DESTINO do item (migr. 440). É a primeira pergunta do
                   cadastro, não a última: ela decide o que o resto do formulário
                   ainda faz sentido perguntar. Antes eram dois valores e material
@@ -1463,7 +1511,22 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       é o passivo de antes da 480. (Era um <datalist> no campo de
                       nome, que não reabria depois de escolher — datalist filtra
                       as opções pelo texto digitado.) */}
-                  {origemExigida && (
+                  {origemExigida && origemSemOpcoes && (
+                    // O beco que a régua acima fecharia sem avisar: nada para
+                    // escolher, e "cadastro por conta própria" não é mais saída
+                    // fora da implantação. A tela aponta o caminho em vez de
+                    // oferecer um select vazio, e o Salvar fica desabilitado.
+                    <FormField label="Origem deste cadastro *">
+                      <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 text-[11px] text-amber-300/90 leading-snug">
+                        Nenhuma requisição de compra eventual está esperando este cadastro, e a unidade já
+                        tem recebimento confirmado — isto não é implantação. Mercadoria nova entra pelo
+                        pedido: abra uma requisição em{' '}
+                        <span className="font-bold">Requisições &gt; Do Setor &gt; Compra eventual</span>,
+                        espere a cotação ser aprovada, e volte aqui — o item aparece nesta lista.
+                      </div>
+                    </FormField>
+                  )}
+                  {origemExigida && !origemSemOpcoes && (
                     <FormField label="Origem deste cadastro *" error={extrasErrors.origem_compra}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.origem_compra ? 'border border-red-500/40' : ''}`}
                         value={itemCompradoSel}
@@ -1517,7 +1580,13 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           }));
                         }}>
                         <option value="">— Selecione —</option>
-                        <option value={SEM_COMPRA}>Não veio de compra (cadastro por conta própria ou saldo de implantação)</option>
+                        {/* Só existe NA janela de implantação (item E/emImplantacao):
+                            a unidade ainda não tem nenhum recebimento Concluído ou
+                            Parcial. Fora dela, "cadastro por conta própria" reabriria
+                            o beco que esta régua inteira existe para fechar. */}
+                        {emImplantacao && (
+                          <option value={SEM_COMPRA}>Saldo de implantação (a unidade está começando agora)</option>
+                        )}
                         {/* Primeiro grupo é o caminho NORMAL pós-480: a compra
                             eventual pediu em português, e o pedido não sai sem
                             código. Escolher aqui grava o vínculo na requisição
@@ -2170,13 +2239,24 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           depende do recebimento". Não é círculo, é fila — mas
                           quem lê precisa ver a fila inteira, com o passo em que
                           está. Salvar com zero é o certo, e é isso que faltava
-                          estar escrito. */}
+                          estar escrito.
+                          `origemSemOpcoes` muda o texto: aqui não há "salve
+                          assim mesmo" — o botão está desabilitado e o painel
+                          âmbar acima já apontou o caminho (abrir a requisição).
+                          Repetir "salve assim mesmo" contradiria os dois. */}
                       <div className="neu-pressed py-2.5 px-3 rounded-xl text-[11px] text-gray-400 border border-white/5 leading-snug flex flex-col gap-1.5">
+                        {origemSemOpcoes ? (
+                          <span>
+                            Sem uma origem escolhida, não há como salvar — o saldo deste produto
+                            nasceria de lugar nenhum. Abra a requisição de compra eventual primeiro.
+                          </span>
+                        ) : (
                         <span>
                           <span className="font-bold text-gray-300">Salve assim mesmo.</span> Este produto
                           nasce com saldo <span className="font-bold text-gray-300">zero</span> — e é o certo:
                           digitar aqui contaria a mesma mercadoria duas vezes.
                         </span>
+                        )}
                         <span className="text-gray-500">
                           A ordem é: <span className="text-gray-400">a carga chega</span> →
                           <span className="text-gray-400"> registra o recebimento</span> →
@@ -2215,7 +2295,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+                <NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={origemSemOpcoes}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
               </div>
             </div>
           </motion.div>
