@@ -11,6 +11,7 @@ import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
+import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc, gerarEanInterno } from '../lib/barcode';
@@ -160,7 +161,7 @@ const MarkupBadge = ({ venda, custo }: { venda: string | number; custo: string |
   );
 };
 
-const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; filial: FilialOp; profile?: UserProfile | null }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -464,6 +465,17 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // no PDV o texto colado de planilha; "Refinar nome" destrava para quem sabe
   // o nome comercial, sem convidar quem não sabe a inventar um do zero.
   const [nomeDestravado, setNomeDestravado] = useState(false);
+
+  // Correção de saldo pela direção (o professor). `role === 'admin'` literal,
+  // não `auth_is_admin()`: essa função inclui CEO e conselheiro, que são
+  // ALUNOS — dar a eles o poder de reescrever saldo seria dar a régua a quem
+  // ela existe para avaliar.
+  const ehProfessor = profile?.role === 'admin';
+  const [corrigindoSaldo, setCorrigindoSaldo]   = useState(false);
+  const [saldoCorrigido, setSaldoCorrigido]     = useState('');
+  const [motivoSaldo, setMotivoSaldo]           = useState('');
+  const [salvandoSaldo, setSalvandoSaldo]       = useState(false);
+
 
   // Campos da ficha em modo "Outro": o valor digitado não está na lista, mas o
   // select precisa continuar mostrando "Outro…" enquanto o campo está vazio.
@@ -966,6 +978,11 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setErrors({});
     setItemCompradoSel('');
     setNomeDestravado(false);
+    // Trocar de produto com o painel de correção aberto aplicaria o número
+    // digitado para o anterior no saldo do novo.
+    setCorrigindoSaldo(false);
+    setSaldoCorrigido('');
+    setMotivoSaldo('');
     setAtrLivre(new Set());
     setShowForm(false);
   };
@@ -980,6 +997,9 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     setEditItem(null);
     setItemCompradoSel('');
     setNomeDestravado(false);
+    setCorrigindoSaldo(false);
+    setSaldoCorrigido('');
+    setMotivoSaldo('');
     setAtrLivre(new Set());
     setForm({ codigo: '', nome: '', preco: '' });
     // `atributosPadrao`: o cadastro novo nasce com o que a lei já responde —
@@ -1024,6 +1044,69 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   const handleRemoverImagem = (slotIdx: number) => {
     setImagens(prev => prev.map((u, i) => i === slotIdx ? '' : u));
     setImagensAviso(prev => prev.map((a, i) => i === slotIdx ? null : a));
+  };
+
+  // Correção de saldo pela direção — via AJUSTE, não escrevendo `estoque`.
+  //
+  // O campo continua travado de propósito, e a trava é do banco
+  // (`fn_block_estoque_manual` reverte em silêncio qualquer UPDATE direto).
+  // Não foi frouxidão: `produtos.estoque` tem de ser SEMPRE igual à soma das
+  // movimentações ativas — é a invariante que a migr. 268 chamou de "estoque
+  // razão único", e é dela que vivem o inventário, o CMV e a conferência.
+  // Escrever o número na mão faria saldo e razão divergirem sem deixar rastro.
+  //
+  // Então o professor digita o número CERTO (que é a ergonomia pedida) e o
+  // sistema grava a DIFERENÇA como 'Ajuste +' / 'Ajuste −', com o motivo. O
+  // saldo chega onde ele quer, a razão continua fechando, e a correção aparece
+  // no histórico com autor e data — que é o que uma correção de professor
+  // precisa ter para virar material de aula.
+  const aplicarCorrecaoSaldo = async () => {
+    if (!editItem || !supabase) return;
+    const atual    = Number(editItem.estoque ?? 0);
+    const desejado = parseQtd(saldoCorrigido);
+    if (!Number.isFinite(desejado) || desejado < 0) {
+      showToast('Informe o saldo correto (zero ou mais).', 'error', true);
+      return;
+    }
+    if (!motivoSaldo.trim()) {
+      showToast('Escreva o motivo da correção — é o que explica o ajuste no histórico.', 'error', true);
+      return;
+    }
+    // Tolerância de meia milésima: `estoque` é numeric(15,3) e a comparação
+    // exata acusa diferença de nada em item fracionário (mesma régua do teto
+    // de recebimento).
+    const diferenca = desejado - atual;
+    if (Math.abs(diferenca) <= 0.0005) {
+      showToast('O saldo já é esse — nada a corrigir.', 'info', true);
+      return;
+    }
+    setSalvandoSaldo(true);
+    try {
+      const { error } = await supabase.rpc('movimentar_estoque', {
+        p_produto_id: editItem.id,
+        p_tipo:       diferenca > 0 ? 'Ajuste +' : 'Ajuste −',
+        p_qtd:        Math.abs(diferenca),
+        p_origem:     `Correção da direção — ${motivoSaldo.trim()}`,
+        p_destino:    null,
+        p_filial:     filial,
+      });
+      if (error) throw new Error(error.message);
+      // Espelha na grade e no formulário sem esperar reload — o saldo mudou
+      // no banco pelo trigger, e `editItem` é o que o painel lê.
+      setEditItem((prev: any) => prev ? { ...prev, estoque: desejado } : prev);
+      setExtras(x => ({ ...x, estoque: formatQtd(String(desejado), fracionario) }));
+      setData((prev: any[]) => prev.map(d => d.id === editItem.id ? { ...d, estoque: desejado } : d));
+      setCorrigindoSaldo(false);
+      setSaldoCorrigido('');
+      setMotivoSaldo('');
+      showToast(
+        `Saldo corrigido para ${qtdBR(desejado)} ${extras.unidade} — lançado como ${diferenca > 0 ? 'Ajuste +' : 'Ajuste −'} de ${qtdBR(Math.abs(diferenca))} em Estoque > Movimentações, com o motivo.`,
+        'success', true);
+    } catch (err: any) {
+      showToast(`Não foi possível corrigir: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setSalvandoSaldo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -2260,7 +2343,64 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       title={editItem ? 'Saldo só altera via Recebimentos / Movimentações de Estoque.' : 'Saldo de abertura — gera movimentação de Entrada.'}
                     />
                     {editItem ? (
+                      // A direção corrige o que o aluno errou — sem reescrever
+                      // `estoque` na mão. Ver `aplicarCorrecaoSaldo`: o número
+                      // digitado vira um Ajuste da diferença, então o saldo
+                      // chega onde o professor quer E a razão continua fechando.
+                      ehProfessor ? (
+                        <div className="mt-1 flex flex-col gap-2">
+                          {!corrigindoSaldo ? (
+                            <>
+                              <p className="text-[10px] text-gray-500">Saldo controlado por Movimentações / Recebimentos.</p>
+                              <button type="button"
+                                onClick={() => {
+                                  setCorrigindoSaldo(true);
+                                  setSaldoCorrigido(formatQtd(String(editItem.estoque ?? 0), fracionario));
+                                  setMotivoSaldo('');
+                                }}
+                                className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 transition-colors self-start flex items-center gap-1.5">
+                                <Pencil size={11} /> Corrigir saldo
+                              </button>
+                            </>
+                          ) : (
+                            <div className="neu-pressed rounded-xl p-3 border border-accent/25 flex flex-col gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Saldo correto ({extras.unidade})
+                              </span>
+                              <input
+                                type="text" inputMode="decimal"
+                                className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
+                                value={saldoCorrigido}
+                                onChange={e => setSaldoCorrigido(formatQtd(e.target.value, fracionario))}
+                                onKeyDown={handleQtdKeyDown(fracionario)}
+                                placeholder="0" />
+                              <input
+                                className="neu-input py-2 px-3 rounded-xl text-xs w-full"
+                                value={motivoSaldo}
+                                onChange={e => setMotivoSaldo(e.target.value)}
+                                placeholder="Motivo — ex.: aluno lançou saldo de implantação em duplicidade" />
+                              <p className="text-[10px] text-gray-500 leading-snug">
+                                Não reescreve o saldo: lança a <span className="text-gray-400 font-semibold">diferença</span> como
+                                Ajuste em Estoque &gt; Movimentações, com este motivo. O estoque bate com a razão e a
+                                correção fica no histórico, com autor e data.
+                              </p>
+                              <div className="flex gap-2 justify-end">
+                                <button type="button" disabled={salvandoSaldo}
+                                  onClick={() => { setCorrigindoSaldo(false); setSaldoCorrigido(''); setMotivoSaldo(''); }}
+                                  className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-gray-400 disabled:opacity-50">
+                                  Cancelar
+                                </button>
+                                <button type="button" onClick={aplicarCorrecaoSaldo} disabled={salvandoSaldo}
+                                  className="neu-button-accent py-1.5 px-3 rounded-lg text-[11px] font-bold disabled:opacity-50">
+                                  {salvandoSaldo ? 'Aplicando...' : 'Aplicar correção'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
                       <p className="text-[10px] text-gray-500 mt-1">Saldo controlado por Movimentações / Recebimentos.</p>
+                      )
                     ) : (
                       // Implantação não é compra: entra mercadoria e não sai
                       // dinheiro. Dizer isso aqui é o que impede o campo de
@@ -2632,7 +2772,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   );
 };
 
-export const ProdutosView = ({ showToast }: any) => {
+export const ProdutosView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) {
     return (
@@ -2652,5 +2792,5 @@ export const ProdutosView = ({ showToast }: any) => {
       />
     );
   }
-  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} />;
+  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} profile={profile} />;
 };
