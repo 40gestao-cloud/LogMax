@@ -129,6 +129,11 @@ const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 // turma já tinha) mas é exceção, e exceção se escolhe com o nome dela na tela.
 const SEM_COMPRA = '__sem_compra__';
 
+// Prefixo do valor das requisições que ainda esperam o pedido sair (migr. 494).
+// O outro grupo do mesmo select guarda a DESCRIÇÃO do item; aqui é preciso o id
+// da requisição, porque é nela que o vínculo vai ser gravado.
+const REQ_PREFIX = '__req__:';
+
 // Sentinel do "Outro…" nos campos de lista da ficha (tamanho, cor).
 const OUTRO = '__outro__';
 
@@ -189,6 +194,17 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
   // antes da chegada obriga a inventar EAN interno para um produto que traz o
   // do fabricante impresso, e ninguem volta para corrigir.
   const { data: recebimentosDaFilial } = useFetchData<any>('/api/recebimentosview', { filial });
+
+  // A outra ponta, que faltava (migr. 494): o item da compra EVENTUAL que ainda
+  // NÃO virou pedido. A lista de cima (`itensComprados`) só enxerga o que já
+  // chegou na doca — passivo de antes da 480. Depois da 480 o caminho normal é o
+  // oposto: a requisição em texto livre para na frente do Gerar Pedido esperando
+  // um código de catálogo que ninguém criou ainda. Este é o momento de criar, e
+  // é aqui que o vínculo tem de nascer — senão o comprador redigita o nome, salva
+  // um produto que não sabe de qual requisição está falando, e volta para a
+  // cotação para procurá-lo num select.
+  const { data: requisicoesDaFilial, setData: setRequisicoesDaFilial } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: cotacoesDaFilial }    = useFetchData<any>('/api/cotacoesview', { filial });
 
 
 
@@ -306,6 +322,49 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
       })
       .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
   }, [pedidosDaFilial, recebimentosDaFilial, fornecedoresList, nomesCatalogo]);
+
+  // Requisições de texto livre esperando um código de catálogo (migr. 494).
+  //
+  // Régua: viva (ativa, não Atendida nem Negada), sem `produto_id` e com nome
+  // que ainda não existe no catálogo. Esse último filtro é o mesmo do grupo de
+  // cima e pela mesma razão — se o item já está cadastrado, o que falta é
+  // amarrar, não cadastrar de novo, e isso se faz no próprio Gerar Pedido.
+  //
+  // A cotação aprovada entra junto porque muda a urgência da linha: essa é a
+  // requisição que está PARADA na frente do Gerar Pedido agora. Ela também traz
+  // o fornecedor, que é a única coisa já decidida a esta altura.
+  const itensAguardandoPedido = useMemo(() => {
+    const cotPorReq = new Map<string, any>();
+    for (const c of cotacoesDaFilial as any[]) {
+      if (c.ativo === false || c.status !== 'Aprovado' || !c.requisicao_id) continue;
+      cotPorReq.set(c.requisicao_id, c);
+    }
+    return (requisicoesDaFilial as any[])
+      .filter(r => r.ativo !== false)
+      .filter(r => !r.produto_id)
+      .filter(r => !['Atendida', 'Negado'].includes(r.status))
+      .map(r => {
+        // Mesmo colapso de espaço em branco do grupo de cima: requisição colada
+        // de planilha traz TAB entre o produto e a marca, e o TAB ia inteiro
+        // para `produtos.nome`.
+        const desc = String(r.item ?? '').replace(/\s+/g, ' ').trim();
+        const cot  = cotPorReq.get(r.id);
+        return {
+          id: r.id,
+          descricao: desc,
+          numero: r.numero ?? `#${String(r.id).slice(-6).toUpperCase()}`,
+          qtd: Number(r.qtd ?? 0),
+          unidade: r.unidade ?? '',
+          cotada: !!cot,
+          fornecedor: cot ? (fornecedoresList.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? '') : '',
+          fornecedor_id: cot?.fornecedor_id ?? '',
+        };
+      })
+      .filter(i => i.descricao && !nomesCatalogo.has(i.descricao.toLowerCase()))
+      // Cotada primeiro: é a que está travando o Gerar Pedido neste minuto.
+      .sort((a, b) => (Number(b.cotada) - Number(a.cotada))
+        || a.descricao.localeCompare(b.descricao, 'pt-BR'));
+  }, [requisicoesDaFilial, cotacoesDaFilial, fornecedoresList, nomesCatalogo]);
   // Seleção para etiquetas. Guarda o produto inteiro (Map), não só o id: a
   // listagem é paginada no servidor, então um item escolhido na página 1 some
   // de `data` ao navegar para a página 2 — sem o snapshot não dá para gerar a
@@ -447,7 +506,26 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
 
   // Este produto veio de uma compra que já chegou? É o que decide se existe
   // custo para declarar.
-  const veioDeCompra = !!itemCompradoSel && itemCompradoSel !== SEM_COMPRA;
+  //
+  // A requisição esperando o pedido (migr. 494) NÃO conta como compra recebida:
+  // ali a mercadoria não chegou, não há custo apurado e não há saldo a lançar. O
+  // que existe é o vínculo a gravar depois do INSERT.
+  const veioDeCompra = !!itemCompradoSel
+    && itemCompradoSel !== SEM_COMPRA
+    && !itemCompradoSel.startsWith(REQ_PREFIX);
+
+  // Requisição escolhida como origem — é ela que recebe o `produto_id` assim que
+  // o produto existir.
+  const reqVinculo = useMemo(
+    () => itemCompradoSel.startsWith(REQ_PREFIX)
+      ? itensAguardandoPedido.find(i => i.id === itemCompradoSel.slice(REQ_PREFIX.length)) ?? null
+      : null,
+    [itemCompradoSel, itensAguardandoPedido],
+  );
+
+  // O select de origem só se cobra quando existe alguma lista para escolher.
+  const origemExigida = !editItem
+    && (itensComprados.length > 0 || itensAguardandoPedido.length > 0);
 
   // Custo obrigatório: só quando alguém REALMENTE sabe o número.
   //
@@ -854,8 +932,8 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
     // catálogo, porque é aí que mora a duplicata: cadastrar do zero um item que
     // está na doca esperando o Confirmar cria o segundo cadastro do mesmo
     // produto. Editar produto existente não passa por aqui.
-    if (!editItem && itensComprados.length > 0 && !itemCompradoSel) {
-      ee.origem_compra = 'Escolha um dos itens que já chegaram — ou "não veio de compra recebida".';
+    if (origemExigida && !itemCompradoSel) {
+      ee.origem_compra = 'Escolha a requisição que este cadastro atende, um dos itens que já chegaram — ou "não veio de compra".';
     }
 
     // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":
@@ -1042,6 +1120,29 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
         // Sem linha, `custo_origem` fica nulo e a tela mostra "—" até o
         // recebimento apurar — que é a verdade.
         if (novoId && extras.preco_custo.trim() !== '') await salvarPrecoCusto(novoId, custoValor);
+        // O vínculo com a requisição (migr. 494). Falhar aqui não desfaz o
+        // cadastro — o produto existe e é bom —, mas o comprador precisa saber,
+        // senão volta para Cotações e reencontra o modal do catálogo sem
+        // entender por quê. Vai por RPC porque `requisicoes` é escrita do setor
+        // solicitante: a função toca UMA coluna, e só quando ela está nula.
+        let vinculoFalhou = '';
+        if (novoId && reqVinculo && supabase) {
+          const { error: vincErr } = await supabase.rpc('vincular_produto_requisicao', {
+            p_requisicao_id: reqVinculo.id,
+            p_produto_id:    novoId,
+          });
+          if (vincErr) {
+            console.error('[Produtos] falha ao vincular requisição:', vincErr);
+            vinculoFalhou = vincErr.message ?? 'motivo não informado';
+          } else {
+            // Tira a requisição da lista sem esperar refetch: sem isto ela
+            // continua oferecida no próximo cadastro, e a segunda tentativa
+            // morre no "já aponta para um produto" — erro que o aluno lê como
+            // defeito da tela.
+            setRequisicoesDaFilial((prev: any[]) =>
+              prev.map(r => r.id === reqVinculo.id ? { ...r, produto_id: novoId } : r));
+          }
+        }
         const hoje = todayBR();
         let saldoFinal = 0;
         if (novoId && estoqueInicial > 0) {
@@ -1077,8 +1178,14 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
             ? 'Patrimônio cadastrado! Ele não aparece nesta lista — está em Financeiro > Patrimônio.'
             : veioDeCompra
               ? 'Produto criado com saldo zero. Agora volte em Estoque > Recebimentos e clique em Confirmar na linha deste pedido — é lá que a quantidade entra no estoque.'
-              : 'Produto criado com sucesso!',
-          'success', true);
+              : reqVinculo
+                // Mesma lógica do texto acima: o cadastro é o meio do fluxo. Aqui
+                // o próximo passo é o pedido, que agora sai sem perguntar nada.
+                ? (vinculoFalhou
+                    ? `Produto criado, mas a requisição ${reqVinculo.numero} não ficou vinculada (${vinculoFalhou}). Em Compras > Cotações, o Gerar Pedido ainda vai pedir o item do catálogo — escolha este produto lá.`
+                    : `Produto criado e vinculado à requisição ${reqVinculo.numero}. Agora é só ir em Compras > Cotações e clicar em Gerar Pedido — ele não vai mais pedir o item do catálogo.`)
+                : 'Produto criado com sucesso!',
+          vinculoFalhou ? 'error' : 'success', true);
       }
       closeForm();
     } catch (err: any) {
@@ -1321,7 +1428,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       é o passivo de antes da 480. (Era um <datalist> no campo de
                       nome, que não reabria depois de escolher — datalist filtra
                       as opções pelo texto digitado.) */}
-                  {itensComprados.length > 0 && (
+                  {origemExigida && (
                     <FormField label="Origem deste cadastro *" error={extrasErrors.origem_compra}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.origem_compra ? 'border border-red-500/40' : ''}`}
                         value={itemCompradoSel}
@@ -1330,6 +1437,32 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           setItemCompradoSel(desc);
                           setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
                           if (!desc || desc === SEM_COMPRA) return;
+                          // Requisição esperando o pedido (migr. 494): traz nome,
+                          // unidade e o fornecedor já cotado. NÃO traz custo — a
+                          // proposta é preço negociado, não custo apurado, e o
+                          // número real sai da média ponderada no recebimento
+                          // (migr. 417). Preencher aqui gravaria uma ficha de
+                          // custo com origem 'manual' antes de a carga existir.
+                          if (desc.startsWith(REQ_PREFIX)) {
+                            const req = itensAguardandoPedido.find(i => i.id === desc.slice(REQ_PREFIX.length));
+                            if (!req) return;
+                            setForm(f => ({ ...f, nome: req.descricao }));
+                            clearError('nome');
+                            setExtras(x => ({
+                              ...x,
+                              // A requisição oferece SERV (serviço) além das
+                              // unidades de produto: jogar isso no select do
+                              // cadastro deixaria o campo em branco, com valor
+                              // que nenhuma opção representa.
+                              unidade: x.unidade === 'UN' && unidadesDeProduto(filial).includes(normalizarUnidade(req.unidade))
+                                ? normalizarUnidade(req.unidade) : x.unidade,
+                              fornecedor:    x.fornecedor    || req.fornecedor,
+                              fornecedor_id: x.fornecedor_id || req.fornecedor_id,
+                              // Nada chegou ainda: o saldo entra pelo Recebimento.
+                              estoque: '',
+                            }));
+                            return;
+                          }
                           const comprado = itensComprados.find(i => i.descricao === desc);
                           if (!comprado) return;
                           setForm(f => ({ ...f, nome: comprado.descricao }));
@@ -1349,7 +1482,24 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                           }));
                         }}>
                         <option value="">— Selecione —</option>
-                        <option value={SEM_COMPRA}>Não veio de compra recebida (cadastro antecipado ou saldo de implantação)</option>
+                        <option value={SEM_COMPRA}>Não veio de compra (cadastro por conta própria ou saldo de implantação)</option>
+                        {/* Primeiro grupo é o caminho NORMAL pós-480: a compra
+                            eventual pediu em português, e o pedido não sai sem
+                            código. Escolher aqui grava o vínculo na requisição
+                            (migr. 494) — o Gerar Pedido daquela cotação deixa de
+                            pedir o catálogo e passa direto, como na Reposição. */}
+                        {itensAguardandoPedido.length > 0 && (
+                          <optgroup label={`Requisição esperando o pedido sair (${itensAguardandoPedido.length})`}>
+                            {itensAguardandoPedido.map(i => (
+                              <option key={i.id} value={`${REQ_PREFIX}${i.id}`}>
+                                {i.descricao}
+                                {i.qtd > 0 ? ` · ${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : ''}
+                                {` · ${i.numero}`}
+                                {i.cotada ? ' · cotação aprovada' : ' · sem cotação aprovada'}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                         {/* Item comprado mas ainda não recebido não aparece: a
                             ficha do produto (EAN, peso, validade) está na caixa
                             que ainda não chegou. */}
@@ -1361,10 +1511,18 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       </select>
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                         O normal é <span className="text-gray-400">cadastrar antes de comprar</span> — é o código
-                        daqui que entra no pedido. A segunda lista são{' '}
-                        <span className="text-accent font-bold">{itensComprados.length}</span> item(ns) que já chegaram
-                        no Recebimento e ainda não têm cadastro: escolher um traz nome, fornecedor e custo do pedido,
-                        em vez de criar um segundo cadastro do mesmo produto.
+                        daqui que entra no pedido.
+                        {itensAguardandoPedido.length > 0 && (
+                          <> A primeira lista são <span className="text-accent font-bold">{itensAguardandoPedido.length}</span>{' '}
+                          requisição(ões) de compra eventual paradas esperando exatamente isto: escolher uma amarra este
+                          cadastro a ela, e o <span className="text-gray-400">Gerar Pedido</span> em Compras &gt; Cotações
+                          passa direto, sem perguntar o item do catálogo.</>
+                        )}
+                        {itensComprados.length > 0 && (
+                          <> A lista &quot;já chegou&quot; são <span className="text-accent font-bold">{itensComprados.length}</span>{' '}
+                          item(ns) que entraram no Recebimento antes de ter cadastro: escolher um traz nome, fornecedor e
+                          custo do pedido, em vez de criar um segundo cadastro do mesmo produto.</>
+                        )}
                       </p>
                     </FormField>
                   )}
@@ -1940,7 +2098,7 @@ const ProdutosViewInner = ({ showToast, filial }: { showToast: any; filial: Fili
                       com a do recebimento, e o estoque vai ao dobro. É o mesmo
                       erro que a migr. 438 removeu ao tirar "Quantidade Comprada"
                       do cadastro, entrando por outra porta. */}
-                  {(editItem || itemCompradoSel === SEM_COMPRA || itensComprados.length === 0) ? (
+                  {(editItem || itemCompradoSel === SEM_COMPRA || !origemExigida) ? (
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
                     <input
                       type="text" inputMode="decimal"

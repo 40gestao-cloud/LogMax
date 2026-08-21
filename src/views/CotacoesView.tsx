@@ -1362,9 +1362,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 O setor pede em português; quem compra amarra ao catálogo, porque é o código que
                 entra no pedido. Feito isso, a carga chega com o item já definido e o Recebimento
                 só confere — ninguém cadastra produto na doca.
+                {/* Compra eventual é, por definição, o item que ainda não está no
+                    catálogo — então este select vazio é o caso NORMAL dela, não o
+                    excepcional. Mandar "cadastre e volte aqui" sem dizer onde o
+                    vínculo se faz era o que obrigava a procurar o produto neste
+                    mesmo select depois. Com a migr. 494 o cadastro já amarra, e
+                    quem vai por lá não passa mais por este modal. */}
                 <span className="block mt-1.5 text-gray-400">
-                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Produtos</span> e
-                  volte aqui — a tela atualiza sozinha.
+                  Não está na lista? Vá em <span className="font-bold">Cadastros &gt; Produtos &gt; Novo</span> e,
+                  no campo <span className="font-bold">Origem deste cadastro</span>, escolha esta requisição —
+                  o produto já nasce amarrado a ela e este passo aqui deixa de aparecer.
                 </span>
               </p>
 
