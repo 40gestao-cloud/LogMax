@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, Plus, Save, Trash2, CornerUpLeft, X } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -10,8 +10,9 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, Pagination } fr
 import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import type { UserProfile } from '../hooks/useUserProfile';
 
-const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToast: any; filial: FilialOp; profile?: UserProfile | null }) => {
   const confirm = useConfirm();
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
 
@@ -39,6 +40,42 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
   const [form, setForm] = useState({ produto_id: '', tipo: '' });
   const [extras, setExtras] = useState({ qtd: '', origem: '', destino: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+
+  // Devolução para correção (migr. 502) — só a direção. `role === 'admin'`
+  // LITERAL, não `hasRole`/`auth_is_admin`: CEO e conselheiro são ALUNOS, e
+  // devolver é ato de quem avalia. O banco repete a régua na RPC; isto aqui só
+  // evita mostrar um botão que vai voltar 42501.
+  const ehProfessor = profile?.role === 'admin';
+  const [devolvendo, setDevolvendo] = useState<any | null>(null);
+  const [motivoDevolucao, setMotivoDevolucao] = useState('');
+  const [devolvendoSalvando, setDevolvendoSalvando] = useState(false);
+
+  const handleDevolver = async () => {
+    if (!devolvendo || !supabase) return;
+    if (!motivoDevolucao.trim()) {
+      showToast('Escreva o que está errado — é o que o aluno vai ler para corrigir.', 'error', true);
+      return;
+    }
+    setDevolvendoSalvando(true);
+    try {
+      const { error } = await supabase.rpc('devolver_movimentacao_para_correcao', {
+        p_movimentacao_id: devolvendo.id,
+        p_motivo:          motivoDevolucao.trim(),
+      });
+      if (error) throw new Error(error.message);
+      // A RPC inativa a linha; o saldo já estornou pelo gatilho da migr. 268.
+      setData((prev: any[]) => prev.filter(d => d.id !== devolvendo.id));
+      setDevolvendo(null);
+      setMotivoDevolucao('');
+      showToast(
+        'Movimentação desfeita e devolvida. O saldo estornou e o produto ficou marcado como "precisa de correção" — quem fez a movimentação vê o motivo em Cadastros > Produtos.',
+        'success', true);
+    } catch (err: any) {
+      showToast(`Não foi possível devolver: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setDevolvendoSalvando(false);
+    }
+  };
 
   const filtered = data.map((m: any) => ({ ...m, prod: produtos.find((p: any) => p.id === m.produto_id) }));
 
@@ -196,6 +233,18 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="movimentacoes_estoque" entidadeId={item.id} titulo={`${item.tipo ?? 'Movimentação'} · ${item.data ?? ''}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                            {/* Devolver é diferente de excluir: as duas desfazem
+                                o saldo, mas esta AVISA quem errou e deixa a
+                                correção com ele. Só a direção vê (migr. 502). */}
+                            {ehProfessor && item.ativo !== false && (
+                              <button
+                                onClick={() => { setDevolvendo(item); setMotivoDevolucao(''); }}
+                                title="Desfazer e devolver para quem lançou corrigir"
+                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1"
+                              >
+                                <CornerUpLeft size={11} /> Devolver
+                              </button>
+                            )}
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
@@ -215,12 +264,76 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial }: { showToast: any; 
           onReload={reload}
         />
       </div>
+
+      {/* Devolver para correção (migr. 502). Mesma ideia da cotação devolvida
+          (migr. 467): quem decide não corrige o trabalho do outro — devolve
+          com motivo, e quem errou conserta. É o que faz o erro virar aula. */}
+      <AnimatePresence>
+        {devolvendo && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !devolvendoSalvando && setDevolvendo(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-300">
+                  Devolver para correção
+                  <span className="text-accent ml-2">— {devolvendo.prod?.nome ?? 'produto'}</span>
+                </h3>
+                <button onClick={() => !devolvendoSalvando && setDevolvendo(null)}
+                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="neu-inset rounded-xl p-3 border border-white/5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">O que será desfeito</p>
+                <p className="text-xs text-gray-200">
+                  {devolvendo.tipo} de {devolvendo.qtd}
+                  {devolvendo.origem ? <span className="text-gray-500"> · {devolvendo.origem}</span> : null}
+                </p>
+              </div>
+
+              <FormField label="O que está errado? *">
+                <textarea rows={3}
+                  className="neu-input py-2 px-3 rounded-xl text-sm w-full resize-none"
+                  value={motivoDevolucao}
+                  onChange={e => setMotivoDevolucao(e.target.value)}
+                  placeholder="Ex.: esta entrada duplicou o saldo de implantação — o produto já tinha entrado pelo recebimento." />
+              </FormField>
+
+              <p className="text-[11px] text-gray-500 leading-snug">
+                A movimentação é desfeita e o saldo estorna. O produto fica marcado como
+                <span className="text-amber-300 font-semibold"> precisa de correção</span>, com este motivo à
+                vista em Cadastros &gt; Produtos — e a caneta fica com quem fez a movimentação
+                (ou o gerente da unidade), não com a direção.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setDevolvendo(null)} disabled={devolvendoSalvando}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={handleDevolver} isLoading={devolvendoSalvando}
+                  disabled={!motivoDevolucao.trim()}>
+                  <CornerUpLeft size={14} /> Devolver
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
 
-export const MovimentacoesEstoqueView = ({ showToast }: any) => {
+export const MovimentacoesEstoqueView = ({ showToast, profile }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return null;
-  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} />;
+  return <MovimentacoesEstoqueViewInner showToast={showToast} filial={filialAtiva} profile={profile} />;
 };

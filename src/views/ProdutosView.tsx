@@ -1109,6 +1109,42 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     }
   };
 
+  // Encerrar a correção devolvida pela direção (migr. 502).
+  //
+  // Quem tem a caneta é o RESPONSÁVEL (quem fez a movimentação devolvida), o
+  // gerente da unidade ou a direção — o colega de setor não, porque o ponto do
+  // exercício é quem errou corrigir. A régua real está na RPC; aqui é só para
+  // não mostrar um botão que voltaria 42501.
+  const podeEncerrarCorrecao = !!editItem?.correcao_pendente && (
+    editItem.correcao_responsavel_id === profile?.id
+    || (profile?.role === 'gerente' && profile?.filial === filial)
+    || profile?.role === 'admin'
+  );
+  const [encerrandoCorrecao, setEncerrandoCorrecao] = useState(false);
+
+  const encerrarCorrecao = async () => {
+    if (!editItem || !supabase) return;
+    setEncerrandoCorrecao(true);
+    try {
+      const { error } = await supabase.rpc('concluir_correcao_produto', {
+        p_produto_id: editItem.id,
+      });
+      if (error) throw new Error(error.message);
+      const limpo = {
+        correcao_pendente: false, correcao_motivo: null,
+        correcao_solicitada_por: null, correcao_solicitada_em: null,
+        correcao_responsavel_id: null,
+      };
+      setEditItem((prev: any) => prev ? { ...prev, ...limpo } : prev);
+      setData((prev: any[]) => prev.map(d => d.id === editItem.id ? { ...d, ...limpo } : d));
+      showToast('Correção encerrada — o produto saiu da lista de pendências.', 'success', true);
+    } catch (err: any) {
+      showToast(`Não foi possível encerrar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setEncerrandoCorrecao(false);
+    }
+  };
+
   const handleSave = async () => {
     // `validate()` do useFormValidation cobra TODA chave de `form`, e `preco` é
     // uma delas — era isso que forçava o aluno a inventar um preço de venda para
@@ -1577,6 +1613,36 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
           <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Produto' : 'Novo Produto'}</h3>
+
+              {/* Correção devolvida pela direção (migr. 502). Primeira coisa do
+                  formulário porque é a razão de o aluno estar nesta tela: sem o
+                  motivo à vista, "corrija o produto" não diz o que corrigir. */}
+              {editItem?.correcao_pendente && (
+                <div className="neu-pressed rounded-xl p-4 border border-amber-400/30 flex flex-col gap-2">
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                    Precisa de correção
+                  </span>
+                  <p className="text-xs text-gray-200 leading-relaxed">{editItem.correcao_motivo}</p>
+                  <p className="text-[10px] text-gray-500 leading-snug">
+                    A direção desfez uma movimentação deste produto — o saldo já foi estornado.
+                    Corrija o que está apontado acima e salve. Quando estiver certo, encerre a
+                    pendência no botão ao lado.
+                  </p>
+                  {podeEncerrarCorrecao ? (
+                    <button type="button" onClick={encerrarCorrecao} disabled={encerrandoCorrecao}
+                      className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors self-start disabled:opacity-50">
+                      {encerrandoCorrecao ? 'Encerrando...' : 'Correção concluída'}
+                    </button>
+                  ) : (
+                    // Não é falta de permissão de tela: é segregação. Quem
+                    // encerra é quem fez, o gerente da unidade ou a direção.
+                    <p className="text-[10px] text-gray-500 leading-snug">
+                      Quem encerra esta pendência é quem fez a movimentação, o gerente da unidade
+                      ou a direção.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* A leitura circular já apareceu em sala: "para confirmar o
                   recebimento preciso do produto, e o produto depende do
@@ -2554,6 +2620,16 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
                           <p className="text-sm font-semibold text-gray-200 flex items-center gap-1.5">
                             {item.nome}
+                            {/* Devolvido pela direção (migr. 502). Primeiro selo
+                                da linha de propósito: é o único que pede ação de
+                                alguém, e quem abre esta lista precisa achá-lo sem
+                                entrar produto a produto. */}
+                            {item.correcao_pendente && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-600/30"
+                                title={item.correcao_motivo ?? 'A direção devolveu uma movimentação deste produto para correção.'}>
+                                Corrigir
+                              </span>
+                            )}
                             {/* Consumo divide a lista com mercadoria — ambos
                                 têm estoque e ambos se repõem. Sem o selo, "Papel
                                 A4" e "Arroz 5kg" são indistinguíveis na grade, e

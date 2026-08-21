@@ -1157,7 +1157,7 @@ function LogMaxAppInner() {
       case 'estoque-recebimentos':            return <RecebimentosView showToast={st} />;
       case 'estoque-requisiçõesdematerial':   return <RequisicoesEstoqueView showToast={st} profile={profile} />;
       case 'estoque-expedição':               return <ExpedicaoView showToast={st} />;
-      case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} />;
+      case 'estoque-movimentações':           return <MovimentacoesEstoqueView showToast={st} profile={profile} />;
       case 'estoque-saldos':                  return <SaldosEstoqueView />;
       case 'estoque-validades':               return <ValidadesView showToast={st} />;
       case 'estoque-inventários':             return <InventariosView showToast={st} />;
