@@ -148,6 +148,14 @@ export const FiliaisView = ({ showToast }: any) => {
     false,
     { orderBy: 'created_at', ascending: true },
   );
+  // Nicho da filial ABERTA no formulário — não o do topbar. Em modo Matriz
+  // (consolidado) a lista mostra todas as unidades, então `nichoAtivo` seria
+  // 'Matriz' mesmo editando a SuperMax: item, grade e conta a pagar sairiam
+  // na unidade errada. Só cai em `nichoAtivo` quando não há filial aberta
+  // (criação), que é o único caso em que o topbar manda.
+  const nichoDoForm: FilialHolding = editItem
+    ? (detectarNicho(editItem.detalhes?.nicho, editItem.nome) ?? nichoAtivo)
+    : nichoAtivo;
   const [search, setSearch]         = useState('');
   const [form, setForm]             = useState({ nome: '', cnpj: '', cidade: '' });
   const [extras, setExtras]         = useState({ celular: '', endereco: '', representante: '' });
@@ -266,30 +274,21 @@ export const FiliaisView = ({ showToast }: any) => {
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
       const num = (v: string) => v !== '' ? Number(v) : null;
-      // Nicho vem da unidade ativa no topbar — não do nome nem de seletor.
-      const nicho = nichoAtivo;
+      // Nicho da filial aberta (ver `nichoDoForm`). Só uma filial nova herda
+      // o nicho do topbar — salvar a SuperMax a partir da Matriz não pode
+      // reescrever o nicho dela.
+      const nicho = nichoDoForm;
       // `detalhes` continua sendo gravado (migr. 509/Fase 2) para não quebrar
       // quem ainda lê as chaves fixas — mas espelhado a partir da lista de
-      // itens (filial_investimentos), que é a fonte da verdade agora. Item
-      // customizado (categoria='outro') não tem chave fixa correspondente e
-      // por isso não aparece aqui — só entra no agregado.
-      const chavesEquipParaSalvar = CAMPOS_NICHO[nicho].map(([k]) => k);
-      const itensGrade = (itens ?? []).filter((i: any) => i.origem_campo === 'grade');
-      const equipPayload = Object.fromEntries(chavesEquipParaSalvar.map(k => {
-        const it = itensGrade.find((i: any) => i.chave === k);
-        return [k, it ? Number(it.quantidade) : null];
-      }));
-      const precoPayload = Object.fromEntries(chavesEquipParaSalvar.map(k => {
-        const it = itensGrade.find((i: any) => i.chave === k);
-        return [precoKey(k), it ? Number(it.preco_unitario) : null];
-      }));
-      const valorTotalEquipamentos = totalEquipamentosForm;
-      const valorAluguel = totalAluguelForm;
-      const folhaPagamento = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
-      // Total investido = itens (equipamento + aluguel + outro) + folha de
-      // pagamento. Investimento inicial fica de fora — é entrada manual
-      // separada (aporte de abertura), não recorrente como os outros dois.
-      const valorTotalInvestido = totalInvestidoForm;
+      // itens (filial_investimentos), que é a fonte da verdade agora. O
+      // espelho e os totais vêm de `espelhoInvestimento`, o mesmo que o
+      // rodapé do formulário mostra. Investimento inicial fica de fora — é
+      // entrada manual separada (aporte de abertura).
+      const { equipPayload, precoPayload } = espelhoInvestimento;
+      const valorTotalEquipamentos = espelhoInvestimento.equipamentos;
+      const valorAluguel           = espelhoInvestimento.aluguel;
+      const folhaPagamento         = espelhoInvestimento.folha;
+      const valorTotalInvestido    = espelhoInvestimento.total;
       const detalhesPayload = {
         nicho,
         tamanhoM2: num(detalhes.tamanhoM2),
@@ -347,24 +346,43 @@ export const FiliaisView = ({ showToast }: any) => {
   // estável pra ler depois.
   const valorNum = (v: string) => { const n = parseBRL(v || '0'); return Number.isFinite(n) ? n : 0; };
 
-  const totalEquipamentosForm = useMemo(() =>
-    (itens ?? []).filter((i: any) => i.categoria === 'equipamento')
-      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
-    [itens],
-  );
-  const totalAluguelForm = useMemo(() =>
-    (itens ?? []).filter((i: any) => i.categoria === 'aluguel')
-      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
-    [itens],
-  );
-  const totalItensForm = useMemo(() =>
-    (itens ?? []).reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
-    [itens],
-  );
-  const totalInvestidoForm = useMemo(() => {
-    const folha = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
-    return totalItensForm + folha;
-  }, [totalItensForm, detalhes.folhaPagamento]);
+  // Espelho de `detalhes` + totais, num lugar só: é o que o Salvar grava e o
+  // que o rodapé do formulário mostra. Chave de grade sem item usa o valor
+  // que já estava em `detalhes` — filial ainda não importada não pode ser
+  // zerada pelo simples ato de salvar (e sem qtd > 0 o botão "Importar de
+  // Detalhes" some, deixando o dado velho inalcançável).
+  const espelhoInvestimento = useMemo(() => {
+    const num = (v: string) => v !== '' && v != null ? Number(v) : null;
+    const chaves = CAMPOS_NICHO[nichoDoForm].map(([k]) => k);
+    const itensGrade = (itens ?? []).filter((i: any) => i.origem_campo === 'grade');
+    const equipPayload: Record<string, number | null> = {};
+    const precoPayload: Record<string, number | null> = {};
+    let totalGrade = 0;
+    for (const k of chaves) {
+      const it = itensGrade.find((i: any) => i.chave === k);
+      const qtd   = it ? Number(it.quantidade)     : num(detalhes[k]);
+      const preco = it ? Number(it.preco_unitario) : (detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : null);
+      equipPayload[k] = qtd;
+      precoPayload[precoKey(k)] = preco;
+      totalGrade += Number(qtd ?? 0) * Number(preco ?? 0);
+    }
+    const totalCustom = (cats: string[]) => (itens ?? [])
+      .filter((i: any) => i.origem_campo === 'customizado' && cats.includes(i.categoria))
+      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0);
+    const totalAluguelItens = (itens ?? [])
+      .filter((i: any) => i.categoria === 'aluguel')
+      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0);
+    const aluguelLegado = detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel
+      ? parseBRL(detalhes.valorAluguel) : 0;
+    const equipamentos = totalGrade + totalCustom(['equipamento']);
+    const aluguel      = totalAluguelItens > 0 ? totalAluguelItens : aluguelLegado;
+    const outros       = totalCustom(['outro']);
+    const folha        = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
+    return {
+      equipPayload, precoPayload, equipamentos, aluguel, outros, folha,
+      total: equipamentos + aluguel + outros + folha,
+    };
+  }, [itens, detalhes, nichoDoForm]);
 
   const itemJaNaLista = (chave: string) => (itens ?? []).some((i: any) => i.chave === chave);
 
@@ -372,7 +390,7 @@ export const FiliaisView = ({ showToast }: any) => {
     if (!editItem?.id || itemJaNaLista(chave)) return;
     try {
       await dbInsert('/api/filialinvestimentosview', {
-        filial_id: editItem.id, filial: nichoAtivo, chave, rotulo,
+        filial_id: editItem.id, filial: nichoDoForm, chave, rotulo,
         origem_campo: 'grade', categoria: 'equipamento', quantidade: 1, preco_unitario: 0,
       });
       reloadItens();
@@ -385,7 +403,7 @@ export const FiliaisView = ({ showToast }: any) => {
     if (!editItem?.id) return;
     try {
       await dbInsert('/api/filialinvestimentosview', {
-        filial_id: editItem.id, filial: nichoAtivo, chave: `custom_${Date.now()}`, rotulo: '',
+        filial_id: editItem.id, filial: nichoDoForm, chave: `custom_${Date.now()}`, rotulo: '',
         origem_campo: 'customizado', categoria: 'outro', quantidade: 1, preco_unitario: 0,
       });
       reloadItens();
@@ -423,7 +441,7 @@ export const FiliaisView = ({ showToast }: any) => {
   const handleImportarParaItens = async () => {
     if (!editItem?.id) return;
     const d = editItem.detalhes ?? {};
-    const nichoItem = detectarNicho(d.nicho, editItem.nome) ?? nichoAtivo;
+    const nichoItem = nichoDoForm;
     const rows: any[] = [];
     for (const [chave, rotulo] of CAMPOS_NICHO[nichoItem]) {
       const qtd = Number(d[chave] || 0);
@@ -678,7 +696,7 @@ export const FiliaisView = ({ showToast }: any) => {
                   que a filial tem id (salva ao menos uma vez). */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoAtivo}</span>
+                  <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoDoForm}</span>
                 </p>
 
                 {!editItem ? (
@@ -687,7 +705,7 @@ export const FiliaisView = ({ showToast }: any) => {
                   </div>
                 ) : (
                   <>
-                    {(itens ?? []).length === 0 && CAMPOS_NICHO[detectarNicho(editItem.detalhes?.nicho, editItem.nome) ?? nichoAtivo]
+                    {(itens ?? []).length === 0 && CAMPOS_NICHO[nichoDoForm]
                       .some(([k]) => Number(editItem.detalhes?.[k] || 0) > 0) && (
                       <button type="button" onClick={handleImportarParaItens}
                         className="neu-button py-2 px-4 rounded-xl text-xs text-accent mb-3">
@@ -696,7 +714,7 @@ export const FiliaisView = ({ showToast }: any) => {
                     )}
 
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {CAMPOS_NICHO[nichoAtivo].filter(([k]) => !itemJaNaLista(k)).map(([k, label]) => (
+                      {CAMPOS_NICHO[nichoDoForm].filter(([k]) => !itemJaNaLista(k)).map(([k, label]) => (
                         <button type="button" key={k} onClick={() => handleAddItemGrade(k, label)}
                           className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-accent">
                           + {label}
@@ -830,12 +848,18 @@ export const FiliaisView = ({ showToast }: any) => {
                 <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
                   <div className="flex items-center justify-between text-[11px] text-gray-500">
                     <span>Equipamentos & mobiliário</span>
-                    <span className="tabular-nums">R$ {formatBRL(totalEquipamentosForm)}</span>
+                    <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.equipamentos)}</span>
                   </div>
-                  {totalAluguelForm > 0 && (
+                  {espelhoInvestimento.aluguel > 0 && (
                     <div className="flex items-center justify-between text-[11px] text-gray-500">
                       <span>Aluguel</span>
-                      <span className="tabular-nums">R$ {formatBRL(totalAluguelForm)}</span>
+                      <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.aluguel)}</span>
+                    </div>
+                  )}
+                  {espelhoInvestimento.outros > 0 && (
+                    <div className="flex items-center justify-between text-[11px] text-gray-500">
+                      <span>Outros itens</span>
+                      <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.outros)}</span>
                     </div>
                   )}
                   {detalhes.folhaPagamento && (
@@ -846,7 +870,7 @@ export const FiliaisView = ({ showToast }: any) => {
                   )}
                   <div className="flex items-center justify-between pt-2 border-t border-white/5">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido</span>
-                    <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(totalInvestidoForm)}</span>
+                    <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(espelhoInvestimento.total)}</span>
                   </div>
                 </div>
               </div>
