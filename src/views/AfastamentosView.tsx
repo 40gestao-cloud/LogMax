@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { usePontoCorteTurma } from '../hooks/useJornadaTurma';
 
 const TIPOS = [
   'Atestado médico',
@@ -104,6 +105,9 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
   const [decidindo, setDecidindo] = useState(false);
 
   const canCRUD = hasSetor(profile, 'rh') || profile?.role === 'gerente';
+  // (506) Afastamento herdado da turma passada: o banco recusa aplicar no
+  // ponto daqueles dias. O botão some em vez de oferecer o erro.
+  const corteTurma = usePontoCorteTurma();
   // Espelho de `afastamento_decisao_guard` (migr. 292). `auth_is_admin()` NÃO
   // serve: ele inclui conselheiro, e a régua aqui é admin ou CEO — por isso a
   // checagem é pelo role cru, e não por hasRole/hasSetor.
@@ -189,16 +193,24 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       if (error) throw error;
       const aplicados = Number(data?.aplicados ?? 0);
       const pulados   = Number(data?.pulados   ?? 0);
+      // (506) Dias que caíram antes do último APAGAR TUDO. O banco pula; a
+      // tela precisa dizer, senão o número de dias aplicados parece errado.
+      const daTurmaAnterior = Number(data?.pulados_turma_anterior ?? 0);
       // silent: chamado com o formulário ainda aberto (o resetForm vem depois)
       // e por botão de linha que já tem seu próprio aplicandoId. Um reload
       // normal cairia no `if (isLoading) return <spinner>` e piscaria a tela.
       await reload({ silent: true });
       if (!opts?.silencioso) {
-        if (pulados > 0) {
-          showToast?.(`Aplicado em ${aplicados} dia(s). ${pulados} dia(s) já tinham outro afastamento e foram preservados.`, 'success');
-        } else {
-          showToast?.(`Ponto atualizado em ${aplicados} dia(s) como Justificado.`, 'success');
-        }
+        const sobras = [
+          pulados > 0        ? `${pulados} dia(s) já tinham outro afastamento` : null,
+          daTurmaAnterior > 0 ? `${daTurmaAnterior} dia(s) são da turma anterior` : null,
+        ].filter(Boolean).join(' e ');
+        showToast?.(
+          sobras
+            ? `Aplicado em ${aplicados} dia(s). ${sobras} — preservados como estavam.`
+            : `Ponto atualizado em ${aplicados} dia(s) como Justificado.`,
+          'success',
+        );
       }
     } catch (err: any) {
       showToast?.(`Erro ao aplicar no ponto: ${err?.message ?? 'verifique o console'}`, 'error');
@@ -449,10 +461,17 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
                               <CheckCircle2 size={11} />Aplicado
                             </span>
                           ) : (
-                            <button onClick={() => aplicarNoPonto(a.id)} disabled={aplicandoId === a.id || !canCRUD}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-yellow-400 border border-yellow-400/30 rounded-md px-2 py-1 hover:bg-yellow-400/10 disabled:opacity-40">
-                              <FileText size={9} />{aplicandoId === a.id ? 'aplicando…' : 'Aplicar'}
-                            </button>
+                            corteTurma && a.data_fim < corteTurma ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-500"
+                                    title={`Período anterior ao APAGAR TUDO de ${corteTurma} — ponto da turma passada, não se reescreve.`}>
+                                <Clock size={11} />Turma anterior
+                              </span>
+                            ) : (
+                              <button onClick={() => aplicarNoPonto(a.id)} disabled={aplicandoId === a.id || !canCRUD}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-yellow-400 border border-yellow-400/30 rounded-md px-2 py-1 hover:bg-yellow-400/10 disabled:opacity-40">
+                                <FileText size={9} />{aplicandoId === a.id ? 'aplicando…' : 'Aplicar'}
+                              </button>
+                            )
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
