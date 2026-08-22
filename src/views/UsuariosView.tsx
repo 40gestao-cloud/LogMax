@@ -272,6 +272,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         `${d?.usuarios_preservados ?? users.length} usuário(s)`,
         d?.funcionarios_preservados != null ? `${d.funcionarios_preservados} funcionário(s)` : null,
         d?.filiais_preservadas      != null ? `${d.filiais_preservadas} filial(is)`         : null,
+        // (504) O ponto passou a atravessar o reset. Aparece cedo na lista de
+        // propósito: é o número que o professor confere primeiro quando o que
+        // ele teme perder é a frequência da turma.
+        d?.ponto_preservado         != null ? `${d.ponto_preservado} registro(s) de ponto` : null,
+        // (504) Documentos da Matriz: sempre atravessaram o reset, mas isso só
+        // aparecia por ausência. Agora aparece por número.
+        d?.documentos_preservados   != null ? `${d.documentos_preservados} documento(s)` : null,
         // Blocos que a migração 377 tirou do TRUNCATE — mostrar aqui é o que
         // dá ao professor a confirmação de que a competição das filiais
         // atravessou o reset.
@@ -1099,9 +1106,10 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                 Apaga <strong className="text-gray-200">TODOS os dados operacionais</strong> (vendas, estoque, financeiro,
-                folha, ponto, avaliações, marketing, histórico MaxBank, produtos, serviços e clientes).
+                folha, avaliações, marketing, histórico MaxBank, produtos, serviços e clientes).
                 Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial),
-                os <strong className="text-gray-200">funcionários</strong>, o <strong className="text-gray-200">histórico de frequência</strong>,
+                os <strong className="text-gray-200">funcionários</strong>, o <strong className="text-gray-200">Registro de Ponto</strong>{' '}
+                (frequência lançada, afastamentos e justificativas — migr. 504),
                 as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais), as <strong className="text-gray-200">filiais</strong>
                 e — desde a migr. 482 — os <strong className="text-gray-200">fornecedores</strong> e as{' '}
                 <strong className="text-gray-200">categorias de produto</strong>.
@@ -1152,7 +1160,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
                   <li>Vendas, estoque, recebimentos, expedição</li>
                   <li>Financeiro: contas a pagar/receber, caixa, conciliações</li>
-                  <li>RH: ponto, folha, férias, afastamentos, treinamentos</li>
+                  {/* (504) "ponto" e "afastamentos" saíram desta linha: estão
+                      do lado de preservar. A linha dizia como perda o que a
+                      régua agora mantém — e o Registro de Ponto era justamente
+                      o que não podia sumir. */}
+                  <li>RH: folha de pagamento, férias, inscrições em treinamento</li>
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
                   <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
@@ -1168,6 +1180,19 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   os <strong>funcionários</strong> e o <strong>histórico de frequência</strong>,
                   as carteiras MaxBank (saldo de salário, benefícios e bonificações)
                   e as <strong>filiais</strong> (com CNPJ e demais cadastros).
+                </p>
+                {/* Migr. 504: o ponto era truncado enquanto esta mesma tela
+                    prometia "histórico de frequência". Parágrafo próprio pelo
+                    mesmo motivo do de fornecedor — é a mudança de lado que o
+                    professor precisa ver antes de digitar APAGAR TUDO. */}
+                <p className="text-emerald-400 text-xs">
+                  ✓ Também preserva o <strong>Registro de Ponto</strong>: a frequência lançada, os{' '}
+                  <strong>afastamentos</strong> e as <strong>justificativas de falta</strong>. São histórico da
+                  pessoa, não exercício da turma — e é deles que o eixo de frequência do placar é calculado.
+                </p>
+                <p className="text-emerald-400 text-xs">
+                  ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
+                  foi assim; a régua só não dizia. O material do professor não se refaz a cada turma.
                 </p>
                 {/* Migr. 482: fornecedor e categoria mudaram de lado. Ganham
                     parágrafo próprio porque é a novidade que o professor
@@ -1230,7 +1255,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <p className="text-sm text-gray-300 mb-4 leading-relaxed">
                 Recomeca <strong>uma</strong> unidade sem tocar nas outras. Mesma regua do Apagar tudo:
                 o que ele preserva, este preserva &mdash; usuarios, funcionarios, filiais, carteiras,
-                frequencia, placar da competicao, fornecedores e categorias.
+                frequencia, Registro de Ponto (migr. 504), placar da competicao, fornecedores e categorias.
               </p>
 
               <div className="flex flex-col gap-2 mb-4">
