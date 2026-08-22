@@ -92,6 +92,9 @@ const EMPTY_EXTRAS = {
   patrimonio_numero:      '',
   patrimonio_responsavel: '',
   patrimonio_localizacao: '',
+  // Migr. 511 — meses até depreciar 100% (linear, sem residual). Vazio =
+  // não entra na depreciação do DRE (bem cadastrado só pra controle físico).
+  patrimonio_vida_util_meses: '',
   elegivel_beneficios:    false,
   // Atributos por nicho (JSONB em produtos.atributos). Cada filial preenche
   // um subconjunto: MaxLook usa tamanho/cor/genero/colecao/material; TechMax
@@ -968,6 +971,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       patrimonio_numero:      item.patrimonio_numero      ?? '',
       patrimonio_responsavel: item.patrimonio_responsavel ?? '',
       patrimonio_localizacao: item.patrimonio_localizacao ?? '',
+      patrimonio_vida_util_meses: item.patrimonio_vida_util_meses != null ? String(item.patrimonio_vida_util_meses) : '',
       elegivel_beneficios:    !!item.elegivel_beneficios,
       atributos:              (item.atributos && typeof item.atributos === 'object') ? item.atributos : {},
     });
@@ -1328,6 +1332,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         patrimonio_numero:      isPatrimonio ? (extras.patrimonio_numero      || null) : null,
         patrimonio_responsavel: isPatrimonio ? (extras.patrimonio_responsavel || null) : null,
         patrimonio_localizacao: isPatrimonio ? (extras.patrimonio_localizacao || null) : null,
+        patrimonio_vida_util_meses: isPatrimonio && extras.patrimonio_vida_util_meses
+          ? Number(extras.patrimonio_vida_util_meses) : null,
         // Patrimônio não vai pro PDV, então força elegivel_beneficios=false.
         // Elegível benefícios só se aplica ao SuperMax (supermercado) — MaxLook
         // e TechMax não têm itens elegíveis por natureza (roupa, eletrônico).
@@ -1704,6 +1710,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         value={extras.patrimonio_localizacao}
                         onChange={e => setExtras(x => ({ ...x, patrimonio_localizacao: e.target.value }))}
                         placeholder="Ex: Sala TI - Rio Branco" />
+                    </FormField>
+                    <FormField label="Vida útil (meses)">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="1"
+                        value={extras.patrimonio_vida_util_meses}
+                        onChange={e => setExtras(x => ({ ...x, patrimonio_vida_util_meses: e.target.value }))}
+                        placeholder="Ex: 60 (5 anos)" />
+                      <p className="text-[10px] text-gray-500 mt-1">Vazio = não entra na depreciação do DRE.</p>
                     </FormField>
                   </div>
                 )}

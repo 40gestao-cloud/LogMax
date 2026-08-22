@@ -233,7 +233,7 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
                       </div>
                       <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
                         <div className={`h-full rounded-full ${naoClassificado ? 'bg-amber-400/60' : 'bg-accent/60'}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }} />
+                          style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }} />
                       </div>
                     </div>
                   );
