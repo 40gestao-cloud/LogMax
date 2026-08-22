@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -115,6 +116,7 @@ function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'x
 export const FiliaisView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/filiaisview');
   const confirm = useConfirm();
+  const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
   const { profile } = useUserProfile();
   // Unidade ativa vinda do topbar (SUPERMAX/MAXLOOK/TECHMAX). null = Matriz.
   // É essa que define a grade de equipamentos & mobiliário do formulário.
@@ -136,6 +138,16 @@ export const FiliaisView = ({ showToast }: any) => {
   const [isSaving, setIsSaving]     = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [editItem, setEditItem]     = useState<any | null>(null);
+  // Fase 1/2 do plano de desembolso da montagem de filial (migr. 509): os
+  // itens de investimento só existem amarrados a uma filial já salva — sem
+  // editItem, o filtro cai no sentinel e a lista fica vazia (não é erro).
+  const SEM_FILIAL_SENTINEL = '00000000-0000-0000-0000-000000000000';
+  const { data: itens, reload: reloadItens } = useFetchData<any>(
+    '/api/filialinvestimentosview',
+    { filial_id: editItem?.id ?? SEM_FILIAL_SENTINEL },
+    false,
+    { orderBy: 'created_at', ascending: true },
+  );
   const [search, setSearch]         = useState('');
   const [form, setForm]             = useState({ nome: '', cnpj: '', cidade: '' });
   const [extras, setExtras]         = useState({ celular: '', endereco: '', representante: '' });
@@ -256,26 +268,28 @@ export const FiliaisView = ({ showToast }: any) => {
       const num = (v: string) => v !== '' ? Number(v) : null;
       // Nicho vem da unidade ativa no topbar — não do nome nem de seletor.
       const nicho = nichoAtivo;
+      // `detalhes` continua sendo gravado (migr. 509/Fase 2) para não quebrar
+      // quem ainda lê as chaves fixas — mas espelhado a partir da lista de
+      // itens (filial_investimentos), que é a fonte da verdade agora. Item
+      // customizado (categoria='outro') não tem chave fixa correspondente e
+      // por isso não aparece aqui — só entra no agregado.
       const chavesEquipParaSalvar = CAMPOS_NICHO[nicho].map(([k]) => k);
-      const equipPayload = Object.fromEntries(
-        chavesEquipParaSalvar.map(k => [k, num(detalhes[k])])
-      );
-      const precoPayload = Object.fromEntries(
-        chavesEquipParaSalvar.map(k => [precoKey(k), detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : null])
-      );
-      // Valor total investido em equipamentos & mobiliário — soma automática
-      // de qtd × preço unitário por item da grade do nicho ativo.
-      const valorTotalEquipamentos = chavesEquipParaSalvar.reduce((acc, k) => {
-        const qtd = num(detalhes[k]) ?? 0;
-        const preco = detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : 0;
-        return acc + qtd * preco;
-      }, 0);
-      const valorAluguel = detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : 0;
+      const itensGrade = (itens ?? []).filter((i: any) => i.origem_campo === 'grade');
+      const equipPayload = Object.fromEntries(chavesEquipParaSalvar.map(k => {
+        const it = itensGrade.find((i: any) => i.chave === k);
+        return [k, it ? Number(it.quantidade) : null];
+      }));
+      const precoPayload = Object.fromEntries(chavesEquipParaSalvar.map(k => {
+        const it = itensGrade.find((i: any) => i.chave === k);
+        return [precoKey(k), it ? Number(it.preco_unitario) : null];
+      }));
+      const valorTotalEquipamentos = totalEquipamentosForm;
+      const valorAluguel = totalAluguelForm;
       const folhaPagamento = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
-      // Total investido = equipamentos & mobiliário + aluguel + folha de
+      // Total investido = itens (equipamento + aluguel + outro) + folha de
       // pagamento. Investimento inicial fica de fora — é entrada manual
-      // separada (aporte de abertura), não recorrente como os outros três.
-      const valorTotalInvestido = valorTotalEquipamentos + valorAluguel + folhaPagamento;
+      // separada (aporte de abertura), não recorrente como os outros dois.
+      const valorTotalInvestido = totalInvestidoForm;
       const detalhesPayload = {
         nicho,
         tamanhoM2: num(detalhes.tamanhoM2),
@@ -326,21 +340,173 @@ export const FiliaisView = ({ showToast }: any) => {
     }
   };
 
-  // Total investido — equipamentos & mobiliário + aluguel + folha de
-  // pagamento. Recalcula ao digitar, pra dar feedback imediato antes de salvar.
+  // Fase 2 do plano de desembolso da montagem de filial (migr. 509): o total
+  // passa a somar da lista de itens (filial_investimentos), não das chaves
+  // fixas de `detalhes`. Cada item persiste na hora (não espera o Salvar da
+  // filial) — é o que dá o botão "Gerar contas a pagar" da Fase 3 algo
+  // estável pra ler depois.
+  const valorNum = (v: string) => { const n = parseBRL(v || '0'); return Number.isFinite(n) ? n : 0; };
+
   const totalEquipamentosForm = useMemo(() =>
-    CAMPOS_NICHO[nichoAtivo].reduce((acc, [k]) => {
-      const qtd = Number(detalhes[k] || 0);
-      const preco = detalhes[precoKey(k)] ? parseBRL(detalhes[precoKey(k)]) : 0;
-      return acc + qtd * preco;
-    }, 0),
-    [detalhes, nichoAtivo],
+    (itens ?? []).filter((i: any) => i.categoria === 'equipamento')
+      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
+    [itens],
+  );
+  const totalAluguelForm = useMemo(() =>
+    (itens ?? []).filter((i: any) => i.categoria === 'aluguel')
+      .reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
+    [itens],
+  );
+  const totalItensForm = useMemo(() =>
+    (itens ?? []).reduce((acc: number, i: any) => acc + Number(i.valor_total ?? 0), 0),
+    [itens],
   );
   const totalInvestidoForm = useMemo(() => {
-    const aluguel = detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel ? parseBRL(detalhes.valorAluguel) : 0;
     const folha = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
-    return totalEquipamentosForm + aluguel + folha;
-  }, [totalEquipamentosForm, detalhes.tipoImovel, detalhes.valorAluguel, detalhes.folhaPagamento]);
+    return totalItensForm + folha;
+  }, [totalItensForm, detalhes.folhaPagamento]);
+
+  const itemJaNaLista = (chave: string) => (itens ?? []).some((i: any) => i.chave === chave);
+
+  const handleAddItemGrade = async (chave: string, rotulo: string) => {
+    if (!editItem?.id || itemJaNaLista(chave)) return;
+    try {
+      await dbInsert('/api/filialinvestimentosview', {
+        filial_id: editItem.id, filial: nichoAtivo, chave, rotulo,
+        origem_campo: 'grade', categoria: 'equipamento', quantidade: 1, preco_unitario: 0,
+      });
+      reloadItens();
+    } catch (err: any) {
+      showToast(`Erro ao adicionar item: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
+
+  const handleAddItemCustom = async () => {
+    if (!editItem?.id) return;
+    try {
+      await dbInsert('/api/filialinvestimentosview', {
+        filial_id: editItem.id, filial: nichoAtivo, chave: `custom_${Date.now()}`, rotulo: '',
+        origem_campo: 'customizado', categoria: 'outro', quantidade: 1, preco_unitario: 0,
+      });
+      reloadItens();
+    } catch (err: any) {
+      showToast(`Erro ao adicionar item: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
+
+  const handleUpdateItem = async (id: string, patch: Record<string, any>) => {
+    try {
+      await dbUpdate('/api/filialinvestimentosview', id, patch);
+      reloadItens();
+    } catch (err: any) {
+      showToast(`Erro ao atualizar item: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
+
+  const handleRemoveItem = async (item: any) => {
+    if (item.conta_pagar_id) {
+      showToast('Este item já gerou uma conta a pagar — desvincule antes de remover.', 'error', true);
+      return;
+    }
+    if (!await confirm(`Remover "${item.rotulo}" da lista de investimento?`)) return;
+    try {
+      await dbDelete('/api/filialinvestimentosview', item.id);
+      reloadItens();
+    } catch (err: any) {
+      showToast(`Erro ao remover item: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
+
+  // Migração de dados (uma vez por filial): converte o que já estava em
+  // `detalhes` (chaves fixas + aluguel) em linhas de filial_investimentos.
+  // `detalhes` continua sendo gravado depois disso — não quebra quem o lê.
+  const handleImportarParaItens = async () => {
+    if (!editItem?.id) return;
+    const d = editItem.detalhes ?? {};
+    const nichoItem = detectarNicho(d.nicho, editItem.nome) ?? nichoAtivo;
+    const rows: any[] = [];
+    for (const [chave, rotulo] of CAMPOS_NICHO[nichoItem]) {
+      const qtd = Number(d[chave] || 0);
+      if (qtd > 0) {
+        rows.push({
+          filial_id: editItem.id, filial: nichoItem, chave, rotulo,
+          origem_campo: 'grade', categoria: 'equipamento',
+          quantidade: qtd, preco_unitario: Number(d[precoKey(chave)] || 0),
+        });
+      }
+    }
+    if (d.tipoImovel === 'Alugado' && Number(d.valorAluguel) > 0) {
+      rows.push({
+        filial_id: editItem.id, filial: nichoItem, chave: 'aluguel', rotulo: 'Aluguel',
+        origem_campo: 'customizado', categoria: 'aluguel',
+        quantidade: 1, preco_unitario: Number(d.valorAluguel),
+      });
+    }
+    if (rows.length === 0) {
+      showToast('Nada em Detalhes para importar.', 'info', true);
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await Promise.all(rows.map(r => dbInsert('/api/filialinvestimentosview', r)));
+      reloadItens();
+      showToast(`${rows.length} item(ns) importado(s).`, 'success', true);
+    } catch (err: any) {
+      showToast(`Erro ao importar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Fase 3: "Gerar contas a pagar" — nunca automático, é botão explícito.
+  const [gerarAberto, setGerarAberto] = useState(false);
+  const [gerando, setGerando]         = useState(false);
+  const [gerarForm, setGerarForm] = useState({
+    dataVencimento: '', diaAluguel: '10', parcelasAluguel: '1', naturezaOutro: 'despesa',
+  });
+  const itensPendentes = (itens ?? []).filter((i: any) => !i.conta_pagar_id && Number(i.valor_total) > 0);
+  const temPendenteAluguel = itensPendentes.some((i: any) => i.categoria === 'aluguel');
+  const temPendenteOutro   = itensPendentes.some((i: any) => i.categoria === 'outro');
+
+  const handleGerarContas = async () => {
+    if (!editItem?.id || !supabase) return;
+    if (!gerarForm.dataVencimento) {
+      showToast('Informe a data de vencimento.', 'error', true);
+      return;
+    }
+    setGerando(true);
+    try {
+      const { data: res, error } = await supabase.rpc('gerar_contas_da_montagem', {
+        p_filial_id:              editItem.id,
+        p_data_vencimento:        gerarForm.dataVencimento,
+        p_dia_vencimento_aluguel: temPendenteAluguel ? Number(gerarForm.diaAluguel) || null : null,
+        p_parcelas_aluguel:       Number(gerarForm.parcelasAluguel) || 1,
+        p_natureza_outro:         gerarForm.naturezaOutro,
+      });
+      if (error) throw new Error(error.message);
+      const r = (res ?? {}) as any;
+      showToast(`${r.itens_gerados ?? 0} conta(s) gerada(s), ${r.itens_pulados ?? 0} já existente(s)/vazio(s).`, 'success', true);
+      reloadItens();
+      setGerarAberto(false);
+    } catch (err: any) {
+      showToast(`Erro ao gerar contas: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setGerando(false);
+    }
+  };
+
+  const handleDesvincular = async (item: any) => {
+    if (!supabase) return;
+    if (!await confirm(`Desvincular "${item.rotulo}"? A conta gerada é CANCELADA (não apagada).`)) return;
+    try {
+      const { error } = await supabase.rpc('desvincular_investimento_conta', { p_item_id: item.id });
+      if (error) throw new Error(error.message);
+      showToast('Desvinculado — conta cancelada.', 'success', true);
+      reloadItens();
+    } catch (err: any) {
+      showToast(`Erro ao desvincular: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    }
+  };
 
   const isFormOpen = showForm || !!editItem;
 
@@ -461,19 +627,17 @@ export const FiliaisView = ({ showToast }: any) => {
                   </FormField>
                   <FormField label="Tipo de imóvel">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.tipoImovel}
-                      onChange={e => setDetalhes(d => ({ ...d, tipoImovel: e.target.value, valorAluguel: e.target.value === 'Alugado' ? d.valorAluguel : '' }))}>
+                      onChange={e => setDetalhes(d => ({ ...d, tipoImovel: e.target.value }))}>
                       <option value="">Selecione...</option>
                       <option value="Próprio">Próprio</option>
                       <option value="Alugado">Alugado</option>
                     </select>
                   </FormField>
                   {detalhes.tipoImovel === 'Alugado' && (
-                    <FormField label="Valor do aluguel">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.valorAluguel}
-                        onChange={e => setDetalhes(d => ({ ...d, valorAluguel: formatBRL(e.target.value) }))}
-                        onKeyDown={handleMoneyKeyDown}
-                        placeholder="R$ 0,00" />
-                    </FormField>
+                    <div className="md:col-span-2 lg:col-span-3 text-xs text-gray-500 -mt-1">
+                      O valor do aluguel agora entra como item da lista de investimento
+                      abaixo (categoria "Aluguel") — é o que vira parcela mensal na Fase 3.
+                    </div>
                   )}
                   <FormField label="Vagas de estacionamento">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
@@ -509,49 +673,169 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
               </div>
 
-              {/* Equipamentos & mobiliário — grade definida pela unidade ativa
-                  do topbar. Não depende do nome digitado nem de seletor. */}
+              {/* Investimento item a item (migr. 509, Fase 2) — cada linha é uma
+                  filial_investimentos amarrada a esta filial. Só existe depois
+                  que a filial tem id (salva ao menos uma vez). */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <Package size={12} /> Equipamentos & Mobiliário <span className="text-accent">· {nichoAtivo}</span>
+                  <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoAtivo}</span>
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {CAMPOS_NICHO[nichoAtivo].map(([key, label]) => {
-                    const qtd = Number(detalhes[key] || 0);
-                    const preco = detalhes[precoKey(key)] ? parseBRL(detalhes[precoKey(key)]) : 0;
-                    const subtotal = qtd * preco;
-                    return (
-                      <div key={key} className="neu-pressed rounded-xl p-3 border border-white/5 flex flex-col gap-2">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
-                        <div className="flex items-center gap-2">
-                          <input className="neu-input py-2 px-3 rounded-lg text-sm w-1/2" type="number" min="0"
-                            value={detalhes[key] ?? ''}
-                            onChange={e => setDetalhes(d => ({ ...d, [key]: e.target.value }))}
-                            placeholder="Qtd" title="Quantidade" />
-                          <input className="neu-input py-2 px-3 rounded-lg text-sm w-1/2" type="text" inputMode="numeric"
-                            value={detalhes[precoKey(key)] ?? ''}
-                            onChange={e => setDetalhes(d => ({ ...d, [precoKey(key)]: formatBRL(e.target.value) }))}
+
+                {!editItem ? (
+                  <div className="neu-pressed rounded-xl p-4 text-xs text-gray-500">
+                    Salve a filial primeiro — os itens de investimento se amarram a ela.
+                  </div>
+                ) : (
+                  <>
+                    {(itens ?? []).length === 0 && CAMPOS_NICHO[detectarNicho(editItem.detalhes?.nicho, editItem.nome) ?? nichoAtivo]
+                      .some(([k]) => Number(editItem.detalhes?.[k] || 0) > 0) && (
+                      <button type="button" onClick={handleImportarParaItens}
+                        className="neu-button py-2 px-4 rounded-xl text-xs text-accent mb-3">
+                        Importar de Detalhes (uma vez)
+                      </button>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {CAMPOS_NICHO[nichoAtivo].filter(([k]) => !itemJaNaLista(k)).map(([k, label]) => (
+                        <button type="button" key={k} onClick={() => handleAddItemGrade(k, label)}
+                          className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-accent">
+                          + {label}
+                        </button>
+                      ))}
+                      <button type="button" onClick={handleAddItemCustom}
+                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-accent font-bold">
+                        <Plus size={11} className="inline -mt-0.5 mr-1" /> Adicionar item
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {(itens ?? []).map((item: any) => (
+                        <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
+                        <div className="neu-pressed rounded-xl p-3 border border-white/5 grid grid-cols-2 md:grid-cols-6 gap-2 items-center">
+                          {item.origem_campo === 'customizado' ? (
+                            <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2"
+                              defaultValue={item.rotulo}
+                              onBlur={e => { const v = e.target.value.trim(); if (v && v !== item.rotulo) handleUpdateItem(item.id, { rotulo: v }); }}
+                              placeholder="Rótulo do item" />
+                          ) : (
+                            <span className="text-xs text-gray-300 col-span-2 truncate" title={item.rotulo}>{item.rotulo}</span>
+                          )}
+                          {item.origem_campo === 'customizado' ? (
+                            <select className="neu-input py-2 px-2 rounded-lg text-xs" value={item.categoria}
+                              onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
+                              <option value="outro">Outro</option>
+                              <option value="equipamento">Equipamento</option>
+                              <option value="aluguel">Aluguel</option>
+                            </select>
+                          ) : (
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Equipamento</span>
+                          )}
+                          <input className="neu-input py-2 px-2 rounded-lg text-sm" type="number" min="0" step="0.01"
+                            defaultValue={item.quantidade}
+                            onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
+                            title="Quantidade" />
+                          <input className="neu-input py-2 px-2 rounded-lg text-sm" type="text" inputMode="numeric"
+                            defaultValue={formatBRL(item.preco_unitario)}
                             onKeyDown={handleMoneyKeyDown}
-                            placeholder="R$ unit." title="Preço unitário" />
+                            onBlur={e => { const v = valorNum(e.target.value); if (v !== Number(item.preco_unitario)) handleUpdateItem(item.id, { preco_unitario: v }); }}
+                            title="Preço unitário" />
+                          <select className="neu-input py-2 px-2 rounded-lg text-xs" value={item.centro_custo_id ?? ''}
+                            onChange={e => handleUpdateItem(item.id, { centro_custo_id: e.target.value || null })}>
+                            <option value="">Centro de custo...</option>
+                            {(centrosCusto ?? []).map((cc: any) => (
+                              <option key={cc.id} value={cc.id}>{cc.nome}</option>
+                            ))}
+                          </select>
+                          <div className="flex items-center justify-between col-span-2 md:col-span-1">
+                            <span className="text-xs font-bold text-gray-300 tabular-nums">R$ {formatBRL(item.valor_total)}</span>
+                            <button type="button" onClick={() => handleRemoveItem(item)}
+                              disabled={!!item.conta_pagar_id}
+                              title={item.conta_pagar_id ? 'Conta já gerada — desvincule antes de remover' : 'Remover'}
+                              className="action-btn-delete disabled:opacity-30 disabled:cursor-not-allowed">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
-                        {subtotal > 0 && (
-                          <p className="text-[10px] text-gray-500 tabular-nums">
-                            Subtotal: <span className="text-gray-300 font-bold">R$ {formatBRL(subtotal)}</span>
-                          </p>
+                        {item.conta_pagar_id && (
+                          <div className="flex items-center justify-between px-3 text-[10px] text-gray-500">
+                            <span>Conta gerada em {new Date(item.updated_at).toLocaleDateString('pt-BR')} por R$ {formatBRL(item.valor_total)}</span>
+                            <button type="button" onClick={() => handleDesvincular(item)}
+                              className="text-accent hover:underline">Desvincular</button>
+                          </div>
+                        )}
+                        </div>
+                      ))}
+                      {(itens ?? []).length === 0 && (
+                        <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Adicionar item".</p>
+                      )}
+                    </div>
+
+                    {itensPendentes.length > 0 && (
+                      <div className="mt-3">
+                        {!gerarAberto ? (
+                          <button type="button" onClick={() => setGerarAberto(true)}
+                            className="neu-button py-2 px-4 rounded-xl text-xs text-accent font-bold flex items-center gap-1.5">
+                            <Wallet size={12} /> Gerar contas a pagar ({itensPendentes.length} pendente{itensPendentes.length > 1 ? 's' : ''})
+                          </button>
+                        ) : (
+                          <div className="neu-pressed rounded-xl p-4 flex flex-col gap-3 border border-accent/20">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                              Gerar {itensPendentes.length} conta(s) a pagar
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <FormField label="Vencimento (equipamento/outro)">
+                                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date"
+                                  value={gerarForm.dataVencimento}
+                                  onChange={e => setGerarForm(f => ({ ...f, dataVencimento: e.target.value }))} />
+                              </FormField>
+                              {temPendenteAluguel && (
+                                <>
+                                  <FormField label="Dia do vencimento do aluguel">
+                                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="1" max="28"
+                                      value={gerarForm.diaAluguel}
+                                      onChange={e => setGerarForm(f => ({ ...f, diaAluguel: e.target.value }))} />
+                                  </FormField>
+                                  <FormField label="Parcelas do aluguel">
+                                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="1"
+                                      value={gerarForm.parcelasAluguel}
+                                      onChange={e => setGerarForm(f => ({ ...f, parcelasAluguel: e.target.value }))} />
+                                  </FormField>
+                                </>
+                              )}
+                              {temPendenteOutro && (
+                                <FormField label='Natureza dos itens "Outro"'>
+                                  <select className="neu-input py-2 px-3 rounded-xl text-sm" value={gerarForm.naturezaOutro}
+                                    onChange={e => setGerarForm(f => ({ ...f, naturezaOutro: e.target.value }))}>
+                                    <option value="despesa">Despesa</option>
+                                    <option value="imobilizado">Imobilizado (bem)</option>
+                                    <option value="estoque">Estoque</option>
+                                  </select>
+                                </FormField>
+                              )}
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button type="button" onClick={() => setGerarAberto(false)}
+                                className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400">Cancelar</button>
+                              <NeuButtonAccent onClick={handleGerarContas} isLoading={gerando}>
+                                Gerar
+                              </NeuButtonAccent>
+                            </div>
+                          </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </>
+                )}
+
                 <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
                   <div className="flex items-center justify-between text-[11px] text-gray-500">
                     <span>Equipamentos & mobiliário</span>
                     <span className="tabular-nums">R$ {formatBRL(totalEquipamentosForm)}</span>
                   </div>
-                  {detalhes.tipoImovel === 'Alugado' && detalhes.valorAluguel && (
+                  {totalAluguelForm > 0 && (
                     <div className="flex items-center justify-between text-[11px] text-gray-500">
                       <span>Aluguel</span>
-                      <span className="tabular-nums">R$ {detalhes.valorAluguel}</span>
+                      <span className="tabular-nums">R$ {formatBRL(totalAluguelForm)}</span>
                     </div>
                   )}
                   {detalhes.folhaPagamento && (

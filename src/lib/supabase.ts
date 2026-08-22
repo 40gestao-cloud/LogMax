@@ -33,6 +33,9 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
 // Mapeamento: endpoint fictício → tabela real no Supabase
 export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/filiaisview':                  'filiais',
+  // Fase 1 do plano de desembolso da montagem de filial (migr. 509) — item a
+  // item do investimento, com centro de custo e vínculo com a conta gerada.
+  '/api/filialinvestimentosview':      'filial_investimentos',
   '/api/crmview':                      'clientes',
   '/api/crmview-clientes':             'clientes',
   '/api/crmview-fornecedores':         'fornecedores',
@@ -169,7 +172,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
 // Tabelas fora deste set continuam com hard delete (auditoria, cascades,
 // transações efêmeras como pix_pendentes).
 export const TABLES_WITH_ATIVO = new Set<string>([
-  'filiais', 'clientes', 'fornecedores', 'produtos', 'produtos_com_custo', 'servicos',
+  'filiais', 'filial_investimentos', 'clientes', 'fornecedores', 'produtos', 'produtos_com_custo', 'servicos',
   'centros_custo', 'projetos', 'condicoes_pagamento', 'classificacoes_auxiliares',
   'formas_pagamento', 'cargos', 'departamentos', 'beneficios',
   'caixa_bancos', 'funcionarios',

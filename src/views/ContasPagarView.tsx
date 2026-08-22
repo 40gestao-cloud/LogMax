@@ -614,6 +614,12 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               Folha
                             </span>
                           )}
+                          {item.origem === 'montagem_filial' && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-violet-500/15 text-violet-400 align-middle"
+                              title="Origem: Montagem da Filial. Gerada item a item em Filiais — desvincule por lá, não apague aqui.">
+                              Montagem
+                            </span>
+                          )}
                           {qtdDe(item) != null && (
                             <span className="ml-2 text-[10px] font-mono text-gray-500 align-middle"
                               title={`Pedido de ${qtdDe(item)!.toLocaleString('pt-BR')} un — R$ ${(Number(item.valor ?? 0) / qtdDe(item)!).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} cada`}>
