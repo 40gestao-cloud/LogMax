@@ -186,12 +186,114 @@ const contaNaFrequencia = (f: any): boolean => {
   return st === 'Ativo' || st === 'Desligado';
 };
 
+/**
+ * Modal de histórico de uma pessoa.
+ *
+ * (504) Tem busca própria, escopada por `funcionario_id`. A grade passou a
+ * carregar só o período visível — sem esta busca, "histórico" viraria
+ * "histórico da semana selecionada". Por pessoa o volume é pequeno, então
+ * aqui não há recorte de data: é justamente o lugar de ver o passado inteiro.
+ */
+const HistoricoFuncModal = ({ func, alvoEntrada, onClose }: { func: Funcionario; alvoEntrada: string; onClose: () => void }) => {
+  const { data: pontos, isLoading } = useFetchData<PontoRow>('/api/pontoeletronicoview', { funcionario_id: func.id });
+  const historicoFunc = useMemo(
+    () => (pontos ?? [])
+      .map(p => pontoParaFrequencia(p, alvoEntrada))
+      .sort((a, b) => b.data.localeCompare(a.data)),
+    [pontos, alvoEntrada],
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+        className="neu-flat rounded-3xl p-6 border border-white/10 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-bold text-accent">{func.nome}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {[func.cargo, func.departamento, func.filial].filter(Boolean).join(' · ') || '—'}
+            </p>
+          </div>
+          <button onClick={onClose} className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-200">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Resumo rápido */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 shrink-0">
+          {(['Presente', 'Falta', 'Presente com Atraso', 'Justificado'] as StatusFreq[]).map(s => {
+            const count = historicoFunc.filter(f => f.status === s).length;
+            const cfg = STATUS_CONFIG[s];
+            const Ic = cfg.icon;
+            return (
+              <div key={s} className={`rounded-xl p-3 border ${cfg.bg} ${cfg.border}`}>
+                <div className="flex items-center gap-2">
+                  <Ic size={14} className={cfg.color} />
+                  <span className={`text-xs font-bold ${cfg.color}`}>{STATUS_LABEL[s]}</span>
+                </div>
+                <div className={`text-xl font-bold tabular-nums mt-1 ${cfg.color}`}>{count}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Lista de registros */}
+        <div className="flex-1 overflow-y-auto main-scrollbar">
+          {isLoading ? (
+            <p className="text-sm text-gray-500 text-center py-8">Carregando histórico...</p>
+          ) : historicoFunc.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-8">Nenhum registro de frequência.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {historicoFunc.map(f => {
+                const cfg = STATUS_CONFIG[f.status];
+                const Ic = cfg.icon;
+                return (
+                  <div key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors">
+                    <Ic size={14} className={cfg.color} />
+                    <span className="text-xs font-mono text-gray-400 tabular-nums w-20 shrink-0">{fmtData(f.data)}</span>
+                    <span className={`text-xs font-bold ${cfg.color} w-36 shrink-0`}>{f.status}</span>
+                    <span className="text-xs text-gray-500 truncate flex-1">{f.justificativa || '—'}</span>
+                    <span className="text-[10px] text-gray-600 shrink-0">{f.registrado_por_nome ?? ''}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: any) => {
   const { user } = useAuth();
   // Presença agora vive em ponto_eletronico (migr. 289) — mesma tabela do
   // totem. `ponto_eletronico` TEM coluna filial, e a RLS já a usa; o filtro
   // client-side abaixo continua servindo ao seletor de unidade no modo Matriz.
-  const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview');
+  //
+  // (504) A busca é recortada pelo período visível. O ponto passou a
+  // atravessar o APAGAR TUDO, então esta tabela acumula turma sobre turma —
+  // sem recorte, a grade de um dia baixava o histórico inteiro e, passado o
+  // teto de linhas da API, passaria a baixá-lo pela metade, em silêncio.
+  const today = todayBR();
+  const [dataSelecionada, setDataSelecionada] = useState(today);
+  const [filtro, setFiltro] = useState<FilterPeriod>('dia');
+  const periodoRange = useMemo(() => {
+    if (filtro === 'dia')    return { gte: dataSelecionada, lte: dataSelecionada };
+    if (filtro === 'semana') return { gte: startOfWeek(dataSelecionada), lte: endOfWeek(dataSelecionada) };
+    return { gte: startOfMonth(dataSelecionada), lte: endOfMonth(dataSelecionada) };
+  }, [filtro, dataSelecionada]);
+
+  const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview', { data: periodoRange });
   // Mesmo alvo que o placar da competição usa (migr. 350), com o env de
   // fallback enquanto a turma não confirmar o horário.
   const jornada = useJornadaTurma();
@@ -204,14 +306,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     '/api/funcionariosview',
     filial ? { filial } : undefined,
   );
-  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview', undefined, true);
+  // (504) Mesmo recorte do ponto, e pela mesma razão: `justificativas_falta`
+  // também passou a atravessar o reset, e o painel listava tudo desde sempre.
+  const { data: justificativas } = useFetchData<any>('/api/justificativasfaltaview', { data: periodoRange }, true);
 
   // Filtro de filial dentro do modo Matriz (null = todas)
   const [filialFiltro, setFilialFiltro] = useState<string | null>(null);
 
-  const today = todayBR();
-  const [dataSelecionada, setDataSelecionada] = useState(today);
-  const [filtro, setFiltro] = useState<FilterPeriod>('dia');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
@@ -946,71 +1047,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       {/* Modal histórico do funcionário */}
       <AnimatePresence>
         {modalFunc && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
-            onClick={() => setModalFunc(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-lg font-bold text-accent">{modalFunc.nome}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {[modalFunc.cargo, modalFunc.departamento, modalFunc.filial].filter(Boolean).join(' · ') || '—'}
-                  </p>
-                </div>
-                <button onClick={() => setModalFunc(null)} className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-200">
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* Resumo rápido */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 shrink-0">
-                {(['Presente', 'Falta', 'Presente com Atraso', 'Justificado'] as StatusFreq[]).map(s => {
-                  const count = historicoFunc.filter(f => f.status === s).length;
-                  const cfg = STATUS_CONFIG[s];
-                  const Ic = cfg.icon;
-                  return (
-                    <div key={s} className={`rounded-xl p-3 border ${cfg.bg} ${cfg.border}`}>
-                      <div className="flex items-center gap-2">
-                        <Ic size={14} className={cfg.color} />
-                        <span className={`text-xs font-bold ${cfg.color}`}>{STATUS_LABEL[s]}</span>
-                      </div>
-                      <div className={`text-xl font-bold tabular-nums mt-1 ${cfg.color}`}>{count}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Lista de registros */}
-              <div className="flex-1 overflow-y-auto main-scrollbar">
-                {historicoFunc.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8">Nenhum registro de frequência.</p>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {historicoFunc.map(f => {
-                      const cfg = STATUS_CONFIG[f.status];
-                      const Ic = cfg.icon;
-                      return (
-                        <div key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors">
-                          <Ic size={14} className={cfg.color} />
-                          <span className="text-xs font-mono text-gray-400 tabular-nums w-20 shrink-0">{fmtData(f.data)}</span>
-                          <span className={`text-xs font-bold ${cfg.color} w-36 shrink-0`}>{f.status}</span>
-                          <span className="text-xs text-gray-500 truncate flex-1">{f.justificativa || '—'}</span>
-                          <span className="text-[10px] text-gray-600 shrink-0">{f.registrado_por_nome ?? ''}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
+          <HistoricoFuncModal func={modalFunc} alvoEntrada={jornada.entrada} onClose={() => setModalFunc(null)} />
         )}
       </AnimatePresence>
 

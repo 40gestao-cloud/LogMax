@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,6 +8,7 @@ import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
+import { todayBR } from '../lib/dates';
 
 // O totem (QR + código + scanner) saiu da UI em 2026-07-29, e com ele a aba de
 // histórico que lia `ponto_qr_registros`: a tabela está zerada nas 4 turmas —
@@ -20,6 +21,13 @@ import { hasSetor, isConselheiro } from '../lib/rbac';
 
 const PILL = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border backdrop-blur-sm';
 
+/** Último dia de `YYYY-MM`, em string. `Date.UTC(y, m, 0)` volta um dia do mês
+ *  seguinte — sem UTC o fuso do Acre puxaria para o dia anterior. */
+const fimDoMes = (mes: string) => {
+  const [y, m] = mes.split('-').map(Number);
+  return `${mes}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+};
+
 const statusCls = (s: string) => {
   if (s === 'Falta')      return `${PILL} bg-red-500/12 border-red-500/30 text-red-400`;
   if (s === 'Hora Extra') return `${PILL} bg-blue-500/12 border-blue-500/30 text-blue-400`;
@@ -31,9 +39,23 @@ const statusCls = (s: string) => {
 // ─── View principal ───────────────────────────────────────────────────────────
 
 const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
-  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial });
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
+  // (504) O ponto passou a atravessar o APAGAR TUDO, então esta tabela é a
+  // única aqui que acumula turma sobre turma. Sem recorte a busca vinha
+  // inteira — os KPIs somavam turmas anteriores e a lista ia crescendo até
+  // bater no teto de linhas do PostgREST. O mês é o recorte natural: é o que
+  // a folha usa (`recalcular_folha_do_ponto` casa por `YYYY-MM`).
+  const [mes, setMes] = useState(() => todayBR().slice(0, 7));
   const [filtroData, setFiltroData] = useState('');
+  // Escolher um dia manda no mês exibido: filtrar por uma data fora do mês
+  // carregado devolveria "nenhum registro" com o registro existindo no banco.
+  const mesEfetivo = filtroData ? filtroData.slice(0, 7) : mes;
+  const periodo = useMemo(
+    () => ({ gte: `${mesEfetivo}-01`, lte: fimDoMes(mesEfetivo) }),
+    [mesEfetivo],
+  );
+
+  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial, data: periodo });
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
   // Sem o totem, o lançamento manual é a única forma de entrada — então é ele
   // que abre. 'registros' é a listagem de ponto_eletronico.
   const [tab, setTab] = useState<'manual' | 'registros'>('manual');
@@ -106,10 +128,12 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
             {[
-              { label: 'Total de Registros', value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
-              { label: 'Faltas',             value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
-              { label: 'Horas Extras',       value: extras,        valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
-              { label: 'Justificados',       value: justificados,  valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },
+              // (504) "no mês" no rótulo: o número é do período carregado, e
+              // sem dizer isso o card volta a parecer o total de sempre.
+              { label: 'Registros no mês',   value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
+              { label: 'Faltas no mês',      value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
+              { label: 'Horas Extras no mês', value: extras,       valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
+              { label: 'Justificados no mês', value: justificados, valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },
             ].map((k) => (
               <div key={k.label} className={`neu-flat rounded-2xl p-5 border ${k.borderCls}`}>
                 <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
@@ -120,18 +144,26 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
 
           {/* Controles manuais */}
           <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Clock size={14} className="text-yellow-400" />
-              <label htmlFor="ponto-data-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Filtrar por Data</label>
-              <input id="ponto-data-filtro" type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm" />
-              {filtroData && <button onClick={() => setFiltroData('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar</button>}
+              <label htmlFor="ponto-mes-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Mês</label>
+              <input id="ponto-mes-filtro" type="month" value={mesEfetivo}
+                onChange={e => { setFiltroData(''); setMes(e.target.value || todayBR().slice(0, 7)); }}
+                className="neu-input rounded-xl px-3 py-2 text-sm" />
+              <label htmlFor="ponto-data-filtro" className="text-xs text-gray-500 font-bold uppercase tracking-widest">Dia</label>
+              {/* Escolher o dia move o mês junto: quem limpa o dia depois
+                  continua no mês que estava olhando, não volta para hoje. */}
+              <input id="ponto-data-filtro" type="date" value={filtroData}
+                onChange={e => { setFiltroData(e.target.value); if (e.target.value) setMes(e.target.value.slice(0, 7)); }}
+                className="neu-input rounded-xl px-3 py-2 text-sm" />
+              {filtroData && <button onClick={() => setFiltroData('')} className="text-xs text-gray-500 hover:text-white transition-colors">Limpar dia</button>}
             </div>
           </div>
 
           {/* Tabela de registros de ponto (QR/codigo). Registro manual foi
               removido — Frequencia de Trabalho ja cumpre esse papel. */}
           <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            {enriched.length === 0 ? <EmptyState message={filtroData ? `Nenhum registro para ${filtroData}.` : 'Nenhum registro de ponto.'} /> : (
+            {enriched.length === 0 ? <EmptyState message={filtroData ? `Nenhum registro para ${filtroData}.` : `Nenhum registro de ponto em ${mesEfetivo}.`} /> : (
               <div className="overflow-x-auto main-scrollbar">
                 <table className="w-full text-left border-collapse">
                   <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
