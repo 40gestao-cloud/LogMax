@@ -46,3 +46,35 @@ export function useJornadaTurma(): JornadaTurma {
 
   return jornada;
 }
+
+/**
+ * Data do último APAGAR TUDO (migr. 505). Ponto anterior a ela é da turma
+ * passada: a folha não conta e o lançamento manual não reescreve — o banco
+ * recusa. A tela lê a mesma chave para não oferecer um botão que vai falhar.
+ *
+ * `null` = projeto que nunca resetou, ou leitura ainda em voo. Nos dois casos
+ * o comportamento é o de sempre, que é o lado seguro de errar.
+ */
+export function usePontoCorteTurma(): string | null {
+  const [corte, setCorte] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelou = false;
+    (async () => {
+      if (!supabase) return;
+      // `configuracoes` não tem `created_at`, então nada de useFetchData aqui:
+      // o ORDER BY padrão dele devolveria 400 e a tela ficaria sem o corte.
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'ponto_corte_turma')
+        .maybeSingle();
+      if (cancelou) return;
+      const v = (data?.valor ?? '').trim();
+      setCorte(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    })();
+    return () => { cancelou = true; };
+  }, []);
+
+  return corte;
+}

@@ -3,11 +3,11 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck,
+  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
-import { useJornadaTurma } from '../hooks/useJornadaTurma';
+import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -65,6 +65,8 @@ type Frequencia = {
   origem: string | null;
   /** Dia coberto por afastamento: não se edita por aqui. */
   bloqueado: boolean;
+  /** (505) Dia anterior ao último APAGAR TUDO: registro da turma passada. */
+  turma_anterior: boolean;
 };
 
 type PontoRow = {
@@ -93,7 +95,7 @@ type PontoRow = {
  * faria esta tela chamar de atrasado quem o placar da competição considera
  * pontual, e vice-versa.
  */
-const pontoParaFrequencia = (p: PontoRow, alvoEntrada: string): Frequencia => {
+const pontoParaFrequencia = (p: PontoRow, alvoEntrada: string, corte?: string | null): Frequencia => {
   let status: StatusFreq;
   if (p.status === 'Falta') status = 'Falta';
   else if (p.status === 'Justificado') status = 'Justificado';
@@ -111,6 +113,8 @@ const pontoParaFrequencia = (p: PontoRow, alvoEntrada: string): Frequencia => {
     entrada: p.entrada,
     origem: p.origem,
     bloqueado: !!p.afastamento_id,
+    // (505) Comparação de string serve: as duas pontas são 'YYYY-MM-DD'.
+    turma_anterior: !!corte && p.data < corte,
   };
 };
 
@@ -297,9 +301,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   // Mesmo alvo que o placar da competição usa (migr. 350), com o env de
   // fallback enquanto a turma não confirmar o horário.
   const jornada = useJornadaTurma();
+  const corteTurma = usePontoCorteTurma();
   const frequencias = useMemo(
-    () => (pontos ?? []).map(p => pontoParaFrequencia(p, jornada.entrada)),
-    [pontos, jornada.entrada],
+    () => (pontos ?? []).map(p => pontoParaFrequencia(p, jornada.entrada, corteTurma)),
+    [pontos, jornada.entrada, corteTurma],
   );
   // No modo Matriz (filial===null) carrega todos sem filtro
   const { data: funcionarios, isLoading: loadingFunc } = useFetchData<Funcionario>(
@@ -738,7 +743,12 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                   {filteredFuncs.map((func: Funcionario) => {
                     const freq = getFreq(func.id, dataSelecionada);
                     const edit = getEdit(func.id);
-                    const bloqueado = !!freq?.bloqueado;
+                    // (505) Dia da turma anterior é só-leitura, e a razão é
+                    // outra: o banco recusa reescrever aquela linha. Bandeira
+                    // separada porque a de afastamento manda para a tela
+                    // errada — lá não há nada desta turma para ajustar.
+                    const turmaAnterior = !!freq?.turma_anterior;
+                    const bloqueado = !!freq?.bloqueado || turmaAnterior;
                     // Justificado vindo de afastamento (bloqueado) não vira estado
                     // de botão — a coluna inteira fica somente-leitura logo abaixo.
                     const freqStatus = bloqueado ? undefined : freq?.status;
@@ -777,7 +787,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                         )}
                         <td className="py-3 px-3 text-xs text-gray-500">{func.cargo ?? '—'}</td>
                         <td className="py-3 px-3">
-                          {bloqueado ? (
+                          {turmaAnterior ? (
+                            <div className="flex items-center justify-center gap-1.5 text-gray-500"
+                                 title={`Registro anterior ao APAGAR TUDO de ${corteTurma} — histórico da turma passada, só leitura.`}>
+                              <Lock size={13} />
+                              <span className="text-[11px] font-semibold">Turma anterior</span>
+                            </div>
+                          ) : bloqueado ? (
                             // Dia coberto por afastamento: a verdade é do módulo
                             // Afastamentos. Antes as duas telas se contradiziam.
                             <div className="flex items-center justify-center gap-1.5 text-yellow-400" title="Ajuste pelo módulo Afastamentos">
@@ -855,7 +871,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             type="button"
                             disabled={bloqueado}
                             onClick={() => setJustModal({ func, texto: currentJust })}
-                            title={bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
+                            title={turmaAnterior ? 'Histórico da turma anterior' : bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
                             className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto disabled:opacity-40 disabled:cursor-not-allowed ${
                               currentJust
                                 ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25'
@@ -870,7 +886,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             onClick={() => handleSave(func)}
                             disabled={!isDirty || isSaving || bloqueado}
                             className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto ${isDirty && !bloqueado ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25' : 'border-white/5 text-gray-700'}`}
-                            title={bloqueado ? 'Dia coberto por afastamento' : 'Salvar'}
+                            title={turmaAnterior ? 'Dia da turma anterior — não se reescreve' : bloqueado ? 'Dia coberto por afastamento' : 'Salvar'}
                           >
                             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                           </button>

@@ -279,6 +279,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         // (504) Documentos da Matriz: sempre atravessaram o reset, mas isso só
         // aparecia por ausência. Agora aparece por número.
         d?.documentos_preservados   != null ? `${d.documentos_preservados} documento(s)` : null,
+        // (505) O reset carimba a virada de turma. Sem isto na mensagem, a
+        // trava que aparece depois ("dia da turma anterior") não tem origem.
+        d?.corte_turma              != null ? `ponto anterior a ${d.corte_turma} vira histórico` : null,
         // Blocos que a migração 377 tirou do TRUNCATE — mostrar aqui é o que
         // dá ao professor a confirmação de que a competição das filiais
         // atravessou o reset.
@@ -1189,6 +1192,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   ✓ Também preserva o <strong>Registro de Ponto</strong>: a frequência lançada, os{' '}
                   <strong>afastamentos</strong> e as <strong>justificativas de falta</strong>. São histórico da
                   pessoa, não exercício da turma — e é deles que o eixo de frequência do placar é calculado.
+                </p>
+                {/* Migr. 505: a contrapartida de preservar. Sem dizer isto, a
+                    turma nova esbarra numa trava sem entender de onde veio. */}
+                <p className="text-gray-400 text-xs">
+                  A partir deste reset, tudo o que foi lançado <strong>até hoje</strong> vira histórico fechado:
+                  segue visível na tela, mas não conta na folha da turma nova e não se reescreve por lá.
                 </p>
                 <p className="text-emerald-400 text-xs">
                   ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
