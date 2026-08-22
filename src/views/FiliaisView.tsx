@@ -727,19 +727,28 @@ export const FiliaisView = ({ showToast }: any) => {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      {(itens ?? []).map((item: any) => (
+                      {(itens ?? []).map((item: any) => {
+                        // Item com conta gerada não muda de valor pelas costas: o
+                        // gatilho da migr. 512 recusa o UPDATE, e a tela evita que o
+                        // aluno descubra isso por erro.
+                        const gerado = !!item.conta_pagar_id;
+                        const travaTitle = gerado
+                          ? 'Conta já gerada — desvincule para editar (a conta é cancelada, não apagada)'
+                          : undefined;
+                        return (
                         <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
-                        <div className="neu-pressed rounded-xl p-3 border border-white/5 grid grid-cols-2 md:grid-cols-6 gap-2 items-center">
+                        <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 md:grid-cols-6 gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
                           {item.origem_campo === 'customizado' ? (
-                            <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2"
-                              defaultValue={item.rotulo}
+                            <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 disabled:opacity-60"
+                              defaultValue={item.rotulo} disabled={gerado} title={travaTitle}
                               onBlur={e => { const v = e.target.value.trim(); if (v && v !== item.rotulo) handleUpdateItem(item.id, { rotulo: v }); }}
                               placeholder="Rótulo do item" />
                           ) : (
                             <span className="text-xs text-gray-300 col-span-2 truncate" title={item.rotulo}>{item.rotulo}</span>
                           )}
                           {item.origem_campo === 'customizado' ? (
-                            <select className="neu-input py-2 px-2 rounded-lg text-xs" value={item.categoria}
+                            <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.categoria}
+                              disabled={gerado} title={travaTitle}
                               onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
                               <option value="outro">Outro</option>
                               <option value="equipamento">Equipamento</option>
@@ -748,16 +757,17 @@ export const FiliaisView = ({ showToast }: any) => {
                           ) : (
                             <span className="text-[10px] text-gray-500 uppercase tracking-wide">Equipamento</span>
                           )}
-                          <input className="neu-input py-2 px-2 rounded-lg text-sm" type="number" min="0" step="0.01"
-                            defaultValue={item.quantidade}
+                          <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="number" min="0" step="0.01"
+                            defaultValue={item.quantidade} disabled={gerado}
                             onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
-                            title="Quantidade" />
-                          <input className="neu-input py-2 px-2 rounded-lg text-sm" type="text" inputMode="numeric"
-                            defaultValue={formatBRL(item.preco_unitario)}
+                            title={travaTitle ?? 'Quantidade'} />
+                          <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="text" inputMode="numeric"
+                            defaultValue={formatBRL(item.preco_unitario)} disabled={gerado}
                             onKeyDown={handleMoneyKeyDown}
                             onBlur={e => { const v = valorNum(e.target.value); if (v !== Number(item.preco_unitario)) handleUpdateItem(item.id, { preco_unitario: v }); }}
-                            title="Preço unitário" />
-                          <select className="neu-input py-2 px-2 rounded-lg text-xs" value={item.centro_custo_id ?? ''}
+                            title={travaTitle ?? 'Preço unitário'} />
+                          <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.centro_custo_id ?? ''}
+                            disabled={gerado} title={travaTitle}
                             onChange={e => handleUpdateItem(item.id, { centro_custo_id: e.target.value || null })}>
                             <option value="">Centro de custo...</option>
                             {(centrosCusto ?? []).map((cc: any) => (
@@ -776,13 +786,18 @@ export const FiliaisView = ({ showToast }: any) => {
                         </div>
                         {item.conta_pagar_id && (
                           <div className="flex items-center justify-between px-3 text-[10px] text-gray-500">
-                            <span>Conta gerada em {new Date(item.updated_at).toLocaleDateString('pt-BR')} por R$ {formatBRL(item.valor_total)}</span>
+                            <span>
+                              {item.categoria === 'aluguel' ? 'Parcelas geradas' : 'Conta gerada'} em{' '}
+                              {new Date(item.updated_at).toLocaleDateString('pt-BR')} por R$ {formatBRL(item.valor_total)}
+                              {item.categoria === 'aluguel' ? ' cada' : ''} — campos travados
+                            </span>
                             <button type="button" onClick={() => handleDesvincular(item)}
                               className="text-accent hover:underline">Desvincular</button>
                           </div>
                         )}
                         </div>
-                      ))}
+                        );
+                      })}
                       {(itens ?? []).length === 0 && (
                         <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Adicionar item".</p>
                       )}
