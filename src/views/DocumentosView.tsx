@@ -13,7 +13,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  FileText, Upload, Download, Trash2, X, Building2, Loader2, Check, Info,
+  FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
@@ -74,16 +74,23 @@ function pathSeguro(nome: string): string {
   return `${Date.now()}-${limpo}`;
 }
 
-// ── Modal: publicar ────────────────────────────────────────────────────────
-function ModalPublicar({
-  profile, onClose, onSaved, showToast,
+// ── Modal: publicar / editar ───────────────────────────────────────────────
+//
+// Editar mexe só no que está escrito — título, descrição e quem recebe. O
+// ARQUIVO não se troca por aqui, e isso é decisão, não falta: quem já clicou
+// em "confirmo a leitura" continuaria confirmado sobre um arquivo que mudou
+// embaixo dele. Trocar o arquivo é excluir e publicar de novo — aí a leitura
+// recomeça do zero porque a linha é outra.
+function ModalDocumento({
+  profile, doc, onClose, onSaved, showToast,
 }: {
-  profile: UserProfile | null; onClose: () => void; onSaved: () => void;
+  profile: UserProfile | null; doc: Documento | null; onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void;
 }) {
-  const [titulo, setTitulo] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [filialAlvo, setFilialAlvo] = useState('');
+  const editando = !!doc;
+  const [titulo, setTitulo] = useState(doc?.titulo ?? '');
+  const [descricao, setDescricao] = useState(doc?.descricao ?? '');
+  const [filialAlvo, setFilialAlvo] = useState(doc?.filial_alvo ?? '');
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [mime, setMime] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -103,6 +110,25 @@ function ModalPublicar({
     setArquivo(f);
     setMime(tipo);
     if (!titulo.trim()) setTitulo(f.name.replace(/\.[^.]+$/, ''));
+  };
+
+  const salvarEdicao = async () => {
+    if (!supabase || !doc) return;
+    if (!titulo.trim()) { showToast('Dê um título ao documento.', 'error'); return; }
+
+    setSalvando(true);
+    try {
+      const { error } = await supabase.from('documentos').update({
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || null,
+        filial_alvo: filialAlvo || null,
+      }).eq('id', doc.id);
+      if (error) throw error;
+      showToast('Documento atualizado.', 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao salvar.', 'error');
+    } finally { setSalvando(false); }
   };
 
   const publicar = async () => {
@@ -152,7 +178,7 @@ function ModalPublicar({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-100">Publicar Documento</h2>
+          <h2 className="text-base font-bold text-gray-100">{editando ? 'Editar Documento' : 'Publicar Documento'}</h2>
           <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
@@ -185,25 +211,41 @@ function ModalPublicar({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo * (PDF ou Word, até 10 MB)</label>
-          <input
-            ref={inputRef} type="file" className="hidden"
-            accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-            onChange={e => escolher(e.target.files?.[0] ?? null)}
-          />
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-300 flex items-center gap-2 hover:text-gray-100"
-          >
-            <Upload size={14} className="text-accent shrink-0" />
-            <span className="truncate">
-              {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}` : 'Escolher arquivo…'}
-            </span>
-          </button>
-        </div>
+        {editando ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo</label>
+            <div className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-400 flex items-center gap-2">
+              <FileText size={14} className="text-accent shrink-0" />
+              <span className="truncate">{doc!.arquivo_nome}{doc!.arquivo_tamanho ? ` · ${tamanhoLegivel(doc!.arquivo_tamanho)}` : ''}</span>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">
+              O arquivo não se troca na edição — quem já confirmou a leitura continuaria confirmado
+              sobre outro conteúdo. Para trocar, exclua e publique de novo.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo * (PDF ou Word, até 10 MB)</label>
+            <input
+              ref={inputRef} type="file" className="hidden"
+              accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+              onChange={e => escolher(e.target.files?.[0] ?? null)}
+            />
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-300 flex items-center gap-2 hover:text-gray-100"
+            >
+              <Upload size={14} className="text-accent shrink-0" />
+              <span className="truncate">
+                {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}` : 'Escolher arquivo…'}
+              </span>
+            </button>
+          </div>
+        )}
 
-        <NeuButtonAccent onClick={publicar} isLoading={salvando}>Publicar</NeuButtonAccent>
+        <NeuButtonAccent onClick={editando ? salvarEdicao : publicar} isLoading={salvando}>
+          {editando ? 'Salvar alterações' : 'Publicar'}
+        </NeuButtonAccent>
       </motion.div>
     </div>
   );
@@ -212,7 +254,8 @@ function ModalPublicar({
 // ── View ───────────────────────────────────────────────────────────────────
 export const DocumentosView = ({ showToast, profile }: { showToast: any; profile: UserProfile | null }) => {
   const { documentos, naoLidos, loading, marcarLido, recarregar } = useDocumentos(profile);
-  const [modal, setModal] = useState(false);
+  // null = fechado · 'novo' = publicar · Documento = editando aquele.
+  const [modal, setModal] = useState<'novo' | Documento | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
   const confirm = useConfirm();
 
@@ -270,7 +313,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         </div>
         {podePublicar && (
           <button
-            onClick={() => setModal(true)}
+            onClick={() => setModal('novo')}
             className="neu-button rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2"
           >
             <Upload size={14} /> Publicar
@@ -349,9 +392,14 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                     </button>
                   )}
                   {podePublicar && (
-                    <button onClick={() => excluir(doc)} className="action-btn-delete">
-                      <Trash2 size={12} />
-                    </button>
+                    <>
+                      <button onClick={() => setModal(doc)} title="Editar informações" className="action-btn-edit">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => excluir(doc)} className="action-btn-delete">
+                        <Trash2 size={12} />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -362,9 +410,10 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
 
       <AnimatePresence>
         {modal && (
-          <ModalPublicar
+          <ModalDocumento
             profile={profile}
-            onClose={() => setModal(false)}
+            doc={modal === 'novo' ? null : modal}
+            onClose={() => setModal(null)}
             onSaved={recarregar}
             showToast={showToast}
           />
