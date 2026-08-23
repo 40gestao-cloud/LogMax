@@ -13,13 +13,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info,
+  FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info, Send, FileClock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { useDocumentos, baixarDocumento, type Documento } from '../hooks/useDocumentos';
+import { useDocumentos, baixarDocumento, ehRascunho, type Documento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -74,20 +74,34 @@ function pathSeguro(nome: string): string {
   return `${Date.now()}-${limpo}`;
 }
 
-// ── Modal: publicar / editar ───────────────────────────────────────────────
+// ── Modal: rascunho / publicar / editar ────────────────────────────────────
 //
-// Editar mexe só no que está escrito — título, descrição e quem recebe. O
-// ARQUIVO não se troca por aqui, e isso é decisão, não falta: quem já clicou
-// em "confirmo a leitura" continuaria confirmado sobre um arquivo que mudou
-// embaixo dele. Trocar o arquivo é excluir e publicar de novo — aí a leitura
-// recomeça do zero porque a linha é outra.
+// Duas saídas em vez de uma (migr. 513). "Salvar rascunho" guarda o documento
+// pronto e calado — nenhuma unidade fica sabendo. "Publicar" é o clique que o
+// manda embora. Preparar o material da semana e escolher a hora de soltá-lo
+// são duas decisões, e antes elas cabiam no mesmo botão.
+//
+// ─── O QUE A EDIÇÃO DEIXA MEXER ─────────────────────────────────────────────
+//
+// Enquanto é RASCUNHO, tudo — inclusive o arquivo: ninguém viu, não há
+// confirmação de leitura para invalidar.
+//
+// Depois de PUBLICADO, só o que está escrito (título, descrição, quem recebe).
+// O arquivo não se troca, e isso é decisão, não falta: quem já clicou em
+// "Recebi" continuaria confirmado sobre um arquivo que mudou embaixo dele.
+// Trocar o arquivo de um documento no ar é excluir e publicar de novo — aí a
+// leitura recomeça do zero porque a linha é outra.
 function ModalDocumento({
-  profile, doc, onClose, onSaved, showToast,
+  profile, doc, onClose, onSaved, showToast, publicarDoc,
 }: {
   profile: UserProfile | null; doc: Documento | null; onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void;
+  publicarDoc: (id: string) => Promise<{ error?: string }>;
 }) {
   const editando = !!doc;
+  // Rascunho é o estado editável de verdade. Publicado só aceita retoque de
+  // texto — vide o cabeçalho.
+  const rascunho = !doc || ehRascunho(doc);
   const [titulo, setTitulo] = useState(doc?.titulo ?? '');
   const [descricao, setDescricao] = useState(doc?.descricao ?? '');
   const [filialAlvo, setFilialAlvo] = useState(doc?.filial_alvo ?? '');
@@ -112,60 +126,92 @@ function ModalDocumento({
     if (!titulo.trim()) setTitulo(f.name.replace(/\.[^.]+$/, ''));
   };
 
-  const salvarEdicao = async () => {
-    if (!supabase || !doc) return;
+  // Um caminho só para os dois botões: `irAoAr` decide se, depois de gravado, o
+  // documento sai da gaveta. Duas funções separadas duplicariam o upload e a
+  // limpeza do bucket, e é sempre uma das duas cópias que fica pra trás.
+  //
+  // A linha SEMPRE nasce rascunho, mesmo no clique de "Publicar": quem carimba
+  // `publicado_em` é a RPC, com a hora do banco. Deixar o cliente mandar a data
+  // no INSERT poria a hora do navegador — errada ou mentirosa — no que a fila
+  // de não-lidos usa pra dizer "chegou agora".
+  const salvar = async (irAoAr: boolean) => {
+    if (!supabase) return;
     if (!titulo.trim()) { showToast('Dê um título ao documento.', 'error'); return; }
+    if (!editando && !arquivo) { showToast('Escolha o arquivo.', 'error'); return; }
 
     setSalvando(true);
+    // Só existe quando há arquivo novo (documento novo, ou troca em rascunho).
+    let pathNovo: string | null = null;
     try {
-      const { error } = await supabase.from('documentos').update({
+      if (arquivo) {
+        pathNovo = pathSeguro(arquivo.name);
+        const { error: upErro } = await supabase.storage
+          .from('documentos')
+          .upload(pathNovo, arquivo, { contentType: mime, upsert: false });
+        if (upErro) throw upErro;
+      }
+
+      const texto = {
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         filial_alvo: filialAlvo || null,
-      }).eq('id', doc.id);
-      if (error) throw error;
-      showToast('Documento atualizado.', 'success');
-      onSaved(); onClose();
-    } catch (err: any) {
-      showToast(err.message ?? 'Erro ao salvar.', 'error');
-    } finally { setSalvando(false); }
-  };
-
-  const publicar = async () => {
-    if (!supabase) return;
-    if (!titulo.trim()) { showToast('Dê um título ao documento.', 'error'); return; }
-    if (!arquivo) { showToast('Escolha o arquivo.', 'error'); return; }
-
-    setSalvando(true);
-    const path = pathSeguro(arquivo.name);
-    try {
-      const { error: upErro } = await supabase.storage
-        .from('documentos')
-        .upload(path, arquivo, { contentType: mime, upsert: false });
-      if (upErro) throw upErro;
-
-      const { error } = await supabase.from('documentos').insert({
-        titulo: titulo.trim(),
-        descricao: descricao.trim() || null,
-        arquivo_path: path,
+      };
+      const doArquivo = arquivo && pathNovo ? {
+        arquivo_path: pathNovo,
         arquivo_nome: arquivo.name,
         arquivo_mime: mime,
         arquivo_tamanho: arquivo.size,
-        filial_alvo: filialAlvo || null,
-        publicado_por: profile?.id ?? null,
-        publicado_por_nome: profile?.nome ?? null,
-      });
-      // Linha recusada com arquivo já no bucket deixaria lixo que ninguém
-      // alcança (a policy de leitura resolve pela linha). Limpa antes de sair.
-      if (error) {
-        await supabase.storage.from('documentos').remove([path]);
-        throw error;
+      } : {};
+
+      let id: string;
+      if (editando) {
+        const { error } = await supabase.from('documentos')
+          .update({ ...texto, ...doArquivo }).eq('id', doc!.id);
+        if (error) throw error;
+        id = doc!.id;
+        // Arquivo antigo do rascunho vira lixo inalcançável assim que a linha
+        // aponta pro novo — a policy de leitura resolve pelo `arquivo_path`.
+        // Só depois do UPDATE dar certo: apagar antes deixaria o documento sem
+        // arquivo se o banco recusasse.
+        if (arquivo && doc!.arquivo_path !== pathNovo) {
+          await supabase.storage.from('documentos').remove([doc!.arquivo_path]);
+        }
+      } else {
+        const { data, error } = await supabase.from('documentos').insert({
+          ...texto, ...doArquivo,
+          publicado_por: profile?.id ?? null,
+          publicado_por_nome: profile?.nome ?? null,
+        }).select('id').single();
+        // Linha recusada com arquivo já no bucket deixaria lixo que ninguém
+        // alcança. Limpa antes de sair.
+        if (error || !data) {
+          if (pathNovo) await supabase.storage.from('documentos').remove([pathNovo]);
+          throw error ?? new Error('Não foi possível gravar o documento.');
+        }
+        id = (data as any).id as string;
       }
 
-      showToast('Documento publicado.', 'success');
+      if (irAoAr) {
+        const { error } = await publicarDoc(id);
+        // O documento está gravado; o que falhou foi só o carimbo. Dizer
+        // "erro ao publicar" e sumir com a tela faria o professor achar que
+        // perdeu o trabalho — ele está lá, como rascunho, esperando o botão.
+        if (error) {
+          showToast(`Salvo como rascunho, mas não foi ao ar: ${error}`, 'error');
+          onSaved(); onClose();
+          return;
+        }
+      }
+
+      showToast(
+        irAoAr
+          ? 'Documento publicado — já está nas unidades.'
+          : 'Rascunho salvo. Ele só vai para as unidades quando você publicar.',
+        'success',
+      );
       onSaved(); onClose();
     } catch (err: any) {
-      showToast(err.message ?? 'Erro ao publicar.', 'error');
+      showToast(err.message ?? 'Erro ao salvar.', 'error');
     } finally { setSalvando(false); }
   };
 
@@ -178,7 +224,9 @@ function ModalDocumento({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-100">{editando ? 'Editar Documento' : 'Publicar Documento'}</h2>
+          <h2 className="text-base font-bold text-gray-100">
+            {!editando ? 'Novo Documento' : rascunho ? 'Editar Rascunho' : 'Editar Documento'}
+          </h2>
           <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
         </div>
 
@@ -211,7 +259,7 @@ function ModalDocumento({
           </select>
         </div>
 
-        {editando ? (
+        {editando && !rascunho ? (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo</label>
             <div className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-400 flex items-center gap-2">
@@ -219,13 +267,15 @@ function ModalDocumento({
               <span className="truncate">{doc!.arquivo_nome}{doc!.arquivo_tamanho ? ` · ${tamanhoLegivel(doc!.arquivo_tamanho)}` : ''}</span>
             </div>
             <p className="text-[10px] text-gray-500 mt-1">
-              O arquivo não se troca na edição — quem já confirmou a leitura continuaria confirmado
-              sobre outro conteúdo. Para trocar, exclua e publique de novo.
+              O arquivo não se troca depois de publicado — quem já confirmou a leitura continuaria
+              confirmado sobre outro conteúdo. Para trocar, exclua e publique de novo.
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo * (PDF ou Word, até 10 MB)</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Arquivo {editando ? '' : '* '}(PDF ou Word, até 10 MB)
+            </label>
             <input
               ref={inputRef} type="file" className="hidden"
               accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
@@ -237,15 +287,47 @@ function ModalDocumento({
             >
               <Upload size={14} className="text-accent shrink-0" />
               <span className="truncate">
-                {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}` : 'Escolher arquivo…'}
+                {arquivo
+                  ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}`
+                  : editando
+                    ? `${doc!.arquivo_nome} — clique para trocar`
+                    : 'Escolher arquivo…'}
               </span>
             </button>
+            {editando && (
+              <p className="text-[10px] text-gray-500 mt-1">
+                Ainda é rascunho: ninguém recebeu, então dá para trocar o arquivo.
+              </p>
+            )}
           </div>
         )}
 
-        <NeuButtonAccent onClick={editando ? salvarEdicao : publicar} isLoading={salvando}>
-          {editando ? 'Salvar alterações' : 'Publicar'}
-        </NeuButtonAccent>
+        {editando && !rascunho ? (
+          <NeuButtonAccent onClick={() => salvar(false)} isLoading={salvando}>
+            Salvar alterações
+          </NeuButtonAccent>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => salvar(false)}
+                disabled={salvando}
+                className="flex-1 neu-button rounded-xl px-3 py-3 text-xs font-black uppercase tracking-widest text-gray-300 hover:text-gray-100 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {salvando ? <Loader2 size={13} className="animate-spin" /> : <FileClock size={13} />}
+                Salvar rascunho
+              </button>
+              <div className="flex-1">
+                <NeuButtonAccent onClick={() => salvar(true)} isLoading={salvando}>
+                  Publicar
+                </NeuButtonAccent>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-500 text-center">
+              O rascunho fica só com você. Publicar é o que manda para as unidades.
+            </p>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -253,7 +335,7 @@ function ModalDocumento({
 
 // ── View ───────────────────────────────────────────────────────────────────
 export const DocumentosView = ({ showToast, profile }: { showToast: any; profile: UserProfile | null }) => {
-  const { documentos, naoLidos, loading, marcarLido, recarregar } = useDocumentos(profile);
+  const { documentos, naoLidos, loading, marcarLido, publicar, recarregar } = useDocumentos(profile);
   // null = fechado · 'novo' = publicar · Documento = editando aquele.
   const [modal, setModal] = useState<'novo' | Documento | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
@@ -278,9 +360,25 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
     if (idsNaoLidos.has(doc.id)) marcarLido(doc.id);
   };
 
+  // Publicar é o clique que manda o documento embora — e não tem volta (o
+  // gatilho da migr. 513 recusa despublicar). Por isso confirma antes, dizendo
+  // exatamente quem vai receber.
+  const publicarAgora = async (doc: Documento) => {
+    const alvo = doc.filial_alvo ?? 'todas as unidades';
+    const ok = await confirm({
+      message: `Publicar "${doc.titulo}"? Ele chega agora em ${alvo} e passa a cobrar confirmação de leitura. Publicado não volta a ser rascunho.`,
+      confirmLabel: 'Publicar',
+    });
+    if (!ok) return;
+    const { error } = await publicar(doc.id);
+    showToast(error ?? 'Documento publicado — já está nas unidades.', error ? 'error' : 'success');
+  };
+
   const excluir = async (doc: Documento) => {
     const ok = await confirm({
-      message: `Excluir "${doc.titulo}"? Ele some na hora da tela de todas as unidades e o arquivo sai do sistema — ninguém mais consegue baixar.`,
+      message: ehRascunho(doc)
+        ? `Excluir o rascunho "${doc.titulo}"? Ele nunca foi publicado, então nenhuma unidade fica sabendo — o arquivo sai do sistema.`
+        : `Excluir "${doc.titulo}"? Ele some na hora da tela de todas as unidades e o arquivo sai do sistema — ninguém mais consegue baixar.`,
       danger: true,
     });
     if (!ok || !supabase) return;
@@ -307,7 +405,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
           </div>
           <p className="text-xs text-gray-500">
             {podePublicar
-              ? 'Publicado aqui, chega em todas as unidades — e o sistema registra quem leu.'
+              ? 'Deixe pronto como rascunho e publique quando quiser — aí chega nas unidades e o sistema registra quem leu.'
               : 'Documentos enviados pela Matriz. Baixe e confirme a leitura.'}
           </p>
         </div>
@@ -316,10 +414,21 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
             onClick={() => setModal('novo')}
             className="neu-button rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2"
           >
-            <Upload size={14} /> Publicar
+            <Upload size={14} /> Novo documento
           </button>
         )}
       </div>
+
+      {podePublicar && documentos.some(ehRascunho) && (
+        <div className="neu-flat rounded-2xl p-4 border border-gray-500/25 flex items-start gap-2 text-xs text-gray-400">
+          <FileClock size={13} className="shrink-0 mt-0.5" />
+          <span>
+            {documentos.filter(ehRascunho).length === 1
+              ? 'Há 1 rascunho guardado — nenhuma unidade o recebeu ainda.'
+              : `Há ${documentos.filter(ehRascunho).length} rascunhos guardados — nenhuma unidade os recebeu ainda.`}
+          </span>
+        </div>
+      )}
 
       {!podePublicar && naoLidos.length > 0 && (
         <div className="neu-flat rounded-2xl p-4 border border-amber-400/25 flex items-start gap-2 text-xs text-amber-200">
@@ -338,10 +447,13 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         <div className="flex flex-col gap-2">
           {documentos.map(doc => {
             const novo = idsNaoLidos.has(doc.id);
+            const draft = ehRascunho(doc);
             return (
               <div
                 key={doc.id}
-                className={`neu-flat rounded-2xl p-4 border flex items-start gap-3 ${novo ? 'border-amber-400/30' : 'border-white/5'}`}
+                className={`neu-flat rounded-2xl p-4 border flex items-start gap-3 ${
+                  draft ? 'border-dashed border-gray-500/40' : novo ? 'border-amber-400/30' : 'border-white/5'
+                }`}
               >
                 <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
                   <FileText size={15} className="text-accent" />
@@ -350,7 +462,12 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold text-gray-100 truncate">{doc.titulo}</h3>
+                    <h3 className={`text-sm font-bold truncate ${draft ? 'text-gray-400' : 'text-gray-100'}`}>{doc.titulo}</h3>
+                    {draft && (
+                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30 flex items-center gap-1">
+                        <FileClock size={9} /> Rascunho
+                      </span>
+                    )}
                     {novo && (
                       <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
                         Novo
@@ -366,7 +483,12 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                     <p className="text-[11px] text-gray-400 mt-1 whitespace-pre-wrap">{doc.descricao}</p>
                   )}
                   <div className="text-[10px] text-gray-500 mt-1">
-                    {formatDataHoraBR(doc.created_at)}
+                    {/* Publicado mostra QUANDO foi ao ar, não quando o arquivo
+                        subiu — é a data que a unidade usa pra saber se está
+                        atrasada. Rascunho mostra desde quando está guardado. */}
+                    {draft
+                      ? `Criado em ${formatDataHoraBR(doc.created_at)}`
+                      : formatDataHoraBR(doc.publicado_em ?? doc.created_at)}
                     {doc.publicado_por_nome && ` · ${doc.publicado_por_nome}`}
                     {doc.arquivo_tamanho ? ` · ${tamanhoLegivel(doc.arquivo_tamanho)}` : ''}
                   </div>
@@ -391,9 +513,18 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       <Check size={13} />
                     </button>
                   )}
+                  {podePublicar && draft && (
+                    <button
+                      onClick={() => publicarAgora(doc)}
+                      title="Publicar para as unidades"
+                      className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-300 ring-1 ring-emerald-500/40 hover:ring-emerald-400 flex items-center gap-1.5"
+                    >
+                      <Send size={13} /> Publicar
+                    </button>
+                  )}
                   {podePublicar && (
                     <>
-                      <button onClick={() => setModal(doc)} title="Editar informações" className="action-btn-edit">
+                      <button onClick={() => setModal(doc)} title={draft ? 'Editar rascunho' : 'Editar informações'} className="action-btn-edit">
                         <Pencil size={12} />
                       </button>
                       <button onClick={() => excluir(doc)} className="action-btn-delete">
@@ -416,6 +547,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
             onClose={() => setModal(null)}
             onSaved={recarregar}
             showToast={showToast}
+            publicarDoc={publicar}
           />
         )}
       </AnimatePresence>

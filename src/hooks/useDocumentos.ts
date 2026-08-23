@@ -23,12 +23,17 @@ export type Documento = {
   publicado_por: string | null;
   publicado_por_nome: string | null;
   ativo: boolean;
+  /** Migr. 513 — NULL = rascunho, só o professor enxerga. */
+  publicado_em: string | null;
   created_at: string;
 };
 
 const CAMPOS =
   'id,titulo,descricao,arquivo_path,arquivo_nome,arquivo_mime,arquivo_tamanho,' +
-  'filial_alvo,publicado_por,publicado_por_nome,ativo,created_at';
+  'filial_alvo,publicado_por,publicado_por_nome,ativo,publicado_em,created_at';
+
+/** Rascunho: existe no sistema, ainda não foi ao ar (migr. 513). */
+export const ehRascunho = (d: Pick<Documento, 'publicado_em'>) => !d.publicado_em;
 
 /**
  * Baixa o documento.
@@ -91,12 +96,23 @@ export function useDocumentos(profile: UserProfile | null) {
       .from('documentos')
       .select(CAMPOS)
       .eq('ativo', true)
+      // Rascunho no topo da lista do professor (NULLS FIRST no DESC) — é o que
+      // está esperando decisão. Para as unidades a RLS não devolve rascunho
+      // nenhum, então elas só veem a ordem de publicação. `created_at` desempata
+      // o que foi publicado no mesmo instante.
+      .order('publicado_em', { ascending: false, nullsFirst: true })
       .order('created_at', { ascending: false });
 
     const lista = (data ?? []) as unknown as Documento[];
     setDocumentos(lista);
 
-    if (!ehDestinatario || lista.length === 0) {
+    // A fila de não-lidos é só do que está no ar. A RLS já esconde rascunho de
+    // quem não é admin; o filtro aqui é o que impede o próprio professor de ver
+    // "documento novo" do que ele mesmo ainda não publicou, se um dia ele deixar
+    // de ser exceção logo abaixo.
+    const publicados = lista.filter(d => !!d.publicado_em);
+
+    if (!ehDestinatario || publicados.length === 0) {
       setNaoLidos([]); setLoading(false); return;
     }
 
@@ -104,10 +120,10 @@ export function useDocumentos(profile: UserProfile | null) {
       .from('documentos_leitura')
       .select('documento_id')
       .eq('user_id', profile.id)
-      .in('documento_id', lista.map(d => d.id));
+      .in('documento_id', publicados.map(d => d.id));
 
     const lidos = new Set((leituras ?? []).map((l: any) => l.documento_id));
-    setNaoLidos(lista.filter(d => !lidos.has(d.id)));
+    setNaoLidos(publicados.filter(d => !lidos.has(d.id)));
     setLoading(false);
   }, [profile, ehDestinatario]);
 
@@ -160,5 +176,16 @@ export function useDocumentos(profile: UserProfile | null) {
     return {};
   }, []);
 
-  return { documentos, naoLidos, loading, marcarLido, recarregar: carregar };
+  // Publicar é o momento em que o documento sai da gaveta e chega nas unidades
+  // (migr. 513). Quem carimba a hora é o banco, não o navegador — a fila de
+  // não-lidos e o "chegou agora" se penduram nessa hora.
+  const publicar = useCallback(async (documentoId: string) => {
+    if (!supabase) return { error: 'Sem conexão.' };
+    const { error } = await supabase.rpc('publicar_documento', { p_documento_id: documentoId });
+    if (error) return { error: error.message };
+    await carregar();
+    return {};
+  }, [carregar]);
+
+  return { documentos, naoLidos, loading, marcarLido, publicar, recarregar: carregar };
 }
