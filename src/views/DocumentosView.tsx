@@ -28,7 +28,7 @@ type FilialAlvo = (typeof FILIAIS)[number];
 
 // Logos das unidades, os mesmos arquivos do seletor de filial (512x512, os três
 // quadrados — a versão larga do SuperMax fica com o emblema minúsculo dentro de
-// um quadrado de 20 px).
+// um quadrado pequeno).
 //
 // Sobre um losango escuro, e não solto na aba: as três artes foram desenhadas
 // para fundo preto e a MaxLook escreve "LOOK" em branco — no tema claro ela
@@ -507,7 +507,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                   ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <span className="w-5 h-5 rounded-md bg-black/70 flex items-center justify-center shrink-0 overflow-hidden">
+                <span className="w-7 h-7 rounded-lg bg-black/70 flex items-center justify-center shrink-0 overflow-hidden">
                   <img src={FILIAL_LOGO[f]} alt="" aria-hidden className="w-full h-full object-contain p-0.5" />
                 </span>
                 {f}
