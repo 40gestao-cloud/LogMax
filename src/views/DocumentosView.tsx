@@ -26,6 +26,19 @@ import type { UserProfile } from '../hooks/useUserProfile';
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialAlvo = (typeof FILIAIS)[number];
 
+// Logos das unidades, os mesmos arquivos do seletor de filial (512x512, os três
+// quadrados — a versão larga do SuperMax fica com o emblema minúsculo dentro de
+// um quadrado de 20 px).
+//
+// Sobre um losango escuro, e não solto na aba: as três artes foram desenhadas
+// para fundo preto e a MaxLook escreve "LOOK" em branco — no tema claro ela
+// perderia metade do nome. O losango dá o mesmo chão nos dois temas.
+const FILIAL_LOGO: Record<FilialAlvo, string> = {
+  SuperMax: '/icon-supermax-view.png',
+  MaxLook:  '/icon-maxlook.png',
+  TechMax:  '/icon-techmax.png',
+};
+
 const MIMES_ACEITOS = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -494,7 +507,9 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                   ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <Building2 size={14} />
+                <span className="w-5 h-5 rounded-md bg-black/70 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img src={FILIAL_LOGO[f]} alt="" aria-hidden className="w-full h-full object-contain p-0.5" />
+                </span>
                 {f}
                 {pendente > 0 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
