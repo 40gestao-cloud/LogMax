@@ -24,6 +24,7 @@ import { useDocumentos, baixarDocumento, ehRascunho, type Documento } from '../h
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+type FilialAlvo = (typeof FILIAIS)[number];
 
 const MIMES_ACEITOS = [
   'application/pdf',
@@ -372,6 +373,37 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   const naoLidos = useMemo(() => naoLidosTodos.filter(dentroDaFilial), [naoLidosTodos, filialAtiva]);
   const idsNaoLidos = useMemo(() => new Set(naoLidos.map(d => d.id)), [naoLidos]);
 
+  // ── Abas por unidade ────────────────────────────────────────────────────
+  //
+  // Só em modo Matriz: operando dentro de uma unidade a lista já é de uma
+  // unidade só, e três abas em que duas nunca têm nada seria mobília.
+  //
+  // Documento sem alvo aparece nas TRÊS, e não numa quarta aba de "geral": ele
+  // de fato chega nas três, e uma aba separada faria a SuperMax parecer não ter
+  // recebido o que recebeu. O selo "Todas as unidades" na linha diz que aquela
+  // cópia é a mesma nas outras duas.
+  const mostrarAbas = !filialAtiva;
+  const [aba, setAba] = useState<FilialAlvo>(FILIAIS[0]);
+  const daAba = (d: Documento, f: FilialAlvo) => !d.filial_alvo || d.filial_alvo === f;
+  const visiveis = useMemo(
+    () => (mostrarAbas ? documentos.filter(d => daAba(d, aba)) : documentos),
+    [documentos, mostrarAbas, aba],
+  );
+  // Contagem por aba: o que a unidade recebe (dela + sem alvo). O segundo
+  // número é o que ainda espera decisão do professor — é por ele que se escolhe
+  // a aba, não pelo total.
+  // Para quem lê (CEO e conselheiro enxergam as três), o que puxa para a aba é
+  // o não-confirmado, não o rascunho — por isso os dois números, um por papel.
+  const contagem = useMemo(() => Object.fromEntries(FILIAIS.map(f => {
+    const doDia = documentos.filter(d => daAba(d, f));
+    return [f, {
+      total: doDia.length,
+      rascunhos: doDia.filter(ehRascunho).length,
+      novos: naoLidos.filter(d => daAba(d, f)).length,
+    }];
+  })) as Record<FilialAlvo, { total: number; rascunhos: number; novos: number }>,
+  [documentos, naoLidos]);
+
   const baixar = async (doc: Documento) => {
     setBaixando(doc.id);
     const { error, sumiu } = await baixarDocumento(doc);
@@ -445,13 +477,45 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         )}
       </div>
 
-      {podePublicar && documentos.some(ehRascunho) && (
+      {mostrarAbas && (
+        <div className="neu-flat rounded-2xl p-1.5 border border-white/5 flex items-center gap-1.5">
+          {FILIAIS.map(f => {
+            const ativa = f === aba;
+            return (
+              <button
+                key={f}
+                onClick={() => setAba(f)}
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[11px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${
+                  ativa ? 'neu-pressed text-accent' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {f}
+                <span className="text-[10px] font-bold tabular-nums text-gray-500">{contagem[f].total}</span>
+                {podePublicar && contagem[f].rascunhos > 0 && (
+                  <span title={`${contagem[f].rascunhos} rascunho(s) desta unidade`}
+                    className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30">
+                    {contagem[f].rascunhos}
+                  </span>
+                )}
+                {!podePublicar && contagem[f].novos > 0 && (
+                  <span title={`${contagem[f].novos} documento(s) sem confirmação de leitura`}
+                    className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                    {contagem[f].novos}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {podePublicar && visiveis.some(ehRascunho) && (
         <div className="neu-flat rounded-2xl p-4 border border-gray-500/25 flex items-start gap-2 text-xs text-gray-400">
           <FileClock size={13} className="shrink-0 mt-0.5" />
           <span>
-            {documentos.filter(ehRascunho).length === 1
-              ? `Há 1 rascunho guardado${filialAtiva ? ` para a ${filialAtiva}` : ''} — nenhuma unidade o recebeu ainda.`
-              : `Há ${documentos.filter(ehRascunho).length} rascunhos guardados${filialAtiva ? ` para a ${filialAtiva}` : ''} — nenhuma unidade os recebeu ainda.`}
+            {visiveis.filter(ehRascunho).length === 1
+              ? `Há 1 rascunho guardado para a ${filialAtiva ?? aba} — ela ainda não o recebeu.`
+              : `Há ${visiveis.filter(ehRascunho).length} rascunhos guardados para a ${filialAtiva ?? aba} — ela ainda não os recebeu.`}
           </span>
         </div>
       )}
@@ -467,11 +531,11 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         </div>
       )}
 
-      {documentos.length === 0 ? (
-        <EmptyState message={filialAtiva ? `Nenhum documento para a ${filialAtiva} ainda.` : 'Nenhum documento publicado ainda.'} />
+      {visiveis.length === 0 ? (
+        <EmptyState message={`Nenhum documento para a ${filialAtiva ?? aba} ainda.`} />
       ) : (
         <div className="flex flex-col gap-2">
-          {documentos.map(doc => {
+          {visiveis.map(doc => {
             const novo = idsNaoLidos.has(doc.id);
             const draft = ehRascunho(doc);
             return (
