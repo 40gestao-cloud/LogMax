@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X, Send, Loader2, RotateCcw, AlertCircle, Eye, Globe, ExternalLink, Copy, Check } from 'lucide-react';
+import { BotaoWhatsApp } from './BotaoWhatsApp';
+import { montarMensagemWhats } from '../lib/whatsappShare';
 import { useGeminiChat } from '../hooks/useGeminiChat';
 import { useCurrentAIContext } from '../contexts/AIAssistantContext';
 
@@ -227,6 +229,14 @@ export const AIAssistantFAB = () => {
                         {copiedId === m.id ? <Check size={10} /> : <Copy size={10} />}
                         {copiedId === m.id ? 'Copiado' : 'Copiar'}
                       </button>
+                    )}
+
+                    {m.role === 'assistant' && m.content.trim() && (
+                      <BotaoWhatsApp
+                        label="WhatsApp"
+                        getTexto={() => montarMensagemWhats({ titulo: 'MaxAI', corpoMarkdown: m.content })}
+                        className="mt-1 ml-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border text-gray-500 border-white/10 hover:text-accent hover:border-accent/40 transition-colors"
+                      />
                     )}
                   </div>
                 ))}

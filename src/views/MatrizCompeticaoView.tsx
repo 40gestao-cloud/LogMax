@@ -8,6 +8,8 @@ import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isConselheiro } from '../lib/rbac';
+import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
+import { montarMensagemWhats } from '../lib/whatsappShare';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
 import { ordenarRanking } from '../lib/competicaoRanking';
@@ -1222,13 +1224,25 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
                       <Sparkles size={13} className="text-accent" /> Análise IA
                     </h3>
-                    {competicaoAtual.status !== 'encerrada' && (
-                      <NeuButtonAccent onClick={gerarAnalise} disabled={gerandoAnalise} variant="">
-                        {gerandoAnalise
-                          ? <><Loader2 size={12} className="animate-spin" /> Analisando…</>
-                          : <><Sparkles size={12} /> {competicaoAtual.analise_ia ? 'Regenerar' : 'Gerar análise'}</>}
-                      </NeuButtonAccent>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {competicaoAtual.analise_ia && (
+                        <BotaoWhatsApp
+                          showToast={showToast}
+                          getTexto={() => montarMensagemWhats({
+                            titulo: 'Análise da Competição',
+                            subtitulo: competicaoAtual.nome,
+                            corpoMarkdown: competicaoAtual.analise_ia,
+                          })}
+                        />
+                      )}
+                      {competicaoAtual.status !== 'encerrada' && (
+                        <NeuButtonAccent onClick={gerarAnalise} disabled={gerandoAnalise} variant="">
+                          {gerandoAnalise
+                            ? <><Loader2 size={12} className="animate-spin" /> Analisando…</>
+                            : <><Sparkles size={12} /> {competicaoAtual.analise_ia ? 'Regenerar' : 'Gerar análise'}</>}
+                        </NeuButtonAccent>
+                      )}
+                    </div>
                   </div>
                   {competicaoAtual.analise_ia ? (
                     <div className="text-sm text-gray-200 leading-relaxed">

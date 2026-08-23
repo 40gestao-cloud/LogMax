@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { exportBIToPDF, exportBIToExcel, exportBIToWord, type BIDados } from '../lib/biExports';
+import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
+import { montarMensagemWhats } from '../lib/whatsappShare';
 
 const todayISO = () => {
   // Fuso local do operador — coerente com createdAt::date no Postgres.
@@ -403,6 +405,15 @@ export const PainelBIView = ({ showToast, profile }: any) => {
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest border border-white/10 hover:border-accent/40 rounded-lg px-3 py-2 text-gray-300 hover:text-accent transition-colors">
               <Presentation size={12} />Max Show
             </button>
+            <BotaoWhatsApp
+              showToast={showToast}
+              getTexto={() => montarMensagemWhats({
+                titulo: 'Painel BI',
+                subtitulo: `${fmtDataBR(inicio)} a ${fmtDataBR(fim)} · ${SETORES.find(s => s.id === relatorio!.setor)?.label ?? relatorio!.setor}`,
+                corpoMarkdown: relatorio!.markdown,
+                geradoEm: new Date(relatorio!.gerado_em).toLocaleString('pt-BR'),
+              })}
+            />
           </div>
           <button onClick={() => setShowHistorico(s => !s)}
             className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors">

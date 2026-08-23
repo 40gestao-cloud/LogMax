@@ -2,6 +2,8 @@ import { isConselheiro } from '../lib/rbac';
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Loader2, Lock, Calendar, CheckCircle2, X, Edit3, History, ListTodo, AlertTriangle, Send, Trash2, RefreshCw } from 'lucide-react';
+import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
+import { montarMensagemWhats } from '../lib/whatsappShare';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
@@ -77,6 +79,14 @@ const fmtDataBR = (iso: string) => {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
+};
+
+const briefingParaTextoWhats = (tarefas: TarefaProposta[]): string => {
+  const ativas = tarefas.filter(t => !t.descartada);
+  if (ativas.length === 0) return '_Nenhuma tarefa proposta._';
+  return ativas
+    .map(t => `• *${t.titulo}* (${t.prioridade}, ${t.prazo_dias}d)\n  ${t.descricao}`)
+    .join('\n\n');
 };
 
 const dataMaisDias = (iso: string, dias: number): string => {
@@ -592,6 +602,15 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
                   <CheckCircle2 size={10} />Briefing aplicado
                 </span>
               )}
+              <BotaoWhatsApp
+                showToast={showToast}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest border border-white/10 text-gray-400 rounded-lg px-3 py-1.5 hover:text-accent hover:border-accent/40 transition-colors"
+                getTexto={() => montarMensagemWhats({
+                  titulo: 'Briefing Diário',
+                  subtitulo: `${fmtDataBR(briefing.data_referencia)} · janela ${briefing.janela_dias ?? 7}d`,
+                  corpoMarkdown: briefingParaTextoWhats(tarefas),
+                })}
+              />
               {/* Excluir sempre disponível pra admin/CEO — RPC propaga */}
               <button onClick={excluirBriefing}
                 className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest border border-red-400/30 text-red-400 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors">
