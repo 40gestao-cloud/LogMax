@@ -392,16 +392,14 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   // Contagem por aba: o que a unidade recebe (dela + sem alvo). O segundo
   // número é o que ainda espera decisão do professor — é por ele que se escolhe
   // a aba, não pelo total.
-  // Para quem lê (CEO e conselheiro enxergam as três), o que puxa para a aba é
-  // o não-confirmado, não o rascunho — por isso os dois números, um por papel.
-  const contagem = useMemo(() => Object.fromEntries(FILIAIS.map(f => {
-    const doDia = documentos.filter(d => daAba(d, f));
-    return [f, {
-      total: doDia.length,
-      rascunhos: doDia.filter(ehRascunho).length,
-      novos: naoLidos.filter(d => daAba(d, f)).length,
-    }];
-  })) as Record<FilialAlvo, { total: number; rascunhos: number; novos: number }>,
+  // O que "pendente" quer dizer muda com o papel: para o professor é rascunho
+  // esperando publicação; para quem lê (CEO e conselheiro enxergam as três) é
+  // documento sem confirmação de leitura. É esse número que acende o ponto na
+  // aba — o total de documentos a própria lista já mostra.
+  const contagem = useMemo(() => Object.fromEntries(FILIAIS.map(f => [f, {
+    rascunhos: documentos.filter(d => daAba(d, f) && ehRascunho(d)).length,
+    novos: naoLidos.filter(d => daAba(d, f)).length,
+  }])) as Record<FilialAlvo, { rascunhos: number; novos: number }>,
   [documentos, naoLidos]);
 
   const baixar = async (doc: Documento) => {
@@ -478,30 +476,28 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
       </div>
 
       {mostrarAbas && (
-        <div className="neu-flat rounded-2xl p-1.5 border border-white/5 flex items-center gap-1.5">
+        <div className="flex gap-2 flex-wrap shrink-0">
           {FILIAIS.map(f => {
             const ativa = f === aba;
+            // Um sinal só, e sem número: o ponto diz "tem algo seu aqui" — o
+            // que é, a lista da aba mostra em duas linhas. Dois contadores lado
+            // a lado só faziam a pessoa parar para decifrar qual era qual.
+            const pendente = podePublicar ? contagem[f].rascunhos : contagem[f].novos;
             return (
               <button
                 key={f}
                 onClick={() => setAba(f)}
-                className={`flex-1 rounded-xl px-3 py-2.5 text-[11px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${
-                  ativa ? 'neu-pressed text-accent' : 'text-gray-500 hover:text-gray-300'
+                title={pendente > 0
+                  ? `${pendente} ${podePublicar ? 'rascunho(s) esperando publicação' : 'documento(s) sem confirmação de leitura'}`
+                  : undefined}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
                 }`}
               >
+                <Building2 size={14} />
                 {f}
-                <span className="text-[10px] font-bold tabular-nums text-gray-500">{contagem[f].total}</span>
-                {podePublicar && contagem[f].rascunhos > 0 && (
-                  <span title={`${contagem[f].rascunhos} rascunho(s) desta unidade`}
-                    className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30">
-                    {contagem[f].rascunhos}
-                  </span>
-                )}
-                {!podePublicar && contagem[f].novos > 0 && (
-                  <span title={`${contagem[f].novos} documento(s) sem confirmação de leitura`}
-                    className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                    {contagem[f].novos}
-                  </span>
+                {pendente > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                 )}
               </button>
             );
