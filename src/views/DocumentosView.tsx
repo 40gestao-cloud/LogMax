@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useFilial } from '../contexts/FilialContext';
 import { useDocumentos, baixarDocumento, ehRascunho, type Documento } from '../hooks/useDocumentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -92,9 +93,10 @@ function pathSeguro(nome: string): string {
 // Trocar o arquivo de um documento no ar é excluir e publicar de novo — aí a
 // leitura recomeça do zero porque a linha é outra.
 function ModalDocumento({
-  profile, doc, onClose, onSaved, showToast, publicarDoc,
+  profile, doc, filialAtiva, onClose, onSaved, showToast, publicarDoc,
 }: {
-  profile: UserProfile | null; doc: Documento | null; onClose: () => void; onSaved: () => void;
+  profile: UserProfile | null; doc: Documento | null; filialAtiva: string | null;
+  onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void;
   publicarDoc: (id: string) => Promise<{ error?: string }>;
 }) {
@@ -104,7 +106,10 @@ function ModalDocumento({
   const rascunho = !doc || ehRascunho(doc);
   const [titulo, setTitulo] = useState(doc?.titulo ?? '');
   const [descricao, setDescricao] = useState(doc?.descricao ?? '');
-  const [filialAlvo, setFilialAlvo] = useState(doc?.filial_alvo ?? '');
+  // Documento novo nasce mirando a unidade em que se está — senão ele sumiria
+  // da lista assim que fosse salvo, porque a tela só mostra a filial ativa.
+  // Em modo Matriz continua "Todas as unidades".
+  const [filialAlvo, setFilialAlvo] = useState(doc?.filial_alvo ?? filialAtiva ?? '');
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [mime, setMime] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -302,6 +307,15 @@ function ModalDocumento({
           </div>
         )}
 
+        {/* Salvar mirando outra unidade tira o documento da lista na hora: a
+            tela mostra só a filial aberta. Dizer antes evita o "sumiu". */}
+        {filialAtiva && filialAlvo && filialAlvo !== filialAtiva && (
+          <p className="text-[10px] text-amber-300/80 leading-snug">
+            Você está operando a {filialAtiva} e este documento é só da {filialAlvo} — depois de salvar
+            ele sai desta lista. Troque a unidade no topo, ou vá para a Matriz, para encontrá-lo.
+          </p>
+        )}
+
         {editando && !rascunho ? (
           <NeuButtonAccent onClick={() => salvar(false)} isLoading={salvando}>
             Salvar alterações
@@ -335,7 +349,8 @@ function ModalDocumento({
 
 // ── View ───────────────────────────────────────────────────────────────────
 export const DocumentosView = ({ showToast, profile }: { showToast: any; profile: UserProfile | null }) => {
-  const { documentos, naoLidos, loading, marcarLido, publicar, recarregar } = useDocumentos(profile);
+  const { documentos: todos, naoLidos: naoLidosTodos, loading, marcarLido, publicar, recarregar } = useDocumentos(profile);
+  const { filialAtiva } = useFilial();
   // null = fechado · 'novo' = publicar · Documento = editando aquele.
   const [modal, setModal] = useState<'novo' | Documento | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
@@ -344,6 +359,17 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   // Publicar é ato do professor. CEO e conselheiro são alunos — o banco já
   // recusa, aqui só não se oferece o botão (vide comentário no topo).
   const podePublicar = profile?.role === 'admin';
+
+  // A tela mostra a unidade em que se está operando, e só ela. O admin vê os
+  // documentos das tres unidades porque a RLS nao o recorta — mas ler tudo
+  // junto enquanto se opera a SuperMax e' o mesmo erro de sempre: o nicho do
+  // topbar tem que valer aqui. Documento sem alvo ("Todas as unidades") chega
+  // na filial ativa tambem, entao continua na lista.
+  // Em modo Matriz (filialAtiva === null) o consolidado e' o certo: mostra tudo.
+  const dentroDaFilial = (d: Documento) =>
+    !filialAtiva || !d.filial_alvo || d.filial_alvo === filialAtiva;
+  const documentos = useMemo(() => todos.filter(dentroDaFilial), [todos, filialAtiva]);
+  const naoLidos = useMemo(() => naoLidosTodos.filter(dentroDaFilial), [naoLidosTodos, filialAtiva]);
   const idsNaoLidos = useMemo(() => new Set(naoLidos.map(d => d.id)), [naoLidos]);
 
   const baixar = async (doc: Documento) => {
@@ -424,8 +450,8 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
           <FileClock size={13} className="shrink-0 mt-0.5" />
           <span>
             {documentos.filter(ehRascunho).length === 1
-              ? 'Há 1 rascunho guardado — nenhuma unidade o recebeu ainda.'
-              : `Há ${documentos.filter(ehRascunho).length} rascunhos guardados — nenhuma unidade os recebeu ainda.`}
+              ? `Há 1 rascunho guardado${filialAtiva ? ` para a ${filialAtiva}` : ''} — nenhuma unidade o recebeu ainda.`
+              : `Há ${documentos.filter(ehRascunho).length} rascunhos guardados${filialAtiva ? ` para a ${filialAtiva}` : ''} — nenhuma unidade os recebeu ainda.`}
           </span>
         </div>
       )}
@@ -442,7 +468,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
       )}
 
       {documentos.length === 0 ? (
-        <EmptyState message="Nenhum documento publicado ainda." />
+        <EmptyState message={filialAtiva ? `Nenhum documento para a ${filialAtiva} ainda.` : 'Nenhum documento publicado ainda.'} />
       ) : (
         <div className="flex flex-col gap-2">
           {documentos.map(doc => {
@@ -544,6 +570,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
           <ModalDocumento
             profile={profile}
             doc={modal === 'novo' ? null : modal}
+            filialAtiva={filialAtiva}
             onClose={() => setModal(null)}
             onSaved={recarregar}
             showToast={showToast}

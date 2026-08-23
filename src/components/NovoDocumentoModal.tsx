@@ -31,11 +31,12 @@
 // que a pessoa sai da operação ou tira o cursor do campo — a recheca acontece a
 // cada troca de view e a cada 30s enquanto houver algo represado.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Check, Download, Building2, Loader2 } from 'lucide-react';
 import { formatDataHoraBR } from '../lib/dates';
 import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
+import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Telas de OPERAÇÃO: nelas o módulo inteiro se cala — nem modal, nem FAB.
@@ -82,7 +83,18 @@ function digitandoAgora(): boolean {
 export function NovoDocumentoModal({ profile, showToast, activeView }: {
   profile: UserProfile; showToast?: any; activeView?: string;
 }) {
-  const { naoLidos, marcarLido, recarregar } = useDocumentos(profile);
+  const { naoLidos: fila, marcarLido, recarregar } = useDocumentos(profile);
+  const { filialAtiva } = useFilial();
+  // A fila segue a unidade aberta, como a tela de Documentos. Para quem opera
+  // uma unidade só (gerente e equipe) isto não muda nada — a RLS já recorta.
+  // Muda para CEO e conselheiro, que enxergam as três: sem o filtro, quem abriu
+  // a SuperMax era interrompido por documento que só a MaxLook precisa ler. Em
+  // modo Matriz a fila volta a ser a das três, que é onde ela se resolve.
+  // Documento sem alvo ("Todas as unidades") alcança qualquer uma, então fica.
+  const naoLidos = useMemo(
+    () => fila.filter(d => !filialAtiva || !d.filial_alvo || d.filial_alvo === filialAtiva),
+    [fila, filialAtiva],
+  );
   const [open, setOpen] = useState(false);
   const [indice, setIndice] = useState(0);
   const [salvando, setSalvando] = useState(false);

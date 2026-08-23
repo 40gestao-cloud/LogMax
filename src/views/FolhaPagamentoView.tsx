@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { todayBR } from '../lib/dates';
+import { todayBR, dataBR } from '../lib/dates';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -10,7 +10,7 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
-import { useJornadaTurma } from '../hooks/useJornadaTurma';
+import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FolhaPagamento, Funcionario } from '../types/domain';
@@ -98,6 +98,10 @@ const EMPTY: any = { funcionario_id: '', mes_ref: '', salario_base: '', desconto
 const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialSelectorValue }) => {
   const { data: folhas, setData, isLoading: loadingF } = useFetchData<FolhaPagamento>('/api/folhapagamentoview', { filial });
   const jornada = useJornadaTurma();
+  // Migr. 514: a folha atravessa o APAGAR TUDO, mas a que veio da turma
+  // anterior e' so' leitura -- o gatilho recusa qualquer UPDATE nela. A tela le'
+  // a mesma data pra nao oferecer botao que vai falhar (mesma regua do ponto).
+  const corteTurma = usePontoCorteTurma();
   const { data: funcionarios, isLoading: loadingFn } = useFetchData<Funcionario>('/api/funcionariosview', { filial });
 
   const hoje = todayBR().slice(0, 7);
@@ -135,6 +139,14 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const [excluindoTxId, setExcluindoTxId] = useState<string | null>(null);
 
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
+
+  // Criada ANTES do corte = turma passada. `created_at`, nao `mes_ref`: o mes
+  // e' digitado, a data de criacao nao.
+  const ehFechada = (f: any) => {
+    if (!corteTurma || !f?.created_at) return false;
+    const dia = dataBR(f.created_at);
+    return !!dia && dia < corteTurma;
+  };
 
   const folhasFiltradas = folhas.filter(f => f.mes_ref === mesFiltro);
   const enriched = folhasFiltradas.map(f => ({
@@ -248,8 +260,16 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const handleSave = async () => {
     if (!form.funcionario_id || !form.mes_ref) { showToast('Funcionário e mês são obrigatórios.', 'error'); return; }
     if (!editId) {
-      const dup = folhas.some(x => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
-      if (dup) { showToast('Já existe folha para este funcionário neste mês. Edite o registro existente.', 'error'); return; }
+      const dup = folhas.find((x: any) => x.funcionario_id === form.funcionario_id && x.mes_ref === form.mes_ref);
+      if (dup) {
+        // A folha da turma anterior ocupa a vaga do mês (índice único por
+        // funcionário + mês) e não aceita edição — mandar "edite o registro
+        // existente" seria mandar bater numa porta trancada.
+        showToast(ehFechada(dup)
+          ? 'Já existe folha deste funcionário neste mês, vinda da turma anterior — ela é histórico e não se edita. Lance outro mês ou exclua aquele lançamento.'
+          : 'Já existe folha para este funcionário neste mês. Edite o registro existente.', 'error');
+        return;
+      }
     }
     const base = parseBRL(form.salario_base);
     const desc = parseBRL(form.descontos);
@@ -322,6 +342,10 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   };
 
   const openEdit = (f: any) => {
+    if (ehFechada(f)) {
+      showToast('Folha da turma anterior — histórico fechado pelo APAGAR TUDO. Ela fica para consulta; para refazer, lance o mês corrente.', 'error');
+      return;
+    }
     setEditId(f.id);
     const base = f.salario_base ?? f.salario_bruto;
     setForm({
@@ -575,6 +599,12 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const handleStatusCycle = async (f: any) => {
     const next = statusNext(f.status);
     if (!next) return; // 'Paga' é estado terminal — sem reversão
+    // Herdada do reset: processar geraria conta a pagar da turma passada e o
+    // crédito cairia na carteira de quem ocupa o cadastro hoje (migr. 514).
+    if (ehFechada(f)) {
+      showToast('Folha da turma anterior — não se processa nem se paga. É histórico.', 'error');
+      return;
+    }
     try {
       // Processada → Paga não existe mais aqui (migr. 282): quem paga é o
       // Financeiro, em Contas a Pagar. `statusNext` já para em 'Processada' —
@@ -729,7 +759,15 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                     <motion.tr key={f.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.func?.nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.mes_ref ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-400">
+                        {f.mes_ref ?? '—'}
+                        {ehFechada(f) && (
+                          <span title="Folha da turma anterior, preservada pelo reset — só leitura."
+                            className="ml-2 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-500/15 text-gray-400 border border-gray-500/30">
+                            Turma anterior
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-right">R$ {Number(f.salario_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono text-red-500 text-right">- R$ {Number(f.descontos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-xs font-mono text-blue-400 text-right">+ R$ {Number(f.valor_beneficios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
@@ -737,8 +775,8 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                       <td className="py-3 px-4 text-center">
                         <button
                           onClick={() => handleStatusCycle(f)}
-                          disabled={!statusNext(f.status)}
-                          title={statusNextTitle(f.status)}
+                          disabled={!statusNext(f.status) || ehFechada(f)}
+                          title={ehFechada(f) ? 'Folha da turma anterior — histórico fechado (migr. 514).' : statusNextTitle(f.status)}
                           className={`flex items-center gap-1.5 mx-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase hover:opacity-80 disabled:cursor-default ${statusCls(f.status)}`}
                         >
                           {f.status === 'Paga' ? <CheckCircle size={11} /> : f.status === 'Processada' ? <DollarSign size={11} /> : <Clock size={11} />}
@@ -759,7 +797,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                           >
                             <FileText size={12} />
                           </button>
-                          {f.status === 'Pendente' && (
+                          {f.status === 'Pendente' && !ehFechada(f) && (
                             <button
                               onClick={() => handleRecalcular(f)}
                               disabled={recalcLoading === f.id}
@@ -769,7 +807,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                               <Calculator size={12} />
                             </button>
                           )}
-                          {(f.status === 'Paga' || f.status === 'Processada') && podeDestravarCredito && (
+                          {(f.status === 'Paga' || f.status === 'Processada') && podeDestravarCredito && !ehFechada(f) && (
                             <button
                               onClick={() => handleRecreditar(f)}
                               disabled={recreditandoId === f.id}
@@ -787,7 +825,12 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                           >
                             <Wallet size={12} />
                           </button>
-                          <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                          {/* Excluir fica mesmo na folha fechada: é a válvula
+                              do professor quando o lançamento antigo ocupa a
+                              vaga do mês da turma nova (migr. 514). */}
+                          {!ehFechada(f) && (
+                            <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                          )}
                           <button onClick={() => handleDelete(f)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                         </div>
                       </td>

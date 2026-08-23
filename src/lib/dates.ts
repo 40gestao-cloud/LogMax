@@ -18,6 +18,20 @@ export function todayBR(): string {
   return FMT.format(new Date());
 }
 
+/**
+ * Dia (no fuso do Acre) em que um timestamp caiu, formato `YYYY-MM-DD`.
+ *
+ * `iso.slice(0,10)` não serve: `created_at` vem em UTC, e das 19h às 24h do
+ * Acre o corte de UTC já é o dia seguinte. Quem compara com uma data gravada
+ * pelo banco em ACT (o corte de turma da migr. 505/514, por exemplo) erraria
+ * cinco horas por dia.
+ */
+export function dataBR(iso: string | Date | null | undefined): string | null {
+  if (!iso) return null;
+  const d = iso instanceof Date ? iso : new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : FMT.format(d);
+}
+
 /** Data N dias antes de hoje no fuso do Acre, formato `YYYY-MM-DD`. */
 export function daysAgoBR(dias: number): string {
   const [y, m, d] = todayBR().split('-').map(Number);

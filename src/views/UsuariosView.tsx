@@ -1167,7 +1167,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       do lado de preservar. A linha dizia como perda o que a
                       régua agora mantém — e o Registro de Ponto era justamente
                       o que não podia sumir. */}
-                  <li>RH: folha de pagamento, férias, inscrições em treinamento</li>
+                  {/* (514) "folha de pagamento" saiu desta linha: o holerite
+                      mudou de lado, junto com as rubricas que o explicam. */}
+                  <li>RH: férias e inscrições em treinamento</li>
                   <li>Avaliações, pesquisas, feedbacks, PDIs</li>
                   <li>Marketing: campanhas, promoções, cupons, calendário</li>
                   <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
@@ -1202,6 +1204,20 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <p className="text-emerald-400 text-xs">
                   ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
                   foi assim; a régua só não dizia. O material do professor não se refaz a cada turma.
+                </p>
+                {/* Migr. 514: a folha muda de lado; os três cadastros só passam
+                    a estar escritos. Parágrafo próprio pelo mesmo motivo do de
+                    fornecedor — é a mudança que o professor precisa ver antes
+                    de digitar APAGAR TUDO. */}
+                <p className="text-emerald-400 text-xs">
+                  ✓ Agora também preserva a <strong>Folha de Pagamento</strong> com as rubricas de cada
+                  holerite — é histórico da pessoa e a base do FGTS acumulado. As <strong>contas a pagar</strong> da
+                  folha continuam sendo apagadas: lançar e pagar é exercício da turma. E a folha de antes deste
+                  reset vira <strong>só leitura</strong> — não se processa, não se paga, não se recalcula.
+                </p>
+                <p className="text-emerald-400 text-xs">
+                  ✓ E os cadastros de estrutura: <strong>Departamentos</strong>, <strong>Cargos</strong> e{' '}
+                  <strong>Centros de Custo</strong>. Nunca foram apagados; a régua é que não dizia.
                 </p>
                 {/* Migr. 482: fornecedor e categoria mudaram de lado. Ganham
                     parágrafo próprio porque é a novidade que o professor
@@ -1264,7 +1280,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <p className="text-sm text-gray-300 mb-4 leading-relaxed">
                 Recomeca <strong>uma</strong> unidade sem tocar nas outras. Mesma regua do Apagar tudo:
                 o que ele preserva, este preserva &mdash; usuarios, funcionarios, filiais, carteiras,
-                frequencia, Registro de Ponto (migr. 504), placar da competicao, fornecedores e categorias.
+                frequencia, Registro de Ponto (migr. 504), folha de pagamento com as rubricas (migr. 514),
+                departamentos, cargos, centros de custo, placar da competicao, fornecedores e categorias.
+                A conta a pagar da folha sai; o holerite fica.
               </p>
 
               <div className="flex flex-col gap-2 mb-4">
