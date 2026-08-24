@@ -306,6 +306,54 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     }
   };
 
+  // ── Abas por situação ─────────────────────────────────────────────────────
+  //
+  // A lista era uma só, em ordem de abertura, com tudo dentro: o que espera o
+  // gerente, o que ele aprovou, o que virou pedido, o que ele negou e o que
+  // voltou para conserto. Numa turma que abre requisição em lote isso passa de
+  // cem linhas no primeiro dia — e a devolvida, que é a única que exige ação
+  // AGORA, ficava enterrada no meio, indistinguível.
+  //
+  // "Atendidas" tem aba própria mesmo não tendo sido pedida: sem ela, a
+  // requisição que virou pedido sumiria da tela do setor que a abriu — e é
+  // justamente ali que o aluno vai procurar para saber se a compra andou.
+  const ABAS = [
+    { key: 'corrigir',  label: 'Para corrigir', status: ['Em correção'] },
+    { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'] },
+    { key: 'aprovadas', label: 'Aprovadas',     status: ['Aprovado'] },
+    { key: 'atendidas', label: 'Atendidas',     status: ['Atendida'] },
+    { key: 'negadas',   label: 'Negadas',       status: ['Negado'] },
+  ] as const;
+  type AbaKey = typeof ABAS[number]['key'];
+
+  const porAba = useMemo(() => {
+    const mapa = Object.fromEntries(ABAS.map(a => [a.key, [] as any[]])) as Record<AbaKey, any[]>;
+    const outras: any[] = [];
+    for (const r of pedidos) {
+      const aba = ABAS.find(a => (a.status as readonly string[]).includes(String(r.status)));
+      if (aba) mapa[aba.key].push(r);
+      // Status que nenhuma aba cobre (legado, ou fluxo do almoxarifado com
+      // vocabulário próprio) não pode sumir da tela: cai em Pendentes, que é
+      // onde alguém ainda olha.
+      else outras.push(r);
+    }
+    mapa.pendentes = [...mapa.pendentes, ...outras];
+    return mapa;
+  }, [pedidos]);
+
+  // Quantas devolvidas ESTE usuário pode consertar. É o que acende o ponto na
+  // aba — o total de linhas a própria lista mostra.
+  const minhasParaCorrigir = useMemo(
+    () => porAba.corrigir.filter(r => podeCorrigir(r)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [porAba],
+  );
+
+  // Abre onde há trabalho. Só uma vez: depois disso quem manda é o clique.
+  const [aba, setAba] = useState<AbaKey | null>(null);
+  const abaAtiva: AbaKey = aba ?? (porAba.corrigir.length > 0 ? 'corrigir' : 'pendentes');
+  const visiveis = porAba[abaAtiva];
+
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
   const updateLinha = (i: number, patch: Partial<{ item: string; qtd: string; unidade: string; justificativa: string }>) =>
@@ -881,6 +929,33 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       {(isLoading || loadingEst) ? <LoadingSpinner /> : pedidos.length === 0 ? (
         <EmptyState message="O seu setor ainda não abriu nenhum pedido" />
       ) : (
+      <>
+      {/* Pílulas no padrão da casa (mesmas de Relatórios e Documentos). O ponto
+          âmbar diz "tem algo SEU aqui para consertar"; o que é, a lista mostra. */}
+      <div className="flex gap-2 flex-wrap shrink-0">
+        {ABAS.map(a => {
+          const ativa = a.key === abaAtiva;
+          const n = porAba[a.key].length;
+          const chama = a.key === 'corrigir' && minhasParaCorrigir > 0;
+          return (
+            <button key={a.key} onClick={() => setAba(a.key)}
+              title={chama ? `${minhasParaCorrigir} requisição(ões) sua(s) esperando correção` : undefined}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
+              }`}>
+              {a.key === 'corrigir' && <RotateCcw size={14} />}
+              {a.label}
+              <span className="text-[11px] font-bold tabular-nums text-gray-500">{n}</span>
+              {chama && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+      {visiveis.length === 0 ? (
+        <EmptyState message={abaAtiva === 'corrigir'
+          ? 'Nada devolvido para correção — o que o gerente pediu para consertar aparece aqui.'
+          : 'Nenhuma requisição nesta situação.'} />
+      ) : (
         <div className="neu-flat rounded-2xl border border-white/5 overflow-x-auto">
           <table className="w-full min-w-[780px]">
             <thead>
@@ -891,7 +966,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               </tr>
             </thead>
             <tbody>
-              {pedidos.map(r => (
+              {visiveis.map(r => (
                 <React.Fragment key={`${r.tipo}-${r.id}`}>
                   <tr
                     className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
@@ -932,10 +1007,38 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <td className="py-3 px-4 text-xs font-mono text-gray-400">{r.prazo ?? '—'}</td>
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-500">{r.abertura || '—'}</td>
-                    <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                    {/* "Em correção" descreve o estado do documento, não o que
+                        se espera de quem lê — e quem lê é justamente quem tem de
+                        agir. O valor no banco continua 'Em correção' (guardas,
+                        RPCs e cotações falam essa língua); aqui o rótulo fala a
+                        língua do aluno. */}
+                    <td className="py-3 px-4">
+                      {r.status === 'Em correção' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-amber-400/15 text-amber-300 whitespace-nowrap">
+                          <RotateCcw size={11} />
+                          Devolvida — corrigir
+                        </span>
+                      ) : (
+                        <StatusBadge status={r.status} />
+                      )}
+                    </td>
                     {/* O aluno que pediu acompanha o próprio documento sem ter
                         de perguntar ao professor por que ele parou. */}
                     <td className="py-3 px-4 text-right">
+                      {/* O botão vivia só dentro da linha expandida, no fim do
+                          painel de detalhe. Quem foi avisado de que a requisição
+                          voltou abria a tela, via "Em correção" e não achava o
+                          que fazer — a ação existia, escondida atrás de um
+                          clique que nada anunciava. Agora ela está onde o olho
+                          já está: na linha, ao lado do histórico. */}
+                      {r.status === 'Em correção' && podeCorrigir(r) && (
+                        <button
+                          onClick={e => { e.stopPropagation(); abrirCorrecao(r); }}
+                          className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-amber-400 inline-flex items-center gap-1.5 mr-2 align-middle"
+                        >
+                          <RotateCcw size={11} /> Corrigir
+                        </button>
+                      )}
                       <HistoricoOperacoes
                         entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
                         entidadeId={r.id}
@@ -993,7 +1096,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         {r.status === 'Em correção' && (
                           <div className="mt-3 neu-pressed rounded-xl p-3 border border-amber-400/20">
                             <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
-                              O gerente devolveu para correção
+                              O gerente devolveu para você corrigir
                             </span>
                             <span className="text-xs text-gray-200">
                               {r.correcaoMotivo || 'Sem motivo registrado.'}
@@ -1025,6 +1128,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
 
       {/* Correcao da requisicao devolvida (migr. 517).
