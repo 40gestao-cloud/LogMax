@@ -44,6 +44,10 @@ export const GerenciamentoComprasView = () => {
   const reqPendentes = requisicoes.filter((r: any) => r.status === 'Pendente').length;
   const reqAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado').length;
   const reqNegadas = requisicoes.filter((r: any) => r.status === 'Negado').length;
+  // Devolvidas (migr. 517): não estão negadas nem pendentes de decisão — estão
+  // com quem as abriu. Sem card próprio elas sumiriam do painel, que é onde a
+  // direção vê a fila travar.
+  const reqEmCorrecao = requisicoes.filter((r: any) => r.status === 'Em correção').length;
   // 'Atendida' = já virou pedido (migr. 266). Sem este card as requisições
   // sumiam de "Aprovadas" sem aparecer em lugar nenhum.
   const reqAtendidas = requisicoes.filter((r: any) => r.status === 'Atendida').length;
@@ -76,6 +80,7 @@ export const GerenciamentoComprasView = () => {
         { label: 'Aprovadas', value: reqAprovadas, cls: 'text-green-400' },
         { label: 'Atendidas', value: reqAtendidas, cls: reqAtendidas > 0 ? 'text-accent' : 'text-gray-500' },
         { label: 'Negadas', value: reqNegadas, cls: reqNegadas > 0 ? 'text-red-500' : 'text-gray-500' },
+        { label: 'Em correção', value: reqEmCorrecao, cls: reqEmCorrecao > 0 ? 'text-amber-400' : 'text-gray-500' },
       ],
     },
     {

@@ -23,7 +23,7 @@ type EnrichedAp = AprovacaoCompras & { req: Requisicao };
 
 const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast: ShowToast; profile: UserProfile; filial: FilialOp }) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
+  const { data: requisicoes, setData: setRequisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<Requisicao>('/api/requisicoesview', { filial }, true);
   // As decisões já tomadas. A tela só listava 'Pendente', então o card sumia no
   // instante em que o gerente clicava — e o erro dele virava impasse, porque a
   // volta só existia em Requisições, outra tela, outro menu.
@@ -130,6 +130,51 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
 
   const handleAprovar = (ap: EnrichedAp) => decidir(ap, 'Aprovado');
   const handleNegar   = (ap: EnrichedAp) => decidir(ap, 'Negado');
+
+  // Terceira saída do gerente (migr. 517), ao lado de Aprovar e Negar.
+  //
+  // Negar é decisão de MÉRITO — "não vamos comprar isto" — e é terminal: o
+  // solicitante não edita a requisição (a policy só entrega UPDATE a compras e
+  // ao gerente) nem a reenvia. Quem errava a quantidade ou a justificativa não
+  // tinha caminho: abria outra requisição e perdia o fio do documento, ou
+  // chamava a direção para usar `reabrir_requisicao`, que é ferramenta de
+  // professor. Em aula errar é a regra, e um fluxo onde o erro só se conserta
+  // por fora do fluxo não ensina o fluxo.
+  //
+  // Devolver não decide a aprovação: ela segue 'Pendente'. Nada foi julgado —
+  // o documento só saiu da mesa, e volta para ela quando o solicitante corrigir.
+  const devolverParaCorrecao = async (ap: EnrichedAp) => {
+    if (!supabase) return;
+    const motivo = (obs[ap.id] ?? '').trim();
+    if (!motivo) {
+      showToast('Escreva na observação o que precisa ser corrigido — é isso que o solicitante vai ler.', 'error', true);
+      return;
+    }
+    setProcessing(ap.id);
+    try {
+      const { error } = await supabase.rpc('devolver_requisicao_para_correcao', {
+        p_aprovacao_id: ap.id,
+        p_motivo:       motivo,
+      });
+      if (error) throw error;
+      // O card NÃO some: a aprovação continua 'Pendente' (nada foi decidido), e
+      // some-agora-volta-no-reload seria pior que ficar. Ele fica travado, com o
+      // motivo à vista — o gerente enxerga o que mandou consertar.
+      setRequisicoes(prev => prev.map(r => r.id === ap.req.id
+        ? { ...r, status: 'Em correção', correcao_motivo: motivo } as Requisicao
+        : r));
+      setAvulsas(prev => prev[ap.req.id]
+        ? { ...prev, [ap.req.id]: { ...prev[ap.req.id], status: 'Em correção', correcao_motivo: motivo } as Requisicao }
+        : prev);
+      showToast(
+        `${numeroRequisicao(ap.req)} devolvida para ${ap.req.solicitante || 'o solicitante'}. `
+        + 'Ela fica travada aqui até ele reenviar corrigida, em Requisições → Do Setor.', 'info', true);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível devolver.', 'error', true);
+    } finally {
+      setProcessing(null);
+    }
+  };
 
   // Devolver a decisão do gerente (migr. 330/340, RPC `reabrir_requisicao`).
   //
@@ -272,7 +317,20 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             <span className="text-xs text-gray-200">{req.justificativa}</span>
                           </div>
                         )}
-                        {!podeDecidir(ap) ? (
+                        {req.status === 'Em correção' ? (
+                          <div className="neu-pressed p-3 rounded-xl border border-amber-400/20">
+                            <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                              Devolvida — está com o solicitante
+                            </span>
+                            <span className="text-xs text-gray-300">
+                              {(req as any).correcao_motivo || 'Aguardando correção.'}
+                            </span>
+                            <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
+                              Nada foi decidido: quando {req.solicitante || 'o solicitante'} reenviar em
+                              Requisições &gt; Do Setor, este mesmo card volta a aceitar Aprovar ou Negar.
+                            </span>
+                          </div>
+                        ) : !podeDecidir(ap) ? (
                           <div className="neu-pressed p-3 rounded-xl text-xs text-gray-400">
                             {ap.req.criado_por === profile.id
                               ? 'Você abriu esta requisição — quem decide é o gerente da filial.'
@@ -280,9 +338,16 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                           </div>
                         ) : (
                         <>
+                        <p className="text-[11px] text-gray-500 leading-snug">
+                          <span className="text-gray-300 font-bold">Negar</span> é decisão de mérito — a unidade
+                          não vai comprar isto, e o documento se encerra.{' '}
+                          <span className="text-amber-400/90 font-bold">Devolver</span> é para o pedido mal feito:
+                          quantidade errada, item impreciso, justificativa que não explica. Volta para quem abriu,
+                          com o seu motivo, e o mesmo documento retorna corrigido — sem virar requisição nova.
+                        </p>
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                            Observação <span className="text-red-500/70">(obrigatória para negar)</span>
+                            Observação <span className="text-red-500/70">(obrigatória para negar e para devolver)</span>
                           </label>
                           <textarea
                             className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20"
@@ -291,7 +356,19 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             onChange={e => setObs(prev => ({ ...prev, [ap.id]: e.target.value }))}
                           />
                         </div>
-                        <div className="flex gap-3 justify-end">
+                        <div className="flex flex-wrap gap-3 justify-end">
+                          {/* Entre Negar e Aprovar de propósito: as três saídas
+                              são do mesmo momento de decisão, e a do meio é a
+                              que o gerente mais vai usar em aula. */}
+                          <button
+                            onClick={() => devolverParaCorrecao(ap)}
+                            disabled={isProcessing}
+                            title="O pedido está mal feito: volta para quem abriu, com o seu motivo, e não conta como negado."
+                            className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-amber-400 hover:border-amber-400/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                            Devolver p/ correção
+                          </button>
                           <button
                             onClick={() => handleNegar(ap)}
                             disabled={isProcessing}

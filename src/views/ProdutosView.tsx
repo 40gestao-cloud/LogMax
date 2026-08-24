@@ -359,7 +359,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       // ainda não passou por lá — que é justamente a que apareceria aqui.
       .filter(r => !r.servico_id)
       .filter(r => String(r.unidade ?? '').trim().toUpperCase() !== 'SV')
-      .filter(r => !['Atendida', 'Negado'].includes(r.status))
+      // 'Em correção' (migr. 517) sai junto: o documento voltou para quem o
+      // abriu e o TEXTO DO ITEM pode mudar. Cadastrar produto a partir dele
+      // amarraria o catálogo a um pedido que ainda vai ser reescrito.
+      .filter(r => !['Atendida', 'Negado', 'Em correção'].includes(r.status))
       .map(r => {
         // Mesmo colapso de espaço em branco do grupo de cima: requisição colada
         // de planilha traz TAB entre o produto e a marca, e o TAB ia inteiro

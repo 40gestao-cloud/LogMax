@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -202,6 +202,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: r.justificativa, solicitante: r.solicitante,
       saldo: r.saldo_no_pedido, minimo: r.minimo_no_pedido,
+      // Devolvida pelo gerente (migr. 517): o motivo vem na própria requisição,
+      // porque o solicitante não enxerga `aprovacoes_compras`.
+      correcaoMotivo: r.correcao_motivo ?? null,
+      criadoPor: r.criado_por ?? null,
+      centroCusto: r.centro_custo ?? '',
     }));
     const materiais = reqEstoque.map((r: any) => ({
       id: r.id, tipo: 'estoque' as TipoReq, tipoLabel: 'Estoque', numero: null as string | null,
@@ -215,6 +220,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: null, solicitante: r.solicitante,
       saldo: null as number | null, minimo: null as number | null,
+      correcaoMotivo: null as string | null,
+      criadoPor: r.criado_por ?? null,
+      centroCusto: '',
     }));
     return [...compras, ...materiais].sort((a, b) => String(b.abertura).localeCompare(String(a.abertura)));
   }, [data, reqEstoque, produtos]);
@@ -225,6 +233,61 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
     [centrosCusto],
   );
+
+  // Requisição devolvida pelo gerente (migr. 517). Quem abriu corrige aqui e
+  // reenvia — o mesmo documento volta para a fila de aprovação, sem virar
+  // requisição nova. Antes disso o solicitante não tinha saída nenhuma: Negar
+  // era terminal, e a policy não lhe dá UPDATE em `requisicoes`.
+  const [corrigindo, setCorrigindo] = useState<any | null>(null);
+  const [corrForm, setCorrForm] = useState({
+    item: '', qtd: '1', unidade: '', justificativa: '',
+    urgencia: 'Normal', centro_custo: '', data_necessidade: '',
+  });
+  const [reenviando, setReenviando] = useState(false);
+  const corrFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(corrForm.unidade));
+
+  const abrirCorrecao = (r: any) => {
+    const bruta = data.find((x: any) => x.id === r.id);
+    setCorrigindo(r);
+    setCorrForm({
+      item:             r.item ?? '',
+      qtd:              qtdBR(r.qtd ?? 1),
+      unidade:          normalizarUnidade(r.unidade) || '',
+      justificativa:    r.justificativa ?? '',
+      urgencia:         r.urgencia ?? 'Normal',
+      centro_custo:     r.centroCusto ?? '',
+      data_necessidade: bruta?.data_necessidade ?? r.prazo ?? '',
+    });
+  };
+
+  const handleReenviar = async () => {
+    if (!corrigindo || !supabase) return;
+    const qtd = parseQtd(corrForm.qtd);
+    if (!corrForm.item.trim()) { showToast('Diga o que está sendo pedido.', 'error', true); return; }
+    if (!(qtd > 0))            { showToast('A quantidade tem de ser maior que zero.', 'error', true); return; }
+    setReenviando(true);
+    try {
+      const { data: res, error } = await supabase.rpc('reenviar_requisicao_corrigida', {
+        p_id:               corrigindo.id,
+        p_item:             corrForm.item,
+        p_qtd:              qtd,
+        p_unidade:          corrForm.unidade || null,
+        p_justificativa:    corrForm.justificativa || null,
+        p_urgencia:         corrForm.urgencia || null,
+        p_centro_custo:     corrForm.centro_custo || null,
+        p_data_necessidade: corrForm.data_necessidade || null,
+      });
+      if (error) throw error;
+      const atualizada: any = Array.isArray(res) ? res[0] : res;
+      setData((prev: any[]) => prev.map(d => d.id === corrigindo.id ? (atualizada ?? d) : d));
+      showToast('Requisição corrigida e reenviada — está de volta na fila do gerente.', 'success', true);
+      setCorrigindo(null);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível reenviar.', 'error', true);
+    } finally {
+      setReenviando(false);
+    }
+  };
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
@@ -906,6 +969,36 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                             <span className="text-xs text-gray-300">{r.justificativa}</span>
                           </div>
                         )}
+                        {/* O que o gerente mandou consertar, e o botao de faze-lo
+                            (migr. 517). Fica no fim porque e a ultima coisa que
+                            se le antes de agir — e so aparece para quem pode
+                            agir: quem abriu o documento. */}
+                        {r.status === 'Em correção' && (
+                          <div className="mt-3 neu-pressed rounded-xl p-3 border border-amber-400/20">
+                            <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                              O gerente devolveu para correção
+                            </span>
+                            <span className="text-xs text-gray-200">
+                              {r.correcaoMotivo || 'Sem motivo registrado.'}
+                            </span>
+                            <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+                              <span className="text-[11px] text-gray-500 leading-snug">
+                                Não foi negada — nada foi decidido. Corrija e reenvie: é o mesmo documento que
+                                volta para a fila do gerente.
+                              </span>
+                              {(!r.criadoPor || r.criadoPor === profile?.id) ? (
+                                <button onClick={() => abrirCorrecao(r)}
+                                  className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-amber-400 flex items-center gap-2 shrink-0">
+                                  <RotateCcw size={12} /> Corrigir e reenviar
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-gray-500 shrink-0">
+                                  Quem corrige é {r.solicitante || 'quem abriu'}.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -915,6 +1008,102 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           </table>
         </div>
       )}
+
+      {/* Correcao da requisicao devolvida (migr. 517).
+          Item, quantidade, unidade, prazo, urgencia, centro de custo e
+          justificativa — o que foi PEDIDO. Tipo, produto do catalogo, setor e
+          unidade de negocio ficam de fora, na tela e na RPC: corrigir e
+          consertar o pedido, nao troca-lo por outro documento. */}
+      <AnimatePresence>
+        {corrigindo && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !reenviando && setCorrigindo(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }} onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+              <h3 className="text-sm font-bold text-gray-300 mb-1">
+                Corrigir e reenviar
+                {corrigindo.numero && <span className="text-accent ml-2 font-mono text-xs">{corrigindo.numero}</span>}
+              </h3>
+              <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 my-4">
+                <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                  O que o gerente pediu para consertar
+                </span>
+                <span className="text-xs text-gray-200">{corrigindo.correcaoMotivo || '—'}</span>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <FormField label="Item *">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                    value={corrForm.item}
+                    onChange={e => setCorrForm(f => ({ ...f, item: e.target.value }))} />
+                </FormField>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField label="Quantidade *">
+                    <input type="text" inputMode="decimal"
+                      className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
+                      value={corrForm.qtd}
+                      onChange={e => setCorrForm(f => ({ ...f, qtd: formatQtd(e.target.value, corrFrac) }))}
+                      onKeyDown={handleQtdKeyDown(corrFrac)} />
+                  </FormField>
+                  <FormField label="Unidade">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      value={corrForm.unidade}
+                      onChange={e => setCorrForm(f => ({ ...f, unidade: e.target.value }))}>
+                      {unidadesReq.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Necessário até">
+                    <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      value={corrForm.data_necessidade}
+                      onChange={e => setCorrForm(f => ({ ...f, data_necessidade: e.target.value }))} />
+                  </FormField>
+                  <FormField label="Urgência">
+                    <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      value={corrForm.urgencia}
+                      onChange={e => setCorrForm(f => ({ ...f, urgencia: e.target.value }))}>
+                      {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                <FormField label="Centro de custo">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                    value={corrForm.centro_custo}
+                    onChange={e => setCorrForm(f => ({ ...f, centro_custo: e.target.value }))}>
+                    <option value="">Não informar</option>
+                    {centrosOrdenados.map((c: any) => (
+                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Justificativa">
+                  <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20 w-full"
+                    value={corrForm.justificativa}
+                    onChange={e => setCorrForm(f => ({ ...f, justificativa: e.target.value }))} />
+                </FormField>
+              </div>
+
+              <p className="text-[11px] text-gray-500 leading-snug mt-3">
+                O tipo da requisição, o produto do catálogo e o setor não mudam aqui — se o pedido era de
+                outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas
+                coisas num documento só.
+              </p>
+
+              <div className="flex justify-end gap-2 mt-5">
+                <button onClick={() => setCorrigindo(null)} disabled={reenviando}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={handleReenviar} isLoading={reenviando}>
+                  Reenviar para o gerente
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
