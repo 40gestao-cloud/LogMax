@@ -8,6 +8,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos';
+import { ehContratado } from '../lib/naturezaServico';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -110,6 +111,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const { data: servicos } = useFetchData<any>('/api/servicosview', undefined, true);
   const servicosOrdenados = useMemo(
     () => servicos
+      // Só o CONTRATADO (migr. 516). O catálogo de venda mora na mesma tabela,
+      // e sem este filtro quem precisa comprar dedetização abre a lista e vê
+      // "Troca de tela — R$ 150", que é o que a loja vende. A RPC recusa de
+      // qualquer jeito; aqui é não oferecer o que vai ser recusado.
+      .filter((s: any) => ehContratado(s.natureza))
       .filter((s: any) => (s.filial == null || s.filial === filial)
                        && (s.status ?? 'Ativo') !== 'Inativo')
       .sort((a: any, b: any) =>
@@ -1484,8 +1490,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 entra no resultado como despesa do período, no grupo do centro de custo que a
                 requisição informou.
                 <span className="block mt-1.5 text-gray-400">
-                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Serviços &gt; Novo</span> e
-                  volte aqui.
+                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Serviços &gt; Novo</span>,
+                  marcando a natureza <span className="font-bold">Contratado de terceiro</span>, e volte aqui.
+                  Esta lista não mostra o que a unidade PRESTA: aquilo é o que ela vende ao cliente, não o
+                  que ela compra.
                 </span>
               </p>
               )}

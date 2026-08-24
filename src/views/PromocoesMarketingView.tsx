@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { ehPrestado } from '../lib/naturezaServico';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -114,7 +115,11 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const confirm = useConfirm();
   // View mascarada: precisa do custo para calcular margem da promoção (migr. 262).
   const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
-  const { data: servicos } = useFetchData<any>('/api/servicosview', { filial });
+  const { data: servicosAll } = useFetchData<any>('/api/servicosview', { filial });
+  // Promoção é do que a loja VENDE. Depois da migr. 516 o mesmo catálogo guarda
+  // o que ela contrata de terceiro — e "20% off na dedetização" não é oferta ao
+  // cliente, é desconto que a unidade daria a si mesma.
+  const servicos = useMemo(() => servicosAll.filter((s: any) => ehPrestado(s.natureza)), [servicosAll]);
   const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview', { filial });
   const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', { filial }, true);
   // marketing_arte_feedback é escopado via arte_id ∈ artes da filial (join

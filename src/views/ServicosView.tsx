@@ -10,6 +10,8 @@ import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
+import { NATUREZAS_SERVICO, NATUREZA_LABEL, NATUREZA_AJUDA, NATUREZA_VALOR_LABEL,
+         normalizarNatureza, ehContratado } from '../lib/naturezaServico';
 
 type AtributoDef = {
   key: string;
@@ -52,6 +54,8 @@ const ATRIBUTOS_SERVICO: Record<string, AtributoDef[]> = {
 const EMPTY_FORM = {
   codigo: '',
   nome: '',
+  // Migr. 516: quem presta. Nasce 'prestado' porque é o que a tela sempre foi.
+  natureza: 'prestado' as string,
   tipo: '',
   valor: '',
   status: 'Ativo',
@@ -74,7 +78,15 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
   const { data: rawData, setData, isLoading } = useFetchData<any>('/api/servicosview');
 
   const filial = filialAtiva ?? '';
-  const atrDefs = useMemo(() => ATRIBUTOS_SERVICO[filial] ?? [], [filial]);
+  // Os atributos por nicho são todos do lado da VENDA — garantia ao cliente,
+  // marcas atendidas, tempo da OS. Perguntar "garantia do serviço" para uma
+  // dedetização contratada é pedir número que ninguém tem. Contratado fica sem
+  // seção extra; o que ele precisa (centro de custo, prazo) já vem da
+  // requisição e da cotação.
+  const atrDefs = useMemo(
+    () => ehContratado(form.natureza) ? [] : (ATRIBUTOS_SERVICO[filial] ?? []),
+    [filial, form.natureza],
+  );
 
   const data = useMemo(
     () => rawData.filter((s: any) => s.filial === filial || (!s.filial && !filial)),
@@ -106,6 +118,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
             </span>
           ) },
           { key: 'tipo', label: 'Tipo' },
+          { key: 'natureza', label: 'Natureza', render: r => NATUREZA_LABEL[normalizarNatureza(r.natureza)] },
           { key: 'valor', label: 'Valor', render: r => r.valor != null ? `R$ ${Number(r.valor).toFixed(2).replace('.', ',')}` : '—' },
           { key: 'status', label: 'Status' },
         ]}
@@ -152,6 +165,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     setForm({
       codigo: item.codigo ?? '',
       nome:   item.nome   ?? '',
+      natureza: normalizarNatureza(item.natureza),
       tipo:   item.tipo   ?? '',
       valor:  item.valor != null ? formatBRL(Number(item.valor)) : '',
       status: item.status ?? 'Ativo',
@@ -178,7 +192,10 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     const e: Record<string, string> = {};
     if (!form.codigo.trim()) e.codigo = 'Obrigatório';
     if (!form.nome.trim())   e.nome   = 'Obrigatório';
-    if (!form.valor.trim())  e.valor  = 'Obrigatório';
+    // Preço é obrigatório em quem vende — é o que o cliente paga. No contratado
+    // o número vem da cotação; exigir aqui seria pedir chute, o mesmo motivo
+    // pelo qual o custo saiu do cadastro de produto (migr. 480/417).
+    if (!ehContratado(form.natureza) && !form.valor.trim()) e.valor = 'Obrigatório';
     for (const d of atrDefs) {
       if (!d.req) continue;
       const v = form.atributos?.[d.key];
@@ -218,6 +235,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
       const payload: any = {
         codigo: form.codigo,
         nome:   form.nome,
+        natureza: normalizarNatureza(form.natureza),
         tipo:   form.tipo || null,
         valor:  parseBRL(form.valor),
         status: form.status,
@@ -272,6 +290,10 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
             {filial === 'MaxLook' && 'Ajustes, customizações e cuidados de peças.'}
             {filial === 'TechMax' && 'Assistência técnica: reparos, trocas e diagnósticos.'}
             {filial === 'SuperMax' && 'Serviços do supermercado.'}
+            <span className="block mt-0.5 text-gray-600">
+              A lista tem as duas naturezas: o que a unidade presta ao cliente e o que ela
+              contrata de terceiro. Só o contratado aparece na cotação e no pedido de compra.
+            </span>
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -304,6 +326,12 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest">{s.codigo}</span>
                     <StatusBadge status={s.status} />
+                    {ehContratado(s.natureza) && (
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 neu-pressed rounded-md px-1.5 py-0.5"
+                        title="Serviço que a unidade contrata de terceiro — entra em pedido de compra, não em venda.">
+                        Contratado
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-bold text-gray-100 mt-1 leading-tight">{s.nome}</p>
                   {s.atributos?.categoria_svc && (
@@ -325,7 +353,9 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                 {s.atributos?.requer_peca && <span>🔩 requer peça</span>}
               </div>
               <div className="flex items-end justify-between mt-1 pt-2 border-t border-white/5">
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Valor</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  {ehContratado(s.natureza) ? 'Custo ref.' : 'Preço'}
+                </span>
                 <span className="text-lg font-black text-accent tabular-nums">
                   {Number(s.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
@@ -363,6 +393,32 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                 </div>
               </div>
 
+              {/* A natureza é a PRIMEIRA pergunta, não um detalhe de cadastro:
+                  ela decide se o serviço é vendável (preço, garantia, promoção)
+                  ou comprável (item de pedido, aceite da execução). Mesma régua
+                  do Tipo em Cadastros > Produtos. */}
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Natureza</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {NATUREZAS_SERVICO.map(n => (
+                    <button key={n} type="button"
+                      onClick={() => setForm(f => ({ ...f, natureza: n }))}
+                      className={`text-left p-3 rounded-xl border transition-colors ${
+                        normalizarNatureza(form.natureza) === n
+                          ? 'neu-pressed border-accent/40'
+                          : 'neu-button border-transparent'}`}>
+                      <span className={`block text-xs font-bold ${
+                        normalizarNatureza(form.natureza) === n ? 'text-accent' : 'text-gray-300'}`}>
+                        {NATUREZA_LABEL[n]}
+                      </span>
+                      <span className="block text-[10px] text-gray-500 leading-snug mt-1">
+                        {NATUREZA_AJUDA[n]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField label="Código *" error={errors.codigo}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
@@ -374,7 +430,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                     value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder={filial === 'TechMax' ? 'Ex: Troca de tela iPhone 12' : filial === 'MaxLook' ? 'Ex: Ajuste de bainha calça jeans' : 'Ex: Instalação'} />
                 </FormField>
-                <FormField label="Valor (R$) *" error={errors.valor}>
+                <FormField label={NATUREZA_VALOR_LABEL[normalizarNatureza(form.natureza)]} error={errors.valor}>
                   <input type="text" inputMode="numeric" onKeyDown={handleMoneyKeyDown}
                     className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.valor ? 'border border-red-500/40' : ''}`}
                     value={form.valor} onChange={e => setForm(f => ({ ...f, valor: formatBRL(parseBRL(e.target.value)) }))}
