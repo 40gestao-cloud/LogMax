@@ -17,6 +17,7 @@ import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque } from '../lib/tipoProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
 //
@@ -99,6 +100,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   );
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
+
+  const confirm = useConfirm();
 
   const [tipo, setTipo] = useState<TipoReq>('reposicao');
   const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
@@ -453,9 +456,65 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     return Object.keys(e).length === 0;
   };
 
+  // Já existe requisição VIVA para este item? (2026-08-24)
+  //
+  // A queixa do gerente foi "devolvo para correção e volta outra igual, como se
+  // duplicasse". Não duplica: é documento novo. O que faltava era isto — nada
+  // avisava que o setor já tinha um pedido vivo daquele item. Na turma ERP deu
+  // "Controle DualSense" em quádruplo e "Notebook IdeaPad" em triplo, e em dois
+  // casos quem reabriu não foi nem o autor do original: foi o COLEGA de setor,
+  // que via a linha parada e não sabia que ela estava com alguém.
+  //
+  // Aviso, não trava: comprar duas vezes o mesmo item é legítimo (reposição de
+  // consumo, lote adicional). Quem decide é quem está pedindo — mas decide
+  // sabendo, e com o número do documento na mão.
+  const normalizarItem = (t: string) => String(t ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const VIVAS = new Set(['Pendente', 'Aprovado', 'Em correção']);
+
+  const vivasDoItem = (nome: string) => {
+    const k = normalizarItem(nome);
+    if (!k) return [];
+    return (data as any[]).filter(d =>
+      d?.ativo !== false && VIVAS.has(String(d.status)) && normalizarItem(d.item) === k);
+  };
+
+  /** Devolve true se pode seguir com o envio. */
+  const confirmarDuplicatas = async (nomes: string[]): Promise<boolean> => {
+    const achados = nomes
+      .map(n => ({ nome: n, vivas: vivasDoItem(n) }))
+      .filter(x => x.vivas.length > 0);
+    if (achados.length === 0) return true;
+
+    const linhas = achados.map(({ nome, vivas }) => {
+      const det = vivas.map((v: any) => {
+        const rot = v.status === 'Em correção' ? 'DEVOLVIDA para correção' : v.status;
+        return `   • ${numeroRequisicao(v)} — ${rot}, de ${v.solicitante ?? 'alguém do setor'}`;
+      }).join('\n');
+      return `"${String(nome).replace(/\s+/g, ' ').trim()}"\n${det}`;
+    }).join('\n\n');
+
+    const temDevolvida = achados.some(x => x.vivas.some((v: any) => v.status === 'Em correção'));
+
+    return await confirm(
+      `O seu setor já tem pedido em andamento para:\n\n${linhas}\n\n`
+      + (temDevolvida
+          ? 'Uma delas foi DEVOLVIDA para correção — o caminho é corrigir aquele documento '
+            + '(aba "Para corrigir"), não abrir outro: abrir de novo faz o gerente decidir '
+            + 'duas vezes a mesma compra.\n\n'
+          : '')
+      + 'Abrir mesmo assim?');
+  };
+
   const handleEnviar = async () => {
     const ehRepo = tipo === 'reposicao';
     if (!(ehRepo ? validarReposicao() : validar()) || !supabase) return;
+
+    // Os nomes conferidos: na reposição vêm do catálogo, na eventual do texto.
+    const nomes = ehRepo
+      ? [...repo.keys()].map(id => produtos.find((p: any) => p.id === id)?.nome ?? '')
+      : itens.map(r => r.item);
+    if (!await confirmarDuplicatas(nomes)) return;
+
     setSaving(true);
     try {
       // Na reposição só o `produto_id` viaja: nome e unidade a RPC lê do

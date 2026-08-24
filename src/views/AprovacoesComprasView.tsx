@@ -70,6 +70,25 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     return () => { cancelado = true; };
   }, [chaveFaltantes, loadingAp, loadingReq]);
 
+  // Outras requisições VIVAS do mesmo item na mesma unidade (2026-08-24).
+  //
+  // É o que o gerente pediu para enxergar: ele devolve uma para correção e
+  // chega outra igual, com número diferente, e a tela não dizia que as duas
+  // falavam do mesmo item. Não é duplicação do sistema — é documento novo,
+  // aberto por quem não achou o caminho da correção (às vezes um colega do
+  // autor). Sem este aviso, o gerente aprova as duas e a unidade compra duas
+  // vezes.
+  const irmasVivas = (req: Requisicao): Requisicao[] => {
+    const k = String(req.item ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!k) return [];
+    return requisicoes.filter(o =>
+      o.id !== req.id
+      && (o as any).ativo !== false
+      && o.filial === req.filial
+      && ['Pendente', 'Aprovado', 'Em correção'].includes(String(o.status))
+      && String(o.item ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === k);
+  };
+
   const enriched: EnrichedAp[] = aprovacoes
     .map(ap => ({ ...ap, req: requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id] }))
     .filter((ap): ap is EnrichedAp => ap.req !== undefined);
@@ -315,6 +334,29 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                           <div className="neu-pressed p-3 rounded-xl">
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa do solicitante</span>
                             <span className="text-xs text-gray-200">{req.justificativa}</span>
+                          </div>
+                        )}
+                        {irmasVivas(req).length > 0 && (
+                          <div className="neu-pressed p-3 rounded-xl border border-amber-400/20">
+                            <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                              Atenção: mesmo item em outro documento
+                            </span>
+                            <div className="flex flex-col gap-0.5">
+                              {irmasVivas(req).map(o => (
+                                <span key={o.id} className="text-xs text-gray-300">
+                                  <span className="font-mono text-gray-400">{numeroRequisicao(o)}</span>
+                                  {' — '}
+                                  <span className={o.status === 'Em correção' ? 'text-amber-300 font-bold' : ''}>
+                                    {o.status === 'Em correção' ? 'devolvida para correção' : String(o.status).toLowerCase()}
+                                  </span>
+                                  {o.solicitante ? `, de ${o.solicitante}` : ''}
+                                </span>
+                              ))}
+                            </div>
+                            <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
+                              São documentos diferentes para o mesmo item. Aprovar os dois compra duas vezes —
+                              e se um deles está devolvido, o certo é esperar a correção dele e negar este.
+                            </span>
                           </div>
                         )}
                         {req.status === 'Em correção' ? (
