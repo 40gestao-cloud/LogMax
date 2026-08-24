@@ -12,14 +12,19 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        // 'autoUpdate' desde 2026-08-10. Era 'prompt' (banner "Nova versão
-        // disponível", vide PwaUpdatePrompt.tsx), e o preço apareceu no
-        // primeiro fix de service worker: a correção só alcançava quem
-        // clicasse no banner, então a turma que adiava continuava rodando o SW
-        // com o bug — no caso, o que servia a `aula_config` de antes do Modo
-        // Aula. Numa sala de aula ninguém lê banner, e o custo de um reload
-        // inesperado é menor que o de metade da turma em outra versão.
-        registerType: 'autoUpdate',
+        // 'prompt' desde 2026-08-24 — mas quem decide quando aplicar é o
+        // PwaUpdatePrompt, não o utilizador. Leia o cabeçalho dele: continua
+        // automático, só que espera o primeiro momento seguro em vez de
+        // recarregar no meio da venda do aluno.
+        //
+        // Histórico: era 'prompt' até 10/08, quando virou 'autoUpdate' porque
+        // a correção só alcançava quem clicasse no banner e metade da turma
+        // ficou com o service worker antigo (o que servia `aula_config` de
+        // antes do Modo Aula). O 'autoUpdate' resolveu isso e trouxe o outro
+        // preço: reload instantâneo apaga carrinho, lote de requisições e
+        // contagem de inventário. 'prompt' aqui NÃO significa esperar clique —
+        // significa que o reload passa pela nossa régua antes de acontecer.
+        registerType: 'prompt',
         includeAssets: ['icon-logmax.png', 'icon-logmax-modoclaro.png'],
         manifest: false, // usamos o public/manifest.json manual
         workbox: {

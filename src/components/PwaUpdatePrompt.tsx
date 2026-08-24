@@ -1,32 +1,55 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { motivoDeAdiar } from '../lib/naoInterromper';
+import { viewAtual } from '../lib/viewAtual';
 
 // Intervalo entre verificações de nova versão. O navegador só checa o SW por
 // conta própria na navegação e a cada ~24h — numa PWA instalada, que a turma
 // deixa aberta a manhã inteira, isso é tempo demais para um fix chegar.
 const INTERVALO_CHECAGEM_MS = 30 * 60 * 1000;
 
+// De quanto em quanto tempo se reconfere se já dá para recarregar. Curto: o
+// objetivo é entrar no primeiro respiro, não no próximo quarto de hora.
+const INTERVALO_TENTATIVA_MS = 5000;
+
 /**
- * Registra o service worker do PWA e, se preciso, mostra o banner de nova
- * versão. Visível em todas as rotas (login e logado).
+ * Registra o service worker do PWA e aplica a versão nova NUM MOMENTO SEGURO.
  *
- * Desde 2026-08-10 o `registerType` é 'autoUpdate': a nova versão assume
- * sozinha e o banner praticamente não aparece mais. O componente CONTINUA
- * obrigatório — é o `useRegisterSW` daqui que registra o service worker, e
- * sem ele não há PWA nenhuma. O banner fica como rede de segurança para o
- * caso de o registerType voltar a 'prompt'.
+ * ─── Por que não é mais o 'autoUpdate' puro ─────────────────────────────────
+ *
+ * De 10/08 a 24/08 o `registerType` era 'autoUpdate': versão nova assumia e a
+ * página recarregava sozinha, na hora. O motivo era bom — com 'prompt', a
+ * correção só alcançava quem clicasse no banner, e numa sala de aula ninguém
+ * lê banner; metade da turma ficou com o service worker antigo.
+ *
+ * O preço, porém, cai sempre no mesmo sítio: o reload é instantâneo e apaga o
+ * que está em memória. O aluno no meio de uma venda perde o carrinho; quem
+ * está preenchendo um lote de requisições perde as linhas; a contagem de
+ * inventário volta ao zero. E não há aviso nenhum: a tela simplesmente pisca e
+ * volta vazia, o que a turma lê como "o sistema apagou o meu trabalho".
+ *
+ * As duas coisas são conciliáveis, porque a versão nova quase nunca precisa
+ * entrar NESTE segundo — precisa entrar hoje, sem ninguém clicar em nada.
+ * Então: continua automático, mas espera o primeiro momento seguro (régua em
+ * src/lib/naoInterromper.ts — telas de operação, campo em foco, trabalho não
+ * gravado declarado pela tela, e uns segundos de silêncio). Aba escondida é o
+ * melhor momento de todos e dispensa o silêncio.
+ *
+ * O banner continua, agora com outro papel: enquanto está adiado, ele DIZ que
+ * está adiado e por quê, e oferece o botão para quem quiser atualizar já.
  */
 export function PwaUpdatePrompt() {
   const {
-    needRefresh: [needRefresh, setNeedRefresh],
+    needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
       if (!registration) return;
-      // Checagem periódica + ao voltar para a aba. Sem isto, 'autoUpdate' só
-      // atualiza na próxima navegação — e uma PWA instalada quase não navega.
+      // Checagem periódica + ao voltar para a aba. Sem isto, a versão nova só
+      // seria descoberta na próxima navegação — e uma PWA instalada quase não
+      // navega.
       const checar = () => { registration.update().catch(() => { /* offline */ }); };
       setInterval(checar, INTERVALO_CHECAGEM_MS);
       document.addEventListener('visibilitychange', () => {
@@ -37,21 +60,53 @@ export function PwaUpdatePrompt() {
       console.warn('[PWA] Erro ao registar service worker:', err);
     },
   });
-  const [updating, setUpdating] = useState(false);
 
-  const handleUpdate = () => {
+  const [updating, setUpdating] = useState(false);
+  const [adiadoPor, setAdiadoPor] = useState<string | null>(null);
+  // Esconder é só do banner. `needRefresh` fica de pé: se o X desligasse a
+  // fila, fechar o aviso significaria "nunca mais atualize" — que é o defeito
+  // do 'prompt' que a 10/08 tentou resolver.
+  const [escondido, setEscondido] = useState(false);
+  // O reload é irreversível e pode ser chamado por três caminhos (tentativa
+  // periódica, aba escondida, clique). O ref garante que só um passa.
+  const aplicandoRef = useRef(false);
+
+  const aplicar = useCallback(() => {
+    if (aplicandoRef.current) return;
+    aplicandoRef.current = true;
     setUpdating(true);
     // updateServiceWorker(true) só recarrega se o evento `controllerchange`
     // disparar. Em alguns estados (SW waiting preso, primeira visita após
-    // registro, dev) isso não acontece e o clique fica silencioso. Disparamos
+    // registro, dev) isso não acontece e a chamada fica silenciosa. Disparamos
     // o skip-waiting e, em paralelo, agendamos um reload de fallback.
     try { updateServiceWorker(true); } catch (e) { console.warn('[PWA] update falhou:', e); }
     setTimeout(() => window.location.reload(), 1500);
-  };
+  }, [updateServiceWorker]);
+
+  useEffect(() => {
+    if (!needRefresh) return;
+
+    const tentar = (ignorarOcioso = false) => {
+      const motivo = motivoDeAdiar({ view: viewAtual(), ignorarOcioso });
+      if (motivo) { setAdiadoPor(motivo); return; }
+      setAdiadoPor(null);
+      aplicar();
+    };
+
+    tentar();
+    const t = window.setInterval(() => tentar(), INTERVALO_TENTATIVA_MS);
+    // Aba escondida: a pessoa foi para outro sítio, e este é o momento mais
+    // seguro que existe — ela volta com a versão nova já carregada. O relógio
+    // de ociosidade não vale aqui (ninguém interage numa aba que não vê), mas
+    // as travas de trabalho não gravado continuam valendo.
+    const onVis = () => { if (document.visibilityState === 'hidden') tentar(true); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, [needRefresh, aplicar]);
 
   return (
     <AnimatePresence>
-      {needRefresh && (
+      {needRefresh && adiadoPor && !escondido && (
         <motion.div
           initial={{ y: -64, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -80,11 +135,12 @@ export function PwaUpdatePrompt() {
           >
             <Sparkles size={16} style={{ flexShrink: 0 }} />
             <span style={{ fontSize: '0.78rem', fontWeight: 700, flex: 1, letterSpacing: '0.02em' }}>
-              Nova versão do LogMax disponível.
+              Nova versão pronta — entra sozinha quando você terminar
+              <span style={{ fontWeight: 600, opacity: 0.85 }}> ({adiadoPor}).</span>
             </span>
             <button
               type="button"
-              onClick={handleUpdate}
+              onClick={aplicar}
               disabled={updating}
               style={{
                 display: 'flex',
@@ -107,8 +163,9 @@ export function PwaUpdatePrompt() {
             </button>
             <button
               type="button"
-              onClick={() => setNeedRefresh(false)}
-              aria-label="Adiar atualização"
+              onClick={() => setEscondido(true)}
+              aria-label="Esconder aviso"
+              title="Esconder o aviso. A versão nova entra sozinha no primeiro momento seguro."
               style={{
                 width: 28,
                 height: 28,

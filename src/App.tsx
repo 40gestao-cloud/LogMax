@@ -18,6 +18,7 @@ import {
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
+import { setViewAtual } from './lib/viewAtual';
 import { DesligamentoAviso } from './components/DesligamentoAviso';
 import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -762,6 +763,13 @@ function LogMaxAppInner() {
   const activeViewRef = useRef(activeView);
   const viewHistoryRef = useRef(viewHistory);
   useEffect(() => { activeViewRef.current = activeView; }, [activeView]);
+  // Espelha a tela aberta num módulo, para quem vive fora desta árvore: o
+  // registador do service worker monta acima daqui e precisa saber se pode
+  // recarregar a página (src/lib/viewAtual.ts).
+  useEffect(() => {
+    setViewAtual(activeView);
+    return () => setViewAtual(null);
+  }, [activeView]);
   useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
   // Ref usado pelo navigate/goBack pra bloquear views fora da whitelist do
   // Modo Aula sem exigir aulaConfig como dep (evita recriar o callback e

@@ -10,6 +10,7 @@ import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { useAuth } from '../hooks/useAuth';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { UNIDADES_FRACIONARIAS } from '../lib/unidades';
@@ -234,6 +235,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // vendedor vira pro cliente. O clique no card continua sendo "adicionar".
   const [detalheProduto, setDetalheProduto] = useState<any | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Venda em aberto trava o reload da PWA. O PDV já está na lista de telas de
+  // operação (src/lib/naoInterromper.ts), mas a lista é por NOME de tela e o
+  // carrinho é o fato — se um dia a tela mudar de id, a trava continua certa.
+  useTravaAtualizacao(cart.length > 0, 'venda-pdv', 'há uma venda aberta no caixa');
   // Nicho-específico (Fase 2, sem migração — grava em vendas.observacao pós-RPC).
   // MaxLook: vendedor associado à venda (comissão de moda). TechMax: IMEI/Serial
   // do aparelho vendido (celular/notebook — garantia).

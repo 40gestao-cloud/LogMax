@@ -18,7 +18,8 @@
 //
 // Duas travas, porque uma só não cobre o caso real:
 //
-//   · TELAS DE OPERAÇÃO (lista abaixo) — ali o módulo some por inteiro: nem
+//   · TELAS DE OPERAÇÃO (a lista vive em src/lib/naoInterromper.ts) — ali o
+//     módulo some por inteiro: nem
 //     modal, nem FAB. Interromper não é inconveniência, é erro de operação.
 //
 //   · CAMPO EM FOCO — se o cursor está num input, textarea, select ou área
@@ -36,49 +37,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Check, Download, Building2, Loader2 } from 'lucide-react';
 import { formatDataHoraBR } from '../lib/dates';
 import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
+import { emOperacao, digitandoAgora } from '../lib/naoInterromper';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
-
-// Telas de OPERAÇÃO: nelas o módulo inteiro se cala — nem modal, nem FAB.
-//
-// O critério não é "tela importante" (todas são), é: existe alguém ou alguma
-// coisa esperando do outro lado enquanto a pessoa mexe aqui? Ou o balcão com um
-// cliente parado, ou uma contagem física que perde o fio se for interrompida.
-// Nesses dois casos um botão piscando no canto não é lembrete, é ruído em cima
-// de trabalho que não pode ser refeito.
-//
-//   · vendas-pdv                 venda no balcão, cliente na frente
-//   · vendas-devoluções          troca/devolução, cliente na frente
-//   · vendas-pedidosonline       fila de comprador esperando atendimento
-//   · financeiro-controledecaixa abertura, sangria, suprimento, fechamento
-//   · estoque-recebimentos       conferência da carga contra o pedido
-//   · estoque-expedição          separação e saída da mercadoria
-//   · estoque-inventários        contagem física
-//
-// Fora daqui o FAB fica: é o único jeito de a pessoa saber que chegou documento
-// sem depender de lembrar de abrir o módulo. E a fila não se perde — o que a
-// operação faz é adiar o aviso, não descartá-lo.
-const VIEWS_DE_OPERACAO = new Set([
-  'vendas-pdv',
-  'vendas-devoluções',
-  'vendas-pedidosonline',
-  'financeiro-controledecaixa',
-  'estoque-recebimentos',
-  'estoque-expedição',
-  'estoque-inventários',
-]);
-
-function emOperacao(view?: string): boolean {
-  return !!view && VIEWS_DE_OPERACAO.has(view);
-}
-
-/** Alguém está digitando? Vale em qualquer tela, inclusive dentro de modal. */
-function digitandoAgora(): boolean {
-  const el = document.activeElement as HTMLElement | null;
-  if (!el) return false;
-  if (el.isContentEditable) return true;
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-}
 
 export function NovoDocumentoModal({ profile, showToast, activeView }: {
   profile: UserProfile; showToast?: any; activeView?: string;

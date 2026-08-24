@@ -21,32 +21,9 @@ import { RotateCcw, X, Check, ArrowRight, Building2, Loader2 } from 'lucide-reac
 import { formatDataHoraBR } from '../lib/dates';
 import { numeroRequisicao } from '../lib/documentos';
 import { useRequisicoesAviso, type RequisicaoAviso } from '../hooks/useRequisicoesAviso';
+import { emOperacao, digitandoAgora } from '../lib/naoInterromper';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
-
-// Mesma lista do NovoDocumentoModal: onde há alguém (ou uma contagem) esperando
-// do outro lado, o módulo inteiro se cala — nem modal, nem FAB.
-const VIEWS_DE_OPERACAO = new Set([
-  'vendas-pdv',
-  'vendas-devoluções',
-  'vendas-pedidosonline',
-  'financeiro-controledecaixa',
-  'estoque-recebimentos',
-  'estoque-expedição',
-  'estoque-inventários',
-]);
-
-function emOperacao(view?: string): boolean {
-  return !!view && VIEWS_DE_OPERACAO.has(view);
-}
-
-/** Alguém está digitando? Vale em qualquer tela, inclusive dentro de modal. */
-function digitandoAgora(): boolean {
-  const el = document.activeElement as HTMLElement | null;
-  if (!el) return false;
-  if (el.isContentEditable) return true;
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-}
 
 const chave = (a: RequisicaoAviso) => `${a.id}:${a.evento}`;
 

@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FluxoCompra } from '../components/FluxoCompra';
@@ -244,6 +245,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // requisição nova. Antes disso o solicitante não tinha saída nenhuma: Negar
   // era terminal, e a policy não lhe dá UPDATE em `requisicoes`.
   const [corrigindo, setCorrigindo] = useState<any | null>(null);
+
+  // Nada disto está gravado: um lote de dez linhas digitadas à mão, ou a
+  // correção que o gerente devolveu, some inteiro se a PWA recarregar por
+  // baixo. Enquanto houver formulário com conteúdo, a versão nova espera.
+  const rascunhoAberto =
+    (showForm && (repo.size > 0 || itens.some(r => r.item.trim() !== '' || r.justificativa.trim() !== '')))
+    || corrigindo != null;
+  useTravaAtualizacao(rascunhoAberto, 'requisicao-rascunho', 'há uma requisição aberta sem enviar');
   const [corrForm, setCorrForm] = useState({
     item: '', qtd: '1', unidade: '', justificativa: '',
     urgencia: 'Normal', centro_custo: '', data_necessidade: '',
