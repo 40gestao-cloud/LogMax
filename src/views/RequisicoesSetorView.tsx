@@ -18,6 +18,7 @@ import { temEstoque } from '../lib/tipoProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { semelhancaDeItem } from '../lib/similaridadeItem';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
 //
@@ -495,11 +496,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       if (porCodigo.length > 0) return porCodigo;
     }
     if (!k) return [];
-    // Sem código dos dois lados: só o texto resta. A linha que JÁ tem
-    // `produto_id` fica de fora quando o pedido novo não tem nenhum — ali o
-    // texto da requisição é a necessidade escrita, e o nome do catálogo é outra
-    // coisa (migr. 480); comparar os dois casa por acidente, não por identidade.
-    return vivas.filter(d => !d.produto_id && normalizarItem(d.item) === k);
+    // Sem código dos dois lados: só o texto resta, e igualdade de string não
+    // basta — "Sal Refinado 1kg" e "Sal Refinado 1kg Cisne" são o mesmo sal.
+    // `semelhancaDeItem` (src/lib/similaridadeItem.ts) é conservadora de
+    // propósito: medida divergente barra, e uma palavra em comum não conta.
+    //
+    // A linha que JÁ tem `produto_id` fica de fora quando o pedido novo não tem
+    // nenhum — ali o texto da requisição é a necessidade escrita e o nome do
+    // catálogo é outra coisa (migr. 480); comparar os dois casa por acidente.
+    return vivas.filter(d => !d.produto_id && semelhancaDeItem(d.item, nome) !== 'nao');
   };
 
   /** Devolve true se pode seguir com o envio. */
@@ -517,8 +522,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         const cod = v.produto_id
           ? produtos.find((p: any) => p.id === v.produto_id)?.codigo
           : null;
+        // Quando o casamento veio do texto, o aluno precisa ver O QUE foi
+        // escrito lá — é ele quem decide se é a mesma coisa, e decide melhor
+        // lendo o nome do outro documento em vez de confiar no palpite.
+        const grafia = !v.produto_id && semelhancaDeItem(v.item, nome) !== 'igual'
+          ? `\n     escrito lá como: "${String(v.item ?? '').replace(/\s+/g, ' ').trim()}"`
+          : '';
         return `   • ${numeroRequisicao(v)}${cod ? ` (cód. ${cod})` : ''}`
-             + ` — ${rot}, de ${v.solicitante ?? 'alguém do setor'}`;
+             + ` — ${rot}, de ${v.solicitante ?? 'alguém do setor'}${grafia}`;
       }).join('\n');
       return `"${String(nome).replace(/\s+/g, ' ').trim()}"\n${det}`;
     }).join('\n\n');
@@ -526,7 +537,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const temDevolvida = achados.some(x => x.vivas.some((v: any) => v.status === 'Em correção'));
 
     return await confirm(
-      `O seu setor já tem pedido em andamento para:\n\n${linhas}\n\n`
+      `O seu setor já tem pedido em andamento para o mesmo item (ou muito parecido):`
+      + `\n\n${linhas}\n\n`
       + (temDevolvida
           ? 'Uma delas foi DEVOLVIDA para correção — o caminho é corrigir aquele documento '
             + '(aba "Para corrigir"), não abrir outro: abrir de novo faz o gerente decidir '

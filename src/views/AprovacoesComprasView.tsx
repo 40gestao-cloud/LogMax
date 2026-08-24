@@ -10,6 +10,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { semelhancaDeItem } from '../lib/similaridadeItem';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
@@ -97,7 +98,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     }
     const k = norm(req.item);
     if (!k) return [];
-    return vivas.filter(o => !(o as any).produto_id && norm(o.item) === k);
+    // Igualdade de string não basta: a marca no fim muda a string inteira e
+    // continua sendo o mesmo item. Régua em src/lib/similaridadeItem.ts.
+    return vivas.filter(o => !(o as any).produto_id && semelhancaDeItem(o.item, req.item) !== 'nao');
   };
 
   const enriched: EnrichedAp[] = aprovacoes
@@ -361,12 +364,18 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                                     {o.status === 'Em correção' ? 'devolvida para correção' : String(o.status).toLowerCase()}
                                   </span>
                                   {o.solicitante ? `, de ${o.solicitante}` : ''}
+                                  {semelhancaDeItem(o.item, req.item) !== 'igual' && (
+                                    <span className="block text-[11px] text-gray-500 pl-1">
+                                      escrito lá como “{String(o.item ?? '').replace(/\s+/g, ' ').trim()}”
+                                    </span>
+                                  )}
                                 </span>
                               ))}
                             </div>
                             <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
-                              São documentos diferentes para o mesmo item. Aprovar os dois compra duas vezes —
-                              e se um deles está devolvido, o certo é esperar a correção dele e negar este.
+                              São documentos diferentes para o mesmo item — ou para um muito parecido, quando
+                              a grafia não bate. Aprovar os dois compra duas vezes; e se um deles está
+                              devolvido, o certo é esperar a correção dele e negar este.
                             </span>
                           </div>
                         )}
