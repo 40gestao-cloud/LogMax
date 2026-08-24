@@ -471,24 +471,54 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const normalizarItem = (t: string) => String(t ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
   const VIVAS = new Set(['Pendente', 'Aprovado', 'Em correção']);
 
-  const vivasDoItem = (nome: string) => {
+  /**
+   * As duas chaves, nesta ordem: CÓDIGO primeiro, texto só onde não há código.
+   *
+   * `produto_id` é o código — a etiqueta que o aluno lê ("023") é a face humana
+   * dele, e comparar pelo id é comparar pelo código sem depender de grafia. A
+   * Reposição sempre o traz (migr. 358: só o `produto_id` viaja) e a Eventual
+   * passa a trazer assim que Compras amarra o item ao catálogo (migr. 480/494).
+   *
+   * Por texto continua valendo só onde código não existe: a Eventual recém
+   * aberta, que por definição ainda não está no catálogo. E ali o casamento é
+   * frouxo mesmo — "Sal Refinado 1kg" e "Sal Refinado 1kg Cisne" são o mesmo
+   * sal para a pessoa e itens diferentes para a máquina. Apertar isso com
+   * similaridade avisaria demais, e a turma aprenderia a clicar "sim" sem ler.
+   */
+  const vivasDoItem = (nome: string, produtoId?: string | null) => {
     const k = normalizarItem(nome);
+    const vivas = (data as any[]).filter(d => d?.ativo !== false && VIVAS.has(String(d.status)));
+    if (produtoId) {
+      const porCodigo = vivas.filter(d => d.produto_id === produtoId);
+      // Achou pelo código: é o mesmo item, ponto. Não mistura com o palpite de
+      // texto — juntar os dois faria a lista repetir a mesma requisição.
+      if (porCodigo.length > 0) return porCodigo;
+    }
     if (!k) return [];
-    return (data as any[]).filter(d =>
-      d?.ativo !== false && VIVAS.has(String(d.status)) && normalizarItem(d.item) === k);
+    // Sem código dos dois lados: só o texto resta. A linha que JÁ tem
+    // `produto_id` fica de fora quando o pedido novo não tem nenhum — ali o
+    // texto da requisição é a necessidade escrita, e o nome do catálogo é outra
+    // coisa (migr. 480); comparar os dois casa por acidente, não por identidade.
+    return vivas.filter(d => !d.produto_id && normalizarItem(d.item) === k);
   };
 
   /** Devolve true se pode seguir com o envio. */
-  const confirmarDuplicatas = async (nomes: string[]): Promise<boolean> => {
-    const achados = nomes
-      .map(n => ({ nome: n, vivas: vivasDoItem(n) }))
+  const confirmarDuplicatas = async (
+    linhasPedidas: { nome: string; produtoId?: string | null }[],
+  ): Promise<boolean> => {
+    const achados = linhasPedidas
+      .map(l => ({ nome: l.nome, vivas: vivasDoItem(l.nome, l.produtoId) }))
       .filter(x => x.vivas.length > 0);
     if (achados.length === 0) return true;
 
     const linhas = achados.map(({ nome, vivas }) => {
       const det = vivas.map((v: any) => {
         const rot = v.status === 'Em correção' ? 'DEVOLVIDA para correção' : v.status;
-        return `   • ${numeroRequisicao(v)} — ${rot}, de ${v.solicitante ?? 'alguém do setor'}`;
+        const cod = v.produto_id
+          ? produtos.find((p: any) => p.id === v.produto_id)?.codigo
+          : null;
+        return `   • ${numeroRequisicao(v)}${cod ? ` (cód. ${cod})` : ''}`
+             + ` — ${rot}, de ${v.solicitante ?? 'alguém do setor'}`;
       }).join('\n');
       return `"${String(nome).replace(/\s+/g, ' ').trim()}"\n${det}`;
     }).join('\n\n');
@@ -509,11 +539,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const ehRepo = tipo === 'reposicao';
     if (!(ehRepo ? validarReposicao() : validar()) || !supabase) return;
 
-    // Os nomes conferidos: na reposição vêm do catálogo, na eventual do texto.
-    const nomes = ehRepo
-      ? [...repo.keys()].map(id => produtos.find((p: any) => p.id === id)?.nome ?? '')
-      : itens.map(r => r.item);
-    if (!await confirmarDuplicatas(nomes)) return;
+    // Na reposição o item É o produto do catálogo: manda o id, e a conferência
+    // fica exata. Na eventual só existe o texto — é o que ela é.
+    const linhasPedidas = ehRepo
+      ? [...repo.keys()].map(id => ({
+          nome: produtos.find((p: any) => p.id === id)?.nome ?? '',
+          produtoId: id,
+        }))
+      : itens.map(r => ({ nome: r.item, produtoId: null }));
+    if (!await confirmarDuplicatas(linhasPedidas)) return;
 
     setSaving(true);
     try {

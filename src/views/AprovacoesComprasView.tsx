@@ -78,15 +78,26 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   // aberto por quem não achou o caminho da correção (às vezes um colega do
   // autor). Sem este aviso, o gerente aprova as duas e a unidade compra duas
   // vezes.
+  // Duas chaves, código primeiro. `produto_id` é o código — a Reposição sempre
+  // o traz, e a Eventual passa a trazer quando Compras amarra o item ao
+  // catálogo. Texto só onde nenhum dos dois lados tem código: a Eventual recém
+  // aberta, onde o texto é tudo o que existe.
   const irmasVivas = (req: Requisicao): Requisicao[] => {
-    const k = String(req.item ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!k) return [];
-    return requisicoes.filter(o =>
+    const norm = (t: any) => String(t ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const vivas = requisicoes.filter(o =>
       o.id !== req.id
       && (o as any).ativo !== false
       && o.filial === req.filial
-      && ['Pendente', 'Aprovado', 'Em correção'].includes(String(o.status))
-      && String(o.item ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === k);
+      && ['Pendente', 'Aprovado', 'Em correção'].includes(String(o.status)));
+
+    const pid = (req as any).produto_id;
+    if (pid) {
+      const porCodigo = vivas.filter(o => (o as any).produto_id === pid);
+      if (porCodigo.length > 0) return porCodigo;
+    }
+    const k = norm(req.item);
+    if (!k) return [];
+    return vivas.filter(o => !(o as any).produto_id && norm(o.item) === k);
   };
 
   const enriched: EnrichedAp[] = aprovacoes
