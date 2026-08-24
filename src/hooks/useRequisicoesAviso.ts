@@ -9,7 +9,12 @@
 //   · devolvida  → SÓ quem abriu (`criado_por`). Gerente e Matriz ficam de
 //                  fora: foram eles que devolveram — cobrar deles seria cobrar
 //                  a própria decisão.
-//   · reenviada  → quem decide: gerente da unidade e Matriz.
+//   · reenviada  → quem decide: gerente da unidade e Matriz — mas só quando
+//                  a Matriz está DENTRO de uma unidade (`filialAtiva` ≠ null).
+//                  Sem esse recorte (2026-08-24), o admin em modo Matriz
+//                  consolidado — sem unidade escolhida — recebia o modal de
+//                  CADA reenvio das três filiais: o professor não é a fila
+//                  de decisão, é quem destrava quando ninguém decide.
 //
 // A ciência é por pessoa E por instante do evento (`requisicao_ciencia`): o
 // mesmo documento vai e volta várias vezes na mesma aula, e ciência que só
@@ -47,9 +52,16 @@ export function useRequisicoesAviso(profile: UserProfile | null, filialAtiva: st
 
   // Quem decide: gerente da unidade e a direção. Mesma régua de
   // AprovacoesComprasView — se muda lá, muda aqui.
+  //
+  // A fila de "reenviada" só entra com `filialAtiva` definida (2026-08-24):
+  // em modo Matriz consolidado (`filialAtiva === null`) o admin decide na
+  // tela de Aprovações filtrada por unidade, não aqui — sem o recorte, ele
+  // recebia o modal de CADA reenvio das três filiais só por estar logado.
   const decide =
-    profile?.role === 'gerente' || profile?.role === 'admin' ||
-    profile?.role === 'ceo' || isConselheiro(profile);
+    !!filialAtiva && (
+      profile?.role === 'gerente' || profile?.role === 'admin' ||
+      profile?.role === 'ceo' || isConselheiro(profile)
+    );
 
   const carregar = useCallback(async () => {
     if (!supabase || !profile?.id) { setPendentes([]); setLoading(false); return; }

@@ -330,15 +330,30 @@ reenvio grava `reenviada_em` de verdade. Limpeza de órfãs de material: 0 nos
 4 projetos — o botão de excluir requisição de material nunca tinha sido
 usado ainda.
 
-### Fase 2 — Correções de tela
+### Fase 2 — Correções de tela — ✅ feito 2026-08-24
 
-8. `useRequisicoesAviso`: fila de "reenviada" só com `filialAtiva` definida.
+8. `useRequisicoesAviso`: fila de "reenviada" só com `filialAtiva` definida
+   — `decide` passa a exigir `!!filialAtiva`, guardado no próprio cabeçalho
+   do hook para não se perder de vista na próxima edição.
 9. `AprovacoesEstoqueView`: descartar aprovação sem requisição, contar e avisar
-   (espelhar `orfas` de `AprovacoesComprasView`).
-10. `RequisicoesView`: contexto da linha `Em correção`.
-11. Cartão de material no formato do de compra (4.2), com número, urgência,
-    data e histórico, e sem o `StatusBadge` redundante (4.3).
-12. `action-btn-warning` âmbar para devolver, nas duas telas (4.4).
+   (espelhado `orfas`/`avulsas` de `AprovacoesComprasView`, com o mesmo aviso
+   âmbar e o mesmo guard de `isLoading` para não piscar durante o fetch).
+10. `RequisicoesView`: contexto da linha `Em correção` — mesmo bloco âmbar
+    ("Devolvida — está com…", motivo, o que esperar) que já existia em
+    Aprovações, agora também na linha expandida de Compras → Requisições.
+11. Cartão de material no formato do de compra: largura inteira (era grelha
+    de 2 colunas), observação à vista (era escondida atrás de "Adicionar
+    obs."), `HistoricoOperacoes` e data de abertura. **Ajuste ao executar:**
+    `requisicoes_estoque` não tem coluna `numero` nem `urgencia` — essas
+    duas partes do item 11 não existem na tabela. O código curto
+    (`numeroRequisicao` cai no fallback `REQ-xxxxxx` via `id`) supre o
+    "como nomear o documento numa conversa"; urgência fica de fora porque
+    não há dado nenhum para mostrar. `StatusBadge` removido (era sempre
+    "Pendente" na fila — ruído).
+12. `action-btn-warning` âmbar para devolver, nas duas telas — trocado de
+    `action-btn-success` (verde, que em todo o resto do sistema significa
+    "aprovar"). A classe já existia, usada em Requisições → Compras para
+    "Reabrir"; só faltava aplicá-la aqui.
 
 ### Fase 3 — Devolver material para correção (migr. 522)
 

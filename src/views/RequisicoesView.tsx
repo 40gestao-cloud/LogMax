@@ -452,6 +452,25 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                     {aberto === item.id && (
                       <tr className="border-b border-white/5 bg-white/[0.02]">
                         <td colSpan={9} className="py-3 px-4">
+                          {/* Em correção não tem botão nesta tela (2026-08-24)
+                              — Compras não corrige o texto de outro setor, só
+                              acompanha. Sem esta linha a requisição ficava
+                              muda: etiqueta e nenhuma explicação de por quê
+                              nada mais aparece nela. */}
+                          {item.status === 'Em correção' && (
+                            <div className="neu-pressed p-3 rounded-xl border border-amber-400/20 mb-3">
+                              <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                                Devolvida — está com {item.solicitante || 'o solicitante'}
+                              </span>
+                              <span className="text-xs text-gray-300">
+                                {item.correcao_motivo || 'Aguardando correção.'}
+                              </span>
+                              <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
+                                Não há o que fazer aqui agora: quando {item.solicitante || 'o solicitante'} reenviar,
+                                o documento volta para a fila do gerente em Requisições &gt; Aprovações.
+                              </span>
+                            </div>
+                          )}
                           <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
                             Onde está
                           </span>

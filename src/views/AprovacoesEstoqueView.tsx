@@ -1,14 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
 import { X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { EmptyState, StatusBadge, SelecioneUnidade } from '../components/ui';
+import { EmptyState, SelecioneUnidade } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
+import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { numeroRequisicao } from '../lib/documentos';
+import { formatDataHoraBR } from '../lib/dates';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import type { AprovacaoEstoque, RequisicaoEstoque, Produto } from '../types/domain';
@@ -25,15 +28,14 @@ type EnrichedAp = AprovacaoEstoque & {
 export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
 
 export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos' }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque }) => {
-  const { data: aprovacoes, setData: setAprovacoes, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
+  const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
+  const { data: requisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
   // Decisões já tomadas — a lista de Pendente sozinha faz o card sumir no
   // clique, e com ele a chance de desfazer o engano do gerente.
   const { data: decididas, reload: reloadDecididas } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: ['Aprovado', 'Negado'], filial }, true);
   const confirm = useConfirm();
   const prompt = usePrompt();
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
   const [devolvendo, setDevolvendo] = useState<string | null>(null);
@@ -42,10 +44,44 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   // O ref tranca instantaneamente.
   const processingRef = useRef<string | null>(null);
 
-  const enriched: EnrichedAp[] = aprovacoes.map(ap => {
-    const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
-    return { ...ap, req, prod: req ? produtos.find(p => p.id === req.produto_id) : undefined };
-  });
+  // Aprovação sem requisição legível (2026-08-24, espelha AprovacoesComprasView).
+  //
+  // `requisicoes_estoque` também tem soft-delete: a lista vem filtrada por
+  // `ativo=true`, então uma requisição inativada some da busca e a aprovação
+  // que aponta para ela fica sem `req`. Antes disso virava "Produto não
+  // encontrado" com Aprovar/Negar ativos — e a RPC recusava os dois, sem a
+  // tela dizer por quê. Busca a linha por id antes de descartar; o que sobrar
+  // órfão de verdade vira aviso, não card quebrado.
+  const [avulsas, setAvulsas] = useState<Record<string, RequisicaoEstoque>>({});
+  const [orfas, setOrfas] = useState(0);
+  const faltantes = aprovacoes
+    .filter(ap => !requisicoes.some(r => r.id === ap.requisicao_estoque_id) && !avulsas[ap.requisicao_estoque_id])
+    .map(ap => ap.requisicao_estoque_id);
+  const chaveFaltantes = faltantes.join(',');
+
+  useEffect(() => {
+    if (loadingAp || loadingReq || !chaveFaltantes || !supabase) { if (!chaveFaltantes) setOrfas(0); return; }
+    let cancelado = false;
+    (async () => {
+      const ids = chaveFaltantes.split(',');
+      const { data: rows, error } = await supabase!
+        .from('requisicoes_estoque').select('*').in('id', ids).eq('ativo', true);
+      if (cancelado) return;
+      const achadas = (rows ?? []) as RequisicaoEstoque[];
+      if (achadas.length) {
+        setAvulsas(prev => ({ ...prev, ...Object.fromEntries(achadas.map(r => [r.id, r])) }));
+      }
+      setOrfas(error ? ids.length : ids.length - achadas.length);
+    })();
+    return () => { cancelado = true; };
+  }, [chaveFaltantes, loadingAp, loadingReq]);
+
+  const enriched: (EnrichedAp & { req: RequisicaoEstoque })[] = aprovacoes
+    .map(ap => {
+      const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id) ?? avulsas[ap.requisicao_estoque_id];
+      return { ...ap, req, prod: req ? produtos.find(p => p.id === req.produto_id) : undefined };
+    })
+    .filter((ap): ap is EnrichedAp & { req: RequisicaoEstoque } => ap.req !== undefined);
 
   // O erro que mais aparece aqui não é falha: é regra. O guard
   // `trg_requisicao_estoque_decisao_guard` levanta "Quem pede o material não
@@ -160,29 +196,61 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284).</p></div>
         </div>
       )}
+      {veFila && orfas > 0 && (
+        <div className="neu-flat rounded-2xl p-4 border border-yellow-500/25 shrink-0">
+          <p className="text-xs text-yellow-400 leading-relaxed">
+            {orfas} aprovação(ões) pendente(s) sem requisição legível — a requisição foi inativada
+            ou não é visível para o seu usuário. Elas não aparecem na lista abaixo e continuam
+            travando o pedido de quem solicitou.
+          </p>
+        </div>
+      )}
+      {/* Cartão no formato do de Compra (2026-08-24) — mesma largura, mesmo
+          cabeçalho com código e data, observação à vista em vez de escondida
+          atrás de um botão. Trocar de aba não pode parecer trocar de sistema.
+          Falta aqui o que `requisicoes_estoque` não tem — número sequencial
+          e urgência não existem nesta tabela; o código curto (REQ-xxxxxx) é
+          o que dá para nomear o documento numa conversa. */}
       {veFila && (enriched.length === 0 ? <EmptyState message="Nenhum material esperando liberação" /> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
           {enriched.map(ap => (
-            <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
-              <div className="flex justify-between items-start">
-                <div>
+            <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className="neu-flat rounded-2xl border border-white/5 p-5 flex flex-col gap-4">
+              <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
                   <p className="text-sm font-bold text-gray-200">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Qtd: <span className="text-gray-300 font-mono">{ap.req?.qtd ?? '—'}</span> · Destino: <span className="text-gray-300">{ap.req?.destino || '—'}</span></p>
-                  <p className="text-xs text-gray-500">Solicitante: <span className="text-gray-300">{ap.req?.solicitante ?? '—'}</span></p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Solicitante: {ap.req.solicitante ?? '—'} · Qtd: {ap.req.qtd} · Destino: {ap.req.destino || '—'}
+                  </p>
                 </div>
-                <StatusBadge status={ap.status} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <HistoricoOperacoes entidade="requisicoes_estoque" entidadeId={ap.req.id}
+                    titulo={`${numeroRequisicao(ap.req)} · ${ap.prod?.nome ?? 'material'}`}
+                    criadoEm={ap.req.created_at} atualizadoEm={(ap.req as any).updated_at} />
+                </div>
               </div>
-              {expanded === ap.id && (
-                <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16" placeholder="Observação (obrigatória para negar)..."
-                  value={obs[ap.id] ?? ''} onChange={e => setObs(o => ({ ...o, [ap.id]: e.target.value }))} />
+              {ap.req.created_at && (
+                <p className="text-[11px] text-gray-500 -mt-2">Aberta em {formatDataHoraBR(ap.req.created_at)}</p>
               )}
-              <div className="flex gap-2 justify-end">
-                {expanded !== ap.id && (<button onClick={() => setExpanded(ap.id)} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">Adicionar obs.</button>)}
-                <button onClick={() => decidir(ap, 'Negado')} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
-                  {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Negar
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  Observação <span className="text-red-500/70">(obrigatória para negar)</span>
+                </label>
+                <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
+                  placeholder="Justificativa da decisão..."
+                  value={obs[ap.id] ?? ''} onChange={e => setObs(o => ({ ...o, [ap.id]: e.target.value }))} />
+              </div>
+              <div className="flex flex-wrap gap-3 justify-end">
+                <button onClick={() => decidir(ap, 'Negado')} disabled={processing === ap.id}
+                  className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2">
+                  {processing === ap.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                  Negar
                 </button>
-                <button onClick={() => decidir(ap, 'Aprovado')} disabled={processing === ap.id} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
-                  {processing === ap.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Aprovar
+                <button onClick={() => decidir(ap, 'Aprovado')} disabled={processing === ap.id}
+                  className="neu-button-accent py-2 px-6 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+                  {processing === ap.id ? <Loader2 size={14} className="animate-spin text-[#0A0A0A]" /> : <Check size={14} />}
+                  Aprovar
                 </button>
               </div>
             </motion.div>
@@ -235,7 +303,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                       </span>
                     ) : (
                       <button onClick={() => devolver(ap, nome)} disabled={indo}
-                        title="Devolver para correção" className="action-btn-success disabled:opacity-50">
+                        title="Devolver para correção" className="action-btn-warning disabled:opacity-50">
                         {indo ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
                       </button>
                     )}

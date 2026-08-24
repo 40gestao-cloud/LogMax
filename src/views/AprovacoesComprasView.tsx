@@ -616,7 +616,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => devolver(ap, req)} disabled={indo}
-                      title="Devolver para correção" className="action-btn-success disabled:opacity-50">
+                      title="Devolver para correção" className="action-btn-warning disabled:opacity-50">
                       {indo ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
                     </button>
                     {isProfessor && (
