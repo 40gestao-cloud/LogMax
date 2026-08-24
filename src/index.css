@@ -596,6 +596,40 @@ table,
 [data-theme="light"] .text-red-500     { color: #b91c1c !important; }
 [data-theme="light"] .text-red-300     { color: #991b1b !important; }
 
+/* Famílias que faltavam no mapa acima (2026-08-24) — achado auditando o fluxo
+   de Requisições/Aprovações: `amber` tem uso pesado nesta casa (79+62
+   ocorrências de amber-300/400 nas telas) e não tinha NENHUM override —
+   no modo claro o botão "Devolver p/ correção" e os avisos de duplicata
+   ficavam ~1,5:1 de contraste, ilegíveis. `sky`, `indigo` e o resto abaixo
+   tinham a mesma lacuna, menor em volume mas real. Mesma régua dos vizinhos:
+   tom 700–900 sobre o cartão branco. */
+[data-theme="light"] .text-amber-500   { color: #78350f !important; }
+[data-theme="light"] .text-amber-400   { color: #92400e !important; }
+[data-theme="light"] .text-amber-300   { color: #92400e !important; }
+[data-theme="light"] .text-amber-200   { color: #92400e !important; }
+[data-theme="light"] .text-amber-100   { color: #92400e !important; }
+[data-theme="light"] .text-yellow-500  { color: #854d0e !important; }
+[data-theme="light"] .text-sky-400     { color: #075985 !important; }
+[data-theme="light"] .text-sky-300     { color: #075985 !important; }
+[data-theme="light"] .text-sky-200     { color: #075985 !important; }
+[data-theme="light"] .text-sky-100     { color: #075985 !important; }
+[data-theme="light"] .text-indigo-400  { color: #3730a3 !important; }
+[data-theme="light"] .text-indigo-300  { color: #3730a3 !important; }
+[data-theme="light"] .text-indigo-200  { color: #3730a3 !important; }
+[data-theme="light"] .text-indigo-100  { color: #3730a3 !important; }
+[data-theme="light"] .text-violet-400  { color: #5b21b6 !important; }
+[data-theme="light"] .text-violet-300  { color: #5b21b6 !important; }
+[data-theme="light"] .text-teal-400    { color: #115e59 !important; }
+[data-theme="light"] .text-fuchsia-400 { color: #86198f !important; }
+[data-theme="light"] .text-cyan-300    { color: #155e75 !important; }
+[data-theme="light"] .text-emerald-200 { color: #047857 !important; }
+[data-theme="light"] .text-emerald-100 { color: #047857 !important; }
+[data-theme="light"] .text-orange-200  { color: #9a3412 !important; }
+[data-theme="light"] .text-orange-100  { color: #9a3412 !important; }
+[data-theme="light"] .text-purple-200  { color: #6b21a8 !important; }
+[data-theme="light"] .text-red-200     { color: #991b1b !important; }
+[data-theme="light"] .text-slate-300   { color: #334155 !important; }
+
 /* ── FilialBadge: cores dedicadas por unidade ──
    Tons mais escuros no modo claro para garantir contraste WCAG.
    Classes próprias evitam que overrides globais quebrem outros componentes. */
