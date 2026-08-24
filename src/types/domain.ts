@@ -146,6 +146,12 @@ export interface Requisicao {
    *  ocupa o lugar da justificativa escrita (migr. 358). */
   saldo_no_pedido?: number | null;
   minimo_no_pedido?: number | null;
+  /** Devolução para correção (migr. 517): o que o gerente pediu, quando e por
+   *  quem — o solicitante lê aqui porque não enxerga `aprovacoes_compras`. */
+  correcao_motivo?: string | null;
+  correcao_solicitada_em?: string | null;
+  correcao_solicitada_por?: string | null;
+  reenviada_em?: string | null;
   created_at?: string;
   updated_at?: string | null;
 }
@@ -178,6 +184,7 @@ export interface RequisicaoEstoque {
    *  espelhando a de compra (migr. 522). */
   correcao_motivo?: string | null;
   correcao_solicitada_em?: string | null;
+  correcao_solicitada_por?: string | null;
   reenviada_em?: string | null;
   created_at?: string;
   updated_at?: string | null;

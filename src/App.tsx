@@ -36,11 +36,7 @@ import {
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
-import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
-import { RequisicaoAvisoModal } from './components/RequisicaoAvisoModal';
-import { NovoDocumentoModal } from './components/NovoDocumentoModal';
-import { ConviteVagaFAB } from './components/ConviteVagaFAB';
-import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
+import { PendenciasFAB } from './components/PendenciasFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
@@ -1466,35 +1462,16 @@ function LogMaxAppInner() {
         </div>
       </main>
 
-      {/* Aviso da Matriz: acompanha o usuário em qualquer tela até ele dar
-          Ciente. Oculto no Modo Aula pela mesma razão do sino — nada de
-          conteúdo fora da aula na sessão do aluno. */}
-      {!aulaFiltro && <AvisoMatrizFAB profile={profile} showToast={showToast} />}
-
-      {/* Documento novo da Matriz: mesma mecânica do aviso, e some quando a
-          pessoa confirma. Vale TAMBÉM no Modo Aula — o roteiro da atividade
-          costuma ser justamente um PDF, e escondê-lo ali derrubaria o caso de
-          uso principal do módulo.
-          `activeView` vai junto porque o modal se recusa a abrir sozinho por
-          cima de operação em curso (PDV, caixa) — ele adia, não desiste. */}
-      <NovoDocumentoModal profile={profile} showToast={showToast} activeView={activeView} />
-
-      {/* Pedido da loja online: some da fila quando vira venda ou é cancelado,
-          então não há botão de "já vi" — dar ciência sem atender deixaria o
-          comprador esperando. Oculto no Modo Aula pela mesma razão dos outros. */}
-      {!aulaFiltro && <PedidoOnlineFAB profile={profile} onNavigate={navigate} />}
-
-      {/* Convocação para vaga interna: nominal, então só aparece para quem o RH
-          chamou. Mesmo motivo dos outros para sumir no Modo Aula. */}
-      {!aulaFiltro && <ConviteVagaFAB profile={profile} showToast={showToast} />}
-
-      {/* Requisição devolvida (para quem a abriu) e requisição corrigida (para
-          quem decide). Vale TAMBÉM no Modo Aula: o fluxo de compra é conteúdo
-          da aula, e o recado que some ali é justamente o que fez a turma abrir
-          o mesmo pedido quatro vezes (migr. 520). A fila é por pessoa —
-          `criado_por` de um lado, gerente da unidade do outro —, então o Modo
-          Aula não muda quem recebe. */}
-      <RequisicaoAvisoModal profile={profile} showToast={showToast} activeView={activeView} onNavigate={navigate} />
+      {/* FAB único de pendências (plano de requisições, fase 5): Aviso da
+          Matriz, documento novo, pedido da loja online, convite de vaga e
+          requisição devolvida/corrigida viviam empilhados, um botão fixo cada,
+          seis cores pulsando ao mesmo tempo no mesmo canto. Este componente
+          soma as contagens numa pílula só; cada fila continua dona do próprio
+          modal e do próprio auto-abrir (naoInterromper) — só o botão
+          individual saiu da tela. Regras de Modo Aula preservadas por dentro
+          do componente: Aviso/Pedido online/Convite somem, Documento e
+          Requisição continuam (mesmo motivo de antes). */}
+      <PendenciasFAB profile={profile} showToast={showToast} activeView={activeView} onNavigate={navigate} aulaFiltro={!!aulaFiltro} />
     </div>
     </AIAssistantProvider>
   );

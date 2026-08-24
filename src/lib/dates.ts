@@ -103,6 +103,39 @@ export function dataExtensoBR(d: Date = new Date()): string {
   return FMT_EXTENSO.format(d);
 }
 
+/**
+ * Quantos dias inteiros se passaram desde `iso` até hoje, no fuso do Acre.
+ * `null`/inválido devolve `null` — quem chama decide o que mostrar (nada, em
+ * geral: "parada há N dias" não faz sentido sem data de referência).
+ */
+export function diasDesde(iso: string | Date | null | undefined): number | null {
+  if (!iso) return null;
+  const hoje = todayBR();
+  // Coluna `date` (ex.: `requisicoes.data`) chega como 'YYYY-MM-DD' e JÁ é o
+  // dia local — passar por `new Date()` a leria como meia-noite UTC, que no
+  // Acre (UTC-5) é 19h do dia ANTERIOR. Sem este atalho, requisição aberta
+  // hoje aparecia como "há 1 dia" e o âmbar de 2 dias acendia com 1.
+  const dia = typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? iso
+    : dataBR(iso instanceof Date ? iso : new Date(iso));
+  if (!dia) return null;
+  const [y1, m1, d1] = hoje.split('-').map(Number);
+  const [y2, m2, d2] = dia.split('-').map(Number);
+  const ms = Date.UTC(y1, m1 - 1, d1) - Date.UTC(y2, m2 - 1, d2);
+  return Math.round(ms / 86400000);
+}
+
+/** "parada há N dias" — usado nas filas de aprovação para dar idade ao
+ * documento. `null` quando não há data (não deveria acontecer, mas o campo é
+ * opcional no tipo). */
+export function paradaHaDias(iso: string | Date | null | undefined): string | null {
+  const n = diasDesde(iso);
+  if (n === null) return null;
+  if (n <= 0) return 'aberta hoje';
+  if (n === 1) return 'parada há 1 dia';
+  return `parada há ${n} dias`;
+}
+
 /** Saudação por hora do dia no fuso do Acre: "Bom dia/tarde/noite". */
 export function saudacaoBR(d: Date = new Date()): string {
   const h = Number(new Intl.DateTimeFormat('en-US', {

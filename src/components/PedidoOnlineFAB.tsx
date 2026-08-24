@@ -38,7 +38,13 @@ const desdeQuando = (iso: string) => {
   return `há ${Math.floor(h / 24)}d`;
 };
 
-export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile; onNavigate: (v: string) => void }) {
+export function PedidoOnlineFAB({ profile, onNavigate, hideTrigger, openSignal, onCount }: {
+  profile: UserProfile; onNavigate: (v: string) => void;
+  /** FAB único de pendências (item 23): esconde o próprio botão e só reage
+   *  ao `openSignal` para abrir a lista. `onCount` devolve o tamanho da fila
+   *  para quem mostra a contagem — o hook fica montado só aqui. */
+  hideTrigger?: boolean; openSignal?: number; onCount?: (n: number) => void;
+}) {
   // A régua de quem opera a loja mora na RLS (`auth_opera_loja`). Aqui só
   // evitamos a consulta para quem certamente não tem nada a ver com vendas —
   // conselheiro é observador, e ninguém sem setor recebe fila de trabalho.
@@ -90,6 +96,16 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
   useEffect(() => { if (pendentes.length === 0) setOpen(false); }, [pendentes.length]);
 
   useEffect(() => {
+    if (!openSignal) return;
+    setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
+
+  // Antes do early return: fila vazia também é notícia para quem conta.
+  useEffect(() => { onCount?.(pendentes.length); }, [pendentes.length, onCount]);
+  useEffect(() => () => { onCount?.(0); }, [onCount]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('keydown', onKey);
@@ -115,6 +131,7 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
 
   return (
     <>
+      {!hideTrigger && (
       <motion.button
         ref={btnRef}
         onClick={() => {
@@ -153,6 +170,7 @@ export function PedidoOnlineFAB({ profile, onNavigate }: { profile: UserProfile;
           </span>
         )}
       </motion.button>
+      )}
 
       <AnimatePresence>
         {open && (

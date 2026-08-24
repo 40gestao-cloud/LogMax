@@ -390,21 +390,108 @@ usado ainda.
     (`requisicao_estoque_ciencia`), não a mesma da compra — a FK de cada uma
     aponta para o documento certo.
 
-### Fase 4 — Refinamento
+### Fase 4 — Refinamento — ✅ feito 2026-08-24 (sem migração)
 
-17. Duplicata reconferida no reenvio.
-18. "Parada há N dias" nas três filas (3.3 e 4.6), âmbar depois de 2 dias.
-19. Quem devolveu e quando, na aba Devolvidas — as colunas existem desde a 517
-    e nenhuma tela lê.
-20. Etiqueta de origem também no material (4.6).
-21. Régua de vocabulário (`Atendido`; "Liberado" só como verbo).
-22. Subtítulos nomeando a porta gêmea.
+17. Duplicata reconferida no reenvio. `confirmarDuplicatas` (compra) e a nova
+    `confirmarDuplicataEstoque` (material — não existia nada equivalente antes)
+    passam a rodar em `handleReenviar`/`handleReenviarEstoque`, excluindo o
+    próprio documento (`excludeId`) — sem isso ele se achava a si mesmo, ainda
+    `Em correção` no estado local até a RPC responder.
+18. "Parada há N dias": `diasDesde`/`paradaHaDias` em `src/lib/dates.ts` +
+    componente `IdadeBadge` em `src/components/ui.tsx` (âmbar a partir de 2
+    dias). Aplicado em `AprovacoesComprasView` (aba Compra: `req.data`; aba
+    Devolvidas: `correcao_solicitada_em`) e `AprovacoesEstoqueView` (fila:
+    `created_at`; devolvidas: `correcao_solicitada_em`).
+19. Quem devolveu e quando: `correcao_solicitada_por` estava faltando no tipo
+    `Requisicao` (só existia em `RequisicaoEstoque`) — adicionado nos dois, e
+    `correcao_motivo`/`correcao_solicitada_em`/`reenviada_em` que também
+    faltavam em `Requisicao`. Nome resolvido por consulta direta a
+    `user_profiles` (não havia hook id→nome no projeto; padrão espelha o de
+    "avulsas" já usado nas duas telas). Mostrado nos blocos "Devolvida" de
+    `AprovacoesComprasView` e `AprovacoesEstoqueView`.
+20. Etiqueta de origem no material — **não implementado**. `requisicoes_estoque`
+    não tem coluna equivalente a `tipo_requisicao`/`servico_id`, e todo pedido
+    de material vem do mesmo caminho (almoxarifado); criar uma etiqueta exigiria
+    coluna nova e migração, fora do escopo desta fase sem-banco. Fica no backlog
+    se surgir necessidade real de distinguir origem dentro do material.
+21. Régua de vocabulário: `StatusBadge` (`src/components/ui.tsx`) mostra
+    "Atendido" para o valor armazenado `'Atendida'` — só rótulo, o valor no
+    banco não mudou (mudar exigiria migração de dados e tocaria comparações
+    `=== 'Atendida'` espalhadas por 5 arquivos). Labels de aba/card ajustados
+    para "Atendidos" em `RequisicoesSetorView` e `GerenciamentoComprasView`.
+    "Liberado" (único lugar onde aparecia como nome de status, não verbo) virou
+    "Aprovado" em `AprovacoesEstoqueView`, igual ao resto da régua.
+22. Subtítulos nomeando a porta gêmea: `AprovacoesEstoqueView` (Liberar
+    Requisições) cita Requisições → Aprovações; `RequisicoesEstoqueView`
+    (Requisições de Material) cita Estoque → Liberar Requisições e a aba
+    Material de Aprovações.
 
-### Fase 5 — FAB único de pendências (desenho, não correção)
+### Fase 5 — FAB único de pendências — ✅ feito 2026-08-24
 
-23. Substituir a pilha de seis FABs por um só, com contagem e lista curta (4.5).
-    Fase própria porque mexe em cinco componentes que hoje não se conhecem, e
-    porque o ganho é de desenho, não de correção.
+23. `src/components/PendenciasFAB.tsx` substitui a pilha de cinco FABs globais
+    (Aviso da Matriz, Pedido online, Convite de vaga, Documento novo, Requisição
+    devolvida/corrigida) por um botão só, com a soma das pendências e uma lista
+    curta ao clicar. `PontoFAB` fica de fora — é ação, não aviso, e não mora na
+    pilha global. Nenhum dos cinco componentes foi reescrito: cada um continua
+    dono da própria fila, do próprio auto-abrir (`naoInterromper`) e do próprio
+    modal — só o botão flutuante deles foi escondido (`hideTrigger`) e passou a
+    abrir por um contador (`openSignal`) disparado pela lista do FAB novo.
+    Réguas de Modo Aula preservadas dentro do componente (Aviso/Pedido
+    online/Convite somem; Documento/Requisição continuam). `App.tsx` troca os
+    cinco imports e as cinco montagens por um `<PendenciasFAB />`.
+
+### Auditoria pós-implementação — 5 defeitos, corrigidos no mesmo dia
+
+Revisão das fases 4 e 5 logo depois de escritas. Nenhum apareceria em
+`tsc`/testes; três só se manifestariam em produção, calados.
+
+1. **(ALTA) O FAB único matava o realtime de três filas.** A primeira versão
+   do `PendenciasFAB` chamava os cinco hooks outra vez, só para somar. Mas
+   `useAvisosMatriz` (`'avisos-matriz-fab'`), `usePedidosNovos`
+   (`'rt-pedidos-novos'`) e `useConvitesVaga` (`'convites-vaga-fab'`) abrem
+   canal de realtime com nome FIXO — montar o hook duas vezes faz
+   `supabase.channel(nome)` devolver o canal já assinado e o segundo `.on()`
+   estourar "cannot add postgres_changes callbacks after subscribe()", sem
+   erro na tela. O próprio `useDocumentos` já documenta essa armadilha no
+   comentário dele, e a memória do projeto a registra desde antes.
+   **Correção:** os cinco componentes passaram a reportar o tamanho da fila
+   para cima (`onCount`), e o FAB deixou de montar hook nenhum — uma
+   instância por fila.
+2. **(ALTA) A contagem desincronizava do que o modal mostra.** Consequência do
+   mesmo desenho: dar "Ciente" encolhe a fila da instância chamada, e a
+   ciência grava em `requisicao_ciencia`/`avisos_matriz_ciencia` — tabelas que
+   nenhum daqueles canais escuta. A pílula continuaria contando o que a pessoa
+   já confirmou, e o clique abriria um modal vazio. Resolvido pela mesma
+   correção do item 1.
+3. **(MÉDIA) "Parada há N dias" errava um dia inteiro em Compra.**
+   `requisicoes.data` é coluna `date` e chega como `'YYYY-MM-DD'`, que já é o
+   dia local; `new Date('2026-08-24')` é meia-noite **UTC**, ou seja 19h do dia
+   ANTERIOR no Acre. Requisição aberta hoje aparecia como "há 1 dia", e o
+   âmbar de dois dias acendia com um. `diasDesde` passou a tratar a data pura
+   como dia local, sem conversão. Coberto por `tests/idadeDocumento.test.ts`
+   (8 casos), que falha com o código antigo.
+4. **(MÉDIA) O nome de quem devolveu ficava "…" para sempre.** A policy de
+   `user_profiles` é `id = auth.uid() OR auth_is_admin() OR
+   auth_pode_filial(filial)`, e `auth_pode_filial` compara
+   `auth_user_filial() = p_filial` — com o perfil da Matriz, que não tem
+   filial, isso é NULL e a linha não é entregue. Ou seja: sempre que o
+   professor devolvia, o gerente lia "Devolvida por …". Id que não resolve
+   agora é marcado como tentado e a tela omite o "por fulano", mantendo a data.
+5. **(BAIXA) A reconferência de duplicata perdia o código na Reposição.** O
+   reenvio de compra passava `produtoId: null` fixo, e `vivasDoItem` ignora de
+   propósito quem tem `produto_id` quando o pedido novo não tem — então a
+   Reposição corrigida não enxergava a irmã de mesmo código, que é justamente
+   a que a devolução provoca. Passa o `produto_id` da linha original.
+
+6. **(desenho) A pílula inteira some em tela de operação.** A primeira versão
+   copiava a régua antiga, que era por componente: Documento e Requisição
+   escondiam o botão em `emOperacao`, os outros três ficavam. Essa diferença só
+   fazia sentido com um botão por fila — dava para calar um sem calar os
+   outros. Num botão só ela quebra por dois lados: a pílula que aparece durante
+   o atendimento continua sendo interrupção, e uma contagem parcial não bateria
+   com o que a lista abre. Em PDV, caixa, recebimento, expedição e inventário
+   há alguém do outro lado do balcão esperando — o recado espera a operação
+   terminar. As filas continuam vivas e o sino continua avisando.
 
 ### Fora de escopo, anotado
 

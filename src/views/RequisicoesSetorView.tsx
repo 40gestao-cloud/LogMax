@@ -306,6 +306,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     if (!corrigindo || !supabase) return;
     const qtd = parseQtd(corrFormEstoque.qtd);
     if (!(qtd > 0)) { showToast('A quantidade tem de ser maior que zero.', 'error', true); return; }
+    const original = (reqEstoque as any[]).find(r => r.id === corrigindo.id);
+    if (!await confirmarDuplicataEstoque(original?.produto_id, corrigindo.id)) return;
     setReenviando(true);
     try {
       const { data: res, error } = await supabase.rpc('reenviar_requisicao_estoque_corrigida', {
@@ -331,6 +333,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const qtd = parseQtd(corrForm.qtd);
     if (!corrForm.item.trim()) { showToast('Diga o que está sendo pedido.', 'error', true); return; }
     if (!(qtd > 0))            { showToast('A quantidade tem de ser maior que zero.', 'error', true); return; }
+    // O `produto_id` da linha original viaja junto: numa Reposição corrigida
+    // ele é o código, e sem ele a conferência cairia no casamento por texto —
+    // que ignora de propósito quem TEM código, deixando passar exatamente a
+    // irmã que a devolução costuma provocar.
+    const originalCompra = (data as any[]).find(d => d.id === corrigindo.id);
+    if (!await confirmarDuplicatas(
+      [{ nome: corrForm.item, produtoId: originalCompra?.produto_id ?? null }],
+      corrigindo.id,
+    )) return;
     setReenviando(true);
     try {
       const { data: res, error } = await supabase.rpc('reenviar_requisicao_corrigida', {
@@ -370,7 +381,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     { key: 'corrigir',  label: 'Para corrigir', status: ['Em correção'] },
     { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'] },
     { key: 'aprovadas', label: 'Aprovadas',     status: ['Aprovado'] },
-    { key: 'atendidas', label: 'Atendidas',     status: ['Atendida'] },
+    { key: 'atendidas', label: 'Atendidos',     status: ['Atendida'] },
     { key: 'negadas',   label: 'Negadas',       status: ['Negado'] },
   ] as const;
   type AbaKey = typeof ABAS[number]['key'];
@@ -531,9 +542,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
    * sal para a pessoa e itens diferentes para a máquina. Apertar isso com
    * similaridade avisaria demais, e a turma aprenderia a clicar "sim" sem ler.
    */
-  const vivasDoItem = (nome: string, produtoId?: string | null) => {
+  const vivasDoItem = (nome: string, produtoId?: string | null, excludeId?: string) => {
     const k = normalizarItem(nome);
-    const vivas = (data as any[]).filter(d => d?.ativo !== false && VIVAS.has(String(d.status)));
+    const vivas = (data as any[]).filter(d => d?.ativo !== false && VIVAS.has(String(d.status)) && d.id !== excludeId);
     if (produtoId) {
       const porCodigo = vivas.filter(d => d.produto_id === produtoId);
       // Achou pelo código: é o mesmo item, ponto. Não mistura com o palpite de
@@ -552,12 +563,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     return vivas.filter(d => !d.produto_id && semelhancaDeItem(d.item, nome) !== 'nao');
   };
 
-  /** Devolve true se pode seguir com o envio. */
+  /** Devolve true se pode seguir com o envio. `excludeId` tira o próprio
+   * documento sendo reenviado da varredura — senão ele acha a si mesmo, que
+   * segue 'Em correção' até a RPC de reenvio rodar. */
   const confirmarDuplicatas = async (
     linhasPedidas: { nome: string; produtoId?: string | null }[],
+    excludeId?: string,
   ): Promise<boolean> => {
     const achados = linhasPedidas
-      .map(l => ({ nome: l.nome, vivas: vivasDoItem(l.nome, l.produtoId) }))
+      .map(l => ({ nome: l.nome, vivas: vivasDoItem(l.nome, l.produtoId, excludeId) }))
       .filter(x => x.vivas.length > 0);
     if (achados.length === 0) return true;
 
@@ -590,6 +604,29 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             + 'duas vezes a mesma compra.\n\n'
           : '')
       + 'Abrir mesmo assim?');
+  };
+
+  // Mesma pergunta da abertura, do lado do material (item 17 do plano de
+  // requisições): entre a devolução e a correção um colega pode ter aberto
+  // pedido pro mesmo produto — e é exatamente esse intervalo que a devolução
+  // cria. `requisicoes_estoque` não guarda texto livre, então o casamento é só
+  // por `produto_id`, sem a régua de semelhança de texto.
+  const vivasEstoqueDoProduto = (produtoId: string | null | undefined, excludeId?: string) => {
+    if (!produtoId) return [];
+    return (reqEstoque as any[]).filter(d =>
+      d?.ativo !== false && VIVAS.has(String(d.status)) && d.produto_id === produtoId && d.id !== excludeId);
+  };
+
+  const confirmarDuplicataEstoque = async (produtoId: string | null | undefined, excludeId: string): Promise<boolean> => {
+    const vivas = vivasEstoqueDoProduto(produtoId, excludeId);
+    if (vivas.length === 0) return true;
+    const nomeProduto = produtos.find((p: any) => p.id === produtoId)?.nome ?? 'este item';
+    const linhas = vivas.map((v: any) => {
+      const rot = v.status === 'Em correção' ? 'DEVOLVIDA para correção' : v.status;
+      return `   • pedido de ${v.solicitante ?? 'alguém do setor'} — ${rot}`;
+    }).join('\n');
+    return await confirm(
+      `O seu setor já tem pedido em andamento para "${nomeProduto}":\n\n${linhas}\n\nReenviar mesmo assim?`);
   };
 
   const handleEnviar = async () => {

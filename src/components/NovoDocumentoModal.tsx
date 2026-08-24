@@ -41,8 +41,13 @@ import { emOperacao, digitandoAgora } from '../lib/naoInterromper';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-export function NovoDocumentoModal({ profile, showToast, activeView }: {
+export function NovoDocumentoModal({ profile, showToast, activeView, hideTrigger, openSignal, onCount }: {
   profile: UserProfile; showToast?: any; activeView?: string;
+  /** FAB único de pendências (item 23): esconde o próprio botão e só reage
+   *  ao `openSignal` para abrir o modal. `onCount` devolve o tamanho da fila
+   *  (já recortada pela unidade aberta) para quem mostra a contagem — o hook
+   *  fica montado só aqui, e o recorte não precisa ser copiado lá fora. */
+  hideTrigger?: boolean; openSignal?: number; onCount?: (n: number) => void;
 }) {
   const { naoLidos: fila, marcarLido, recarregar } = useDocumentos(profile);
   const { filialAtiva } = useFilial();
@@ -102,6 +107,17 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!openSignal) return;
+    setIndice(0);
+    setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
+
+  // Antes do early return: fila vazia também é notícia para quem conta.
+  useEffect(() => { onCount?.(naoLidos.length); }, [naoLidos.length, onCount]);
+  useEffect(() => () => { onCount?.(0); }, [onCount]);
+
   if (naoLidos.length === 0) return null;
 
   const baixar = async () => {
@@ -128,7 +144,7 @@ export function NovoDocumentoModal({ profile, showToast, activeView }: {
 
   return (
     <>
-      {!emOperacao(activeView) && (
+      {!hideTrigger && !emOperacao(activeView) && (
         <motion.button
           onClick={() => { setIndice(0); setOpen(true); }}
           initial={{ opacity: 0, y: 12 }}

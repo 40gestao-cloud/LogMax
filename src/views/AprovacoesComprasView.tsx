@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, RotateCcw, Package } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
+import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade, IdadeBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
@@ -14,6 +14,7 @@ import { semelhancaDeItem } from '../lib/similaridadeItem';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
+import { formatDataHoraBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import type { AprovacaoCompras, AprovacaoEstoque, Requisicao } from '../types/domain';
@@ -75,6 +76,41 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     })();
     return () => { cancelado = true; };
   }, [chaveFaltantes, loadingAp, loadingReq]);
+
+  // Quem devolveu, por nome (item 19 do plano de requisições). A coluna
+  // `correcao_solicitada_por` guarda o uuid de quem devolveu desde a migr.
+  // 517; a aba "Devolvidas" mostrava o motivo sem dizer quem pediu nem quando.
+  //
+  // O nome pode não vir: a policy de `user_profiles` é
+  // `id = auth.uid() OR auth_is_admin() OR auth_pode_filial(filial)`, e
+  // `auth_pode_filial` compara `auth_user_filial() = p_filial` — com o perfil
+  // da Matriz, que não tem filial, a comparação é NULL e a linha não é
+  // entregue. Ou seja: o gerente NÃO lê o nome do professor que devolveu.
+  // Por isso o id resolvido vira string vazia em vez de ficar num "…"
+  // eterno, e a tela omite o "por fulano" mantendo a data.
+  const [nomesDevolucao, setNomesDevolucao] = useState<Record<string, string>>({});
+  const idsCorrecao = [...new Set(
+    requisicoes.map(r => (r as any).correcao_solicitada_por).filter(Boolean) as string[],
+  )].filter(id => nomesDevolucao[id] === undefined);
+  const chaveIdsCorrecao = idsCorrecao.join(',');
+  useEffect(() => {
+    if (!chaveIdsCorrecao || !supabase) return;
+    let cancelado = false;
+    (async () => {
+      const ids = chaveIdsCorrecao.split(',');
+      const { data: rows } = await supabase!
+        .from('user_profiles').select('id,nome').in('id', ids);
+      if (cancelado) return;
+      const achados = Object.fromEntries(((rows ?? []) as any[]).map(r => [r.id, r.nome ?? '']));
+      // Os que a RLS não entregou entram como '' — marca de "já tentei",
+      // que impede o efeito de repetir a consulta a cada render.
+      setNomesDevolucao(prev => ({
+        ...prev,
+        ...Object.fromEntries(ids.map(id => [id, achados[id] ?? ''])),
+      }));
+    })();
+    return () => { cancelado = true; };
+  }, [chaveIdsCorrecao]);
 
   // De onde veio o pedido (2026-08-24).
   //
@@ -391,6 +427,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {/* Devolvida conta a partir de quando voltou pro solicitante,
+                        não de quando a requisição nasceu — é ali que o relógio da
+                        fila do gerente recomeça a contar. */}
+                    <IdadeBadge iso={abaAtiva === 'devolvidas' ? (req as any).correcao_solicitada_em : req.data} />
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${tipoDaReq(req).cor}`}>
                       {tipoDaReq(req).label}
                     </span>
@@ -499,6 +539,17 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             <span className="text-xs text-gray-300">
                               {(req as any).correcao_motivo || 'Aguardando correção.'}
                             </span>
+                            {((req as any).correcao_solicitada_em || (req as any).correcao_solicitada_por) && (
+                              <span className="block text-[11px] text-gray-400 mt-1">
+                                Devolvida
+                                {nomesDevolucao[(req as any).correcao_solicitada_por]
+                                  ? ` por ${nomesDevolucao[(req as any).correcao_solicitada_por]}`
+                                  : ''}
+                                {(req as any).correcao_solicitada_em
+                                  ? ` em ${formatDataHoraBR((req as any).correcao_solicitada_em)}`
+                                  : ''}
+                              </span>
+                            )}
                             <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
                               Nada foi decidido: quando {req.solicitante || 'o solicitante'} reenviar em
                               Requisições &gt; Do Setor, este mesmo card volta a aceitar Aprovar ou Negar.

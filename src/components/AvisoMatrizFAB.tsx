@@ -11,7 +11,14 @@ import { formatDataHoraBR } from '../lib/dates';
 import { useAvisosMatriz } from '../hooks/useAvisosMatriz';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-export function AvisoMatrizFAB({ profile, showToast }: { profile: UserProfile; showToast?: any }) {
+export function AvisoMatrizFAB({ profile, showToast, hideTrigger, openSignal, onCount }: {
+  profile: UserProfile; showToast?: any;
+  /** FAB único de pendências (item 23): esconde o próprio botão e só reage
+   *  ao `openSignal` para abrir o modal. `onCount` devolve o tamanho da fila
+   *  para quem mostra a contagem — o dono da fila continua sendo este
+   *  componente, para o hook não ser montado duas vezes. */
+  hideTrigger?: boolean; openSignal?: number; onCount?: (n: number) => void;
+}) {
   const { pendentes, darCiencia } = useAvisosMatriz(profile);
   const [open, setOpen] = useState(false);
   const [indice, setIndice] = useState(0);
@@ -22,6 +29,17 @@ export function AvisoMatrizFAB({ profile, showToast }: { profile: UserProfile; s
     if (indice > pendentes.length - 1) setIndice(Math.max(0, pendentes.length - 1));
     if (pendentes.length === 0) setOpen(false);
   }, [pendentes.length, indice]);
+
+  useEffect(() => {
+    if (!openSignal) return;
+    setIndice(0);
+    setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
+
+  // Antes do early return: fila vazia também é notícia para quem conta.
+  useEffect(() => { onCount?.(pendentes.length); }, [pendentes.length, onCount]);
+  useEffect(() => () => { onCount?.(0); }, [onCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +63,7 @@ export function AvisoMatrizFAB({ profile, showToast }: { profile: UserProfile; s
 
   return (
     <>
+      {!hideTrigger && (
       <motion.button
         onClick={() => { setIndice(0); setOpen(true); }}
         initial={{ opacity: 0, y: 12 }}
@@ -65,6 +84,7 @@ export function AvisoMatrizFAB({ profile, showToast }: { profile: UserProfile; s
           </span>
         )}
       </motion.button>
+      )}
 
       <AnimatePresence>
         {open && aviso && (

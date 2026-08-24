@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { EmptyState, SelecioneUnidade } from '../components/ui';
+import { EmptyState, SelecioneUnidade, IdadeBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
@@ -75,6 +75,32 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
     })();
     return () => { cancelado = true; };
   }, [chaveFaltantes, loadingAp, loadingReq]);
+
+  // Quem devolveu, por nome (item 19 do plano — espelha AprovacoesComprasView,
+  // inclusive o motivo de a RLS poder não entregar a linha: a policy de
+  // `user_profiles` recusa o perfil da Matriz, que não tem filial. Id que não
+  // resolveu vira '' — marca de "já tentei" — e a tela omite o "por fulano".
+  const [nomesDevolucao, setNomesDevolucao] = useState<Record<string, string>>({});
+  const idsCorrecao = [...new Set(
+    requisicoes.map(r => (r as any).correcao_solicitada_por).filter(Boolean) as string[],
+  )].filter(id => nomesDevolucao[id] === undefined);
+  const chaveIdsCorrecao = idsCorrecao.join(',');
+  useEffect(() => {
+    if (!chaveIdsCorrecao || !supabase) return;
+    let cancelado = false;
+    (async () => {
+      const ids = chaveIdsCorrecao.split(',');
+      const { data: rows } = await supabase!
+        .from('user_profiles').select('id,nome').in('id', ids);
+      if (cancelado) return;
+      const achados = Object.fromEntries(((rows ?? []) as any[]).map(r => [r.id, r.nome ?? '']));
+      setNomesDevolucao(prev => ({
+        ...prev,
+        ...Object.fromEntries(ids.map(id => [id, achados[id] ?? ''])),
+      }));
+    })();
+    return () => { cancelado = true; };
+  }, [chaveIdsCorrecao]);
 
   const enriched: (EnrichedAp & { req: RequisicaoEstoque })[] = aprovacoes
     .map(ap => {
@@ -241,7 +267,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
         : mostrar === 'fila' ? 'flex flex-col flex-1 min-h-0 gap-4' : 'flex flex-col gap-4 shrink-0'}>
       {mostrar === 'ambos' && (
         <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-          <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284).</p></div>
+          <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284). Esta é a fila do almoxarife; a fila do gerente para os dois documentos, compra e material, fica em Requisições → Aprovações.</p></div>
         </div>
       )}
       {veFila && orfas > 0 && (
@@ -279,7 +305,10 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                 </div>
               </div>
               {ap.req.created_at && (
-                <p className="text-[11px] text-gray-500 -mt-2">Aberta em {formatDataHoraBR(ap.req.created_at)}</p>
+                <p className="text-[11px] text-gray-500 -mt-2 flex items-center gap-2">
+                  Aberta em {formatDataHoraBR(ap.req.created_at)}
+                  <IdadeBadge iso={ap.req.created_at} />
+                </p>
               )}
               <p className="text-[11px] text-gray-500 leading-snug">
                 <span className="text-gray-300 font-bold">Negar</span> é decisão de mérito — a unidade
@@ -337,10 +366,24 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                   <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
                   <p className="text-sm font-semibold text-gray-200 truncate">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
                   <p className="text-xs text-gray-300 mt-1">{ap.req.correcao_motivo || 'Sem motivo registrado.'}</p>
+                  {((ap.req as any).correcao_solicitada_em || (ap.req as any).correcao_solicitada_por) && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Devolvida
+                      {nomesDevolucao[(ap.req as any).correcao_solicitada_por]
+                        ? ` por ${nomesDevolucao[(ap.req as any).correcao_solicitada_por]}`
+                        : ''}
+                      {(ap.req as any).correcao_solicitada_em
+                        ? ` em ${formatDataHoraBR((ap.req as any).correcao_solicitada_em)}`
+                        : ''}
+                    </p>
+                  )}
                 </div>
-                <span className="text-[11px] text-gray-500 shrink-0 text-right">
-                  com {ap.req.solicitante || 'quem abriu'}
-                </span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-[11px] text-gray-500 text-right">
+                    com {ap.req.solicitante || 'quem abriu'}
+                  </span>
+                  <IdadeBadge iso={(ap.req as any).correcao_solicitada_em} />
+                </div>
               </div>
             </div>
           ))}
@@ -375,7 +418,10 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${liberada
                         ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
-                        {liberada ? 'Liberado' : 'Negado'}
+                        {/* "Liberado" é o verbo do botão, não o nome do status
+                            (item 21 do plano) — o valor gravado é 'Aprovado',
+                            igual ao resto da régua de decisão. */}
+                        {liberada ? 'Aprovado' : 'Negado'}
                       </span>
                       <span className="text-[11px] text-gray-500">Qtd: {req?.qtd ?? '—'}</span>
                     </div>

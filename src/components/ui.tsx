@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
+import { diasDesde } from '../lib/dates';
 
 export const StatusBadge = ({ status }: { status: string }) => {
   let colorClass = 'text-gray-400';
@@ -25,12 +26,35 @@ export const StatusBadge = ({ status }: { status: string }) => {
     style = {};
   }
 
+  // "Atendida" é feminino no meio de uma régua masculina (Aprovado/Negado/
+  // Aberto); o valor gravado no banco continua 'Atendida' — trocar exigiria
+  // migração de dados em toda comparação `=== 'Atendida'` espalhada pelo
+  // front. Aqui é só rótulo (plano de requisições, item 21).
+  const rotulo = status === 'Atendida' ? 'Atendido' : status;
+
   return (
     <span
       className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest ${colorClass}`}
       style={style}
     >
-      {status}
+      {rotulo}
+    </span>
+  );
+};
+
+/** "parada há N dias" — idade de um documento numa fila de decisão (plano de
+ *  requisições, item 18/3.3). Âmbar a partir de 2 dias parado. `null` some
+ *  em silêncio: sem data de referência não há o que mostrar. */
+export const IdadeBadge = ({ iso }: { iso: string | null | undefined }) => {
+  const dias = diasDesde(iso);
+  if (dias === null) return null;
+  const label = dias <= 0 ? 'hoje' : dias === 1 ? 'há 1 dia' : `há ${dias} dias`;
+  const alerta = dias >= 2;
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tabular-nums ${
+      alerta ? 'bg-amber-400/15 text-amber-400' : 'text-gray-500'
+    }`}>
+      {label}
     </span>
   );
 };

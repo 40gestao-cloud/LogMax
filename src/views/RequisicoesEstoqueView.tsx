@@ -82,7 +82,9 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
             Estoque confere e corrige a quantidade, e a baixa é em Liberar Requisições. Não confunda com a
             requisição de <strong className="text-gray-300">compra</strong>: aquela é
             <strong className="text-gray-300"> outro documento</strong>, para o que a empresa não tem e precisa
-            comprar — esta sai da prateleira e não passa por Compras.
+            comprar — esta sai da prateleira e não passa por Compras. Esta é a tela do almoxarife, para
+            conferir e corrigir; quem decide (liberar/negar) usa Estoque &rarr; Liberar Requisições, ou a
+            aba Material em Requisições &rarr; Aprovações.
           </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">

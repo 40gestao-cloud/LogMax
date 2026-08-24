@@ -27,17 +27,33 @@ import type { UserProfile } from '../hooks/useUserProfile';
 
 const chave = (a: RequisicaoAviso) => `${a.id}:${a.evento}`;
 
-export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigate }: {
+export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigate, hideTrigger, openSignal, onCount }: {
   profile: UserProfile;
   showToast?: any;
   activeView?: string;
   onNavigate?: (view: string) => void;
+  /** FAB único de pendências (item 23 do plano de requisições): quando outro
+   *  componente já mostra a contagem, este esconde o próprio botão flutuante
+   *  e só reage ao `openSignal` para abrir o modal. `onCount` devolve o
+   *  tamanho da fila e o rótulo (devolvida/corrigida) — o hook fica montado
+   *  só aqui, e a ciência que encolhe a fila chega à contagem pelo mesmo
+   *  caminho, sem depender de realtime (a ciência escreve noutra tabela). */
+  hideTrigger?: boolean;
+  openSignal?: number;
+  onCount?: (n: number, rotulo: string) => void;
 }) {
   const { filialAtiva } = useFilial();
   const { pendentes, darCiencia } = useRequisicoesAviso(profile, filialAtiva);
   const [open, setOpen] = useState(false);
   const [indice, setIndice] = useState(0);
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (!openSignal) return;
+    setIndice(0);
+    setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
   // Abre sozinho uma vez por evento. Sem esta memória, fechar sem confirmar
   // faria o modal voltar a cada re-render — aviso vira armadilha.
   const [jaAbriuPara, setJaAbriuPara] = useState<string | null>(null);
@@ -77,6 +93,13 @@ export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigat
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // Antes do early return: fila vazia também é notícia para quem conta.
+  const rotuloDaFila = pendentes[0]?.evento === 'devolvida'
+    ? (pendentes.length === 1 ? 'Requisição devolvida' : 'Requisições devolvidas')
+    : (pendentes.length === 1 ? 'Requisição corrigida' : 'Requisições corrigidas');
+  useEffect(() => { onCount?.(pendentes.length, rotuloDaFila); }, [pendentes.length, rotuloDaFila, onCount]);
+  useEffect(() => () => { onCount?.(0, ''); }, [onCount]);
+
   if (pendentes.length === 0) return null;
 
   const confirmar = async () => {
@@ -99,13 +122,11 @@ export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigat
   };
 
   const quantos = pendentes.length;
-  const rotuloFab = pendentes[0]?.evento === 'devolvida'
-    ? (quantos === 1 ? 'Requisição devolvida' : 'Requisições devolvidas')
-    : (quantos === 1 ? 'Requisição corrigida' : 'Requisições corrigidas');
+  const rotuloFab = rotuloDaFila;
 
   return (
     <>
-      {!emOperacao(activeView) && (
+      {!hideTrigger && !emOperacao(activeView) && (
         <motion.button
           onClick={() => { setIndice(0); setOpen(true); }}
           initial={{ opacity: 0, y: 12 }}

@@ -78,7 +78,7 @@ export const GerenciamentoComprasView = () => {
       breakdown: [
         { label: 'Pendentes', value: reqPendentes, cls: reqPendentes > 0 ? 'text-yellow-400' : 'text-gray-500' },
         { label: 'Aprovadas', value: reqAprovadas, cls: 'text-green-400' },
-        { label: 'Atendidas', value: reqAtendidas, cls: reqAtendidas > 0 ? 'text-accent' : 'text-gray-500' },
+        { label: 'Atendidos', value: reqAtendidas, cls: reqAtendidas > 0 ? 'text-accent' : 'text-gray-500' },
         { label: 'Negadas', value: reqNegadas, cls: reqNegadas > 0 ? 'text-red-500' : 'text-gray-500' },
         { label: 'Em correção', value: reqEmCorrecao, cls: reqEmCorrecao > 0 ? 'text-amber-400' : 'text-gray-500' },
       ],
