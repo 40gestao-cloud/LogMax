@@ -368,7 +368,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
           ? 'Nada devolvido para correção — o que você mandar consertar fica aqui até o solicitante reenviar.'
           : 'Nenhuma aprovação pendente'} />
       ) : (
-        <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 pb-6">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
           {visiveis.map(ap => {
             const req = ap.req;
             const isExpanded = expanded === ap.id;
@@ -573,9 +573,14 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
       ))}
 
       {/* Decisões já tomadas — só para a direção. O gerente não desfaz a
-          própria decisão: se pudesse, aprovar deixaria de ser um ato. */}
+          própria decisão: se pudesse, aprovar deixaria de ser um ato.
+          A aba rola como UMA página. Antes cada bloco rolava por dentro, com
+          altura própria: dois `flex-1` dividindo a sobra e uma `max-h` no meio,
+          o que deixava cada lista com espaço para um card. Rolagem dentro de
+          rolagem é o mesmo defeito que as abas vieram resolver. */}
       {abaAtiva === 'decididas' && (
-        <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6 flex flex-col gap-6">
+        <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
           <p className="text-xs text-gray-500 mt-1 mb-4">
             Erro de gerente não precisa travar a aula: devolver desfaz a decisão e o card volta para a
@@ -585,7 +590,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
           {decididas.length === 0 && (
             <p className="text-xs text-gray-600">Nenhuma decisão tomada nesta unidade ainda.</p>
           )}
-          <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-1">
+          <div className="flex flex-col gap-2">
             {decididas.slice(0, 15).map(ap => {
               const req = requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
               const negado = ap.status === 'Negado';
@@ -635,13 +640,13 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             </p>
           )}
         </div>
-      )}
 
-      {/* E o outro documento, logo abaixo: quem desfaz uma decisão vem procurar
-          a outra no mesmo lugar. Liberação de material não volta — o material
-          já saiu da prateleira —, e o bloco explica isso onde a pergunta nasce. */}
-      {abaAtiva === 'decididas' && (
+        {/* E o outro documento, logo abaixo: quem desfaz uma decisão vem
+            procurar a outra no mesmo lugar. Liberação de material não volta —
+            o material já saiu da prateleira —, e o bloco explica isso onde a
+            pergunta nasce. */}
         <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="decididas" />
+        </div>
       )}
       </>
       )}
