@@ -226,9 +226,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: null, solicitante: r.solicitante,
       saldo: null as number | null, minimo: null as number | null,
-      correcaoMotivo: null as string | null,
+      // Devolvida (migr. 522, espelha a 517 de compra): o motivo vem na
+      // própria requisição, porque o solicitante não enxerga `aprovacoes_estoque`.
+      correcaoMotivo: r.correcao_motivo ?? null,
       criadoPor: r.criado_por ?? null,
       centroCusto: '',
+      destino: r.destino ?? '',
     }));
     return [...compras, ...materiais].sort((a, b) => String(b.abertura).localeCompare(String(a.abertura)));
   }, [data, reqEstoque, produtos]);
@@ -257,6 +260,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     item: '', qtd: '1', unidade: '', justificativa: '',
     urgencia: 'Normal', centro_custo: '', data_necessidade: '',
   });
+  // Material não tem item, unidade, urgência, centro de custo nem prazo — só
+  // quantidade e destino (`requisicoes_estoque` não guarda os outros campos,
+  // e corrigir o produto trocaria o documento por outro). Formulário próprio
+  // em vez de forçar `corrForm` a fingir campos que não existem.
+  const [corrFormEstoque, setCorrFormEstoque] = useState({ qtd: '1', destino: '' });
   const [reenviando, setReenviando] = useState(false);
   const corrFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(corrForm.unidade));
 
@@ -277,8 +285,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     || isConselheiro(profile);
 
   const abrirCorrecao = (r: any) => {
-    const bruta = data.find((x: any) => x.id === r.id);
     setCorrigindo(r);
+    if (r.tipo === 'estoque') {
+      setCorrFormEstoque({ qtd: qtdBR(r.qtd ?? 1), destino: r.complemento ?? '' });
+      return;
+    }
+    const bruta = data.find((x: any) => x.id === r.id);
     setCorrForm({
       item:             r.item ?? '',
       qtd:              qtdBR(r.qtd ?? 1),
@@ -290,8 +302,32 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     });
   };
 
+  const handleReenviarEstoque = async () => {
+    if (!corrigindo || !supabase) return;
+    const qtd = parseQtd(corrFormEstoque.qtd);
+    if (!(qtd > 0)) { showToast('A quantidade tem de ser maior que zero.', 'error', true); return; }
+    setReenviando(true);
+    try {
+      const { data: res, error } = await supabase.rpc('reenviar_requisicao_estoque_corrigida', {
+        p_id:      corrigindo.id,
+        p_qtd:     qtd,
+        p_destino: corrFormEstoque.destino || null,
+      });
+      if (error) throw error;
+      const atualizada: any = Array.isArray(res) ? res[0] : res;
+      setReqEstoque((prev: any[]) => prev.map(d => d.id === corrigindo.id ? (atualizada ?? d) : d));
+      showToast('Requisição corrigida e reenviada — está de volta na fila de quem decide.', 'success', true);
+      setCorrigindo(null);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível reenviar.', 'error', true);
+    } finally {
+      setReenviando(false);
+    }
+  };
+
   const handleReenviar = async () => {
     if (!corrigindo || !supabase) return;
+    if (corrigindo.tipo === 'estoque') return handleReenviarEstoque();
     const qtd = parseQtd(corrForm.qtd);
     if (!corrForm.item.trim()) { showToast('Diga o que está sendo pedido.', 'error', true); return; }
     if (!(qtd > 0))            { showToast('A quantidade tem de ser maior que zero.', 'error', true); return; }
@@ -1210,7 +1246,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         {r.status === 'Em correção' && (
                           <div className="mt-3 neu-pressed rounded-xl p-3 border border-amber-400/20">
                             <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
-                              O gerente devolveu para você corrigir
+                              {r.tipo === 'estoque' ? 'Devolveram para você corrigir' : 'O gerente devolveu para você corrigir'}
                             </span>
                             <span className="text-xs text-gray-200">
                               {r.correcaoMotivo || 'Sem motivo registrado.'}
@@ -1218,7 +1254,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                             <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
                               <span className="text-[11px] text-gray-500 leading-snug">
                                 Não foi negada — nada foi decidido. Corrija e reenvie: é o mesmo documento que
-                                volta para a fila do gerente.
+                                volta para a fila de quem decide.
                               </span>
                               {podeCorrigir(r) ? (
                                 <button onClick={() => abrirCorrecao(r)}
@@ -1246,11 +1282,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       </>
       )}
 
-      {/* Correcao da requisicao devolvida (migr. 517).
-          Item, quantidade, unidade, prazo, urgencia, centro de custo e
-          justificativa — o que foi PEDIDO. Tipo, produto do catalogo, setor e
-          unidade de negocio ficam de fora, na tela e na RPC: corrigir e
-          consertar o pedido, nao troca-lo por outro documento. */}
+      {/* Correcao da requisicao devolvida (migr. 517, material na 522).
+          Compra: item, quantidade, unidade, prazo, urgencia, centro de custo
+          e justificativa — o que foi PEDIDO. Material: so quantidade e
+          destino, porque e so isso que `requisicoes_estoque` guarda. Nos
+          dois, tipo/produto do catalogo/setor ficam de fora, na tela e na
+          RPC: corrigir e consertar o pedido, nao troca-lo por outro documento. */}
       <AnimatePresence>
         {corrigindo && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -1262,15 +1299,35 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-xl max-h-[90vh] overflow-y-auto">
               <h3 className="text-sm font-bold text-gray-300 mb-1">
                 Corrigir e reenviar
-                {corrigindo.numero && <span className="text-accent ml-2 font-mono text-xs">{corrigindo.numero}</span>}
+                {corrigindo.numero
+                  ? <span className="text-accent ml-2 font-mono text-xs">{corrigindo.numero}</span>
+                  : <span className="text-accent ml-2 text-xs">{corrigindo.item}</span>}
               </h3>
               <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 my-4">
                 <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
-                  O que o gerente pediu para consertar
+                  {corrigindo.tipo === 'estoque' ? 'O que pediram para consertar' : 'O que o gerente pediu para consertar'}
                 </span>
                 <span className="text-xs text-gray-200">{corrigindo.correcaoMotivo || '—'}</span>
               </div>
 
+              {corrigindo.tipo === 'estoque' ? (
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <FormField label="Quantidade *">
+                      <input type="text" inputMode="decimal"
+                        className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
+                        value={corrFormEstoque.qtd}
+                        onChange={e => setCorrFormEstoque(f => ({ ...f, qtd: formatQtd(e.target.value, ehFracionaria(corrigindo.unidade)) }))}
+                        onKeyDown={handleQtdKeyDown(ehFracionaria(corrigindo.unidade))} />
+                    </FormField>
+                    <FormField label="Destino">
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                        value={corrFormEstoque.destino}
+                        onChange={e => setCorrFormEstoque(f => ({ ...f, destino: e.target.value }))} />
+                    </FormField>
+                  </div>
+                </div>
+              ) : (
               <div className="flex flex-col gap-3">
                 <FormField label="Item *">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
@@ -1321,11 +1378,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     onChange={e => setCorrForm(f => ({ ...f, justificativa: e.target.value }))} />
                 </FormField>
               </div>
+              )}
 
               <p className="text-[11px] text-gray-500 leading-snug mt-3">
-                O tipo da requisição, o produto do catálogo e o setor não mudam aqui — se o pedido era de
-                outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas
-                coisas num documento só.
+                {corrigindo.tipo === 'estoque'
+                  ? 'O produto do catálogo não muda aqui — se o pedido era de outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas coisas num documento só.'
+                  : 'O tipo da requisição, o produto do catálogo e o setor não mudam aqui — se o pedido era de outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas coisas num documento só.'}
               </p>
 
               <div className="flex justify-end gap-2 mt-5">
@@ -1334,7 +1392,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   Cancelar
                 </button>
                 <NeuButtonAccent onClick={handleReenviar} isLoading={reenviando}>
-                  Reenviar para o gerente
+                  Reenviar para quem decide
                 </NeuButtonAccent>
               </div>
             </motion.div>

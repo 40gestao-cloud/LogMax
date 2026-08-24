@@ -355,14 +355,40 @@ usado ainda.
     "aprovar"). A classe já existia, usada em Requisições → Compras para
     "Reabrir"; só faltava aplicá-la aqui.
 
-### Fase 3 — Devolver material para correção (migr. 522)
+### Fase 3 — Devolver material para correção (migr. 522) — ✅ feito 2026-08-24, aplicado nos 4 projetos
 
-13. `devolver_requisicao_estoque_para_correcao` + colunas de correção em
-    `requisicoes_estoque`.
-14. Botão na aba Material, com o mesmo texto de três saídas de Compra.
-15. `RequisicoesSetorView`: aba "Para corrigir" aceita material.
-16. Modal de aviso (`useRequisicoesAviso`) passa a cobrir o documento de
-    material — mesma tabela de ciência, evento novo.
+13. `devolver_requisicao_estoque_para_correcao` + `reenviar_requisicao_estoque_corrigida`
+    + colunas de correção em `requisicoes_estoque` (`correcao_motivo`,
+    `correcao_solicitada_em`, `correcao_solicitada_por`, `reenviada_em`).
+    Espelhou também as três lições que a 521 já tinha pago: `reenviada_em`
+    gravado pela RPC de reenvio (não por gatilho), `liberar_requisicao_estoque`
+    recusa decidir requisição `Em correção`, e `reabrir_requisicao_estoque`
+    zera `reenviada_em` explicitamente. Testado com transações revertidas
+    (sessão fake-admin via `request.jwt.claim.sub`, já que o material estava
+    vazio nos 4 projetos): devolver → recusa de decidir → reenviar → ciência,
+    tudo conferido antes de aplicar de verdade.
+14. Botão "Devolver p/ correção" na aba Material, mesmo texto das três
+    saídas de Compra. A fila de decisão passou a excluir os itens `Em
+    correção` (mesma divisão `paraDecidir`/`devolvidas` da aba Compra) — sem
+    isso o card continuaria com os botões de decisão junto da etiqueta,
+    porque `aprovacoes_estoque.status` não muda ao devolver, só
+    `requisicoes_estoque.status`. Os devolvidos aparecem embaixo, num bloco
+    "Devolvidas — esperando correção", sem botão nenhum.
+15. `RequisicoesSetorView`: a aba "Para corrigir" já aceitava material sem
+    mudança nenhuma — a lista combinada `pedidos` (compra + material) já
+    agrupava por `status`, e `Em correção` já era um dos status agrupados.
+    Faltava só: (a) `correcaoMotivo` estava hardcoded `null` para material,
+    (b) o formulário de correção era só o de compra (item, unidade,
+    urgência, centro de custo, justificativa — nenhum existe em
+    `requisicoes_estoque`). Formulário próprio para material (`corrFormEstoque`,
+    só quantidade e destino) e `handleReenviar` branch por `tipo`.
+16. Modal de aviso (`useRequisicoesAviso`) passa a consultar as duas tabelas
+    em paralelo (`requisicoes` e `requisicoes_estoque`, com embed
+    `produtos(nome)` para o nome do item) e a rotear `darCiencia` para
+    `dar_ciencia_requisicao` ou `dar_ciencia_requisicao_estoque` conforme
+    `aviso.tipo`. Ciência do material numa tabela própria
+    (`requisicao_estoque_ciencia`), não a mesma da compra — a FK de cada uma
+    aponta para o documento certo.
 
 ### Fase 4 — Refinamento
 

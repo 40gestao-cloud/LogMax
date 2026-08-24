@@ -173,7 +173,14 @@ export interface RequisicaoEstoque {
   status: string;
   filial?: string | null;
   ativo?: boolean;
+  criado_por?: string | null;
+  /** O que o Estoque (ou gerente) pediu para corrigir — terceira saída,
+   *  espelhando a de compra (migr. 522). */
+  correcao_motivo?: string | null;
+  correcao_solicitada_em?: string | null;
+  reenviada_em?: string | null;
   created_at?: string;
+  updated_at?: string | null;
 }
 
 export interface AprovacaoEstoque {

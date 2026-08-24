@@ -29,7 +29,7 @@ export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
 
 export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos' }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque }) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
-  const { data: requisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
+  const { data: requisicoes, setData: setRequisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
   // Decisões já tomadas — a lista de Pendente sozinha faz o card sumir no
   // clique, e com ele a chance de desfazer o engano do gerente.
@@ -142,6 +142,46 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
     }
   };
 
+  // Terceira saída, ao lado de Aprovar e Negar (migr. 522, espelha a 517).
+  //
+  // Negar é decisão de mérito — a unidade não vai receber isto, e o documento
+  // se encerra. Devolver é para o pedido mal feito: quantidade errada,
+  // destino impreciso. Volta para quem abriu, com o motivo, e o mesmo
+  // documento retorna corrigido — sem virar requisição nova, que era o único
+  // caminho que sobrava e a razão de a mesma peça aparecer duas vezes na fila.
+  const devolverParaCorrecao = async (ap: EnrichedAp & { req: RequisicaoEstoque }) => {
+    if (!supabase) return;
+    const motivo = (obs[ap.id] ?? '').trim();
+    if (!motivo) {
+      showToast('Escreva na observação o que precisa ser corrigido — é isso que o solicitante vai ler.', 'error', true);
+      return;
+    }
+    setProcessing(ap.id);
+    try {
+      const { error } = await supabase.rpc('devolver_requisicao_estoque_para_correcao', {
+        p_aprovacao_id: ap.id,
+        p_motivo:       motivo,
+      });
+      if (error) throw error;
+      // O card sai da lista de decisão e passa a aparecer em "Devolvidas" —
+      // a aprovação continua Pendente (nada foi decidido), só a requisição
+      // muda de status.
+      setRequisicoes(prev => prev.map(r => r.id === ap.req.id
+        ? { ...r, status: 'Em correção', correcao_motivo: motivo } as RequisicaoEstoque
+        : r));
+      setAvulsas(prev => prev[ap.req.id]
+        ? { ...prev, [ap.req.id]: { ...prev[ap.req.id], status: 'Em correção', correcao_motivo: motivo } as RequisicaoEstoque }
+        : prev);
+      showToast(
+        `Devolvida para ${ap.req.solicitante || 'o solicitante'}. Ela fica travada aqui até ele reenviar corrigida, ` +
+        'em Requisições → Do Setor.', 'info', true);
+    } catch (err: unknown) {
+      showToast(`Não foi possível devolver: ${motivoDoErro(err)}`, 'error', true);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   // Devolver a decisão do gerente (RPC `reabrir_requisicao_estoque`).
   //
   // Vale para a requisição NEGADA. A liberada já tirou material da prateleira:
@@ -184,6 +224,14 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   const veFila      = mostrar === 'ambos' || mostrar === 'fila';
   const veDecididas = mostrar === 'ambos' || mostrar === 'decididas';
 
+  // Espelha a divisão de AprovacoesComprasView (2026-08-24): quem foi
+  // devolvido some da fila de decisão — a aprovação continua Pendente, mas
+  // decidir por baixo de quem está corrigindo é exatamente o que a 522
+  // passou a recusar no banco. Aqui embaixo, sem botão nenhum: nada foi
+  // decidido, só se aguarda o reenvio.
+  const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
+  const devolvidas  = enriched.filter(ap => ap.req.status === 'Em correção');
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className={mostrar === 'ambos'
@@ -211,9 +259,9 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           Falta aqui o que `requisicoes_estoque` não tem — número sequencial
           e urgência não existem nesta tabela; o código curto (REQ-xxxxxx) é
           o que dá para nomear o documento numa conversa. */}
-      {veFila && (enriched.length === 0 ? <EmptyState message="Nenhum material esperando liberação" /> : (
+      {veFila && (paraDecidir.length === 0 ? <EmptyState message="Nenhum material esperando liberação" /> : (
         <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
-          {enriched.map(ap => (
+          {paraDecidir.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className="neu-flat rounded-2xl border border-white/5 p-5 flex flex-col gap-4">
               <div className="flex justify-between items-start gap-3">
@@ -233,15 +281,31 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
               {ap.req.created_at && (
                 <p className="text-[11px] text-gray-500 -mt-2">Aberta em {formatDataHoraBR(ap.req.created_at)}</p>
               )}
+              <p className="text-[11px] text-gray-500 leading-snug">
+                <span className="text-gray-300 font-bold">Negar</span> é decisão de mérito — a unidade
+                não vai receber isto, e o documento se encerra.{' '}
+                <span className="text-amber-400/90 font-bold">Devolver</span> é para o pedido mal feito:
+                quantidade errada, destino impreciso. Volta para quem abriu, com o motivo, e o mesmo
+                documento retorna corrigido — sem virar requisição nova.
+              </p>
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  Observação <span className="text-red-500/70">(obrigatória para negar)</span>
+                  Observação <span className="text-red-500/70">(obrigatória para negar e para devolver)</span>
                 </label>
                 <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
                   placeholder="Justificativa da decisão..."
                   value={obs[ap.id] ?? ''} onChange={e => setObs(o => ({ ...o, [ap.id]: e.target.value }))} />
               </div>
               <div className="flex flex-wrap gap-3 justify-end">
+                <button
+                  onClick={() => devolverParaCorrecao(ap)}
+                  disabled={processing === ap.id}
+                  title="O pedido está mal feito: volta para quem abriu, com o seu motivo, e não conta como negado."
+                  className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-amber-400 hover:border-amber-400/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {processing === ap.id ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                  Devolver p/ correção
+                </button>
                 <button onClick={() => decidir(ap, 'Negado')} disabled={processing === ap.id}
                   className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2">
                   {processing === ap.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
@@ -257,6 +321,31 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           ))}
         </div>
       ))}
+
+      {/* Devolvidas — mesmo tratamento do card `Em correção` em
+          AprovacoesComprasView: sem botão, só o contexto. Quem corrige é quem
+          abriu; a fila de decisão continua vazia até o reenvio. */}
+      {veFila && devolvidas.length > 0 && (
+        <div className="flex flex-col gap-3 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            Devolvidas — esperando correção
+          </p>
+          {devolvidas.map(ap => (
+            <div key={ap.id} className="neu-pressed rounded-xl p-3 border border-amber-400/20">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
+                  <p className="text-sm font-semibold text-gray-200 truncate">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
+                  <p className="text-xs text-gray-300 mt-1">{ap.req.correcao_motivo || 'Sem motivo registrado.'}</p>
+                </div>
+                <span className="text-[11px] text-gray-500 shrink-0 text-right">
+                  com {ap.req.solicitante || 'quem abriu'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Decisões já tomadas — só para a direção. */}
       {veDecididas && podeDevolver && decididas.length > 0 && (

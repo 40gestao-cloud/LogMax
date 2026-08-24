@@ -177,7 +177,7 @@ export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigat
                         Motivo da devolução
                       </span>
                       <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
-                        {aviso.correcao_motivo || 'O gerente devolveu sem escrever o motivo.'}
+                        {aviso.correcao_motivo || 'Devolvida sem motivo escrito.'}
                       </p>
                     </div>
                     <p className="text-[11px] text-gray-500 leading-snug">
@@ -189,7 +189,9 @@ export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigat
                 ) : (
                   <p className="text-[11px] text-gray-500 leading-snug">
                     O solicitante corrigiu o que você pediu e devolveu o documento para a sua fila.
-                    Ele espera Aprovar ou Negar em Requisições &gt; Aprovações, aba “Para decidir”.
+                    {aviso.tipo === 'estoque'
+                      ? ' Ele espera Aprovar ou Negar em Requisições > Aprovações, aba "Material do estoque".'
+                      : ' Ele espera Aprovar ou Negar em Requisições > Aprovações, aba "Para decidir".'}
                   </p>
                 )}
 
