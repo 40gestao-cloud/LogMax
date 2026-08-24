@@ -21,7 +21,10 @@ import { useAIContext } from '../contexts/AIAssistantContext';
 // `satelite` (migr. 452): relação 1:1 em cascata — a ficha de custo do produto,
 // por exemplo. É parte do registro, vai junto no DELETE e não impede nada.
 // Contá-la como vínculo deixava o botão "apagar de vez" travado para sempre.
-type Vinculo = { tabela: string; linhas: number; satelite?: boolean };
+// `rotulos` (migr. 524): o numero/nome de ate 3 documentos presos. Sem eles a
+// tela dizia "requisicoes (1)" e mandava o admin procurar um vinculo que
+// nenhuma outra tela mostra — ele e uma coluna de id.
+type Vinculo = { tabela: string; linhas: number; satelite?: boolean; rotulos?: string[] };
 type Item = {
   tabela: string;
   id: string;
@@ -50,9 +53,14 @@ const rotulo = (t: string) => ROTULO[t] ?? t;
 const bloqueantes = (v: Vinculo[]) => v.filter(x => !x.satelite);
 
 // A tabela de vínculo aparece para o admin com o nome que ela tem no banco —
-// quem abre esta tela é quem lê migração.
+// quem abre esta tela é quem lê migração. O que ele NÃO tinha como adivinhar
+// era qual documento: o número vem do banco (migr. 524).
 const descreveVinculos = (v: Vinculo[]) =>
-  v.map(x => `${x.tabela} (${x.linhas})`).join(', ');
+  v.map(x => {
+    const r = x.rotulos ?? [];
+    const lista = r.length ? `: ${r.join(', ')}${x.linhas > r.length ? ' e outros' : ''}` : '';
+    return `${x.tabela} (${x.linhas})${lista}`;
+  }).join('; ');
 
 const dataBR = (iso: string | null) => {
   if (!iso) return 'data desconhecida';
