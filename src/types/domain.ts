@@ -135,6 +135,17 @@ export interface Requisicao {
   /** Para quando o item é necessário. */
   data_necessidade?: string | null;
   unidade?: string | null;
+  /** 'Reposição' (saiu do catálogo, com saldo fotografado) ou 'Eventual' (item
+   *  escrito à mão). NULL nas linhas abertas antes da migr. 358. */
+  tipo_requisicao?: string | null;
+  /** Amarração ao catálogo: a Reposição já nasce com ele; a Eventual só ganha
+   *  quando Compras casa o item (migr. 480). */
+  produto_id?: string | null;
+  servico_id?: string | null;
+  /** Fotografia do estoque no instante do pedido — na Reposição é isto que
+   *  ocupa o lugar da justificativa escrita (migr. 358). */
+  saldo_no_pedido?: number | null;
+  minimo_no_pedido?: number | null;
   created_at?: string;
   updated_at?: string | null;
 }

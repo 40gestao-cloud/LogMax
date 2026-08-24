@@ -71,6 +71,27 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     return () => { cancelado = true; };
   }, [chaveFaltantes, loadingAp, loadingReq]);
 
+  // De onde veio o pedido (2026-08-24).
+  //
+  // O gerente decidia sem saber se estava olhando uma reposição de catálogo ou
+  // um item escrito à mão — e são conferências diferentes. Na Reposição, o que
+  // justifica é o saldo, que o sistema fotografou; se o saldo está longe do
+  // mínimo, a reposição não se sustenta. Na Eventual, quem justifica é o texto
+  // do solicitante, e é ali que mora o pedido mal feito.
+  //
+  // Requisição de MATERIAL (almoxarifado) não chega nesta tela — ela tem
+  // aprovação própria em Estoque. O rótulo existe para deixar isso explícito
+  // para quem procura por ela aqui.
+  const tipoDaReq = (req: Requisicao) => {
+    if ((req as any).servico_id) {
+      return { label: 'Serviço', cor: 'bg-sky-500/15 text-sky-400' };
+    }
+    return req.tipo_requisicao === 'Reposição'
+      ? { label: 'Reposição', cor: 'bg-emerald-500/15 text-emerald-400' }
+      // NULL é requisição anterior à migr. 358, quando só havia um caminho.
+      : { label: req.tipo_requisicao ?? 'Compra', cor: 'bg-purple-500/15 text-purple-400' };
+  };
+
   // Outras requisições VIVAS do mesmo item na mesma unidade (2026-08-24).
   //
   // É o que o gerente pediu para enxergar: ele devolve uma para correção e
@@ -351,6 +372,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${tipoDaReq(req).cor}`}>
+                      {tipoDaReq(req).label}
+                    </span>
                     <UrgenciaBadge urgencia={req.urgencia ?? 'Normal'} />
                     <ChevronDown size={16} className={`text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
@@ -372,6 +396,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                         <FluxoCompra etapa={etapaDaRequisicao(req.status)} />
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
+                            { label: 'Origem', val: tipoDaReq(req).label },
                             { label: 'Solicitante', val: req.solicitante || '—' },
                             { label: 'Setor', val: req.setor_solicitante || '—' },
                             { label: 'Centro de Custo', val: req.centro_custo || '—' },
@@ -386,6 +411,29 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             </div>
                           ))}
                         </div>
+
+                        {/* Na Reposição isto ocupa o lugar da justificativa: é a
+                            fotografia do estoque no instante do pedido (migr.
+                            358), e não depende de ninguém ter escrito bem. É
+                            também a conferência que o gerente precisa fazer —
+                            saldo acima do mínimo é reposição sem motivo. */}
+                        {req.saldo_no_pedido != null && (
+                          <div className="neu-pressed p-3 rounded-xl">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+                              Saldo quando foi pedido
+                            </span>
+                            <span className="text-xs text-gray-300">
+                              <strong className={Number(req.minimo_no_pedido) > 0 && Number(req.saldo_no_pedido) <= Number(req.minimo_no_pedido)
+                                ? 'text-red-400' : 'text-gray-200'}>
+                                {req.saldo_no_pedido}
+                              </strong>
+                              {req.minimo_no_pedido != null && Number(req.minimo_no_pedido) > 0 && (
+                                <> em estoque, para um mínimo de <strong className="text-gray-200">{req.minimo_no_pedido}</strong></>
+                              )}
+                              {' '}{req.unidade ?? ''}
+                            </span>
+                          </div>
+                        )}
 
                         {/* A justificativa é o que se lê para decidir — por isso
                             vem antes dos botões, não escondida num tooltip. */}
