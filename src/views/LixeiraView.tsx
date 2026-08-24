@@ -24,7 +24,10 @@ import { useAIContext } from '../contexts/AIAssistantContext';
 // `rotulos` (migr. 524): o numero/nome de ate 3 documentos presos. Sem eles a
 // tela dizia "requisicoes (1)" e mandava o admin procurar um vinculo que
 // nenhuma outra tela mostra — ele e uma coluna de id.
-type Vinculo = { tabela: string; linhas: number; satelite?: boolean; rotulos?: string[] };
+// `excluidas` (migr. 525): quantas das linhas presas já foram excluídas na
+// tela. Excluir é soft-delete — a linha continua no banco e continua apontando
+// para o cadastro, e sem dizer isso a mensagem parecia ignorar a exclusão.
+type Vinculo = { tabela: string; linhas: number; satelite?: boolean; rotulos?: string[]; excluidas?: number };
 type Item = {
   tabela: string;
   id: string;
@@ -237,7 +240,19 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
                     {travado && (
                       <div className="text-[11px] mt-1 flex items-start gap-1.5 opacity-80">
                         <Link2 size={13} className="mt-0.5 shrink-0" />
-                        <span>Preso por: {descreveVinculos(trava)}</span>
+                        <span>
+                          Preso por: {descreveVinculos(trava)}
+                          {/* Migr. 525: quem já excluiu o documento na tela
+                              tentava de novo, porque a mensagem era a mesma de
+                              antes da exclusão. Soft-delete não solta a FK. */}
+                          {trava.every(x => (x.excluidas ?? 0) >= x.linhas) && (
+                            <span className="block opacity-70">
+                              Já excluídos na tela — mas excluir não tira do banco: eles continuam
+                              apontando para este cadastro. Ou o documento passa a apontar para outro,
+                              ou este registro fica aqui, onde não atrapalha a operação.
+                            </span>
+                          )}
+                        </span>
                       </div>
                     )}
                   </div>
