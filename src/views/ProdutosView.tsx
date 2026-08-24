@@ -586,9 +586,24 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // percebe que pulou a fila (era exatamente o furo que os alunos achavam:
   // a opção "não veio de compra" sempre disponível).
   //
-  // Patrimônio e consumo continuam livres — não nascem de requisição de compra
-  // e o formulário nem oferece o vínculo para eles.
+  // Patrimônio e consumo não são EXIGIDOS: eles entram no catálogo por outras
+  // portas legítimas (saldo de implantação, montagem da filial, bem que já
+  // estava na casa), e cobrar origem ali fecharia caminho que nada tem de
+  // errado.
   const origemExigida = !editItem && ehVendavel(extras.tipo);
+
+  // Mas OFERECIDO para todo cadastro novo, qualquer tipo.
+  //
+  // Exigir e oferecer eram a mesma coisa, e isso tinha um preço: a compra
+  // eventual de material de consumo ou de um bem — papelaria, limpeza,
+  // ferramenta, ar-condicionado, que é a maioria das eventuais — não via o
+  // campo, então o vínculo da migr. 494 não nascia aqui. O comprador cadastrava
+  // o produto, voltava para Compras > Cotações e o Gerar Pedido continuava
+  // perguntando o item do catálogo — exatamente a fricção que a 494 existe para
+  // matar, sobrevivendo por um tipo de produto. A RPC `vincular_produto_requisicao`
+  // nunca olhou `tipo`, e o select do modal de Compras já aceitava qualquer um:
+  // o que faltava era esta tela deixar o vínculo nascer no lugar certo.
+  const origemOferecida = !editItem;
 
   // A régua acima criaria um beco se não houvesse NADA para escolher: nenhuma
   // requisição esperando, nenhum item já chegado, e a unidade não está mais em
@@ -612,7 +627,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     // Só existe NA janela de implantação: a unidade ainda não tem nenhum
     // recebimento Concluído ou Parcial. Fora dela, "cadastro por conta
     // própria" reabriria o beco que a régua do item F existe para fechar.
-    if (emImplantacao) {
+    // Só onde a origem é EXIGIDA: para consumo e patrimônio o campo é opcional,
+    // e "não escolhi nada" já diz o mesmo que "saldo de implantação" — a opção
+    // ali seria um segundo jeito de dizer a mesma coisa.
+    if (emImplantacao && (origemExigida || itemCompradoSel === SEM_COMPRA)) {
       grupos.push({
         label: 'Implantação',
         opcoes: [{ value: SEM_COMPRA, label: 'Saldo de implantação (a unidade está começando agora)' }],
@@ -639,7 +657,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       });
     }
     return grupos;
-  }, [itensAguardandoPedido, itensComprados, emImplantacao]);
+  }, [itensAguardandoPedido, itensComprados, emImplantacao, origemExigida, itemCompradoSel]);
 
   // Escolha no SelectBusca de origem. Mesma lógica de antes (era o onChange
   // inline do <select>): requisição traz nome/unidade/fornecedor sem custo (a
@@ -707,7 +725,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // informacao boa.
   const custoJaApurado = !!editItem
     && editItem.preco_custo != null && Number(editItem.preco_custo) > 0;
-  const custoObrigatorio = !ehVendavel(extras.tipo) || custoJaApurado || veioDeCompra;
+  // `!reqVinculo`: consumo e patrimônio pagam o valor de aquisição, e por isso o
+  // custo é obrigatório neles — mas quando o cadastro está atendendo uma
+  // requisição que AINDA espera o pedido, esse valor não existe. A cotação pode
+  // nem ter acontecido, e o que houver é proposta, não custo apurado. Cobrar ali
+  // é pedir número inventado, que é o mesmo motivo pelo qual a mercadoria já
+  // estava fora (migr. 480/417).
+  const custoObrigatorio = (!ehVendavel(extras.tipo) && !reqVinculo) || custoJaApurado || veioDeCompra;
 
   // A RLS de `categorias_produto` é `auth_pode_filial(filial)` — admin/CEO
   // satisfaz para as três, então sem este filtro o select do produto oferece o
@@ -1655,7 +1679,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   recebimento". Não é círculo, é fila — mas só dentro do painel
                   de saldo isso não bastava. Aqui em cima, sempre visível, com o
                   passo atual marcado. */}
-              {origemExigida && (
+              {(origemExigida || reqVinculo) && (
                 <div className="neu-pressed rounded-xl px-4 py-2.5 border border-white/5 text-[10px] text-gray-500 leading-relaxed">
                   Requisição → Aprovação → Cotação → Aprovação da cotação →{' '}
                   <span className="text-accent font-bold">Cadastro (você está aqui)</span> →
@@ -1788,8 +1812,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       </div>
                     </FormField>
                   )}
-                  {origemExigida && !origemSemOpcoes && (
-                    <FormField label="Origem deste cadastro *" error={extrasErrors.origem_compra}>
+                  {origemOferecida && !origemSemOpcoes && gruposOrigem.length > 0 && (
+                    <FormField label={origemExigida ? 'Origem deste cadastro *' : 'Origem deste cadastro'}
+                      error={extrasErrors.origem_compra}>
                       <SelectBusca
                         value={itemCompradoSel}
                         onChange={escolherOrigem}
@@ -1810,6 +1835,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           <> A lista &quot;já chegou&quot; são item(ns) que entraram no Recebimento antes de ter
                           cadastro: escolher um traz nome, fornecedor e custo do pedido, em vez de criar um
                           segundo cadastro do mesmo produto.</>
+                        )}
+                        {!origemExigida && (
+                          <span className="block mt-1">
+                            Aqui é <span className="text-gray-400">opcional</span>: item de uso e consumo e bem
+                            também entram por implantação, montagem da unidade ou doação. Deixe em branco se
+                            este cadastro não está atendendo nenhuma requisição.
+                          </span>
                         )}
                       </p>
                     </FormField>
@@ -2408,7 +2440,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       com a do recebimento, e o estoque vai ao dobro. É o mesmo
                       erro que a migr. 438 removeu ao tirar "Quantidade Comprada"
                       do cadastro, entrando por outra porta. */}
-                  {(editItem || itemCompradoSel === SEM_COMPRA || !origemExigida) ? (
+                  {(editItem || itemCompradoSel === SEM_COMPRA
+                    || (!origemExigida && !reqVinculo && !veioDeCompra)) ? (
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
                     <input
                       type="text" inputMode="decimal"
