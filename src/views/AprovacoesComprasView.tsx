@@ -258,6 +258,30 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     }
   };
 
+  // ── Abas por situação (2026-08-24) ──────────────────────────────
+  //
+  // A tela empilhava tudo: a fila de decisão em cima, com a altura que sobrava,
+  // e embaixo um bloco fixo de decisões já tomadas com rolagem própria. Sobrava
+  // uma faixa de dois cards para o que é o trabalho da tela. Pior: o que o
+  // gerente devolveu continuava na MESMA lista do que ele ainda precisa
+  // decidir — só que sem botão, porque a bola está com o solicitante.
+  //
+  // Devolvida não é fila de decisão: é acompanhamento. Por isso sai da fila e
+  // ganha aba própria.
+  const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
+  const devolvidas = enriched.filter(ap => ap.req.status === 'Em correção');
+  const ABAS = [
+    { key: 'decidir' as const, label: 'Para decidir', n: paraDecidir.length },
+    { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
+    // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
+    // decidiu. Sem essa autoridade, a aba nem existe.
+    ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididas.length }] : []),
+  ];
+  type AbaKey = 'decidir' | 'devolvidas' | 'decididas';
+  const [aba, setAba] = useState<AbaKey | null>(null);
+  const abaAtiva: AbaKey = aba && ABAS.some(a => a.key === aba) ? aba : 'decidir';
+  const visiveis = abaAtiva === 'devolvidas' ? devolvidas : paraDecidir;
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -280,11 +304,32 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
         </div>
       )}
 
-      {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
-        <EmptyState message="Nenhuma aprovação pendente" />
+      {isLoading ? <LoadingSpinner /> : (
+      <>
+      {/* Pílulas no padrão da casa (as mesmas de Requisições > Do Setor). */}
+      <div className="flex gap-2 flex-wrap shrink-0">
+        {ABAS.map(a => {
+          const ativa = a.key === abaAtiva;
+          return (
+            <button key={a.key} onClick={() => setAba(a.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
+              }`}>
+              {a.key === 'devolvidas' && <RotateCcw size={14} />}
+              {a.label}
+              <span className="text-[11px] font-bold tabular-nums text-gray-500">{a.n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {abaAtiva !== 'decididas' && (visiveis.length === 0 ? (
+        <EmptyState message={abaAtiva === 'devolvidas'
+          ? 'Nada devolvido para correção — o que você mandar consertar fica aqui até o solicitante reenviar.'
+          : 'Nenhuma aprovação pendente'} />
       ) : (
         <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pr-2 pb-6">
-          {enriched.map(ap => {
+          {visiveis.map(ap => {
             const req = ap.req;
             const isExpanded = expanded === ap.id;
             const isProcessing = processing === ap.id;
@@ -458,19 +503,22 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Decisões já tomadas — só para a direção. O gerente não desfaz a
           própria decisão: se pudesse, aprovar deixaria de ser um ato. */}
-      {podeDevolver && decididas.length > 0 && (
-        <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
+      {abaAtiva === 'decididas' && (
+        <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col flex-1 min-h-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
           <p className="text-xs text-gray-500 mt-1 mb-4">
             Erro de gerente não precisa travar a aula: devolver desfaz a decisão e o card volta para a
             fila dele com o seu motivo. Excluir é o último recurso — some com o documento e com a
             correspondência dele nas outras telas.
           </p>
-          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto main-scrollbar pr-1">
+          {decididas.length === 0 && (
+            <p className="text-xs text-gray-600">Nenhuma decisão tomada nesta unidade ainda.</p>
+          )}
+          <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-1">
             {decididas.slice(0, 15).map(ap => {
               const req = requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
               const negado = ap.status === 'Negado';
@@ -520,6 +568,8 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             </p>
           )}
         </div>
+      )}
+      </>
       )}
     </motion.div>
   );
