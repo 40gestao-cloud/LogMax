@@ -16,6 +16,7 @@ ERP PWA didático (React 19 + Vite + Tailwind v4 + Supabase + Vercel). Deploy au
   - `filiais.ts` (mapa SuperMax/MaxLook/TechMax + prefixo SKU), `cadastrosSelect.ts` (`groupCadastrosParaSelect`)
   - `dates.ts` (fuso Acre), `pontoHorarios.ts`
   - `produtoImagem.ts`, `perfilFoto.ts`, `barcode.ts`, `viewUtils.ts`, `sentry.ts`
+  - `naoInterromper.ts` — quando NÃO interromper o aluno (reload da PWA e modais que abrem sozinhos). Tela que guarda trabalho não gravado **sem campo na tela** (carrinho, lista de itens em memória) declara com `useTravaAtualizacao`; campo preenchido a rede genérica já apanha. Busca/filtro fora da régua via placeholder "Buscar…" ou `data-trava-atualizacao="nao"`.
 - **`src/utils/audioUtils.ts`** — sons de UI (alarm/kaching/timer-end).
 
 ### Backend serverless (`api/`)

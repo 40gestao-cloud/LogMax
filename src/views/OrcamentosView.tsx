@@ -4,6 +4,7 @@ import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -107,6 +108,11 @@ const OrcamentosViewInner = ({
   // Form
   const [form, setForm] = useState({ cliente_id: '', validade_dias: '3' });
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
+  // Item já adicionado não tem campo na tela — é linha numa lista em memória, e
+  // por isso a rede genérica de "campo preenchido" não o vê. Uma proposta com
+  // seis produtos escolhidos some inteira se a PWA recarregar por baixo.
+  useTravaAtualizacao(itens.length > 0, 'orcamento-em-montagem',
+    'há um orçamento em montagem, ainda sem enviar');
   const [extras, setExtras] = useState({ desconto: '', observacoes: '' });
   const [produtoBusca, setProdutoBusca] = useState('');
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
