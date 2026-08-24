@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Bell, X, Check, CheckCheck, AlertCircle, Inbox,
-  Megaphone, ClipboardList, Monitor,
+  Megaphone, ClipboardList, Monitor, RotateCcw, GraduationCap, Sunrise, CalendarClock,
 } from 'lucide-react';
 import { useNotificacoes, type Notificacao } from '../hooks/useNotificacoes';
 import { useTheme } from '../contexts/ThemeContext';
@@ -26,6 +26,12 @@ const TIPO_ICON: Record<Notificacao['tipo'], any> = {
   ti_chamado:         Monitor,
   ti_resolvido:       Check,
   info:               Bell,
+  treinamento_atribuido: GraduationCap,
+  briefing_diario:       Sunrise,
+  justificativa_falta:   CalendarClock,
+  // Devolvido não é reprovado (migr. 517/518): o documento voltou para
+  // conserto, não foi recusado. Ícone e cor dizem isso antes do texto.
+  devolvido_correcao:    RotateCcw,
 };
 
 const TIPO_COLOR: Record<Notificacao['tipo'], string> = {
@@ -38,6 +44,10 @@ const TIPO_COLOR: Record<Notificacao['tipo'], string> = {
   ti_chamado:         'text-blue-400',
   ti_resolvido:       'text-accent',
   info:               'text-gray-400',
+  treinamento_atribuido: 'text-purple-400',
+  briefing_diario:       'text-blue-400',
+  justificativa_falta:   'text-yellow-400',
+  devolvido_correcao:    'text-amber-400',
 };
 
 const TIPO_LABEL: Record<Notificacao['tipo'], string> = {
@@ -50,6 +60,10 @@ const TIPO_LABEL: Record<Notificacao['tipo'], string> = {
   ti_chamado:         'Chamado de TI',
   ti_resolvido:       'TI resolvido',
   info:               'Aviso',
+  treinamento_atribuido: 'Treinamento',
+  briefing_diario:       'Briefing',
+  justificativa_falta:   'Justificativa de falta',
+  devolvido_correcao:    'Devolvido para correção',
 };
 
 const formatRelative = (iso: string) => {

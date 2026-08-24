@@ -4,10 +4,15 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 export type Notificacao = {
   id: string;
   setor: string;
+  // Espelha `chk_notif_tipo` no banco. Os quatro últimos existiam na CHECK e
+  // faltavam aqui — e o mapa de ícones do sino é indexado por este tipo, então
+  // notificação de treinamento ou briefing chegava com ícone `undefined`.
   tipo:
     | 'aprovacao_pendente' | 'aprovado' | 'reprovado'
     | 'mensagem_setor' | 'tarefa_atribuida' | 'tarefa_concluida'
-    | 'ti_chamado' | 'ti_resolvido' | 'info';
+    | 'ti_chamado' | 'ti_resolvido' | 'info'
+    | 'treinamento_atribuido' | 'briefing_diario' | 'justificativa_falta'
+    | 'devolvido_correcao';
   titulo: string;
   mensagem?: string | null;
   link_view?: string | null;

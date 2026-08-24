@@ -16,6 +16,7 @@ import { unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, nor
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque } from '../lib/tipoProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { isConselheiro } from '../lib/rbac';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
 //
@@ -245,6 +246,22 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   });
   const [reenviando, setReenviando] = useState(false);
   const corrFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(corrForm.unidade));
+
+  // Quem corrige a devolvida: quem a abriu — e mais ninguém do setor. Requisição
+  // é documento do setor para LER; para escrever, a autoria é de quem escreveu.
+  //
+  // Gerente e Matriz entram junto porque a RPC os aceita (migr. 517) e porque
+  // sem eles a fila trava quando o autor falta na aula seguinte: a requisição
+  // fica 'Em correção' para sempre, e o colega que enxerga o documento não tem
+  // como destravar. A tela escondia o botão até deles — o banco permitia e a
+  // interface não oferecia.
+  const podeCorrigir = (r: any) =>
+    !r.criadoPor
+    || r.criadoPor === profile?.id
+    || profile?.role === 'admin'
+    || profile?.role === 'ceo'
+    || profile?.role === 'gerente'
+    || isConselheiro(profile);
 
   const abrirCorrecao = (r: any) => {
     const bruta = data.find((x: any) => x.id === r.id);
@@ -986,14 +1003,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                                 Não foi negada — nada foi decidido. Corrija e reenvie: é o mesmo documento que
                                 volta para a fila do gerente.
                               </span>
-                              {(!r.criadoPor || r.criadoPor === profile?.id) ? (
+                              {podeCorrigir(r) ? (
                                 <button onClick={() => abrirCorrecao(r)}
                                   className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-amber-400 flex items-center gap-2 shrink-0">
                                   <RotateCcw size={12} /> Corrigir e reenviar
                                 </button>
                               ) : (
-                                <span className="text-[11px] text-gray-500 shrink-0">
-                                  Quem corrige é {r.solicitante || 'quem abriu'}.
+                                <span className="text-[11px] text-gray-500 shrink-0 text-right">
+                                  Quem corrige é <span className="text-gray-300 font-bold">{r.solicitante || 'quem abriu'}</span>.
+                                  <span className="block text-gray-600">O gerente destrava se faltar.</span>
                                 </span>
                               )}
                             </div>
