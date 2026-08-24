@@ -36,6 +36,7 @@ import {
 import { NotificationBell } from './components/NotificationBell';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { AvisoMatrizFAB } from './components/AvisoMatrizFAB';
+import { RequisicaoAvisoModal } from './components/RequisicaoAvisoModal';
 import { NovoDocumentoModal } from './components/NovoDocumentoModal';
 import { ConviteVagaFAB } from './components/ConviteVagaFAB';
 import { PedidoOnlineFAB } from './components/PedidoOnlineFAB';
@@ -1478,6 +1479,14 @@ function LogMaxAppInner() {
       {/* Convocação para vaga interna: nominal, então só aparece para quem o RH
           chamou. Mesmo motivo dos outros para sumir no Modo Aula. */}
       {!aulaFiltro && <ConviteVagaFAB profile={profile} showToast={showToast} />}
+
+      {/* Requisição devolvida (para quem a abriu) e requisição corrigida (para
+          quem decide). Vale TAMBÉM no Modo Aula: o fluxo de compra é conteúdo
+          da aula, e o recado que some ali é justamente o que fez a turma abrir
+          o mesmo pedido quatro vezes (migr. 520). A fila é por pessoa —
+          `criado_por` de um lado, gerente da unidade do outro —, então o Modo
+          Aula não muda quem recebe. */}
+      <RequisicaoAvisoModal profile={profile} showToast={showToast} activeView={activeView} onNavigate={navigate} />
     </div>
     </AIAssistantProvider>
   );
