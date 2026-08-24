@@ -18,7 +18,13 @@ type EnrichedAp = AprovacaoEstoque & {
   prod: Produto | undefined;
 };
 
-const AprovacoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp }) => {
+/** Qual pedaço da tela renderizar. Existe porque a mesma fila aparece em dois
+ *  lugares: aqui, dentro de Estoque, e como aba de Requisições > Aprovações,
+ *  onde o gerente decide tudo o que espera por ele num sítio só. Um componente
+ *  só, para as duas telas não divergirem com o tempo. */
+export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
+
+export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos' }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque }) => {
   const { data: aprovacoes, setData: setAprovacoes, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
   const { data: requisicoes, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
@@ -139,12 +145,21 @@ const AprovacoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast:
     }
   };
 
+  const veFila      = mostrar === 'ambos' || mostrar === 'fila';
+  const veDecididas = mostrar === 'ambos' || mostrar === 'decididas';
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284).</p></div>
-      </div>
-      {enriched.length === 0 ? <EmptyState message="Nenhuma aprovação pendente" /> : (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className={mostrar === 'ambos'
+        ? 'flex flex-col h-full gap-8'
+        // Como aba de outra tela, quem manda na altura é a tela de fora.
+        : 'flex flex-col flex-1 min-h-0 gap-4'}>
+      {mostrar === 'ambos' && (
+        <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
+          <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284).</p></div>
+        </div>
+      )}
+      {veFila && (enriched.length === 0 ? <EmptyState message="Nenhum material esperando liberação" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto main-scrollbar pb-6">
           {enriched.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
@@ -172,10 +187,10 @@ const AprovacoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast:
             </motion.div>
           ))}
         </div>
-      )}
+      ))}
 
       {/* Decisões já tomadas — só para a direção. */}
-      {podeDevolver && decididas.length > 0 && (
+      {veDecididas && podeDevolver && decididas.length > 0 && (
         <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
           <p className="text-xs text-gray-500 mt-1 mb-4">
@@ -248,5 +263,5 @@ const AprovacoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast:
 export const AprovacoesEstoqueView = ({ showToast, profile }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A liberação de material do almoxarifado" />;
-  return <AprovacoesEstoqueViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
+  return <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filialAtiva} />;
 };

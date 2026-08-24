@@ -67,6 +67,19 @@ const BADGE_DEFS: BadgeDef[] = [
     listenTables: ['aprovacoes_compras', 'requisicoes'],
     filialColumn: 'filial',
   },
+  // A mesma tela também é a porta do material do almoxarifado (aba "Material
+  // do estoque"), então o número no menu tem de contar os dois documentos —
+  // senão a aba mostra fila e o menu diz que não há nada. O badge de
+  // 'estoque-liberarrequisições' continua: são duas portas para a mesma fila.
+  {
+    viewId: 'requisicoes-aprovações',
+    modulo: 'requisicoes',
+    table: 'aprovacoes_estoque',
+    filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
+    select: '*,requisicoes_estoque!inner(id)',
+    listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
+    filialColumn: 'filial',
+  },
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
   {

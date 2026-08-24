@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, RotateCcw } from 'lucide-react';
+import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, RotateCcw, Package } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -16,7 +16,8 @@ import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
-import type { AprovacaoCompras, Requisicao } from '../types/domain';
+import type { AprovacaoCompras, AprovacaoEstoque, Requisicao } from '../types/domain';
+import { AprovacoesEstoqueBloco } from './AprovacoesEstoqueView';
 
 type ShowToast = (msg: string, type: string, persist?: boolean) => void;
 
@@ -29,6 +30,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   // instante em que o gerente clicava — e o erro dele virava impasse, porque a
   // volta só existia em Requisições, outra tela, outro menu.
   const { data: decididas, reload: reloadDecididas } = useFetchData<AprovacaoCompras>('/api/minhasaprovacoesview', { status: ['Aprovado', 'Negado'], filial }, true);
+  // Só para o número da pílula: quem decide precisa ver que há material
+  // esperando SEM ter de clicar na aba. A fila em si é renderizada pelo
+  // componente de Estoque, que traz os seus próprios dados.
+  const { data: filaMaterial } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [processing, setProcessing] = useState<string | null>(null);
@@ -292,13 +297,20 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
   const devolvidas = enriched.filter(ap => ap.req.status === 'Em correção');
   const ABAS = [
-    { key: 'decidir' as const, label: 'Para decidir', n: paraDecidir.length },
+    { key: 'decidir' as const, label: 'Compra', n: paraDecidir.length },
+    // Material do almoxarifado (2026-08-24). São dois documentos diferentes e
+    // duas decisões diferentes — comprar não é entregar o que já está na
+    // prateleira, e liberar material dá baixa no estoque na hora. Mas quem
+    // decide os dois é a MESMA pessoa, e ela procurava a segunda fila em
+    // Estoque > Liberar Requisições, um módulo adiante. Aba, não mistura: os
+    // cards continuam com o vocabulário e os botões de cada fluxo.
+    { key: 'material' as const, label: 'Material do estoque', n: filaMaterial.length },
     { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
     // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
     // decidiu. Sem essa autoridade, a aba nem existe.
     ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididas.length }] : []),
   ];
-  type AbaKey = 'decidir' | 'devolvidas' | 'decididas';
+  type AbaKey = 'decidir' | 'material' | 'devolvidas' | 'decididas';
   const [aba, setAba] = useState<AbaKey | null>(null);
   const abaAtiva: AbaKey = aba && ABAS.some(a => a.key === aba) ? aba : 'decidir';
   const visiveis = abaAtiva === 'devolvidas' ? devolvidas : paraDecidir;
@@ -309,8 +321,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Requisições de compra aguardando sua decisão. Aprovar não compra nada —
-            libera Compras para cotar fornecedores.
+            Tudo o que espera a sua decisão, num sítio só. Em <span className="text-gray-300 font-semibold">Compra</span>,
+            aprovar não compra nada — libera Compras para cotar fornecedores. Em{' '}
+            <span className="text-gray-300 font-semibold">Material do estoque</span>, liberar entrega o que já
+            está na prateleira e baixa o saldo na hora.
           </p>
         </div>
       </div>
@@ -337,6 +351,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                 ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
               }`}>
               {a.key === 'devolvidas' && <RotateCcw size={14} />}
+              {a.key === 'material' && <Package size={14} />}
               {a.label}
               <span className="text-[11px] font-bold tabular-nums text-gray-500">{a.n}</span>
             </button>
@@ -344,7 +359,11 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
         })}
       </div>
 
-      {abaAtiva !== 'decididas' && (visiveis.length === 0 ? (
+      {abaAtiva === 'material' && (
+        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="fila" />
+      )}
+
+      {(abaAtiva === 'decidir' || abaAtiva === 'devolvidas') && (visiveis.length === 0 ? (
         <EmptyState message={abaAtiva === 'devolvidas'
           ? 'Nada devolvido para correção — o que você mandar consertar fica aqui até o solicitante reenviar.'
           : 'Nenhuma aprovação pendente'} />
@@ -616,6 +635,13 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             </p>
           )}
         </div>
+      )}
+
+      {/* E o outro documento, logo abaixo: quem desfaz uma decisão vem procurar
+          a outra no mesmo lugar. Liberação de material não volta — o material
+          já saiu da prateleira —, e o bloco explica isso onde a pergunta nasce. */}
+      {abaAtiva === 'decididas' && (
+        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="decididas" />
       )}
       </>
       )}
