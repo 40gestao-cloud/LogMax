@@ -592,18 +592,22 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // errado.
   const origemExigida = !editItem && ehVendavel(extras.tipo);
 
-  // Mas OFERECIDO para todo cadastro novo, qualquer tipo.
+  // Mas OFERECIDO para tudo que TEM SALDO — mercadoria e uso e consumo.
   //
   // Exigir e oferecer eram a mesma coisa, e isso tinha um preço: a compra
-  // eventual de material de consumo ou de um bem — papelaria, limpeza,
-  // ferramenta, ar-condicionado, que é a maioria das eventuais — não via o
+  // eventual de material de consumo — papelaria, limpeza, embalagem — não via o
   // campo, então o vínculo da migr. 494 não nascia aqui. O comprador cadastrava
   // o produto, voltava para Compras > Cotações e o Gerar Pedido continuava
   // perguntando o item do catálogo — exatamente a fricção que a 494 existe para
-  // matar, sobrevivendo por um tipo de produto. A RPC `vincular_produto_requisicao`
-  // nunca olhou `tipo`, e o select do modal de Compras já aceitava qualquer um:
-  // o que faltava era esta tela deixar o vínculo nascer no lugar certo.
-  const origemOferecida = !editItem;
+  // matar, sobrevivendo por um tipo de produto.
+  //
+  // Patrimônio fica FORA, e a régua é `temEstoque`: o que não tem saldo não
+  // entra pelo fluxo de compra. Bem de uso tem duas portas próprias — conta a
+  // pagar marcada como imobilizado e a montagem da unidade (migr. 510/511) —, e
+  // o pedido recusa apontar para ele desde a migr. 515. Oferecer o vínculo aqui
+  // seria construir o beco: cadastro salvo, requisição amarrada, e a recusa só
+  // aparecendo na frente do Gerar Pedido.
+  const origemOferecida = !editItem && temEstoque(extras.tipo);
 
   // A régua acima criaria um beco se não houvesse NADA para escolher: nenhuma
   // requisição esperando, nenhum item já chegado, e a unidade não está mais em
@@ -1698,7 +1702,19 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   <FormField label="Tipo *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.tipo}
-                      onChange={e => setExtras(x => ({ ...x, tipo: normalizarTipo(e.target.value) }))}>
+                      onChange={e => {
+                        const t = normalizarTipo(e.target.value);
+                        setExtras(x => ({ ...x, tipo: t }));
+                        // Virou bem de uso: a origem escolhida deixa de existir
+                        // (migr. 515). Deixá-la pendurada faria o Salvar chamar
+                        // `vincular_produto_requisicao` só para receber a recusa
+                        // e avisar, depois de gravar, que o vínculo não saiu.
+                        if (!temEstoque(t) && itemCompradoSel) {
+                          setItemCompradoSel('');
+                          setNomeDestravado(false);
+                          setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
+                        }
+                      }}>
                       {TIPOS_PRODUTO.map(t => (
                         <option key={t} value={t}>{TIPO_LABEL[t]}</option>
                       ))}
@@ -1809,6 +1825,18 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         pedido: abra uma requisição em{' '}
                         <span className="font-bold">Requisições &gt; Do Setor &gt; Compra eventual</span>,
                         espere a cotação ser aprovada, e volte aqui — o item aparece nesta lista.
+                      </div>
+                    </FormField>
+                  )}
+                  {!editItem && !temEstoque(extras.tipo) && itensAguardandoPedido.length > 0 && (
+                    <FormField label="Origem deste cadastro">
+                      <div className="neu-pressed rounded-xl p-3 border border-white/5 text-[11px] text-gray-400 leading-snug">
+                        Bem de uso não entra pelo fluxo de compra: ele não tem saldo, e o Confirmar do
+                        recebimento daria entrada de mercadoria num item que nunca vai ter saldo. A
+                        aquisição se registra em <span className="font-bold">Financeiro &gt; Contas a Pagar</span>,
+                        marcando a conta como imobilizado — o bem aparece em Financeiro &gt; Patrimônio, com
+                        vida útil e depreciação. Se isto aqui é mercadoria ou material de consumo, corrija o
+                        Tipo acima e a lista de requisições volta.
                       </div>
                     </FormField>
                   )}
