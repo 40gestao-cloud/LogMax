@@ -1544,6 +1544,58 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   const margemAoVivo = calcMargem(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const isFormOpen = showForm || !!editItem;
 
+  // ── Devolver o número quando o cadastro é abandonado ───────────────────────
+  //
+  // `closeForm` já devolve no Cancelar e no Salvar. O que escapava era o
+  // abandono sem clique: trocar de módulo (desmonta a view), fechar a aba,
+  // recarregar a PWA. Nesses casos o número ficava fora da fila até vencer a
+  // reserva — e, com o heartbeat renovando de 10 em 10 minutos, uma aba
+  // esquecida aberta segurava o número indefinidamente.
+  //
+  // O ref existe porque o cleanup do efeito lê o valor no momento em que a tela
+  // morre, não o da renderização em que o efeito foi criado.
+  const codigoReservadoRef = useRef<string | null>(null);
+  useEffect(() => { codigoReservadoRef.current = codigoReservado; }, [codigoReservado]);
+
+  // Token capturado enquanto o formulário está aberto: no `pagehide` não dá
+  // para esperar `getSession()` — é assíncrono, e a aba já foi.
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isFormOpen || !supabase) return;
+    supabase.auth.getSession().then(({ data }) => { tokenRef.current = data.session?.access_token ?? null; });
+  }, [isFormOpen]);
+
+  useEffect(() => {
+    // `fetch` com keepalive, e não a RPC do supabase-js: a requisição do
+    // cliente é cancelada junto com a aba, e é justamente no fechar que o
+    // número precisa voltar.
+    const devolverNoUnload = () => {
+      const codigo = codigoReservadoRef.current;
+      const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      if (!codigo || !url || !key || !tokenRef.current) return;
+      fetch(`${url}/rest/v1/rpc/liberar_codigo_produto`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: key,
+          Authorization: `Bearer ${tokenRef.current}`,
+        },
+        body: JSON.stringify({ p_filial: filial, p_codigo: codigo }),
+      }).catch(() => {});
+    };
+    // `pagehide` e não `beforeunload`: no iOS o segundo não dispara, e é tablet
+    // que a turma usa.
+    window.addEventListener('pagehide', devolverNoUnload);
+    return () => {
+      window.removeEventListener('pagehide', devolverNoUnload);
+      // Saiu da tela (trocou de módulo ou de unidade) com o formulário aberto:
+      // aqui a chamada normal ainda tem tempo de completar.
+      liberarCodigo(codigoReservadoRef.current);
+    };
+  }, [filial]);
+
   // O formulário fica ACIMA da tabela. Clicar em editar numa linha do fim da
   // lista abria o form fora da viewport, e o operador tinha de rolar até o topo
   // para descobrir que alguma coisa havia acontecido. Mesmo padrão de
