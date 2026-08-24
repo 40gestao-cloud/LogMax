@@ -930,7 +930,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                 <AnimatePresence>
                   {enrichedFiltered.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-200 min-w-[13rem]">
                         {/* A cotação tem número próprio e cita a requisição de
                             onde nasceu: as duas pontas da conversa entre Compras
                             e Financeiro numa linha só. */}
@@ -957,7 +957,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         </div>
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">
+                      <td className="py-3 px-4 text-xs text-gray-400 min-w-[9rem]">
                         <div className="flex flex-col gap-0.5">
                           <span>{item.forn?.nome ?? '—'}</span>
                           {desempenhoDisponivel && item.fornecedor_id && (
@@ -965,7 +965,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
                           <span>R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
                           {item.status === 'Aguardando Financeiro' && (() => {
@@ -992,42 +992,53 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-500 font-mono">{item.validade || '—'}</td>
-                      <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
+                      <td className="py-3 px-4 text-xs text-gray-500 font-mono whitespace-nowrap">{item.validade || '—'}</td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-xs max-w-xs">
                         {item.feedback
                           ? <span className="text-gray-400 italic line-clamp-2" title={item.feedback}>“{item.feedback}”</span>
                           : <span className="text-gray-700">—</span>}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Os botões rotulados desta célula empurravam as oito
+                            colunas da esquerda e quebravam o nome do item em
+                            duas linhas: três rótulos ("Aprovar", "Reprovar",
+                            "Devolver") somam mais largura do que a coluna de
+                            ações merece. Abaixo de 2xl eles viram só o ícone,
+                            com o mesmo `title` — o texto volta quando há tela
+                            para ele. `opacity-0` também saiu: em tablet, sem
+                            hover, os botões nunca apareciam. */}
+                        <div className="flex justify-end items-center gap-1.5 flex-nowrap whitespace-nowrap opacity-60 group-hover:opacity-100 transition-opacity">
                           <HistoricoOperacoes entidade="cotacoes" entidadeId={item.id} titulo={`${numeroCotacao(item)} · ${item.req?.item ?? 'Cotação'}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                           {/* Aguardando Financeiro: gerente do Financeiro decide */}
                           {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'aprovar' }); setFeedbackInput(''); }}
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors flex items-center gap-1">
-                                <Check size={11} /> Aprovar
+                                title="Aprovar a proposta"
+                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-emerald-400 hover:bg-emerald-400/10">
+                                <Check size={12} /> <span className="hidden 2xl:inline">Aprovar</span>
                               </button>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'reprovar' }); setFeedbackInput(''); }}
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-1">
-                                <X size={11} /> Reprovar
+                                title="Reprovar a proposta"
+                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-red-400 hover:bg-red-400/10">
+                                <X size={12} /> <span className="hidden 2xl:inline">Reprovar</span>
                               </button>
                               {/* Erro de digitação não é recusa do fornecedor:
                                   devolve para quem cadastrou em vez de matar a
                                   proposta (migr. 467). */}
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'devolver' }); setFeedbackInput(''); }}
                                 title="Devolver para Compras corrigir — a proposta continua viva"
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center gap-1">
-                                <CornerUpLeft size={11} /> Devolver
+                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-amber-400 hover:bg-amber-400/10">
+                                <CornerUpLeft size={12} /> <span className="hidden 2xl:inline">Devolver</span>
                               </button>
                             </>
                           )}
                           {/* Devolvida: quem cadastrou corrige e reenvia */}
                           {item.status === 'Em correção' && podeCorrigir(item) && (
                             <button onClick={() => abrirCorrecao(item)}
-                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-400/10 border border-amber-400/15 transition-colors flex items-center gap-1">
-                              <Pencil size={11} /> Corrigir
+                              title="Corrigir e reenviar ao Financeiro"
+                              className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-amber-400 hover:bg-amber-400/10 border border-amber-400/15">
+                              <Pencil size={12} /> <span className="hidden 2xl:inline">Corrigir</span>
                             </button>
                           )}
                           {item.status === 'Em correção' && item.feedback && (
@@ -1049,9 +1060,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           {/* Aprovado e ainda sem pedido → Compras gera */}
                           {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && isCompras && (
                             <button onClick={() => handleGerarPedido(item)} disabled={generating === item.id}
-                              className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 transition-colors flex items-center gap-1 disabled:opacity-50">
-                              {generating === item.id ? <Loader2 size={11} className="animate-spin" /> : <ShoppingBag size={11} />}
-                              Gerar Pedido
+                              title="Gerar o pedido de compra desta cotação"
+                              className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 disabled:opacity-50">
+                              {generating === item.id ? <Loader2 size={12} className="animate-spin" /> : <ShoppingBag size={12} />}
+                              <span className="hidden 2xl:inline">Gerar Pedido</span>
                             </button>
                           )}
                           {/* Negado com feedback longo: botão pra ver o motivo completo */}

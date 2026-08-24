@@ -17,6 +17,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { usePrompt } from '../contexts/PromptContext';
 import { isConselheiro } from '../lib/rbac';
+import { formatDataHoraBR } from '../lib/dates';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -58,6 +59,16 @@ const ProdutoResumo = ({ produto }: { produto: any }) => {
     </div>
   );
 };
+
+// Um campo da ficha da requisição: rótulo pequeno em cima, valor embaixo.
+// Existe porque a linha da tabela trunca (e tem de truncar) — a ficha é o
+// lugar onde nada fica cortado.
+const Campo = ({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) => (
+  <div>
+    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block">{rotulo}</span>
+    <span className="text-xs text-gray-200 break-words">{valor ?? '—'}</span>
+  </div>
+);
 
 const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -246,7 +257,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
           <p className="text-sm text-gray-400 mt-1">
             Fila da filial. Quem pede é a área que precisa, em Requisições &rarr; Do Setor; aqui Compras confere,
             corrige e leva para cotação — é o <strong className="text-gray-300">mesmo documento</strong>, visto pelo
-            papel de quem executa a compra. Clique na linha para ver em que etapa ela está e por que foi pedida.
+            papel de quem executa a compra. Clique na linha para abrir a ficha completa: o item sem corte, a ficha do produto, a quantidade, quem pediu, o prazo e em que etapa está.
           </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
@@ -382,7 +393,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         <span className="flex items-center gap-1.5">
                           <ChevronRight size={13}
                             className={`text-gray-500 shrink-0 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
-                          <span className="block truncate">{item.item}</span>
+                          <span className="block truncate" title={item.item}>{item.item}</span>
                         </span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
@@ -451,38 +462,123 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                     </motion.tr>
                     {aberto === item.id && (
                       <tr className="border-b border-white/5 bg-white/[0.02]">
-                        <td colSpan={9} className="py-3 px-4">
-                          {/* Em correção não tem botão nesta tela (2026-08-24)
-                              — Compras não corrige o texto de outro setor, só
-                              acompanha. Sem esta linha a requisição ficava
-                              muda: etiqueta e nenhuma explicação de por quê
-                              nada mais aparece nela. */}
-                          {item.status === 'Em correção' && (
-                            <div className="neu-pressed p-3 rounded-xl border border-amber-400/20 mb-3">
-                              <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
-                                Devolvida — está com {item.solicitante || 'o solicitante'}
-                              </span>
-                              <span className="text-xs text-gray-300">
-                                {item.correcao_motivo || 'Aguardando correção.'}
-                              </span>
-                              <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
-                                Não há o que fazer aqui agora: quando {item.solicitante || 'o solicitante'} reenviar,
-                                o documento volta para a fila do gerente em Requisições &gt; Aprovações.
-                              </span>
+                        <td colSpan={9} className="py-4 px-4">
+                          {(() => {
+                            // A linha da tabela trunca o nome do item — precisa
+                            // truncar, senão nove colunas não cabem. Aqui é o
+                            // avesso: a requisição inteira, sem corte, para quem
+                            // vai cotar decidir com o que foi realmente pedido.
+                            const prod = produtosOrdenados.find((p: any) =>
+                              (item.produto_id && p.id === item.produto_id) || p.nome === item.item);
+                            return (
+                          <div className="flex flex-col gap-4">
+                            {/* Cabeçalho: o nome inteiro, quebrando linha se
+                                precisar. É a informação que faltava. */}
+                            <div>
+                              <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
+                              <h4 className="text-sm sm:text-base font-bold text-gray-100 leading-snug break-words">{item.item}</h4>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                {item.tipo_requisicao && (
+                                  <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                                    item.tipo_requisicao === 'Reposição'
+                                      ? 'bg-emerald-500/15 text-emerald-400'
+                                      : 'bg-purple-500/15 text-purple-400'
+                                  }`}>
+                                    {item.tipo_requisicao}
+                                  </span>
+                                )}
+                                {item.servico_id && (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-400">
+                                    Serviço
+                                  </span>
+                                )}
+                                {prod?.codigo && (
+                                  <span className="font-mono text-[10px] text-gray-500">cód. {prod.codigo}</span>
+                                )}
+                                {!prod && !item.servico_id && (
+                                  <span className="text-[10px] text-gray-500">Item fora do catálogo — descrito pelo solicitante</span>
+                                )}
+                              </div>
+                              <ProdutoResumo produto={prod} />
                             </div>
-                          )}
-                          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
-                            Onde está
-                          </span>
-                          <FluxoCompra etapa={etapaDaRequisicao(item.status)} />
-                          {item.justificativa && (
-                            <div className="mt-3">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
-                                Por que foi pedido
-                              </span>
-                              <span className="text-xs text-gray-300">{item.justificativa}</span>
+
+                            {/* A ficha. Tudo o que a requisição guarda, inclusive
+                                o que a tabela esconde em tela pequena. */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                              <Campo rotulo="Quantidade" valor={`${qtdBR(item.qtd)} ${normalizarUnidade(item.unidade)}`} />
+                              <Campo rotulo="Urgência" valor={<UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} />} />
+                              <Campo rotulo="Status" valor={<StatusBadge status={item.status} />} />
+                              <Campo rotulo="Centro de custo" valor={item.centro_custo || '—'} />
+                              <Campo rotulo="Solicitante" valor={item.solicitante || '—'} />
+                              <Campo rotulo="Setor" valor={item.setor_solicitante || '—'} />
+                              <Campo rotulo="Unidade" valor={item.filial || filial} />
+                              <Campo rotulo="Aberta em" valor={<span className="font-mono">{item.data || '—'}</span>} />
+                              <Campo rotulo="Necessário até" valor={<span className="font-mono">{item.data_necessidade || '—'}</span>} />
+                              {item.reenviada_em && (
+                                <Campo rotulo="Reenviada em" valor={<span className="font-mono">{formatDataHoraBR(item.reenviada_em)}</span>} />
+                              )}
+                              {item.updated_at && (
+                                <Campo rotulo="Última alteração" valor={<span className="font-mono">{formatDataHoraBR(item.updated_at)}</span>} />
+                              )}
                             </div>
-                          )}
+
+                            {/* Na reposição o saldo é o motivo — ninguém escreveu
+                                justificativa, e nem precisava. */}
+                            {item.saldo_no_pedido != null && (
+                              <div>
+                                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+                                  Saldo quando foi pedido
+                                </span>
+                                <span className="text-xs text-gray-300">
+                                  <strong className={Number(item.minimo_no_pedido) > 0 && Number(item.saldo_no_pedido) <= Number(item.minimo_no_pedido) ? 'text-red-400' : 'text-gray-200'}>
+                                    {qtdBR(item.saldo_no_pedido)}
+                                  </strong>
+                                  {item.minimo_no_pedido != null && Number(item.minimo_no_pedido) > 0 && (
+                                    <> em estoque, para um mínimo de <strong className="text-gray-200">{qtdBR(item.minimo_no_pedido)}</strong></>
+                                  )}
+                                  {' '}{normalizarUnidade(item.unidade)}
+                                </span>
+                              </div>
+                            )}
+
+                            {item.justificativa && (
+                              <div>
+                                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+                                  Por que foi pedido
+                                </span>
+                                <span className="text-xs text-gray-300 break-words">{item.justificativa}</span>
+                              </div>
+                            )}
+
+                            {/* Em correção não tem botão nesta tela (2026-08-24)
+                                — Compras não corrige o texto de outro setor, só
+                                acompanha. Sem esta linha a requisição ficava
+                                muda: etiqueta e nenhuma explicação de por quê
+                                nada mais aparece nela. */}
+                            {item.status === 'Em correção' && (
+                              <div className="neu-pressed p-3 rounded-xl border border-amber-400/20">
+                                <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                                  Devolvida — está com {item.solicitante || 'o solicitante'}
+                                </span>
+                                <span className="text-xs text-gray-300">
+                                  {item.correcao_motivo || 'Aguardando correção.'}
+                                </span>
+                                <span className="block text-[11px] text-gray-500 mt-2 leading-snug">
+                                  Não há o que fazer aqui agora: quando {item.solicitante || 'o solicitante'} reenviar,
+                                  o documento volta para a fila do gerente em Requisições &gt; Aprovações.
+                                </span>
+                              </div>
+                            )}
+
+                            <div>
+                              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1.5">
+                                Onde está
+                              </span>
+                              <FluxoCompra etapa={etapaDaRequisicao(item.status)} />
+                            </div>
+                          </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     )}

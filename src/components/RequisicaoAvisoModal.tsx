@@ -211,7 +211,7 @@ export function RequisicaoAvisoModal({ profile, showToast, activeView, onNavigat
                   <p className="text-[11px] text-gray-500 leading-snug">
                     O solicitante corrigiu o que você pediu e devolveu o documento para a sua fila.
                     {aviso.tipo === 'estoque'
-                      ? ' Ele espera Aprovar ou Negar em Requisições > Aprovações, aba "Material do estoque".'
+                      ? ' Ele espera Aprovar ou Negar em Requisições > Aprovações, aba "Material a liberar".'
                       : ' Ele espera Aprovar ou Negar em Requisições > Aprovações, aba "Para decidir".'}
                   </p>
                 )}

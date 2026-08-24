@@ -333,14 +333,18 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
   const devolvidas = enriched.filter(ap => ap.req.status === 'Em correção');
   const ABAS = [
-    { key: 'decidir' as const, label: 'Compra', n: paraDecidir.length },
+    // "Compra" nomeava o assunto, não a pendência: numa tela de aprovações
+    // toda linha é uma requisição de compra, então o rótulo não dizia nada ao
+    // gerente sobre o que falta ali. Agora as duas primeiras abas nomeiam o
+    // verbo que se espera dele — aprovar a compra, liberar o material.
+    { key: 'decidir' as const, label: 'Compras a aprovar', n: paraDecidir.length },
     // Material do almoxarifado (2026-08-24). São dois documentos diferentes e
     // duas decisões diferentes — comprar não é entregar o que já está na
     // prateleira, e liberar material dá baixa no estoque na hora. Mas quem
     // decide os dois é a MESMA pessoa, e ela procurava a segunda fila em
     // Estoque > Liberar Requisições, um módulo adiante. Aba, não mistura: os
     // cards continuam com o vocabulário e os botões de cada fluxo.
-    { key: 'material' as const, label: 'Material do estoque', n: filaMaterial.length },
+    { key: 'material' as const, label: 'Material a liberar', n: filaMaterial.length },
     { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
     // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
     // decidiu. Sem essa autoridade, a aba nem existe.
@@ -357,9 +361,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Tudo o que espera a sua decisão, num sítio só. Em <span className="text-gray-300 font-semibold">Compra</span>,
+            Tudo o que espera a sua decisão, num sítio só. Em <span className="text-gray-300 font-semibold">Compras a aprovar</span>,
             aprovar não compra nada — libera Compras para cotar fornecedores. Em{' '}
-            <span className="text-gray-300 font-semibold">Material do estoque</span>, liberar entrega o que já
+            <span className="text-gray-300 font-semibold">Material a liberar</span>, liberar entrega o que já
             está na prateleira e baixa o saldo na hora.
           </p>
         </div>
