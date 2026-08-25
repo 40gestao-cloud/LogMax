@@ -548,16 +548,34 @@ function buildPromptPendencias(linhas: PendenciaRow[], filial: string): string {
 async function handlePendencias(
   req: VercelRequest, res: VercelResponse, user: AuthedUser, log: Logger,
 ) {
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'gerente') {
     log.warn('pendencias.access_denied', { user_id: user.id, role: user.role });
-    return res.status(403).json({ error: 'O mapa de pendências é do professor (admin).' });
+    return res.status(403).json({ error: 'O mapa de pendências é do professor e do gerente da unidade.' });
   }
 
   const body = (req.body ?? {}) as any;
-  const filial = str(body.filial, 60);
+  let filial = str(body.filial, 60);
 
   const admin = getAdminClient(res);
   if (!admin) return;
+
+  // Migr. 527: aqui a RPC roda com service_role, então o guard dela passa
+  // batido — quem recorta é este bloco. Sem ele, o gerente pediria a leitura
+  // com `filial: null` e a IA leria as três unidades.
+  if (user.role === 'gerente') {
+    const { data: perfil } = await admin
+      .from('user_profiles').select('filial').eq('id', user.id).maybeSingle();
+    const minha = String((perfil as any)?.filial ?? '').trim();
+    if (!minha) {
+      log.warn('pendencias.gerente_sem_filial', { user_id: user.id });
+      return res.status(403).json({ error: 'Sua conta não está alocada em nenhuma unidade.' });
+    }
+    if (filial && filial !== minha) {
+      log.warn('pendencias.filial_alheia', { user_id: user.id, pedida: filial, minha });
+      return res.status(403).json({ error: `O gerente vê as pendências da própria unidade (${minha}).` });
+    }
+    filial = minha;
+  }
 
   // A lista vem do BANCO, não do cliente (mesma régua da 472). Se o front
   // mandasse as linhas, uma aba adulterada escolheria o que a IA lê — e o

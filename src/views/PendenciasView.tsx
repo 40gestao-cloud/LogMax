@@ -50,7 +50,12 @@ interface Props {
 }
 
 export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
-  const [filial, setFilial] = useState<string>('');
+  // Migr. 527: o professor atravessa as unidades; o gerente vê a dele. O
+  // seletor nasce travado na unidade do gerente porque a RPC recusa qualquer
+  // outra — deixar o select aberto seria oferecer um caminho que dá 42501.
+  const ehGerente = profile?.role === 'gerente';
+  const minhaFilial = String(profile?.filial ?? '');
+  const [filial, setFilial] = useState<string>(ehGerente ? minhaFilial : '');
   const [linhas, setLinhas] = useState<PendenciaLinha[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -181,14 +186,20 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
       <div className="neu-flat rounded-2xl p-4 border border-accent/15 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Unidade</label>
-          <select
-            value={filial}
-            onChange={e => setFilial(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none min-w-52"
-          >
-            <option value="">Todas as unidades</option>
-            {UNIDADES.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          {ehGerente ? (
+            <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 min-w-52">
+              {minhaFilial || '—'}
+            </div>
+          ) : (
+            <select
+              value={filial}
+              onChange={e => setFilial(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none min-w-52"
+            >
+              <option value="">Todas as unidades</option>
+              {UNIDADES.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          )}
         </div>
 
         <button

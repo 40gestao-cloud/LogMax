@@ -453,8 +453,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             "o que está parado e com quem?" é de qualquer terça-feira, não só de
             dia de aula. Primeiro nível, e só para o professor: a tela atravessa
             as três unidades e diz o nome de quem está devendo.
-            Mesmo componente da aba — uma tela, duas portas. */}
-        {profile?.role === 'admin' && (
+            Mesmo componente da aba — uma tela, duas portas.
+
+            Migr. 527: o gerente entra junto, mas só enxerga a unidade dele —
+            e quem recorta é a RPC, não este `if`. "O que está parado na minha
+            filial e com quem?" é o trabalho do gerente todo dia, não um
+            relatório sobre ele. */}
+        {(profile?.role === 'admin' || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
           </button>
