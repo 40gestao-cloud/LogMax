@@ -52,8 +52,21 @@ const BADGE_DEFS: BadgeDef[] = [
   // faixa de fila de trabalho mostra dentro da tela. A primeira é a carga que
   // ainda não chegou ao sistema; a segunda, a entrada lançada que ninguém
   // confirmou. Contar só a segunda escondia justamente a que ninguém avisava.
-  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' } },
-  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'pedidos',              filters: { status: 'Em Entrega' }, isNull: ['recebido_em'], filialColumn: 'filial' },
+  //
+  // As DUAS precisam de `filialColumn` — só a de pedidos tinha. Sem ela o
+  // `count` não filtra a unidade e a RLS é a única régua: quem enxerga mais de
+  // uma filial (admin, CEO, conselheiro) via na TechMax os 14 recebimentos por
+  // confirmar do SuperMax. O aluno confirmava tudo o que a tela mostrava e o
+  // número no menu não baixava — "confirmei e continua aparecendo". A faixa
+  // dentro da tela sempre filtrou pela filial; era o menu que discordava dela.
+  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  // A segunda fila lê a view da migr. 530 e não a tabela: "em entrega e sem
+  // recebido_em" também pega o pedido cuja carga JÁ foi toda lançada e só
+  // espera conferência — e esse já está contado na primeira fila. A view põe o
+  // saldo na régua, que é a mesma coisa que a faixa dentro da tela pergunta.
+  // `listenTables` volta a nomear as tabelas reais: realtime não emite evento
+  // de view.
+  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'v_pedidos_a_receber',  filters: {}, filialColumn: 'filial', listenTables: ['pedidos', 'recebimentos'] },
 
   // ─── Requisições ──────────────────────────────────────────────────────────
   // Caixa de decisão do gerente. Mora no módulo Requisições desde que ele
@@ -92,13 +105,13 @@ const BADGE_DEFS: BadgeDef[] = [
     filialColumn: 'filial',
   },
   { viewId: 'estoque-requisiçõesdematerial', modulo: 'estoque', table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' } },
+  { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' }, filialColumn: 'filial' },
 
   // ─── Financeiro ───────────────────────────────────────────────────────────
   { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
-  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
-  { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' } },
+  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' }, filialColumn: 'filial' },
+  { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' }, filialColumn: 'filial' },
   // Pedidos de Venda chega no Financeiro pra registrar pagamento: conta o que
   // ainda não foi recebido. Mesmo recorte que PedidosVendaView mode="financeiro".
   { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: {}, isNull: ['pago_em'], neq: { status: 'Cancelado' }, filialColumn: 'filial' },
@@ -109,7 +122,7 @@ const BADGE_DEFS: BadgeDef[] = [
   { viewId: 'metas',      modulo: 'all', table: 'metas_estrategicas', filters: { status: 'Em Produção' } },
 
   // ─── RH ───────────────────────────────────────────────────────────────────
-  { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' } },
+  { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' }, filialColumn: 'filial' },
 
   // ─── Estoque (extra) ──────────────────────────────────────────────────────
   // Pedidos aguardando a logística separar. Mesmo recorte que
@@ -123,7 +136,7 @@ const BADGE_DEFS: BadgeDef[] = [
   // o badge não tinha onde aparecer.
 
   // ─── Marketing ────────────────────────────────────────────────────────────
-  { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' } },
+  { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' }, filialColumn: 'filial' },
   // 'Tarefas' do marketing usa a tabela própria marketing_tarefas — status_link
   // 'Aguardando Aprovação' já vira o badge 'financeiro-aprovaçõesdeconteúdo';
   // não duplicamos aqui pra não inflar dois badges com a mesma fila.

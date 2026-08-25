@@ -129,14 +129,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // Lista sem paginação só para os contadores: a tabela mostra 50 por vez e um
   // "nada a fazer" calculado sobre a página 1 é pior que contador nenhum.
   const { data: todosRecebimentos } = useFetchData<any>('/api/recebimentosview', { filial }, true);
-  // `recebido_em` é carimbado só na virada para 'Recebido' (migr. 421), então
-  // "em entrega e sem essa data" é exatamente o que falta receber — e inclui o
-  // pedido parcialmente recebido, que a régua anterior ("nenhum recebimento
-  // ainda") deixava sumir da fila com saldo em aberto. É a mesma pergunta que
-  // a bolinha da barra lateral faz (migr. 457): badge e lista discordando
-  // sobre a mesma fila é bolinha que vira mentira.
-  const pedidosAReceber = pedidos.filter(
-    (p: any) => p.status === 'Em Entrega' && !p.recebido_em).length;
   const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
 
   // Fonte do botão "Gerar" do número de NF, nos três formulários que o
@@ -204,6 +196,27 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     setSaldos(map);
   }, [filial]);
   useEffect(() => { reloadSaldos(); }, [reloadSaldos, pedidos.length, data.length]);
+
+  // `recebido_em` é carimbado só na virada para 'Recebido' (migr. 421), então
+  // "em entrega e sem essa data" pega o pedido parcialmente recebido — que a
+  // régua ainda anterior ("nenhum recebimento ainda") deixava sumir da fila com
+  // saldo em aberto — mas pega também o pedido cuja carga JÁ foi toda lançada e
+  // só espera a conferência. Esse não está esperando carga: está esperando a
+  // linha de baixo desta mesma faixa. Contado nas duas, virava um número que o
+  // botão Registrar não sabia atender — o select de Pedido o mostra esgotado,
+  // porque o banco recusaria a entrada (`fn_recebimento_nao_estoura_pedido`).
+  //
+  // A régua passa a ser o saldo (migr. 530), a mesma que a view
+  // `v_pedidos_a_receber` dá à bolinha da barra lateral: badge e faixa
+  // discordando sobre a mesma fila é bolinha que vira mentira.
+  //
+  // Saldo ainda não carregado conta: a faixa é aviso, e esconder fila por causa
+  // de uma resposta em trânsito é pior que mostrá-la um segundo a mais.
+  const pedidosAReceber = pedidos.filter((p: any) => {
+    if (p.status !== 'Em Entrega' || p.recebido_em) return false;
+    const s = saldos[p.id];
+    return !s || s.qtd_saldo > 0.0005;
+  }).length;
 
   // Retorna quanto o item atual pode chegar a receber, sem estourar o pedido.
   // saldo já EXCLUI o próprio recebimento (a view soma todos ativos, então
@@ -619,12 +632,18 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   const desc = p.item_descricao ?? p.req?.item ?? '';
                   const s = saldos[p.id];
                   const sufSaldo = s ? ` — falta ${qtdBR(s.qtd_saldo)}/${qtdBR(s.qtd_pedida)}` : '';
-                  const esgotado = s && s.qtd_saldo <= 0;
+                  const esgotado = s && s.qtd_saldo <= 0.0005;
+                  // Esgotado sem dizer por quê fazia o aluno reler a lista à
+                  // procura da linha que sumiu. A carga inteira já foi lançada:
+                  // o que falta é confirmar a entrada na tabela abaixo, e é
+                  // isso que a opção cinza passa a dizer.
+                  const pendenteDeConfirmar = esgotado && todosRecebimentos.some(
+                    (r: any) => r.pedido_id === p.id && r.status === 'Pendente');
                   // Serviço na mesma lista, marcado (migr. 499): quem abre esta
                   // tela procura "o que chegou", e contratação não chega em
                   // caixa. O selo evita o susto de não achar a dedetização.
                   const selo = p.servico_id ? ' [serviço]' : '';
-                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{selo}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? ' (recebido totalmente)' : ''}</option>;
+                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{selo}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? (pendenteDeConfirmar ? ' (carga já lançada — falta confirmar abaixo)' : ' (recebido totalmente)') : ''}</option>;
                 })}</select></FormField>
                 {/* A unidade é a do produto do pedido — mercearia recebe 12,5 KG
                     (migr. 439). `type=number` recusava a vírgula do teclado pt-BR
