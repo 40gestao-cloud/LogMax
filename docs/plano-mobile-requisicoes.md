@@ -147,7 +147,7 @@ dependente de sensação de uso.
 
 | Fase | O que entra | Tamanho | Depende de |
 |---|---|---|---|
-| 1 | 1.4, 1.5, 1.6 — `min-w-0`, `truncate` e quebra de linha nos cards de Aprovações e de material | P | nada |
+| 1 ✅ | 1.4, 1.5, 1.6 — `min-w-0`, `truncate` e quebra de linha nos cards de Aprovações e de material | P | nada |
 | 2 | 1.1, 1.2, 1.3 — tabela do Do Setor responsiva + detalhe com largura de tela | M | decisão 2.1 |
 | 3 | 1.8 — empilhamento dos FABs compactado abaixo de `sm` | P | nada, mas mexe em 3 componentes globais |
 | 4 | 1.7 — catálogo de reposição | P/M | decisão 2.2 + teste em aparelho |
@@ -202,3 +202,26 @@ hoje em `VitrineCarousel`, para `prefers-reduced-motion`.
 - **FABs são globais.** Mexer no empilhamento afeta todas as telas, não só
   estas duas — a verificação tem de incluir uma tela de operação (PDV) para
   garantir que nada passou a cobrir o botão de finalizar.
+
+## 7. Fase 1 — executada em 2026-08-24
+
+Commit: (ver `git log`). Duas correções, não uma:
+
+- **`AprovacoesComprasView.tsx`** (o defeito 1.4/1.5 real): o botão do
+  cabeçalho do card ganhou `flex-wrap`; o bloco esquerdo (ícone + textos)
+  ganhou `min-w-0`, e o nome do item e a linha de solicitante ganharam
+  `truncate`. O bloco direito (badges + seta) ganhou `ml-auto` para cair numa
+  segunda linha quando o primeiro quebra, em vez de espremer.
+- **`AprovacoesEstoqueView.tsx`** — na releitura para implementar, o card da
+  fila de material (linha ~292) **já tinha `min-w-0`**; o item 1.6 do
+  levantamento original superestimou a gravidade ali (não impedia o uso, só
+  deixava o card crescer em altura sem cortar o texto). O que faltava era só
+  `truncate` no nome do produto e na linha de solicitante — adicionado, para
+  consistência com o resto da tela e com o card de "Decisões já tomadas" logo
+  abaixo, que já usava o padrão certo.
+
+**Não verificado em aparelho** — exige login de turma. `tsc --noEmit`, `npm
+test` (229 passando) e `npm run build` (produção, com PWA) limpos.
+
+Fases 2, 3 e 4 continuam não implementadas, aguardando ordem — a fase 2 segue
+precisando da decisão da seção 2.1 (régua de colunas x cards).

@@ -290,11 +290,17 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           {paraDecidir.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className="neu-flat rounded-2xl border border-white/5 p-5 flex flex-col gap-4">
+              {/* `min-w-0` já existia aqui; `truncate` é o que faltava —
+                  sem ele um nome de produto comprido quebrava em várias
+                  linhas e empurrava a altura do card, em vez de cortar como o
+                  resto da tela faz (o nome completo segue disponível no
+                  Histórico, ao lado). Mesmo ajuste do card de Aprovações de
+                  compra. */}
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
-                  <p className="text-sm font-bold text-gray-200">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-sm font-bold text-gray-200 truncate">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
                     Solicitante: {ap.req.solicitante ?? '—'} · Qtd: {ap.req.qtd} · Destino: {ap.req.destino || '—'}
                   </p>
                 </div>

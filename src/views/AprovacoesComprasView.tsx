@@ -418,19 +418,29 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                 className="neu-flat rounded-2xl border border-white/5">
                 <button
                   onClick={() => setExpanded(isExpanded ? null : ap.id)}
-                  className="w-full p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+                  className="w-full p-5 flex items-center justify-between gap-3 flex-wrap hover:bg-white/[0.02] transition-colors"
                 >
-                  <div className="flex items-center gap-4">
+                  {/* `min-w-0` é o que falta ao flex item para poder encolher
+                      abaixo do próprio conteúdo — sem ele, um nome de item
+                      comprido (que é a regra, não a exceção, num catálogo)
+                      empurrava os badges e a seta de expandir para fora da
+                      tela em mobile. `truncate` no nome evita a quebra feia; o
+                      nome completo já está na ficha, dentro do card expandido. */}
+                  <div className="flex items-center gap-4 min-w-0">
                     <div className="w-10 h-10 neu-circle flex items-center justify-center bg-accent/5 shrink-0">
                       <ClipboardList size={18} className="text-accent" />
                     </div>
-                    <div className="text-left">
+                    <div className="text-left min-w-0">
                       <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(req)}</p>
-                      <p className="text-sm font-bold text-gray-200">{req.item}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Solicitante: {req.solicitante} · Qtd: {req.qtd} · {req.data}</p>
+                      <p className="text-sm font-bold text-gray-200 truncate">{req.item}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">Solicitante: {req.solicitante} · Qtd: {req.qtd} · {req.data}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  {/* `flex-wrap` no botão pai (acima) deixa este bloco cair
+                      para uma segunda linha em vez de espremer o nome do item
+                      até sumir — mobile ganha duas linhas, desktop continua
+                      numa só porque a largura sobra. */}
+                  <div className="flex items-center gap-3 shrink-0 ml-auto">
                     {/* Devolvida conta a partir de quando voltou pro solicitante,
                         não de quando a requisição nasceu — é ali que o relógio da
                         fila do gerente recomeça a contar. */}
