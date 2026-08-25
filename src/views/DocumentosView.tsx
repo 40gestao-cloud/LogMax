@@ -14,6 +14,7 @@ import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info, Send, FileClock,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
@@ -386,6 +387,12 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   // null = fechado · 'novo' = publicar · Documento = editando aquele.
   const [modal, setModal] = useState<'novo' | Documento | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
+  // Descrição fica recolhida até o clique. No celular a coluna de texto tem
+  // uns 110px (o ícone do arquivo e os botões comem o resto da largura), e um
+  // parágrafo ali vira uma tira estreita de dez linhas — o card do documento
+  // seguinte some da tela. Um por vez: abrir o segundo fecha o primeiro, senão
+  // a lista volta a crescer sozinha.
+  const [descricaoAberta, setDescricaoAberta] = useState<string | null>(null);
   const confirm = useConfirm();
 
   // Publicar deixou de ser só do professor (migr. 528): o gerente emite para a
@@ -584,92 +591,128 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
             return (
               <div
                 key={doc.id}
-                className={`neu-flat rounded-2xl p-4 border flex items-start gap-3 ${
+                className={`neu-flat rounded-2xl p-4 border flex flex-col gap-3 ${
                   draft ? 'border-dashed border-gray-500/40' : novo ? 'border-amber-400/30' : 'border-white/5'
                 }`}
               >
-                <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
-                  <FileText size={15} className="text-accent" />
-                  <span className="text-[8px] font-black text-gray-500 mt-0.5">{extensaoDe(doc.arquivo_nome)}</span>
-                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
+                    <FileText size={15} className="text-accent" />
+                    <span className="text-[8px] font-black text-gray-500 mt-0.5">{extensaoDe(doc.arquivo_nome)}</span>
+                  </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className={`text-sm font-bold truncate ${draft ? 'text-gray-400' : 'text-gray-100'}`}>{doc.titulo}</h3>
-                    {draft && (
-                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30 flex items-center gap-1">
-                        <FileClock size={9} /> Rascunho
-                      </span>
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Com descrição, o título inteiro é o botão que a revela —
+                          alvo grande de toque, em vez de um ícone de 12px. Sem
+                          descrição continua sendo texto puro: botão que não faz
+                          nada ensina o aluno a desconfiar do clique. */}
+                      {doc.descricao ? (
+                        <button
+                          type="button"
+                          onClick={() => setDescricaoAberta(id => id === doc.id ? null : doc.id)}
+                          aria-expanded={descricaoAberta === doc.id}
+                          title={descricaoAberta === doc.id ? 'Ocultar descrição' : 'Ver descrição'}
+                          className="group flex items-center gap-1.5 min-w-0 text-left"
+                        >
+                          <h3 className={`text-sm font-bold truncate ${draft ? 'text-gray-400' : 'text-gray-100'}`}>{doc.titulo}</h3>
+                          <Info
+                            size={12}
+                            className={`shrink-0 transition-colors ${
+                              descricaoAberta === doc.id ? 'text-accent' : 'text-gray-500 group-hover:text-accent'
+                            }`}
+                          />
+                          <ChevronDown
+                            size={12}
+                            className={`shrink-0 text-gray-500 transition-transform ${
+                              descricaoAberta === doc.id ? 'rotate-180 text-accent' : ''
+                            }`}
+                          />
+                        </button>
+                      ) : (
+                        <h3 className={`text-sm font-bold truncate ${draft ? 'text-gray-400' : 'text-gray-100'}`}>{doc.titulo}</h3>
+                      )}
+                      {draft && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30 flex items-center gap-1">
+                          <FileClock size={9} /> Rascunho
+                        </span>
+                      )}
+                      {novo && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                          Novo
+                        </span>
+                      )}
+                      {doc.filial_alvo ? <FilialBadge filial={doc.filial_alvo} /> : (
+                        <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                          <Building2 size={10} /> Todas as unidades
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      {/* Publicado mostra QUANDO foi ao ar, não quando o arquivo
+                          subiu — é a data que a unidade usa pra saber se está
+                          atrasada. Rascunho mostra desde quando está guardado. */}
+                      {draft
+                        ? `Criado em ${formatDataHoraBR(doc.created_at)}`
+                        : formatDataHoraBR(doc.publicado_em ?? doc.created_at)}
+                      {doc.publicado_por_nome && ` · ${doc.publicado_por_nome}`}
+                      {doc.arquivo_tamanho ? ` · ${tamanhoLegivel(doc.arquivo_tamanho)}` : ''}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => baixar(doc)}
+                      disabled={baixando === doc.id}
+                      title={`Baixar ${extensaoDe(doc.arquivo_nome)}`}
+                      className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {baixando === doc.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                      Baixar
+                    </button>
                     {novo && (
-                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                        Novo
-                      </span>
+                      <button
+                        onClick={() => marcarLido(doc.id)}
+                        title="Confirmar leitura"
+                        className="neu-button rounded-xl p-2 text-emerald-300"
+                      >
+                        <Check size={13} />
+                      </button>
                     )}
-                    {doc.filial_alvo ? <FilialBadge filial={doc.filial_alvo} /> : (
-                      <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                        <Building2 size={10} /> Todas as unidades
-                      </span>
+                    {podeMexer(doc) && draft && (
+                      <button
+                        onClick={() => publicarAgora(doc)}
+                        title="Publicar para as unidades"
+                        className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-300 ring-1 ring-emerald-500/40 hover:ring-emerald-400 flex items-center gap-1.5"
+                      >
+                        <Send size={13} /> Publicar
+                      </button>
                     )}
-                  </div>
-                  {doc.descricao && (
-                    <p className="text-[11px] text-gray-400 mt-1 whitespace-pre-wrap">{doc.descricao}</p>
-                  )}
-                  <div className="text-[10px] text-gray-500 mt-1">
-                    {/* Publicado mostra QUANDO foi ao ar, não quando o arquivo
-                        subiu — é a data que a unidade usa pra saber se está
-                        atrasada. Rascunho mostra desde quando está guardado. */}
-                    {draft
-                      ? `Criado em ${formatDataHoraBR(doc.created_at)}`
-                      : formatDataHoraBR(doc.publicado_em ?? doc.created_at)}
-                    {doc.publicado_por_nome && ` · ${doc.publicado_por_nome}`}
-                    {doc.arquivo_tamanho ? ` · ${tamanhoLegivel(doc.arquivo_tamanho)}` : ''}
+                    {/* Migr. 528: o gerente mexe no que ele mesmo publicou. O
+                        documento do professor que caiu na filial dele é de
+                        leitura — a RLS recusa, e oferecer o botão seria prometer
+                        o que não acontece. */}
+                    {podeMexer(doc) && (
+                      <>
+                        <button onClick={() => setModal(doc)} title={draft ? 'Editar rascunho' : 'Editar informações'} className="action-btn-edit">
+                          <Pencil size={12} />
+                        </button>
+                        <button onClick={() => excluir(doc)} className="action-btn-delete">
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => baixar(doc)}
-                    disabled={baixando === doc.id}
-                    title={`Baixar ${extensaoDe(doc.arquivo_nome)}`}
-                    className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {baixando === doc.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                    Baixar
-                  </button>
-                  {novo && (
-                    <button
-                      onClick={() => marcarLido(doc.id)}
-                      title="Confirmar leitura"
-                      className="neu-button rounded-xl p-2 text-emerald-300"
-                    >
-                      <Check size={13} />
-                    </button>
-                  )}
-                  {podeMexer(doc) && draft && (
-                    <button
-                      onClick={() => publicarAgora(doc)}
-                      title="Publicar para as unidades"
-                      className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-300 ring-1 ring-emerald-500/40 hover:ring-emerald-400 flex items-center gap-1.5"
-                    >
-                      <Send size={13} /> Publicar
-                    </button>
-                  )}
-                  {/* Migr. 528: o gerente mexe no que ele mesmo publicou. O
-                      documento do professor que caiu na filial dele é de
-                      leitura — a RLS recusa, e oferecer o botão seria prometer
-                      o que não acontece. */}
-                  {podeMexer(doc) && (
-                    <>
-                      <button onClick={() => setModal(doc)} title={draft ? 'Editar rascunho' : 'Editar informações'} className="action-btn-edit">
-                        <Pencil size={12} />
-                      </button>
-                      <button onClick={() => excluir(doc)} className="action-btn-delete">
-                        <Trash2 size={12} />
-                      </button>
-                    </>
-                  )}
-                </div>
+                {/* Fora da coluna do meio de propósito: aqui o texto ocupa a
+                    largura inteira do card, que era o problema de origem —
+                    espremido ao lado dos botões ele virava uma tira estreita. */}
+                {doc.descricao && descricaoAberta === doc.id && (
+                  <p className="text-[11px] text-gray-400 leading-relaxed whitespace-pre-wrap neu-pressed rounded-xl p-3 border border-white/5">
+                    {doc.descricao}
+                  </p>
+                )}
               </div>
             );
           })}
