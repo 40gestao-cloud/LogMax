@@ -171,7 +171,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
-  const { data: categoriasProduto }  = useFetchData<any>('categorias_produto');
+  // Escopo de unidade: `auth_pode_filial()` deixa admin, CEO e conselheiro
+  // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
+  // dentro de uma unidade via catálogo/cadastro de outra.
+  const { data: categoriasProduto }  = useFetchData<any>('categorias_produto', filial ? { filial } : undefined);
   const { data: subcategoriasProduto } = useFetchData<any>('subcategorias_produto');
   const { data: fornecedoresList } = useFetchData<any>('/api/crmview-fornecedores', { filial });
 

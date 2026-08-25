@@ -1431,7 +1431,7 @@ function LogMaxAppInner() {
                 está sob a whitelist — evita vazamento de contexto de módulos
                 fora da aula (notificação de outro setor, IA respondendo sobre
                 dados que o aluno não deveria ver naquela sessão). */}
-            {!aulaFiltro && <NotificationBell setor={profile.setor} onNavigate={navigate} />}
+            {!aulaFiltro && <NotificationBell setor={profile.setor} filial={filialAtiva} onNavigate={navigate} />}
             {canUseMaxAI && !aulaFiltro && <AIAssistantFAB />}
             {podeEscolherFilial && (
               <button

@@ -75,7 +75,10 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
   // Arquivo escolhido mas ainda não enviado — sobe só no save.
   const [imagemFile, setImagemFile] = useState<File | null>(null);
 
-  const { data: rawData, setData, isLoading } = useFetchData<any>('/api/servicosview');
+  // Escopo de unidade: `auth_pode_filial()` deixa admin, CEO e conselheiro
+  // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
+  // dentro de uma unidade via catálogo/cadastro de outra.
+  const { data: rawData, setData, isLoading } = useFetchData<any>('/api/servicosview', filialAtiva ? { filial: filialAtiva } : undefined);
 
   const filial = filialAtiva ?? '';
   // Os atributos por nicho são todos do lado da VENDA — garantia ao cliente,

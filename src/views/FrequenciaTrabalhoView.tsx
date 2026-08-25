@@ -297,7 +297,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     return { gte: startOfMonth(dataSelecionada), lte: endOfMonth(dataSelecionada) };
   }, [filtro, dataSelecionada]);
 
-  const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview', { data: periodoRange });
+  // Escopo de unidade: a RLS deixa admin, CEO e conselheiro passarem em
+  // todas as filiais (`auth_pode_filial`), então quem opera dentro de uma
+  // unidade via dado de outra. Em Matriz o filtro não existe, que é o ponto.
+  const { data: pontos, isLoading, reload } = useFetchData<PontoRow>('/api/pontoeletronicoview',
+    filial ? { data: periodoRange, filial } : { data: periodoRange });
   // Mesmo alvo que o placar da competição usa (migr. 350), com o env de
   // fallback enquanto a turma não confirmar o horário.
   const jornada = useJornadaTurma();

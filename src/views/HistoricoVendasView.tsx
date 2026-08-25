@@ -25,7 +25,10 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
     '/api/vendasview', { filial }, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['forma_pagamento', 'status'] }
   );
-  const { data: clientes } = useFetchData<any>('/api/crmview');
+  // Escopo de unidade: `auth_pode_filial()` deixa admin, CEO e conselheiro
+  // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
+  // dentro de uma unidade via catálogo/cadastro de outra.
+  const { data: clientes } = useFetchData<any>('/api/crmview', filial ? { filial } : undefined);
 
   // Itens carregados apenas para as vendas da página actual.
   // Antes carregava `itens_venda` inteira — escala mal com vendas diárias acumuladas.

@@ -52,7 +52,10 @@ function variacao(atual: number, anterior: number | undefined): React.ReactNode 
 
 export function MetricasRedesSociaisView({ showToast, profile }: { showToast: any; profile: UserProfile }) {
   const { filialAtiva } = useFilial();
-  const { data: raw, isLoading, reload } = useFetchData('/api/metricasredessociaisview');
+  // Escopo de unidade: `auth_pode_filial()` deixa admin, CEO e conselheiro
+  // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
+  // dentro de uma unidade via catálogo/cadastro de outra.
+  const { data: raw, isLoading, reload } = useFetchData('/api/metricasredessociaisview', filialAtiva ? { filial: filialAtiva } : undefined);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });

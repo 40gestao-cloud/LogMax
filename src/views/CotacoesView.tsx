@@ -108,7 +108,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // serviço sem unidade vale para todas (o que a holding contrata). Um `.eq`
   // aqui sumiria justamente com esses — o filtro é feito abaixo, com a mesma
   // régua que a RPC aplica.
-  const { data: servicos } = useFetchData<any>('/api/servicosview', undefined, true);
+  // Escopo de unidade: `auth_pode_filial()` deixa admin, CEO e conselheiro
+  // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
+  // dentro de uma unidade via catálogo/cadastro de outra.
+  const { data: servicos } = useFetchData<any>('/api/servicosview', filial ? { filial } : undefined, true);
   const servicosOrdenados = useMemo(
     () => servicos
       // Só o CONTRATADO (migr. 516). O catálogo de venda mora na mesma tabela,

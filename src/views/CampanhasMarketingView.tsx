@@ -64,8 +64,12 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
   const [salvando,        setSalvando]        = useState(false);
   const [enviando,        setEnviando]        = useState(false);
 
-  const { data: produtos }     = useFetchData<any>('/api/produtosview');
-  const { data: categorias }   = useFetchData<any>('categorias_produto');
+  // Escopo de unidade: a RLS deixa admin, CEO e conselheiro passarem em
+  // todas as filiais (`auth_pode_filial`), então quem opera dentro de uma
+  // unidade via dado de outra. Em Matriz o filtro não existe, que é o ponto.
+  const escopo = campanha?.filial ? { filial: campanha.filial } : undefined;
+  const { data: produtos }     = useFetchData<any>('/api/produtosview', escopo);
+  const { data: categorias }   = useFetchData<any>('categorias_produto', escopo);
   const { data: subcategorias} = useFetchData<any>('subcategorias_produto');
   const { data: itensSaved, setData: setItensSaved, reload: reloadItens } = useFetchData<any>('itens_campanha');
 
@@ -274,7 +278,11 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const { data: campanhas, setData, isLoading } = useFetchData<Campanha>('/api/marketingcampanhasview', { filial }, true);
   const confirm = useConfirm();
   const prompt = usePrompt();
-  const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview', { orderBy: 'data_inicio', ascending: false });
+  // `orderBy`/`ascending` são o QUARTO argumento (options); estavam no segundo,
+  // que é o filtro — viravam `.eq('orderBy', ...)`, PostgREST devolvia 400 e o
+  // painel de ROI ficava vazio em silêncio. Aproveitando, o escopo de unidade.
+  const { data: roi } = useFetchData<RoiRow>('/api/campanharoiview', { filial }, false,
+    { orderBy: 'data_inicio', ascending: false });
 
   const [showForm,  setShowForm]  = useState(false);
   const [editing,   setEditing]   = useState<Campanha | null>(null);

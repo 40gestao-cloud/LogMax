@@ -12,6 +12,12 @@ type Props = {
   setor: string | undefined | null;
   /** Restringe o sino a um setor específico (sino local de página). */
   filterSetor?: string;
+  /**
+   * Unidade em que a pessoa está operando. Nulo = Matriz (vê tudo). Quem
+   * enxerga mais de uma filial — admin, CEO, conselheiro — precisa disto:
+   * a RLS deixa passar, e o sino mostrava recado de outra unidade.
+   */
+  filial?: string | null;
   /** Callback opcional ao clicar numa notificação com link_view. */
   onNavigate?: (view: string) => void;
 };
@@ -75,8 +81,8 @@ const formatRelative = (iso: string) => {
   return `${Math.floor(diff / 86400)}d`;
 };
 
-export const NotificationBell = ({ setor, filterSetor, onNavigate }: Props) => {
-  const { data, unreadCount, markRead, markAllRead } = useNotificacoes(setor);
+export const NotificationBell = ({ setor, filterSetor, filial, onNavigate }: Props) => {
+  const { data, unreadCount, markRead, markAllRead } = useNotificacoes(setor, filial);
   const { accentColor } = useTheme();
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);

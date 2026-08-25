@@ -4,6 +4,7 @@ import { Search, FileDown, Sheet, Lock, Receipt } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, ExportButton } from '../components/ui';
 import { exportToExcel, gerarReciboVendaPDF } from '../lib/viewUtils';
+import { useFilial } from '../contexts/FilialContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
@@ -25,11 +26,16 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
   const debouncedSearch = useDebouncedValue(search, 300);
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
+  // Escopo de unidade: a RLS deixa admin, CEO e conselheiro passarem em todas
+  // as filiais, e o recibo é documento da unidade que vendeu. Em Matriz não há
+  // filtro, que é o ponto de estar na Matriz.
+  const { filialAtiva } = useFilial();
+  const escopo = filialAtiva ? { filial: filialAtiva } : undefined;
   const { data: vendas, isLoading: loadingV, totalCount, reload } = useFetchData<any>(
-    '/api/vendasview', undefined, true,
+    '/api/vendasview', escopo, true,
     { page, searchTerm: debouncedSearch, searchColumns: ['forma_pagamento', 'status'] }
   );
-  const { data: clientes } = useFetchData<any>('/api/crmview');
+  const { data: clientes } = useFetchData<any>('/api/crmview', escopo);
 
   const [itens, setItens] = useState<any[]>([]);
   const [loadingI, setLoadingI] = useState(false);

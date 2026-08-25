@@ -296,7 +296,13 @@ export function RequerimentosView({
 
   const isGerente = profile?.role === 'gerente' || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
-  const { data: requerimentos = [], isLoading, reload } = useFetchData<Requerimento>('requerimentos');
+  const { filialAtiva } = useFilial();
+  // Escopo de unidade: o comentário abaixo dizia "a RLS já filtra", e filtra —
+  // para colaborador e gerente. `auth_pode_filial()` deixa admin, CEO e
+  // conselheiro passarem em todas, e o professor dentro da TechMax lia o
+  // requerimento do SuperMax. Em Matriz o filtro não existe, que é o ponto.
+  const { data: requerimentos = [], isLoading, reload } = useFetchData<Requerimento>(
+    'requerimentos', filialAtiva ? { filial: filialAtiva } : undefined);
 
   // Gerente vê todos da filial (RLS já filtra); colaborador vê só os próprios
   const visiveis = useMemo(() => {

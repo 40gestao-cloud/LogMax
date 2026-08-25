@@ -40,10 +40,11 @@ export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile 
   }
   const { filialAtiva } = useFilial();
   const ff = filialAtiva ? { filial: filialAtiva } : undefined;
-  // caixa_bancos não tem coluna filial — permanece global.
+  // O comentário aqui dizia que caixa_bancos não tem coluna filial. Tem, e
+  // populada por unidade — a coluna chegou depois e ninguém revisitou a linha.
   const { data: receber, isLoading: loadingRec } = useFetchData<any>('/api/contasreceberview', ff);
   const { data: pagar, isLoading: loadingPag } = useFetchData<any>('/api/contaspagarview', ff);
-  const { data: bancos, isLoading: loadingBan } = useFetchData<any>('/api/caixabancosview');
+  const { data: bancos, isLoading: loadingBan } = useFetchData<any>('/api/caixabancosview', ff);
   const { data: clientes } = useFetchData<any>('/api/crmview-clientes', ff);
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', ff);
 

@@ -635,7 +635,10 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
   // própria filial + próprios dados). Mantém `isRH` só pra descrição do header.
   const podeVerConsolidado = isAdminOuCEO;
 
-  const { data: treinamentos } = useFetchData<any>('/api/treinamentosview');
+  // Escopo de unidade: a RLS deixa admin, CEO e conselheiro passarem em
+  // todas as filiais (`auth_pode_filial`), então quem opera dentro de uma
+  // unidade via dado de outra. Em Matriz o filtro não existe, que é o ponto.
+  const { data: treinamentos } = useFetchData<any>('/api/treinamentosview', filial ? { filial } : undefined);
 
   const podeEditarAvaliacao = (av: Avaliacao): boolean => {
     const ciclo = ciclos.find(c => c.id === av.ciclo_id);

@@ -116,7 +116,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     return { pronta: false, acao: 'conferir' };
   };
 
-  const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview');
+  // A conta bancária é da unidade (`caixa_bancos.filial`). Sem o filtro, a
+  // lista de bancos da TechMax oferecia a conta do SuperMax — e quem enxerga
+  // mais de uma filial (admin, CEO, conselheiro) passava pela RLS.
+  const { data: bancos, setData: setBancos } = useFetchData<any>('/api/caixabancosview', filial ? { filial } : undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);

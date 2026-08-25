@@ -71,7 +71,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // aceito. Sem filtro de filial no fetch porque `servicos.filial` é nulável e
   // serviço sem unidade vale para todas; aqui a busca é por id, então não há
   // lista a escopar.
-  const { data: servicos } = useFetchData<any>('/api/servicosview', undefined, true);
+  const { data: servicos } = useFetchData<any>('/api/servicosview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pedido_id: '' });
