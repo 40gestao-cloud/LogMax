@@ -1,6 +1,7 @@
 // Documentos — mão única da Matriz para as unidades (migr. 476).
 //
-// O professor (role='admin') publica um arquivo PDF ou Word; todo mundo baixa.
+// O professor (role='admin') publica um arquivo — PDF, Word ou imagem (PNG,
+// JPG, WEBP); todo mundo baixa.
 // Aluno não sobe nada, e isso não depende desta tela: a RLS e as policies do
 // bucket recusam INSERT de quem não é admin. O que muda aqui é só o que
 // aparece — esconder botão que o banco já barra evita erro de permissão na
@@ -14,7 +15,7 @@ import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info, Send, FileClock,
-  ChevronDown,
+  ChevronDown, ImageIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
@@ -40,10 +41,17 @@ const FILIAL_LOGO: Record<FilialAlvo, string> = {
   TechMax:  '/icon-techmax.png',
 };
 
+// Imagem entrou porque metade do que a Matriz manda é foto: o cartaz da
+// campanha, o print do procedimento, a planta do layout da loja. Sem isso a
+// única saída era colar dentro de um .docx, e o aluno recebia um Word de uma
+// página só para ver uma figura.
 const MIMES_ACEITOS = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
 ];
 const TETO_BYTES = 10 * 1024 * 1024;
 
@@ -55,7 +63,16 @@ const MIME_POR_EXTENSAO: Record<string, string> = {
   pdf:  'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   doc:  'application/msword',
+  png:  'image/png',
+  // `.jpg` e `.jpeg` são o MESMO tipo: o bucket só conhece 'image/jpeg', e
+  // mandar 'image/jpg' (que alguns sistemas reportam) faria o upload voltar
+  // recusado por causa da extensão que a pessoa escolheu.
+  jpg:  'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
 };
+
+const EH_IMAGEM = (mime?: string | null) => String(mime ?? '').startsWith('image/');
 
 function mimeDoArquivo(f: File): string | null {
   if (MIMES_ACEITOS.includes(f.type)) return f.type;
@@ -141,7 +158,7 @@ function ModalDocumento({
     if (!f) { setArquivo(null); setMime(''); return; }
     const tipo = mimeDoArquivo(f);
     if (!tipo) {
-      showToast('Formato não aceito. Envie PDF ou Word (.docx / .doc).', 'error');
+      showToast('Formato não aceito. Envie PDF, Word (.docx / .doc) ou imagem (PNG, JPG, WEBP).', 'error');
       return;
     }
     if (f.size > TETO_BYTES) {
@@ -312,11 +329,11 @@ function ModalDocumento({
         ) : (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Arquivo {editando ? '' : '* '}(PDF ou Word, até 10 MB)
+              Arquivo {editando ? '' : '* '}(PDF, Word ou imagem, até 10 MB)
             </label>
             <input
               ref={inputRef} type="file" className="hidden"
-              accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+              accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,image/png,image/jpeg,image/webp"
               onChange={e => escolher(e.target.files?.[0] ?? null)}
             />
             <button
@@ -603,8 +620,13 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                     palavra por linha. No desktop nada muda: `sm:w-auto`
                     devolve os botões para a mesma linha. */}
                 <div className="flex items-start gap-3 flex-wrap">
+                  {/* Ícone de imagem quando é imagem: com a extensão embaixo em
+                      8px, uma folha de papel escrita "PNG" faz o olho ler
+                      documento de texto. */}
                   <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
-                    <FileText size={15} className="text-accent" />
+                    {EH_IMAGEM(doc.arquivo_mime)
+                      ? <ImageIcon size={15} className="text-accent" />
+                      : <FileText size={15} className="text-accent" />}
                     <span className="text-[8px] font-black text-gray-500 mt-0.5">{extensaoDe(doc.arquivo_nome)}</span>
                   </div>
 
