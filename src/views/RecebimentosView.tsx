@@ -561,15 +561,12 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, ...(salvo ?? { status: statusFinal }) } : r));
       await reloadSaldos();
 
-      // Sincronia: recebimento "Concluído" fecha o pedido relacionado.
-      // "Parcial" deixa o pedido em "Em Entrega" para permitir entregas adicionais.
-      if (statusFinal === 'Concluído' && item.pedido_id) {
-        const ped = pedidos.find((p: any) => p.id === item.pedido_id);
-        if (ped && ped.status !== 'Recebido' && ped.status !== 'Cancelado') {
-          try { await dbUpdate('/api/pedidosview', item.pedido_id, { status: 'Recebido' }); }
-          catch { /* não bloqueia o fluxo — relatórios mostrarão divergência */ }
-        }
-      }
+      // Quem fecha o pedido é o banco (migr. 531). Aqui havia um segundo update
+      // em `pedidos`, guardado por um `pedidos.find()` num array em memória e
+      // com o erro engolido por um `catch` vazio: array desatualizado, ou RLS
+      // recusando (`recebimentos` aceita setor 'estoque', `pedidos` não), e o
+      // pedido ficava aberto para sempre sem ninguém saber. O status novo chega
+      // pelo realtime de `pedidos`, que esta tela já assina.
 
       setConfirmando(null);
       setConfirmProduto('');
