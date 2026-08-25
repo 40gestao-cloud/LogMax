@@ -374,7 +374,11 @@ const FILIAL_ONLY_VIEWS = new Set(['demandas']);
 // contexto que ele acabou de escolher. Para o gerente é o oposto: ele nunca
 // entra em Matriz, e a tela é justamente a da filial dele.
 const viewPermitidaNoModo = (view: string, matrizMode: boolean, role?: string): boolean => {
-  if (view === 'pendencias') return role === 'gerente' ? !matrizMode : matrizMode;
+  // CEO e conselheiro também têm modo Matriz, mas a RPC recusa os dois (são
+  // alunos): sem o `role === 'admin'` aqui, eles chegariam na tela por uma porta
+  // que não é o menu — sessionStorage, card da Início, botão Voltar — e leriam
+  // um 42501 em vez de nada.
+  if (view === 'pendencias') return role === 'gerente' ? !matrizMode : (role === 'admin' && matrizMode);
   return matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
 };
 

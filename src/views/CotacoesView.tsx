@@ -181,7 +181,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // fornecedores podem propor marcas diferentes para o mesmo pedido, e é isso
   // que a comparação de propostas precisa mostrar. Na reposição a marca é do
   // produto do catálogo, e o gatilho do banco zera este campo.
-  const ehEventual = !!form.requisicao_id && !reqSelecionada?.produto_id;
+  // `!!reqSelecionada` e não só `form.requisicao_id`: entre escolher a
+  // requisição e a lista chegar, `reqSelecionada` é undefined — e tratar isso
+  // como eventual mostraria o campo de marca numa reposição, para o gatilho
+  // apagar o que foi digitado.
+  const ehEventual = !!reqSelecionada && !reqSelecionada.produto_id;
   const produtoDaReq = useMemo(
     () => produtos.find((p: any) => p.id === reqSelecionada?.produto_id),
     [produtos, reqSelecionada]);

@@ -87,6 +87,11 @@ export function useDocumentos(profile: UserProfile | null) {
 
   // Quem publica não entra na própria fila de leitura: o professor não precisa
   // confirmar que leu o que acabou de mandar.
+  //
+  // Migr. 528: com o gerente publicando, o papel deixou de bastar. Ele é
+  // destinatário do que a Matriz manda E autor do que manda para a equipe —
+  // sem o filtro de autoria abaixo, o FAB o cobraria de confirmar a leitura da
+  // escala que ele mesmo acabou de publicar.
   const ehDestinatario = profile?.role !== 'admin';
 
   const carregar = useCallback(async () => {
@@ -110,7 +115,7 @@ export function useDocumentos(profile: UserProfile | null) {
     // quem não é admin; o filtro aqui é o que impede o próprio professor de ver
     // "documento novo" do que ele mesmo ainda não publicou, se um dia ele deixar
     // de ser exceção logo abaixo.
-    const publicados = lista.filter(d => !!d.publicado_em);
+    const publicados = lista.filter(d => !!d.publicado_em && d.publicado_por !== profile.id);
 
     if (!ehDestinatario || publicados.length === 0) {
       setNaoLidos([]); setLoading(false); return;
