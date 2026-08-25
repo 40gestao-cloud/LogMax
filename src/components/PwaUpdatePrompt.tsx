@@ -8,7 +8,13 @@ import { viewAtual } from '../lib/viewAtual';
 // Intervalo entre verificações de nova versão. O navegador só checa o SW por
 // conta própria na navegação e a cada ~24h — numa PWA instalada, que a turma
 // deixa aberta a manhã inteira, isso é tempo demais para um fix chegar.
-const INTERVALO_CHECAGEM_MS = 30 * 60 * 1000;
+//
+// 10 min (era 30, até 24/08). Este intervalo é o gargalo real da chegada de uma
+// correção: a régua de momento seguro custa ~20 s, o reload 1,5 s, e o resto da
+// espera era só o relógio daqui. Com 30 min a média de espera da turma era ~15;
+// com 10, cai para ~5. O custo é uma requisição do `sw.js` por aba a cada 10
+// min — o navegador responde 304 quando nada mudou.
+const INTERVALO_CHECAGEM_MS = 10 * 60 * 1000;
 
 // De quanto em quanto tempo se reconfere se já dá para recarregar. Curto: o
 // objetivo é entrar no primeiro respiro, não no próximo quarto de hora.
