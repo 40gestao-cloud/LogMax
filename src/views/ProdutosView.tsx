@@ -316,8 +316,12 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         const desc = String(p.item_descricao ?? '').replace(/\s+/g, ' ').trim();
         const qtd  = Number(p.item_qtd ?? 0);
         const val  = Number(p.valor_total ?? 0);
+        // Migr. 526: a marca da proposta que virou ESTE pedido. Só a compra
+        // eventual tem — na reposição o produto já existe e não passa por aqui.
+        const cotDoPedido = (cotacoesDaFilial as any[]).find((c: any) => c.id === p.cotacao_id);
         return {
           descricao: desc,
+          marca: String(cotDoPedido?.marca ?? '').trim(),
           fornecedor: fornecedoresList.find((f: any) => f.id === p.fornecedor_id)?.nome ?? '',
           fornecedor_id: p.fornecedor_id ?? '',
           // Custo unitário do próprio pedido — a mesma conta que a migr. 417 faz
@@ -332,7 +336,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         return true;
       })
       .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
-  }, [pedidosDaFilial, recebimentosDaFilial, fornecedoresList, nomesCatalogo]);
+  }, [pedidosDaFilial, recebimentosDaFilial, cotacoesDaFilial, fornecedoresList, nomesCatalogo]);
 
   // Requisições de texto livre esperando um código de catálogo (migr. 494).
   //
@@ -376,6 +380,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
           qtd: Number(r.qtd ?? 0),
           unidade: r.unidade ?? '',
           cotada: !!cot,
+          // Migr. 526: só da cotação APROVADA — que é a única que `cotPorReq`
+          // guarda. Sugerir a marca de uma proposta reprovada seria pior que o
+          // texto livre que este campo tinha antes.
+          marca: String(cot?.marca ?? '').trim(),
           fornecedor: cot ? (fornecedoresList.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? '') : '',
           fornecedor_id: cot?.fornecedor_id ?? '',
         };
@@ -569,6 +577,17 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // A requisição esperando o pedido (migr. 494) NÃO conta como compra recebida:
   // ali a mercadoria não chegou, não há custo apurado e não há saldo a lançar. O
   // que existe é o vínculo a gravar depois do INSERT.
+  // Migr. 526: a marca que a origem escolhida traz — da requisição esperando
+  // pedido ou do pedido já recebido, nos dois casos vinda da cotação aprovada.
+  const marcaDaCompra = useMemo(() => {
+    if (!itemCompradoSel || itemCompradoSel === SEM_COMPRA) return '';
+    if (itemCompradoSel.startsWith(REQ_PREFIX)) {
+      const id = itemCompradoSel.slice(REQ_PREFIX.length);
+      return itensAguardandoPedido.find(i => i.id === id)?.marca ?? '';
+    }
+    return itensComprados.find(i => i.descricao === itemCompradoSel)?.marca ?? '';
+  }, [itemCompradoSel, itensAguardandoPedido, itensComprados]);
+
   const veioDeCompra = !!itemCompradoSel
     && itemCompradoSel !== SEM_COMPRA
     && !itemCompradoSel.startsWith(REQ_PREFIX);
@@ -690,6 +709,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
           ? normalizarUnidade(req.unidade) : x.unidade,
         fornecedor:    x.fornecedor    || req.fornecedor,
         fornecedor_id: x.fornecedor_id || req.fornecedor_id,
+        // Migr. 526: a marca decidida na proposta aprovada. Sugestão, como o
+        // fornecedor (migr. 488) — quem cadastra confirma, e o que já foi
+        // digitado não se perde.
+        marca:         x.marca         || req.marca,
         // Nada chegou ainda: o saldo entra pelo Recebimento.
         estoque: '',
       }));
@@ -705,6 +728,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       ...x,
       fornecedor:    x.fornecedor    || comprado.fornecedor,
       fornecedor_id: x.fornecedor_id || comprado.fornecedor_id,
+      marca:         x.marca         || comprado.marca,
       preco_custo: x.preco_custo || (comprado.custo != null ? formatBRL(comprado.custo) : ''),
       // O saldo passa a vir do recebimento; o que estava digitado aqui iria
       // junto, escondido, e dobraria a entrada.
@@ -2085,6 +2109,15 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       value={extras.marca}
                       onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
                       placeholder={`Ex: ${exProd.marca}`} />
+                    {/* Migr. 526: dizer DE ONDE veio é o que separa sugestão de
+                        dado que apareceu sozinho — e o aluno precisa saber que
+                        pode discordar da proposta se o que chegou foi outro. */}
+                    {marcaDaCompra && extras.marca.trim() === marcaDaCompra && (
+                      <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">
+                        Veio da proposta aprovada desta compra. Se o que chegou é de outra marca,
+                        corrija aqui — o cadastro é o que vale daqui para a frente.
+                      </p>
+                    )}
                   </FormField>
                   {/* Peso/Volume é o CONTEÚDO da embalagem, e tem medida própria
                       (migr. 438). Antes o sufixo era `extras.unidade` — a medida

@@ -142,7 +142,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
-  const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
+  const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   // A requisição do formulário aberto. O `data_necessidade` dela é o alvo do
@@ -176,6 +176,27 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     }));
   }, [form.requisicao_id, form.fornecedor_id, reqSelecionada, produtos, fornecedores]);
 
+  // Marca da proposta (migr. 526). Só na compra EVENTUAL: ali o produto ainda
+  // não existe e a marca é o que o fornecedor está oferecendo — dois
+  // fornecedores podem propor marcas diferentes para o mesmo pedido, e é isso
+  // que a comparação de propostas precisa mostrar. Na reposição a marca é do
+  // produto do catálogo, e o gatilho do banco zera este campo.
+  const ehEventual = !!form.requisicao_id && !reqSelecionada?.produto_id;
+  const produtoDaReq = useMemo(
+    () => produtos.find((p: any) => p.id === reqSelecionada?.produto_id),
+    [produtos, reqSelecionada]);
+  // Sugestão a partir do que a unidade já cadastrou — não fecha a lista (nem
+  // toda compra eventual é de marca que já existe), só evita "Foxton" virar
+  // "foxton" na segunda vez.
+  const marcasConhecidas = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of produtos as any[]) {
+      const m = String(p?.marca ?? '').trim();
+      if (m) set.add(m);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [produtos]);
+
   // Decisão Financeiro: modal de aprovar/reprovar/devolver.
   const [decisao, setDecisao] = useState<{ cot: any; tipo: 'aprovar' | 'reprovar' | 'devolver' } | null>(null);
   const [feedbackInput, setFeedbackInput] = useState('');
@@ -185,7 +206,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
   // proposta, não correção desta.
   const [correcao, setCorrecao] = useState<any | null>(null);
-  const [correcaoForm, setCorrecaoForm] = useState({ valor_total: '', prazo_entrega: '', validade: '' });
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
   const [reenviando, setReenviando] = useState(false);
 
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
@@ -411,7 +432,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const closeForm = () => {
     setShowForm(false);
     setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
-    setExtras({ valor_total: '', prazo_entrega: '', validade: '' });
+    setExtras({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
     setErrors({});
   };
 
@@ -440,6 +461,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         valor_total: valorNum,
         prazo_entrega: extras.prazo_entrega,
         validade: extras.validade || null,
+        // Reposição manda null: o gatilho zeraria de qualquer jeito, e enviar
+        // texto daria a impressão de que foi gravado.
+        marca: ehEventual ? (extras.marca.trim() || null) : null,
         status: 'Aguardando Financeiro',
         filial,
       });
@@ -668,6 +692,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       valor_total:   formatBRL(Number(cot.valor_total ?? 0)),
       prazo_entrega: cot.prazo_entrega ?? '',
       validade:      cot.validade ?? '',
+      marca:         cot.marca ?? '',
     });
   };
 
@@ -685,12 +710,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         p_valor_total:   valorNum,
         p_prazo_entrega: correcaoForm.prazo_entrega || null,
         p_validade:      correcaoForm.validade || null,
+        // Migr. 526: branco LIMPA. "Tirei a marca da proposta" é correção
+        // legítima, e guardar o valor antigo diria que deu certo sem ter dado.
+        p_marca:         correcaoForm.marca.trim() || null,
       });
       if (error) throw error;
       setData((prev: any[]) => prev.map(c => c.id === correcao.id
         ? { ...c, status: 'Aguardando Financeiro', feedback: null,
             valor_total: valorNum, prazo_entrega: correcaoForm.prazo_entrega || c.prazo_entrega,
-            validade: correcaoForm.validade || null }
+            validade: correcaoForm.validade || null,
+            marca: correcaoForm.marca.trim() || null }
         : c));
 
       const reqItem  = correcao.req?.item ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id)?.item ?? 'item';
@@ -748,6 +777,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
+      {/* Uma vez só, na raiz: o formulário de nova proposta e o modal de
+          correção apontam os dois para este `list` (migr. 526). Dentro do
+          formulário, ele sumia junto com ele e o modal ficava sem sugestão. */}
+      <datalist id="marcas-conhecidas">
+        {marcasConhecidas.map(m => <option key={m} value={m} />)}
+      </datalist>
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
@@ -895,6 +930,31 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
                         value={extras.validade} onChange={e => setExtras(x => ({ ...x, validade: e.target.value }))} />
                     </FormField>
+                    {/* Marca (migr. 526). Na eventual é campo da proposta; na
+                        reposição é o que o catálogo já diz, em cinza. */}
+                    {form.requisicao_id && (ehEventual ? (
+                      <FormField label="Marca oferecida">
+                        <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
+                          value={extras.marca}
+                          onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
+                          placeholder="Ex.: Foxton" />
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Compra eventual: o item ainda não está no catálogo, e a marca faz parte do que
+                          está sendo oferecido. Quem cadastrar o produto depois recebe esta marca já
+                          preenchida — se esta for a proposta aprovada.
+                        </p>
+                      </FormField>
+                    ) : (
+                      <FormField label="Marca">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                          {produtoDaReq?.marca || '—'}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Reposição: a marca é a do produto do catálogo. Proposta de outra marca não é a
+                          mesma compra — é outro item, e pede outra requisição.
+                        </p>
+                      </FormField>
+                    ))}
                   </div>
                   <div className="flex gap-3 justify-end">
                     <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -939,6 +999,13 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{item.req?.item ?? '—'}</span>
+                          {/* Migr. 526: sem isto, duas propostas de marcas
+                              diferentes apareciam como o mesmo item. */}
+                          {item.marca && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-white/5 text-gray-300 border border-white/10">
+                              {item.marca}
+                            </span>
+                          )}
                           {item.req && (
                             <span className="block font-mono text-[10px] text-gray-600 tracking-wider">
                               {numeroRequisicao(item.req)}
@@ -1152,6 +1219,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   <thead>
                     <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       <th className="pb-3 font-bold px-3">Fornecedor</th>
+                      {/* Migr. 526: comparar preço sem ver a marca é comparar
+                          coisas diferentes como se fossem a mesma. */}
+                      <th className="pb-3 font-bold px-3">Marca</th>
                       <th className="pb-3 font-bold px-3 text-right">Valor</th>
                       <th className="pb-3 font-bold px-3">Entrega no prazo</th>
                       <th className="pb-3 font-bold px-3">Prazo</th>
@@ -1172,6 +1242,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               {isMenor && <span title="Menor preço"><Award size={12} className="text-emerald-400 shrink-0" /></span>}
                               {c.forn?.nome ?? '—'}
                             </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-gray-300">
+                            {c.marca || <span className="text-gray-600">—</span>}
                           </td>
                           <td className={`py-2.5 px-3 text-xs font-mono text-right tabular-nums ${isMenor ? 'text-emerald-300 font-bold' : 'text-gray-200'}`}>
                             R$ {formatBRL(Number(c.valor_total ?? 0))}
@@ -1347,6 +1420,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     value={correcaoForm.validade}
                     onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
                 </FormField>
+                {/* Migr. 526: só na eventual. Na reposição o campo nem existe
+                    na proposta — a marca é do produto do catálogo. */}
+                {!correcao.req?.produto_id && (
+                  <FormField label="Marca oferecida">
+                    <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={correcaoForm.marca}
+                      onChange={e => setCorrecaoForm(x => ({ ...x, marca: e.target.value }))}
+                      placeholder="Ex.: Foxton" />
+                  </FormField>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 mt-6">
