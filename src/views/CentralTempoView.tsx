@@ -1,25 +1,28 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Clock, AlarmClock, Timer as TimerIcon, Hourglass,
-  Play, Pause, RotateCcw, Flag, Plus, Trash2, VolumeX,
+  Play, Pause, RotateCcw, Flag, Plus, Trash2,
 } from 'lucide-react';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { useAlarmesTurma } from '../hooks/useAlarmesTurma';
+import {
+  ALARME_TIPOS, ALARME_TITULO, textoDoAlarme, type AlarmeTipo,
+} from '../lib/alarmes';
 
 // =================================================================
 // LogMax — Central de Tempo
 // =================================================================
-// Quatro ferramentas operacionais 100% client-side: relógio (Acre),
-// alarmes (LocalStorage), cronômetro com voltas e timer regressivo.
-// Sem chamadas a servidor — custo zero de operação. Sem assets remotos
-// além dos dois MP3 locais (alarme + fim de timer).
+// Quatro ferramentas operacionais: relógio (Acre), alarmes, cronômetro
+// com voltas e timer regressivo. Relógio, cronômetro e timer são 100%
+// client-side; os alarmes passaram a viver no banco na migr. 529, porque
+// alarme que só existe no navegador de quem cadastrou não avisa a turma.
 //
 // Áudio: arquivos esperados em public/sounds/. Se ausentes, o som
 // falha em silêncio (catch no play) — mesma política do PDV.
 // =================================================================
 
-const ALARM_AUDIO_URL = '/sounds/alarm.mp3';
 const TIMER_AUDIO_URL = '/sounds/timer-end.mp3';
-const ALARMS_LS_KEY = 'logmax_timer_alarms';
 
 // Fuso obrigatório do Acre. `Intl.DateTimeFormat` resolve UTC ↔ local
 // sem depender da máquina do usuário (turma pode estar em qualquer
@@ -32,13 +35,6 @@ const ACRE_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
   hour12: false,
 });
 
-const ACRE_HHMM = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'America/Rio_Branco',
-  hour:   '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
-
 const ACRE_DATE = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Rio_Branco',
   weekday: 'long',
@@ -47,47 +43,8 @@ const ACRE_DATE = new Intl.DateTimeFormat('pt-BR', {
   year:    'numeric',
 });
 
-type Alarm = {
-  id: string;
-  hour:   number; // 0–23
-  minute: number; // 0–59
-  enabled: boolean;
-};
-
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const pad3 = (n: number) => String(n).padStart(3, '0');
-
-const newId = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-// Lê alarmes do LocalStorage com fallback seguro — qualquer JSON
-// corrompido devolve lista vazia em vez de explodir o componente.
-function loadAlarms(): Alarm[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(ALARMS_LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(a => a && typeof a.hour === 'number' && typeof a.minute === 'number')
-      .map(a => ({
-        id:      String(a.id ?? newId()),
-        hour:    Math.min(23, Math.max(0, Math.floor(a.hour))),
-        minute:  Math.min(59, Math.max(0, Math.floor(a.minute))),
-        enabled: !!a.enabled,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function saveAlarms(alarms: Alarm[]) {
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(ALARMS_LS_KEY, JSON.stringify(alarms)); } catch {}
-}
 
 // Cabeçalho neumórfico reutilizado pelos 4 cards.
 function CardHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
@@ -145,187 +102,152 @@ function RelogioCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 2. GERENCIADOR DE ALARMES — LocalStorage + Audio loop
+// 2. GERENCIADOR DE ALARMES — banco + realtime (migr. 529)
 // ─────────────────────────────────────────────────────────────────
+// Antes: LocalStorage e som tocando aqui dentro. O alarme morria ao
+// trocar de view e só existia no navegador de quem cadastrou.
+// Agora: a lista vive no banco, chega em realtime na turma inteira e
+// QUEM TOCA é a shell do App (useAlarmeGlobal), que não desmonta.
+// Este card só cadastra e lista — nada de áudio aqui, senão quem
+// estivesse nesta tela ouviria dois alarmes sobrepostos.
 function AlarmesCard() {
-  const [alarms, setAlarms]   = useState<Alarm[]>(() => loadAlarms());
-  const [hourIn, setHourIn]   = useState('07');
-  const [minIn, setMinIn]     = useState('00');
-  const [ringingId, setRinging] = useState<string | null>(null);
+  const { profile } = useUserProfile();
+  const { alarmes, isLoading, criar, alternar, remover } = useAlarmesTurma();
+  // Escrita é só do professor (`role = 'admin'` literal, igual à RLS da
+  // migr. 529): alarme interrompe a tela de 45 pessoas.
+  const podeGerenciar = profile?.role === 'admin';
 
-  // Persiste qualquer alteração no LocalStorage. Custom event 'storage'
-  // não é necessário porque a app inteira opera numa única aba.
-  useEffect(() => { saveAlarms(alarms); }, [alarms]);
+  const [hourIn, setHourIn]     = useState('07');
+  const [minIn, setMinIn]       = useState('00');
+  const [tipo, setTipo]         = useState<AlarmeTipo>('aviso');
+  const [mensagem, setMensagem] = useState('');
+  const [erro, setErro]         = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
-  // Áudio em loop pro alarme; lazy-instanciado pra respeitar autoplay policy.
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const lastMinuteCheckedRef = useRef<string>('');
-
-  const stopRinging = useCallback(() => {
-    setRinging(null);
-    const a = audioRef.current;
-    if (a) {
-      try { a.pause(); a.currentTime = 0; } catch {}
-    }
-  }, []);
-
-  const startRinging = useCallback((alarmId: string) => {
-    setRinging(alarmId);
-    try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(ALARM_AUDIO_URL);
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.7;
-      }
-      audioRef.current.currentTime = 0;
-      const p = audioRef.current.play();
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    } catch {
-      // Áudio bloqueado: o estado visual de "tocando" ainda guia o usuário.
-    }
-  }, []);
-
-  // Tick de checagem: a cada segundo lê hora atual em Acre, normaliza
-  // pra "HH:MM" e dispara o alarme só na VIRADA do minuto (evita disparar
-  // 60x dentro do mesmo minuto).
-  const checkRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const alarmsRef = useRef(alarms);
-  useEffect(() => { alarmsRef.current = alarms; }, [alarms]);
-  const ringingRef = useRef(ringingId);
-  useEffect(() => { ringingRef.current = ringingId; }, [ringingId]);
-
-  useEffect(() => {
-    const tick = () => {
-      const hhmm = ACRE_HHMM.format(new Date());
-      if (hhmm === lastMinuteCheckedRef.current) return;
-      lastMinuteCheckedRef.current = hhmm;
-      // Já está tocando algum alarme — não dispara outro por cima.
-      if (ringingRef.current) return;
-      const [h, m] = hhmm.split(':').map(n => Number.parseInt(n, 10));
-      const hit = alarmsRef.current.find(a => a.enabled && a.hour === h && a.minute === m);
-      if (hit) startRinging(hit.id);
-    };
-    tick(); // inicializa a referência de minuto sem disparar
-    checkRef.current = setInterval(tick, 1000);
-    return () => {
-      if (checkRef.current !== null) clearInterval(checkRef.current);
-      checkRef.current = null;
-    };
-  }, [startRinging]);
-
-  // Limpa o áudio ao desmontar o componente — evita som tocando depois
-  // do usuário sair da view.
-  useEffect(() => () => {
-    const a = audioRef.current;
-    if (a) {
-      try { a.pause(); } catch {}
-      audioRef.current = null;
-    }
-  }, []);
-
-  const addAlarm = () => {
+  const addAlarm = async () => {
     const h = Number.parseInt(hourIn, 10);
     const m = Number.parseInt(minIn, 10);
     if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return;
-    // Duplicado (mesmo h:m): só ativa o existente em vez de criar par.
-    const dup = alarms.find(a => a.hour === h && a.minute === m);
-    if (dup) {
-      setAlarms(prev => prev.map(a => a.id === dup.id ? { ...a, enabled: true } : a));
+    if (tipo === 'aviso' && !mensagem.trim()) {
+      setErro('Escreva a mensagem do aviso.');
       return;
     }
-    setAlarms(prev => [...prev, { id: newId(), hour: h, minute: m, enabled: true }]);
+    setSalvando(true);
+    const falha = await criar(h, m, tipo, mensagem);
+    setSalvando(false);
+    setErro(falha);
+    if (!falha) setMensagem('');
   };
-
-  const removeAlarm = (id: string) => {
-    if (ringingId === id) stopRinging();
-    setAlarms(prev => prev.filter(a => a.id !== id));
-  };
-
-  const toggleAlarm = (id: string) => {
-    setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
-  };
-
-  // Ordena cronologicamente pra UX previsível.
-  const sortedAlarms = useMemo(
-    () => [...alarms].sort((a, b) => (a.hour - b.hour) || (a.minute - b.minute)),
-    [alarms],
-  );
 
   return (
     <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col">
-      <CardHeader icon={AlarmClock} title="Alarmes" subtitle="Salvos no navegador" />
+      <CardHeader icon={AlarmClock} title="Alarmes" subtitle="Toca para a turma · em qualquer tela" />
 
-      {ringingId && (
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-          className="mb-4 p-3 rounded-2xl flex items-center justify-between gap-3"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-xs font-bold text-red-400">Alarme tocando</span>
+      {podeGerenciar ? (
+        <>
+          <div className="flex items-end gap-2 mb-3">
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label htmlFor="alarme-hora" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Hora</label>
+              <input id="alarme-hora" type="number" min={0} max={23} value={hourIn}
+                onChange={e => setHourIn(e.target.value)}
+                onBlur={e => setHourIn(pad2(Math.min(23, Math.max(0, Number.parseInt(e.target.value, 10) || 0))))}
+                className="neu-input py-2 px-3 rounded-xl text-sm font-mono tabular-nums w-full text-center" />
+            </div>
+            <span className="text-2xl font-black text-gray-600 pb-1">:</span>
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label htmlFor="alarme-min" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Minuto</label>
+              <input id="alarme-min" type="number" min={0} max={59} value={minIn}
+                onChange={e => setMinIn(e.target.value)}
+                onBlur={e => setMinIn(pad2(Math.min(59, Math.max(0, Number.parseInt(e.target.value, 10) || 0))))}
+                className="neu-input py-2 px-3 rounded-xl text-sm font-mono tabular-nums w-full text-center" />
+            </div>
           </div>
-          <button onClick={stopRinging}
-            className="neu-button rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-300 hover:text-white">
-            <VolumeX size={12} /> Silenciar
+
+          <div className="flex flex-col gap-1.5 mb-3">
+            <label htmlFor="alarme-tipo" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Tipo</label>
+            <select id="alarme-tipo" value={tipo}
+              onChange={e => { setTipo(e.target.value as AlarmeTipo); setErro(null); }}
+              className="neu-input py-2 px-3 rounded-xl text-sm w-full">
+              {ALARME_TIPOS.map(t => <option key={t.valor} value={t.valor}>{t.rotulo}</option>)}
+            </select>
+          </div>
+
+          {/* Intervalo e Fim de Expediente têm texto fixo (src/lib/alarmes.ts):
+              mostrar o texto em vez de um campo evita a impressão de que dá
+              para reescrever procedimento da operação por alarme. */}
+          {tipo === 'aviso' ? (
+            <div className="flex flex-col gap-1.5 mb-3">
+              <label htmlFor="alarme-msg" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Mensagem do aviso</label>
+              <textarea id="alarme-msg" rows={2} value={mensagem}
+                onChange={e => { setMensagem(e.target.value); setErro(null); }}
+                placeholder="O que a turma precisa ler quando o alarme tocar"
+                className="neu-input py-2 px-3 rounded-xl text-sm w-full resize-none" />
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-500 leading-relaxed mb-3 neu-pressed rounded-xl p-3 border border-white/5">
+              {textoDoAlarme(tipo)}
+            </p>
+          )}
+
+          {erro && <p className="text-[11px] text-red-400 mb-2">{erro}</p>}
+
+          <button onClick={addAlarm} disabled={salvando}
+            className="neu-button rounded-xl px-4 py-2.5 flex items-center justify-center gap-1.5 text-xs font-bold text-accent hover:bg-accent/5 transition-colors mb-4 disabled:opacity-40">
+            <Plus size={14} /> {salvando ? 'Salvando…' : 'Adicionar alarme'}
           </button>
-        </motion.div>
+        </>
+      ) : (
+        <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
+          Os alarmes são definidos pelo professor. Quando o horário chegar, o
+          aviso aparece na sua tela — esteja você em qualquer módulo.
+        </p>
       )}
 
-      <div className="flex items-end gap-2 mb-4">
-        <div className="flex flex-col gap-1.5 flex-1">
-          <label htmlFor="alarme-hora" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Hora</label>
-          <input id="alarme-hora" type="number" min={0} max={23} value={hourIn}
-            onChange={e => setHourIn(e.target.value)}
-            onBlur={e => setHourIn(pad2(Math.min(23, Math.max(0, Number.parseInt(e.target.value, 10) || 0))))}
-            className="neu-input py-2 px-3 rounded-xl text-sm font-mono tabular-nums w-full text-center" />
-        </div>
-        <span className="text-2xl font-black text-gray-600 pb-1">:</span>
-        <div className="flex flex-col gap-1.5 flex-1">
-          <label htmlFor="alarme-min" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Minuto</label>
-          <input id="alarme-min" type="number" min={0} max={59} value={minIn}
-            onChange={e => setMinIn(e.target.value)}
-            onBlur={e => setMinIn(pad2(Math.min(59, Math.max(0, Number.parseInt(e.target.value, 10) || 0))))}
-            className="neu-input py-2 px-3 rounded-xl text-sm font-mono tabular-nums w-full text-center" />
-        </div>
-        <button onClick={addAlarm}
-          className="neu-button rounded-xl px-4 py-2 flex items-center gap-1.5 text-xs font-bold text-accent hover:bg-accent/5 transition-colors h-[38px]">
-          <Plus size={14} /> Adicionar
-        </button>
-      </div>
-
       <div className="flex flex-col gap-2 flex-1 min-h-[120px]">
-        {sortedAlarms.length === 0 ? (
+        {isLoading ? (
+          <p className="text-xs text-gray-600 text-center py-6">Carregando…</p>
+        ) : alarmes.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-center py-6">
             <p className="text-xs text-gray-600">Nenhum alarme cadastrado.</p>
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            {sortedAlarms.map(a => (
+            {alarmes.map(a => (
               <motion.div key={a.id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
-                className={`neu-pressed rounded-xl p-3 flex items-center gap-3 border ${
-                  ringingId === a.id ? 'border-red-500/40' : 'border-white/5'
-                }`}>
-                <span className={`font-mono tabular-nums text-lg font-black ${a.enabled ? 'text-accent' : 'text-gray-600'}`}>
-                  {pad2(a.hour)}:{pad2(a.minute)}
+                className="neu-pressed rounded-xl p-3 flex items-center gap-3 border border-white/5">
+                <span className={`font-mono tabular-nums text-lg font-black shrink-0 ${a.ativo ? 'text-accent' : 'text-gray-600'}`}>
+                  {pad2(a.hora)}:{pad2(a.minuto)}
                 </span>
-                <span className="flex-1" />
-                {/* Toggle neumórfico (track + bolinha) */}
-                <button onClick={() => toggleAlarm(a.id)}
-                  role="switch" aria-checked={a.enabled}
-                  aria-label={`${a.enabled ? 'Desativar' : 'Ativar'} alarme ${pad2(a.hour)}:${pad2(a.minute)}`}
-                  className="neu-pressed w-11 h-6 rounded-full relative transition-colors border border-white/5"
-                  style={{ background: a.enabled ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)' : undefined }}>
-                  <span className="absolute top-0.5 w-5 h-5 rounded-full neu-flat transition-all"
-                    style={{
-                      left: a.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
-                      background: a.enabled ? 'var(--color-accent)' : 'var(--color-bg-base)',
-                    }} />
-                </button>
-                <button onClick={() => removeAlarm(a.id)}
-                  className="action-btn-delete"
-                  aria-label="Excluir alarme">
-                  <Trash2 size={12} />
-                </button>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                    {ALARME_TITULO[a.tipo]}
+                  </span>
+                  <span className="block text-[11px] text-gray-400 truncate">
+                    {textoDoAlarme(a.tipo, a.mensagem)}
+                  </span>
+                </span>
+                {podeGerenciar && (
+                  <>
+                    {/* Toggle neumórfico (track + bolinha) */}
+                    <button onClick={() => alternar(a.id, !a.ativo)}
+                      role="switch" aria-checked={a.ativo}
+                      aria-label={`${a.ativo ? 'Desativar' : 'Ativar'} alarme ${pad2(a.hora)}:${pad2(a.minuto)}`}
+                      className="neu-pressed w-11 h-6 rounded-full relative transition-colors border border-white/5 shrink-0"
+                      style={{ background: a.ativo ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)' : undefined }}>
+                      <span className="absolute top-0.5 w-5 h-5 rounded-full neu-flat transition-all"
+                        style={{
+                          left: a.ativo ? 'calc(100% - 1.375rem)' : '0.125rem',
+                          background: a.ativo ? 'var(--color-accent)' : 'var(--color-bg-base)',
+                        }} />
+                    </button>
+                    <button onClick={() => remover(a.id)}
+                      className="action-btn-delete shrink-0"
+                      aria-label="Excluir alarme">
+                      <Trash2 size={12} />
+                    </button>
+                  </>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

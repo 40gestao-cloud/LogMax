@@ -5,6 +5,8 @@ import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from '.
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useIdleLogout } from './hooks/useIdleLogout';
 import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
+import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
+import { AlarmeModal } from './components/AlarmeModal';
 import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
@@ -900,6 +902,12 @@ function LogMaxAppInner() {
     onExpirar: encerrarSessaoAutomatica,
   });
 
+  // ── Alarmes da aula (migr. 529) ──────────────────────────────────────────
+  // Aqui em cima, junto dos outros hooks e ANTES dos early returns: é o que
+  // faz o alarme tocar em qualquer tela. Dentro da Central de Tempo ele
+  // morreria ao trocar de view — que era exatamente o defeito antigo.
+  const { disparo: alarmeDisparo, silenciar: silenciarAlarme } = useAlarmeGlobal(isAuthenticated);
+
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
   // corpo do render (não em efeito) porque as views chamam `hasSetor` durante o
   // próprio render — um useEffect chegaria um frame atrasado e a primeira
@@ -1331,6 +1339,10 @@ function LogMaxAppInner() {
           onContinuar={continuarSessao}
           onSairAgora={handleSignOut}
         />
+      )}
+      {/* Alarme da aula: modal central em qualquer tela (migr. 529). */}
+      {alarmeDisparo && (
+        <AlarmeModal alarme={alarmeDisparo} onFechar={silenciarAlarme} />
       )}
       {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
           (migr. 307). Ver o comentário no próprio componente. */}
