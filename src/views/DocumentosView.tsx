@@ -595,7 +595,14 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                   draft ? 'border-dashed border-gray-500/40' : novo ? 'border-amber-400/30' : 'border-white/5'
                 }`}
               >
-                <div className="flex items-start gap-3">
+                {/* `flex-wrap` + `w-full` nos botões: no celular a fileira de
+                    ações desce para uma linha só dela. Sem isto o bloco de
+                    botões é `shrink-0` e a coluna do meio é quem cede — com
+                    rascunho são quatro botões (Baixar, Publicar, editar,
+                    excluir), o título desaparecia e a data quebrava uma
+                    palavra por linha. No desktop nada muda: `sm:w-auto`
+                    devolve os botões para a mesma linha. */}
+                <div className="flex items-start gap-3 flex-wrap">
                   <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
                     <FileText size={15} className="text-accent" />
                     <span className="text-[8px] font-black text-gray-500 mt-0.5">{extensaoDe(doc.arquivo_nome)}</span>
@@ -660,7 +667,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 w-full justify-end flex-wrap sm:w-auto sm:flex-nowrap">
                     <button
                       onClick={() => baixar(doc)}
                       disabled={baixando === doc.id}
