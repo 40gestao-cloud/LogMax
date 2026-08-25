@@ -123,7 +123,14 @@ function ModalDocumento({
   // Documento novo nasce mirando a unidade em que se está — senão ele sumiria
   // da lista assim que fosse salvo, porque a tela só mostra a filial ativa.
   // Em modo Matriz continua "Todas as unidades".
-  const [filialAlvo, setFilialAlvo] = useState(doc?.filial_alvo ?? filialAtiva ?? '');
+  // Migr. 528: o gerente emite para a própria unidade, e só. O destino nasce
+  // travado nela porque a RLS recusa qualquer outro — deixar o select aberto
+  // seria oferecer "Todas as unidades" para quem vai levar 42501 ao salvar.
+  const ehGerenteEmissor = profile?.role === 'gerente';
+  const filialDoEmissor = String(profile?.filial ?? '');
+  const [filialAlvo, setFilialAlvo] = useState(
+    ehGerenteEmissor ? (doc?.filial_alvo ?? filialDoEmissor)
+                     : (doc?.filial_alvo ?? filialAtiva ?? ''));
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [mime, setMime] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -269,13 +276,24 @@ function ModalDocumento({
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Quem recebe</label>
-          <select
-            value={filialAlvo} onChange={e => setFilialAlvo(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            <option value="">Todas as unidades</option>
-            {FILIAIS.map(f => <option key={f} value={f}>Somente {f}</option>)}
-          </select>
+          {ehGerenteEmissor ? (
+            <>
+              <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100">
+                Somente {filialDoEmissor || '—'}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">
+                A equipe da sua unidade. Documento para todas as unidades é da Matriz.
+              </p>
+            </>
+          ) : (
+            <select
+              value={filialAlvo} onChange={e => setFilialAlvo(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Todas as unidades</option>
+              {FILIAIS.map(f => <option key={f} value={f}>Somente {f}</option>)}
+            </select>
+          )}
         </div>
 
         {editando && !rascunho ? (
@@ -370,9 +388,18 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   const [baixando, setBaixando] = useState<string | null>(null);
   const confirm = useConfirm();
 
-  // Publicar é ato do professor. CEO e conselheiro são alunos — o banco já
-  // recusa, aqui só não se oferece o botão (vide comentário no topo).
-  const podePublicar = profile?.role === 'admin';
+  // Publicar deixou de ser só do professor (migr. 528): o gerente emite para a
+  // equipe da unidade dele — escala, procedimento de caixa, roteiro de
+  // inventário. CEO e conselheiro continuam de fora: são alunos, e o banco já
+  // recusa; aqui só não se oferece o botão (vide comentário no topo).
+  const ehAdmin  = profile?.role === 'admin';
+  const ehGerente = profile?.role === 'gerente';
+  const podePublicar = ehAdmin || ehGerente;
+  // O gerente publica só na unidade dele, e nunca em "todas" — é o que a RLS
+  // impõe. E mexe só no que ele mesmo criou: oferecer os botões no documento
+  // do professor seria oferecer um caminho que termina em erro.
+  const minhaFilial = String(profile?.filial ?? '');
+  const podeMexer = (d: Documento) => ehAdmin || (ehGerente && d.publicado_por === profile?.id);
 
   // A tela mostra a unidade em que se está operando, e só ela. O admin vê os
   // documentos das tres unidades porque a RLS nao o recorta — mas ler tudo
@@ -473,9 +500,11 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
             <h1 className="text-sm font-black uppercase tracking-widest text-gray-100">Documentos</h1>
           </div>
           <p className="text-xs text-gray-500">
-            {podePublicar
+            {ehAdmin
               ? 'Deixe pronto como rascunho e publique quando quiser — aí chega nas unidades e o sistema registra quem leu.'
-              : 'Documentos enviados pela Matriz. Baixe e confirme a leitura.'}
+              : ehGerente
+                ? 'Publique para a equipe da sua unidade e veja quem leu. O que a Matriz enviar aparece aqui também, para você baixar e confirmar.'
+                : 'Documentos enviados pela Matriz. Baixe e confirme a leitura.'}
           </p>
         </div>
         {podePublicar && (
@@ -531,7 +560,10 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         </div>
       )}
 
-      {!podePublicar && naoLidos.length > 0 && (
+      {/* Migr. 528: o gerente publica E recebe. Amarrar este aviso a
+          `!podePublicar` o faria sumir justamente para quem tem as duas
+          caixas — e o que a Matriz manda continua esperando confirmação. */}
+      {!ehAdmin && naoLidos.length > 0 && (
         <div className="neu-flat rounded-2xl p-4 border border-amber-400/25 flex items-start gap-2 text-xs text-amber-200">
           <Info size={13} className="shrink-0 mt-0.5" />
           <span>
@@ -614,7 +646,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       <Check size={13} />
                     </button>
                   )}
-                  {podePublicar && draft && (
+                  {podeMexer(doc) && draft && (
                     <button
                       onClick={() => publicarAgora(doc)}
                       title="Publicar para as unidades"
@@ -623,7 +655,11 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       <Send size={13} /> Publicar
                     </button>
                   )}
-                  {podePublicar && (
+                  {/* Migr. 528: o gerente mexe no que ele mesmo publicou. O
+                      documento do professor que caiu na filial dele é de
+                      leitura — a RLS recusa, e oferecer o botão seria prometer
+                      o que não acontece. */}
+                  {podeMexer(doc) && (
                     <>
                       <button onClick={() => setModal(doc)} title={draft ? 'Editar rascunho' : 'Editar informações'} className="action-btn-edit">
                         <Pencil size={12} />
