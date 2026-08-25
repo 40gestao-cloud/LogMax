@@ -94,16 +94,30 @@ e prende o dedo.
 **Nota:** aqui a correção não é óbvia. Tirar a `max-h` faz a lista de 40+
 produtos empurrar o botão de enviar para muito longe. Ver 2.2.
 
-### 1.8 — Os FABs cobrem a lista (MÉDIA — fora do módulo, bate nele)
+### 1.8 — INVALIDADO na execução: os FABs não empilham mais (era falso positivo)
 
-Os botões flutuantes estão empilhados em `bottom-6`, **`bottom-72` (288 px)** e
-**`bottom-88` (352 px)**, todos em `right-6`
-([PontoFAB.tsx:63](../src/components/PontoFAB.tsx#L63),
-[NovoDocumentoModal.tsx:154](../src/components/NovoDocumentoModal.tsx#L154),
-[RequisicaoAvisoModal.tsx:136](../src/components/RequisicaoAvisoModal.tsx#L136)).
+O levantamento original leu `PontoFAB.tsx`, `NovoDocumentoModal.tsx` e
+`RequisicaoAvisoModal.tsx` isoladamente e viu três `fixed bottom-N` diferentes
+— sem checar se os três `<button>` chegam a renderizar no app rodando.
+**Não chegam.** `App.tsx` monta um único `<PendenciasFAB>`
+([App.tsx:1496](../src/App.tsx#L1496)), que já resolveu exatamente este
+problema numa fase anterior do plano de requisições ("fase 5, item 23", ver o
+cabeçalho de [PendenciasFAB.tsx](../src/components/PendenciasFAB.tsx)):
 
-Numa tela de 812 px de altura, dois deles ficam no **meio da lateral direita**,
-por cima da lista. O empilhamento foi desenhado para desktop, onde sobra altura.
+- Os cinco FABs de aviso (Matriz, pedido online, convite de vaga, documento
+  novo, requisição devolvida) continuam montados — cada um dono da própria
+  fila e do próprio "abre sozinho" — mas todos com `hideTrigger`, então o
+  `<button fixed bottom-*>` de cada um está no código e nunca aparece na tela.
+- `PendenciasFAB` mostra **um** botão (`bottom-24`, 96 px) com a soma das
+  filas, e um menu (`bottom-40`, só quando aberto pelo próprio toque) que
+  lista cada pendência.
+- `PontoFAB` não está mais nem importado em lugar nenhum — foi desmontado em
+  2026-07-29 junto com a aba Totem ([InicioView.tsx:146](../src/views/InicioView.tsx#L146)),
+  e continua no repositório só para a volta ser remontá-lo.
+
+**Correção no próprio levantamento, não no código:** não há nada para
+compactar — o "empilhamento" descrito neste item não existe na árvore que
+realmente renderiza. Nenhuma mudança foi feita para 1.8.
 
 ---
 
@@ -149,8 +163,8 @@ dependente de sensação de uso.
 |---|---|---|---|
 | 1 ✅ | 1.4, 1.5, 1.6 — `min-w-0`, `truncate` e quebra de linha nos cards de Aprovações e de material | P | nada |
 | 2 | 1.1, 1.2, 1.3 — tabela do Do Setor responsiva + detalhe com largura de tela | M | decisão 2.1 |
-| 3 | 1.8 — empilhamento dos FABs compactado abaixo de `sm` | P | nada, mas mexe em 3 componentes globais |
-| 4 | 1.7 — catálogo de reposição | P/M | decisão 2.2 + teste em aparelho |
+| 3 ❌ | 1.8 — invalidado na execução (ver seção 1.8): nada a fazer, o FAB único já resolvia isto | — | — |
+| 4 ✅ | 1.7 — catálogo de reposição | P | decisão 2.2 |
 
 A fase 1 é independente e entrega valor sozinha: é a que devolve o botão de
 expandir ao gerente que decide pelo celular.
@@ -225,3 +239,39 @@ test` (229 passando) e `npm run build` (produção, com PWA) limpos.
 
 Fases 2, 3 e 4 continuam não implementadas, aguardando ordem — a fase 2 segue
 precisando da decisão da seção 2.1 (régua de colunas x cards).
+## 8. Fases 2 e 4 — executadas em 2026-08-24
+
+### Fase 2 (1.1, 1.2, 1.3 — tabela do Do Setor)
+
+Opção **A** da decisão 2.1 (régua de colunas escondidas), sem objeção à
+recomendação do plano.
+
+`RequisicoesSetorView.tsx`: `min-w-[780px]` saiu da tabela. Item, Qtd,
+Urgência, Situação e Histórico/Ação ficam sempre visíveis — mesmo esqueleto de
+`RequisicoesView.tsx` (Compras), já em produção. Tipo, Solicitante, Necessário
+até e Aberto em entram a partir de `lg`/`md`/`lg`/`sm`. O badge de Tipo, que
+some do cabeçalho abaixo de `lg`, reaparece embaixo do nome do item (mesmo
+padrão do número e do complemento que já viviam ali).
+
+O item 1.3 (painel de detalhe herdando 780 px) não precisou de mudança própria:
+colunas com `hidden` (`display: none`) não contribuem para a largura calculada
+da tabela, então o `<td colSpan={9}>` do detalhe passou a herdar a largura das
+colunas **visíveis**, não mais os 780 px fixos — mesmo mecanismo que já
+resolvia isso em `RequisicoesView.tsx`.
+
+**Não verificado em aparelho.**
+
+### Fase 4 (1.7 — catálogo de reposição)
+
+Decisão 2.2 revista durante a execução: a opção (b) do plano ("trocar por
+`SelectBusca`") não serve — a caixa é um checklist de **múltipla seleção com
+quantidade por item** (busca + checkbox + input de quantidade inline), e
+`SelectBusca` é combobox de valor único. Não dava para aplicar sem redesenhar
+a interação, o que estava fora do tamanho "P" orçado para este item.
+
+Ficou a opção (a): `max-h-72` (288 px) virou `max-h-56 sm:max-h-72` (224 px
+abaixo de `sm`, 288 px dali para cima). Reduz a área presa pelo gesto de
+rolagem em mobile sem mudar a interação — o incômodo de "rolagem dentro de
+rolagem" continua existindo, só que numa caixa menor.
+
+

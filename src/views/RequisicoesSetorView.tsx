@@ -931,7 +931,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
                   {erros.repo && <span className="text-[10px] text-red-500 font-semibold">{erros.repo}</span>}
 
-                  <div className={`neu-pressed rounded-xl max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
+                  {/* max-h menor abaixo de sm (plano mobile, item 1.7):
+                      a caixa e rolagem-dentro-de-rolagem por natureza (e uma
+                      lista com busca e checkbox, nao da pra virar select de
+                      valor unico), entao a correcao possivel e encolher a
+                      area presa pelo gesto, nao elimina-la. */}
+                  <div className={`neu-pressed rounded-xl max-h-56 sm:max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
                     {catalogoRepo.length === 0 ? (
                       <p className="text-xs text-gray-500 p-4 text-center">
                         {soAbaixoMin ? 'Nenhum item no mínimo agora.' : 'Nenhum produto encontrado.'}
@@ -1144,12 +1149,23 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           : 'Nenhuma requisição nesta situação.'} />
       ) : (
         <div className="neu-flat rounded-2xl border border-white/5 overflow-x-auto">
-          <table className="w-full min-w-[780px]">
+          {/* Sem min-w fixo: Item, Qtd, Urgencia, Situacao e Acao ficam
+              sempre visiveis (mesma regua de RequisicoesView, em Compras);
+              o resto entra a partir de sm/md/lg. Item 1.1/1.2 do plano de
+              mobile (docs/plano-mobile-requisicoes.md) - em 375px a tabela
+              le sem rolagem horizontal, e a acao fica ao alcance. */}
+          <table className="w-full">
             <thead>
               <tr className="border-b border-white/5">
-                {['Item', 'Tipo', 'Solicitante', 'Qtd', 'Necessário até', 'Urgência', 'Aberto em', 'Situação', 'Histórico'].map(h => (
-                  <th key={h} className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">{h}</th>
-                ))}
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Item</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden lg:table-cell">Tipo</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden md:table-cell">Solicitante</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Qtd</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden lg:table-cell">Necessario ate</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Urgencia</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden sm:table-cell">Aberto em</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Situacao</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Historico</th>
               </tr>
             </thead>
             <tbody>
@@ -1174,8 +1190,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       {r.complemento && (
                         <span className="text-[10px] text-gray-500 ml-[21px]">{r.complemento}</span>
                       )}
+                      {/* A coluna Tipo some abaixo de lg (plano mobile,
+                          item 1.1) -- o badge migra para debaixo do item, so
+                          ate o breakpoint em que a coluna propria assume. */}
+                      <span className={`lg:hidden inline-block mt-1 ml-[21px] px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                        r.tipo === 'estoque'   ? 'bg-blue-500/15 text-blue-400'
+                        : r.tipo === 'reposicao' ? 'bg-emerald-500/15 text-emerald-400'
+                        : 'bg-purple-500/15 text-purple-400'
+                      }`}>
+                        {r.tipoLabel}
+                      </span>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 hidden lg:table-cell">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                         r.tipo === 'estoque'   ? 'bg-blue-500/15 text-blue-400'
                         : r.tipo === 'reposicao' ? 'bg-emerald-500/15 text-emerald-400'
@@ -1187,13 +1213,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     {/* Quem pediu. Vira informação útil justamente porque a
                         lista é do setor: sem esta coluna, "quem foi?" viraria
                         pergunta de corredor. */}
-                    <td className="py-3 px-4 text-xs text-gray-300 capitalize">
+                    <td className="py-3 px-4 text-xs text-gray-300 capitalize hidden md:table-cell">
                       {r.solicitante ?? '—'}
                     </td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-300">{qtdBR(r.qtd)} {r.unidade ?? ''}</td>
-                    <td className="py-3 px-4 text-xs font-mono text-gray-400">{r.prazo ?? '—'}</td>
+                    <td className="py-3 px-4 text-xs font-mono text-gray-400 hidden lg:table-cell">{r.prazo ?? '—'}</td>
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
-                    <td className="py-3 px-4 text-xs font-mono text-gray-500">{r.abertura || '—'}</td>
+                    <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{r.abertura || '—'}</td>
                     {/* "Em correção" descreve o estado do documento, não o que
                         se espera de quem lê — e quem lê é justamente quem tem de
                         agir. O valor no banco continua 'Em correção' (guardas,
