@@ -908,6 +908,15 @@ function LogMaxAppInner() {
   // morreria ao trocar de view — que era exatamente o defeito antigo.
   const { disparo: alarmeDisparo, silenciar: silenciarAlarme } = useAlarmeGlobal(isAuthenticated);
 
+  // O modal é montado em TODAS as telas de usuário logado, não só na shell.
+  // O áudio começa a tocar no hook, que vive acima dos early returns: se o
+  // modal só existisse na shell, quem estivesse no seletor de filial ou na
+  // tela de "aguardando alocação" ouviria o alarme em loop sem ter botão
+  // nenhum para silenciar.
+  const alarmeDaAula = alarmeDisparo
+    ? <AlarmeModal alarme={alarmeDisparo} onFechar={silenciarAlarme} />
+    : null;
+
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
   // corpo do render (não em efeito) porque as views chamam `hasSetor` durante o
   // próprio render — um useEffect chegaria um frame atrasado e a primeira
@@ -1006,6 +1015,7 @@ function LogMaxAppInner() {
   if (authLoading || (isAuthenticated && profileLoading && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base">
+        {alarmeDaAula}
         <div className="flex flex-col items-center gap-4">
           <Loader2 size={32} className="text-accent animate-spin" />
           <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">
@@ -1023,6 +1033,7 @@ function LogMaxAppInner() {
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
+        {alarmeDaAula}
         <UserCog size={40} className="text-gray-600" />
         <h2 className="text-lg font-bold text-gray-300">Acesso não configurado</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
@@ -1040,6 +1051,7 @@ function LogMaxAppInner() {
   if (podeEscolherFilial && !escolheu) {
     return (
       <div className="min-h-screen flex flex-col bg-base">
+        {alarmeDaAula}
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
           <button
             onClick={handleSignOut}
@@ -1074,6 +1086,7 @@ function LogMaxAppInner() {
   if (!filialAtiva && !podeEscolherFilial) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
+        {alarmeDaAula}
         <Building2 size={40} className="text-gray-600" />
         <h2 className="text-lg font-bold text-gray-300">Aguardando alocação</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
@@ -1341,9 +1354,7 @@ function LogMaxAppInner() {
         />
       )}
       {/* Alarme da aula: modal central em qualquer tela (migr. 529). */}
-      {alarmeDisparo && (
-        <AlarmeModal alarme={alarmeDisparo} onFechar={silenciarAlarme} />
-      )}
+      {alarmeDaAula}
       {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
           (migr. 307). Ver o comentário no próprio componente. */}
       <DesligamentoAviso profile={profile} />

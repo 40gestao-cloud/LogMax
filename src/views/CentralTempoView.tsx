@@ -178,7 +178,7 @@ function AlarmesCard() {
           {tipo === 'aviso' ? (
             <div className="flex flex-col gap-1.5 mb-3">
               <label htmlFor="alarme-msg" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Mensagem do aviso</label>
-              <textarea id="alarme-msg" rows={2} value={mensagem}
+              <textarea id="alarme-msg" rows={2} value={mensagem} maxLength={300}
                 onChange={e => { setMensagem(e.target.value); setErro(null); }}
                 placeholder="O que a turma precisa ler quando o alarme tocar"
                 className="neu-input py-2 px-3 rounded-xl text-sm w-full resize-none" />

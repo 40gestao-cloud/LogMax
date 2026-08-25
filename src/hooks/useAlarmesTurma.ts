@@ -34,12 +34,12 @@ async function carregar(): Promise<AlarmeTurma[]> {
 // Assinatura realtime com nome de canal único por instância: dois hooks
 // vivos ao mesmo tempo (shell + Central de Tempo aberta) com o mesmo nome
 // derrubariam um ao outro.
-function useRealtimeAlarmes(onChange: () => void) {
+function useRealtimeAlarmes(onChange: () => void, enabled = true) {
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !enabled) return;
     const sb = supabase;
     const sufixo = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -50,7 +50,7 @@ function useRealtimeAlarmes(onChange: () => void) {
         () => onChangeRef.current())
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, []);
+  }, [enabled]);
 }
 
 /** Lista + escrita. Usado pela Central de Tempo. A RLS é quem barra o aluno. */
@@ -117,7 +117,7 @@ export function useAlarmeGlobal(enabled: boolean) {
   }, [enabled]);
 
   useEffect(() => { load(); }, [load]);
-  useRealtimeAlarmes(load);
+  useRealtimeAlarmes(load, enabled);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const alarmesRef = useRef(alarmes);
@@ -130,6 +130,46 @@ export function useAlarmeGlobal(enabled: boolean) {
     const a = audioRef.current;
     if (a) { try { a.pause(); a.currentTime = 0; } catch {} }
   }, []);
+
+  // O navegador só deixa tocar áudio depois de algum gesto do usuário, e em
+  // parte deles a permissão fica no ELEMENTO, não na página. Por isso o
+  // elemento é criado e "abençoado" no primeiro clique/tecla — mudo, para
+  // não soltar nenhum bip — em vez de ser criado no instante do disparo,
+  // que pode acontecer horas depois do último gesto.
+  useEffect(() => {
+    if (!enabled) return;
+    const preparar = () => {
+      if (audioRef.current) return;
+      try {
+        const a = new Audio(ALARME_AUDIO_URL);
+        a.loop = true;
+        a.volume = 0.7;
+        a.muted = true;
+        const p = a.play();
+        const encerrar = () => { try { a.pause(); a.currentTime = 0; a.muted = false; } catch {} };
+        if (p && typeof p.then === 'function') p.then(encerrar).catch(encerrar);
+        else encerrar();
+        audioRef.current = a;
+      } catch {}
+    };
+    window.addEventListener('pointerdown', preparar, { once: true });
+    window.addEventListener('keydown', preparar, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', preparar);
+      window.removeEventListener('keydown', preparar);
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    // Saiu a sessão (logout, expiração por inatividade): cala o som e some
+    // com o modal. Sem isto o áudio ficaria em loop na tela de login, sem
+    // botão nenhum para pará-lo, e o modal velho reapareceria no próximo
+    // login como se o alarme tivesse acabado de tocar.
+    if (enabled) return;
+    setDisparo(null);
+    const a = audioRef.current;
+    if (a) { try { a.pause(); a.currentTime = 0; } catch {} }
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -151,18 +191,23 @@ export function useAlarmeGlobal(enabled: boolean) {
           audioRef.current.loop = true;
           audioRef.current.volume = 0.7;
         }
+        audioRef.current.muted = false;
         audioRef.current.currentTime = 0;
         const p = audioRef.current.play();
-        // Autoplay bloqueado (aba sem interação): o modal continua na tela,
-        // que é a parte que não pode falhar.
+        // Autoplay bloqueado (aba que nunca recebeu um clique): o modal
+        // continua na tela, que é a parte que não pode falhar.
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch {}
     };
+    // 1s de intervalo com aba em segundo plano vira ~1x por minuto (o
+    // navegador estrangula timers de aba oculta). A comparação é por minuto
+    // do relógio, e não por contagem de ticks, justamente para o alarme
+    // sobreviver a isso — no pior caso ele atrasa alguns segundos.
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [enabled]);
 
-  // Ao desmontar (logout), nada de som órfão tocando na tela de login.
+  // Ao desmontar, nada de som órfão.
   useEffect(() => () => {
     const a = audioRef.current;
     if (a) { try { a.pause(); } catch {} }

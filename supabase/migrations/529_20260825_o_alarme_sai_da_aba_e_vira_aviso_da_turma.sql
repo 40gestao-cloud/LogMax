@@ -74,6 +74,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Quem cadastrou vem do banco, não do cliente: o insert do front não manda a
+-- coluna, e sem DEFAULT ela nasceria NULL em toda linha — coluna de auditoria
+-- que não audita nada.
+ALTER TABLE public.alarmes_turma ALTER COLUMN criado_por SET DEFAULT auth.uid();
+
 COMMENT ON TABLE public.alarmes_turma IS
   'Migr. 529 — alarmes da aula. O banco guarda a régua; o disparo é do cliente, comparando o relógio do Acre com hora:minuto.';
 

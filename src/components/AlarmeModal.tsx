@@ -54,6 +54,8 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
       >
         <div
           style={{
+            maxHeight: '85vh',
+            overflowY: 'auto',
             background: 'rgba(10,10,10,0.90)',
             border: `1px solid ${borda}`,
             borderRadius: '1rem',
@@ -80,7 +82,10 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
             </div>
           </div>
 
-          <p className="text-sm text-gray-200 leading-relaxed mb-6 whitespace-pre-line">
+          {/* Rola em vez de esticar: aviso longo em tela de celular empurraria o
+              botão para fora da viewport, e sem o botão não há como calar o
+              áudio — o alarme viraria armadilha. */}
+          <p className="text-sm text-gray-200 leading-relaxed mb-6 whitespace-pre-line max-h-[45vh] overflow-y-auto main-scrollbar">
             {texto}
           </p>
 
