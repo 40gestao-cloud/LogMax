@@ -368,8 +368,15 @@ const MATRIZ_ONLY_VIEWS = new Set([
   'rh-mandatos',
 ]);
 const FILIAL_ONLY_VIEWS = new Set(['demandas']);
-const viewPermitidaNoModo = (view: string, matrizMode: boolean): boolean =>
-  matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
+// `pendencias` não cabe em nenhuma das duas listas porque o modo em que ela vive
+// depende do PAPEL (migr. 527): para o professor é tela de Matriz — o mapa
+// atravessa as três unidades, e abri-lo dentro de uma filial contradiz o
+// contexto que ele acabou de escolher. Para o gerente é o oposto: ele nunca
+// entra em Matriz, e a tela é justamente a da filial dele.
+const viewPermitidaNoModo = (view: string, matrizMode: boolean, role?: string): boolean => {
+  if (view === 'pendencias') return role === 'gerente' ? !matrizMode : matrizMode;
+  return matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
+};
 
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro, atividadesAula, atividadesNaoLidas }: any) => (
   <>
@@ -458,8 +465,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             Migr. 527: o gerente entra junto, mas só enxerga a unidade dele —
             e quem recorta é a RPC, não este `if`. "O que está parado na minha
             filial e com quem?" é o trabalho do gerente todo dia, não um
-            relatório sobre ele. */}
-        {(profile?.role === 'admin' || profile?.role === 'gerente') && (
+            relatório sobre ele.
+
+            O modo depende do papel. Para o professor a tela é da MATRIZ: ela
+            atravessa as três unidades, e oferecê-la dentro de uma filial
+            contradiz o contexto que ele acabou de escolher. O gerente nunca
+            entra em Matriz, então para ele é o contrário. `viewPermitidaNoModo`
+            repete a mesma régua — o menu não é a única porta. */}
+        {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
           <button onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
           </button>
@@ -1083,7 +1096,7 @@ function LogMaxAppInner() {
   // botão Voltar), uma view exclusiva do outro modo cai em 'inicio' aqui —
   // durante o render, antes do commit, então não há flash. 'inicio' é
   // permitida nos dois modos, o que garante que isto converge.
-  if (!viewPermitidaNoModo(activeView, matrizMode)) setActiveView('inicio');
+  if (!viewPermitidaNoModo(activeView, matrizMode, profile?.role)) setActiveView('inicio');
 
   const visibleModulesBase = matrizMode
     // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,
