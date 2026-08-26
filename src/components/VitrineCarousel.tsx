@@ -104,7 +104,7 @@ export function VitrineCarousel() {
         style={{
           width: '100%',
           maxWidth: 460,
-          aspectRatio: '3 / 4',
+          aspectRatio: '5 / 7',
           borderRadius: '1.5rem',
           overflow: 'hidden',
           position: 'relative',
@@ -215,43 +215,22 @@ function Slide({ item }: { item: VitrineItem }) {
 
   return (
     <>
-      {/* A imagem fica com todo o espaço que sobra do texto (antes era fatia
-          fixa de 52%, e o bloco de texto esticava mesmo com uma linha só —
-          arte pequena embaixo, vazio enorme em cima). */}
-      <div style={{ flex: '1 1 auto', minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      {/* Caixa quadrada: as artes são 512x512, então `cover` preenche tudo sem
+          cortar nada e sem sobrar faixa nas laterais. O card (5/7) é alto o
+          bastante pra caber o quadrado + o bloco de texto abaixo. */}
+      <div style={{ flex: '0 0 auto', aspectRatio: '1 / 1', position: 'relative', overflow: 'hidden' }}>
         {imgSrc && !imgError ? (
-          <>
-            {/* Cópia borrada preenchendo a caixa: a arte de cima usa `contain`
-                (nada de corte — 512x512 numa caixa mais larga sobrava faixa),
-                e essa camada evita a barra preta lateral. */}
-            <img
-              src={imgSrc}
-              alt=""
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                filter: 'blur(28px) saturate(1.2)',
-                transform: 'scale(1.15)',
-                opacity: 0.45,
-              }}
-            />
-            <img
-              src={imgSrc}
-              alt={item.titulo}
-              onError={handleError}
-              style={{
-                position: 'relative',
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-          </>
+          <img
+            src={imgSrc}
+            alt={item.titulo}
+            onError={handleError}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
         ) : (
           <div
             className="w-full h-full flex items-center justify-center"
@@ -266,7 +245,8 @@ function Slide({ item }: { item: VitrineItem }) {
           `flex: 0 0 auto`: ocupa só a altura do próprio conteúdo. */}
       <div
         style={{
-          flex: '0 0 auto',
+          flex: '1 1 auto',
+          minHeight: 0,
           padding: '0.9rem 1.35rem 1.1rem',
           background: 'rgba(0,0,0,0.55)',
           backdropFilter: 'blur(6px)',
