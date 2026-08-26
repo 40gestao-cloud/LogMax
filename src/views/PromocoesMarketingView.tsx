@@ -9,6 +9,10 @@ import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
+import {
+  uploadImagemArte, validarImagemArte, avaliarResolucaoArte, removerArteAntiga,
+  ehArteHospedada, ARTE_IMAGEM_ACCEPT, ARTE_IMAGEM_OUTPUT_MAX_LABEL,
+} from '../lib/arteImagem';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -135,6 +139,13 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const [arteModal, setArteModal] = useState<{ promocao: any; arte: any | null } | null>(null);
   const [arteUrl, setArteUrl] = useState('');
   const [savingArte, setSavingArte] = useState(false);
+  // Upload da arte (migr. 539). `arteFile` guarda o arquivo escolhido até o
+  // Publicar — subir no `onChange` deixaria lixo no bucket toda vez que
+  // alguém escolhe e desiste.
+  const [arteFile, setArteFile] = useState<File | null>(null);
+  const [artePreview, setArtePreview] = useState<string | null>(null);
+  const [arteAviso, setArteAviso] = useState<string | null>(null);
+  const [enviandoArte, setEnviandoArte] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState<{ arte: any } | null>(null);
 
   // Modal de geração de legenda via Gemini (endpoint /api/ai-legenda).
@@ -157,12 +168,32 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   // o botão pra não mostrar uma ação que falha.
   const canPublicarArte = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
 
-  // Mapa rápido promocao_id → arte (1 por promoção, garantido pelo UNIQUE).
-  const arteByPromocao = useMemo(() => {
-    const m: Record<string, any> = {};
-    for (const a of artes ?? []) m[a.promocao_id] = a;
+  // promocao_id → LISTA de artes. Era 1 por promoção enquanto existia o
+  // UNIQUE(promocao_id); a migr. 539 soltou essa amarra e passou a cota a
+  // contar por PRODUTO, justamente para o aluno poder subir mais de uma
+  // versão da peça e o professor escolher qual vai para a vitrine.
+  const artesByPromocao = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    for (const a of artes ?? []) (m[a.promocao_id] ??= []).push(a);
     return m;
   }, [artes]);
+
+  // Quantas artes cada PRODUTO já tem — é essa a unidade da cota (migr. 539).
+  const artesPorProduto = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const a of artes ?? []) if (a.produto_id) m[a.produto_id] = (m[a.produto_id] ?? 0) + 1;
+    return m;
+  }, [artes]);
+
+  // Limite que o professor define em Sessões Gerais → Marketing (migr. 539).
+  // Lido aqui para a tela dizer "2 de 3" ANTES de o aluno preencher, em vez de
+  // só recusar depois. O gatilho do banco é quem garante.
+  const [maxArtes, setMaxArtes] = useState(3);
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.from('marketing_config').select('max_artes_por_produto').eq('id', 1).maybeSingle()
+      .then(({ data }) => { if (data?.max_artes_por_produto) setMaxArtes(data.max_artes_por_produto); });
+  }, []);
 
   // Feedbacks agrupados por arte_id pra mostrar contagem no botão.
   const feedbacksByArte = useMemo(() => {
@@ -305,27 +336,73 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     setSaving(false);
   };
 
-  const openArteModal = (promocao: any) => {
-    const existing = arteByPromocao[promocao.id] ?? null;
-    setArteModal({ promocao, arte: existing });
-    setArteUrl(existing?.arte_url ?? '');
+  // `arte` nulo = publicar mais uma; preenchido = editar aquela.
+  const openArteModal = (promocao: any, arte: any | null = null) => {
+    setArteModal({ promocao, arte });
+    setArteUrl(arte?.arte_url ?? '');
+    setArteFile(null);
+    setArtePreview(null);
+    setArteAviso(null);
   };
 
   const closeArteModal = () => {
+    // O preview é um object URL; sem revoke ele fica preso na memória da aba
+    // enquanto o aluno abre e fecha o modal a cada tentativa.
+    if (artePreview) URL.revokeObjectURL(artePreview);
     setArteModal(null);
+    setArteUrl('');
+    setArteFile(null);
+    setArtePreview(null);
+    setArteAviso(null);
+  };
+
+  const escolherArquivoArte = async (file: File | null) => {
+    if (artePreview) URL.revokeObjectURL(artePreview);
+    if (!file) { setArteFile(null); setArtePreview(null); setArteAviso(null); return; }
+    const v = validarImagemArte(file);
+    if (!v.ok) {
+      setArteFile(null); setArtePreview(null); setArteAviso(null);
+      showToast(v.motivo, 'error', true);
+      return;
+    }
+    setArteFile(file);
+    setArtePreview(URL.createObjectURL(file));
+    // Resolução baixa avisa, não impede: travar aqui deixaria o aluno sem
+    // caminho no meio da aula, e o resize nunca amplia mesmo.
+    setArteAviso(await avaliarResolucaoArte(file));
     setArteUrl('');
   };
 
   const handleSaveArte = async () => {
     if (!arteModal) return;
-    const url = arteUrl.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      showToast('Cole um link válido começando com http(s)://', 'error');
-      return;
+    const { promocao, arte } = arteModal;
+
+    // Cota por produto (migr. 539). O gatilho do banco é quem garante; aqui é
+    // só para não deixar o aluno subir a imagem e levar a recusa depois.
+    if (!arte) {
+      const usadas = artesPorProduto[promocao.produto_id] ?? 0;
+      if (promocao.produto_id && usadas >= maxArtes) {
+        showToast(
+          `Este produto já tem ${usadas} arte(s), que é o limite atual. Apague uma ou peça ao professor para aumentar em Sessões Gerais → Marketing.`,
+          'error', true);
+        return;
+      }
     }
+
+    let url = arteUrl.trim();
     setSavingArte(true);
     try {
-      const { promocao, arte } = arteModal;
+      // Arquivo escolhido vence o campo de link: só sobe agora, no Publicar.
+      if (arteFile) {
+        setEnviandoArte(true);
+        url = await uploadImagemArte(arteFile, promocao.id);
+        setEnviandoArte(false);
+      }
+      if (!/^https?:\/\//i.test(url)) {
+        showToast('Envie a imagem da arte ou cole um link começando com http(s)://', 'error', true);
+        setSavingArte(false);
+        return;
+      }
       const payload: any = {
         promocao_id:        promocao.id,
         nome_produto:       promocao.nome_produto ?? '',
@@ -340,7 +417,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
 
       let saved;
       if (arte) {
-        // Edição: substitui o link existente.
+        // Edição: substitui o link existente. Se a arte antiga era um arquivo
+        // NOSSO e agora vem outro, o antigo vira bytes parados no bucket —
+        // removido depois de a coluna já estar reescrita (best-effort).
+        const urlAntiga = arte.arte_url;
         const { data, error } = await supabase!
           .from('marketing_artes')
           .update({ arte_url: url, nome_publicador: profile?.nome ?? '' })
@@ -350,6 +430,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
         if (error) throw error;
         saved = data;
         setArtes((prev: any[]) => prev.map(a => a.id === saved.id ? saved : a));
+        if (urlAntiga && urlAntiga !== url) await removerArteAntiga(urlAntiga);
         showToast('Arte atualizada.', 'success');
       } else {
         saved = await dbInsert('/api/marketingartesview', payload);
@@ -374,9 +455,25 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       closeArteModal();
     } catch (err: any) {
       console.error('[publicar arte]', err);
-      showToast(`Erro ao publicar: ${err?.message ?? 'tente novamente'}`, 'error');
+      showToast(`Erro ao publicar: ${err?.message ?? 'tente novamente'}`, 'error', true);
     }
+    setEnviandoArte(false);
     setSavingArte(false);
+  };
+
+  const handleApagarArte = async (arte: any) => {
+    if (!await confirm('Apagar esta arte? O feedback recebido nela some junto.')) return;
+    try {
+      const { error } = await supabase!.from('marketing_artes').delete().eq('id', arte.id);
+      if (error) throw error;
+      setArtes((prev: any[]) => prev.filter(a => a.id !== arte.id));
+      // Libera a vaga da cota também no bucket — arte apagada não precisa
+      // continuar ocupando espaço.
+      await removerArteAntiga(arte.arte_url);
+      showToast('Arte apagada.', 'success');
+    } catch (err: any) {
+      showToast(`Não foi possível apagar: ${err?.message ?? 'tente novamente'}`, 'error', true);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -670,11 +767,17 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                         </td>
                         <td className="py-3 px-4 text-center">
                           {p.status === 'Aprovado' ? (() => {
-                            const arte = arteByPromocao[p.id];
+                            const lista = artesByPromocao[p.id] ?? [];
+                            const arte = lista[0] ?? null;
                             const fbList = arte ? (feedbacksByArte[arte.id] ?? []) : [];
                             const avg = fbList.length
                               ? (fbList.reduce((s, f) => s + (f.estrelas ?? 0), 0) / fbList.length).toFixed(1)
                               : null;
+                            // Cota é por PRODUTO (migr. 539), não por promoção:
+                            // o mesmo produto pode ter outra campanha já com
+                            // artes, e é o conjunto que conta.
+                            const usadas = p.produto_id ? (artesPorProduto[p.produto_id] ?? 0) : 0;
+                            const cotaCheia = !!p.produto_id && usadas >= maxArtes;
 
                             // Sem arte e sem permissão → célula vazia limpa.
                             if (!arte && !canPublicarArte) {
@@ -684,16 +787,43 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                               <div className="flex flex-col items-center gap-1.5">
                                 {canPublicarArte && (
                                   <button
-                                    onClick={() => openArteModal(p)}
-                                    title={arte ? 'Editar link da arte' : 'Publicar arte e notificar setores'}
-                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-colors ${
-                                      arte
+                                    onClick={() => openArteModal(p, null)}
+                                    disabled={cotaCheia}
+                                    title={cotaCheia
+                                      ? `Este produto já tem ${usadas} de ${maxArtes} artes — o limite atual`
+                                      : 'Publicar arte e notificar setores'}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                      lista.length
                                         ? 'text-accent border-accent/40 bg-accent/10 hover:bg-accent/15'
                                         : 'text-gray-300 border-white/15 hover:text-accent hover:border-accent/40'
                                     }`}
                                   >
-                                    {arte ? <><Edit3 size={10} /> Editar</> : <><ImagePlus size={10} /> Publicar</>}
+                                    <ImagePlus size={10} /> Publicar
                                   </button>
+                                )}
+                                {/* Uma linha por arte: com a cota por produto a
+                                    promoção pode ter mais de uma versão. */}
+                                {lista.map(a => (
+                                  <div key={a.id} className="flex items-center gap-1">
+                                    <a href={a.arte_url} target="_blank" rel="noreferrer"
+                                      title={ehArteHospedada(a.arte_url) ? 'Abrir a imagem enviada' : 'Abrir o link externo'}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
+                                      <ExternalLink size={9} /> {ehArteHospedada(a.arte_url) ? 'Imagem' : 'Link'}
+                                    </a>
+                                    {canPublicarArte && (
+                                      <>
+                                        <button onClick={() => openArteModal(p, a)} title="Substituir esta arte"
+                                          className="action-btn-edit"><Edit3 size={10} /></button>
+                                        <button onClick={() => handleApagarArte(a)} title="Apagar esta arte"
+                                          className="action-btn-delete"><Trash2 size={10} /></button>
+                                      </>
+                                    )}
+                                  </div>
+                                ))}
+                                {canPublicarArte && p.produto_id && (
+                                  <span className="text-[9px] text-gray-600 uppercase tracking-widest">
+                                    {usadas} de {maxArtes}
+                                  </span>
                                 )}
                                 {arte && (
                                   <button
@@ -759,29 +889,71 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                 <span className="font-bold text-gray-300">{arteModal.promocao.nome_produto}</span>
                 {arteModal.promocao.descricao && <> · <span className="text-gray-400">{arteModal.promocao.descricao}</span></>}
               </p>
-              <label htmlFor="promo-arte-url" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link da arte *</label>
+              {/* Enviar a imagem vem PRIMEIRO, e o link depois, porque o
+                  caminho que funciona é o de cima: link de página do Canva não
+                  é imagem e quebrava no carrossel sem avisar ninguém
+                  (migr. 539/540). */}
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Imagem da arte</label>
+              <div className="mt-1.5 flex items-center gap-3">
+                <label className="neu-button rounded-xl px-3 py-2 text-xs font-bold text-gray-300 hover:text-accent cursor-pointer border border-white/10 flex items-center gap-1.5 shrink-0">
+                  <ImagePlus size={13} /> Escolher arquivo
+                  <input type="file" accept={ARTE_IMAGEM_ACCEPT} className="hidden"
+                    onChange={e => { void escolherArquivoArte(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                </label>
+                {artePreview ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <img src={artePreview} alt="Prévia da arte"
+                      className="h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0" />
+                    <button onClick={() => void escolherArquivoArte(null)}
+                      className="text-[10px] text-gray-500 hover:text-red-400 uppercase tracking-widest">
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-gray-600 leading-snug">
+                    JPG, PNG ou WEBP. É reduzida para até {ARTE_IMAGEM_OUTPUT_MAX_LABEL} antes de subir.
+                  </span>
+                )}
+              </div>
+              {arteAviso && (
+                <p className="text-[11px] text-yellow-400 mt-2 leading-relaxed">{arteAviso}</p>
+              )}
+
+              <div className="flex items-center gap-2 my-3">
+                <span className="h-px flex-1 bg-white/10" />
+                <span className="text-[10px] text-gray-600 uppercase tracking-widest">ou</span>
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <label htmlFor="promo-arte-url" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link externo</label>
               <input
                 id="promo-arte-url"
                 type="url"
                 value={arteUrl}
-                onChange={e => setArteUrl(e.target.value)}
-                placeholder="https://canva.com/... ou https://drive.google.com/..."
-                className="neu-input rounded-xl px-3 py-2.5 text-sm w-full mt-1.5"
-                autoFocus
+                onChange={e => { setArteUrl(e.target.value); if (e.target.value) void escolherArquivoArte(null); }}
+                placeholder="https://..."
+                disabled={!!arteFile}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm w-full mt-1.5 disabled:opacity-40"
               />
               <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                O link só funciona no carrossel se apontar direto para o <span className="text-gray-400">arquivo de imagem</span> —
+                link da página do Canva aparece quebrado. Na dúvida, envie a imagem acima.
+              </p>
+              <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
                 {arteModal.arte
-                  ? 'O novo link substituirá o atual. O feedback já recebido continua válido.'
-                  : 'Ao publicar, todos os setores receberão uma notificação com link direto pra arte.'}
+                  ? 'A nova arte substitui a atual. O feedback já recebido continua válido.'
+                  : 'Ao publicar, todos os setores recebem uma notificação. O professor decide, na Vitrine da Tela de Login, quais artes entram no carrossel.'}
               </p>
               <div className="flex justify-end gap-2 mt-5">
                 <button onClick={closeArteModal} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
                   Cancelar
                 </button>
-                <NeuButtonAccent variant="" onClick={handleSaveArte} disabled={savingArte || !arteUrl.trim()}>
-                  {savingArte
-                    ? (arteModal.arte ? 'Salvando…' : 'Publicando…')
-                    : (<><Send size={12} /> {arteModal.arte ? 'Salvar' : 'Publicar e Notificar'}</>)}
+                <NeuButtonAccent variant="" onClick={handleSaveArte} disabled={savingArte || (!arteUrl.trim() && !arteFile)}>
+                  {enviandoArte
+                    ? 'Enviando imagem…'
+                    : savingArte
+                      ? (arteModal.arte ? 'Salvando…' : 'Publicando…')
+                      : (<><Send size={12} /> {arteModal.arte ? 'Salvar' : 'Publicar e Notificar'}</>)}
                 </NeuButtonAccent>
               </div>
             </motion.div>

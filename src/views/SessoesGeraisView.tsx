@@ -164,7 +164,12 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'marketing-matriz', label: 'Marketing', icon: Megaphone, color: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 text-pink-400',
     modulos: [
       { id: 'marketing', label: 'Marketing', icon: Store, color: 'text-pink-400',
-        submenus: ['Vitrine da Tela de Login'] },
+        submenus: [
+          'Vitrine da Tela de Login',
+          // Os limites da turma (migr. 539/540). `requireRole` admin literal:
+          // CEO e conselheiro são alunos, e estes números os limitam.
+          { label: 'Configurações', requireRole: ['admin'] },
+        ] },
     ],
   },
   // Leaf — vai direto pro Relatório de Vendas (Orçamentos/Pedidos/Histórico

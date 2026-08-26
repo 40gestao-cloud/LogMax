@@ -25,6 +25,11 @@ export const VitrinePublicaView = ({ showToast }: any) => {
   const [items, setItems] = useState<Candidato[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [aba, setAba] = useState<'tudo' | 'arte' | 'produto'>('tudo');
+  // Teto do carrossel (migr. 539/540). Vem para a tela dizer "12 de 12" e
+  // desabilitar o que não cabe — antes ele cortava em silêncio na leitura, e
+  // o professor aprovava 20 sem saber que 8 nunca apareceriam.
+  const [maxVitrine, setMaxVitrine] = useState<number | null>(null);
 
   const load = async () => {
     if (!supabase) return;
@@ -40,6 +45,12 @@ export const VitrinePublicaView = ({ showToast }: any) => {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.from('marketing_config').select('max_vitrine').eq('id', 1).maybeSingle()
+      .then(({ data }) => { if (data?.max_vitrine) setMaxVitrine(data.max_vitrine); });
+  }, []);
 
   const toggle = async (item: Candidato) => {
     if (!supabase) return;
@@ -65,9 +76,21 @@ export const VitrinePublicaView = ({ showToast }: any) => {
     showToast(novoEstado ? 'Adicionado à vitrine.' : 'Removido da vitrine.', 'success', true);
   };
 
-  const ativos    = items.filter(i => i.vitrine_publica).length;
-  const naVitrine = items.filter(i => i.vitrine_publica);
-  const fora      = items.filter(i => !i.vitrine_publica);
+  const ativos = items.filter(i => i.vitrine_publica).length;
+  // Abas por tipo em vez de um interruptor global "só artes"/"só produtos":
+  // o interruptor criaria um estado que mente — o professor liga um produto,
+  // não vê aparecer, e não descobre que o modo estava em "só artes". A aba
+  // organiza sem inventar regra nova.
+  const doTipo = aba === 'tudo' ? items : items.filter(i => i.tipo === aba);
+  const naVitrine = doTipo.filter(i => i.vitrine_publica);
+  const fora      = doTipo.filter(i => !i.vitrine_publica);
+  const cheia     = maxVitrine != null && ativos >= maxVitrine;
+
+  const ABAS: { id: typeof aba; label: string; n: number }[] = [
+    { id: 'tudo',    label: 'Tudo',            n: items.length },
+    { id: 'arte',    label: 'Artes e Design',  n: items.filter(i => i.tipo === 'arte').length },
+    { id: 'produto', label: 'Produtos',        n: items.filter(i => i.tipo === 'produto').length },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
@@ -80,11 +103,27 @@ export const VitrinePublicaView = ({ showToast }: any) => {
             use Vendas → Pedidos Online.</span>
           </p>
         </div>
-        <div className="neu-pressed px-4 py-2 rounded-xl text-xs">
+        <div className={`neu-pressed px-4 py-2 rounded-xl text-xs border ${cheia ? 'border-yellow-500/40' : 'border-transparent'}`}>
           <span className="text-gray-500 uppercase tracking-widest font-bold">Na vitrine</span>
-          <span className="ml-3 text-accent font-bold text-base">{ativos}</span>
-          <span className="text-gray-500"> / {items.length}</span>
+          <span className={`ml-3 font-bold text-base ${cheia ? 'text-yellow-400' : 'text-accent'}`}>{ativos}</span>
+          <span className="text-gray-500"> / {maxVitrine ?? items.length}</span>
+          {cheia && (
+            <span className="block text-[10px] text-yellow-400/90 mt-0.5 normal-case tracking-normal">
+              Limite atingido — tire um para incluir outro.
+            </span>
+          )}
         </div>
+      </div>
+
+      <div className="shrink-0 flex items-center gap-1 border-b border-white/5">
+        {ABAS.map(t => (
+          <button key={t.id} type="button" onClick={() => setAba(t.id)}
+            className={`px-3 py-2 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-colors ${
+              aba === t.id ? 'text-accent border-accent' : 'text-gray-500 border-transparent hover:text-gray-300'
+            }`}>
+            {t.label} <span className="text-gray-600">({t.n})</span>
+          </button>
+        ))}
       </div>
 
       {loading ? <LoadingSpinner /> : items.length === 0 ? (
@@ -103,11 +142,19 @@ export const VitrinePublicaView = ({ showToast }: any) => {
           {fora.length > 0 && (
             <Section
               titulo="Disponíveis"
-              subtitulo="Itens elegíveis para entrar na vitrine."
+              subtitulo={cheia
+                ? `A vitrine está cheia (${ativos} de ${maxVitrine}). Tire um item de "Em destaque" para liberar vaga.`
+                : 'Itens elegíveis para entrar na vitrine.'}
               items={fora}
               saving={saving}
               onToggle={toggle}
+              bloqueado={cheia}
             />
+          )}
+          {naVitrine.length === 0 && fora.length === 0 && (
+            <p className="text-xs text-gray-500 py-8 text-center">
+              Nada nesta aba ainda.
+            </p>
           )}
         </div>
       )}
@@ -116,13 +163,15 @@ export const VitrinePublicaView = ({ showToast }: any) => {
 };
 
 function Section({
-  titulo, subtitulo, items, saving, onToggle,
+  titulo, subtitulo, items, saving, onToggle, bloqueado = false,
 }: {
   titulo: string;
   subtitulo: string;
   items: Candidato[];
   saving: string | null;
   onToggle: (item: Candidato) => void;
+  /** Vitrine cheia: incluir mais um seria recusado pela RPC (migr. 540). */
+  bloqueado?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -132,7 +181,7 @@ function Section({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {items.map(item => (
-          <Card key={`${item.tipo}:${item.id}`} item={item} saving={saving} onToggle={onToggle} />
+          <Card key={`${item.tipo}:${item.id}`} item={item} saving={saving} onToggle={onToggle} bloqueado={bloqueado} />
         ))}
       </div>
     </div>
@@ -140,11 +189,12 @@ function Section({
 }
 
 function Card({
-  item, saving, onToggle,
+  item, saving, onToggle, bloqueado = false,
 }: {
   item: Candidato;
   saving: string | null;
   onToggle: (item: Candidato) => void;
+  bloqueado?: boolean;
 }) {
   // Tenta imagem_url primeiro; em onError, troca pra fallback (produto.imagem_url).
   const [imgSrc, setImgSrc] = useState<string | null>(item.imagem_url);
@@ -210,17 +260,24 @@ function Card({
         <p className="text-sm font-bold text-gray-200 leading-snug line-clamp-2">{item.titulo}</p>
         {preco && <p className="text-sm font-bold text-accent">{preco}</p>}
 
+        {/* `disabled` honesto: com a vitrine cheia a RPC recusaria de verdade
+            (migr. 540). Remover nunca é bloqueado — é justamente o que libera
+            a vaga. */}
         <button
           onClick={() => onToggle(item)}
-          disabled={isSaving}
-          className="mt-auto neu-button py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+          disabled={isSaving || (bloqueado && !ativo)}
+          title={bloqueado && !ativo ? 'A vitrine está cheia — tire um item para liberar vaga' : undefined}
+          className="mt-auto neu-button py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           style={ativo ? {
             background: 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))',
             border: '1px solid rgba(212,175,55,0.4)',
             color: '#D4AF37',
           } : undefined}
         >
-          {isSaving ? '...' : ativo ? (<><Check size={12} /> Remover da vitrine</>) : 'Adicionar à vitrine'}
+          {isSaving ? '...'
+            : ativo ? (<><Check size={12} /> Remover da vitrine</>)
+            : bloqueado ? 'Vitrine cheia'
+            : 'Adicionar à vitrine'}
         </button>
       </div>
     </motion.div>

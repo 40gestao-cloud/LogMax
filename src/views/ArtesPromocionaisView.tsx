@@ -6,6 +6,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { isConselheiro } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
+import { ehArteHospedada } from '../lib/arteImagem';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 
 const SETOR_LABEL: Record<string, string> = {
@@ -204,13 +205,26 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial }: any) => {
                   </div>
                 </div>
 
+                {/* A peça em si, quando é imagem nossa (migr. 539). Quem
+                    avalia precisa VER a arte — mandar abrir noutra aba para
+                    depois voltar e dar estrelas é o caminho que ninguém faz.
+                    Link externo continua só como botão: pode não ser imagem. */}
+                {ehArteHospedada(arte.arte_url) && (
+                  <a href={arte.arte_url} target="_blank" rel="noopener noreferrer"
+                    className="block rounded-xl overflow-hidden border border-white/10 bg-black/20">
+                    <img src={arte.arte_url} alt={`Arte de ${arte.nome_produto}`}
+                      loading="lazy"
+                      className="w-full max-h-56 object-contain" />
+                  </a>
+                )}
+
                 <a
                   href={arte.arte_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 neu-button-accent rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest"
                 >
-                  <ExternalLink size={12} /> Abrir Arte
+                  <ExternalLink size={12} /> {ehArteHospedada(arte.arte_url) ? 'Ver em tamanho real' : 'Abrir Arte'}
                 </a>
 
                 {arte.nome_publicador && (

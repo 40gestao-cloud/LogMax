@@ -54,6 +54,7 @@ const RequisicoesView         = lazy(() => import('./views/RequisicoesView').the
 const RequisicoesSetorView    = lazy(() => import('./views/RequisicoesSetorView').then(m => ({ default: m.RequisicoesSetorView })));
 const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
 const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
+const MarketingConfigView     = lazy(() => import('./views/MarketingConfigView').then(m => ({ default: m.MarketingConfigView })));
 const ConfigJurosView         = lazy(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
 const CotacoesView            = lazy(() => import('./views/CotacoesView').then(m => ({ default: m.CotacoesView })));
 const PedidosView             = lazy(() => import('./views/PedidosView').then(m => ({ default: m.PedidosView })));
@@ -1280,6 +1281,9 @@ function LogMaxAppInner() {
       // tela no momento do deploy cairia num switch sem case ao recarregar.
       case 'marketing-vitrinedateladelogin':
       case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} />;
+      // Migr. 539/540 — os dois limites do Marketing. Só o professor abre: o
+      // submenu tem requireRole e a policy de UPDATE recusa o resto.
+      case 'marketing-configurações':      return <MarketingConfigView showToast={st} />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
