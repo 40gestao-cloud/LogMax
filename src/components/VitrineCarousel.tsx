@@ -215,8 +215,10 @@ function Slide({ item }: { item: VitrineItem }) {
 
   return (
     <>
-      {/* Imagem ocupa ~52% do card; texto ganha mais espaço pra respirar. */}
-      <div style={{ flex: '0 0 52%', position: 'relative', overflow: 'hidden' }}>
+      {/* A imagem fica com todo o espaço que sobra do texto (antes era fatia
+          fixa de 52%, e o bloco de texto esticava mesmo com uma linha só —
+          arte pequena embaixo, vazio enorme em cima). */}
+      <div style={{ flex: '1 1 auto', minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {imgSrc && !imgError ? (
           <img
             src={imgSrc}
@@ -239,16 +241,17 @@ function Slide({ item }: { item: VitrineItem }) {
         )}
       </div>
 
-      {/* Bloco de texto abaixo da imagem — não overlay. Mais legível. */}
+      {/* Bloco de texto abaixo da imagem — não overlay. Mais legível.
+          `flex: 0 0 auto`: ocupa só a altura do próprio conteúdo. */}
       <div
         style={{
-          flex: '1 1 auto',
-          padding: '1.5rem 1.75rem 2rem',
+          flex: '0 0 auto',
+          padding: '1.1rem 1.5rem 1.35rem',
           background: 'rgba(0,0,0,0.55)',
           backdropFilter: 'blur(6px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.65rem',
+          gap: '0.5rem',
         }}
       >
         <span
@@ -269,7 +272,7 @@ function Slide({ item }: { item: VitrineItem }) {
         </span>
         <h3
           style={{
-            fontSize: '1.45rem',
+            fontSize: '1.3rem',
             fontWeight: 800,
             color: '#fff',
             margin: 0,
@@ -287,10 +290,10 @@ function Slide({ item }: { item: VitrineItem }) {
             style={{
               margin: 0,
               color: 'rgba(255,255,255,0.72)',
-              fontSize: '0.95rem',
-              lineHeight: 1.45,
+              fontSize: '0.9rem',
+              lineHeight: 1.4,
               display: '-webkit-box',
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
             }}
