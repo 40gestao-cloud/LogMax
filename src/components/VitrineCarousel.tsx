@@ -220,17 +220,38 @@ function Slide({ item }: { item: VitrineItem }) {
           arte pequena embaixo, vazio enorme em cima). */}
       <div style={{ flex: '1 1 auto', minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {imgSrc && !imgError ? (
-          <img
-            src={imgSrc}
-            alt={item.titulo}
-            onError={handleError}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
+          <>
+            {/* Cópia borrada preenchendo a caixa: a arte de cima usa `contain`
+                (nada de corte — 512x512 numa caixa mais larga sobrava faixa),
+                e essa camada evita a barra preta lateral. */}
+            <img
+              src={imgSrc}
+              alt=""
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(28px) saturate(1.2)',
+                transform: 'scale(1.15)',
+                opacity: 0.45,
+              }}
+            />
+            <img
+              src={imgSrc}
+              alt={item.titulo}
+              onError={handleError}
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          </>
         ) : (
           <div
             className="w-full h-full flex items-center justify-center"
