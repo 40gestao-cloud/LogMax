@@ -1280,7 +1280,7 @@ function LogMaxAppInner() {
       // alias: `activeView` vive no sessionStorage, e quem estivesse nessa
       // tela no momento do deploy cairia num switch sem case ao recarregar.
       case 'marketing-vitrinedateladelogin':
-      case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} />;
+      case 'marketing-vitrinepública':     return <VitrinePublicaView showToast={st} profile={profile} />;
       // Migr. 539/540 — os dois limites do Marketing. Só o professor abre: o
       // submenu tem requireRole e a policy de UPDATE recusa o resto.
       case 'marketing-configurações':      return <MarketingConfigView showToast={st} />;
