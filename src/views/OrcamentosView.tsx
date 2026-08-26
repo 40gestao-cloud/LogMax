@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
-import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
@@ -396,16 +396,11 @@ const OrcamentosViewInner = ({
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Inativar este orçamento?')) return;
-    try {
-      await dbDelete('/api/orcamentosview', id);
-      setData((prev: any[]) => prev.filter(o => o.id !== id));
-      showToast('Orçamento inativado.', 'success', true);
-    } catch (err: any) {
-      showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
-    }
-  };
+  // `handleDelete` saiu daqui (migr. 552). Ele perguntava "Inativar este
+  // orçamento?" e gravava `ativo = false` — inclusive num orçamento já
+  // convertido, deixando `pedidos_venda.orcamento_id` apontando para documento
+  // morto. Orçamento entrou na mesma régua de requisição, cotação e pedido:
+  // documento é rastro, cancela-se. O banco agora recusa a inativação.
 
   // Expirado helper (visual): considera expirado se passa data_emissao + validade_dias
   // e ainda está em status que esperam ação. Não muda no banco aqui (cliente_especial
@@ -702,7 +697,16 @@ const OrcamentosViewInner = ({
                                 <FileText size={12} />
                               </button>
                             )}
-                            {(o.status === 'Rascunho' || o.status === 'Aguardando Financeiro') && isVendas && (
+                            {/* Cancelar cobre todo orçamento que ainda não virou
+                                pedido. Antes só aparecia em Rascunho e
+                                Aguardando Financeiro, e para o resto sobrava o
+                                botão de inativar — que não é a mesma coisa:
+                                cancelar é decisão registrada, inativar sumia
+                                com o documento. Convertido não se cancela por
+                                aqui; cancela-se o pedido de venda (migr. 551),
+                                e ele solta o orçamento de volta. */}
+                            {o.status !== 'Convertido em Pedido' && o.status !== 'Cancelado'
+                              && (isVendas || isAdminOuCeo) && (
                               <button onClick={() => handleCancelar(o.id)} title="Cancelar"
                                 className="action-btn-warning">
                                 <X size={12} />
@@ -712,12 +716,6 @@ const OrcamentosViewInner = ({
                               <button onClick={() => setFeedbackAberto(o.feedback_financeiro)} title="Ver feedback"
                                 className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
                                 <MessageSquare size={12} />
-                              </button>
-                            )}
-                            {(isVendas || isAdminOuCeo) && (
-                              <button onClick={() => handleDelete(o.id)} title="Inativar"
-                                className="action-btn-delete">
-                                <Trash2 size={12} />
                               </button>
                             )}
                           </div>

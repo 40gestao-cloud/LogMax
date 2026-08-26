@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroPedidoVenda } from '../lib/documentos';
-import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
@@ -103,12 +103,37 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Cancelar este pedido de venda?')) return;
+  // Cancelar é decisão que desfaz efeitos; inativar é tirar a linha da tela.
+  // Isto aqui chamava `dbDelete` — o botão dizia "Cancelar", a pergunta dizia
+  // "Cancelar", o toast dizia "inativado", e a ação era a terceira: a
+  // mercadoria já separada ficava fora do estoque sem documento que a
+  // explicasse, e a conta do cliente seguia cobrável sem pedido atrás. Agora
+  // quem faz o trabalho é a RPC (migr. 551): devolve o estoque, cancela a
+  // cobrança e solta o orçamento de origem para poder ser convertido de novo.
+  const handleCancelar = async (p: any) => {
+    const separado = !!p.separado_em;
+    if (!await confirm(
+      `Cancelar o ${numeroPedidoVenda(p)}?\n\n`
+      + (separado
+          ? 'Este pedido já foi separado, então a mercadoria volta para o estoque. '
+          : '')
+      + 'A conta a receber do cliente é cancelada junto, e o orçamento de origem volta '
+      + 'a poder virar pedido.\n\nO pedido continua na lista, com status Cancelado — '
+      + 'documento não se apaga.')) return;
+    if (!supabase) return;
     try {
-      await dbDelete('/api/pedidosvendaview', id);
-      setData((prev: any[]) => prev.filter(p => p.id !== id));
-      showToast('Pedido inativado.', 'success', true);
+      const { data: res, error } = await supabase.rpc('cancelar_pedido_venda', {
+        p_id: p.id, p_motivo: null,
+      });
+      if (error) throw error;
+      setData((prev: any[]) => prev.map(x =>
+        x.id === p.id ? { ...x, status: 'Cancelado' } : x));
+      const devolvido = Number((res as any)?.estoque_devolvido ?? 0);
+      showToast(
+        devolvido > 0
+          ? `Pedido cancelado. ${devolvido} item(ns) voltaram para o estoque, e a conta do cliente foi cancelada.`
+          : 'Pedido cancelado, e a conta do cliente foi cancelada junto.',
+        'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
     }
@@ -219,8 +244,8 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                                 <ExternalLink size={12} />
                               </span>
                             )}
-                            {(isVendas || isAdminOuCeo) && p.status !== 'Concluído' && (
-                              <button onClick={() => handleDelete(p.id)} title="Cancelar"
+                            {(isVendas || isAdminOuCeo) && p.status !== 'Concluído' && p.status !== 'Cancelado' && (
+                              <button onClick={() => handleCancelar(p)} title="Cancelar pedido"
                                 className="action-btn-delete">
                                 <Trash2 size={12} />
                               </button>
