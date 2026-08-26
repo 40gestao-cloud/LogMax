@@ -230,6 +230,18 @@ const MSG_POR_CONSTRAINT: Record<string, string> = {
     + 'use o que já está no catálogo em vez de cadastrar de novo — dois cadastros '
     + 'partem o estoque em dois. Se é outro produto, diferencie o nome (marca, '
     + 'tamanho, volume).',
+  // Migr. 550. Os gatilhos companheiros (`fn_produto_ean_valido` e
+  // `fn_produto_variante_ja_existe`) barram antes e conseguem NOMEAR o cadastro
+  // que está no caminho — coisa que o índice não faz. Estas frases são a rede
+  // de baixo, para o caso de o índice pegar primeiro (corrida entre duas abas).
+  uq_produtos_ean_filial:
+    'Este código de barras já está em outro produto desta unidade. Dois produtos '
+    + 'com o mesmo EAN fazem o PDV vender o errado — confira o número na embalagem, '
+    + 'ou clique em "Gerar" para um código interno.',
+  uq_produtos_variante:
+    'Esta combinação de tamanho e cor já existe neste modelo. Cada variante é um '
+    + 'cadastro só — dois partem o estoque da peça em dois. Edite a que já existe, '
+    + 'ou escolha outra combinação.',
 };
 
 function traduzErroDeGravacao(error: { code?: string; message?: string }): string {

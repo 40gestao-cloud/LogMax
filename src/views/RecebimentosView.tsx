@@ -390,8 +390,20 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!await confirm('Inativar este recebimento? Ele sairá da lista mas o histórico fica preservado.')) return;
+  // O texto antigo — "sairá da lista mas o histórico fica preservado" —
+  // prometia o oposto do que acontecia num recebimento já conferido: a
+  // movimentação de Entrada continuava ativa e o saldo, inflado. Quem barra
+  // agora é o banco (migr. 546); aqui a linha só para de convidar.
+  const handleDelete = async (id: string, status?: string) => {
+    const conferido = status === 'Concluído' || status === 'Parcial';
+    if (conferido) {
+      await confirm(
+        'Este recebimento já foi conferido: a mercadoria entrou no estoque e a conta do fornecedor '
+        + 'foi liberada.\n\nEle não se exclui. Se a carga voltou para o fornecedor, use "Devolver ao '
+        + 'fornecedor" na própria linha — é o que baixa o estoque, encolhe o lote e abate a conta a pagar.');
+      return;
+    }
+    if (!await confirm('Inativar este recebimento? Nada entrou no estoque ainda — ele sai da lista e o histórico fica preservado.')) return;
     try {
       await dbDelete('/api/recebimentosview', id);
       setData((prev: any[]) => prev.filter(d => d.id !== id));
@@ -808,7 +820,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            <button onClick={() => handleDelete(item.id, item.status)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>
                         </td>
                       </motion.tr>

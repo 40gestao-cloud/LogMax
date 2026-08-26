@@ -123,9 +123,14 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
     setEditItem(item);
     setForm({ item: item.item ?? '' });
     setExtras({ qtd: qtdBR(item.qtd ?? 1), urgencia: item.urgencia ?? 'Normal', centro_custo: item.centro_custo ?? '' });
-    // Pré-seleciona o produto se o item gravado bater com algum do catálogo;
-    // senão cai em "Outro" pra preservar o texto histórico.
-    const match = produtosOrdenados.find((p: any) => p.nome === item.item);
+    // O vínculo gravado manda (migr. 545): `produto_id` é o que o pedido e o
+    // recebimento vão obedecer, e é ele que precisa aparecer no campo — não o
+    // resultado de casar o texto por acaso. Sem vínculo, cai no palpite pelo
+    // nome; sem nenhum dos dois, em "Outro" pra preservar o texto histórico.
+    const doVinculo = item.produto_id
+      ? produtosOrdenados.find((p: any) => p.id === item.produto_id)
+      : null;
+    const match = doVinculo ?? produtosOrdenados.find((p: any) => p.nome === item.item);
     setProdutoSel(match ? match.id : (item.item ? ITEM_OUTRO : ''));
     setErrors({});
   };
@@ -155,20 +160,32 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   // Requisições → Do Setor.
   //
   // Corrigir o que o gerente já aprovou devolve o documento para ele (migr.
-  // 330): item e quantidade SÃO a decisão — aprovar 5 e comprar 50 esvaziaria a
-  // aprovação. Urgência e centro de custo não reabrem nada. Quem decide isso é
-  // a RPC, porque reabrir são duas escritas (requisição e aprovação) que só
-  // fazem sentido juntas.
+  // 330): item, quantidade e PRODUTO são a decisão — aprovar 5 e comprar 50
+  // esvaziaria a aprovação, e trocar o produto esvazia mais ainda. Urgência e
+  // centro de custo não reabrem nada. Quem decide isso é a RPC, porque reabrir
+  // são duas escritas (requisição e aprovação) que só fazem sentido juntas.
+  //
+  // `p_vincula` (migr. 545) diz "esta chamada está decidindo o vínculo com o
+  // catálogo". Sem ela, `p_produto_id = null` seria ambíguo: "não mandei nada"
+  // e "escolhi Outro (digitar)" são opostos. Só mandamos a flag quando o
+  // dropdown foi de fato resolvido — com o campo em branco a RPC preserva o
+  // vínculo que já existia.
   const handleSave = async () => {
     if (!validate() || !editItem || !supabase) return;
 
     const qtd = parseQtd(extras.qtd) || 1;
-    const mudouDecisao = form.item.trim() !== (editItem.item ?? '') || qtd !== Number(editItem.qtd);
+    const vincula   = produtoSel !== '';
+    const produtoId = produtoSel === ITEM_OUTRO ? null : (produtoSel || null);
+    const trocouProduto = vincula && (produtoId ?? null) !== (editItem.produto_id ?? null);
+    const mudouDecisao = form.item.trim() !== (editItem.item ?? '')
+      || qtd !== Number(editItem.qtd)
+      || trocouProduto;
     if (editItem.status === 'Aprovado' && mudouDecisao) {
       const ok = await confirm(
         `O gerente aprovou "${editItem.item}" na quantidade ${editItem.qtd}.\n\n` +
-        'Mudar o item ou a quantidade devolve a requisição para aprovação — ela sai da sua fila ' +
-        'e volta para a do gerente. Urgência e centro de custo você corrige sem reabrir nada.\n\n' +
+        'Mudar o item, o produto do catálogo ou a quantidade devolve a requisição para aprovação — ' +
+        'ela sai da sua fila e volta para a do gerente. Urgência e centro de custo você corrige ' +
+        'sem reabrir nada.\n\n' +
         'Corrigir mesmo assim?');
       if (!ok) return;
     }
@@ -182,12 +199,16 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
         p_qtd:          qtd,
         p_urgencia:     extras.urgencia,
         p_centro_custo: extras.centro_custo,
+        p_produto_id:   produtoId,
+        p_vincula:      vincula,
       });
       if (error) throw error;
       const atualizada = (res as any)?.requisicao;
       const reaberta   = !!(res as any)?.reaberta;
       setData((prev: any[]) => prev.map(d => d.id === editItem.id
-        ? (atualizada ?? { ...d, item: form.item, qtd, urgencia: extras.urgencia, centro_custo: extras.centro_custo })
+        ? (atualizada ?? { ...d, item: form.item, qtd, urgencia: extras.urgencia,
+                           centro_custo: extras.centro_custo,
+                           produto_id: vincula ? produtoId : d.produto_id })
         : d));
       showToast(
         reaberta
