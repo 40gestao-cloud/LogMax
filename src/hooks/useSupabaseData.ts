@@ -223,6 +223,13 @@ const MSG_POR_CONSTRAINT: Record<string, string> = {
     'Já existe uma proposta viva deste fornecedor para esta requisição. Comparar '
     + 'preço é cotar fornecedores DIFERENTES — escolha outro fornecedor, ou cancele '
     + 'a proposta anterior antes de repetir este.',
+  // Migr. 535. Aqui não há gatilho companheiro: o índice fala sozinho, então
+  // esta frase é a única explicação que o aluno recebe.
+  uq_produtos_nome_filial_ativo:
+    'Já existe um produto ativo com este nome nesta unidade. Se é o mesmo item, '
+    + 'use o que já está no catálogo em vez de cadastrar de novo — dois cadastros '
+    + 'partem o estoque em dois. Se é outro produto, diferencie o nome (marca, '
+    + 'tamanho, volume).',
 };
 
 function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
