@@ -49,15 +49,23 @@ export const MarketingConfigView = ({ showToast }: any) => {
   const salvar = async () => {
     if (!supabase) return;
     setSaving(true);
-    const { error } = await supabase.from('marketing_config')
+    // `.select()` não é enfeite: sem ele, um UPDATE que não acha a linha (ou
+    // que a RLS recusa em silêncio) volta sem erro, e a tela diria "salvo"
+    // sem ter salvado nada.
+    const { data, error } = await supabase.from('marketing_config')
       .update({
         max_artes_por_produto: maxArtes,
         max_vitrine: maxVitrine,
         atualizado_em: new Date().toISOString(),
       })
-      .eq('id', 1);
+      .eq('id', 1)
+      .select();
     setSaving(false);
     if (error) { showToast(`Não foi possível salvar: ${error.message}`, 'error', true); return; }
+    if (!data || data.length === 0) {
+      showToast('Nada foi salvo — a linha de configuração não foi encontrada ou a permissão foi negada.', 'error', true);
+      return;
+    }
     showToast('Configurações salvas.', 'success', true);
   };
 

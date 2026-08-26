@@ -390,12 +390,17 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     }
 
     let url = arteUrl.trim();
+    // Guardado para limpar o bucket se o INSERT falhar depois do upload — a
+    // cota do banco (migr. 539) recusa DEPOIS de o arquivo já ter subido, e
+    // sem isto cada recusa deixaria uma imagem órfã ocupando espaço.
+    let subida: string | null = null;
     setSavingArte(true);
     try {
       // Arquivo escolhido vence o campo de link: só sobe agora, no Publicar.
       if (arteFile) {
         setEnviandoArte(true);
         url = await uploadImagemArte(arteFile, promocao.id);
+        subida = url;
         setEnviandoArte(false);
       }
       if (!/^https?:\/\//i.test(url)) {
@@ -455,6 +460,9 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       closeArteModal();
     } catch (err: any) {
       console.error('[publicar arte]', err);
+      // A imagem subiu e o registro não entrou: desfaz o upload em vez de
+      // deixar bytes parados no bucket.
+      if (subida) await removerArteAntiga(subida);
       showToast(`Erro ao publicar: ${err?.message ?? 'tente novamente'}`, 'error', true);
     }
     setEnviandoArte(false);

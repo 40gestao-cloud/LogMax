@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, ImageOff, Check, Plus, X, ImagePlus, Edit3, Trash2, ArrowUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
 import {
   uploadImagemArte, validarImagemArte, avaliarResolucaoArte, removerArteAntiga,
@@ -18,6 +19,9 @@ type Candidato = {
   imagem_fallback: string | null;  // produto.imagem_url quando arte_url quebrar
   preco_promocional: number | null;
   vitrine_publica: boolean;
+  /** Marcado E dentro da janela de datas (migr. 543). É `no_ar` que ocupa
+   *  vaga — arte de campanha encerrada fica marcada e fora do ar. */
+  no_ar: boolean;
   prioridade: number;
   created_at: string;
 };
@@ -44,6 +48,7 @@ const formatBRL = (v: number | null | undefined): string | null => {
 };
 
 export const VitrinePublicaView = ({ showToast, profile }: any) => {
+  const confirm = useConfirm();
   const [items, setItems] = useState<Candidato[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -89,7 +94,10 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
     const novoEstado = !item.vitrine_publica;
 
     // Optimistic update — reverte se a RPC falhar.
-    setItems(prev => prev.map(x => x.id === item.id && x.tipo === item.tipo ? { ...x, vitrine_publica: novoEstado } : x));
+    // `no_ar` acompanha: tirar da vitrine sempre tira do ar; pôr só põe se o
+    // item já estava dentro da janela (a RPC recarrega a verdade no fim).
+    setItems(prev => prev.map(x => x.id === item.id && x.tipo === item.tipo
+      ? { ...x, vitrine_publica: novoEstado, no_ar: novoEstado ? x.no_ar || true : false } : x));
     setSaving(key);
 
     const { error } = await supabase.rpc('marcar_vitrine', {
@@ -100,7 +108,8 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
 
     setSaving(null);
     if (error) {
-      setItems(prev => prev.map(x => x.id === item.id && x.tipo === item.tipo ? { ...x, vitrine_publica: item.vitrine_publica } : x));
+      setItems(prev => prev.map(x => x.id === item.id && x.tipo === item.tipo
+        ? { ...x, vitrine_publica: item.vitrine_publica, no_ar: item.no_ar } : x));
       showToast(`Erro: ${error.message}`, 'error', true);
       return;
     }
@@ -145,11 +154,14 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
     if (!formInst.titulo.trim()) { showToast('Dê um título à peça.', 'error', true); return; }
     if (!arqInst && !formInst.imagem_url) { showToast('Envie a imagem da peça.', 'error', true); return; }
     setSalvandoInst(true);
+    // Desfaz o upload se a gravação falhar depois dele (RLS, rede) — senão
+    // cada tentativa frustrada deixa uma imagem órfã no bucket.
+    let subida: string | null = null;
     try {
       let url = formInst.imagem_url;
       const urlAntiga = formInst.imagem_url;
       // Só sobe no Salvar — escolher e desistir não pode deixar lixo no bucket.
-      if (arqInst) url = await uploadImagemArte(arqInst, 'institucional');
+      if (arqInst) { url = await uploadImagemArte(arqInst, 'institucional'); subida = url; }
 
       const payload = {
         titulo: formInst.titulo.trim(),
@@ -178,6 +190,7 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
       fecharFormInst();
       await load();
     } catch (err: any) {
+      if (subida) await removerArteAntiga(subida);
       showToast(`Não foi possível salvar: ${err?.message ?? 'tente novamente'}`, 'error', true);
     }
     setSalvandoInst(false);
@@ -185,6 +198,9 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
 
   const apagarInst = async (item: Candidato) => {
     if (!supabase) return;
+    // `vitrine_institucional` não tem soft delete: some de vez, e o arquivo
+    // sai do bucket junto. Um clique sem pergunta não pode fazer isso.
+    if (!await confirm(`Apagar "${item.titulo}"? A peça e a imagem somem de vez.`)) return;
     const { error } = await supabase.from('vitrine_institucional').delete().eq('id', item.id);
     if (error) { showToast(`Não foi possível apagar: ${error.message}`, 'error', true); return; }
     await removerArteAntiga(item.imagem_url);
@@ -192,7 +208,10 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
     showToast('Peça apagada.', 'success', true);
   };
 
-  const ativos = items.filter(i => i.vitrine_publica).length;
+  // Conta o que está NO AR, não o que está marcado — é essa a régua da RPC
+  // (migr. 543). Contar flags dizia "2 de 2" com o carrossel vazio.
+  const ativos = items.filter(i => i.no_ar).length;
+  const marcadosForaDoAr = items.filter(i => i.vitrine_publica && !i.no_ar).length;
   // Abas por tipo em vez de um interruptor global "só artes"/"só produtos":
   // o interruptor criaria um estado que mente — o professor liga um produto,
   // não vê aparecer, e não descobre que o modo estava em "só artes". A aba
@@ -233,6 +252,12 @@ export const VitrinePublicaView = ({ showToast, profile }: any) => {
           {cheia && (
             <span className="block text-[10px] text-yellow-400/90 mt-0.5 normal-case tracking-normal">
               Limite atingido — tire um para incluir outro.
+            </span>
+          )}
+          {marcadosForaDoAr > 0 && (
+            <span className="block text-[10px] text-gray-500 mt-0.5 normal-case tracking-normal">
+              {marcadosForaDoAr} marcad{marcadosForaDoAr > 1 ? 'os' : 'o'} fora do ar (prazo vencido) —
+              não ocupa{marcadosForaDoAr > 1 ? 'm' : ''} vaga.
             </span>
           )}
         </div>
@@ -490,6 +515,14 @@ function Card({
         </span>
         <p className="text-sm font-bold text-gray-200 leading-snug line-clamp-2">{item.titulo}</p>
         {preco && <p className="text-sm font-bold text-accent">{preco}</p>}
+
+        {/* Marcado mas vencido: o professor precisa VER isso para poder
+            limpar — antes a peça só sumia do carrossel em silêncio. */}
+        {item.vitrine_publica && !item.no_ar && (
+          <span className="text-[10px] uppercase tracking-widest text-yellow-400/90">
+            Fora do ar — prazo vencido
+          </span>
+        )}
 
         {/* Peça do professor: prioridade e as ações que só ela tem. */}
         {item.tipo === 'institucional' && (

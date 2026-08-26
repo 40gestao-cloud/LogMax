@@ -4,7 +4,10 @@ import { ImageOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type VitrineItem = {
-  tipo: 'arte' | 'produto';
+  // 'institucional' = peça do professor (migr. 541). Sem esse terceiro caso o
+  // rótulo caía no `else` e um banner de boas-vindas aparecia etiquetado
+  // "Produto" na tela de login.
+  tipo: 'arte' | 'produto' | 'institucional';
   id: string;
   titulo: string;
   descricao: string | null;
@@ -262,7 +265,7 @@ function Slide({ item }: { item: VitrineItem }) {
             border: '1px solid rgba(212, 175, 55, 0.3)',
           }}
         >
-          {item.tipo === 'arte' ? 'Promoção' : 'Produto'}
+          {item.tipo === 'arte' ? 'Promoção' : item.tipo === 'institucional' ? 'Destaque' : 'Produto'}
         </span>
         <h3
           style={{
