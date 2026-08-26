@@ -104,7 +104,7 @@ export function VitrineCarousel() {
         style={{
           width: '100%',
           maxWidth: 460,
-          aspectRatio: '4 / 5',
+          aspectRatio: '3 / 4',
           borderRadius: '1.5rem',
           overflow: 'hidden',
           position: 'relative',
@@ -267,23 +267,23 @@ function Slide({ item }: { item: VitrineItem }) {
       <div
         style={{
           flex: '0 0 auto',
-          padding: '1.1rem 1.5rem 1.35rem',
+          padding: '0.9rem 1.35rem 1.1rem',
           background: 'rgba(0,0,0,0.55)',
           backdropFilter: 'blur(6px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.5rem',
+          gap: '0.4rem',
         }}
       >
         <span
           style={{
             alignSelf: 'flex-start',
-            fontSize: '0.7rem',
+            fontSize: '0.6rem',
             fontWeight: 800,
             letterSpacing: '0.2em',
             textTransform: 'uppercase',
             color: '#D4AF37',
-            padding: '0.35rem 0.85rem',
+            padding: '0.25rem 0.7rem',
             borderRadius: '999px',
             background: 'rgba(212, 175, 55, 0.1)',
             border: '1px solid rgba(212, 175, 55, 0.3)',
@@ -293,7 +293,7 @@ function Slide({ item }: { item: VitrineItem }) {
         </span>
         <h3
           style={{
-            fontSize: '1.3rem',
+            fontSize: '1.05rem',
             fontWeight: 800,
             color: '#fff',
             margin: 0,
@@ -311,8 +311,8 @@ function Slide({ item }: { item: VitrineItem }) {
             style={{
               margin: 0,
               color: 'rgba(255,255,255,0.72)',
-              fontSize: '0.9rem',
-              lineHeight: 1.4,
+              fontSize: '0.8rem',
+              lineHeight: 1.35,
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -326,7 +326,7 @@ function Slide({ item }: { item: VitrineItem }) {
           <p
             style={{
               marginTop: '0.4rem',
-              fontSize: '1.7rem',
+              fontSize: '1.25rem',
               fontWeight: 800,
               color: '#D4AF37',
               letterSpacing: '0.02em',
