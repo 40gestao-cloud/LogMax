@@ -410,6 +410,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       }
       const payload: any = {
         promocao_id:        promocao.id,
+        // A unidade vem da promoção, não do default 'SuperMax' da coluna
+        // (migr. 139): sem isto a RLS recusa o INSERT de quem opera MaxLook
+        // ou TechMax e a arte só passava na SuperMax (migr. 558).
+        filial:             promocao.filial ?? filial,
         nome_produto:       promocao.nome_produto ?? '',
         descricao_promocao: promocao.descricao ?? null,
         preco_promocional:  promocao.preco_promocional ?? null,
