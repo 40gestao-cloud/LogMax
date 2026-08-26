@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { FilialProvider, useFilial } from './contexts/FilialContext';
 import { FilialSelector, type FilialOp } from './components/FilialSelector';
+import { ComandosProvider, BotaoComandos } from './components/ComandosGlobais';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
@@ -1051,18 +1052,35 @@ function LogMaxAppInner() {
   // 'escolheu' distingue "ainda não escolhi" de "escolhi Matriz (consolidado)".
   if (podeEscolherFilial && !escolheu) {
     return (
+      // Os mesmos comandos valem aqui: nesta tela Alt+2 entra direto na
+      // SuperMax, sem passar pelo card, e Alt+Q sai.
+      <ComandosProvider
+        podeTrocarUnidade
+        activeView="seletor-filial"
+        onTrocarUnidade={(d) => d === 'Matriz' ? escolherMatriz() : setFilialAtiva(d)}
+        onAbrirSeletor={clearFilial}
+        onSair={handleSignOut}
+      >
       <div className="min-h-screen flex flex-col bg-base">
         {alarmeDaAula}
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
           <button
             onClick={handleSignOut}
             className="btn-shimmer btn-shimmer-gold relative flex items-center gap-2.5 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
+            // Dourado solido, nao mais vidro tingido: o botao vivia sozinho no
+            // preto e o fundo translucido o deixava com cara de placeholder. O
+            // shimmer continua sendo o sweep do ::before (.btn-shimmer-gold) —
+            // so trocou o que ele varre. Texto escuro porque sobre dourado
+            // cheio o dourado no texto perde contraste.
             style={{
-              background: 'linear-gradient(135deg, rgba(212,175,55,0.18) 0%, rgba(255,220,100,0.08) 50%, rgba(212,175,55,0.14) 100%)',
-              border: '1px solid rgba(212,175,55,0.45)',
-              boxShadow: 'inset 0 1px 0 rgba(255,220,100,0.20), inset 0 0 12px 4px rgba(212,175,55,0.08), 0 2px 12px rgba(212,175,55,0.15)',
-              color: 'rgba(212,175,55,0.90)',
-              backdropFilter: 'blur(8px)',
+              // Sem background-size 200%: com o gradiente esticado ao dobro, a
+              // janela visivel pegava so um pedaco dele e a ponta #B8860B
+              // ficava parada no canto como uma mancha escura. Dourado cheio
+              // de cima pra baixo, o brilho fica por conta do sweep.
+              background: 'linear-gradient(180deg, #F6C948 0%, #E9B02E 55%, #C9901A 100%)',
+              border: '1px solid rgba(255,224,140,0.75)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.38), 0 4px 16px rgba(212,175,55,0.28)',
+              color: '#1b1405',
             }}
           >
             <LogOut size={15} />
@@ -1073,6 +1091,7 @@ function LogMaxAppInner() {
           onSelect={(v) => v === 'Matriz' ? escolherMatriz() : setFilialAtiva(v)}
         />
       </div>
+      </ComandosProvider>
     );
   }
 
@@ -1339,6 +1358,16 @@ function LogMaxAppInner() {
 
   return (
     <AIAssistantProvider>
+    {/* Comandos globais (teclado, Ctrl+K e voz). Aqui dentro porque precisa do
+        `profile` e do contexto de filial — e envolve a shell inteira para que o
+        botão do topbar alcance o `abrir()`. */}
+    <ComandosProvider
+      podeTrocarUnidade={podeEscolherFilial}
+      activeView={activeView}
+      onTrocarUnidade={(d) => d === 'Matriz' ? escolherMatriz() : setFilialAtiva(d)}
+      onAbrirSeletor={clearFilial}
+      onSair={handleSignOut}
+    >
     {/* `relative` não é cosmético: sem ancestral posicionado, qualquer
         descendente `absolute` (um `sr-only`, um badge esquecido) resolve o
         bloco contêiner no documento, escapa do `overflow-hidden` daqui e
@@ -1440,13 +1469,14 @@ function LogMaxAppInner() {
             {podeEscolherFilial && (
               <button
                 onClick={clearFilial}
-                title="Trocar filial"
+                title="Trocar filial (Alt+0) — comandos em Ctrl+K"
                 className="neu-button h-9 px-3 rounded-xl flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-accent border border-accent/20 hover:bg-accent/10 transition-colors shrink-0"
               >
                 <Building2 size={13} />
                 <span className="hidden sm:inline">{filialAtiva ?? 'Matriz'}</span>
               </button>
             )}
+            <BotaoComandos />
             <ThemeToggle />
             <AccentPicker />
 
@@ -1522,6 +1552,7 @@ function LogMaxAppInner() {
           Requisição continuam (mesmo motivo de antes). */}
       <PendenciasFAB profile={profile} showToast={showToast} activeView={activeView} onNavigate={navigate} aulaFiltro={!!aulaFiltro} />
     </div>
+    </ComandosProvider>
     </AIAssistantProvider>
   );
 }

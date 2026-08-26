@@ -1212,6 +1212,54 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
 }
 
 
+/* ── Seletor de filial — shimmer correndo na borda do card ──
+   Mesmo truque do .vitrine-card-shimmer (conic-gradient recortado no anel de
+   1.5px por mask-composite), com uma diferenca: as cores nao sao fixas, saem
+   das vars que cada card ja declara inline (--fs-bd-hv e --fs-peak). Assim o
+   SuperMax corre azul, o MaxLook dourado claro e o TechMax laranja, sem uma
+   regra por unidade e sem tocar na cor da borda parada, que continua sendo o
+   `border` do proprio card. O restante do conic e transparente de proposito:
+   se pintasse o anel inteiro, dobraria a borda e engrossaria o card. */
+@property --fs-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.fs-card-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--fs-angle),
+    transparent 0deg,
+    transparent 68deg,
+    var(--fs-bd-hv) 92deg,
+    var(--fs-peak, var(--fs-bd-hv)) 104deg,
+    var(--fs-bd-hv) 116deg,
+    transparent 140deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: fs-border-spin 4.5s linear infinite;
+  pointer-events: none;
+  z-index: 4;
+}
+
+@keyframes fs-border-spin {
+  to { --fs-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-card-shimmer::before { animation: none; }
+}
+
+
 /* LoginScreen — botão Entrar dourado fixo (#F0B429). Sem box-shadow:
    preferência explícita por design flat. Hover só clareia o tom. */
 .login-submit:not(:disabled):hover {
