@@ -15,6 +15,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { useFornecedorDesempenho, SeloDesempenho } from '../components/FornecedorDesempenho';
+import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 
@@ -147,6 +148,52 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
   const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
+
+  // Trava de trabalho (migr. 537) — chave é requisição+fornecedor, não a
+  // requisição inteira: dois alunos cotando fornecedores DIFERENTES para o
+  // mesmo item seguem em paralelo (é a comparação de preço que a tela existe
+  // para fazer); a chave composta só impede os dois cotando o MESMO
+  // fornecedor, que é trabalho repetido.
+  const chaveReserva = form.requisicao_id && form.fornecedor_id
+    ? `${form.requisicao_id}:${form.fornecedor_id}` : null;
+  const reserva = useReservaTrabalho('cotacao', chaveReserva, filial);
+
+  // Quem mais está cotando cada fornecedor NESTA requisição — para travar as
+  // opções do select antes do clique, não só depois. Consulta simples (não é
+  // o hook de cima, que só cuida da chave ATIVA) e realtime por requisição.
+  const [reservasDaReq, setReservasDaReq] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
+  useEffect(() => {
+    if (!supabase || !form.requisicao_id) { setReservasDaReq({}); return; }
+    let cancelado = false;
+    const carregar = async () => {
+      // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
+      // relógio não emite evento. Sem este filtro, quem fechou o notebook
+      // deixaria o fornecedor travado na tela dos colegas para sempre — e
+      // travado é mentira, porque o banco liberaria a reserva na hora.
+      const { data } = await supabase!.from('trabalho_reservas')
+        .select('chave, usuario_id, usuario_nome')
+        .eq('escopo', 'cotacao')
+        .like('chave', `${form.requisicao_id}:%`)
+        .gt('expira_em', new Date().toISOString());
+      if (cancelado) return;
+      const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
+      for (const r of data ?? []) {
+        const fornId = String(r.chave).slice(form.requisicao_id.length + 1);
+        mapa[fornId] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
+      }
+      setReservasDaReq(mapa);
+    };
+    void carregar();
+    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    const ch = supabase.channel(`cotacao_reservas_${canalId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregar(); })
+      .subscribe();
+    // Releitura periódica pela mesma razão do filtro acima: o cadeado do
+    // colega tem de sumir sozinho quando o prazo vence, sem F5.
+    const relogio = window.setInterval(() => { void carregar(); }, 30_000);
+    return () => { cancelado = true; window.clearInterval(relogio); ch.unsubscribe(); };
+  }, [form.requisicao_id]);
 
   // A requisição do formulário aberto. O `data_necessidade` dela é o alvo do
   // prazo que o fornecedor promete — sem ele na tela, a data da proposta era
@@ -380,6 +427,22 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const contarVivos = (reqId: string) =>
     (propostasPorRequisicao.get(reqId) ?? []).filter((c: any) => STATUS_VIVOS.has(c.status)).length;
 
+  // Fornecedores que JÁ têm proposta viva nesta requisição (migr. 538). É
+  // situação diferente do cadeado da 537: aquele é "alguém está digitando
+  // agora" e passa em 3 minutos; este é definitivo — o banco recusa o INSERT.
+  // Mostrar antes do clique evita o aluno preencher a proposta inteira para
+  // levar o erro no Salvar.
+  const fornecedoresJaCotados = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!form.requisicao_id) return map;
+    for (const c of propostasPorRequisicao.get(form.requisicao_id) ?? []) {
+      if (c.fornecedor_id && STATUS_VIVOS.has(c.status)) {
+        map.set(c.fornecedor_id, numeroCotacao(c));
+      }
+    }
+    return map;
+  }, [propostasPorRequisicao, form.requisicao_id]);
+
   // A lista de "Nova cotação" não pode ser só "toda requisição aprovada":
   // cotar não é ato único (a régua é 3 propostas), então a requisição
   // continua 'Aprovado' depois da 1ª proposta e voltava para o dropdown
@@ -446,6 +509,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Compras cria a cotação → vai direto para 'Aguardando Financeiro' e notifica.
   const handleSave = async () => {
     if (!validate()) return;
+    // O select já vem com a opção travada, mas o banco é quem decide de
+    // verdade: sem esta checagem no Salvar, o cadeado da tela é decoração.
+    if (reserva.travado) {
+      showToast(`${reserva.dono?.usuario_nome} já está cotando este fornecedor para esta requisição.`, 'error');
+      return;
+    }
     // Aviso soft: recomendado ter >=3 propostas por requisição antes do envio.
     // Bloqueio hard atrapalharia compra urgente; então só confirma.
     const vivosAtuais = contarVivos(form.requisicao_id);
@@ -874,9 +943,25 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         <option value="">Selecione um fornecedor PJ...</option>
                         {fornecedoresPJ.map(g => (
                           <optgroup key={g.label} label={g.label}>
-                            {g.items.map((f: any) => (
-                              <option key={f.id} value={f.id}>{f.nome}</option>
-                            ))}
+                            {g.items.map((f: any) => {
+                              // Duas travas diferentes, e a ordem importa: a
+                              // proposta que já existe é definitiva (o banco
+                              // recusa, migr. 538); a reserva é transitória
+                              // (passa em 3 min, migr. 537).
+                              const jaCotado = fornecedoresJaCotados.get(f.id);
+                              const res = reservasDaReq[f.id];
+                              const travado = !!res && res.usuario_id !== profile.id;
+                              const rotulo = jaCotado
+                                ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
+                                : travado
+                                  ? `🔒 ${f.nome} — ${res.usuario_nome} está cotando`
+                                  : f.nome;
+                              return (
+                                <option key={f.id} value={f.id} disabled={!!jaCotado || travado}>
+                                  {rotulo}
+                                </option>
+                              );
+                            })}
                           </optgroup>
                         ))}
                       </select>
@@ -888,13 +973,35 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         <option value="">Selecione um fornecedor PF...</option>
                         {fornecedoresPF.map(g => (
                           <optgroup key={g.label} label={g.label}>
-                            {g.items.map((f: any) => (
-                              <option key={f.id} value={f.id}>{f.nome}</option>
-                            ))}
+                            {g.items.map((f: any) => {
+                              // Duas travas diferentes, e a ordem importa: a
+                              // proposta que já existe é definitiva (o banco
+                              // recusa, migr. 538); a reserva é transitória
+                              // (passa em 3 min, migr. 537).
+                              const jaCotado = fornecedoresJaCotados.get(f.id);
+                              const res = reservasDaReq[f.id];
+                              const travado = !!res && res.usuario_id !== profile.id;
+                              const rotulo = jaCotado
+                                ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
+                                : travado
+                                  ? `🔒 ${f.nome} — ${res.usuario_nome} está cotando`
+                                  : f.nome;
+                              return (
+                                <option key={f.id} value={f.id} disabled={!!jaCotado || travado}>
+                                  {rotulo}
+                                </option>
+                              );
+                            })}
                           </optgroup>
                         ))}
                       </select>
                     </FormField>
+                    {reserva.travado && (
+                      <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
+                        🔒 {reserva.dono?.usuario_nome} já está cotando este fornecedor para esta requisição agora.
+                        Escolha outro fornecedor ou espere.
+                      </p>
+                    )}
                     {/* Histórico de quem foi escolhido, ainda no formulário: o
                         prazo prometido abaixo vale o que o fornecedor costuma
                         cumprir. */}

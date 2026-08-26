@@ -212,8 +212,28 @@ export function useFetchData<T = any>(
 // leva e ainda não distribuída, migr. 411) ou operando uma unidade que não é a
 // dela. `auth_pode_filial(NULL)` devolve NULL, e NULL numa policy é recusa —
 // idêntica a "não pode", sem dizer por quê.
+// Índice único → frase que diz o que fazer. O gatilho companheiro (migr. 538)
+// já explica no caso normal; isto aqui é para a corrida rara em que dois
+// INSERTs simultâneos passam os dois pelo `EXISTS` do gatilho e é o índice que
+// barra o segundo — aí a mensagem que chega é o texto cru do Postgres
+// ("duplicate key value violates unique constraint ..."), que não diz nada a
+// quem está na tela.
+const MSG_POR_CONSTRAINT: Record<string, string> = {
+  uq_cotacao_viva_requisicao_fornecedor:
+    'Já existe uma proposta viva deste fornecedor para esta requisição. Comparar '
+    + 'preço é cotar fornecedores DIFERENTES — escolha outro fornecedor, ou cancele '
+    + 'a proposta anterior antes de repetir este.',
+};
+
 function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
   const msg = error?.message ?? '';
+
+  if (error?.code === '23505') {
+    for (const [constraint, amigavel] of Object.entries(MSG_POR_CONSTRAINT)) {
+      if (msg.includes(constraint)) return amigavel;
+    }
+  }
+
   const ehRls = error?.code === '42501' || /row-level security|violates row-level/i.test(msg);
   if (!ehRls) return msg;
   return 'Sem permissão para gravar neste registro. Quase sempre é a unidade: '

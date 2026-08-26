@@ -42,6 +42,7 @@ import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, typ
 import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
+import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -475,6 +476,56 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
 
+  // Trava de trabalho (migr. 537) — nasce no exato momento que o usuário
+  // descreveu: escolher a origem. `SEM_COMPRA` (implantação) não reserva —
+  // não é um item que outro aluno possa disputar.
+  const chaveOrigemReserva = itemCompradoSel && itemCompradoSel !== SEM_COMPRA
+    ? (itemCompradoSel.startsWith(REQ_PREFIX)
+        ? `req:${itemCompradoSel.slice(REQ_PREFIX.length)}`
+        : `desc:${itemCompradoSel.trim().toLowerCase()}`)
+    : null;
+  const reservaOrigem = useReservaTrabalho('cadastro_produto', chaveOrigemReserva, filial);
+
+  // Quem mais está cadastrando cada origem — para travar as opções do select
+  // antes do clique. Recarrega por filial (não por origem, como na Cotação:
+  // aqui o universo de origens é a filial inteira, não uma requisição só).
+  const [reservasOrigem, setReservasOrigem] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
+  useEffect(() => {
+    if (!supabase || !filial) { setReservasOrigem({}); return; }
+    let cancelado = false;
+    const carregar = async () => {
+      // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
+      // relógio não emite evento. Sem este filtro, quem fechou o notebook
+      // deixaria a origem travada na tela dos colegas para sempre — e travado
+      // é mentira, porque o banco liberaria a reserva na hora.
+      const { data } = await supabase!.from('trabalho_reservas')
+        .select('chave, usuario_id, usuario_nome')
+        .eq('escopo', 'cadastro_produto')
+        .eq('filial', filial)
+        .gt('expira_em', new Date().toISOString());
+      if (cancelado) return;
+      const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
+      for (const r of data ?? []) mapa[String(r.chave)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
+      setReservasOrigem(mapa);
+    };
+    void carregar();
+    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    const ch = supabase.channel(`cadastro_produto_reservas_${canalId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregar(); })
+      .subscribe();
+    // Releitura periódica pela mesma razão do filtro acima: o cadeado do
+    // colega tem de sumir sozinho quando o prazo vence, sem F5.
+    const relogio = window.setInterval(() => { void carregar(); }, 30_000);
+    return () => { cancelado = true; window.clearInterval(relogio); ch.unsubscribe(); };
+  }, [filial]);
+  const chaveDeOrigem = (valor: string) => valor.startsWith(REQ_PREFIX)
+    ? `req:${valor.slice(REQ_PREFIX.length)}` : `desc:${valor.trim().toLowerCase()}`;
+  const origemTravadaPorOutro = (valor: string) => {
+    const res = reservasOrigem[chaveDeOrigem(valor)];
+    return !!res && res.usuario_id !== profile?.id;
+  };
+
   // Nome vem travado quando a origem preencheu — o texto da requisição é a
   // NECESSIDADE escrita em português ("Sardinha em Óleo 125g"), o do catálogo é
   // a IDENTIFICAÇÃO do item ("SARDINHA EM ÓLEO GOMES DA COSTA 125G"). São
@@ -665,16 +716,29 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         opcoes: [{ value: SEM_COMPRA, label: 'Saldo de implantação (a unidade está começando agora)' }],
       });
     }
+    // NOVO (migr. 537): opção já tomada por outro aluno vem travada, com o
+    // nome do dono — o mesmo cadeado que a Cotação usa para requisição+
+    // fornecedor, aqui por origem de compra.
+    const rotuloTravado = (rotulo: string, valor: string) => {
+      const res = reservasOrigem[chaveDeOrigem(valor)];
+      return res && res.usuario_id !== profile?.id ? `🔒 ${rotulo} — ${res.usuario_nome} está cadastrando` : rotulo;
+    };
     if (cotadas.length > 0) {
       grupos.push({
         label: `Cotação aprovada — travando o Gerar Pedido (${cotadas.length})`,
-        opcoes: cotadas.map(i => ({ value: `${REQ_PREFIX}${i.id}`, label: rotuloReq(i), hint: i.fornecedor })),
+        opcoes: cotadas.map(i => ({
+          value: `${REQ_PREFIX}${i.id}`, label: rotuloTravado(rotuloReq(i), `${REQ_PREFIX}${i.id}`),
+          hint: i.fornecedor, disabled: origemTravadaPorOutro(`${REQ_PREFIX}${i.id}`),
+        })),
       });
     }
     if (semCotacao.length > 0) {
       grupos.push({
         label: `Aguardando cotação (${semCotacao.length})`,
-        opcoes: semCotacao.map(i => ({ value: `${REQ_PREFIX}${i.id}`, label: rotuloReq(i), hint: i.fornecedor })),
+        opcoes: semCotacao.map(i => ({
+          value: `${REQ_PREFIX}${i.id}`, label: rotuloTravado(rotuloReq(i), `${REQ_PREFIX}${i.id}`),
+          hint: i.fornecedor, disabled: origemTravadaPorOutro(`${REQ_PREFIX}${i.id}`),
+        })),
       });
     }
     // Item comprado mas ainda não recebido não aparece: a ficha do produto
@@ -682,11 +746,14 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     if (itensComprados.length > 0) {
       grupos.push({
         label: `Já chegou e não está no catálogo (${itensComprados.length})`,
-        opcoes: itensComprados.map(i => ({ value: i.descricao, label: i.descricao, hint: i.fornecedor })),
+        opcoes: itensComprados.map(i => ({
+          value: i.descricao, label: rotuloTravado(i.descricao, i.descricao),
+          hint: i.fornecedor, disabled: origemTravadaPorOutro(i.descricao),
+        })),
       });
     }
     return grupos;
-  }, [itensAguardandoPedido, itensComprados, emImplantacao, origemExigida, itemCompradoSel]);
+  }, [itensAguardandoPedido, itensComprados, emImplantacao, origemExigida, itemCompradoSel, reservasOrigem, profile?.id]);
 
   // Escolha no SelectBusca de origem. Mesma lógica de antes (era o onChange
   // inline do <select>): requisição traz nome/unidade/fornecedor sem custo (a
@@ -1223,6 +1290,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     if (Object.keys(eb).length) {
       setErrors(eb);
       showToast('Preencha todos os campos obrigatórios.', 'error', true);
+      return;
+    }
+    // O select já vem com a opção travada, mas o banco é quem decide de
+    // verdade (migr. 537) — sem esta checagem no Salvar, o cadeado da tela é
+    // decoração.
+    if (reservaOrigem.travado) {
+      showToast(`${reservaOrigem.dono?.usuario_nome} já está cadastrando este item agora.`, 'error', true);
       return;
     }
     setErrors({});
@@ -1965,6 +2039,12 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           </span>
                         )}
                       </p>
+                      {reservaOrigem.travado && (
+                        <p className="text-[11px] text-yellow-400 mt-1">
+                          🔒 {reservaOrigem.dono?.usuario_nome} já está cadastrando este item agora. Escolha
+                          outra origem ou espere.
+                        </p>
+                      )}
                     </FormField>
                   )}
                   <FormField label="Nome do produto *" error={errors.nome}>

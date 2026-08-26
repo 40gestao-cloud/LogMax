@@ -153,6 +153,40 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
   const [loadingMapa, setLoadingMapa] = useState(false);
   const [erroMapa, setErroMapa] = useState<string | null>(null);
 
+  // Reservas de trabalho vivas (migr. 537) — o professor solta a que ficou
+  // presa (notebook fechado antes do prazo de 3 minutos vencer) sem esperar.
+  type Reserva = { id: string; escopo: string; chave: string; filial: string; usuario_nome: string; criado_em: string };
+  const [reservas, setReservas] = useState<Reserva[]>([]);
+  const carregarReservas = useCallback(async () => {
+    if (!supabase) return;
+    // Só as vivas: reserva vencida já não trava ninguém, e listá-la daria ao
+    // professor um botão "soltar" para um problema que não existe mais.
+    const { data } = await supabase.from('trabalho_reservas')
+      .select('id, escopo, chave, filial, usuario_nome, criado_em')
+      .gt('expira_em', new Date().toISOString())
+      .order('criado_em', { ascending: false });
+    setReservas((data ?? []) as Reserva[]);
+  }, []);
+  useEffect(() => {
+    if (modo !== 'cadeia' || !supabase) return;
+    void carregarReservas();
+    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    const ch = supabase.channel(`aula_conferencia_reservas_${canalId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregarReservas(); })
+      .subscribe();
+    // Vencimento não emite evento — sem esta releitura a lista continuaria
+    // mostrando reserva morta até o professor trocar de aba.
+    const relogio = window.setInterval(() => { void carregarReservas(); }, 30_000);
+    return () => { window.clearInterval(relogio); ch.unsubscribe(); };
+  }, [modo, carregarReservas]);
+  const soltarReserva = useCallback(async (r: Reserva) => {
+    if (!supabase) return;
+    const { error } = await supabase.rpc('liberar_trabalho_forcado', { p_escopo: r.escopo, p_chave: r.chave });
+    if (error) { showToast('Não foi possível soltar a reserva.', 'error'); return; }
+    showToast(`Reserva de ${r.usuario_nome} liberada.`, 'success');
+  }, [showToast]);
+
   const carregarSessoes = useCallback(async () => {
     if (!supabase) return;
     const { data } = await supabase.from('aula_sessoes')
@@ -599,6 +633,30 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
         )
       )}
 
+      {/* Reservas de trabalho vivas (migr. 537) — cadeado de cotação e de
+          cadastro de produto. Fica junto da aba Cadeia porque é a mesma
+          pergunta: "o que está travado agora, e por quem". */}
+      {modo === 'cadeia' && reservas.length > 0 && (
+        <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Reservas em aberto ({reservas.length})
+          </p>
+          {reservas.map(r => (
+            <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 neu-pressed border border-white/5 text-[11px]">
+              <span className="text-gray-300 truncate">
+                <span className="text-gray-500 uppercase tracking-widest text-[10px]">
+                  {r.escopo === 'cotacao' ? 'Cotação' : 'Cadastro'} · {r.filial}
+                </span>{' '}
+                — {r.usuario_nome}
+              </span>
+              <button type="button" onClick={() => soltarReserva(r)}
+                className="shrink-0 neu-button px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-red-400 transition-colors border border-white/5">
+                Soltar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
