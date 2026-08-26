@@ -23,7 +23,7 @@
 // tem é "e a aula de hoje?", e a sessão já sabe quando começou e terminou.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, RefreshCw, ChevronDown, FileWarning, CheckCircle2, Sparkles } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ChevronDown, FileWarning, CheckCircle2, Sparkles, GitBranch } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { authFetch } from '../lib/authFetch';
 import { LoadingSpinner } from '../components/ui';
@@ -58,6 +58,58 @@ type AchadoIA = {
 };
 
 type Sessao = { id: string; iniciada_em: string; encerrada_em: string | null; titulo: string | null };
+
+// Camada 3 (migr. 533) — não é achado, é REMONTAGEM: uma linha por requisição
+// com a cadeia inteira ao lado. Fica em aba própria porque responde uma
+// pergunta diferente das outras duas ("o que saiu torto" / "o que parece
+// descuidado"): "essa requisição virou o quê?".
+type LinhaMapa = {
+  requisicao_id: string;
+  requisicao_numero: string;
+  filial: string;
+  item: string;
+  solicitante: string;
+  requisicao_status: string;
+  requisicao_em: string;
+  cotacoes_total: number;
+  cotacao_id: string | null;
+  cotacao_status: string | null;
+  cotacao_fornecedor: string | null;
+  pedido_id: string | null;
+  pedido_numero: string | null;
+  pedido_status: string | null;
+  recebimento_id: string | null;
+  recebimento_status: string | null;
+  produto_id: string | null;
+  produto_codigo: string | null;
+  produto_nome: string | null;
+  confirmado: boolean;
+  etapa_atual: string;
+  parado_ha_horas: number | null;
+};
+
+// Horas → "3d 4h" / "2h" / "40min". O banco manda número justamente para a
+// formatação viver aqui, num lugar só.
+const paradoBR = (h: number | null): string => {
+  if (h == null) return '';
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))}min`;
+  if (h < 24) return `${Math.round(h)}h`;
+  const dias = Math.floor(h / 24);
+  const resto = Math.round(h % 24);
+  return resto ? `${dias}d ${resto}h` : `${dias}d`;
+};
+
+const ETAPAS_CADEIA = ['Requisição', 'Cotação', 'Pedido', 'Recebimento', 'Produto', 'Confirmado'] as const;
+
+const COR_ETAPA: Record<string, string> = {
+  'Requisição': 'text-gray-400 border-white/10',
+  'Cotação': 'text-blue-300 border-blue-500/30',
+  'Pedido': 'text-yellow-300 border-yellow-500/30',
+  'Recebimento': 'text-orange-300 border-orange-500/30',
+  'Produto': 'text-purple-300 border-purple-500/30',
+  'Confirmado': 'text-emerald-400 border-emerald-500/30',
+  'Pedido (serviço)': 'text-emerald-400 border-emerald-500/30',
+};
 
 const ROTULO_TIPO: Record<string, string> = {
   ortografia: 'Escrita',
@@ -94,6 +146,12 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
   // Aluno aberto na lista. Uma turma de 45 gera dezenas de linhas; abrir tudo
   // de uma vez transforma a tela num paredão que ninguém lê.
   const [aberto, setAberto] = useState<string | null>(null);
+
+  // Aba "Cadeia" (migr. 533) — modo próprio porque é remontagem, não achado.
+  const [modo, setModo] = useState<'aluno' | 'cadeia'>('aluno');
+  const [mapa, setMapa] = useState<LinhaMapa[] | null>(null);
+  const [loadingMapa, setLoadingMapa] = useState(false);
+  const [erroMapa, setErroMapa] = useState<string | null>(null);
 
   const carregarSessoes = useCallback(async () => {
     if (!supabase) return;
@@ -165,6 +223,27 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
     }
   }, [sessaoId, showToast]);
 
+  const carregarMapa = useCallback(async () => {
+    if (!supabase || !sessaoId) return;
+    setLoadingMapa(true);
+    setErroMapa(null);
+    const { data, error } = await supabase.rpc('mapa_fluxo_compras', { p_sessao_id: sessaoId });
+    setLoadingMapa(false);
+    if (error) {
+      setErroMapa(error.message);
+      setMapa([]);
+      showToast('Não foi possível montar o mapa do fluxo.', 'error');
+      return;
+    }
+    setMapa((data ?? []) as LinhaMapa[]);
+  }, [sessaoId, showToast]);
+
+  // A aba carrega sozinha na primeira vez que é aberta — sem exigir um clique
+  // extra depois do clique que já trocou de aba.
+  useEffect(() => {
+    if (modo === 'cadeia' && mapa === null && sessaoId) void carregarMapa();
+  }, [modo, mapa, sessaoId, carregarMapa]);
+
   // As duas camadas se encontram AQUI, e só aqui: no agrupamento por aluno.
   // Cada uma continua na sua lista dentro do grupo — o professor lê "o que
   // está errado" e "o que parece descuidado" um embaixo do outro, sabendo qual
@@ -214,15 +293,41 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
-          <button type="button" onClick={conferir} disabled={loading || !sessaoId}
-            className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5 disabled:opacity-50">
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Conferir
-          </button>
-          <button type="button" onClick={pedirLeitura} disabled={loadingIA || !sessaoId}
-            className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-purple-300 transition-colors border border-purple-500/20 flex items-center gap-1.5 disabled:opacity-50">
-            <Sparkles size={11} className={loadingIA ? 'animate-pulse' : ''} /> Leitura da IA
-          </button>
+          {modo === 'aluno' ? (
+            <>
+              <button type="button" onClick={conferir} disabled={loading || !sessaoId}
+                className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5 disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Conferir
+              </button>
+              <button type="button" onClick={pedirLeitura} disabled={loadingIA || !sessaoId}
+                className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-purple-300 transition-colors border border-purple-500/20 flex items-center gap-1.5 disabled:opacity-50">
+                <Sparkles size={11} className={loadingIA ? 'animate-pulse' : ''} /> Leitura da IA
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={carregarMapa} disabled={loadingMapa || !sessaoId}
+              className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-blue-300 transition-colors border border-blue-500/20 flex items-center gap-1.5 disabled:opacity-50">
+              <RefreshCw size={11} className={loadingMapa ? 'animate-spin' : ''} /> Atualizar mapa
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Abas — "Cadeia" é remontagem (migr. 533), não achado; nunca se mistura
+          com as duas camadas de "o que saiu torto". */}
+      <div className="flex items-center gap-1 border-b border-white/5 -mb-1">
+        <button type="button" onClick={() => setModo('aluno')}
+          className={`px-3 py-2 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-colors ${
+            modo === 'aluno' ? 'text-accent border-accent' : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}>
+          Por aluno
+        </button>
+        <button type="button" onClick={() => setModo('cadeia')}
+          className={`px-3 py-2 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${
+            modo === 'cadeia' ? 'text-blue-300 border-blue-400' : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}>
+          <GitBranch size={11} /> Cadeia
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -230,7 +335,7 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
           value={sessaoId}
           onChange={e => {
             setSessaoId(e.target.value);
-            setAchados(null); setLeitura(null); setLidosIA(null);
+            setAchados(null); setLeitura(null); setLidosIA(null); setMapa(null);
           }}
           className="neu-pressed rounded-xl px-3 py-2 text-xs text-gray-200 border border-white/5 min-w-[16rem]">
           {sessoes.length === 0 && <option value="">Nenhuma sessão de aula registrada</option>}
@@ -243,7 +348,7 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
           ))}
         </select>
 
-        {achados && achados.length > 0 && (
+        {modo === 'aluno' && achados && achados.length > 0 && (
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest">
             {totais.alta > 0 && <span className="px-2 py-1 rounded-full border text-red-400 border-red-500/30">{totais.alta} grave</span>}
             {totais.media > 0 && <span className="px-2 py-1 rounded-full border text-yellow-400 border-yellow-500/30">{totais.media} atenção</span>}
@@ -253,13 +358,20 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
 
         {/* Contagem da IA fica NA MESMA linha mas em outra cor e com outro
             verbo: "observações", não "graves". Não soma com as de cima. */}
-        {leitura && leitura.length > 0 && (
+        {modo === 'aluno' && leitura && leitura.length > 0 && (
           <span className="px-2 py-1 rounded-full border text-purple-300 border-purple-500/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
             <Sparkles size={10} /> {leitura.length} observaç{leitura.length > 1 ? 'ões' : 'ão'} da IA
           </span>
         )}
+
+        {modo === 'cadeia' && mapa && mapa.length > 0 && (
+          <span className="px-2 py-1 rounded-full border text-blue-300 border-blue-500/30 text-[10px] font-bold uppercase tracking-widest">
+            {mapa.length} requisiç{mapa.length > 1 ? 'ões' : 'ão'}
+          </span>
+        )}
       </div>
 
+      {modo === 'aluno' && <>
       {erro && (
         <p className="text-[11px] text-red-400 leading-relaxed flex items-start gap-1.5">
           <AlertTriangle size={12} className="shrink-0 mt-0.5" />
@@ -403,6 +515,90 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
         justamente para você discordar dela.
         {modeloIA && <span className="text-gray-600"> Modelo: {modeloIA}.</span>}
       </p>
+      </>}
+
+      {/* ── Aba Cadeia (migr. 533) ─────────────────────────────────────────
+          Uma linha por requisição, do pedido ao produto na prateleira. Não é
+          achado — é remontagem: responde "essa requisição virou o quê?" sem
+          o professor ter de abrir quatro telas e cruzar pelo texto do item. */}
+      {modo === 'cadeia' && (
+        erroMapa ? (
+          <p className="text-[11px] text-red-400 leading-relaxed flex items-start gap-1.5">
+            <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+            {erroMapa}
+          </p>
+        ) : loadingMapa ? <LoadingSpinner /> : mapa === null ? (
+          <p className="text-xs text-gray-500 py-8 text-center leading-relaxed">
+            Escolha a aula e clique em <span className="text-gray-300 font-bold">Atualizar mapa</span>.
+          </p>
+        ) : mapa.length === 0 ? (
+          <p className="text-xs text-emerald-400 py-8 text-center leading-relaxed flex flex-col items-center gap-2">
+            <CheckCircle2 size={20} />
+            Nenhuma requisição nesta aula.
+          </p>
+        ) : (
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-[11px] min-w-[52rem]">
+              <thead>
+                <tr className="text-left text-[10px] text-gray-500 uppercase tracking-widest">
+                  <th className="px-2 py-1.5 font-bold">Requisição</th>
+                  <th className="px-2 py-1.5 font-bold">Filial</th>
+                  {ETAPAS_CADEIA.map(e => (
+                    <th key={e} className="px-2 py-1.5 font-bold text-center">{e}</th>
+                  ))}
+                  <th className="px-2 py-1.5 font-bold">Parado há</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mapa.map(l => {
+                  // Serviço para no Pedido (migr. 499/516) — a cadeia dele não
+                  // tem Recebimento nem Produto. Mapear 'Pedido (serviço)' para
+                  // a última coluna pintaria tique verde em duas etapas que
+                  // nunca aconteceram, que é exatamente a mentira que esta aba
+                  // existe para não contar.
+                  const ehServico = l.etapa_atual === 'Pedido (serviço)';
+                  const idxAtual = ehServico
+                    ? ETAPAS_CADEIA.indexOf('Pedido')
+                    : ETAPAS_CADEIA.findIndex(e => e === l.etapa_atual);
+                  return (
+                    <tr key={l.requisicao_id} className="border-t border-white/5 hover:bg-white/5">
+                      <td className="px-2 py-2 align-top">
+                        <p className="font-bold text-gray-200">{l.requisicao_numero}</p>
+                        <p className="text-gray-500 truncate max-w-[14rem]">{l.item}</p>
+                        <p className="text-[10px] text-gray-600">{l.solicitante}</p>
+                      </td>
+                      <td className="px-2 py-2 align-top text-gray-400">{l.filial}</td>
+                      {ETAPAS_CADEIA.map((e, i) => (
+                        <td key={e} className="px-2 py-2 text-center align-top">
+                          {ehServico && i > idxAtual ? (
+                            <span className="text-gray-700" title="Serviço não entra em estoque">n/a</span>
+                          ) : i === idxAtual ? (
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-widest ${COR_ETAPA[l.etapa_atual] ?? ''}`}>
+                              {ehServico ? 'serviço' : '●'}
+                            </span>
+                          ) : i < idxAtual ? (
+                            <span className="text-emerald-500/70">✓</span>
+                          ) : (
+                            <span className="text-gray-700">—</span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 align-top">
+                        {l.parado_ha_horas != null ? (
+                          <span className="text-yellow-400 font-mono">{paradoBR(l.parado_ha_horas)}</span>
+                        ) : (
+                          <span className="text-emerald-500/70">concluído</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
     </div>
   );
 };
