@@ -23,6 +23,7 @@ import { LoadingSpinner, EmptyState } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { CrachaModal, type CrachaPessoa } from '../components/CrachaVirtual';
 import { lerCracha } from '../lib/cracha';
+import { FILIAIS_HOLDING, isFilialHolding, identidadeDaFilial } from '../lib/filiais';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -51,6 +52,25 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
       String(f.cargo ?? '').toLowerCase().includes(q) ||
       String(f.filial ?? '').toLowerCase().includes(q));
   }, [ativos, busca]);
+
+  // Agrupado por unidade porque é assim que a turma se organiza: o professor
+  // procura "o pessoal da TechMax", não um nome no meio de trinta. A ordem
+  // segue FILIAIS_HOLDING (a mesma do seletor de unidade) para a tela não
+  // reordenar sozinha quando alguém troca de filial; quem tiver filial
+  // desconhecida ou nula cai num grupo próprio no fim, visível — some é pior.
+  const grupos = useMemo(() => {
+    const mapa = new Map<string, any[]>();
+    for (const f of filtrados) {
+      const chave = isFilialHolding(f.filial) ? f.filial : 'Sem unidade';
+      const lista = mapa.get(chave) ?? [];
+      lista.push(f);
+      mapa.set(chave, lista);
+    }
+    const ordem = [...FILIAIS_HOLDING, 'Sem unidade'];
+    return ordem
+      .filter(u => mapa.has(u))
+      .map(u => ({ unidade: u, pessoas: mapa.get(u)! }));
+  }, [filtrados]);
 
   const handleLeitura = (bruto: string) => {
     setScannerAberto(false);
@@ -167,31 +187,50 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
         {isLoading ? <LoadingSpinner /> : filtrados.length === 0 ? (
           <EmptyState message="Nenhum funcionário ativo encontrado." />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtrados.map((f: any) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setCrachaAberto(f)}
-                title="Abrir o crachá"
-                className="flex items-center gap-3 p-3 rounded-2xl border border-white/10 hover:border-accent/40 hover:bg-white/5 transition-colors text-left"
-              >
-                <div className="w-11 h-11 rounded-xl overflow-hidden border border-white/10 bg-black/30 flex items-center justify-center shrink-0">
-                  {f.foto_url
-                    ? <img src={f.foto_url} alt="" className="w-full h-full object-cover" />
-                    : <User size={18} className="text-gray-600" />}
+          <div className="flex flex-col gap-6">
+            {grupos.map(({ unidade, pessoas }) => {
+              const ident = identidadeDaFilial(unidade === 'Sem unidade' ? null : unidade);
+              return (
+                <div key={unidade} className="flex flex-col gap-3">
+                  {/* Cabeçalho do grupo com a cor da unidade: a mesma pista que
+                      o crachá usa, para o olho casar lista e cartão. */}
+                  <div className="flex items-center gap-2">
+                    <Building2 size={12} style={{ color: ident.cor }} />
+                    <span className="text-[10px] font-black uppercase tracking-widest"
+                      style={{ color: ident.cor }}>
+                      {unidade}
+                    </span>
+                    <span className="text-[10px] text-gray-600 font-mono">({pessoas.length})</span>
+                    <span className="flex-1 h-px" style={{ background: `${ident.cor}26` }} />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pessoas.map((f: any) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setCrachaAberto(f)}
+                        title="Abrir o crachá"
+                        className="flex items-center gap-3 p-3 rounded-2xl border transition-colors text-left hover:bg-white/5"
+                        style={{ borderColor: `${ident.cor}33` }}
+                      >
+                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-black/30 flex items-center justify-center shrink-0"
+                          style={{ border: `1px solid ${ident.cor}55` }}>
+                          {f.foto_url
+                            ? <img src={f.foto_url} alt="" className="w-full h-full object-cover" />
+                            : <User size={18} className="text-gray-600" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-gray-200 truncate">{f.nome}</p>
+                          <p className="text-[10px] text-gray-500 truncate">{f.cargo || 'sem cargo'}</p>
+                        </div>
+                        <IdCard size={14} className="text-gray-600 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-200 truncate">{f.nome}</p>
-                  <p className="text-[10px] text-gray-500 truncate flex items-center gap-1">
-                    {f.filial && <><Building2 size={9} />{f.filial}</>}
-                    {f.filial && f.cargo && ' · '}
-                    {f.cargo}
-                  </p>
-                </div>
-                <IdCard size={14} className="text-gray-600 shrink-0" />
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -49,23 +49,19 @@ export const CrachaVirtual = ({ pessoa, compacto = false, semQr = false }: {
         background: `linear-gradient(160deg, ${id.cor}1F 0%, #0c0c0c 55%, #080808 100%)`,
       }}
     >
-      {/* Faixa superior: o logo da unidade é a primeira coisa que se vê. */}
+      {/* Faixa superior: só o logo da unidade, centrado. A palavra "Crachá"
+          saiu — o cartão já se anuncia pelo formato, e o rótulo disputava
+          espaço com a única coisa que precisa ser vista de longe. */}
       <div
-        className="px-5 pt-4 pb-3 flex items-center justify-between gap-3"
+        className="px-5 pt-5 pb-4 flex items-center justify-center"
         style={{ borderBottom: `1px solid ${id.cor}33` }}
       >
         <div
-          className="h-11 px-2.5 rounded-xl flex items-center justify-center shrink-0"
+          className="h-14 px-4 rounded-xl flex items-center justify-center"
           style={id.plate ? { background: id.plate } : undefined}
         >
-          <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="h-8 w-auto max-w-[104px] object-contain" />
+          <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="h-10 w-auto max-w-[150px] object-contain" />
         </div>
-        <span
-          className="text-[9px] font-black uppercase tracking-[0.25em] shrink-0"
-          style={{ color: `${id.cor}CC` }}
-        >
-          Crachá
-        </span>
       </div>
 
       <div className="px-5 py-4 flex flex-col items-center gap-3">
