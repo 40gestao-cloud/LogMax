@@ -2543,3 +2543,27 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
   .max-doc-scope .md-page { padding: 6px 4px !important; }
   .max-doc-scope .md-paper .ProseMirror { padding: 16px 12px !important; }
 }
+
+
+/* ── Impressão do crachá virtual ──
+   `window.print()` mandaria a tela inteira para o papel — sidebar, topbar e o
+   fundo preto do modal por cima de tudo. Aqui só o cartão sobrevive.
+   `visibility` em vez de `display: none` de propósito: esconder por display
+   quebraria o layout dos ancestrais do cartão e ele sairia deslocado.
+   `print-color-adjust` porque o navegador descarta fundo e gradiente na
+   impressão por padrão, e um crachá sem o fundo escuro sai como papel em
+   branco com um QR no meio. */
+@media print {
+  body * { visibility: hidden !important; }
+  .cracha-cartao, .cracha-cartao * { visibility: visible !important; }
+  .cracha-controles { display: none !important; }
+  .cracha-cartao {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 62mm;          /* ~ISO ID-1 em pé, com folga para a moldura */
+    border-radius: 4mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

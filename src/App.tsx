@@ -32,6 +32,7 @@ import { ComandosProvider, BotaoComandos } from './components/ComandosGlobais';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
+  IdCard, ScanLine,
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
@@ -114,6 +115,8 @@ const CalendarioEditorialView              = lazy(() => import('./views/Calendar
 const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
 const PesquisasView                        = lazy(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
 const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
+const MeuCrachaView                        = lazy(() => import('./views/MeuCrachaView').then(m => ({ default: m.MeuCrachaView })));
+const CrachaVirtualView                    = lazy(() => import('./views/CrachaVirtualView').then(m => ({ default: m.CrachaVirtualView })));
 const ArtesPromocionaisView                = lazy(() => import('./views/ArtesPromocionaisView').then(m => ({ default: m.ArtesPromocionaisView })));
 const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
 const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
@@ -434,6 +437,27 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           || hasSetor(profile, 'rh')) && (
           <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <UserCog size={18} /><span>Usuários</span>
+          </button>
+        )}
+        {/* Meu Crachá: o QR que o aluno mostra para ter a presença registrada.
+            Aberto a qualquer pessoa COM cadastro de funcionário — é o cadastro
+            que carrega nome, foto, cargo e unidade; sem ele não há crachá.
+
+            Sem `aulaAllow` de propósito: uma aula cuja whitelist não listasse
+            este módulo tiraria o crachá da tela justamente no dia em que ele é
+            usado. */}
+        {profile?.funcionario_id && (
+          <button onClick={() => { navigate('meu-cracha'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'meu-cracha' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <IdCard size={18} /><span>Meu Crachá</span>
+          </button>
+        )}
+        {/* Crachá Virtual: o outro lado do mesmo par — quem LÊ o crachá e grava
+            a presença. Só o professor, e só em modo Matriz: a leitura atravessa
+            as unidades (a turma inteira passa na mesma fila), e de dentro de uma
+            filial a lista viria pela metade. */}
+        {matrizMode && profile?.role === 'admin' && (
+          <button onClick={() => { navigate('cracha-virtual'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'cracha-virtual' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <ScanLine size={18} /><span>Crachá Virtual</span>
           </button>
         )}
         {/* Modo Aula: config global (whitelist de módulos por turma). Só admin/CEO,
@@ -1306,6 +1330,8 @@ function LogMaxAppInner() {
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
+      case 'meu-cracha':                   return <MeuCrachaView profile={profile} />;
+      case 'cracha-virtual':               return <CrachaVirtualView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'demandas':                     return <DemandasView showToast={st} profile={profile} />;
