@@ -28,7 +28,7 @@ import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { ProdutoDetalheModal } from '../components/ProdutoDetalheModal';
-import { normalizarBusca, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
+import { normalizarBusca, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -42,6 +42,13 @@ type FilialPDV = typeof FILIAIS_PDV[number];
 // Vem de src/lib/unidades.ts — mesma régua do cadastro e da requisição.
 const isProdutoFracionario = (p: any): boolean =>
   UNIDADES_FRACIONARIAS.has(String(p?.unidade ?? 'UN').toUpperCase());
+
+// Quantidade armada na tela: 2 e não "2"→"2,000"; peso mantém as 3 casas.
+// Separado de `formatQtd` porque aquele arredonda para inteiro quando a
+// unidade não é fracionária — e a armada é mostrada antes de existir item, ou
+// seja, antes de existir unidade.
+const fmtQtdArmada = (n: number): string =>
+  Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 const formatQtd = (qtd: number, unidade: string): string => {
   const u = (unidade || 'UN').toUpperCase();
@@ -230,6 +237,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const { data: clientes } = useFetchData<Cliente>('/api/crmview', { filial: filialFiltro });
 
   const [search, setSearch] = useState('');
+  // Quantidade ARMADA — mesma régua do PDV SuperMax e do caixa de mercado: o
+  // operador diz quantos são ("2*" + Enter) e a próxima identificação do item
+  // vale por essa quantidade. Aqui pesa mais do que lá, porque a forma normal
+  // de adicionar é CLICAR no card da grade: sem isto, 3 do mesmo item eram 3
+  // cliques (ou 1 clique + dois "+" no carrinho).
+  const [qtdArmada, setQtdArmada] = useState<number | null>(null);
+  const qtdArmadaRef = useRef<number | null>(null);
+  qtdArmadaRef.current = qtdArmada;
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
   // Ficha do produto aberta pelo botão de informação do card — a tela que o
   // vendedor vira pro cliente. O clique no card continua sendo "adicionar".
@@ -444,7 +459,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // era `.includes()` sem normalizar: "ca" trazia ma[ca]rrão junto com café, e
   // "café" digitado não achava "CAFE" cadastrado. Busca vazia mantém a ordem
   // original da grade — buscarProdutos só reordena quando há termo.
-  const filtered = buscarProdutos(produtosPorCategoria, search, produtosPorCategoria.length);
+  // A grade filtra pelo termo DEPOIS do multiplicador: digitar "2*cami" mostra
+  // as camisetas e o clique no card já adiciona 2.
+  const buscaTermo = separarQtdETermo(search).termo;
+  const filtered = buscarProdutos(produtosPorCategoria, buscaTermo, produtosPorCategoria.length);
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
   // Aceita "10", "10,5" e "10.5"; acima de 100% o desconto seria maior que a
@@ -465,7 +483,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const troco = Math.max(0, dinheiroRecebidoNum - totalFinal);
   const faltaDinheiro = Math.max(0, totalFinal - dinheiroRecebidoNum);
 
-  const addToCart = useCallback((produto: any) => {
+  const addToCart = useCallback((produto: any, qtdExplicita?: number) => {
+    // Quantidade: a explícita (veio de "3*código"), senão a armada, senão 1.
+    // Desarma em qualquer adição — deixar sobrando o que o operador já acha
+    // que gastou é como o multiplicador vira erro de conferência.
+    const qtdAdd = qtdExplicita ?? qtdArmadaRef.current ?? 1;
+    if (qtdArmadaRef.current !== null) {
+      qtdArmadaRef.current = null;
+      setQtdArmada(null);
+    }
     // Produto fracionário (KG/L/...) abre modal de peso. O bloqueio de
     // estoque <= 0 ainda se aplica — vendedor não pode pesar do que não tem.
     if (isProdutoFracionario(produto)) {
@@ -474,34 +500,61 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         return;
       }
       const existingIdx = cart.findIndex(i => i.produto_id === produto.id);
+      // Quantidade informada em item de balança é PESO: entra no campo já
+      // preenchida ("0,350*" pede 350g), e o operador confirma. Não pula o
+      // modal de propósito — é lá que o peso é validado contra o estoque.
+      const pesoInicial = qtdExplicita !== undefined || qtdAdd !== 1
+        ? formatQtd(qtdAdd, produto.unidade)
+        : existingIdx >= 0 ? formatQtd(cart[existingIdx].qtd, produto.unidade) : '';
       setPesoPrompt({
         produto,
-        pesoInput: existingIdx >= 0 ? formatQtd(cart[existingIdx].qtd, produto.unidade) : '',
+        pesoInput: pesoInicial,
         editIndex: existingIdx >= 0 ? existingIdx : null,
       });
       return;
     }
     const preco = Number(produto.preco) || 0;
+    const estoque = Number(produto.estoque ?? 999);
+    const noCarrinho = cart.find(i => i.produto_id === produto.id);
+    const disponivel = estoque - (noCarrinho?.qtd ?? 0);
+    if (disponivel <= 0) {
+      showToast?.(noCarrinho ? 'Quantidade máxima em estoque atingida.' : 'Produto sem estoque.', 'error', true);
+      return;
+    }
+    // Item vendido por unidade não aceita quantidade fracionada: "0,350" armado
+    // é peso, e peso só faz sentido no item de balança (que já saiu por cima,
+    // no modal). Meia camiseta não existe.
+    const qtdInteira = Math.max(1, Math.round(qtdAdd));
+    // Pedido acima do estoque entra pelo que cabe e AVISA, em vez de recusar
+    // tudo: no caixa, "só tem 2" é informação, não motivo para começar de novo.
+    const qtdEfetiva = Math.min(qtdInteira, disponivel);
+    if (qtdEfetiva < qtdInteira) {
+      showToast?.(`Só há ${formatQtd(disponivel, produto.unidade)} em estoque — adicionei ${formatQtd(qtdEfetiva, produto.unidade)}.`, 'error', true);
+    }
     setCart(prev => {
       const existing = prev.find(i => i.produto_id === produto.id);
       if (existing) {
-        if (existing.qtd >= (produto.estoque ?? 999)) {
-          showToast?.('Quantidade máxima em estoque atingida.', 'error', true);
-          return prev;
-        }
-        playBeep();
+        const q = existing.qtd + qtdEfetiva;
         return prev.map(i => i.produto_id === produto.id
-          ? { ...i, qtd: i.qtd + 1, subtotal: (i.qtd + 1) * i.preco_unitario }
+          ? { ...i, qtd: q, subtotal: q * i.preco_unitario }
           : i
         );
       }
-      if ((produto.estoque ?? 999) <= 0) {
-        showToast?.('Produto sem estoque.', 'error', true);
-        return prev;
-      }
-      playBeep();
-      return [...prev, { produto_id: produto.id, nome_produto: produto.nome, preco_unitario: preco, qtd: 1, subtotal: preco, estoque: produto.estoque ?? 999, unidade: produto.unidade ?? 'UN' }];
+      return [...prev, {
+        produto_id:     produto.id,
+        nome_produto:   produto.nome,
+        preco_unitario: preco,
+        qtd:            qtdEfetiva,
+        subtotal:       preco * qtdEfetiva,
+        estoque,
+        unidade:        produto.unidade ?? 'UN',
+      }];
     });
+    // Beep FORA do updater. Dentro dele, o som ficava preso à mesma
+    // otimização do React que resolve o updater na hora: com update pendente
+    // o updater roda depois (e pode rodar duas vezes), então o beep sumia ou
+    // dobrava. Updater tem de ser função pura.
+    playBeep();
   }, [showToast, cart]);
 
   const changeQty = (produto_id: string, delta: number) => {
@@ -571,8 +624,22 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // código por argumento (não lê `search`) porque o scanner pode disparar
   // mesmo com o foco fora do input.
   const processBarcode = useCallback((codeRaw: string) => {
-    const termo = codeRaw.trim();
-    if (!termo) return;
+    const bruto = codeRaw.trim();
+    if (!bruto) return;
+    // Mesma gramática do campo CÓDIGO do SuperMax: "3*7891", "2*camiseta",
+    // "0,350*7891" para balança — e "2*" sozinho ARMA a quantidade e espera o
+    // item, que pode ser bipado, digitado ou clicado na grade.
+    const { qtd, termo, temMultiplicador } = separarQtdETermo(bruto);
+    if (!termo) {
+      if (temMultiplicador) {
+        qtdArmadaRef.current = qtd;
+        setQtdArmada(qtd);
+        setSearch('');
+        searchRef.current?.focus();
+      }
+      return;
+    }
+    const qtdDoTermo = temMultiplicador ? qtd : undefined;
     const termoLower = termo.toLowerCase();
     // Scanner respeita o filtro de filial — assim o operador não bipa por
     // engano um item de outra empresa quando está com filtro ativo.
@@ -587,11 +654,21 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         produtoCasa(p, normalizarBusca(termo), termo)
       );
       if (partial.length === 1) match = partial[0];
+      else if (partial.length > 1) {
+        // Vários candidatos NÃO é "não encontrado" — é escolha pendente. Aqui a
+        // grade é o seletor: deixa o termo filtrando, arma a quantidade e o
+        // operador clica no card certo.
+        if (temMultiplicador) { qtdArmadaRef.current = qtd; setQtdArmada(qtd); }
+        setSearch(termo);
+        searchRef.current?.focus();
+        showToast?.(`${partial.length} produtos casam com "${termo}" — escolha na grade.`, 'info', true);
+        return;
+      }
     }
     if (!match) {
       showToast?.(`Produto não encontrado em ${filialFiltro}: ${termo}`, 'error', true);
     } else {
-      addToCart(match);
+      addToCart(match, qtdDoTermo);
     }
     setSearch('');
     searchRef.current?.focus();
@@ -677,7 +754,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   useVarrerPendentesOrfaos(filialFiltro, user?.id, showToast);
 
   const removeFromCart = (produto_id: string) => setCart(prev => prev.filter(i => i.produto_id !== produto_id));
-  const clearCart = () => { setCart([]); setDesconto(''); setDescontoPct(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
+  const clearCart = () => { qtdArmadaRef.current = null; setQtdArmada(null); setCart([]); setDesconto(''); setDescontoPct(''); setFormaPagamento('Dinheiro'); setParcelas(1); setClienteId(''); setLastVenda(null); setNetworkError(false); setCupomCodigo(''); setCupomAplicado(null); setCupomErro(null); };
 
   // Cupom: re-valida server-side (RPC `validar_cupom`) a cada mudança
   // estável do código, do subtotal ou da filial. Subtotal entra porque
@@ -1575,12 +1652,34 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             <input
               ref={searchRef}
               type="text"
-              placeholder={filialMeta.layout === 'tech' ? 'Buscar modelo, código ou bipar...' : 'Buscar por nome, código ou bipar...'}
-              className="neu-input py-2.5 sm:py-3 pl-10 pr-4 rounded-2xl text-sm w-full"
+              placeholder={filialMeta.layout === 'tech' ? 'Buscar modelo, código ou bipar... (2* = quantidade)' : 'Buscar por nome, código ou bipar... (2* = quantidade)'}
+              className={`neu-input py-2.5 sm:py-3 pl-10 rounded-2xl text-sm w-full ${qtdArmada !== null ? 'pr-24' : 'pr-4'}`}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); } }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); return; }
+                if (e.key === 'Escape' && (search.length > 0 || qtdArmada !== null)) {
+                  // Esc é o "desisti": limpa a busca E desarma a quantidade.
+                  e.preventDefault();
+                  qtdArmadaRef.current = null;
+                  setQtdArmada(null);
+                  setSearch('');
+                }
+              }}
             />
+            {qtdArmada !== null && (
+              // Quantidade armada TEM de estar visível: é estado invisível que
+              // muda o resultado do próximo clique na grade. Some sozinha
+              // quando um item a consome; Esc (ou o X) desarma.
+              <button
+                type="button"
+                onClick={() => { qtdArmadaRef.current = null; setQtdArmada(null); searchRef.current?.focus(); }}
+                title="Quantidade armada — vale para o próximo item. Clique para desarmar (Esc)."
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-accent/15 text-accent border border-accent/40 hover:bg-accent/25"
+              >
+                {fmtQtdArmada(qtdArmada)} × <X size={11} />
+              </button>
+            )}
           </div>
 
           {/* Chips de categoria — montados a partir das categorias que existem no
@@ -1665,12 +1764,12 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 </div>
                 <div>
                   <p className="text-sm font-bold" style={{ color: '#262626' }}>
-                    {search || categoriaFiltro ? 'Nenhum produto encontrado' : `Sem produtos em ${filialFiltro}`}
+                    {buscaTermo || categoriaFiltro ? 'Nenhum produto encontrado' : `Sem produtos em ${filialFiltro}`}
                   </p>
                   <p className="text-xs mt-1 max-w-[18rem]" style={{ color: '#737373' }}>
                     {categoriaFiltro
                       ? <>Nenhum item em <b>{categoriaLabel}</b>. Tente outra categoria ou <button className="underline font-bold" onClick={() => setCategoriaFiltro(null)}>ver todos</button>.</>
-                      : search
+                      : buscaTermo
                         ? 'Ajuste o termo, bipe outro código ou limpe a busca.'
                         : 'Cadastre produtos em Cadastros → Produtos pra começar a vender aqui.'}
                   </p>
