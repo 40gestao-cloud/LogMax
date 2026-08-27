@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ClipboardList, Megaphone, Target, Trophy } from 'lucide-react';
+import { ArrowRight, ClipboardList, Target, Trophy } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import { dataExtensoBR, saudacaoBR } from '../lib/dates';
@@ -57,7 +57,6 @@ export const InicioView = ({
   const filialFilter = filialAtiva ? { filial: filialAtiva } : undefined;
   const { data: contasReceber, isLoading: loadingCR } = useFetchData<any>('/api/contasreceberview', filialFilter);
   const { data: contasPagar, isLoading: loadingCP } = useFetchData<any>('/api/contaspagarview', filialFilter);
-  const { data: artes } = useFetchData<any>('/api/marketingartesview', filialFilter);
 
   // Modo Matriz: a entidade Matriz não tem contas a pagar/receber próprias
   // (isso vive nas filiais) — os 2 cards de Resumo Diário viram Avaliações
@@ -75,10 +74,6 @@ export const InicioView = ({
   }, [matrizMode, profile?.id]);
 
   const isLoading = matrizMode ? loadingAvaliacao : (loadingCR || loadingCP);
-
-  // Card de Artes Promocionais: aparece pra qualquer usuário logado se houver
-  // pelo menos uma arte publicada. Marketing também vê (vai pro mesmo gallery).
-  const artesPublicadasCount = artes?.length ?? 0;
 
   // Pesquisas pendentes para o usuário logado (qualquer role/setor).
   // Mesma semântica de elegibilidade que MinhasPesquisasView e a RPC.
@@ -176,21 +171,6 @@ export const InicioView = ({
               Você tem {pesquisasPendentesCount} {pesquisasPendentesCount === 1 ? 'pesquisa pendente' : 'pesquisas pendentes'}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">Sua opinião é importante. Clique para responder.</p>
-          </div>
-          <ArrowRight size={16} className="text-accent shrink-0" />
-        </button>
-      )}
-      {artesPublicadasCount > 0 && (
-        <button onClick={() => onNavigate?.('artes-promocionais')}
-          className="neu-flat rounded-3xl p-5 sm:p-6 border border-accent/20 hover:border-accent/40 transition-colors flex items-center gap-4 text-left shrink-0">
-          <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center text-accent shrink-0">
-            <Megaphone size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-200">
-              {artesPublicadasCount} {artesPublicadasCount === 1 ? 'arte promocional publicada' : 'artes promocionais publicadas'}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">Veja o material publicado pelo Marketing.</p>
           </div>
           <ArrowRight size={16} className="text-accent shrink-0" />
         </button>
