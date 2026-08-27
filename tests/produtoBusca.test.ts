@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { produtoCasa, produtoRank, buscarProdutos, normalizarBusca } from '../src/lib/produtoBusca';
+import { produtoCasa, produtoRank, buscarProdutos, normalizarBusca, separarQtdETermo } from '../src/lib/produtoBusca';
 
 // Regressão do bug relatado no PDV SuperMax: a busca usava `.includes()`, então
 // digitar "ca" trazia ma[ca]rrão junto com café, e "c" trazia quase tudo.
@@ -104,5 +104,54 @@ describe('termo vazio', () => {
 describe('limite', () => {
   it('respeita o teto de resultados', () => {
     expect(buscarProdutos(CATALOGO, 'leite', 1)).toHaveLength(1);
+  });
+});
+
+// Gramática do multiplicador do PDV. Nasceu de uma pergunta do professor: sem
+// código e sem leitor, como se vende 2 do mesmo produto? A resposta é a do
+// caixa de mercado — a quantidade vem antes e vale para o item que for
+// identificado depois, inclusive o escolhido no F8.
+describe('separarQtdETermo', () => {
+  it('separa quantidade de código', () => {
+    expect(separarQtdETermo('3*7891')).toEqual({ qtd: 3, termo: '7891', temMultiplicador: true });
+  });
+
+  it('aceita x, X e × como separador', () => {
+    for (const sep of ['x', 'X', '×']) {
+      expect(separarQtdETermo(`2${sep}feijao`)).toEqual({ qtd: 2, termo: 'feijao', temMultiplicador: true });
+    }
+  });
+
+  it('aceita nome no lugar do código', () => {
+    expect(separarQtdETermo('2*feijao carioca')).toEqual({ qtd: 2, termo: 'feijao carioca', temMultiplicador: true });
+  });
+
+  it('lê peso com vírgula decimal', () => {
+    expect(separarQtdETermo('0,350*7891')).toEqual({ qtd: 0.35, termo: '7891', temMultiplicador: true });
+  });
+
+  it('"2*" sozinho arma a quantidade e devolve termo vazio', () => {
+    expect(separarQtdETermo('2*')).toEqual({ qtd: 2, termo: '', temMultiplicador: true });
+  });
+
+  it('termo sem multiplicador vale 1', () => {
+    expect(separarQtdETermo('feijao')).toEqual({ qtd: 1, termo: 'feijao', temMultiplicador: false });
+    expect(separarQtdETermo('7891000100103')).toEqual({ qtd: 1, termo: '7891000100103', temMultiplicador: false });
+  });
+
+  it('quantidade zero ou negativa não é multiplicador', () => {
+    expect(separarQtdETermo('0*7891').temMultiplicador).toBe(false);
+    expect(separarQtdETermo('0*7891').termo).toBe('0*7891');
+  });
+
+  it('nulo e vazio não explodem', () => {
+    expect(separarQtdETermo(null)).toEqual({ qtd: 1, termo: '', temMultiplicador: false });
+    expect(separarQtdETermo('   ')).toEqual({ qtd: 1, termo: '', temMultiplicador: false });
+  });
+
+  it('o termo separado alimenta a busca por nome', () => {
+    const { qtd, termo } = separarQtdETermo('2*cafe');
+    expect(qtd).toBe(2);
+    expect(nomes(buscarProdutos(CATALOGO, termo, 10))).toEqual(['Café Torrado 500g']);
   });
 });

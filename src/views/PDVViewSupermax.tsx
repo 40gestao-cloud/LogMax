@@ -19,7 +19,7 @@ import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { consultarCreditoCliente, bloqueioFiado } from '../lib/credito';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
-import { normalizarBusca as norm, produtoCasa, buscarProdutos } from '../lib/produtoBusca';
+import { normalizarBusca as norm, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -144,6 +144,16 @@ export const PDVViewSupermax = ({
   const [clientIdx, setClientIdx]             = useState(-1);
 
   // Busca por nome/código (F8) — replica o classicSearch do MaxPOS.
+  // Quantidade ARMADA — a régua do caixa de mercado: o operador informa quantos
+  // são ANTES de identificar o item ("2*" e Enter), e a próxima identificação
+  // — bipe, código digitado, sugestão ou item escolhido no F8 — vale por essa
+  // quantidade. Antes o `N*` só funcionava colado a um código, então quem não
+  // tinha o código na mão (nem leitor) só conseguia vender 2 do mesmo produto
+  // adicionando duas vezes.
+  const [qtdArmada, setQtdArmada] = useState<number | null>(null);
+  const qtdArmadaRef = useRef<number | null>(null);
+  qtdArmadaRef.current = qtdArmada;
+
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchTerm, setSearchTerm]           = useState('');
   const [searchIdx, setSearchIdx]             = useState(0);
@@ -307,6 +317,8 @@ export const PDVViewSupermax = ({
   const totalPago  = pagamentos.reduce((s, p) => s + p.valor, 0);
   const restante   = Math.max(0, parseFloat((totalFinal - totalPago).toFixed(2)));
   const fmt = (n: number) => formatBRL(n);
+  // Quantidade na tela: 2 e não "2,000"; 0,350 mantém o peso.
+  const fmtQtd = (n: number) => Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 
   // Banner visível dentro do PDV (toast global tem z-50 e fica atrás do overlay
   // fullscreen z-100 — invisível). Aqui é a única mensagem que o operador vê.
@@ -332,8 +344,20 @@ export const PDVViewSupermax = ({
   // SEM validação — sempre adiciona, mesmo com campos faltando.
   // Se algum dia faltar id/estoque/preço, usa default seguro. Se algo der
   // errado mesmo assim, o erro fica visível no banner via try/catch.
-  const addToCart = useCallback((produto: any, qtdAdd: number = 1) => {
+  const addToCart = useCallback((produto: any, qtdExplicita?: number) => {
     try {
+      // Sem quantidade explícita, vale a que estiver armada — e ela vale UMA
+      // vez, como no caixa de mercado: armou 2, o próximo item sai 2, o
+      // seguinte volta a 1. Ref (e não estado) porque este callback é chamado
+      // de dentro do timer do leitor, onde uma closure velha erraria a conta.
+      const qtdAdd = qtdExplicita ?? qtdArmadaRef.current ?? 1;
+      // Desarma em QUALQUER adição, inclusive quando a quantidade veio colada
+      // ao item ("2*7891" com 3 armado): deixar sobrando o que o operador já
+      // acha que gastou é como o multiplicador vira erro de conferência.
+      if (qtdArmadaRef.current !== null) {
+        qtdArmadaRef.current = null;
+        setQtdArmada(null);
+      }
       const id      = produto?.id ?? `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const nome    = produto?.nome ?? '(sem nome)';
       const preco   = Number(produto?.preco) || 0;
@@ -399,6 +423,8 @@ export const PDVViewSupermax = ({
     setCart([]);
     cartRef.current = [];
     setLastAdded(null);
+    qtdArmadaRef.current = null;
+    setQtdArmada(null);
     // Desarma o bipe pendente também: cancelar o cupom com um código em voo
     // fazia o item cair no carrinho novo, já zerado.
     consumirCodigo();
@@ -434,16 +460,11 @@ export const PDVViewSupermax = ({
   const processCode = useCallback((raw: string) => {
     const termo = raw.trim();
     if (!termo) return;
-    let qtd = 1;
-    let codigoBuscar = termo;
-    const m = termo.match(/^([\d.,]+)\s*[*xX×]\s*(.+)$/);
-    if (m) {
-      const n = parseFloat(m[1].replace(',', '.'));
-      if (n > 0) {
-        qtd = n;
-        codigoBuscar = m[2].trim();
-      }
-    }
+    const { qtd, termo: codigoBuscar, temMultiplicador } = separarQtdETermo(termo);
+    if (!codigoBuscar) return;
+    // Multiplicador digitado manda; sem ele, quem manda é a quantidade armada
+    // (resolvida dentro do addToCart).
+    const qtdDoTermo = temMultiplicador ? qtd : undefined;
     const lower = norm(codigoBuscar);
     let match = produtosDisponiveis.find((p: any) =>
       String(p.ean ?? '').trim() === codigoBuscar ||
@@ -454,6 +475,16 @@ export const PDVViewSupermax = ({
       // macarrão, virava ambíguo e caía no "não encontrado". Agora resolve.
       const partial = produtosDisponiveis.filter((p: any) => produtoCasa(p, lower, codigoBuscar));
       if (partial.length === 1) match = partial[0];
+      else if (partial.length > 1) {
+        // Nome que casa com vários NÃO é "produto não encontrado" — é escolha
+        // pendente. Abre o F8 já filtrado, levando a quantidade: era aqui que
+        // "2*leite" morria numa mensagem errada.
+        if (temMultiplicador) { qtdArmadaRef.current = qtd; setQtdArmada(qtd); }
+        setSearchTerm(codigoBuscar);
+        setSearchModalOpen(true);
+        consumirCodigo();
+        return;
+      }
     }
     if (!match) {
       setCodeMsg({ type: 'err', text: `Produto não encontrado: ${codigoBuscar}` });
@@ -465,7 +496,7 @@ export const PDVViewSupermax = ({
       if (/^\d{8,}$/.test(termo)) consumirCodigo();
       return;
     }
-    addToCart(match, qtd);
+    addToCart(match, qtdDoTermo);
     consumirCodigo();
     codeInputRef.current?.focus();
   }, [produtosDisponiveis, addToCart, consumirCodigo]);
@@ -501,10 +532,17 @@ export const PDVViewSupermax = ({
   }, [produtosDisponiveis, addToCart, consumirCodigo]);
 
   // Busca completa (modal F8) — sem cap de 2 chars; lista 50 primeiros se vazio.
+  // A busca do F8 aceita a mesma gramática do campo CÓDIGO: "2*feijao" filtra
+  // por feijão e adiciona 2. Sem isto, o único caminho para quantidade era ter
+  // o código do produto na mão.
+  const buscaF8 = useMemo(() => separarQtdETermo(searchTerm), [searchTerm]);
   const filteredSearch = useMemo(
-    () => buscarProdutos(produtosDisponiveis, searchTerm, 50),
-    [searchTerm, produtosDisponiveis],
+    () => buscarProdutos(produtosDisponiveis, buscaF8.termo, 50),
+    [buscaF8.termo, produtosDisponiveis],
   );
+  // Quantidade que o F8 vai aplicar: a digitada na própria busca, senão a
+  // armada, senão 1.
+  const qtdDoF8 = buscaF8.temMultiplicador ? buscaF8.qtd : (qtdArmada ?? 1);
 
   // Reseta seleção do search modal ao abrir / quando lista muda
   useEffect(() => {
@@ -524,10 +562,14 @@ export const PDVViewSupermax = ({
   // Sugestões enquanto digita (só quando 2+ chars e não é padrão N*EAN).
   // Acento-insensível: "feijão" digitado casa com "FEIJAO" cadastrado e vice-versa.
   const suggestions = useMemo(() => {
-    const t = norm(code.trim());
+    // Sugestão sai do termo DEPOIS do multiplicador: com "2*fei" a lista
+    // aparece igual, e o Enter adiciona 2 do item destacado. Antes a lista
+    // simplesmente não aparecia quando havia multiplicador, então quem não
+    // sabia o código de cor não tinha caminho nenhum.
+    const { termo } = separarQtdETermo(code);
+    const t = norm(termo);
     if (!t || t.length < 2) return [];
-    if (/^[\d.,]+\s*[*xX×]/.test(code)) return [];
-    return buscarProdutos(produtosDisponiveis, code, 8);
+    return buscarProdutos(produtosDisponiveis, termo, 8);
   }, [code, produtosDisponiveis]);
 
   // Mantém suggestionIdx coerente com a lista. Antes o onChange setava
@@ -579,7 +621,16 @@ export const PDVViewSupermax = ({
   //  5) fallback     → processCode (trata N*EAN e mensagem de erro)
   const handleCodeEnter = () => {
     const raw = codeNativeRef.current || code;
-    if (raw.trim() === '') {
+    const { qtd, termo, temMultiplicador } = separarQtdETermo(raw);
+    if (termo === '') {
+      // "2*" e Enter: arma a quantidade e espera o item. É o gesto do caixa de
+      // mercado — quantos são primeiro, o que é depois.
+      if (temMultiplicador) {
+        qtdArmadaRef.current = qtd;
+        setQtdArmada(qtd);
+        consumirCodigo();
+        return;
+      }
       // Enter num campo vazio é "fechar venda" — menos quando o campo acabou
       // de ser limpo por uma leitura: aí este Enter é o sufixo do leitor, não
       // um comando do operador.
@@ -587,24 +638,24 @@ export const PDVViewSupermax = ({
       if (cart.length > 0) openPayment();
       return;
     }
-    const termo = raw.trim();
+    const qtdDoTermo = temMultiplicador ? qtd : undefined;
     const lower = norm(termo);
     const exact = produtosDisponiveis.find((p: any) =>
       String(p.ean ?? '').trim() === termo ||
       norm(p.codigo) === lower
     );
     if (exact) {
-      addToCart(exact);
+      addToCart(exact, qtdDoTermo);
       consumirCodigo();
       return;
     }
     if (suggestionIdx >= 0 && suggestions[suggestionIdx]) {
-      addToCart(suggestions[suggestionIdx]);
+      addToCart(suggestions[suggestionIdx], qtdDoTermo);
       consumirCodigo();
       return;
     }
     if (suggestions.length > 0) {
-      addToCart(suggestions[0]);
+      addToCart(suggestions[0], qtdDoTermo);
       consumirCodigo();
       return;
     }
@@ -1645,7 +1696,7 @@ export const PDVViewSupermax = ({
                     </span>
                   )}
                 </div>
-                <div className="text-right">{item.qtd}</div>
+                <div className="text-right">{fmtQtd(item.qtd)}</div>
                 <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
                 <div className="text-right">{fmt(item.preco_unitario)}</div>
                 <div className="text-right font-bold">{fmt(item.subtotal)}</div>
@@ -1723,6 +1774,18 @@ export const PDVViewSupermax = ({
         )}
         <div className="flex items-center gap-3">
           <span className="text-2xl font-bold text-gray-700 shrink-0">CÓDIGO:</span>
+          {qtdArmada !== null && (
+            // A quantidade armada TEM de estar visível: é estado invisível que
+            // muda o resultado do próximo bipe. Sai da tela sozinha assim que
+            // um item a consome, e Esc desarma.
+            <span
+              className="shrink-0 px-3 py-1 text-xl font-black tabular-nums border-2"
+              style={{ background: YELLOW, color: NAVY_DARK, borderColor: YELLOW_DARK }}
+              title="Quantidade armada — vale para o próximo item (Esc desarma)"
+            >
+              {fmtQtd(qtdArmada)} ×
+            </span>
+          )}
           <div className="relative">
             <input
               ref={codeInputRef}
@@ -1747,8 +1810,11 @@ export const PDVViewSupermax = ({
                     if (e.key === 'ArrowUp')   return prev <= 0 ? cart.length - 1 : prev - 1;
                     return prev >= cart.length - 1 ? 0 : prev + 1;
                   });
-                } else if (e.key === 'Escape' && code.length > 0) {
+                } else if (e.key === 'Escape' && (code.length > 0 || qtdArmada !== null)) {
                   e.preventDefault();
+                  // Esc é o "desisti": limpa o campo E desarma a quantidade.
+                  qtdArmadaRef.current = null;
+                  setQtdArmada(null);
                   consumirCodigo();
                 } else if (e.key === 'Escape' && selectedCartIdx >= 0) {
                   e.preventDefault();
@@ -1835,7 +1901,7 @@ export const PDVViewSupermax = ({
           <span className="opacity-40">·</span>
           <span><b>F3</b> / <b>F9</b> Cancelar cupom · <b>Esc</b> Sair tela cheia</span>
           <span className="opacity-40">·</span>
-          <span><b>N*EAN</b> ou <b>N×EAN</b> Qtd (decimal: <b>0,350*EAN</b>)</span>
+          <span><b>2*</b> Qtd — sozinho arma p/ o próximo item, ou <b>2*código</b> / <b>2*nome</b> (peso: <b>0,350*</b>)</span>
           <span className="opacity-40">·</span>
           <span><b>F6</b> Desconto</span>
           <span className="opacity-40">·</span>
@@ -2197,7 +2263,12 @@ export const PDVViewSupermax = ({
                 <ol className="space-y-3 list-decimal list-inside">
                   <li>
                     <b>Adicionar produtos.</b> Bipe o código de barras OU digite EAN/REF/nome no campo <b>CÓDIGO</b> e aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd>.
-                    Para quantidade, digite <b>N*EAN</b> (ex: <code>3*7891</code>) ou peso decimal <b>0,350*EAN</b>.
+                    Para <b>vários do mesmo item</b>, informe a quantidade antes — como no caixa de mercado:
+                    digite <code>2*</code> e <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> para
+                    <b> armar</b> (aparece <b>2 ×</b> em amarelo ao lado do campo) e então identifique o item de qualquer
+                    forma: bipe, código, nome ou escolha no <b>F8</b>. Também funciona colado:
+                    <code>3*7891</code>, <code>2*feijao</code> ou peso <code>0,350*7891</code>.
+                    Nome que casa com vários produtos abre o <b>F8</b> já filtrado, com a quantidade.
                   </li>
                   <li>
                     <b>Conferir.</b> A última leitura aparece destacada na barra lateral direita.
@@ -2257,7 +2328,8 @@ export const PDVViewSupermax = ({
                     ['Del', 'Remove o último item — ou o item selecionado por ↑↓.'],
                     ['↑ ↓', 'Sugestões enquanto digita · com campo vazio: seleciona item do carrinho.'],
                     ['Esc', 'Limpa o campo / desmarca item / sai da tela cheia / cancela venda.'],
-                    ['N*EAN', 'Quantidade do mesmo item (ex: 3*7891 ou 0,350*7891 pra peso).'],
+                    ['2*', 'Arma a quantidade para o PRÓXIMO item, identificado como você quiser (bipe, código, nome, F8).'],
+                    ['2*item', 'Quantidade colada ao item: 3*7891, 2*feijao, ou peso 0,350*7891.'],
                   ].map(([k, v]) => (
                     <React.Fragment key={k}>
                       <kbd className="text-xs font-mono px-2 py-1 rounded border self-start text-center" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>{k}</kbd>
@@ -2851,6 +2923,11 @@ export const PDVViewSupermax = ({
             <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
               <span className="font-black tracking-wide text-sm uppercase flex items-center gap-2">
                 <Search size={16} /> F8 · Busca de produtos
+                {qtdDoF8 !== 1 && (
+                  <span className="ml-2 px-2 py-0.5 text-xs font-black" style={{ background: YELLOW, color: NAVY_DARK }}>
+                    QTD {fmtQtd(qtdDoF8)} ×
+                  </span>
+                )}
               </span>
               <button onClick={() => { setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
             </div>
@@ -2875,7 +2952,7 @@ export const PDVViewSupermax = ({
                     e.preventDefault();
                     const pick = filteredSearch[searchIdx >= 0 ? searchIdx : 0];
                     if (pick) {
-                      addToCart(pick);
+                      addToCart(pick, buscaF8.temMultiplicador ? buscaF8.qtd : undefined);
                       setSearchModalOpen(false);
                       codeInputRef.current?.focus();
                     }
@@ -2894,7 +2971,11 @@ export const PDVViewSupermax = ({
                   return (
                     <button
                       key={p.id}
-                      onClick={() => { addToCart(p); setSearchModalOpen(false); codeInputRef.current?.focus(); }}
+                      onClick={() => {
+                        addToCart(p, buscaF8.temMultiplicador ? buscaF8.qtd : undefined);
+                        setSearchModalOpen(false);
+                        codeInputRef.current?.focus();
+                      }}
                       onMouseEnter={() => setSearchIdx(i)}
                       tabIndex={-1}
                       ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
@@ -2908,7 +2989,12 @@ export const PDVViewSupermax = ({
                 })}
               </div>
               <div className="mt-3 text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ↑↓ navegar · Enter adicionar · Esc voltar
+                ↑↓ navegar · Enter adicionar {qtdDoF8 !== 1 && (
+                  <span style={{ color: NAVY_DARK }}>({fmtQtd(qtdDoF8)} un)</span>
+                )} · Esc voltar
+              </div>
+              <div className="mt-1 text-[11px] text-gray-400 text-center">
+                Para vários do mesmo item, digite <b>2*</b> antes do nome (ex.: <b>2*feijao</b>).
               </div>
             </div>
           </div>

@@ -76,3 +76,32 @@ export function buscarProdutos<T extends ProdutoBuscavel>(
     })
     .slice(0, limite);
 }
+
+/**
+ * Gramática do multiplicador do PDV: `N*termo`, `N×termo`, `NxTermo` — com
+ * decimal por vírgula para item de balança (`0,350*7891`).
+ *
+ * Mora aqui, e não dentro de uma tela, porque as DUAS formas de identificar o
+ * item têm de aceitar a mesma coisa: o campo CÓDIGO e a busca do F8. Enquanto
+ * a regex vivia solta no `processCode`, quem não tinha o código na mão (nem
+ * leitor) não tinha como vender 2 do mesmo produto sem bipar duas vezes.
+ *
+ * `termo` volta vazio em "2*" sozinho — que não é erro: é o operador ARMANDO a
+ * quantidade antes de escolher o item, como se faz no caixa de mercado.
+ */
+export interface QtdETermo {
+  qtd: number;
+  termo: string;
+  temMultiplicador: boolean;
+}
+
+const MULTIPLICADOR = new RegExp('^([0-9.,]+)\s*[*xX×]\s*(.*)$');
+
+export function separarQtdETermo(raw: string | null | undefined): QtdETermo {
+  const t = String(raw ?? '').trim();
+  const m = t.match(MULTIPLICADOR);
+  if (!m) return { qtd: 1, termo: t, temMultiplicador: false };
+  const n = parseFloat(m[1].replace(',', '.'));
+  if (!(n > 0)) return { qtd: 1, termo: t, temMultiplicador: false };
+  return { qtd: n, termo: m[2].trim(), temMultiplicador: true };
+}
