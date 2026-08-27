@@ -385,6 +385,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   }, [formaPagamento]);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  // Buffer da leitura digitada no campo. Existe porque leitor SEM sufixo Enter
+  // (configuração comum, e o padrão de vários modelos) não tinha caminho nenhum
+  // neste PDV: o listener global só processa quando vem Enter, então o operador
+  // via o leitor ler, os dígitos aparecerem no campo — e nada acontecer.
+  const scanBufferRef = useRef({ chars: '', timer: 0 as any });
   useEffect(() => { searchRef.current?.focus(); }, []);
 
   useEffect(() => {
@@ -623,7 +628,17 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // pelo Enter manual no input e pelo listener global do scanner. Recebe o
   // código por argumento (não lê `search`) porque o scanner pode disparar
   // mesmo com o foco fora do input.
+  // Desarma a leitura pendente. Tem de acontecer sempre que um código é
+  // consumido por outro caminho: sem isto, o Enter do leitor adiciona o item e
+  // 120ms depois o timer adiciona o MESMO item de novo.
+  const cancelarAutoAdd = useCallback(() => {
+    const buf = scanBufferRef.current;
+    clearTimeout(buf.timer);
+    buf.chars = '';
+  }, []);
+
   const processBarcode = useCallback((codeRaw: string) => {
+    cancelarAutoAdd();
     const bruto = codeRaw.trim();
     if (!bruto) return;
     // Mesma gramática do campo CÓDIGO do SuperMax: "3*7891", "2*camiseta",
@@ -672,9 +687,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     }
     setSearch('');
     searchRef.current?.focus();
-  }, [produtosPorFilial, filialFiltro, addToCart, showToast]);
+  }, [produtosPorFilial, filialFiltro, addToCart, showToast, cancelarAutoAdd]);
 
   const handleSearchEnter = () => processBarcode(search);
+
 
   // Mantém a função processBarcode mais recente acessível ao listener global
   // sem que seja necessário rebindar o evento a cada render.
@@ -700,12 +716,45 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const pesoPromptRef = useRef(pesoPrompt);
   useEffect(() => { pesoPromptRef.current = pesoPrompt; }, [pesoPrompt]);
 
+  // Digitação no campo de busca. Além de filtrar a grade, ela é o caminho do
+  // leitor sem sufixo Enter: 120ms depois do último caractere, se o que está no
+  // campo é um código completo que casa EXATAMENTE, o item entra sozinho — a
+  // mesma régua que já valia no PDV da SuperMax. Sem match não faz nada: quem
+  // reclama de "não encontrado" é o Enter, via processBarcode.
+  const registrarBusca = useCallback((val: string) => {
+    setSearch(val);
+    const buf = scanBufferRef.current;
+    buf.chars = val;
+    clearTimeout(buf.timer);
+    buf.timer = setTimeout(() => {
+      const v = buf.chars.trim();
+      if (v.length < 8 || !/^\d+$/.test(v)) return;
+      // Mesmo portão do listener do leitor: com cobrança na tela, venda
+      // fechando, recibo aberto ou modal de peso, ninguém entra no carrinho.
+      if (pixPendenteRef.current !== null || isClosingRef.current ||
+          lastVendaRef.current !== null || pesoPromptRef.current !== null) return;
+      const exact = produtosPorFilial.find((p: any) =>
+        String(p.ean ?? '').trim() === v ||
+        String(p.codigo ?? '').trim().toLowerCase() === v.toLowerCase()
+      );
+      if (!exact) return;
+      addToCart(exact);
+      buf.chars = '';
+      setSearch('');
+    }, 120);
+  }, [produtosPorFilial, addToCart]);
+
   // Leitor de código de barras (hardware): teclas chegam em <50ms entre si e
   // terminam com Enter. Listener global em fase de CAPTURE para que mesmo
   // quando o foco está num botão (Tema, forma de pagamento, card de produto),
   // a leitura seja processada e o Enter não active o botão focado.
   useEffect(() => {
-    const SCANNER_MAX_INTERVAL_MS = 50;
+    // 50ms era apertado demais. Leitor por Bluetooth, teclado virtual de
+    // coletor e aba sob carga entregam tecla com folga maior que isso — e
+    // quando um intervalo passava do limite no MEIO da rajada, `chars` era
+    // zerado e o Enter processava um código TRUNCADO: item errado, ou
+    // "produto não encontrado" com o código certo na mão do operador.
+    const SCANNER_MAX_INTERVAL_MS = 120;
     let chars = '';
     let lastTs = 0;
 
@@ -723,10 +772,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       const fast = now - lastTs < SCANNER_MAX_INTERVAL_MS;
 
       if (e.key === 'Enter') {
-        if (chars.length >= 4 && fast && !blocked) {
+        // Quando o foco está no campo, o VALOR DO CAMPO é a fonte completa —
+        // `chars` pode ter perdido o começo da rajada. Fora do campo, `chars` é
+        // a única fonte. Fica o mais longo dos dois, desde que seja código.
+        const noCampo = (searchRef.current?.value ?? '').trim();
+        const code = (/^\d+$/.test(noCampo) && noCampo.length > chars.length) ? noCampo : chars;
+        if (code.length >= 4 && fast && !blocked) {
           e.preventDefault();
           e.stopPropagation();
-          const code = chars;
           chars = '';
           lastTs = 0;
           processBarcodeRef.current(code);
@@ -1655,7 +1708,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
               placeholder={filialMeta.layout === 'tech' ? 'Buscar modelo, código ou bipar... (2* = quantidade)' : 'Buscar por nome, código ou bipar... (2* = quantidade)'}
               className={`neu-input py-2.5 sm:py-3 pl-10 rounded-2xl text-sm w-full ${qtdArmada !== null ? 'pr-24' : 'pr-4'}`}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => registrarBusca(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); return; }
                 if (e.key === 'Escape' && (search.length > 0 || qtdArmada !== null)) {
@@ -1663,6 +1716,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   e.preventDefault();
                   qtdArmadaRef.current = null;
                   setQtdArmada(null);
+                  cancelarAutoAdd();
                   setSearch('');
                 }
               }}
