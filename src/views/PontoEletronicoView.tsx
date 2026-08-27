@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Trash2, ClipboardList, ListChecks } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
@@ -38,7 +38,13 @@ const statusCls = (s: string) => {
 
 // ─── View principal ───────────────────────────────────────────────────────────
 
-const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
+// `filial` nulo = modo Matriz: a tela deixa de ser de uma unidade e passa a
+// olhar a turma inteira. Os fetches perdem o `.eq('filial', …)` e quem recorta
+// vira a RLS — `ponto_rh_select` e `rh_filial_all` exigem `auth_pode_filial`, e
+// admin/CEO/conselheiro passam em todas. Não é afrouxamento: é a mesma régua
+// que o resto do modo Matriz usa.
+const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp | null }) => {
+  const modoMatriz = !filial;
   // (504) O ponto passou a atravessar o APAGAR TUDO, então esta tabela é a
   // única aqui que acumula turma sobre turma. Sem recorte a busca vinha
   // inteira — os KPIs somavam turmas anteriores e a lista ia crescendo até
@@ -54,8 +60,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     [mesEfetivo],
   );
 
-  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>('/api/pontoeletronicoview', { filial, data: periodo });
-  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>('/api/funcionariosview', { filial });
+  const { data: ponto, setData, isLoading: loadingP } = useFetchData<any>(
+    '/api/pontoeletronicoview', filial ? { filial, data: periodo } : { data: periodo });
+  const { data: funcionarios, isLoading: loadingFn } = useFetchData<any>(
+    '/api/funcionariosview', filial ? { filial } : undefined);
   // Sem o totem, o lançamento manual é a única forma de entrada — então é ele
   // que abre. 'registros' é a listagem de ponto_eletronico.
   const [tab, setTab] = useState<'manual' | 'registros'>('manual');
@@ -103,8 +111,14 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       {/* Título */}
       <div className="shrink-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Registro de Ponto</h2>
-        <p className="text-sm text-gray-400 mt-1">Registro e acompanhamento de ponto dos funcionários.</p>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
+          Registro de Ponto{filial ? ` — ${filial}` : ''}
+        </h2>
+        <p className="text-sm text-gray-400 mt-1">
+          {modoMatriz
+            ? 'Todas as unidades. Escolha uma no seletor do topo para trabalhar dentro dela.'
+            : 'Registro e acompanhamento de ponto dos funcionários.'}
+        </p>
       </div>
 
       {/* Tab switcher */}
@@ -168,6 +182,9 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                 <table className="w-full text-left border-collapse">
                   <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-4 font-bold px-4">Funcionário</th>
+                    {/* Sem esta coluna, na Matriz a lista junta as três unidades
+                        e dois nomes iguais de filiais diferentes viram um só. */}
+                    {modoMatriz && <th className="pb-4 font-bold px-4">Unidade</th>}
                     <th className="pb-4 font-bold px-4">Data</th>
                     <th className="pb-4 font-bold px-4 text-center">Entrada</th>
                     <th className="pb-4 font-bold px-4 text-center">Saída</th>
@@ -181,6 +198,9 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
                         <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                           className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.func?.nome ?? '—'}</td>
+                          {modoMatriz && (
+                            <td className="py-3 px-4"><FilialBadge filial={p.filial} /></td>
+                          )}
                           <td className="py-3 px-4 text-xs font-mono text-gray-400">{p.data ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{p.entrada ?? '—'}</td>
                           <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{p.saida ?? '—'}</td>
@@ -237,28 +257,25 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
 export const PontoEletronicoView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const { filialAtiva } = useFilial();
 
-  // Modo Matriz (sem filial ativa): totem e histórico são operação de unidade
-  // — o QR é gerado e escaneado dentro de uma filial, e as duas abas fazem
-  // fetch escopado por filial. Sobra o lançamento manual, que é justamente o
-  // que a Matriz vem buscar aqui: o painel de cumprimento por unidade.
+  // Modo Matriz (sem filial ativa): a tela abre a turma inteira, em vez de só o
+  // lançamento manual.
   //
-  // Sem este ramo a view devolvia null e o hub da Matriz abria em branco.
+  // Antes este ramo devolvia apenas o painel de cumprimento por unidade, porque
+  // o totem era operação de dentro da filial e as abas faziam fetch escopado. O
+  // totem saiu em 2026-07-29 e a leitura de crachá nasceu na Matriz — então
+  // quem registra ali era justamente quem não tinha como VER nem corrigir o que
+  // registrou, sem antes entrar numa unidade.
+  //
+  // Quem recorta continua sendo a RLS: `podeVer` só decide quem abre a tela, e
+  // a lista mostra o que `ponto_rh_select` deixar passar para cada um — o
+  // gerente enxerga a própria unidade mesmo estando na Matriz.
+  const podeVer = hasSetor(profile, 'rh')
+    || profile?.role === 'admin' || profile?.role === 'ceo'
+    || profile?.role === 'gerente' || isConselheiro(profile);
+
   if (!filialAtiva) {
-    const podeLancarManual = hasSetor(profile, 'rh')
-      || profile?.role === 'admin' || profile?.role === 'ceo'
-      || profile?.role === 'gerente' || isConselheiro(profile);
-
-    if (!podeLancarManual) return null;
-
-    return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col h-full gap-5">
-        <div className="shrink-0">
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Registro de Ponto</h2>
-        </div>
-        <FrequenciaTrabalhoView showToast={showToast} profile={profile} embedded />
-      </motion.div>
-    );
+    if (!podeVer) return null;
+    return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={null} />;
   }
 
   return <PontoEletronicoViewInner showToast={showToast} profile={profile} filial={filialAtiva} />;
