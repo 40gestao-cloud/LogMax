@@ -63,22 +63,31 @@ async function notificarSetor(args: {
 // Congela as opções de um <select> enquanto ele está aberto.
 //
 // Esta tela ouve realtime de cinco tabelas e a turma inteira trabalha nela ao
-// mesmo tempo: cada proposta salva por um colega, cada cadeado de reserva
-// renovado (batimento de 60s por aluno) redesenha os <option>. Trocar o
-// conteúdo dos <option> com o popup nativo aberto faz o Chrome repintar e
-// pular a lista — é o "tremendo" que se vê ao rolar a lista de requisições.
-// Congelado no instante em que o campo abre, o popup fica parado; a lista
-// volta a andar assim que a pessoa escolhe ou sai do campo.
+// mesmo tempo: cada proposta salva por um colega e cada batimento de reserva
+// (60s por aluno) provoca um re-render. Trocar o conteúdo dos <option> com o
+// popup nativo aberto faz o Chrome repintar a lista embaixo do cursor.
+//
+// O congelamento é por REF, não por estado, de propósito: guardar num useState
+// obrigaria um re-render no mousedown — isto é, no exato instante em que o
+// popup está abrindo —, que é justamente o que se quer evitar. A ref não
+// dispara render nenhum; ela só faz os renders que aconteceriam de qualquer
+// jeito continuarem desenhando a lista que a pessoa está vendo.
 function useOpcoesEstaveis<T>(valor: T) {
-  const [congelado, setCongelado] = useState<T | null>(null);
-  const vivo = useRef(valor);
-  vivo.current = valor;
-  // Só congela se ainda não estiver congelado: teclas de navegação dentro do
-  // popup aberto não podem re-fotografar a lista com dado novo.
-  const congelar = () => setCongelado(c => (c === null ? vivo.current : c));
-  const soltar = () => setCongelado(null);
+  const congelado = useRef<T | null>(null);
+  const [, redesenhar] = useState(0);
+  // Só congela se ainda não estiver congelado: tecla de navegação dentro do
+  // popup aberto não pode re-fotografar a lista com dado novo.
+  const congelar = () => { if (congelado.current === null) congelado.current = valor; };
+  // Soltar pede UM render — com o popup já fechado, que é quando pintar de
+  // novo não custa nada. Sem ele o DOM ficaria com a foto antiga até algum
+  // outro estado mudar, e a lista voltaria desatualizada na próxima abertura.
+  const soltar = () => {
+    if (congelado.current === null) return;
+    congelado.current = null;
+    redesenhar(n => n + 1);
+  };
   return {
-    opcoes: congelado ?? valor,
+    opcoes: congelado.current ?? valor,
     // Espalhar no <select>; o onChange do campo chama `soltar()`.
     handlers: { onMouseDown: congelar, onKeyDown: congelar, onBlur: soltar },
     soltar,

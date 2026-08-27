@@ -1071,6 +1071,16 @@ table,
   .neu-input:focus { animation: none; }
 }
 
+/* …e NUNCA num <select>.
+   O anel do foco cresce de 3px para 6px e volta, 1,8s em laço infinito. Num
+   campo de texto isso é uma respiração discreta atrás do cursor; num select
+   com a lista aberta, a lista suspensa nativa é desenhada colada à borda do
+   campo — o anel pulsa exatamente por baixo dela e a lista inteira parece
+   tremer. Relato de 2026-08-26 na tela de Cotações (o campo Requisição fica
+   focado o tempo todo enquanto se escolhe o item).
+   O anel ESTÁTICO fica: quem some é só a respiração. */
+select.neu-input:focus { animation: none; }
+
 /* ── Theme switching: suprime TODAS as transições durante a troca ──
    Sem isso, body (0.3s) + neu-* (0.2s) + Tailwind transitions criam um
    efeito "wave" onde cada elemento muda na sua velocidade e a troca de
