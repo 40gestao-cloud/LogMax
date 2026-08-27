@@ -70,13 +70,18 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
         if (error) setErro(error.message);
         else if (!data) setErro('Não encontrei seu cadastro de funcionário.');
         else {
-          setPessoa(data as CrachaPessoa);
+          // A foto do cadastro de funcionário (RH) manda; se estiver vazia — o
+          // caso comum, porque o formulário do RH grava string vazia e quase
+          // ninguém sobe foto por lá — vale a foto de perfil do próprio aluno,
+          // a mesma que ele vê no topo da tela. Sem esta ponte o crachá saía
+          // com o boneco cinza mesmo para quem já tinha foto no sistema.
+          setPessoa({ ...(data as CrachaPessoa), foto_url: data.foto_url || profile?.foto_url || null });
           setInativo(data.ativo === false || (data.status ?? 'Ativo') === 'Inativo');
         }
         setCarregando(false);
       });
     return () => { cancelado = true; };
-  }, [funcionarioId]);
+  }, [funcionarioId, profile?.foto_url]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

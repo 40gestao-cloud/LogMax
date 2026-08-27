@@ -14,7 +14,7 @@
 // lista aqui não é filtrada por filial. A RLS de `funcionarios` já recorta o
 // que cada um pode ver — admin/CEO passam em todas.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw, X, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -56,11 +56,40 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
   const [conferindo, setConferindo] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
+  // Foto de perfil por funcionário. A foto do cadastro do RH (`funcionarios.foto_url`)
+  // quase sempre vem vazia — o formulário grava string vazia e ninguém sobe foto
+  // por lá —, enquanto o aluno tem a foto que ele mesmo mandou, em
+  // `user_profiles.foto_url`. Como a confirmação existe justamente para o
+  // professor olhar a cara antes de gravar, sem esta ponte a tela mostrava um
+  // boneco cinza e a conferência humana perdia o sentido.
+  const [fotosDoPerfil, setFotosDoPerfil] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!supabase || !podeLer) return;
+    let cancelado = false;
+    supabase
+      .from('user_profiles')
+      .select('funcionario_id, foto_url')
+      .not('funcionario_id', 'is', null)
+      .not('foto_url', 'is', null)
+      .then(({ data }) => {
+        if (cancelado || !data) return;
+        const mapa: Record<string, string> = {};
+        for (const u of data as any[]) {
+          if (u.funcionario_id && u.foto_url) mapa[u.funcionario_id] = u.foto_url;
+        }
+        setFotosDoPerfil(mapa);
+      });
+    return () => { cancelado = true; };
+  }, [podeLer]);
+
   const ativos = useMemo(
     () => (funcionarios ?? [])
       .filter((f: any) => (f.status ?? 'Ativo') !== 'Inativo')
+      // `|| null` e não `??`: o RH grava string vazia, que não é nula mas
+      // também não é foto.
+      .map((f: any) => ({ ...f, foto_url: f.foto_url || fotosDoPerfil[f.id] || null }))
       .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
-    [funcionarios],
+    [funcionarios, fotosDoPerfil],
   );
 
   const filtrados = useMemo(() => {
