@@ -3081,7 +3081,14 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                             // Sem `whitespace-nowrap` o selo quebrava no meio
                             // e "Limpeza Doméstica" lia como DOIS selos
                             // empilhados — categoria diferente, na leitura.
-                            ? <span className="inline-block whitespace-nowrap text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
+                            //
+                            // Com nowrap e sem teto, porém, a categoria mais
+                            // comprida da página ("Mercearia Seca e Despensa")
+                            // esticava a COLUNA para todas as linhas — daí o
+                            // vão entre Categoria e Filial. Teto de 150px e
+                            // reticências: o nome inteiro fica no title.
+                            ? <span title={item.categoria}
+                                className="inline-block align-middle max-w-[150px] truncate whitespace-nowrap text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
                             : <span className="text-gray-700">—</span>}
                         </td>
                         <td className="py-4 px-4 text-center hidden md:table-cell"><FilialBadge filial={item.filial} /></td>
