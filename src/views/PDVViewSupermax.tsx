@@ -20,6 +20,7 @@ import { consultarCreditoCliente, bloqueioFiado } from '../lib/credito';
 import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 import { normalizarBusca as norm, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -350,7 +351,17 @@ export const PDVViewSupermax = ({
       // vez, como no caixa de mercado: armou 2, o próximo item sai 2, o
       // seguinte volta a 1. Ref (e não estado) porque este callback é chamado
       // de dentro do timer do leitor, onde uma closure velha erraria a conta.
-      const qtdAdd = qtdExplicita ?? qtdArmadaRef.current ?? 1;
+      let qtdAdd = qtdExplicita ?? qtdArmadaRef.current ?? 1;
+      // Quantidade fracionada só existe em item de balança (KG, L, M...).
+      // "0,350*" num produto vendido por unidade dava meia água sanitária e
+      // baixava 0,35 do estoque — o banco aceita (só exige qtd > 0), então a
+      // régua tem de estar aqui. Este PDV não tinha nenhuma: era o único lugar
+      // do sistema que ignorava `UNIDADES_FRACIONARIAS`.
+      if (!UNIDADES_FRACIONARIAS.has(normalizarUnidade(produto?.unidade)) && !Number.isInteger(qtdAdd)) {
+        const inteira = Math.max(1, Math.round(qtdAdd));
+        flashError(`${produto?.nome ?? 'Item'} é vendido por unidade — ${fmtQtd(qtdAdd)} virou ${inteira}.`);
+        qtdAdd = inteira;
+      }
       // Desarma em QUALQUER adição, inclusive quando a quantidade veio colada
       // ao item ("2*7891" com 3 armado): deixar sobrando o que o operador já
       // acha que gastou é como o multiplicador vira erro de conferência.
@@ -363,7 +374,12 @@ export const PDVViewSupermax = ({
       const preco   = Number(produto?.preco) || 0;
       const eRaw    = produto?.estoque;
       const eNum    = (eRaw === null || eRaw === undefined || eRaw === '') ? 999 : Number(eRaw);
-      const estoque = Number.isFinite(eNum) && eNum > 0 ? eNum : 999;
+      // Estoque ZERO é zero, não "sem informação". O `> 0` daqui trocava 0 por
+      // 999: item esgotado entrava no carrinho sem badge de ruptura, sem aviso
+      // e sem cair na trava do pagamento — e a recusa só aparecia no banco,
+      // depois do cliente pagar. 999 continua valendo para campo vazio ou
+      // ilegível, que é o caso que este default existia para cobrir.
+      const estoque = Number.isFinite(eNum) ? eNum : 999;
       // O item é calculado AQUI, fora do updater do setCart. Antes, `added`
       // era preenchido DENTRO de `setCart(prev => …)` e lido logo depois — o
       // que só funciona quando o React resolve o updater na hora (otimização
@@ -403,6 +419,14 @@ export const PDVViewSupermax = ({
       });
       setLastAdded(added);
       playScannerBeep();
+      // Ruptura avisa NA HORA. O banco recusa a venda inteira quando a
+      // quantidade passa do estoque (`criar_venda_pdv`), então descobrir isso
+      // só no FECHAR VENDA significa descobrir depois de o cliente pagar. O
+      // badge na linha já mostrava, mas badge não interrompe ninguém — e com a
+      // quantidade armada ("10*") passar do estoque ficou fácil demais.
+      if (added.qtd > added.estoque) {
+        flashError(`${added.nome_produto}: estoque ${fmtQtd(added.estoque)}, no carrinho ${fmtQtd(added.qtd)}. O banco recusa a venda assim.`);
+      }
     } catch (err: any) {
       flashError(`addToCart THROW: ${err?.message ?? String(err)}`);
     }
@@ -592,6 +616,17 @@ export const PDVViewSupermax = ({
       return;
     }
     if (isClosing || paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen) return;
+    // Carrinho que o banco vai recusar não abre pagamento. `criar_venda_pdv`
+    // confere o estoque com FOR UPDATE e aborta a venda inteira — sem esta
+    // trava o erro aparecia DEPOIS do dinheiro na gaveta, que é o pior lugar
+    // possível para ele. (Conferido exercitando a RPC: "Estoque insuficiente
+    // para X: disponível 25, pedido 26".)
+    const ruptura = cartRef.current.filter(i => i.qtd > i.estoque);
+    if (ruptura.length > 0) {
+      const lista = ruptura.map(i => `${i.nome_produto} (estoque ${fmtQtd(i.estoque)}, carrinho ${fmtQtd(i.qtd)})`).join(' · ');
+      flashError(`Ajuste antes de receber — o banco recusa venda acima do estoque: ${lista}`);
+      return;
+    }
     // Sempre abre limpo — pagamentos parciais de venda anterior poderiam
     // vazar pra esta se o operador cancelou e voltou.
     setPagamentos([]);
@@ -599,7 +634,10 @@ export const PDVViewSupermax = ({
     setPayChoiceIdx(0);
     setPaymentError(null);
     setPaymentModalOpen(true);
-  }, [cart.length, isClosing, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, showToast]);
+    // `cartaoModal` estava sendo lido sem constar das deps: quando ele era a
+    // ÚNICA coisa que mudava, este callback ficava com a versão antiga (nula) e
+    // o F4 abria o modal de pagamento por cima da maquininha.
+  }, [cart.length, isClosing, paymentModalOpen, cashModalOpen, pixModal, cartaoModal, clientPickerOpen, showToast, flashError]);
 
   const cancelSale = useCallback(() => {
     if (cart.length === 0) return;
