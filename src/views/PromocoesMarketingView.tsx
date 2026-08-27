@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -14,6 +14,7 @@ import {
   ehArteHospedada, ARTE_IMAGEM_ACCEPT, ARTE_IMAGEM_OUTPUT_MAX_LABEL,
 } from '../lib/arteImagem';
 import { hasSetor } from '../lib/rbac';
+import { ArteLightbox, periodoArte } from '../components/ArteLightbox';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const SETOR_LABEL: Record<string, string> = {
@@ -177,6 +178,34 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     for (const a of artes ?? []) (m[a.promocao_id] ??= []).push(a);
     return m;
   }, [artes]);
+
+  // Modo apresentação (pedido de 2026-08-26). A arte que o aluno fez só era
+  // vista em miniatura na célula da tabela, e ampliar significava abrir a URL
+  // do storage noutra aba — no projetor, aparece o endereço do bucket e some a
+  // aula. Aqui as artes da filial viram uma sequência navegável, com tela
+  // cheia de verdade.
+  //
+  // Só as HOSPEDADAS por nós: link externo colado pelo aluno pode ser Canva,
+  // Drive ou PDF, e um <img> em cima disso mostra quadrado quebrado.
+  const [apresentando, setApresentando] = useState<number | null>(null);
+  const artesApresentaveis = useMemo(
+    () => (artes ?? [])
+      .filter((a: any) => ehArteHospedada(a.arte_url))
+      .map((a: any) => ({
+        id: a.id,
+        src: a.arte_url,
+        titulo: a.nome_produto ?? 'Arte promocional',
+        descricao: a.descricao_promocao,
+        preco: a.preco_promocional != null ? `R$ ${formatBRL(Number(a.preco_promocional))}` : null,
+        periodo: periodoArte(a.data_inicio, a.data_fim),
+        rodape: a.nome_publicador ? `Arte de ${a.nome_publicador}` : null,
+      })),
+    [artes],
+  );
+  const apresentarArte = (id: string) => {
+    const pos = artesApresentaveis.findIndex(a => a.id === id);
+    if (pos >= 0) setApresentando(pos);
+  };
 
   // Quantas artes cada PRODUTO já tem — é essa a unidade da cota (migr. 539).
   const artesPorProduto = useMemo(() => {
@@ -593,6 +622,21 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções — {filial}</h2>
           <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a aprovação pelo Financeiro.</p>
         </div>
+        {/* Sessão de apresentação: abre a primeira arte da unidade e caminha
+            pelas outras com as setas. É o botão que o aluno usa para mostrar à
+            turma o que produziu. */}
+        {artesApresentaveis.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setApresentando(0)}
+            title="Abrir as artes da unidade em tela grande, uma a uma"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-accent border border-accent/40 bg-accent/10 hover:bg-accent/15 transition-colors"
+          >
+            <Presentation size={14} />
+            Apresentar artes
+            <span className="text-[10px] text-gray-400 font-mono">({artesApresentaveis.length})</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -817,11 +861,22 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                                     promoção pode ter mais de uma versão. */}
                                 {lista.map(a => (
                                   <div key={a.id} className="flex items-center gap-1">
-                                    <a href={a.arte_url} target="_blank" rel="noreferrer"
-                                      title={ehArteHospedada(a.arte_url) ? 'Abrir a imagem enviada' : 'Abrir o link externo'}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
-                                      <ExternalLink size={9} /> {ehArteHospedada(a.arte_url) ? 'Imagem' : 'Link'}
-                                    </a>
+                                    {/* Imagem nossa amplia aqui mesmo; link
+                                        externo não tem visor possível e segue
+                                        abrindo noutra aba. */}
+                                    {ehArteHospedada(a.arte_url) ? (
+                                      <button type="button" onClick={() => apresentarArte(a.id)}
+                                        title="Ampliar a arte"
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
+                                        <Maximize2 size={9} /> Ver arte
+                                      </button>
+                                    ) : (
+                                      <a href={a.arte_url} target="_blank" rel="noreferrer"
+                                        title="Abrir o link externo"
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
+                                        <ExternalLink size={9} /> Link
+                                      </a>
+                                    )}
                                     {canPublicarArte && (
                                       <>
                                         <button onClick={() => openArteModal(p, a)} title="Substituir esta arte"
@@ -1177,6 +1232,15 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
           </motion.div>
         )}
       </AnimatePresence>
+
+      {apresentando !== null && artesApresentaveis[apresentando] && (
+        <ArteLightbox
+          itens={artesApresentaveis}
+          indice={apresentando}
+          onIndice={setApresentando}
+          onClose={() => setApresentando(null)}
+        />
+      )}
     </motion.div>
   );
 };

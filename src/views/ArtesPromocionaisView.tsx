@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown } from 'lucide-react';
+import { Star, ExternalLink, MessageSquare, Send, Lock, ChevronDown, Maximize2 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -8,6 +8,7 @@ import { isConselheiro } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { ehArteHospedada } from '../lib/arteImagem';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { ArteLightbox, periodoArte } from '../components/ArteLightbox';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'CEO/Admin',
@@ -73,6 +74,33 @@ const StarRow: React.FC<{ value: number; onChange?: (v: number) => void; size?: 
 const ArtesPromocionaisViewInner = ({ showToast, profile, filial }: any) => {
   const { data: artes, isLoading, error: artesError } = useFetchData<Arte>('/api/marketingartesview', { filial }, true);
   const { data: feedbacks, setData: setFeedbacks } = useFetchData<Feedback>('/api/marketingartefeedbackview', undefined, true);
+
+  // Visor de apresentação. Só entram as artes hospedadas por nós: link externo
+  // colado pelo aluno pode não ser imagem (Canva, Drive, PDF), e um <img> em
+  // cima disso mostraria um quadrado quebrado no meio da aula.
+  const [ampliado, setAmpliado] = useState<number | null>(null);
+  const artesAmpliaveis = useMemo(
+    () => artes
+      .filter(a => ehArteHospedada(a.arte_url))
+      .map(a => ({
+        id: a.id,
+        src: a.arte_url,
+        titulo: a.nome_produto,
+        descricao: a.descricao_promocao,
+        preco: a.preco_promocional != null
+          ? `R$ ${Number(a.preco_promocional).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : null,
+        periodo: periodoArte(a.data_inicio, a.data_fim),
+        rodape: a.nome_publicador
+          ? `Publicada por ${a.nome_publicador} · ${new Date(a.publicada_em).toLocaleDateString('pt-BR')}`
+          : null,
+      })),
+    [artes],
+  );
+  const abrirArte = (id: string) => {
+    const pos = artesAmpliaveis.findIndex(a => a.id === id);
+    if (pos >= 0) setAmpliado(pos);
+  };
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<Record<string, { estrelas: number; comentario: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -210,22 +238,49 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial }: any) => {
                     depois voltar e dar estrelas é o caminho que ninguém faz.
                     Link externo continua só como botão: pode não ser imagem. */}
                 {ehArteHospedada(arte.arte_url) && (
-                  <a href={arte.arte_url} target="_blank" rel="noopener noreferrer"
-                    className="block rounded-xl overflow-hidden border border-white/10 bg-black/20">
+                  <button type="button" onClick={() => abrirArte(arte.id)}
+                    title="Clique para ampliar"
+                    className="block w-full rounded-xl overflow-hidden border border-white/10 bg-black/20 cursor-zoom-in relative group">
                     <img src={arte.arte_url} alt={`Arte de ${arte.nome_produto}`}
                       loading="lazy"
                       className="w-full max-h-56 object-contain" />
-                  </a>
+                    <span className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 border border-white/20 flex items-center justify-center text-white/80">
+                      <Maximize2 size={12} />
+                    </span>
+                  </button>
                 )}
 
-                <a
-                  href={arte.arte_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 neu-button-accent rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest"
-                >
-                  <ExternalLink size={12} /> {ehArteHospedada(arte.arte_url) ? 'Ver em tamanho real' : 'Abrir Arte'}
-                </a>
+                {/* Arte nossa amplia aqui mesmo; o arquivo original continua
+                    a um clique, em texto pequeno, para quem quer baixar. Link
+                    externo não tem visor possível — segue abrindo noutra aba. */}
+                {ehArteHospedada(arte.arte_url) ? (
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => abrirArte(arte.id)}
+                      className="inline-flex items-center justify-center gap-2 neu-button-accent rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest"
+                    >
+                      <Maximize2 size={12} /> Ampliar
+                    </button>
+                    <a
+                      href={arte.arte_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      <ExternalLink size={10} /> abrir o arquivo original
+                    </a>
+                  </div>
+                ) : (
+                  <a
+                    href={arte.arte_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 neu-button-accent rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest"
+                  >
+                    <ExternalLink size={12} /> Abrir Arte
+                  </a>
+                )}
 
                 {arte.nome_publicador && (
                   <p className="text-[10px] text-gray-500 -mt-1">
@@ -328,6 +383,15 @@ const ArtesPromocionaisViewInner = ({ showToast, profile, filial }: any) => {
             );
           })}
         </div>
+      )}
+
+      {ampliado !== null && artesAmpliaveis[ampliado] && (
+        <ArteLightbox
+          itens={artesAmpliaveis}
+          indice={ampliado}
+          onIndice={setAmpliado}
+          onClose={() => setAmpliado(null)}
+        />
       )}
     </motion.div>
   );

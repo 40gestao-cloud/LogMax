@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ImageOff } from 'lucide-react';
+import { ImageOff, Maximize2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ArteLightbox, periodoArte } from './ArteLightbox';
 
 type VitrineItem = {
   // 'institucional' = peça do professor (migr. 541). Sem esse terceiro caso o
@@ -57,18 +58,44 @@ export function VitrineCarousel() {
     return () => { cancelled = true; };
   }, []);
 
+  // Peça aberta no visor (índice DENTRO de `itensAmpliaveis`, que não é o
+  // mesmo de `items`: slide sem imagem nenhuma não tem o que ampliar).
+  const [ampliado, setAmpliado] = useState<number | null>(null);
+  const itensAmpliaveis = useMemo(
+    () => items
+      .map((it, origem) => ({ it, origem }))
+      .filter(({ it }) => !!(it.imagem_url || it.imagem_fallback))
+      .map(({ it, origem }) => ({
+        origem,
+        src: (it.imagem_url || it.imagem_fallback)!,
+        titulo: it.titulo,
+        descricao: it.descricao,
+        preco: formatBRL(it.preco_promocional),
+        periodo: periodoArte(it.data_inicio, it.data_fim),
+      })),
+    [items],
+  );
+
+  const abrirAmpliado = () => {
+    const pos = itensAmpliaveis.findIndex(x => x.origem === idx);
+    if (pos >= 0) setAmpliado(pos);
+  };
+
   // Auto-rotação acontece SEMPRE (o ponto de uma vitrine é mover).
   // prefers-reduced-motion só afeta a duração da transição visual abaixo —
   // não desliga o avanço. Antes desligava, e usuários com Windows
   // Accessibility > Animation effects = OFF viam carrossel estático.
   useEffect(() => {
     if (items.length <= 1) return;
+    // Com o visor aberto a rotação para: quem está apresentando uma arte não
+    // pode ver o card de trás virar sozinho e o contador "2 / 5" desencontrar.
+    if (ampliado !== null) return;
     const t = setInterval(() => {
       tickRef.current += 1;
       setIdx(i => (i + 1) % items.length);
     }, ROTATE_MS);
     return () => clearInterval(t);
-  }, [items.length]);
+  }, [items.length, ampliado]);
 
   useEffect(() => { setIdx(0); tickRef.current = 0; }, [items.length]);
 
@@ -99,8 +126,15 @@ export function VitrineCarousel() {
       {/* Card contido — largura controlada, não estoura a coluna.
           A borda dourada vem do ::before animado de `.vitrine-card-shimmer`
           (conic-gradient rotativo); sem `border:` inline para não dobrar. */}
+      {/* O card inteiro amplia. A arte que o aluno enviou aparece aqui em 460 px
+          — bom para vitrine, pequeno para apresentar em aula. */}
       <div
         className="vitrine-card-shimmer"
+        onClick={abrirAmpliado}
+        role="button"
+        tabIndex={0}
+        title="Clique para ampliar"
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirAmpliado(); } }}
         style={{
           width: '100%',
           maxWidth: 460,
@@ -108,6 +142,7 @@ export function VitrineCarousel() {
           borderRadius: '1.5rem',
           overflow: 'hidden',
           position: 'relative',
+          cursor: 'zoom-in',
           background: 'linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01))',
           boxShadow: '0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset',
         }}
@@ -150,6 +185,25 @@ export function VitrineCarousel() {
             />
           </div>
         )}
+        {/* Dica de que dá para ampliar — discreta, canto oposto ao rótulo do
+            slide, e sem capturar o clique (o card inteiro já é o alvo). */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: 14, right: 14,
+            zIndex: 3,
+            width: 30, height: 30,
+            borderRadius: 999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.45)',
+            border: '1px solid rgba(212,175,55,0.35)',
+            color: 'rgba(212,175,55,0.9)',
+            pointerEvents: 'none',
+          }}
+        >
+          <Maximize2 size={14} />
+        </div>
       </div>
 
       {/* Dots fora do card, perto pra dar sensação de controle imediato. */}
@@ -191,6 +245,21 @@ export function VitrineCarousel() {
       >
         Vitrine LogMax
       </p>
+
+      {ampliado !== null && itensAmpliaveis[ampliado] && (
+          <ArteLightbox
+            itens={itensAmpliaveis}
+            indice={ampliado}
+            onIndice={setAmpliado}
+            onClose={() => {
+              // O carrossel retoma na peça em que a pessoa parou — voltar para
+              // outra arte depois de fechar parece que o clique se perdeu.
+              const pos = itensAmpliaveis[ampliado!]?.origem;
+              if (pos != null) { setIdx(pos); tickRef.current += 1; }
+              setAmpliado(null);
+            }}
+          />
+      )}
     </div>
   );
 }
