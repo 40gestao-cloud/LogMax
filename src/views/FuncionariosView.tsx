@@ -9,7 +9,7 @@ import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosM
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
-import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
+import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -162,10 +162,16 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         // Upload de foto, se selecionada
         if (formPhotoFile && created?.id) {
           try {
-            const url = await uploadFotoPerfil(formPhotoFile, `func-${created.id}`);
+            const url = await uploadFotoDeFuncionario(formPhotoFile, created.id);
             await dbUpdate('/api/funcionariosview', created.id, { foto_url: url });
             created.foto_url = url;
-          } catch { /* não bloqueia */ }
+          } catch (err: any) {
+            // Não bloqueia o cadastro — mas TAMBÉM não fica calado. Era o
+            // silêncio aqui que escondia a recusa do bucket: o funcionário
+            // nascia sem foto e ninguém ficava sabendo por quê.
+            console.error('[Funcionarios] falha ao enviar foto:', err);
+            showToast(`Funcionário cadastrado, mas a foto não subiu: ${err?.message ?? err}`, 'error', true);
+          }
         }
         setData((prev: any[]) => [created, ...prev]);
         showToast('Funcionário cadastrado.', 'success');
@@ -199,7 +205,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     if (!val.ok) { showToast(val.motivo, 'error'); return; }
     setPhotoUploading(true);
     try {
-      const url = await uploadFotoPerfil(file, `func-${photoUploadId}`);
+      const url = await uploadFotoDeFuncionario(file, photoUploadId);
       await dbUpdate('/api/funcionariosview', photoUploadId, { foto_url: url });
       setData((prev: any[]) => prev.map((f: any) => f.id === photoUploadId ? { ...f, foto_url: url } : f));
       showToast('Foto atualizada.', 'success');

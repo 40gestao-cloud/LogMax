@@ -45,7 +45,16 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
   // Sem cadastro de funcionário o crachá ainda existe — só não registra ponto,
   // porque a presença é lançada por `funcionario_id`. O cartão sai sem QR em
   // vez de sair com um código que a leitura recusaria.
-  const semFuncionario = !funcionarioId;
+  //
+  // "Sem cadastro" é conclusão, não premissa: o vínculo é gravado nos DOIS
+  // lados (`user_profiles.funcionario_id` e `funcionarios.user_profile_id`) e
+  // houve turma inteira em que só o segundo estava preenchido — e todos os 39
+  // alunos viam "sua conta não está ligada a um cadastro", com crachá sem QR,
+  // no dia em que o crachá é usado. Por isso a busca tenta os dois lados
+  // (migr. 561 abriu a `func_self` para o segundo) e só depois disso a tela
+  // conclui que não há vínculo.
+  const semFuncionario = !pessoa;
+
   const pessoaDoPerfil: CrachaPessoa = {
     id: profile?.id ?? '',
     nome: profile?.nome ?? '',
@@ -55,21 +64,28 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
   };
 
   useEffect(() => {
-    if (!supabase || !funcionarioId) { setCarregando(false); return; }
+    if (!supabase || (!funcionarioId && !profile?.id)) { setCarregando(false); return; }
     setCarregando(true);
     let cancelado = false;
     // A policy `func_self` deixa cada um ler a própria linha de `funcionarios`
     // — é por isso que o aluno monta o próprio crachá sem passar pelo RH.
-    supabase
+    const base = supabase
       .from('funcionarios')
-      .select('id, nome, cargo, filial, foto_url, status, ativo')
-      .eq('id', funcionarioId)
+      .select('id, nome, cargo, filial, foto_url, status, ativo');
+    const busca = funcionarioId
+      ? base.eq('id', funcionarioId)
+      : base.eq('user_profile_id', profile!.id);
+    busca
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelado) return;
+        // Vínculo ausente não é erro de sistema: quando o perfil não aponta
+        // para funcionário nenhum e o outro lado também não aponta de volta, a
+        // tela tem uma mensagem própria — com o caminho do conserto — em vez de
+        // uma caixa vermelha.
         if (error) setErro(error.message);
-        else if (!data) setErro('Não encontrei seu cadastro de funcionário.');
-        else {
+        else if (!data && funcionarioId) setErro('Não encontrei seu cadastro de funcionário.');
+        else if (data) {
           // A foto do cadastro de funcionário (RH) manda; se estiver vazia — o
           // caso comum, porque o formulário do RH grava string vazia e quase
           // ninguém sobe foto por lá — vale a foto de perfil do próprio aluno,
@@ -81,7 +97,7 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
         setCarregando(false);
       });
     return () => { cancelado = true; };
-  }, [funcionarioId, profile?.foto_url]);
+  }, [funcionarioId, profile?.id, profile?.foto_url]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

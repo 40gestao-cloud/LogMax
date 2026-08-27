@@ -41,10 +41,13 @@ export function extrairPathDoBucket(url: string | null | undefined): string | nu
   return url.slice(idx + marker.length);
 }
 
-// Upload + retorno da URL pública. userId é o dono da foto — usado como
-// prefixo do path pra agrupar e facilitar limpeza futura. A imagem passa
-// por resize+recompressão (WebP, máx 512x512) antes de subir.
-export async function uploadFotoPerfil(file: File, userId: string): Promise<string> {
+// Upload + retorno da URL pública. userId é a PASTA — e a policy do bucket
+// aceita só duas coisas: a pasta ser o próprio `auth.uid()`, ou quem sobe ser
+// admin/CEO/conselheiro. Quem chama por outra pessoa (o professor em Usuários)
+// cai no segundo caso; quem não é Matriz tem de subir na própria pasta e
+// identificar o dono pelo `sufixo` (ver `uploadFotoDeFuncionario`).
+// A imagem passa por resize+recompressão (WebP, máx 512x512) antes de subir.
+export async function uploadFotoPerfil(file: File, userId: string, sufixo?: string): Promise<string> {
   if (!supabase) throw new Error('Supabase não configurado.');
   const validacao = validarFotoPerfil(file);
   if (!validacao.ok) throw new Error(validacao.motivo);
@@ -52,7 +55,7 @@ export async function uploadFotoPerfil(file: File, userId: string): Promise<stri
   const optimized = await resizeImage(file, { maxWidth: 512, maxHeight: 512 });
   const ext = extFromMime(optimized.type) || validacao.ext;
 
-  const path = `${userId}/${Date.now()}.${ext}`;
+  const path = `${userId}/${sufixo ? `${sufixo}-` : ''}${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase
     .storage
@@ -77,4 +80,20 @@ export async function removerFotoPerfilAntiga(urlAntiga: string | null | undefin
   if (error) {
     console.warn('[perfilFoto] falha ao remover foto antiga:', error.message);
   }
+}
+
+// Foto de um cadastro de FUNCIONÁRIO (tela do RH). O caminho antigo era
+// `func-<id>/…`, uma pasta que não é de ninguém — e a policy do bucket recusa
+// pasta que não seja a de quem sobe, a menos que quem suba seja Matriz.
+// Resultado: o RH da unidade nunca conseguia subir foto, e no cadastro novo o
+// erro era engolido — o funcionário nascia sem foto e ninguém era avisado. Foi
+// por isso que `funcionarios.foto_url` estava vazio em turma inteira.
+//
+// Agora o arquivo vai para a pasta de QUEM SOBE (que a policy aceita para todo
+// mundo) e o funcionário fica identificado no nome do arquivo.
+export async function uploadFotoDeFuncionario(file: File, funcionarioId: string): Promise<string> {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) throw new Error('Sessão expirada — entre de novo para enviar a foto.');
+  return uploadFotoPerfil(file, user.id, `func-${funcionarioId}`);
 }
