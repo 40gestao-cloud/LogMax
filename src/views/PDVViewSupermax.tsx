@@ -257,7 +257,7 @@ export const PDVViewSupermax = ({
   // hook devolver null por um instante (hiccup de rede/RLS) no meio de uma
   // cobrança. Ver caixaAtivo, antes do RENDER.
   const ultimoCaixaRef       = useRef(caixa);
-  const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number) => Promise<string>>(null!);
+  const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number, dinheiroEmEspecie?: number) => Promise<string>>(null!);
 
   // Relógio do header — atualiza a cada 30s, evita repaint frenético
   useEffect(() => {
@@ -936,7 +936,13 @@ export const PDVViewSupermax = ({
   // === FINALIZAR ===
   // Devolve o id da venda criada — o fluxo misto precisa dele pra registrar a
   // parte do crédito como conta a receber (migr. 415).
-  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1): Promise<string> => {
+  // `dinheiroEmEspecie` é quanto desta venda entra na GAVETA. Vai à RPC como
+  // `p_valor_dinheiro` (migr. 562) porque "venda em dinheiro" era deduzido do
+  // texto da forma de pagamento — e o misto grava "Misto: Dinheiro R$ 20,00 +
+  // PIX R$ 6,00", que não casava com o prefixo. Resultado: o misto furava a
+  // trava do caixa aberto e a parte em espécie ficava fora da conferência do
+  // fim do dia. Troco NÃO entra: o que volta para o cliente não fica na gaveta.
+  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1, dinheiroEmEspecie: number = 0): Promise<string> => {
     if (!supabase) throw new Error('Supabase indisponível.');
     const cid = cidOverride !== undefined ? cidOverride : null;
     const itensPayload = cart.map(item => ({
@@ -957,6 +963,7 @@ export const PDVViewSupermax = ({
       p_filial:          filial,
       p_cupom_codigo:    null,
       p_cupom_desconto:  0,
+      p_valor_dinheiro:  parseFloat(dinheiroEmEspecie.toFixed(2)),
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
     const shortId = String(vendaId).slice(-6).toUpperCase();
@@ -1043,7 +1050,12 @@ export const PDVViewSupermax = ({
       // handlePayChoice. O tempo entre cash modal e FECHAR VENDA é de
       // segundos; revalidar gera falso-negativo silencioso (toast some
       // atrás do overlay fullscreen z-100) e mata a venda.
-      const vendaId = await finalizarVenda(forma, undefined, parcelas);
+      // Só o VALOR das linhas em Dinheiro — `troco` fica fora, porque volta
+      // para o cliente e não para a gaveta.
+      const dinheiroNaGaveta = parseFloat(
+        pagamentos.filter(p => p.forma === 'Dinheiro').reduce((s, p) => s + p.valor, 0).toFixed(2),
+      );
+      const vendaId = await finalizarVenda(forma, undefined, parcelas, dinheiroNaGaveta);
       // Só em misto com crédito. Falha aqui não desfaz a venda — ela já
       // persistiu, e o aviso diz exatamente o que ficou pendente de ajuste
       // pro Financeiro não descobrir isso no fechamento do mês.

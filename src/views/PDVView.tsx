@@ -893,6 +893,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     const cupomCod = snap.cupomCodigo ?? null;
     const cupomDesc = snap.cupomDesconto ?? 0;
     const descontoEnviado = snap.descontoNum + cupomDesc;
+    // Quanto entra na GAVETA (migr. 562). Este PDV não tem pagamento misto:
+    // dinheiro é forma única, então é o total ou zero. Vai explícito porque a
+    // RPC não deve mais deduzir "espécie" do texto da forma de pagamento.
+    const dinheiroEmEspecie = forma === 'Dinheiro' ? snap.totalFinal : 0;
     const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
       p_cliente_id:      snap.clienteId || null,
       p_total:           snap.subtotal,
@@ -904,6 +908,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       p_filial:          filialFiltro,
       p_cupom_codigo:    cupomCod,
       p_cupom_desconto:  cupomDesc,
+      p_valor_dinheiro:  parseFloat(dinheiroEmEspecie.toFixed(2)),
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
