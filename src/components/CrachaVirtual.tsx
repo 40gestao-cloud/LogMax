@@ -78,12 +78,12 @@ export const CrachaVirtual = ({ pessoa, semQr = false }: {
           o assunto é o QR. */}
       <div className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-1">
         <div
-          className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0"
-          style={{ background: id.escuro, border: `1.5px solid ${id.cor}66` }}
+          className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0 bg-neutral-100"
+          style={{ border: `1.5px solid ${id.cor}66` }}
         >
           {pessoa.foto_url
             ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
-            : <User size={22} style={{ color: id.claro }} />}
+            : <User size={22} style={{ color: id.cor }} />}
         </div>
         <div className="min-w-0 flex-1">
           {/* Nome em neutro escuro, e não no tom da unidade: o tom escuro da
@@ -127,27 +127,40 @@ export const CrachaVirtual = ({ pessoa, semQr = false }: {
         )}
       </div>
 
-      {/* Rodapé no tom escuro da marca: fecha o cartão e carrega o que é texto
-          de conferência, não de leitura óptica. */}
+      {/* Rodapé: assinatura da unidade à esquerda, matrícula à direita.
+          Estava desalinhado porque misturava três tamanhos e duas opacidades na
+          MESMA linha — 8px de rótulo colado em 10px de código, tudo esmaecido.
+          Agora são dois blocos com papéis diferentes: um nome, e um campo de
+          dado com rótulo em cima do valor.
+
+          A matrícula vive numa pastilha translúcida em vez de flutuar solta.
+          Isso resolve a faixa da TechMax, que é laranja vivo: texto escuro com
+          opacidade sobre laranja vira lama, enquanto a pastilha clareia o fundo
+          e devolve contraste ao valor. E funciona igual nas outras unidades,
+          sem cor nova para cada uma. */}
       <div
-        className="shrink-0 flex items-center justify-between gap-3 px-4 py-3"
+        className="shrink-0 flex items-end justify-between gap-3 px-4 py-3"
         style={{ background: id.escuro }}
       >
         {pessoa.filial && (
-          // BRANCO, e não o tom da marca: a faixa já é a cor da unidade, e azul
-          // sobre azul-marinho (SuperMax) ficava ilegível. Cor sobre cor da
-          // mesma família é sempre aposta de contraste — o branco fecha nas
-          // três unidades sem depender de calibragem.
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] truncate text-white">
+          <p className="text-xs font-black uppercase tracking-[0.18em] truncate leading-none pb-1"
+            style={{ color: id.destaqueNaFaixa }}>
             {pessoa.filial}
           </p>
         )}
-        {/* Rotulado: antes eram seis caracteres soltos e ninguém sabia o que
-            eram. */}
-        <p className="text-[10px] font-mono tracking-[0.18em] shrink-0" style={{ color: 'rgba(255,255,255,0.80)' }}>
-          <span className="text-[8px] uppercase tracking-[0.2em] mr-1.5" style={{ color: 'rgba(255,255,255,0.50)' }}>Matrícula</span>
-          {codigoCracha(pessoa.id)}
-        </p>
+
+        <div className="shrink-0 text-right">
+          <p className="text-[7px] font-bold uppercase tracking-[0.22em] leading-none mb-1"
+            style={{ color: id.textoNaFaixa, opacity: 0.7 }}>
+            Matrícula
+          </p>
+          <span
+            className="inline-block rounded-md px-2 py-1 text-[11px] font-mono font-bold tracking-[0.15em] leading-none"
+            style={{ background: 'rgba(255,255,255,0.16)', color: id.textoNaFaixa }}
+          >
+            {codigoCracha(pessoa.id)}
+          </span>
+        </div>
       </div>
     </div>
   );

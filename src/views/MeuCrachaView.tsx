@@ -31,6 +31,12 @@ const ROTULO_PAPEL: Record<string, string> = {
 
 export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
   const [pessoa, setPessoa] = useState<CrachaPessoa | null>(null);
+  // Vínculo encerrado: o crachá continua existindo como identificação, mas o QR
+  // sai de cena. A leitura do professor já recusaria essa pessoa (a lista dele
+  // só traz ativos) — sem este aviso, o aluno levaria o crachá até a fila para
+  // ouvir "não achei essa pessoa", que é a mensagem errada para o que está
+  // acontecendo.
+  const [inativo, setInativo] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -56,14 +62,17 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
     // — é por isso que o aluno monta o próprio crachá sem passar pelo RH.
     supabase
       .from('funcionarios')
-      .select('id, nome, cargo, filial, foto_url')
+      .select('id, nome, cargo, filial, foto_url, status, ativo')
       .eq('id', funcionarioId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelado) return;
         if (error) setErro(error.message);
         else if (!data) setErro('Não encontrei seu cadastro de funcionário.');
-        else setPessoa(data as CrachaPessoa);
+        else {
+          setPessoa(data as CrachaPessoa);
+          setInativo(data.ativo === false || (data.status ?? 'Ativo') === 'Inativo');
+        }
         setCarregando(false);
       });
     return () => { cancelado = true; };
@@ -90,8 +99,18 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
       ) : (
         <div className="flex flex-col items-center gap-4 shrink-0">
           <div className="w-full max-w-[320px]">
-            <CrachaVirtual pessoa={pessoa ?? pessoaDoPerfil} semQr={semFuncionario} />
+            <CrachaVirtual pessoa={pessoa ?? pessoaDoPerfil} semQr={semFuncionario || inativo} />
           </div>
+
+          {inativo && !semFuncionario && (
+            <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">
+              <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Seu cadastro de funcionário está <span className="text-gray-300 font-semibold">inativo</span>,
+                então este crachá não registra presença. Procure o RH ou o professor.
+              </p>
+            </div>
+          )}
 
           {semFuncionario && (
             <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">

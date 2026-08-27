@@ -31,27 +31,54 @@ export const isFilialHolding = (v: any): v is FilialHolding =>
 // placa não tem como ser a mesma cor nos três — é a mesma constatação que o
 // FilialSelector já fazia, agora num lugar onde outras telas alcançam.
 //
-// `cor` é o tom que identifica a unidade à distância (moldura, anel da foto,
-// selo). Vem das mesmas famílias do FILIAL_COLOR acima, em hex, porque aqui
-// entra em gradiente e em borda inline — classe Tailwind dinâmica não existe.
+// As cores foram AMOSTRADAS dos próprios PNGs (pixel dominante saturado de
+// cada logo), não escolhidas de memória: o laranja da TechMax é #F86800, o
+// azul do SuperMax é #000070 e o dourado da MaxLook é #D8B888. Chutar um tom
+// "parecido" foi o que fez o crachá da TechMax sair marrom.
+//
+// Em hex, e não em classe Tailwind, porque entram em gradiente e borda inline
+// — classe dinâmica não existe.
 export const FILIAL_IDENTIDADE: Record<FilialHolding, {
   logo: string;
-  /** Tom da marca para texto e traço sobre fundo CLARO (o crachá). */
+  /** Tom da marca para traço e detalhe sobre fundo CLARO (o crachá). */
   cor: string;
   /** Mesma família, aberta o bastante para ler sobre fundo ESCURO (o app). */
   claro: string;
-  /** Tom escuro da marca, para faixa cheia com texto claro por cima. */
+  /** Fundo da faixa cheia do rodapé. */
   escuro: string;
+  /** Cor do texto POR CIMA de `escuro`. Explícita, e não calculada: a faixa da
+   *  TechMax é laranja vivo, onde branco dá 3:1 e preto dá 6,9:1 — o oposto do
+   *  que vale para o azul-marinho do SuperMax. */
+  textoNaFaixa: string;
+  /** Cor do NOME da unidade na faixa. Separada de `textoNaFaixa` porque é o
+   *  destaque da marca, não texto de apoio — o SuperMax assina em amarelo sobre
+   *  o azul, e amarelo não serve para o resto do rodapé. */
+  destaqueNaFaixa: string;
   /** Fundo da faixa/plaquinha do logo. `null` = o PNG já é transparente. */
   plate: string | null;
 }> = {
-  SuperMax: { logo: '/icon-supermax-view.png', cor: '#1D4ED8', claro: '#608CFF', escuro: '#12213F', plate: '#ffffff' },
-  MaxLook:  { logo: '/icon-maxlook.png',       cor: '#A9834B', claro: '#E8CDA8', escuro: '#0B0A08', plate: '#000000' },
-  // TechMax é LARANJA. #C2410C sobre #2A1608 lia como marrom — laranja escurecido
-  // demais perde o matiz e vira terra. O tom da faixa desceu só o necessário
-  // para o branco por cima passar de 6:1 de contraste.
-  TechMax:  { logo: '/icon-techmax.png',       cor: '#EA580C', claro: '#FF9646', escuro: '#9A3412', plate: '#ffffff' },
-  Matriz:   { logo: '/icon-logmax.png',        cor: '#A97C0B', claro: '#F0B429', escuro: '#161310', plate: null },
+  SuperMax: {
+    logo: '/icon-supermax-view.png',
+    cor: '#000070', claro: '#608CFF', escuro: '#000070',
+    // AMARELO, e não o dourado #F8C840 que o brasão usa: dourado sobre o
+    // azul-marinho lê como bronze apagado, e o pedido era amarelo.
+    textoNaFaixa: '#ffffff', destaqueNaFaixa: '#FFDD00', plate: '#ffffff',
+  },
+  MaxLook: {
+    logo: '/icon-maxlook.png',
+    cor: '#D8B888', claro: '#D8B888', escuro: '#0B0A08',
+    textoNaFaixa: '#ffffff', destaqueNaFaixa: '#D8B888', plate: '#000000',
+  },
+  TechMax: {
+    logo: '/icon-techmax.png',
+    cor: '#F86800', claro: '#F86800', escuro: '#F86800',
+    textoNaFaixa: '#1A0B00', destaqueNaFaixa: '#1A0B00', plate: '#ffffff',
+  },
+  Matriz: {
+    logo: '/icon-logmax.png',
+    cor: '#F0B429', claro: '#F0B429', escuro: '#161310',
+    textoNaFaixa: '#ffffff', destaqueNaFaixa: '#F0B429', plate: null,
+  },
 };
 
 /** Identidade da unidade, com a da holding como rede de segurança: filial nula

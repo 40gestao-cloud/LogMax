@@ -16,7 +16,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2 } from 'lucide-react';
+import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -27,7 +27,18 @@ import { FILIAIS_HOLDING, isFilialHolding, identidadeDaFilial } from '../lib/fil
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 
-export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: UserProfile }) => {
+export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
+  // Guarda de papel DENTRO da view, não só no menu. Esconder o botão da barra
+  // lateral não fecha a rota: `activeView` também é definido pelo link de uma
+  // notificação, pelo histórico de navegação e pelos comandos globais. A RLS de
+  // `funcionarios` já limitaria o que cada um enxerga (aluno vê só a própria
+  // linha), mas quem tem setor RH veria a unidade inteira e teria o botão de
+  // gravar presença a um clique — é a régua do menu que tem de valer aqui.
+  const podeLer = profile?.role === 'admin';
+
+  // Sem filtro de filial de propósito: a fila da turma atravessa as unidades, e
+  // a RLS de `funcionarios` é quem recorta (admin passa em todas). Sem
+  // paginação porque a turma cabe folgada no teto de linhas do PostgREST.
   const { data: funcionarios, isLoading } = useFetchData<any>('/api/funcionariosview');
 
   const [scannerAberto, setScannerAberto] = useState(false);
@@ -36,6 +47,13 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
   const [gravando, setGravando] = useState(false);
   const [busca, setBusca] = useState('');
   const [lidosAgora, setLidosAgora] = useState<{ nome: string; hora: string }[]>([]);
+  // O que já existe de ponto HOJE para quem acabou de ser lido. `registrar_ponto_manual`
+  // faz ON CONFLICT DO UPDATE: uma segunda leitura reescreve a hora de entrada,
+  // e — pior — transforma em 'Normal' uma falta justificada que o RH tinha
+  // lançado, sem dizer nada a ninguém. Aqui isso vira aviso e um botão que diz
+  // o que vai fazer.
+  const [jaRegistrado, setJaRegistrado] = useState<{ status: string; entrada: string | null } | null>(null);
+  const [conferindo, setConferindo] = useState(false);
 
   const ativos = useMemo(
     () => (funcionarios ?? [])
@@ -97,7 +115,27 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
       showToast('Crachá lido, mas não achei essa pessoa entre os funcionários ativos.', 'error', true);
       return;
     }
+    setJaRegistrado(null);
     setConfirmando(achado);
+    void conferirPontoDeHoje(funcionarioId);
+  };
+
+  // Leitura à parte, e não junto do fetch da lista: interessa só a pessoa que
+  // acabou de ser lida, e no dia de hoje.
+  const conferirPontoDeHoje = async (funcionarioId: string) => {
+    if (!supabase) return;
+    setConferindo(true);
+    try {
+      const { data } = await supabase
+        .from('ponto_eletronico')
+        .select('status, entrada')
+        .eq('funcionario_id', funcionarioId)
+        .eq('data', todayBR())
+        .maybeSingle();
+      setJaRegistrado(data ? { status: data.status, entrada: data.entrada } : null);
+    } finally {
+      setConferindo(false);
+    }
   };
 
   const handleGravar = async () => {
@@ -120,6 +158,7 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
       showToast(`Presença de ${confirmando.nome} registrada às ${hora}.`, 'success', true);
       setLidosAgora(prev => [{ nome: confirmando.nome, hora }, ...prev].slice(0, 12));
       setConfirmando(null);
+      setJaRegistrado(null);
       // Reabre o leitor: com a turma em fila, voltar ao botão a cada leitura é
       // o gesto repetido que mais custa.
       setScannerAberto(true);
@@ -129,6 +168,23 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
       setGravando(false);
     }
   };
+
+  if (!podeLer) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="neu-flat rounded-3xl p-8 border border-white/5 max-w-md flex items-start gap-3">
+          <ShieldAlert size={20} className="text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-gray-200">Tela restrita</p>
+            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+              A leitura de crachá registra presença de outras pessoas, e por isso fica só com
+              quem conduz a turma. Seu próprio crachá está em <span className="text-gray-300">Meu Crachá</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -272,7 +328,7 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
       {confirmando && (
         <div
           className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => !gravando && setConfirmando(null)}
+          onClick={() => { if (!gravando) { setConfirmando(null); setJaRegistrado(null); } }}
         >
           <div
             onClick={e => e.stopPropagation()}
@@ -297,28 +353,50 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
               </p>
             )}
 
-            <p className="text-[11px] text-gray-500 text-center">
-              É esta pessoa que está na sua frente? A presença de hoje será registrada como
-              <span className="text-gray-300 font-semibold"> Normal</span>.
-            </p>
+            {conferindo ? (
+              <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                <Loader2 size={11} className="animate-spin" /> conferindo o ponto de hoje…
+              </p>
+            ) : jaRegistrado ? (
+              <div className="rounded-xl p-3 border border-amber-500/30 bg-amber-500/5 flex items-start gap-2">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Já existe ponto hoje para esta pessoa
+                  {jaRegistrado.entrada ? ` (entrada ${jaRegistrado.entrada}` : ` (${jaRegistrado.status}`}
+                  {jaRegistrado.entrada ? `, ${jaRegistrado.status})` : ')'}.
+                  Gravar de novo <span className="font-semibold">substitui</span> o registro —
+                  inclusive uma falta justificada, que voltaria a ser presença normal.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-500 text-center">
+                É esta pessoa que está na sua frente? A presença de hoje será registrada como
+                <span className="text-gray-300 font-semibold"> Normal</span>.
+              </p>
+            )}
 
             <div className="flex gap-2 w-full">
               <button
                 type="button"
-                onClick={() => setConfirmando(null)}
+                onClick={() => { setConfirmando(null); setJaRegistrado(null); }}
                 disabled={gravando}
                 className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest border border-white/15 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-40"
               >
-                Não é
+                {jaRegistrado ? 'Deixar como está' : 'Não é'}
               </button>
               <button
                 type="button"
                 onClick={handleGravar}
-                disabled={gravando}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-accent/10 text-accent border border-accent/40 hover:bg-accent/15 transition-colors disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                disabled={gravando || conferindo}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-colors disabled:opacity-40 inline-flex items-center justify-center gap-2 ${
+                  jaRegistrado
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                    : 'bg-accent/10 text-accent border-accent/40 hover:bg-accent/15'
+                }`}
               >
-                {gravando ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />}
-                Registrar presença
+                {gravando ? <Loader2 size={12} className="animate-spin" />
+                  : jaRegistrado ? <RotateCcw size={12} /> : <Clock size={12} />}
+                {jaRegistrado ? 'Substituir registro' : 'Registrar presença'}
               </button>
             </div>
           </div>
