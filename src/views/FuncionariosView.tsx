@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Users, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2 } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -53,7 +53,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     false,
     { orderBy: 'nome', ascending: true },
   );
-  const [painelUsuarios, setPainelUsuarios] = useState(false);
+  const [usuarioSel, setUsuarioSel] = useState('');
   const [beneficiosDe, setBeneficiosDe] = useState<{ id: string; nome: string } | null>(null);
   // Só cargo/departamento ativos entram no select; inativo que já esteja
   // gravado num funcionário continua aparecendo via fallback "Outro".
@@ -116,11 +116,21 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const perfisComCadastro = new Set(
     (funcionarios ?? []).map((f: any) => f.user_profile_id).filter(Boolean),
   );
-  const usuariosSemCadastro = (usuarios ?? []).filter((u: any) =>
-    !u.funcionario_id && !perfisComCadastro.has(u.id) && u.ativo !== false,
-  );
+  // A lista suspensa mostra TODO mundo da unidade, com quem já tem cadastro
+  // marcado e desabilitado. Esconder os cadastrados faria o aluno procurar um
+  // nome que não está lá sem saber por quê — e a lista encurtando sozinha é
+  // pior que a lista inteira com o motivo escrito ao lado do nome.
+  const usuariosDaUnidade = (usuarios ?? [])
+    .filter((u: any) => u.ativo !== false)
+    .map((u: any) => ({
+      ...u,
+      jaCadastrado: !!u.funcionario_id || perfisComCadastro.has(u.id),
+      cargoTexto:   roleLabel(u.role),
+      deptoTexto:   u.setor ? setorLabel(u.setor) : '',
+    }));
+  const usuariosSemCadastro = usuariosDaUnidade.filter((u: any) => !u.jaCadastrado);
 
-  const openNew = () => { setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setEditing(null); setShowForm(true); };
+  const openNew = () => { setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setUsuarioSel(''); setEditing(null); setShowForm(true); };
 
   // Abre o formulário já preenchido com o que a conta do usuário sabe: nome,
   // e-mail, o papel como "cargo" e o setor como "departamento" — exatamente as
@@ -130,26 +140,28 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // `user_profile_id` vai junto: é o vínculo, e é ele que faz o crachá do aluno
   // sair com QR sem ninguém precisar ligar nada depois (migr. 561).
   const openNewFromUser = (u: any) => {
-    const cargoTexto = roleLabel(u.role);
-    const deptoTexto = u.setor ? setorLabel(u.setor) : '';
+    const cargoTexto = u.cargoTexto ?? roleLabel(u.role);
+    const deptoTexto = u.deptoTexto ?? (u.setor ? setorLabel(u.setor) : '');
     // Casa com o catálogo da unidade quando existir; senão cai em "Outro" com
     // o texto preenchido, que é o mesmo caminho do cadastro histórico.
     const cargoMatch = cargosAtivos.find((c: any) => c.nome === cargoTexto);
     const deptoMatch = deptosAtivos.find((d: any) => d.nome === deptoTexto);
-    setForm({
-      ...makeEmpty(filial),
+    // MERGE, não reset: o RH pode já ter digitado CPF, admissão ou salário
+    // antes de escolher a pessoa na lista — recomeçar do zero apagaria isso.
+    setForm((p: any) => ({
+      ...p,
       nome:            u.nome ?? '',
       email:           u.email ?? '',
       cargo:           cargoTexto,
       departamento:    deptoTexto,
       filial:          filial,
       user_profile_id: u.id,
-    });
+    }));
     setCargoSel(cargoMatch ? cargoMatch.id : (cargoTexto ? OUTRO : ''));
     setDeptoSel(deptoMatch ? deptoMatch.id : (deptoTexto ? OUTRO : ''));
     setEditing(null);
+    setUsuarioSel(u.id);
     setShowForm(true);
-    setPainelUsuarios(false);
   };
   const openEdit = (f: any) => {
     setForm({
@@ -165,10 +177,11 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     const deptoMatch = deptosAtivos.find((d: any) => d.nome === f.departamento);
     setCargoSel(cargoMatch ? cargoMatch.id : (f.cargo ? OUTRO : ''));
     setDeptoSel(deptoMatch ? deptoMatch.id : (f.departamento ? OUTRO : ''));
+    setUsuarioSel('');
     setEditing(f);
     setShowForm(true);
   };
-  const closeForm = () => { setShowForm(false); setEditing(null); setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setUsuarioSel(''); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); };
 
   // Cargo traz o salário base junto — mas só preenche campo vazio ou zerado.
   // Sobrescrever um salário já digitado transformaria "escolhi o cargo errado
@@ -315,62 +328,9 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             <input type="text" placeholder="Buscar funcionário..." value={search} onChange={e => setSearch(e.target.value)}
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" />
           </div>
-          {usuariosSemCadastro.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setPainelUsuarios(v => !v)}
-              className="neu-button py-2.5 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent flex items-center gap-2 shrink-0"
-              title="Usuários desta unidade que ainda não têm cadastro de funcionário"
-            >
-              <Users size={14} />
-              De Usuários
-              <span className="px-1.5 py-0.5 rounded-md bg-accent/15 text-accent tabular-nums">{usuariosSemCadastro.length}</span>
-            </button>
-          )}
           <NeuButtonAccent variant="" onClick={openNew}><Plus size={14} />Novo Funcionário</NeuButtonAccent>
         </div>
       </div>
-
-      {/* Usuários da unidade sem cadastro de funcionário. Não substitui o
-          "Novo Funcionário": quem não tem conta (ou ainda não terá) continua
-          entrando pelo formulário em branco. */}
-      <AnimatePresence>
-        {painelUsuarios && usuariosSemCadastro.length > 0 && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-flat rounded-3xl border border-white/5 shrink-0 overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2">
-                  <Users size={15} /> Usuários de {filial} sem cadastro de funcionário
-                </h3>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Traz nome, e-mail, cargo e departamento da conta. CPF, admissão e salário continuam com o RH.
-                </p>
-              </div>
-              <button onClick={() => setPainelUsuarios(false)} className="modal-close-btn"><X size={16} /></button>
-            </div>
-            <div className="max-h-72 overflow-y-auto main-scrollbar px-3 pb-4">
-              {usuariosSemCadastro.map((u: any) => (
-                <div key={u.id}
-                  className="grid grid-cols-[1fr_auto] sm:grid-cols-[1.4fr_1.6fr_1fr_auto] gap-3 items-center px-3 py-2.5 rounded-xl hover:bg-white/[0.03]">
-                  <span className="text-sm font-semibold text-gray-200 truncate">{u.nome || '—'}</span>
-                  <span className="text-xs text-gray-500 truncate hidden sm:block">{u.email || '—'}</span>
-                  <span className="text-[11px] text-gray-400 truncate hidden sm:block">
-                    {roleLabel(u.role)}{u.setor ? ` · ${setorLabel(u.setor)}` : ''}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => openNewFromUser(u)}
-                    className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-gray-400 hover:text-accent flex items-center gap-1.5 justify-self-end"
-                  >
-                    <Plus size={12} /> Cadastrar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showForm && (
@@ -420,6 +380,49 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   setFormPhotoPreview(URL.createObjectURL(f));
                 }} />
             </div>
+
+            {/* Trazer de Usuários — só no cadastro novo. Editar um funcionário
+                existente não escolhe pessoa: escolher outra ali reescreveria o
+                cadastro de alguém por cima. */}
+            {!editing && (
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label htmlFor="func-usuario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  Trazer de Usuários ({filial}) — opcional
+                </label>
+                <select
+                  id="func-usuario"
+                  value={usuarioSel}
+                  onChange={e => {
+                    const escolhido = usuariosDaUnidade.find((u: any) => u.id === e.target.value);
+                    if (escolhido) { openNewFromUser(escolhido); return; }
+                    // "Do zero" desfaz só o VÍNCULO. O texto já digitado fica:
+                    // apagar o que o RH escreveu por causa de uma troca de
+                    // seleção seria perda silenciosa.
+                    setUsuarioSel('');
+                    setForm((p: any) => ({ ...p, user_profile_id: null }));
+                  }}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                >
+                  <option value="">Cadastrar do zero (sem conta de usuário)</option>
+                  {usuariosDaUnidade.map((u: any) => (
+                    <option key={u.id} value={u.id} disabled={u.jaCadastrado}>
+                      {u.nome || '(sem nome)'}
+                      {u.email ? ` — ${u.email}` : ''}
+                      {u.cargoTexto ? ` · ${u.cargoTexto}` : ''}
+                      {u.deptoTexto ? ` · ${u.deptoTexto}` : ''}
+                      {u.jaCadastrado ? ' (já cadastrado)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-500">
+                  {usuariosDaUnidade.length === 0
+                    ? `Nenhum usuário cadastrado em ${filial} ainda — cadastre o funcionário pelos campos abaixo.`
+                    : usuariosSemCadastro.length === 0
+                      ? 'Todos os usuários desta unidade já têm cadastro de funcionário. Use os campos abaixo para quem não tem conta.'
+                      : `${usuariosSemCadastro.length} de ${usuariosDaUnidade.length} ainda sem cadastro. Escolher preenche nome, e-mail, cargo e departamento — CPF, admissão e salário continuam com o RH.`}
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
