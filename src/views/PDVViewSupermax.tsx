@@ -232,7 +232,12 @@ export const PDVViewSupermax = ({
   const [nowTick, setNowTick] = useState(0);
   const codeInputRef   = useRef<HTMLInputElement>(null);
   const codeNativeRef  = useRef('');
-  const scanBufferRef  = useRef({ chars: '' as string, lastTime: 0, timer: 0 as any });
+  // `limpoEm` existe por causa do Enter que o leitor manda DEPOIS dos dígitos:
+  // quando o auto-add do buffer já consumiu o código e limpou o campo, esse
+  // Enter chega num campo vazio — e Enter vazio é "fechar venda". O operador
+  // via o modal de pagamento abrir sozinho no meio do bipe, e daí em diante o
+  // leitor lia para dentro do modal (é o "lê e não adiciona").
+  const scanBufferRef  = useRef({ chars: '' as string, lastTime: 0, timer: 0 as any, limpoEm: 0 });
   const cashInputRef   = useRef<HTMLInputElement>(null);
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
   const cartRef              = useRef(cart);
@@ -291,7 +296,7 @@ export const PDVViewSupermax = ({
   const produtosDisponiveis = useMemo(() => produtos
     .filter((p: any) => (p.status === 'Ativo' || !p.status) && ehVendavel(p.tipo))
     .filter((p: any) => p.filial === filial),
-  [produtos]);
+  [produtos, filial]);
 
   const subtotal   = cart.reduce((s, i) => s + i.subtotal, 0);
   // desconto pode ser maior que subtotal se o operador errou — clampa pra
@@ -310,6 +315,20 @@ export const PDVViewSupermax = ({
     setTimeout(() => setCodeMsg(null), 4000);
   }, []);
 
+  // Consumir o código = limpar o campo E desarmar o bipe pendente. Os dois
+  // juntos, sempre: era o timer que sobrevivia ao Enter do leitor que fazia o
+  // mesmo item entrar duas vezes (o Enter adicionava e limpava o campo, e 120ms
+  // depois o timer ainda tinha o código no buffer e adicionava de novo).
+  const consumirCodigo = useCallback(() => {
+    const buf = scanBufferRef.current;
+    clearTimeout(buf.timer);
+    buf.chars = '';
+    buf.limpoEm = performance.now();
+    setCode('');
+    codeNativeRef.current = '';
+    setSuggestionIdx(-1);
+  }, []);
+
   // SEM validação — sempre adiciona, mesmo com campos faltando.
   // Se algum dia faltar id/estoque/preço, usa default seguro. Se algo der
   // errado mesmo assim, o erro fica visível no banner via try/catch.
@@ -321,33 +340,45 @@ export const PDVViewSupermax = ({
       const eRaw    = produto?.estoque;
       const eNum    = (eRaw === null || eRaw === undefined || eRaw === '') ? 999 : Number(eRaw);
       const estoque = Number.isFinite(eNum) && eNum > 0 ? eNum : 999;
-      let added: CartItem | null = null;
+      // O item é calculado AQUI, fora do updater do setCart. Antes, `added`
+      // era preenchido DENTRO de `setCart(prev => …)` e lido logo depois — o
+      // que só funciona quando o React resolve o updater na hora (otimização
+      // que ele aplica apenas se não houver update pendente no componente).
+      // Com um update já na fila — o realtime de estoque, o relógio do header,
+      // o próprio setCode do bipe — o updater roda DEPOIS, `added` continuava
+      // null, e o item entrava no carrinho SEM beep e SEM aparecer em "ÚLTIMO
+      // ITEM LIDO". Para quem está no caixa, isso é o leitor não ter lido.
+      const base = cartRef.current;
+      const jaTem = base.find(i => i.produto_id === id);
+      const novaQtd = (jaTem?.qtd ?? 0) + qtdAdd;
+      const added: CartItem = jaTem
+        ? { ...jaTem, qtd: novaQtd, subtotal: novaQtd * jaTem.preco_unitario }
+        : {
+            produto_id:     id,
+            nome_produto:   nome,
+            ean:            produto?.ean,
+            codigo:         produto?.codigo,
+            preco_unitario: preco,
+            qtd:            qtdAdd,
+            subtotal:       preco * qtdAdd,
+            estoque,
+            unidade:        produto?.unidade ?? 'UN',
+          };
+      // Adiantar o ref mantém dois bipes no mesmo quadro somando certo em
+      // "ÚLTIMO ITEM LIDO" (o carrinho em si já somava, por vir do `prev`).
+      cartRef.current = jaTem
+        ? base.map(i => i.produto_id === id ? added : i)
+        : [...base, added];
       setCart(prev => {
-        const existing = prev.find(i => i.produto_id === id);
-        if (existing) {
-          const newQty = existing.qtd + qtdAdd;
-          const novo = { ...existing, qtd: newQty, subtotal: newQty * existing.preco_unitario };
-          added = novo;
-          return prev.map(i => i.produto_id === id ? novo : i);
-        }
-        const novo: CartItem = {
-          produto_id:     id,
-          nome_produto:   nome,
-          ean:            produto?.ean,
-          codigo:         produto?.codigo,
-          preco_unitario: preco,
-          qtd:            qtdAdd,
-          subtotal:       preco * qtdAdd,
-          estoque,
-          unidade:        produto?.unidade ?? 'UN',
-        };
-        added = novo;
-        return [...prev, novo];
+        const atual = prev.find(i => i.produto_id === id);
+        if (!atual) return [...prev, added];
+        const q = atual.qtd + qtdAdd;
+        return prev.map(i => i.produto_id === id
+          ? { ...atual, qtd: q, subtotal: q * atual.preco_unitario }
+          : i);
       });
-      if (added) {
-        setLastAdded(added);
-        playScannerBeep();
-      }
+      setLastAdded(added);
+      playScannerBeep();
     } catch (err: any) {
       flashError(`addToCart THROW: ${err?.message ?? String(err)}`);
     }
@@ -366,9 +397,11 @@ export const PDVViewSupermax = ({
 
   const clearAll = () => {
     setCart([]);
+    cartRef.current = [];
     setLastAdded(null);
-    setCode('');
-    setSuggestionIdx(-1);
+    // Desarma o bipe pendente também: cancelar o cupom com um código em voo
+    // fazia o item cair no carrinho novo, já zerado.
+    consumirCodigo();
     setCashReceived('');
     setDesconto(0);
     setDiscountValue('');
@@ -425,13 +458,47 @@ export const PDVViewSupermax = ({
     if (!match) {
       setCodeMsg({ type: 'err', text: `Produto não encontrado: ${codigoBuscar}` });
       setTimeout(() => setCodeMsg(null), 3000);
+      // Bipe que não achou produto LIMPA o campo; texto digitado à mão fica.
+      // Sem isso o código recusado ficava no campo e o bipe seguinte colava
+      // atrás dele ("78912…78912…"), então a partir do primeiro erro NENHUMA
+      // leitura funcionava mais até alguém apertar Esc.
+      if (/^\d{8,}$/.test(termo)) consumirCodigo();
       return;
     }
     addToCart(match, qtd);
-    setCode(''); codeNativeRef.current = '';
-    setSuggestionIdx(-1);
+    consumirCodigo();
     codeInputRef.current?.focus();
-  }, [produtosDisponiveis, addToCart]);
+  }, [produtosDisponiveis, addToCart, consumirCodigo]);
+
+  // Toda digitação no campo CÓDIGO passa por aqui — o `onChange` do input e o
+  // resgate de tecla perdida do listener global. Um leitor de código de barras
+  // é um teclado: os dígitos chegam em rajada e, 120ms depois do último, se o
+  // que está no campo for um código completo que casa exatamente, o item entra
+  // sozinho (é o que faz o bipe funcionar mesmo em leitor sem sufixo Enter).
+  const registrarDigitacao = useCallback((val: string) => {
+    codeNativeRef.current = val;
+    setCode(val);
+    const buf = scanBufferRef.current;
+    buf.chars = val;
+    buf.lastTime = performance.now();
+    clearTimeout(buf.timer);
+    buf.timer = setTimeout(() => {
+      const v = buf.chars.trim();
+      if (v.length >= 8 && /^\d+$/.test(v)) {
+        const lower = norm(v);
+        const exact = produtosDisponiveis.find((p: any) =>
+          String(p.ean ?? '').trim() === v ||
+          norm(p.codigo) === lower
+        );
+        if (exact) {
+          addToCart(exact);
+          consumirCodigo();
+        }
+        // Sem match não limpa nada: o Enter do leitor (se vier) cai em
+        // processCode, que é quem mostra "produto não encontrado".
+      }
+    }, 120);
+  }, [produtosDisponiveis, addToCart, consumirCodigo]);
 
   // Busca completa (modal F8) — sem cap de 2 chars; lista 50 primeiros se vazio.
   const filteredSearch = useMemo(
@@ -513,6 +580,10 @@ export const PDVViewSupermax = ({
   const handleCodeEnter = () => {
     const raw = codeNativeRef.current || code;
     if (raw.trim() === '') {
+      // Enter num campo vazio é "fechar venda" — menos quando o campo acabou
+      // de ser limpo por uma leitura: aí este Enter é o sufixo do leitor, não
+      // um comando do operador.
+      if (performance.now() - scanBufferRef.current.limpoEm < 400) return;
       if (cart.length > 0) openPayment();
       return;
     }
@@ -524,20 +595,17 @@ export const PDVViewSupermax = ({
     );
     if (exact) {
       addToCart(exact);
-      setCode(''); codeNativeRef.current = '';
-      setSuggestionIdx(-1);
+      consumirCodigo();
       return;
     }
     if (suggestionIdx >= 0 && suggestions[suggestionIdx]) {
       addToCart(suggestions[suggestionIdx]);
-      setCode(''); codeNativeRef.current = '';
-      setSuggestionIdx(-1);
+      consumirCodigo();
       return;
     }
     if (suggestions.length > 0) {
       addToCart(suggestions[0]);
-      setCode(''); codeNativeRef.current = '';
-      setSuggestionIdx(-1);
+      consumirCodigo();
       return;
     }
     processCode(raw);
@@ -609,6 +677,22 @@ export const PDVViewSupermax = ({
       const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || isClosing;
       const target = e.target as HTMLElement | null;
       const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+
+      // Dígito solto = bipe que caiu fora do campo. O foco sai do CÓDIGO a cada
+      // clique num botão, num item do carrinho ou no header — e a partir dali o
+      // leitor digitava para o vazio (pior: o Enter do sufixo "clicava" o botão
+      // focado). O operador vê o leitor ler e o PDV não reagir. Aqui a tecla é
+      // devolvida ao campo, que é o único lugar do PDV onde dígito significa
+      // produto.
+      if (
+        !anyModal && !isEditable && !e.ctrlKey && !e.altKey && !e.metaKey &&
+        e.key.length === 1 && e.key >= '0' && e.key <= '9'
+      ) {
+        e.preventDefault();
+        codeInputRef.current?.focus();
+        registrarDigitacao((codeNativeRef.current || '') + e.key);
+        return;
+      }
 
       // Shift+F1 ou ? — abrir manual/ajuda (padrão universal)
       if ((e.key === 'F1' && e.shiftKey) || (e.key === '?' && !isEditable)) {
@@ -758,7 +842,7 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint]);
+  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint, registrarDigitacao]);
 
   // === FINALIZAR ===
   // Devolve o id da venda criada — o fluxo misto precisa dele pra registrar a
@@ -1643,36 +1727,7 @@ export const PDVViewSupermax = ({
             <input
               ref={codeInputRef}
               value={code}
-              onChange={(e) => {
-                const val = e.target.value;
-                codeNativeRef.current = val;
-                setCode(val);
-                const now = performance.now();
-                const buf = scanBufferRef.current;
-                if (now - buf.lastTime < 80) {
-                  buf.chars = val;
-                } else {
-                  buf.chars = val;
-                }
-                buf.lastTime = now;
-                clearTimeout(buf.timer);
-                buf.timer = setTimeout(() => {
-                  const v = buf.chars.trim();
-                  if (v.length >= 8 && /^\d+$/.test(v)) {
-                    const lower = norm(v);
-                    const exact = produtosDisponiveis.find((p: any) =>
-                      String(p.ean ?? '').trim() === v ||
-                      norm(p.codigo) === lower
-                    );
-                    if (exact) {
-                      addToCart(exact);
-                      setCode(''); codeNativeRef.current = '';
-                      setSuggestionIdx(-1);
-                      buf.chars = '';
-                    }
-                  }
-                }, 120);
-              }}
+              onChange={(e) => registrarDigitacao(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -1694,8 +1749,7 @@ export const PDVViewSupermax = ({
                   });
                 } else if (e.key === 'Escape' && code.length > 0) {
                   e.preventDefault();
-                  setCode(''); codeNativeRef.current = '';
-                  setSuggestionIdx(-1);
+                  consumirCodigo();
                 } else if (e.key === 'Escape' && selectedCartIdx >= 0) {
                   e.preventDefault();
                   setSelectedCartIdx(-1);
