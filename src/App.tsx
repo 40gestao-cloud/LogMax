@@ -440,17 +440,17 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           </button>
         )}
         {/* Meu Crachá: o QR que o aluno mostra para ter a presença registrada.
-            Aberto a qualquer pessoa COM cadastro de funcionário — é o cadastro
-            que carrega nome, foto, cargo e unidade; sem ele não há crachá.
+            Aberto a TODO mundo, inclusive a quem não tem cadastro de
+            funcionário: o professor e o conselheiro não têm ponto a bater, mas
+            têm identidade — e o item sumir só para eles fazia parecer defeito.
+            Nesse caso o cartão sai sem QR e diz por quê.
 
             Sem `aulaAllow` de propósito: uma aula cuja whitelist não listasse
             este módulo tiraria o crachá da tela justamente no dia em que ele é
             usado. */}
-        {profile?.funcionario_id && (
-          <button onClick={() => { navigate('meu-cracha'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'meu-cracha' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <IdCard size={18} /><span>Meu Crachá</span>
-          </button>
-        )}
+        <button onClick={() => { navigate('meu-cracha'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'meu-cracha' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <IdCard size={18} /><span>Meu Crachá</span>
+        </button>
         {/* Crachá Virtual: o outro lado do mesmo par — quem LÊ o crachá e grava
             a presença. Só o professor, e só em modo Matriz: a leitura atravessa
             as unidades (a turma inteira passa na mesma fila), e de dentro de uma

@@ -1,8 +1,8 @@
 // O cartão do crachá virtual e o modal que o exibe.
 //
-// Dois consumidores: o aluno, que abre o próprio pelo topo da tela, e o
-// professor, que abre o de qualquer um pela aba Crachás do Ponto Eletrônico.
-// O mesmo cartão serve aos dois — o que muda é quem o abre.
+// Dois consumidores: cada pessoa, que abre o próprio em Meu Crachá, e o
+// professor, que abre o de qualquer um em Crachá Virtual. O mesmo cartão serve
+// aos dois — o que muda é quem o abre.
 //
 // Cartão em proporção de crachá de verdade (ISO 7810 ID-1, 85,6 × 54 mm, mas
 // em pé): a ideia é que imprimir e plastificar seja opção, não gambiarra.
@@ -21,7 +21,17 @@ export type CrachaPessoa = {
   foto_url?: string | null;
 };
 
-export const CrachaVirtual = ({ pessoa, compacto = false }: { pessoa: CrachaPessoa; compacto?: boolean }) => (
+/**
+ * `semQr` existe para o crachá de quem não tem cadastro de funcionário — hoje o
+ * professor e o conselheiro. Eles têm identidade no sistema, mas não têm ponto
+ * a registrar, e um QR ali seria um código que a leitura recusaria ("não achei
+ * essa pessoa"). Melhor não desenhar do que desenhar algo que não funciona.
+ */
+export const CrachaVirtual = ({ pessoa, compacto = false, semQr = false }: {
+  pessoa: CrachaPessoa;
+  compacto?: boolean;
+  semQr?: boolean;
+}) => (
   <div
     className="cracha-cartao rounded-3xl border border-accent/30 overflow-hidden flex flex-col"
     style={{ background: 'linear-gradient(160deg, #141414 0%, #0a0a0a 60%, #100d04 100%)' }}
@@ -56,16 +66,24 @@ export const CrachaVirtual = ({ pessoa, compacto = false }: { pessoa: CrachaPess
     {/* Fundo branco no QR sempre, nos dois temas: leitor de câmera erra em
         código claro sobre escuro, e o crachá tem de funcionar impresso. */}
     <div className="mt-auto px-5 pb-5 flex flex-col items-center gap-2">
-      <div className="bg-white p-2.5 rounded-xl">
-        <QRCodeSVG
-          value={montarCracha(pessoa.id)}
-          size={compacto ? 96 : 132}
-          bgColor="#ffffff"
-          fgColor="#000000"
-          level="M"
-        />
-      </div>
-      <p className="text-[10px] font-mono tracking-[0.3em] text-gray-500">{codigoCracha(pessoa.id)}</p>
+      {semQr ? (
+        <p className="text-[10px] text-gray-600 text-center leading-relaxed py-6 px-2">
+          Crachá de identificação.<br />Sem registro de ponto associado.
+        </p>
+      ) : (
+        <>
+          <div className="bg-white p-2.5 rounded-xl">
+            <QRCodeSVG
+              value={montarCracha(pessoa.id)}
+              size={compacto ? 96 : 132}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="M"
+            />
+          </div>
+          <p className="text-[10px] font-mono tracking-[0.3em] text-gray-500">{codigoCracha(pessoa.id)}</p>
+        </>
+      )}
     </div>
   </div>
 );

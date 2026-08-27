@@ -1,7 +1,11 @@
-// Meu Crachá — a tela do aluno.
+// Meu Crachá — o crachá de quem está logado.
 //
 // Módulo de primeiro nível, e não um botão escondido no topo: o crachá é o que
 // o aluno mostra quando chega, então tem de estar onde a mão vai sozinha.
+//
+// Aberto a todo mundo. Quem não tem cadastro de funcionário — o professor, o
+// conselheiro — continua tendo identidade no sistema; o que não tem é ponto a
+// bater, e o cartão sai sem QR dizendo isso.
 //
 // De propósito FORA da whitelist do Modo Aula: uma aula que não listasse este
 // módulo tiraria o crachá da tela justamente no dia em que ele é usado.
@@ -14,6 +18,15 @@ import { LoadingSpinner } from '../components/ui';
 import { CrachaVirtual, type CrachaPessoa } from '../components/CrachaVirtual';
 import type { UserProfile } from '../hooks/useUserProfile';
 
+// O papel serve de "cargo" no crachá de quem não tem cadastro de funcionário.
+const ROTULO_PAPEL: Record<string, string> = {
+  admin:       'Professor',
+  ceo:         'CEO',
+  conselheiro: 'Conselheiro',
+  gerente:     'Gerente',
+  colaborador: 'Colaborador',
+};
+
 export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
   const [pessoa, setPessoa] = useState<CrachaPessoa | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -21,8 +34,22 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
 
   const funcionarioId = profile?.funcionario_id ?? null;
 
+  // Sem cadastro de funcionário o crachá ainda existe — só não registra ponto.
+  // É o caso do professor e do conselheiro: eles têm identidade no sistema
+  // (nome, foto, papel), mas não têm presença a lançar, então o cartão sai sem
+  // QR em vez de sair com um código que a leitura recusaria.
+  const semFuncionario = !funcionarioId;
+  const pessoaDoPerfil: CrachaPessoa = {
+    id: profile?.id ?? '',
+    nome: profile?.nome ?? '',
+    cargo: ROTULO_PAPEL[profile?.role ?? ''] ?? null,
+    filial: profile?.filial ?? null,
+    foto_url: profile?.foto_url ?? null,
+  };
+
   useEffect(() => {
     if (!supabase || !funcionarioId) { setCarregando(false); return; }
+    setCarregando(true);
     let cancelado = false;
     // A policy `func_self` deixa cada um ler a própria linha de `funcionarios`
     // — é por isso que o aluno monta o próprio crachá sem passar pelo RH.
@@ -54,27 +81,27 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
         </p>
       </div>
 
-      {carregando ? <LoadingSpinner /> : !funcionarioId ? (
-        <div className="neu-flat rounded-3xl p-8 border border-amber-500/20 flex items-start gap-3 max-w-xl">
-          <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-gray-200">Sua conta ainda não está ligada a um funcionário</p>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-              O crachá nasce do cadastro de funcionário, que é o que carrega nome, cargo,
-              unidade e foto. Peça ao RH ou ao professor para fazer o vínculo em Usuários.
-            </p>
-          </div>
-        </div>
-      ) : erro ? (
+      {carregando ? <LoadingSpinner /> : erro ? (
         <div className="neu-flat rounded-3xl p-8 border border-red-500/20 flex items-start gap-3 max-w-xl">
           <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-gray-300">{erro}</p>
         </div>
-      ) : pessoa && (
+      ) : (
         <div className="flex flex-col items-center gap-4 shrink-0">
           <div className="w-full max-w-[320px]">
-            <CrachaVirtual pessoa={pessoa} />
+            <CrachaVirtual pessoa={pessoa ?? pessoaDoPerfil} semQr={semFuncionario} />
           </div>
+
+          {semFuncionario && (
+            <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">
+              <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Sua conta não tem cadastro de funcionário, então este crachá identifica você
+                mas <span className="text-gray-300 font-semibold">não registra presença</span> —
+                é o caso de quem conduz a turma, não de quem tem ponto a bater.
+              </p>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => window.print()}
