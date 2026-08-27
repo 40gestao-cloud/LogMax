@@ -6,7 +6,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
-import { freshToken } from '../lib/authFetch';
+import { freshToken, lerJsonDaApi } from '../lib/authFetch';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const CANAIS = [
@@ -238,7 +238,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
         },
         body: JSON.stringify(payload),
       });
-      const data = await resp.json();
+      const data = await lerJsonDaApi(resp);
       if (!resp.ok) {
         const detail = data?.finish ? ` (motivo: ${data.finish})` : '';
         setLegendaModal(m => m ? { ...m, loading: false, erro: (data?.error ?? 'Falha na IA.') + detail } : null);

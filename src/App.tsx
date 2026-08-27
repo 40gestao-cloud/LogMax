@@ -1304,7 +1304,7 @@ function LogMaxAppInner() {
       // submenu tem requireRole e a policy de UPDATE recusa o resto.
       case 'marketing-configurações':      return <MarketingConfigView showToast={st} />;
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
-      case 'artes-promocionais':           return <ArtesPromocionaisView showToast={st} profile={profile} />;
+      case 'artes-promocionais':           return <ArtesPromocionaisView />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;

@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, MessageSquare, ImagePlus, ExternalLink, Star, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, ImagePlus, ExternalLink, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation, ChevronDown } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { freshToken } from '../lib/authFetch';
+import { freshToken, lerJsonDaApi } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
@@ -127,13 +127,9 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const servicos = useMemo(() => servicosAll.filter((s: any) => ehPrestado(s.natureza)), [servicosAll]);
   const { data: campanhas } = useFetchData<any>('/api/marketingcampanhasview', { filial });
   const { data: artes, setData: setArtes } = useFetchData<any>('/api/marketingartesview', { filial }, true);
-  // marketing_arte_feedback é escopado via arte_id ∈ artes da filial (join
-  // client-side). A tabela não tem coluna filial própria.
-  const { data: feedbacks } = useFetchData<any>('/api/marketingartefeedbackview', undefined, true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [obsAberta, setObsAberta] = useState<any | null>(null);
   const [searchPromo, setSearchPromo] = useState('');
 
   // Modais de arte
@@ -147,7 +143,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const [artePreview, setArtePreview] = useState<string | null>(null);
   const [arteAviso, setArteAviso] = useState<string | null>(null);
   const [enviandoArte, setEnviandoArte] = useState(false);
-  const [feedbackModal, setFeedbackModal] = useState<{ arte: any } | null>(null);
 
   // Modal de geração de legenda via Gemini (endpoint /api/ai-legenda).
   // Aberto pelo botão na tabela (uma promoção) ou no form (sugestão pra
@@ -188,6 +183,9 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   // Só as HOSPEDADAS por nós: link externo colado pelo aluno pode ser Canva,
   // Drive ou PDF, e um <img> em cima disso mostra quadrado quebrado.
   const [apresentando, setApresentando] = useState<number | null>(null);
+  // Gaveta de detalhes: uma linha por vez (acordeão). Várias abertas devolvem
+  // a mesma parede de botões que a gaveta veio desfazer.
+  const [expandida, setExpandida] = useState<string | null>(null);
   const artesApresentaveis = useMemo(
     () => (artes ?? [])
       .filter((a: any) => ehArteHospedada(a.arte_url))
@@ -223,15 +221,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
     supabase.from('marketing_config').select('max_artes_por_produto').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (data?.max_artes_por_produto) setMaxArtes(data.max_artes_por_produto); });
   }, []);
-
-  // Feedbacks agrupados por arte_id pra mostrar contagem no botão.
-  const feedbacksByArte = useMemo(() => {
-    const m: Record<string, any[]> = {};
-    for (const f of feedbacks ?? []) {
-      (m[f.arte_id] ??= []).push(f);
-    }
-    return m;
-  }, [feedbacks]);
 
   // Sincronização best-effort ao montar: reverte promoções expiradas e
   // recarrega a lista. O cron diário (vercel.json) é a defesa primária.
@@ -477,7 +466,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
         // Broadcast único: setor='all' é visível por todos via RLS.
         // Falha silenciosa — a arte já foi publicada com sucesso.
         const titulo = `Nova arte: ${promocao.nome_produto ?? 'campanha'}`;
-        const msg = `Marketing publicou a arte da promoção. Clique pra visualizar e dar feedback.`;
+        const msg = `Marketing publicou a arte da promoção. Clique pra visualizar.`;
         const { error: notifErr } = await supabase!.rpc('notificar_setor', {
           p_setor:     'all',
           p_tipo:      'info',
@@ -503,7 +492,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   };
 
   const handleApagarArte = async (arte: any) => {
-    if (!await confirm('Apagar esta arte? O feedback recebido nela some junto.')) return;
+    if (!await confirm('Apagar esta arte?')) return;
     try {
       const { error } = await supabase!.from('marketing_artes').delete().eq('id', arte.id);
       if (error) throw error;
@@ -575,7 +564,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
         },
         body: JSON.stringify(payload),
       });
-      const data = await resp.json();
+      const data = await lerJsonDaApi(resp);
       if (!resp.ok) {
         // Adiciona detalhe técnico (finishReason) quando vier do servidor —
         // facilita pra você reportar pra mim sem precisar olhar log do Vercel.
@@ -767,160 +756,190 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {promocoes.length === 0 ? <EmptyState message="Nenhuma proposta criada ainda" /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[900px]">
+            {/* Antes: nove colunas, e a célula "Arte" era uma torre de seis
+                botões (publicar, ver, substituir, apagar, cota, feedback) em
+                cima de outra coluna de ações. Cabia em nenhuma tela e não dizia
+                o que era importante. Agora a grade mostra só o que se lê de
+                relance; o resto vive na gaveta da linha. */}
+            <table className="w-full text-left border-collapse min-w-[720px]">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-4 font-bold px-4">Produto</th>
+                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest [&>th]:whitespace-nowrap">
+                  <th className="pb-4 font-bold px-4 w-8"></th>
+                  <th className="pb-4 font-bold px-4 w-full">Produto</th>
                   <th className="pb-4 font-bold px-4 text-right">Preço Atual</th>
                   <th className="pb-4 font-bold px-4 text-right">Preço Promo</th>
                   <th className="pb-4 font-bold px-4">Período</th>
-                  <th className="pb-4 font-bold px-4">Descrição</th>
                   <th className="pb-4 font-bold px-4 text-center">Status</th>
-                  <th className="pb-4 font-bold px-4">Observação</th>
                   <th className="pb-4 font-bold px-4 text-center">Arte</th>
-                  <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                <AnimatePresence>
-                  {promocoesFiltradas.length === 0
-                    ? <tr><td colSpan={9} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma promoção encontrada para "{searchPromo}"</td></tr>
-                    : promocoesFiltradas.map((p: any) => {
-                    const style = STATUS_STYLE[p.status];
-                    return (
-                      <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[200px] truncate" title={p.nome_produto ?? ''}>{p.nome_produto ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right">
-                          R$ {Number(p.preco_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                {promocoesFiltradas.length === 0
+                  ? <tr><td colSpan={7} className="py-8 text-center text-sm text-gray-600 italic">Nenhuma promoção encontrada para "{searchPromo}"</td></tr>
+                  : promocoesFiltradas.map((p: any) => {
+                  const style = STATUS_STYLE[p.status];
+                  const aberta = expandida === p.id;
+                  const lista = artesByPromocao[p.id] ?? [];
+                  // Cota é por PRODUTO (migr. 539), não por promoção: o mesmo
+                  // produto pode ter outra campanha já com artes, e é o
+                  // conjunto que conta.
+                  const usadas = p.produto_id ? (artesPorProduto[p.produto_id] ?? 0) : 0;
+                  const cotaCheia = !!p.produto_id && usadas >= maxArtes;
+                  const desconto = Number(p.preco_atual) > 0
+                    ? (1 - Number(p.preco_promocional || 0) / Number(p.preco_atual)) * 100
+                    : null;
+
+                  return (
+                    <React.Fragment key={p.id}>
+                      <tr
+                        onClick={() => setExpandida(aberta ? null : p.id)}
+                        className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${aberta ? 'bg-white/5' : ''}`}
+                      >
+                        <td className="py-3 px-4 text-gray-500">
+                          <ChevronDown size={14} className={`transition-transform ${aberta ? 'rotate-180 text-accent' : ''}`} />
                         </td>
-                        <td className="py-3 px-4 text-xs font-mono text-accent font-bold text-right">
-                          R$ {Number(p.preco_promocional || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-200" title={p.nome_produto ?? ''}>
+                          {p.nome_produto ?? '—'}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-400 text-right whitespace-nowrap">
+                          R$ {formatBRL(Number(p.preco_atual || 0))}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-mono text-accent font-bold text-right whitespace-nowrap">
+                          R$ {formatBRL(Number(p.preco_promocional || 0))}
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 whitespace-nowrap">
-                          {p.data_inicio ?? '—'}{p.data_fim ? ` → ${p.data_fim}` : ''}
+                          {periodoArte(p.data_inicio, p.data_fim) ?? '—'}
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-400 max-w-[7rem] sm:max-w-[150px] truncate">{p.descricao ?? '—'}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${style?.badge ?? ''}`}>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${style?.badge ?? ''}`}>
                             {style?.icon}{p.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-500 max-w-[6rem] sm:max-w-[180px] truncate">
-                          {p.observacao ? (
-                            <button
-                              type="button"
-                              onClick={() => setObsAberta(p)}
-                              title="Ver observação completa"
-                              className="inline-flex items-center gap-1.5 text-left text-gray-300 hover:text-accent transition-colors max-w-full"
-                            >
-                              <MessageSquare size={12} className="shrink-0 opacity-70" />
-                              <span className="truncate">{p.observacao}</span>
-                            </button>
-                          ) : (
-                            <span>—</span>
-                          )}
+                        {/* Indicador, não botoeira: quantas artes existem e como
+                            foram avaliadas. O que se FAZ com elas está na gaveta. */}
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {p.status !== 'Aprovado'
+                            ? <span className="text-[10px] text-gray-600">—</span>
+                            : lista.length === 0
+                              ? <span className="text-[10px] text-gray-600 uppercase tracking-widest">sem arte</span>
+                              : (
+                                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent">
+                                  <ImagePlus size={11} />
+                                  {lista.length}
+                                </span>
+                              )}
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          {p.status === 'Aprovado' ? (() => {
-                            const lista = artesByPromocao[p.id] ?? [];
-                            const arte = lista[0] ?? null;
-                            const fbList = arte ? (feedbacksByArte[arte.id] ?? []) : [];
-                            const avg = fbList.length
-                              ? (fbList.reduce((s, f) => s + (f.estrelas ?? 0), 0) / fbList.length).toFixed(1)
-                              : null;
-                            // Cota é por PRODUTO (migr. 539), não por promoção:
-                            // o mesmo produto pode ter outra campanha já com
-                            // artes, e é o conjunto que conta.
-                            const usadas = p.produto_id ? (artesPorProduto[p.produto_id] ?? 0) : 0;
-                            const cotaCheia = !!p.produto_id && usadas >= maxArtes;
+                      </tr>
 
-                            // Sem arte e sem permissão → célula vazia limpa.
-                            if (!arte && !canPublicarArte) {
-                              return <span className="text-[10px] text-gray-600">—</span>;
-                            }
-                            return (
-                              <div className="flex flex-col items-center gap-1.5">
-                                {canPublicarArte && (
-                                  <button
-                                    onClick={() => openArteModal(p, null)}
-                                    disabled={cotaCheia}
-                                    title={cotaCheia
-                                      ? `Este produto já tem ${usadas} de ${maxArtes} artes — o limite atual`
-                                      : 'Publicar arte e notificar setores'}
-                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                                      lista.length
-                                        ? 'text-accent border-accent/40 bg-accent/10 hover:bg-accent/15'
-                                        : 'text-gray-300 border-white/15 hover:text-accent hover:border-accent/40'
-                                    }`}
-                                  >
-                                    <ImagePlus size={10} /> Publicar
-                                  </button>
-                                )}
-                                {/* Uma linha por arte: com a cota por produto a
-                                    promoção pode ter mais de uma versão. */}
-                                {lista.map(a => (
-                                  <div key={a.id} className="flex items-center gap-1">
-                                    {/* Imagem nossa amplia aqui mesmo; link
-                                        externo não tem visor possível e segue
-                                        abrindo noutra aba. */}
-                                    {ehArteHospedada(a.arte_url) ? (
-                                      <button type="button" onClick={() => apresentarArte(a.id)}
-                                        title="Ampliar a arte"
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
-                                        <Maximize2 size={9} /> Ver arte
-                                      </button>
-                                    ) : (
-                                      <a href={a.arte_url} target="_blank" rel="noreferrer"
-                                        title="Abrir o link externo"
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-accent border border-white/10">
-                                        <ExternalLink size={9} /> Link
-                                      </a>
-                                    )}
-                                    {canPublicarArte && (
-                                      <>
-                                        <button onClick={() => openArteModal(p, a)} title="Substituir esta arte"
-                                          className="action-btn-edit"><Edit3 size={10} /></button>
-                                        <button onClick={() => handleApagarArte(a)} title="Apagar esta arte"
-                                          className="action-btn-delete"><Trash2 size={10} /></button>
-                                      </>
-                                    )}
+                      {/* Gaveta da linha. `stopPropagation` no conteúdo: clicar
+                          nos detalhes não pode fechar a gaveta por baixo. */}
+                      {aberta && (
+                        <tr className="border-b border-white/5 bg-black/20">
+                          <td colSpan={7} className="px-4 pb-5 pt-1" onClick={e => e.stopPropagation()}>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                              <div className="flex flex-col gap-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Detalhes</p>
+                                <div className="flex flex-col gap-2 text-xs">
+                                  <div>
+                                    <span className="text-gray-500">Descrição: </span>
+                                    <span className="text-gray-300 whitespace-pre-wrap break-words">{p.descricao || '—'}</span>
                                   </div>
-                                ))}
-                                {canPublicarArte && p.produto_id && (
-                                  <span className="text-[9px] text-gray-600 uppercase tracking-widest">
-                                    {usadas} de {maxArtes}
-                                  </span>
-                                )}
-                                {arte && (
-                                  <button
-                                    onClick={() => setFeedbackModal({ arte })}
-                                    title="Ver feedback dos setores"
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest text-gray-400 hover:text-yellow-400 border border-white/10 hover:border-yellow-400/40"
-                                  >
-                                    <Star size={9} className={avg ? 'fill-yellow-400 text-yellow-400' : ''} />
-                                    {avg ? `${avg} · ${fbList.length}` : 'sem feedback'}
-                                  </button>
+                                  <div>
+                                    <span className="text-gray-500">Desconto: </span>
+                                    <span className="text-gray-300 font-mono">
+                                      {desconto != null ? `${desconto.toFixed(1).replace('.', ',')}%` : '—'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    {/* Observação inteira, sem truncar: é o que o
+                                        decisor escreveu, e era justamente o texto
+                                        que a coluna cortava no meio. */}
+                                    <span className="text-gray-500">Observação do decisor: </span>
+                                    <span className="text-gray-300 whitespace-pre-wrap break-words">{p.observacao || '—'}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                  Artes{p.produto_id && canPublicarArte ? ` · ${usadas} de ${maxArtes}` : ''}
+                                </p>
+                                {p.status !== 'Aprovado' ? (
+                                  <p className="text-[11px] text-gray-500">
+                                    A arte só entra depois da aprovação do Financeiro.
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-col gap-2 items-start">
+                                    {canPublicarArte && (
+                                      <button
+                                        onClick={() => openArteModal(p, null)}
+                                        disabled={cotaCheia}
+                                        title={cotaCheia
+                                          ? `Este produto já tem ${usadas} de ${maxArtes} artes — o limite atual`
+                                          : 'Publicar arte e notificar setores'}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 border-white/15 hover:text-accent hover:border-accent/40"
+                                      >
+                                        <ImagePlus size={11} /> Publicar arte
+                                      </button>
+                                    )}
+                                    {lista.length === 0 && !canPublicarArte && (
+                                      <p className="text-[11px] text-gray-500">Nenhuma arte publicada.</p>
+                                    )}
+                                    {lista.map((a: any) => (
+                                      <div key={a.id} className="flex items-center gap-1.5">
+                                        {ehArteHospedada(a.arte_url) ? (
+                                          <button type="button" onClick={() => apresentarArte(a.id)}
+                                            title="Ampliar a arte"
+                                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] text-gray-300 hover:text-accent border border-white/10 hover:border-accent/40 transition-colors">
+                                            <Maximize2 size={10} /> Ver arte
+                                          </button>
+                                        ) : (
+                                          <a href={a.arte_url} target="_blank" rel="noreferrer"
+                                            title="Abrir o link externo"
+                                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] text-gray-300 hover:text-accent border border-white/10">
+                                            <ExternalLink size={10} /> Link
+                                          </a>
+                                        )}
+                                        {canPublicarArte && (
+                                          <>
+                                            <button onClick={() => openArteModal(p, a)} title="Substituir esta arte"
+                                              className="action-btn-edit"><Edit3 size={10} /></button>
+                                            <button onClick={() => handleApagarArte(a)} title="Apagar esta arte"
+                                              className="action-btn-delete"><Trash2 size={10} /></button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
-                            );
-                          })() : <span className="text-[10px] text-gray-600">—</span>}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {canPublicarArte && (
-                              <button onClick={() => gerarLegenda({ promocao: p })} title="Gerar legenda com IA"
-                                className="action-btn-accent">
-                                <Sparkles size={12} />
-                              </button>
-                            )}
-                            <button onClick={() => handleDelete(p.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })}
-                </AnimatePresence>
+
+                              <div className="flex flex-col gap-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Ações</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {canPublicarArte && (
+                                    <button onClick={() => gerarLegenda({ promocao: p })}
+                                      title="IA gera 3 variações de legenda para esta promoção"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors">
+                                      <Sparkles size={11} /> Gerar legenda
+                                    </button>
+                                  )}
+                                  <button onClick={() => handleDelete(p.id)}
+                                    title="Excluir esta proposta"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+                                    <Trash2 size={11} /> Excluir proposta
+                                  </button>
+                                </div>
+                              </div>
+
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1008,7 +1027,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
               </p>
               <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
                 {arteModal.arte
-                  ? 'A nova arte substitui a atual. O feedback já recebido continua válido.'
+                  ? 'A nova arte substitui a atual.'
                   : 'Ao publicar, todos os setores recebem uma notificação. O professor decide, na Vitrine da Tela de Login, quais artes entram no carrossel.'}
               </p>
               <div className="flex justify-end gap-2 mt-5">
@@ -1026,90 +1045,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
-
-      {/* Modal — Feedback recebido (Marketing) */}
-      <AnimatePresence>
-        {feedbackModal && (() => {
-          const fbList = feedbacksByArte[feedbackModal.arte.id] ?? [];
-          const avg = fbList.length
-            ? (fbList.reduce((s, f) => s + (f.estrelas ?? 0), 0) / fbList.length)
-            : 0;
-          return (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-              onClick={() => setFeedbackModal(null)}>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                onClick={e => e.stopPropagation()}
-                className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg max-h-[80vh] flex flex-col">
-                <div className="flex items-center justify-between mb-4 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Star size={16} className="text-yellow-400 fill-yellow-400" />
-                    <h3 className="text-sm font-bold text-gray-200">Feedback recebido</h3>
-                  </div>
-                  <button onClick={() => setFeedbackModal(null)}
-                    className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                    <X size={14} />
-                  </button>
-                </div>
-
-                <div className="neu-pressed rounded-2xl p-4 mb-4 shrink-0">
-                  <p className="text-xs text-gray-400 mb-1">{feedbackModal.arte.nome_produto}</p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-3xl font-black text-yellow-400">{fbList.length ? avg.toFixed(1) : '—'}</span>
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <Star key={n} size={14}
-                          className={n <= Math.round(avg) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-700'} />
-                      ))}
-                    </div>
-                    <span className="text-xs text-gray-500">· {fbList.length} {fbList.length === 1 ? 'avaliação' : 'avaliações'}</span>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto main-scrollbar pr-1 flex flex-col gap-2">
-                  {fbList.length === 0 && (
-                    <EmptyState message="Ainda sem feedback dos setores." />
-                  )}
-                  {fbList.map((f: any) => (
-                    <div key={f.id} className="neu-flat rounded-xl p-3 border border-white/5">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
-                            {SETOR_LABEL[f.setor] ?? f.setor}
-                          </span>
-                          <span className="text-[10px] text-gray-500 truncate">{f.nome_user ?? '—'} · {f.role}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <Star key={n} size={11}
-                              className={n <= (f.estrelas ?? 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-700'} />
-                          ))}
-                        </div>
-                      </div>
-                      {f.comentario && (
-                        <p className="text-xs text-gray-300 whitespace-pre-wrap break-words">{f.comentario}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <a
-                  href={feedbackModal.arte.arte_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 shrink-0 inline-flex items-center justify-center gap-2 neu-button rounded-xl px-3 py-2 text-xs text-gray-300 hover:text-accent border border-white/10 hover:border-accent/40"
-                >
-                  <ExternalLink size={12} /> Abrir arte publicada
-                </a>
-              </motion.div>
-            </motion.div>
-          );
-        })()}
       </AnimatePresence>
 
       {/* Modal — Legendas geradas pela IA (Gemini via /api/ai-legenda) */}
@@ -1190,44 +1125,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
               <p className="text-[10px] text-gray-600 mt-3 shrink-0 leading-relaxed">
                 As sugestões são geradas por IA — revise antes de publicar.
               </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal — observação completa (ex: motivo da reprovação pelo Financeiro) */}
-      <AnimatePresence>
-        {obsAberta && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => setObsAberta(null)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MessageSquare size={16} className="text-accent" />
-                  <h3 className="text-sm font-bold text-gray-200">Observação do Financeiro</h3>
-                </div>
-                <button onClick={() => setObsAberta(null)}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mb-3">
-                <span className="font-bold text-gray-300">{obsAberta.nome_produto ?? 'Promoção'}</span>
-                {' · '}
-                <span className={STATUS_STYLE[obsAberta.status]?.badge ? `${STATUS_STYLE[obsAberta.status].badge} px-2 py-0.5 rounded-full border text-[10px] font-bold` : ''}>
-                  {obsAberta.status}
-                </span>
-              </p>
-              <div className="neu-pressed rounded-xl p-4 text-sm text-gray-200 whitespace-pre-wrap break-words">
-                {obsAberta.observacao}
-              </div>
             </motion.div>
           </motion.div>
         )}
