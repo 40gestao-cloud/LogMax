@@ -133,7 +133,15 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   'emprestimos_filial':               'emprestimos_filial',
   'parcelas_emprestimo':              'parcelas_emprestimo',
   'capital_config':                   'capital_config',
+  // Terceira vez a mesma armadilha (o teste tests/endpointMap.test.ts existe
+  // por isso): Capital lia `distribuicoes_lucro` sem a chave, então a lista de
+  // distribuições de lucro da filial e a da Matriz ficavam vazias em silêncio.
+  'distribuicoes_lucro':              'distribuicoes_lucro',
   'caixa_bancos':                     'caixa_bancos',
+  // RH → Funcionários lê os usuários da unidade para oferecer o cadastro já
+  // preenchido. Sem esta chave o select saía com uma única opção ("cadastrar
+  // do zero") e nenhum nome — o mesmo sintoma do bloco acima, silencioso.
+  'user_profiles':                    'user_profiles',
   // Sem `created_at`: quem ler esta tabela precisa passar
   // `{ orderBy: 'filial' }`, senão o PostgREST devolve 400 e a tela fica
   // vazia do mesmo jeito, agora por outro motivo.
