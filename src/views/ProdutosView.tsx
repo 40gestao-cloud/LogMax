@@ -2970,7 +2970,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   </th>
                   <th className="pb-4 font-bold px-4 w-14">Foto</th>
                   <th className="pb-4 font-bold px-4 hidden sm:table-cell">Código</th>
-                  <th className="pb-4 font-bold px-4">Nome</th>
+                  {/* `w-full` no Nome, e só nele: com todas as outras colunas
+                      em `whitespace-nowrap`, a largura sobrando da tabela era
+                      repartida entre elas e virava rio branco no meio da grade
+                      — o buraco entre Categoria e Filial. Mandando a coluna de
+                      texto tomar 100%, as demais encolhem até o próprio
+                      conteúdo e a sobra vai para onde ela é útil. */}
+                  <th className="pb-4 font-bold px-4 w-full">Nome</th>
                   <th className="pb-4 font-bold px-4 hidden lg:table-cell">Categoria</th>
                   <th className="pb-4 font-bold px-4 text-center hidden md:table-cell">Filial</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">P. Custo</th>
