@@ -143,21 +143,16 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
         </p>
       </div>
 
-      <div className="neu-flat rounded-3xl p-6 border border-accent/20 flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-200">Registrar presença lendo o crachá</p>
-          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-            A leitura só identifica quem é. A foto aparece para você conferir antes de gravar,
-            e a presença entra como <span className="text-gray-300 font-semibold">Normal</span> no
-            dia de hoje, com a hora da leitura.
-          </p>
-        </div>
+      {/* Só o botão. A explicação que morava aqui dizia o que a própria tela de
+          confirmação já mostra na hora — texto que se lê uma vez e depois vira
+          moldura ao redor da única coisa que se clica. */}
+      <div className="flex justify-center shrink-0">
         <button
           type="button"
           onClick={() => setScannerAberto(true)}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-widest bg-accent/10 text-accent border border-accent/40 hover:bg-accent/15 transition-colors shrink-0"
+          className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-sm font-bold uppercase tracking-widest bg-accent/10 text-accent border border-accent/40 hover:bg-accent/15 transition-colors"
         >
-          <ScanLine size={14} /> Ler crachá
+          <ScanLine size={18} /> Ler crachá
         </button>
       </div>
 
