@@ -2561,7 +2561,10 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
     position: absolute;
     left: 0;
     top: 0;
-    width: 62mm;          /* ~ISO ID-1 em pé, com folga para a moldura */
+    /* 54 mm é a largura real do ID-1; com o `aspect-ratio` do cartão a altura
+       sai nos 85,6 mm sozinha. Antes eram 62 mm arbitrários, porque a
+       proporção não estava cravada e não havia o que respeitar. */
+    width: 54mm;
     border-radius: 4mm;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

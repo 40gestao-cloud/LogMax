@@ -4,11 +4,14 @@
 // professor, que abre o de qualquer um em Crachá Virtual. O mesmo cartão serve
 // aos dois — o que muda é quem o abre.
 //
-// Cartão em proporção de crachá de verdade (ISO 7810 ID-1, 85,6 × 54 mm, mas
-// em pé): a ideia é que imprimir e plastificar seja opção, não gambiarra.
+// Proporção ISO 7810 ID-1 em pé (54 × 85,6 mm), CRAVADA em `aspectRatio`. Antes
+// o comentário prometia isso e o CSS não entregava: a altura era o que o
+// conteúdo empilhasse, e dois crachás lado a lado saíam com alturas diferentes
+// conforme o tamanho do nome. Agora o cartão tem forma própria e o conteúdo se
+// acomoda dentro dela.
 //
 // A identidade é da UNIDADE, não do LogMax: quem trabalha na TechMax carrega o
-// crachá da TechMax. Logo, cor da moldura, anel da foto e selo saem de
+// crachá da TechMax. Logo, cor da moldura, anel da foto e faixa saem de
 // `identidadeDaFilial` — o mesmo par logo/cor do seletor de unidade.
 
 import React, { useEffect } from 'react';
@@ -31,86 +34,110 @@ export type CrachaPessoa = {
  * ligado à conta. Um QR ali seria um código que a leitura recusaria ("não achei
  * essa pessoa") — melhor não desenhar do que desenhar o que não funciona.
  */
-export const CrachaVirtual = ({ pessoa, compacto = false, semQr = false }: {
+export const CrachaVirtual = ({ pessoa, semQr = false }: {
   pessoa: CrachaPessoa;
-  compacto?: boolean;
   semQr?: boolean;
 }) => {
   const id = identidadeDaFilial(pessoa.filial);
 
   return (
     <div
-      className="cracha-cartao rounded-3xl overflow-hidden flex flex-col"
+      className="cracha-cartao rounded-3xl overflow-hidden flex flex-col relative"
       style={{
-        // Cor da unidade em tudo o que emoldura: borda, brilho de fora e o
-        // fundo, que recebe um véu do tom em vez de ser preto puro.
+        aspectRatio: '54 / 85.6',
         border: `1px solid ${id.cor}55`,
-        boxShadow: `0 20px 45px -22px ${id.cor}66, 0 0 0 1px rgba(255,255,255,0.03) inset`,
-        background: `linear-gradient(160deg, ${id.cor}1F 0%, #0c0c0c 55%, #080808 100%)`,
+        boxShadow: `0 24px 50px -24px ${id.cor}77, 0 0 0 1px rgba(255,255,255,0.03) inset`,
+        background: `linear-gradient(165deg, ${id.cor}1A 0%, #0c0c0c 45%, #070707 100%)`,
       }}
     >
-      {/* Faixa superior: só o logo da unidade, centrado. A palavra "Crachá"
-          saiu — o cartão já se anuncia pelo formato, e o rótulo disputava
-          espaço com a única coisa que precisa ser vista de longe. */}
-      <div
-        className="px-5 pt-5 pb-4 flex items-center justify-center"
-        style={{ borderBottom: `1px solid ${id.cor}33` }}
-      >
+      {/* Recorte do cordão. É o detalhe que faz um retângulo escuro ser lido
+          como crachá antes de alguém ler uma palavra dele. */}
+      <div className="pt-3 pb-1 flex justify-center shrink-0">
         <div
-          className="h-14 px-4 rounded-xl flex items-center justify-center"
-          style={id.plate ? { background: id.plate } : undefined}
-        >
-          <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="h-10 w-auto max-w-[150px] object-contain" />
-        </div>
+          className="h-1.5 w-14 rounded-full"
+          style={{ background: 'rgba(0,0,0,0.55)', boxShadow: `inset 0 1px 2px rgba(0,0,0,0.9), 0 1px 0 ${id.cor}22` }}
+        />
       </div>
 
-      <div className="px-5 py-4 flex flex-col items-center gap-3">
+      {/* Faixa do logo, de ponta a ponta. Full-bleed de propósito: a placa que a
+          arte exige (os PNGs vieram com fundo queimado, cada um pedindo um
+          fundo) virava uma caixa branca flutuando no meio do escuro. Como faixa
+          inteira, lê como decisão de design em vez de remendo. */}
+      <div
+        className="shrink-0 h-16 flex items-center justify-center px-4"
+        style={{
+          background: id.plate ?? 'transparent',
+          borderTop: `1px solid ${id.cor}22`,
+          borderBottom: `1px solid ${id.cor}33`,
+        }}
+      >
+        <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="max-h-11 w-auto max-w-[75%] object-contain" />
+      </div>
+
+      {/* Miolo: foto e nome. `flex-1 min-h-0` para o conteúdo ceder à proporção
+          do cartão, e não o contrário. */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 py-3">
+        {/* 3:4, como foto de documento — quadrado com canto arredondado lia
+            como avatar de aplicativo. */}
         <div
-          className="w-24 h-24 rounded-2xl overflow-hidden bg-black/40 flex items-center justify-center shrink-0"
-          style={{ border: `2px solid ${id.cor}88` }}
+          className="w-[38%] rounded-xl overflow-hidden bg-black/40 flex items-center justify-center shrink-0"
+          style={{ aspectRatio: '3 / 4', border: `2px solid ${id.cor}99` }}
         >
           {pessoa.foto_url
             ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
-            : <User size={34} style={{ color: `${id.cor}88` }} />}
+            : <User size={40} style={{ color: `${id.cor}77` }} />}
         </div>
 
         <div className="text-center min-w-0 w-full">
-          <p className="text-base font-bold text-gray-100 leading-tight break-words">{pessoa.nome}</p>
+          {/* O nome é o elemento principal de um crachá — antes empatava com o
+              cargo e perdia para o QR. */}
+          <p className="text-xl font-black text-white leading-[1.15] break-words line-clamp-3 tracking-tight">
+            {pessoa.nome}
+          </p>
           {pessoa.cargo && (
-            <p className="text-[11px] text-gray-400 mt-0.5">{pessoa.cargo}</p>
-          )}
-          {pessoa.filial && (
-            <span
-              className="inline-block mt-2 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
-              style={{ background: `${id.cor}1A`, color: id.cor, border: `1px solid ${id.cor}4D` }}
-            >
-              {pessoa.filial}
-            </span>
+            <p className="text-[11px] uppercase tracking-widest text-gray-400 mt-1.5 line-clamp-1">
+              {pessoa.cargo}
+            </p>
           )}
         </div>
       </div>
 
-      {/* Fundo branco no QR sempre, nos dois temas e em qualquer unidade: leitor
-          de câmera erra em código claro sobre escuro, e o crachá tem de
-          funcionar impresso. A identidade da filial fica de fora daqui de
-          propósito — legibilidade primeiro. */}
-      <div className="mt-auto px-5 pb-5 flex flex-col items-center gap-2">
+      {/* Faixa inferior na cor da unidade: fecha o cartão e dá ao QR um lugar,
+          em vez de deixá-lo ocupando metade do desenho. */}
+      <div
+        className="shrink-0 flex items-center gap-3 px-4 py-3"
+        style={{ background: `${id.cor}1F`, borderTop: `1px solid ${id.cor}44` }}
+      >
         {semQr ? (
-          <p className="text-[10px] text-gray-600 text-center leading-relaxed py-6 px-2">
-            Crachá de identificação.<br />Sem registro de ponto associado.
+          <p className="text-[10px] text-gray-400 leading-snug">
+            Crachá de identificação — <span className="text-gray-500">sem registro de ponto associado.</span>
           </p>
         ) : (
           <>
-            <div className="bg-white p-2.5 rounded-xl">
+            {/* Fundo branco no QR sempre, em qualquer unidade e nos dois temas:
+                leitor de câmera erra em código claro sobre escuro. Aqui a
+                identidade da filial fica de fora — legibilidade primeiro. */}
+            <div className="bg-white p-1.5 rounded-lg shrink-0">
               <QRCodeSVG
                 value={montarCracha(pessoa.id)}
-                size={compacto ? 96 : 132}
+                size={64}
                 bgColor="#ffffff"
                 fgColor="#000000"
                 level="M"
               />
             </div>
-            <p className="text-[10px] font-mono tracking-[0.3em] text-gray-500">{codigoCracha(pessoa.id)}</p>
+            <div className="min-w-0 flex-1">
+              {pessoa.filial && (
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] truncate"
+                  style={{ color: id.cor }}>
+                  {pessoa.filial}
+                </p>
+              )}
+              {/* Rotulado: antes eram seis caracteres soltos e ninguém sabia o
+                  que eram. */}
+              <p className="text-[8px] uppercase tracking-[0.2em] text-gray-500 mt-1.5">Matrícula</p>
+              <p className="text-[11px] font-mono tracking-[0.2em] text-gray-300">{codigoCracha(pessoa.id)}</p>
+            </div>
           </>
         )}
       </div>
@@ -137,7 +164,11 @@ export const CrachaModal = ({ pessoa, onClose }: { pessoa: CrachaPessoa; onClose
       <motion.div
         initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-[320px]"
+        // Teto por ALTURA também: com a proporção cravada, um cartão de 320px
+        // de largura pede ~507px de altura, e em notebook de tela baixa ele
+        // passava do rodapé.
+        className="w-full max-w-[300px]"
+        style={{ maxHeight: '78vh' }}
       >
         <CrachaVirtual pessoa={pessoa} />
       </motion.div>

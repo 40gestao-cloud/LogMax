@@ -14,28 +14,56 @@
 // de barras de produto, QR de Pix, link de wi-fi — em vez de tentar resolver
 // um id que não existe e devolver "funcionário não encontrado".
 
-const PREFIXO = 'LOGMAX:CRACHA';
-const VERSAO = '1';
+const PREFIXO_LONGO = 'LOGMAX:CRACHA';
+const VERSAO_LONGA = '1';
+
+// Formato curto, usado para GERAR desde 2026-08-27. Motivo é legibilidade
+// óptica, não estética: `LOGMAX:CRACHA:1:<uuid com hífens>` são 50 caracteres
+// em minúsculas, o que joga o QR para a versão 4 (33×33 módulos). Sem os
+// hífens e em MAIÚSCULAS, a string cabe no modo alfanumérico do QR e desce
+// para a versão 2 (25×25) — no mesmo tamanho em pixels, cada módulo fica ~30%
+// maior, e é isso que decide se a câmera lê a tela de um telemóvel a meio
+// metro.
+const PREFIXO_CURTO = 'LMX1:';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HEX32_RE = /^[0-9a-f]{32}$/i;
+
+/** Devolve o uuid com hífens a partir dos 32 dígitos hexadecimais. */
+const comHifens = (hex: string): string => {
+  const h = hex.toLowerCase();
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
 
 /** Conteúdo do QR impresso no crachá de um funcionário. */
 export function montarCracha(funcionarioId: string): string {
-  return `${PREFIXO}:${VERSAO}:${funcionarioId}`;
+  return `${PREFIXO_CURTO}${funcionarioId.replace(/-/g, '').toUpperCase()}`;
 }
 
 /**
  * Lê o que a câmera capturou. Devolve o id do funcionário, ou `null` quando o
  * QR não é um crachá nosso (o chamador transforma isso em "isto não é um
  * crachá", que é uma mensagem útil — diferente de um erro de banco).
+ *
+ * Aceita os DOIS formatos: o curto, que é o que se gera hoje, e o longo, que
+ * saiu na primeira versão. Crachá impresso ou salvo na galeria do telemóvel não
+ * se atualiza sozinho — trocar o formato sem aceitar o antigo transformaria
+ * cada crachá já distribuído em papel morto.
  */
 export function lerCracha(bruto: string | null | undefined): string | null {
   if (!bruto) return null;
-  const partes = String(bruto).trim().split(':');
+  const texto = String(bruto).trim();
+
+  if (texto.toUpperCase().startsWith(PREFIXO_CURTO)) {
+    const hex = texto.slice(PREFIXO_CURTO.length);
+    return HEX32_RE.test(hex) ? comHifens(hex) : null;
+  }
+
+  const partes = texto.split(':');
   // LOGMAX : CRACHA : versao : uuid
   if (partes.length !== 4) return null;
-  if (`${partes[0]}:${partes[1]}` !== PREFIXO) return null;
-  if (partes[2] !== VERSAO) return null;
+  if (`${partes[0]}:${partes[1]}` !== PREFIXO_LONGO) return null;
+  if (partes[2] !== VERSAO_LONGA) return null;
   return UUID_RE.test(partes[3]) ? partes[3].toLowerCase() : null;
 }
 
