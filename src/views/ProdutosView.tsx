@@ -2942,7 +2942,11 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse md:min-w-[900px]">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                {/* `whitespace-nowrap` em todo o cabeçalho: "P. Custo" e
+                    "P. Venda" quebravam em duas linhas e empurravam a altura
+                    do cabeçalho inteiro, deixando a grade com cara de
+                    desalinhada antes mesmo da primeira linha de dado. */}
+                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest [&>th]:whitespace-nowrap">
                   <th className="pb-4 font-bold px-4 w-10">
                     <input
                       type="checkbox"
@@ -2999,10 +3003,15 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         <td className="py-4 px-4">
                           <ProdutoThumb url={item.imagem_url} size="xs" alt={item.nome} />
                         </td>
-                        <td className="py-4 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{item.codigo}</td>
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell whitespace-nowrap">{item.codigo}</td>
+                        {/* Nome é a única coluna que PODE quebrar — é texto de
+                            verdade. Ganha piso de largura para não ser espremida
+                            a três linhas pelas colunas numéricas ao lado. */}
+                        <td className="py-4 px-4 min-w-[200px]">
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
-                          <p className="text-sm font-semibold text-gray-200 flex items-center gap-1.5">
+                          {/* `flex-wrap`: com nome comprido os selos ficavam
+                              espremidos na mesma linha, cada um com meia letra. */}
+                          <p className="text-sm font-semibold text-gray-200 flex flex-wrap items-center gap-1.5">
                             {item.nome}
                             {/* Devolvido pela direção (migr. 502). Primeiro selo
                                 da linha de propósito: é o único que pede ação de
@@ -3063,24 +3072,33 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         </td>
                         <td className="py-4 px-4 hidden lg:table-cell">
                           {item.categoria
-                            ? <span className="text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
+                            // Sem `whitespace-nowrap` o selo quebrava no meio
+                            // e "Limpeza Doméstica" lia como DOIS selos
+                            // empilhados — categoria diferente, na leitura.
+                            ? <span className="inline-block whitespace-nowrap text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
                             : <span className="text-gray-700">—</span>}
                         </td>
                         <td className="py-4 px-4 text-center hidden md:table-cell"><FilialBadge filial={item.filial} /></td>
-                        <td className="py-4 px-4 text-xs font-mono text-gray-400 text-right hidden md:table-cell">
+                        {/* `whitespace-nowrap` nos valores: sem ele o espaço de
+                            "R$ 8,00" era ponto de quebra e a coluna saía com o
+                            símbolo numa linha e o número na outra. */}
+                        <td className="py-4 px-4 text-xs font-mono text-gray-400 text-right hidden md:table-cell whitespace-nowrap">
                           {item.preco_custo != null ? fmtBRL(parseNum(item.preco_custo)) : '—'}
                         </td>
-                        <td className="py-4 px-4 text-xs font-mono text-gray-200 text-right">
+                        <td className="py-4 px-4 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
                           {item.preco != null ? fmtBRL(parseNum(item.preco)) : '—'}
                           {item.unidade && item.unidade !== 'UN' && (
                             <span className="text-[9px] text-gray-600 ml-0.5">/{item.unidade}</span>
                           )}
                         </td>
-                        <td className="py-4 px-4 text-xs text-right hidden md:table-cell">
+                        <td className="py-4 px-4 text-xs text-right hidden md:table-cell whitespace-nowrap">
                           <MarkupBadge venda={item.preco} custo={item.preco_custo} />
                         </td>
-                        <td className="py-4 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
+                          {/* Saldo e mínimo são leitura única ("30 de 30"): o
+                              "/ 30" caindo para a linha de baixo lia como outro
+                              número, e ainda desalinhava a altura da linha. */}
+                          <div className="flex flex-nowrap items-center justify-center gap-1.5">
                             {baixoEstoque && <AlertTriangle size={11} className="text-red-500 shrink-0" />}
                             <span className={`text-xs font-bold tabular-nums ${baixoEstoque ? 'text-red-400' : 'text-gray-300'}`}>
                               {(() => {
@@ -3094,21 +3112,21 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                             {estMin > 0 && (
                               // Mínimo virou numeric(15,3) na migr. 438 — sem
                               // toLocaleString sairia "2.5" com ponto.
-                              <span className="text-[10px] text-gray-600">
+                              <span className="text-[10px] text-gray-600 whitespace-nowrap">
                                 / {Number.isInteger(estMin) ? estMin : estMin.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                               </span>
                             )}
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center hidden sm:table-cell"><StatusBadge status={item.status} /></td>
-                        <td className="py-4 px-4 text-right">
+                        <td className="py-4 px-4 text-right whitespace-nowrap">
                           {/* Sempre visíveis. Antes eram `opacity-0` até o
                               hover: no telemóvel, que não tem hover, as ações
                               simplesmente não existiam — e no desktop obrigava
                               a varrer o mouse pela coluna para descobrir que
                               havia botão ali. Ficam a 70% e acendem na linha
                               sob o cursor, que é o realce sem ser esconderijo. */}
-                          <div className="flex justify-end gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
+                          <div className="flex flex-nowrap justify-end gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="produtos" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             {normalizeEan13(item.ean).valid && (
                               <button onClick={() => setEtiquetaPreview(item)}
