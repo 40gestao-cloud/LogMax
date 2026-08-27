@@ -36,14 +36,22 @@ export const isFilialHolding = (v: any): v is FilialHolding =>
 // entra em gradiente e em borda inline — classe Tailwind dinâmica não existe.
 export const FILIAL_IDENTIDADE: Record<FilialHolding, {
   logo: string;
+  /** Tom da marca para texto e traço sobre fundo CLARO (o crachá). */
   cor: string;
-  /** Fundo da plaquinha do logo. `null` = o PNG já é transparente. */
+  /** Mesma família, aberta o bastante para ler sobre fundo ESCURO (o app). */
+  claro: string;
+  /** Tom escuro da marca, para faixa cheia com texto claro por cima. */
+  escuro: string;
+  /** Fundo da faixa/plaquinha do logo. `null` = o PNG já é transparente. */
   plate: string | null;
 }> = {
-  SuperMax: { logo: '/icon-supermax-view.png', cor: '#608CFF', plate: '#ffffff' },
-  MaxLook:  { logo: '/icon-maxlook.png',       cor: '#E8CDA8', plate: '#000000' },
-  TechMax:  { logo: '/icon-techmax.png',       cor: '#FF9646', plate: '#ffffff' },
-  Matriz:   { logo: '/icon-logmax.png',        cor: '#F0B429', plate: null },
+  SuperMax: { logo: '/icon-supermax-view.png', cor: '#1D4ED8', claro: '#608CFF', escuro: '#12213F', plate: '#ffffff' },
+  MaxLook:  { logo: '/icon-maxlook.png',       cor: '#A9834B', claro: '#E8CDA8', escuro: '#0B0A08', plate: '#000000' },
+  // TechMax é LARANJA. #C2410C sobre #2A1608 lia como marrom — laranja escurecido
+  // demais perde o matiz e vira terra. O tom da faixa desceu só o necessário
+  // para o branco por cima passar de 6:1 de contraste.
+  TechMax:  { logo: '/icon-techmax.png',       cor: '#EA580C', claro: '#FF9646', escuro: '#9A3412', plate: '#ffffff' },
+  Matriz:   { logo: '/icon-logmax.png',        cor: '#A97C0B', claro: '#F0B429', escuro: '#161310', plate: null },
 };
 
 /** Identidade da unidade, com a da holding como rede de segurança: filial nula

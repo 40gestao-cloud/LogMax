@@ -11,8 +11,12 @@
 // acomoda dentro dela.
 //
 // A identidade é da UNIDADE, não do LogMax: quem trabalha na TechMax carrega o
-// crachá da TechMax. Logo, cor da moldura, anel da foto e faixa saem de
-// `identidadeDaFilial` — o mesmo par logo/cor do seletor de unidade.
+// crachá da TechMax. Logo, tom vivo e tom escuro saem de `identidadeDaFilial`.
+//
+// Cartão CLARO, sempre, nos dois temas do app: crachá é cartão, não
+// interface. É o mesmo desenho que sai na impressora, e o QR — que é preto
+// sobre branco por obrigação óptica — deixa de ser um bloco gritante no meio
+// de um retângulo preto para virar o centro natural do cartão.
 
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
@@ -45,71 +49,73 @@ export const CrachaVirtual = ({ pessoa, semQr = false }: {
       className="cracha-cartao rounded-3xl overflow-hidden flex flex-col relative"
       style={{
         aspectRatio: '54 / 85.6',
-        border: `1px solid ${id.cor}55`,
-        boxShadow: `0 24px 50px -24px ${id.cor}77, 0 0 0 1px rgba(255,255,255,0.03) inset`,
-        background: `linear-gradient(165deg, ${id.cor}1A 0%, #0c0c0c 45%, #070707 100%)`,
+        // Cartão CLARO, e sempre — crachá é cartão, não interface: não segue o
+        // tema do app, segue o que sai na impressora. O escuro anterior fazia o
+        // QR (que é preto sobre branco por obrigação óptica) virar um bloco
+        // gritante no meio de um retângulo preto.
+        background: '#F7F8FA',
+        border: `1px solid ${id.cor}33`,
+        boxShadow: '0 24px 50px -26px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.15)',
       }}
     >
-      {/* Recorte do cordão. É o detalhe que faz um retângulo escuro ser lido
-          como crachá antes de alguém ler uma palavra dele. */}
-      <div className="pt-3 pb-1 flex justify-center shrink-0">
-        <div
-          className="h-1.5 w-14 rounded-full"
-          style={{ background: 'rgba(0,0,0,0.55)', boxShadow: `inset 0 1px 2px rgba(0,0,0,0.9), 0 1px 0 ${id.cor}22` }}
-        />
-      </div>
-
-      {/* Faixa do logo, de ponta a ponta e alta. Full-bleed de propósito: a
-          placa que a arte exige (os PNGs vieram com fundo queimado, cada um
-          pedindo um fundo) virava uma caixa branca flutuando no meio do escuro.
-          Como faixa inteira, lê como decisão de design em vez de remendo. */}
+      {/* Faixa do logo, de ponta a ponta. A cor da faixa é a `plate` da unidade
+          — e isso não é escolha estética, é a arte que manda: os PNGs vieram
+          com fundo queimado e cada um só fecha sobre um fundo (SuperMax e
+          TechMax sobre claro, MaxLook sobre preto). Como faixa inteira, aquilo
+          que seria uma caixa branca flutuando vira decisão de design. */}
       <div
         className="shrink-0 h-24 flex items-center justify-center px-4"
         style={{
-          background: id.plate ?? 'transparent',
-          borderTop: `1px solid ${id.cor}22`,
-          borderBottom: `1px solid ${id.cor}33`,
+          background: id.plate ?? id.escuro,
+          borderBottom: `3px solid ${id.cor}`,
         }}
       >
         <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="max-h-16 w-auto max-w-[82%] object-contain" />
       </div>
 
-      {/* Linha de identificação: foto pequena ao lado do nome. A foto encolheu
-          e saiu do centro de propósito — ela serve para conferir quem está na
-          frente, não para ser o assunto do cartão. O assunto é o QR. */}
-      <div className="shrink-0 flex items-center gap-3 px-4 pt-3 pb-1">
+      {/* Linha de identificação: foto pequena ao lado do nome. A foto serve
+          para conferir quem está na frente, não para ser o assunto do cartão —
+          o assunto é o QR. */}
+      <div className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-1">
         <div
-          className="w-12 h-12 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center shrink-0"
-          style={{ border: `1.5px solid ${id.cor}99` }}
+          className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0"
+          style={{ background: id.escuro, border: `1.5px solid ${id.cor}66` }}
         >
           {pessoa.foto_url
             ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
-            : <User size={22} style={{ color: `${id.cor}77` }} />}
+            : <User size={22} style={{ color: id.claro }} />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-base font-black text-white leading-[1.15] break-words line-clamp-2 tracking-tight">
+          {/* Nome em neutro escuro, e não no tom da unidade: o tom escuro da
+              TechMax é laranja queimado e o nome saía cor de terra. A identidade
+              já está na faixa do logo, no rodapé e nos detalhes — o nome só
+              precisa ser legível. */}
+          <p className="text-base font-black leading-[1.15] break-words line-clamp-2 tracking-tight text-neutral-900">
             {pessoa.nome}
           </p>
           {pessoa.cargo && (
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-0.5 line-clamp-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mt-0.5 line-clamp-1">
               {pessoa.cargo}
             </p>
           )}
         </div>
       </div>
 
-      {/* O QR no meio e grande — é o que se aponta a câmera para ler, e era o
-          que estava espremido num canto da faixa de baixo.
-          Fundo branco sempre, em qualquer unidade e nos dois temas: leitor de
-          câmera erra em código claro sobre escuro. A identidade da filial fica
-          de fora daqui — legibilidade primeiro. */}
+      {/* O QR no meio e grande — é o que se aponta a câmera para ler. Preto
+          sobre branco em qualquer unidade: leitor de câmera erra em código
+          claro sobre escuro, e a identidade da filial não entra aqui. Num
+          cartão claro ele finalmente deixa de ser um bloco estranho e passa a
+          ser o centro natural do desenho. */}
       <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-3">
         {semQr ? (
-          <p className="text-[11px] text-gray-500 text-center leading-relaxed px-4">
+          <p className="text-[11px] text-neutral-500 text-center leading-relaxed px-4">
             Crachá de identificação.<br />Sem registro de ponto associado.
           </p>
         ) : (
-          <div className="bg-white p-2.5 rounded-xl">
+          <div
+            className="bg-white p-2.5 rounded-2xl"
+            style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.10)' }}
+          >
             <QRCodeSVG
               value={montarCracha(pessoa.id)}
               size={148}
@@ -121,22 +127,25 @@ export const CrachaVirtual = ({ pessoa, semQr = false }: {
         )}
       </div>
 
-      {/* Faixa inferior na cor da unidade: fecha o cartão e carrega o que é
-          texto de conferência, não de leitura óptica. */}
+      {/* Rodapé no tom escuro da marca: fecha o cartão e carrega o que é texto
+          de conferência, não de leitura óptica. */}
       <div
-        className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5"
-        style={{ background: `${id.cor}1F`, borderTop: `1px solid ${id.cor}44` }}
+        className="shrink-0 flex items-center justify-between gap-3 px-4 py-3"
+        style={{ background: id.escuro }}
       >
         {pessoa.filial && (
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] truncate"
-            style={{ color: id.cor }}>
+          // BRANCO, e não o tom da marca: a faixa já é a cor da unidade, e azul
+          // sobre azul-marinho (SuperMax) ficava ilegível. Cor sobre cor da
+          // mesma família é sempre aposta de contraste — o branco fecha nas
+          // três unidades sem depender de calibragem.
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] truncate text-white">
             {pessoa.filial}
           </p>
         )}
         {/* Rotulado: antes eram seis caracteres soltos e ninguém sabia o que
             eram. */}
-        <p className="text-[10px] font-mono tracking-[0.18em] text-gray-400 shrink-0">
-          <span className="text-[8px] uppercase tracking-[0.2em] text-gray-600 mr-1.5">Matrícula</span>
+        <p className="text-[10px] font-mono tracking-[0.18em] shrink-0" style={{ color: 'rgba(255,255,255,0.80)' }}>
+          <span className="text-[8px] uppercase tracking-[0.2em] mr-1.5" style={{ color: 'rgba(255,255,255,0.50)' }}>Matrícula</span>
           {codigoCracha(pessoa.id)}
         </p>
       </div>

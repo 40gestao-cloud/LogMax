@@ -226,7 +226,7 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
                       </div>
                     )}
                     <span className="text-[10px] text-gray-600 font-mono">({pessoas.length})</span>
-                    <span className="flex-1 h-px" style={{ background: `${ident.cor}26` }} />
+                    <span className="flex-1 h-px" style={{ background: `${ident.claro}26` }} />
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -237,10 +237,10 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
                         onClick={() => setCrachaAberto(f)}
                         title="Abrir o crachá"
                         className="flex items-center gap-3 p-3 rounded-2xl border transition-colors text-left hover:bg-white/5"
-                        style={{ borderColor: `${ident.cor}33` }}
+                        style={{ borderColor: `${ident.claro}33` }}
                       >
                         <div className="w-11 h-11 rounded-xl overflow-hidden bg-black/30 flex items-center justify-center shrink-0"
-                          style={{ border: `1px solid ${ident.cor}55` }}>
+                          style={{ border: `1px solid ${ident.claro}55` }}>
                           {f.foto_url
                             ? <img src={f.foto_url} alt="" className="w-full h-full object-cover" />
                             : <User size={18} className="text-gray-600" />}
