@@ -77,3 +77,44 @@ describe('semelhancaDeItem — o que NÃO pode avisar', () => {
     expect(semelhancaDeItem(null, undefined)).toBe('nao');
   });
 });
+
+// Relatado pelo professor em 2026-08-27: a régua estava casando dois produtos
+// diferentes da MESMA marca. Marca, medida e substantivo iguais somavam Dice
+// 0.83 e o aviso disparava — mas espaguete e parafuso são duas compras.
+describe('semelhancaDeItem — marca igual não é item igual', () => {
+  it('mesma marca e medida, produto diferente — o caso do macarrão', () => {
+    expect(semelhancaDeItem(
+      'Macarrão Espaguete 500 g Dona Benta',
+      'Macarrão Parafuso 500 g Dona Benta',
+    )).toBe('nao');
+  });
+
+  it('mesma linha, sabor diferente', () => {
+    expect(semelhancaDeItem(
+      'Biscoito Recheado Chocolate Bono',
+      'Biscoito Recheado Morango Bono',
+    )).toBe('nao');
+  });
+
+  it('mesmo produto, marca diferente — duas compras, duas decisões', () => {
+    expect(semelhancaDeItem('Café Torrado 500g Pilão', 'Café Torrado 500g Melitta')).toBe('nao');
+  });
+
+  it('mas a marca a mais de UM lado só continua avisando', () => {
+    expect(semelhancaDeItem(
+      'Macarrão Espaguete 500 g',
+      'Macarrão Espaguete 500 g Dona Benta',
+    )).toBe('contido');
+  });
+});
+
+describe('medida escrita com espaço', () => {
+  it('"500 g" vale o mesmo que "500g"', () => {
+    expect(medidasDoItem('Sabão Omo 500 g')).toEqual(medidasDoItem('Sabão Omo 500g'));
+    expect(medidasDoItem('Refrigerante 2 litros')).toEqual(medidasDoItem('Refrigerante 2l'));
+  });
+
+  it('gramatura diferente com espaço barra igual', () => {
+    expect(semelhancaDeItem('Sabão Omo 500 g', 'Sabão Omo 1 kg')).toBe('nao');
+  });
+});
