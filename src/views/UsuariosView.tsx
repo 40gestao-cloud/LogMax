@@ -28,7 +28,18 @@ const SETOR_LABEL: Record<string, string> = {
 // cargo global (admin/CEO/conselheiro), não um setor que se escolhe.
 const SETORES_SELECIONAVEIS = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
 
-const roleEscopoGlobal = (role: string) => role === 'ceo' || role === 'conselheiro';
+// Cargos de escopo global — os que operam a holding inteira e por isso ficam
+// com `setor = 'all'`.
+//
+// `admin` faltava aqui, e o estrago era duplo: a option "Global" não era
+// desenhada para o professor (ele via a lista começando em Logística) e, ao
+// salvar, `setorParaRole` trocava o 'all' dele pelo primeiro setor da lista.
+// O professor virava Logística sem nada avisar — e, com isso, Sessões Gerais
+// da Matriz perdia os cards de Financeiro, RH, Marketing e Vendas, porque o
+// hub monta os cards a partir de SETOR_MODULES[setor]. O backend
+// (api/users.ts) sempre aceitou 'all' para admin: era só a tela que não.
+const roleEscopoGlobal = (role: string) =>
+  role === 'admin' || role === 'ceo' || role === 'conselheiro';
 
 /**
  * Setor coerente com o cargo.
@@ -516,11 +527,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
     setSaving(true);
     try {
-      // CEO é global por definição — força setor='all' antes de enviar.
-      // Gerente não envia setores_extras (backend bloqueia).
+      // Cargo de escopo global é 'all' por definição — força antes de enviar,
+      // pela mesma régua do select (`roleEscopoGlobal`). Gerente não envia
+      // setores_extras (backend bloqueia).
       const cleanExtras = (form.setores_extras ?? []).filter((s: string) => s !== form.setor);
       const basePayload = isGlobal ? { ...form, setores_extras: cleanExtras } : form;
-      const payload = (basePayload.role === 'ceo' || basePayload.role === 'conselheiro')
+      const payload = roleEscopoGlobal(basePayload.role)
         ? { ...basePayload, setor: 'all', setores_extras: [] }
         : basePayload;
       const res = await fetch('/api/users', {
