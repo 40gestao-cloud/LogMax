@@ -207,14 +207,29 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
               const ident = identidadeDaFilial(unidade === 'Sem unidade' ? null : unidade);
               return (
                 <div key={unidade} className="flex flex-col gap-3">
-                  {/* Cabeçalho do grupo com a cor da unidade: a mesma pista que
-                      o crachá usa, para o olho casar lista e cartão. */}
-                  <div className="flex items-center gap-2">
-                    <Building2 size={12} style={{ color: ident.cor }} />
-                    <span className="text-[10px] font-black uppercase tracking-widest"
-                      style={{ color: ident.cor }}>
-                      {unidade}
-                    </span>
+                  {/* Cabeçalho do grupo: o logo da unidade, o mesmo que vai no
+                      crachá — é assim que o olho casa a coluna com o cartão que
+                      vai ser lido. A placa por trás repete a do crachá pelo
+                      mesmo motivo: os PNGs vieram com fundo queimado e cada um
+                      pede um fundo diferente para fechar.
+
+                      "Sem unidade" fica em texto: ali não há logo que diga a
+                      verdade, e emprestar o do LogMax seria dizer que aquelas
+                      pessoas são da holding. */}
+                  <div className="flex items-center gap-2.5">
+                    {unidade === 'Sem unidade' ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                        <Building2 size={12} /> Sem unidade
+                      </span>
+                    ) : (
+                      <div
+                        className="h-9 px-3 rounded-lg flex items-center justify-center shrink-0"
+                        style={ident.plate ? { background: ident.plate } : undefined}
+                      >
+                        <img src={ident.logo} alt={unidade}
+                          className="h-6 w-auto max-w-[110px] object-contain" />
+                      </div>
+                    )}
                     <span className="text-[10px] text-gray-600 font-mono">({pessoas.length})</span>
                     <span className="flex-1 h-px" style={{ background: `${ident.cor}26` }} />
                   </div>
