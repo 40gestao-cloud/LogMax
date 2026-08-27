@@ -22,6 +22,36 @@ export const FILIAL_COLOR: Record<FilialHolding, { bg: string; text: string; bor
 export const isFilialHolding = (v: any): v is FilialHolding =>
   typeof v === 'string' && (FILIAIS_HOLDING as readonly string[]).includes(v);
 
+// Identidade visual da unidade — logo, cor e a cor da PLACA onde o logo
+// assenta.
+//
+// A placa existe porque os PNGs vieram com fundo queimado, cada um diferente: o
+// SuperMax é arte que só fecha sobre claro, o TechMax vem com branco chapado e
+// o MaxLook com preto chapado. Enquanto os três não vierem transparentes, a
+// placa não tem como ser a mesma cor nos três — é a mesma constatação que o
+// FilialSelector já fazia, agora num lugar onde outras telas alcançam.
+//
+// `cor` é o tom que identifica a unidade à distância (moldura, anel da foto,
+// selo). Vem das mesmas famílias do FILIAL_COLOR acima, em hex, porque aqui
+// entra em gradiente e em borda inline — classe Tailwind dinâmica não existe.
+export const FILIAL_IDENTIDADE: Record<FilialHolding, {
+  logo: string;
+  cor: string;
+  /** Fundo da plaquinha do logo. `null` = o PNG já é transparente. */
+  plate: string | null;
+}> = {
+  SuperMax: { logo: '/icon-supermax-view.png', cor: '#608CFF', plate: '#ffffff' },
+  MaxLook:  { logo: '/icon-maxlook.png',       cor: '#E8CDA8', plate: '#000000' },
+  TechMax:  { logo: '/icon-techmax.png',       cor: '#FF9646', plate: '#ffffff' },
+  Matriz:   { logo: '/icon-logmax.png',        cor: '#F0B429', plate: null },
+};
+
+/** Identidade da unidade, com a da holding como rede de segurança: filial nula
+ *  ou desconhecida (cadastro antigo, dado de outra turma) não pode derrubar a
+ *  tela nem sair sem logo. */
+export const identidadeDaFilial = (filial: string | null | undefined) =>
+  (isFilialHolding(filial) ? FILIAL_IDENTIDADE[filial] : FILIAL_IDENTIDADE.Matriz);
+
 // Uma conta de `caixa_bancos` pertence à unidade quando a filial casa. O
 // literal 'Matriz' é a holding (migr. 325); `filial = null` é a conta
 // global/legada de antes da coluna existir e continua valendo pra todas as

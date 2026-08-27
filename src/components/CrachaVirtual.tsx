@@ -6,12 +6,17 @@
 //
 // Cartão em proporção de crachá de verdade (ISO 7810 ID-1, 85,6 × 54 mm, mas
 // em pé): a ideia é que imprimir e plastificar seja opção, não gambiarra.
+//
+// A identidade é da UNIDADE, não do LogMax: quem trabalha na TechMax carrega o
+// crachá da TechMax. Logo, cor da moldura, anel da foto e selo saem de
+// `identidadeDaFilial` — o mesmo par logo/cor do seletor de unidade.
 
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, User, Printer } from 'lucide-react';
 import { montarCracha, codigoCracha } from '../lib/cracha';
+import { identidadeDaFilial } from '../lib/filiais';
 
 export type CrachaPessoa = {
   id: string;
@@ -22,71 +27,100 @@ export type CrachaPessoa = {
 };
 
 /**
- * `semQr` existe para o crachá de quem não tem cadastro de funcionário — hoje o
- * professor e o conselheiro. Eles têm identidade no sistema, mas não têm ponto
- * a registrar, e um QR ali seria um código que a leitura recusaria ("não achei
- * essa pessoa"). Melhor não desenhar do que desenhar algo que não funciona.
+ * `semQr` existe para o crachá de quem ainda não tem cadastro de funcionário
+ * ligado à conta. Um QR ali seria um código que a leitura recusaria ("não achei
+ * essa pessoa") — melhor não desenhar do que desenhar o que não funciona.
  */
 export const CrachaVirtual = ({ pessoa, compacto = false, semQr = false }: {
   pessoa: CrachaPessoa;
   compacto?: boolean;
   semQr?: boolean;
-}) => (
-  <div
-    className="cracha-cartao rounded-3xl border border-accent/30 overflow-hidden flex flex-col"
-    style={{ background: 'linear-gradient(160deg, #141414 0%, #0a0a0a 60%, #100d04 100%)' }}
-  >
-    <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-white/5">
-      <img src="/icon-logmax.png" alt="" className="w-8 h-8 rounded-lg object-cover" />
-      <span className="text-[9px] font-black uppercase tracking-[0.25em] text-accent/70">
-        Crachá
-      </span>
-    </div>
+}) => {
+  const id = identidadeDaFilial(pessoa.filial);
 
-    <div className="px-5 py-4 flex flex-col items-center gap-3">
-      <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-accent/40 bg-black/40 flex items-center justify-center shrink-0">
-        {pessoa.foto_url
-          ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
-          : <User size={34} className="text-accent/50" />}
+  return (
+    <div
+      className="cracha-cartao rounded-3xl overflow-hidden flex flex-col"
+      style={{
+        // Cor da unidade em tudo o que emoldura: borda, brilho de fora e o
+        // fundo, que recebe um véu do tom em vez de ser preto puro.
+        border: `1px solid ${id.cor}55`,
+        boxShadow: `0 20px 45px -22px ${id.cor}66, 0 0 0 1px rgba(255,255,255,0.03) inset`,
+        background: `linear-gradient(160deg, ${id.cor}1F 0%, #0c0c0c 55%, #080808 100%)`,
+      }}
+    >
+      {/* Faixa superior: o logo da unidade é a primeira coisa que se vê. */}
+      <div
+        className="px-5 pt-4 pb-3 flex items-center justify-between gap-3"
+        style={{ borderBottom: `1px solid ${id.cor}33` }}
+      >
+        <div
+          className="h-11 px-2.5 rounded-xl flex items-center justify-center shrink-0"
+          style={id.plate ? { background: id.plate } : undefined}
+        >
+          <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="h-8 w-auto max-w-[104px] object-contain" />
+        </div>
+        <span
+          className="text-[9px] font-black uppercase tracking-[0.25em] shrink-0"
+          style={{ color: `${id.cor}CC` }}
+        >
+          Crachá
+        </span>
       </div>
 
-      <div className="text-center min-w-0 w-full">
-        <p className="text-base font-bold text-gray-100 leading-tight break-words">{pessoa.nome}</p>
-        {pessoa.cargo && (
-          <p className="text-[11px] text-gray-400 mt-0.5">{pessoa.cargo}</p>
-        )}
-        {pessoa.filial && (
-          <span className="inline-block mt-2 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/30">
-            {pessoa.filial}
-          </span>
+      <div className="px-5 py-4 flex flex-col items-center gap-3">
+        <div
+          className="w-24 h-24 rounded-2xl overflow-hidden bg-black/40 flex items-center justify-center shrink-0"
+          style={{ border: `2px solid ${id.cor}88` }}
+        >
+          {pessoa.foto_url
+            ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
+            : <User size={34} style={{ color: `${id.cor}88` }} />}
+        </div>
+
+        <div className="text-center min-w-0 w-full">
+          <p className="text-base font-bold text-gray-100 leading-tight break-words">{pessoa.nome}</p>
+          {pessoa.cargo && (
+            <p className="text-[11px] text-gray-400 mt-0.5">{pessoa.cargo}</p>
+          )}
+          {pessoa.filial && (
+            <span
+              className="inline-block mt-2 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
+              style={{ background: `${id.cor}1A`, color: id.cor, border: `1px solid ${id.cor}4D` }}
+            >
+              {pessoa.filial}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Fundo branco no QR sempre, nos dois temas e em qualquer unidade: leitor
+          de câmera erra em código claro sobre escuro, e o crachá tem de
+          funcionar impresso. A identidade da filial fica de fora daqui de
+          propósito — legibilidade primeiro. */}
+      <div className="mt-auto px-5 pb-5 flex flex-col items-center gap-2">
+        {semQr ? (
+          <p className="text-[10px] text-gray-600 text-center leading-relaxed py-6 px-2">
+            Crachá de identificação.<br />Sem registro de ponto associado.
+          </p>
+        ) : (
+          <>
+            <div className="bg-white p-2.5 rounded-xl">
+              <QRCodeSVG
+                value={montarCracha(pessoa.id)}
+                size={compacto ? 96 : 132}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="M"
+              />
+            </div>
+            <p className="text-[10px] font-mono tracking-[0.3em] text-gray-500">{codigoCracha(pessoa.id)}</p>
+          </>
         )}
       </div>
     </div>
-
-    {/* Fundo branco no QR sempre, nos dois temas: leitor de câmera erra em
-        código claro sobre escuro, e o crachá tem de funcionar impresso. */}
-    <div className="mt-auto px-5 pb-5 flex flex-col items-center gap-2">
-      {semQr ? (
-        <p className="text-[10px] text-gray-600 text-center leading-relaxed py-6 px-2">
-          Crachá de identificação.<br />Sem registro de ponto associado.
-        </p>
-      ) : (
-        <>
-          <div className="bg-white p-2.5 rounded-xl">
-            <QRCodeSVG
-              value={montarCracha(pessoa.id)}
-              size={compacto ? 96 : 132}
-              bgColor="#ffffff"
-              fgColor="#000000"
-              level="M"
-            />
-          </div>
-          <p className="text-[10px] font-mono tracking-[0.3em] text-gray-500">{codigoCracha(pessoa.id)}</p>
-        </>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 export const CrachaModal = ({ pessoa, onClose }: { pessoa: CrachaPessoa; onClose: () => void }) => {
   useEffect(() => {

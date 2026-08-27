@@ -3,9 +3,11 @@
 // Módulo de primeiro nível, e não um botão escondido no topo: o crachá é o que
 // o aluno mostra quando chega, então tem de estar onde a mão vai sozinha.
 //
-// Aberto a todo mundo. Quem não tem cadastro de funcionário — o professor, o
-// conselheiro — continua tendo identidade no sistema; o que não tem é ponto a
-// bater, e o cartão sai sem QR dizendo isso.
+// Aberto a todo mundo. Quem ainda não tem cadastro de funcionário ligado à
+// conta continua tendo identidade no sistema; o que não tem é como registrar
+// presença, e o cartão sai sem QR dizendo isso — com o caminho do conserto,
+// porque na turma a falta do vínculo é acidente de cadastro, não regra: CEO e
+// conselheiro são alunos como os outros e batem ponto igual.
 //
 // De propósito FORA da whitelist do Modo Aula: uma aula que não listasse este
 // módulo tiraria o crachá da tela justamente no dia em que ele é usado.
@@ -34,10 +36,9 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
 
   const funcionarioId = profile?.funcionario_id ?? null;
 
-  // Sem cadastro de funcionário o crachá ainda existe — só não registra ponto.
-  // É o caso do professor e do conselheiro: eles têm identidade no sistema
-  // (nome, foto, papel), mas não têm presença a lançar, então o cartão sai sem
-  // QR em vez de sair com um código que a leitura recusaria.
+  // Sem cadastro de funcionário o crachá ainda existe — só não registra ponto,
+  // porque a presença é lançada por `funcionario_id`. O cartão sai sem QR em
+  // vez de sair com um código que a leitura recusaria.
   const semFuncionario = !funcionarioId;
   const pessoaDoPerfil: CrachaPessoa = {
     id: profile?.id ?? '',
@@ -96,9 +97,10 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
             <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">
               <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Sua conta não tem cadastro de funcionário, então este crachá identifica você
-                mas <span className="text-gray-300 font-semibold">não registra presença</span> —
-                é o caso de quem conduz a turma, não de quem tem ponto a bater.
+                Sua conta ainda não está ligada a um cadastro de funcionário, então este crachá
+                identifica você mas <span className="text-gray-300 font-semibold">não registra
+                presença</span>. Peça ao professor para fazer o vínculo em Usuários — feito isso,
+                o QR aparece aqui sozinho.
               </p>
             </div>
           )}
