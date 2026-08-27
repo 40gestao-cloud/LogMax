@@ -57,39 +57,51 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
   const [excluindo, setExcluindo] = useState(false);
 
   // Foto de perfil por funcionário. A foto do cadastro do RH (`funcionarios.foto_url`)
-  // quase sempre vem vazia — o formulário grava string vazia e ninguém sobe foto
-  // por lá —, enquanto o aluno tem a foto que ele mesmo mandou, em
-  // `user_profiles.foto_url`. Como a confirmação existe justamente para o
-  // professor olhar a cara antes de gravar, sem esta ponte a tela mostrava um
-  // boneco cinza e a conferência humana perdia o sentido.
-  const [fotosDoPerfil, setFotosDoPerfil] = useState<Record<string, string>>({});
+  // quase sempre vem vazia — o formulário grava string vazia e o upload de lá é
+  // recusado pela policy do bucket para quem não é admin —, enquanto o aluno tem
+  // a foto que ele mesmo mandou, em `user_profiles.foto_url`. Como a confirmação
+  // existe justamente para o professor olhar a cara antes de gravar, sem esta
+  // ponte a tela mostrava um boneco cinza e a conferência humana perdia o sentido.
+  //
+  // Dois índices porque o vínculo perfil↔funcionário é gravado nos DOIS lados e
+  // nem sempre nos dois ao mesmo tempo: há turma inteira (contabilidade) em que
+  // `user_profiles.funcionario_id` está nulo e quem aponta é
+  // `funcionarios.user_profile_id`. Ler só um lado deixaria a turma sem foto.
+  const [fotosPorFuncionario, setFotosPorFuncionario] = useState<Record<string, string>>({});
+  const [fotosPorPerfil, setFotosPorPerfil] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!supabase || !podeLer) return;
     let cancelado = false;
     supabase
       .from('user_profiles')
-      .select('funcionario_id, foto_url')
-      .not('funcionario_id', 'is', null)
+      .select('id, funcionario_id, foto_url')
       .not('foto_url', 'is', null)
       .then(({ data }) => {
         if (cancelado || !data) return;
-        const mapa: Record<string, string> = {};
+        const porFuncionario: Record<string, string> = {};
+        const porPerfil: Record<string, string> = {};
         for (const u of data as any[]) {
-          if (u.funcionario_id && u.foto_url) mapa[u.funcionario_id] = u.foto_url;
+          if (!u.foto_url) continue;
+          if (u.funcionario_id) porFuncionario[u.funcionario_id] = u.foto_url;
+          if (u.id) porPerfil[u.id] = u.foto_url;
         }
-        setFotosDoPerfil(mapa);
+        setFotosPorFuncionario(porFuncionario);
+        setFotosPorPerfil(porPerfil);
       });
     return () => { cancelado = true; };
   }, [podeLer]);
 
+  // `||` e não `??`: o formulário do RH grava string vazia, que não é nula mas
+  // também não é foto.
+  const fotoDe = (f: any): string | null =>
+    f?.foto_url || fotosPorFuncionario[f?.id] || fotosPorPerfil[f?.user_profile_id] || null;
+
   const ativos = useMemo(
     () => (funcionarios ?? [])
       .filter((f: any) => (f.status ?? 'Ativo') !== 'Inativo')
-      // `|| null` e não `??`: o RH grava string vazia, que não é nula mas
-      // também não é foto.
-      .map((f: any) => ({ ...f, foto_url: f.foto_url || fotosDoPerfil[f.id] || null }))
+      .map((f: any) => ({ ...f, foto_url: fotoDe(f) }))
       .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
-    [funcionarios, fotosDoPerfil],
+    [funcionarios, fotosPorFuncionario, fotosPorPerfil],
   );
 
   const filtrados = useMemo(() => {
@@ -415,8 +427,10 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
             className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-sm flex flex-col items-center gap-4"
           >
             <div className="w-32 h-32 rounded-2xl overflow-hidden border-2 border-accent/40 bg-black/40 flex items-center justify-center">
-              {confirmando.foto_url
-                ? <img src={confirmando.foto_url} alt={confirmando.nome} className="w-full h-full object-cover" />
+              {/* Resolvido de novo aqui, e não só herdado do objeto: a confirmação
+                  pode ter sido aberta antes de o índice de fotos chegar. */}
+              {fotoDe(confirmando)
+                ? <img src={fotoDe(confirmando)!} alt={confirmando.nome} className="w-full h-full object-cover" />
                 : <User size={44} className="text-accent/50" />}
             </div>
             <div className="text-center">
@@ -426,7 +440,7 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
               </p>
             </div>
 
-            {!confirmando.foto_url && (
+            {!fotoDe(confirmando) && (
               <p className="text-[11px] text-amber-400/90 flex items-start gap-1.5 text-center">
                 <AlertTriangle size={12} className="shrink-0 mt-px" />
                 <span>Esta pessoa não tem foto no cadastro — confira o nome antes de gravar.</span>
