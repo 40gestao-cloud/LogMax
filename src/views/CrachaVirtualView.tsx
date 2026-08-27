@@ -16,7 +16,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw } from 'lucide-react';
+import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -316,8 +316,32 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
         )}
       </div>
 
+      {/* O QRScanner NÃO é um modal: ele devolve um bloco comum, feito para ser
+          posto dentro de um por quem chama (era assim no totem antigo). Solto
+          aqui no fim da árvore, ele nascia embaixo da lista de crachás — a
+          câmera até abria, mas fora da tela, e o clique parecia não fazer nada.
+          A moldura é nossa. */}
       {scannerAberto && (
-        <QRScanner onResult={handleLeitura} onClose={() => setScannerAberto(false)} />
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setScannerAberto(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-sm flex flex-col items-center gap-4"
+          >
+            <div className="flex items-center justify-between w-full gap-3">
+              <p className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                <ScanLine size={15} className="text-accent" /> Ler crachá
+              </p>
+              <button type="button" onClick={() => setScannerAberto(false)} title="Fechar"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <QRScanner onResult={handleLeitura} onClose={() => setScannerAberto(false)} />
+          </div>
+        </div>
       )}
 
       {crachaAberto && (
