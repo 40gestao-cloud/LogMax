@@ -69,7 +69,20 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
     const ordem = [...FILIAIS_HOLDING, 'Sem unidade'];
     return ordem
       .filter(u => mapa.has(u))
-      .map(u => ({ unidade: u, pessoas: mapa.get(u)! }));
+      .map(u => ({
+        unidade: u,
+        // Gerente no topo da unidade: é a cabeça daquela coluna, e quem procura
+        // "quem responde pela TechMax" não deve varrer a lista inteira.
+        // `cargo` é texto livre e vem da turma com maiúscula irregular e espaço
+        // sobrando ("Gerente ", "Gerente De Vendas e Atendimentos") — por isso
+        // busca por substring no texto normalizado, não igualdade.
+        pessoas: [...mapa.get(u)!].sort((a, b) => {
+          const ehGerente = (f: any) => /gerente/.test(String(f.cargo ?? '').trim().toLowerCase()) ? 0 : 1;
+          const d = ehGerente(a) - ehGerente(b);
+          return d !== 0 ? d
+            : String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR');
+        }),
+      }));
   }, [filtrados]);
 
   const handleLeitura = (bruto: string) => {
@@ -187,7 +200,9 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
         {isLoading ? <LoadingSpinner /> : filtrados.length === 0 ? (
           <EmptyState message="Nenhum funcionário ativo encontrado." />
         ) : (
-          <div className="flex flex-col gap-6">
+          // Uma coluna por unidade, lado a lado: a turma se lê em paralelo, não
+          // em pilha — e três unidades cabem numa tela de notebook.
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
             {grupos.map(({ unidade, pessoas }) => {
               const ident = identidadeDaFilial(unidade === 'Sem unidade' ? null : unidade);
               return (
@@ -204,7 +219,7 @@ export const CrachaVirtualView = ({ showToast }: { showToast: any; profile?: Use
                     <span className="flex-1 h-px" style={{ background: `${ident.cor}26` }} />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-2">
                     {pessoas.map((f: any) => (
                       <button
                         key={f.id}
