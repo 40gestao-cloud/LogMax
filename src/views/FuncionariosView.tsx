@@ -3,13 +3,15 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Users, Link2 } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
+import { roleLabel } from '../lib/rbac';
+import { setorLabel } from '../lib/setores';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -36,6 +38,22 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const { data: cargos }        = useFetchData<any>('/api/cargosview', { filial });
   const { data: departamentos } = useFetchData<any>('/api/departamentosview', { filial });
   const { data: beneficios }    = useFetchData<any>('/api/beneficiosview', { filial });
+  // Usuários da unidade. A tela de Funcionários e a de Usuários falavam da
+  // mesma pessoa e não se conheciam: o RH redigitava nome, e-mail, cargo e
+  // setor de alguém que já estava cadastrado ao lado.
+  //
+  // O recorte é o MESMO do quadro exibido acima — inclusive em Matriz, que
+  // lista o pessoal da própria holding (CEO e conselheiro). Oferecer usuário de
+  // outra unidade aqui criaria funcionário que não aparece na lista logo
+  // depois de criado. A RLS de `user_profiles` ainda recorta por cima: aluno de
+  // RH enxerga só a própria unidade.
+  const { data: usuarios } = useFetchData<any>(
+    'user_profiles',
+    { filial },
+    false,
+    { orderBy: 'nome', ascending: true },
+  );
+  const [painelUsuarios, setPainelUsuarios] = useState(false);
   const [beneficiosDe, setBeneficiosDe] = useState<{ id: string; nome: string } | null>(null);
   // Só cargo/departamento ativos entram no select; inativo que já esteja
   // gravado num funcionário continua aparecendo via fallback "Outro".
@@ -90,7 +108,49 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       return an < bn ? -1 : an > bn ? 1 : 0;
     });
 
+  // Usuário que ainda não tem cadastro de funcionário. O vínculo é gravado nos
+  // DOIS lados do sistema (`user_profiles.funcionario_id` e
+  // `funcionarios.user_profile_id`) e nem sempre nos dois ao mesmo tempo, então
+  // a pergunta é feita pelos dois — ler um lado só faria a lista oferecer gente
+  // que já está cadastrada.
+  const perfisComCadastro = new Set(
+    (funcionarios ?? []).map((f: any) => f.user_profile_id).filter(Boolean),
+  );
+  const usuariosSemCadastro = (usuarios ?? []).filter((u: any) =>
+    !u.funcionario_id && !perfisComCadastro.has(u.id) && u.ativo !== false,
+  );
+
   const openNew = () => { setForm(makeEmpty(filial)); setCargoSel(''); setDeptoSel(''); setEditing(null); setShowForm(true); };
+
+  // Abre o formulário já preenchido com o que a conta do usuário sabe: nome,
+  // e-mail, o papel como "cargo" e o setor como "departamento" — exatamente as
+  // colunas que a tela de Usuários mostra. O resto (CPF, admissão, salário)
+  // continua sendo do RH, porque a conta não tem esse dado.
+  //
+  // `user_profile_id` vai junto: é o vínculo, e é ele que faz o crachá do aluno
+  // sair com QR sem ninguém precisar ligar nada depois (migr. 561).
+  const openNewFromUser = (u: any) => {
+    const cargoTexto = roleLabel(u.role);
+    const deptoTexto = u.setor ? setorLabel(u.setor) : '';
+    // Casa com o catálogo da unidade quando existir; senão cai em "Outro" com
+    // o texto preenchido, que é o mesmo caminho do cadastro histórico.
+    const cargoMatch = cargosAtivos.find((c: any) => c.nome === cargoTexto);
+    const deptoMatch = deptosAtivos.find((d: any) => d.nome === deptoTexto);
+    setForm({
+      ...makeEmpty(filial),
+      nome:            u.nome ?? '',
+      email:           u.email ?? '',
+      cargo:           cargoTexto,
+      departamento:    deptoTexto,
+      filial:          filial,
+      user_profile_id: u.id,
+    });
+    setCargoSel(cargoMatch ? cargoMatch.id : (cargoTexto ? OUTRO : ''));
+    setDeptoSel(deptoMatch ? deptoMatch.id : (deptoTexto ? OUTRO : ''));
+    setEditing(null);
+    setShowForm(true);
+    setPainelUsuarios(false);
+  };
   const openEdit = (f: any) => {
     setForm({
       ...f,
@@ -255,16 +315,80 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
             <input type="text" placeholder="Buscar funcionário..." value={search} onChange={e => setSearch(e.target.value)}
               className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" />
           </div>
+          {usuariosSemCadastro.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPainelUsuarios(v => !v)}
+              className="neu-button py-2.5 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent flex items-center gap-2 shrink-0"
+              title="Usuários desta unidade que ainda não têm cadastro de funcionário"
+            >
+              <Users size={14} />
+              De Usuários
+              <span className="px-1.5 py-0.5 rounded-md bg-accent/15 text-accent tabular-nums">{usuariosSemCadastro.length}</span>
+            </button>
+          )}
           <NeuButtonAccent variant="" onClick={openNew}><Plus size={14} />Novo Funcionário</NeuButtonAccent>
         </div>
       </div>
+
+      {/* Usuários da unidade sem cadastro de funcionário. Não substitui o
+          "Novo Funcionário": quem não tem conta (ou ainda não terá) continua
+          entrando pelo formulário em branco. */}
+      <AnimatePresence>
+        {painelUsuarios && usuariosSemCadastro.length > 0 && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="neu-flat rounded-3xl border border-white/5 shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                  <Users size={15} /> Usuários de {filial} sem cadastro de funcionário
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Traz nome, e-mail, cargo e departamento da conta. CPF, admissão e salário continuam com o RH.
+                </p>
+              </div>
+              <button onClick={() => setPainelUsuarios(false)} className="modal-close-btn"><X size={16} /></button>
+            </div>
+            <div className="max-h-72 overflow-y-auto main-scrollbar px-3 pb-4">
+              {usuariosSemCadastro.map((u: any) => (
+                <div key={u.id}
+                  className="grid grid-cols-[1fr_auto] sm:grid-cols-[1.4fr_1.6fr_1fr_auto] gap-3 items-center px-3 py-2.5 rounded-xl hover:bg-white/[0.03]">
+                  <span className="text-sm font-semibold text-gray-200 truncate">{u.nome || '—'}</span>
+                  <span className="text-xs text-gray-500 truncate hidden sm:block">{u.email || '—'}</span>
+                  <span className="text-[11px] text-gray-400 truncate hidden sm:block">
+                    {roleLabel(u.role)}{u.setor ? ` · ${setorLabel(u.setor)}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => openNewFromUser(u)}
+                    className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-gray-400 hover:text-accent flex items-center gap-1.5 justify-self-end"
+                  >
+                    <Plus size={12} /> Cadastrar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showForm && (
           <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
+              <div className="flex items-center gap-3 min-w-0">
+                <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
+                {form.user_profile_id && (
+                  // Vínculo visível: sem isso o RH não teria como saber que
+                  // este cadastro já está amarrado à conta do aluno — e é esse
+                  // vínculo que faz o crachá dele sair com QR.
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-accent/15 text-accent shrink-0"
+                    title="Cadastro ligado à conta de usuário — o crachá dessa pessoa já sai com QR">
+                    <Link2 size={11} /> ligado ao usuário
+                  </span>
+                )}
+              </div>
               <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
             </div>
 

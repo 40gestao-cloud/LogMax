@@ -11,6 +11,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { exportToExcel } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
+import { ROLE_LABEL } from '../lib/rbac';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'Global',
@@ -44,13 +45,6 @@ const setorParaRole = (role: string, setor: string): string => {
   return setor === 'all' ? SETORES_SELECIONAVEIS[0] : setor;
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  admin:       'Administrador',
-  ceo:         'CEO',
-  gerente:     'Gerente',
-  colaborador: 'Colaborador',
-  conselheiro: 'Conselheiro',
-};
 
 // Classes CSS dedicadas (.role-badge--* / .setor-badge--* em index.css).
 // Antes Tailwind bg-X-900/30 + text-X-400 — mesmo hue no bg e no texto

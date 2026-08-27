@@ -1,5 +1,23 @@
 import type { UserProfile, Setor } from '../hooks/useUserProfile';
 
+/**
+ * Rótulo do papel como a turma o lê — é a coluna "Cargo" da tela de Usuários.
+ * Mora aqui, e não dentro de uma view, porque RH → Funcionários passou a
+ * mostrar a mesma palavra ao trazer o cadastro de um usuário: duas cópias do
+ * mapa acabariam divergindo, e o aluno veria "gerente" numa tela e "Gerente"
+ * na outra para a mesma pessoa.
+ */
+export const ROLE_LABEL: Record<string, string> = {
+  admin:       'Administrador',
+  ceo:         'CEO',
+  gerente:     'Gerente',
+  colaborador: 'Colaborador',
+  conselheiro: 'Conselheiro',
+};
+
+export const roleLabel = (role: string | null | undefined): string =>
+  ROLE_LABEL[String(role ?? '')] ?? String(role ?? '');
+
 /** Lista plana de todos os setores do usuário (primário + extras). */
 export function allSetores(profile: Pick<UserProfile, 'setor' | 'setores_extras'> | null | undefined): Setor[] {
   if (!profile) return [];
