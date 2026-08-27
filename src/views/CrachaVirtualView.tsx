@@ -16,7 +16,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw, X } from 'lucide-react';
+import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw, X, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState } from '../components/ui';
@@ -52,8 +52,9 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
   // e — pior — transforma em 'Normal' uma falta justificada que o RH tinha
   // lançado, sem dizer nada a ninguém. Aqui isso vira aviso e um botão que diz
   // o que vai fazer.
-  const [jaRegistrado, setJaRegistrado] = useState<{ status: string; entrada: string | null } | null>(null);
+  const [jaRegistrado, setJaRegistrado] = useState<{ id: string; status: string; entrada: string | null } | null>(null);
   const [conferindo, setConferindo] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
 
   const ativos = useMemo(
     () => (funcionarios ?? [])
@@ -128,13 +129,39 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
     try {
       const { data } = await supabase
         .from('ponto_eletronico')
-        .select('status, entrada')
+        .select('id, status, entrada')
         .eq('funcionario_id', funcionarioId)
         .eq('data', todayBR())
         .maybeSingle();
-      setJaRegistrado(data ? { status: data.status, entrada: data.entrada } : null);
+      setJaRegistrado(data ? { id: data.id, status: data.status, entrada: data.entrada } : null);
     } finally {
       setConferindo(false);
+    }
+  };
+
+  // Apagar o registro do dia, aqui mesmo. A exclusão já existia na aba
+  // Registros do Ponto Eletrônico, mas aquela aba é por FILIAL — e a leitura de
+  // crachá acontece na Matriz, onde ela nem aparece. Quem lê errado tinha de
+  // entrar na unidade para desfazer; o conserto ficava longe do erro.
+  //
+  // A RLS de `ponto_eletronico` é quem autoriza de verdade (`ponto_rh_delete`);
+  // aqui só se oferece o botão a quem a tela já restringe.
+  const handleExcluir = async () => {
+    if (!jaRegistrado || !confirmando || !supabase) return;
+    setExcluindo(true);
+    try {
+      const { error } = await supabase
+        .from('ponto_eletronico')
+        .delete()
+        .eq('id', jaRegistrado.id);
+      if (error) throw error;
+      showToast(`Registro de hoje de ${confirmando.nome} excluído.`, 'success', true);
+      setJaRegistrado(null);
+      setLidosAgora(prev => prev.filter(l => l.nome !== confirmando.nome));
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não consegui excluir o registro.', 'error', true);
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -423,6 +450,21 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
                 {jaRegistrado ? 'Substituir registro' : 'Registrar presença'}
               </button>
             </div>
+
+            {/* Terceira saída, e só quando há o que apagar: substituir conserta
+                a hora, apagar desfaz a leitura inteira — quem marcou a pessoa
+                errada quer isto, não um registro corrigido. */}
+            {jaRegistrado && (
+              <button
+                type="button"
+                onClick={handleExcluir}
+                disabled={excluindo || gravando}
+                className="text-[10px] font-bold uppercase tracking-widest text-red-400/80 hover:text-red-300 transition-colors disabled:opacity-40 inline-flex items-center gap-1.5"
+              >
+                {excluindo ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                Excluir o registro de hoje
+              </button>
+            )}
           </div>
         </div>
       )}
