@@ -190,7 +190,7 @@ export const InicioView = ({
             <p className="text-sm font-bold text-gray-200">
               {artesPublicadasCount} {artesPublicadasCount === 1 ? 'arte promocional publicada' : 'artes promocionais publicadas'}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">Veja o material do Marketing e dê seu feedback.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Veja o material publicado pelo Marketing.</p>
           </div>
           <ArrowRight size={16} className="text-accent shrink-0" />
         </button>
