@@ -563,6 +563,16 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   }, [showToast, cart]);
 
   const changeQty = (produto_id: string, delta: number) => {
+    // O aviso sai FORA do updater: função de setState tem de ser pura, e ali o
+    // toast era engolido ou disparado duas vezes conforme o React resolvesse o
+    // updater na hora ou depois.
+    const alvo = cart.find(i => i.produto_id === produto_id);
+    if (alvo &&
+        !UNIDADES_FRACIONARIAS.has(alvo.unidade.toUpperCase()) &&
+        alvo.qtd + delta > alvo.estoque) {
+      showToast?.('Quantidade máxima em estoque atingida.', 'error', true);
+      return;
+    }
     setCart(prev => prev
       .map(i => {
         if (i.produto_id !== produto_id) return i;
@@ -570,7 +580,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         if (UNIDADES_FRACIONARIAS.has(i.unidade.toUpperCase())) return i;
         const newQty = i.qtd + delta;
         if (newQty <= 0) return null as any;
-        if (newQty > i.estoque) { showToast?.('Quantidade máxima em estoque atingida.', 'error', true); return i; }
+        if (newQty > i.estoque) return i;
         return { ...i, qtd: newQty, subtotal: newQty * i.preco_unitario };
       })
       .filter(Boolean)
@@ -715,6 +725,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   useEffect(() => { lastVendaRef.current = lastVenda; }, [lastVenda]);
   const pesoPromptRef = useRef(pesoPrompt);
   useEffect(() => { pesoPromptRef.current = pesoPrompt; }, [pesoPrompt]);
+  // Faltavam no portão: a maquininha na tela e a falha pós-pagamento. Nos dois
+  // casos o carrinho da venda JÁ foi congelado em `vendaSnapshotRef` — um bipe
+  // ali entrava no carrinho visível, não ia para a venda nenhuma, e desaparecia
+  // quando a venda fechasse. Para quem está no caixa, é o leitor lendo e o
+  // sistema não registrando.
+  const cartaoModalRef = useRef(cartaoModal);
+  useEffect(() => { cartaoModalRef.current = cartaoModal; }, [cartaoModal]);
+  const falhaPosPagamentoRef = useRef(falhaPosPagamento);
+  useEffect(() => { falhaPosPagamentoRef.current = falhaPosPagamento; }, [falhaPosPagamento]);
 
   // Digitação no campo de busca. Além de filtrar a grade, ela é o caminho do
   // leitor sem sufixo Enter: 120ms depois do último caractere, se o que está no
@@ -731,7 +750,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       if (v.length < 8 || !/^\d+$/.test(v)) return;
       // Mesmo portão do listener do leitor: com cobrança na tela, venda
       // fechando, recibo aberto ou modal de peso, ninguém entra no carrinho.
-      if (pixPendenteRef.current !== null || isClosingRef.current ||
+      if (pixPendenteRef.current !== null || cartaoModalRef.current !== null ||
+          falhaPosPagamentoRef.current !== null || isClosingRef.current ||
           lastVendaRef.current !== null || pesoPromptRef.current !== null) return;
       const exact = produtosPorFilial.find((p: any) =>
         String(p.ean ?? '').trim() === v ||
@@ -764,6 +784,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       // de "venda concluída" antes do operador clicar OK).
       const blocked =
         pixPendenteRef.current !== null ||
+        cartaoModalRef.current !== null ||
+        falhaPosPagamentoRef.current !== null ||
         isClosingRef.current ||
         lastVendaRef.current !== null ||
         pesoPromptRef.current !== null;
@@ -1405,6 +1427,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // disparava um refetch que ligava loadingProd → PDV virava spinner (a tela
   // "piscando") e o QR sumia no meio do pagamento.
   const cobrancaEmCurso = !!pixPendente || !!cartaoModal;
+  // Sair do PDV com cobrança na tela é abandonar dinheiro em trânsito: o
+  // pendente fica 'aguardando', e se o cliente pagar depois de a tela morrer
+  // ninguém registra a venda (a varredura de órfãos só cancela 'aguardando' —
+  // nunca desfaz um 'pago'). Mesmo motivo vale para a falha pós-pagamento, que
+  // é o único lugar onde o retry existe.
+  const naoPodeSair = cobrancaEmCurso || isClosing || !!falhaPosPagamento;
+  const tituloSair = naoPodeSair
+    ? 'Termine ou cancele a cobrança em andamento antes de trocar de PDV'
+    : 'Trocar PDV';
   if (caixa) ultimoCaixaRef.current = caixa;
   const caixaAtivo = caixa ?? (cobrancaEmCurso ? ultimoCaixaRef.current : null);
 
@@ -1568,9 +1599,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         )}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onVoltar && (
-            <button onClick={onVoltar}
-              className="neu-button p-2 rounded-lg text-gray-400 hover:text-accent shrink-0"
-              title="Trocar PDV">
+            <button onClick={onVoltar} disabled={naoPodeSair}
+              className="neu-button p-2 rounded-lg text-gray-400 hover:text-accent shrink-0 disabled:opacity-30 disabled:hover:text-gray-400"
+              title={tituloSair}>
               <ArrowLeft size={16} />
             </button>
           )}
@@ -1637,9 +1668,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             </div>
           )}
           {onVoltar && (
-            <button onClick={onVoltar}
-              className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5"
-              title="Trocar PDV">
+            <button onClick={onVoltar} disabled={naoPodeSair}
+              className="neu-button py-1.5 px-3 rounded-lg text-[10px] font-bold text-gray-400 hover:text-accent hidden sm:flex items-center gap-1.5 disabled:opacity-30 disabled:hover:text-gray-400"
+              title={tituloSair}>
               <Store size={12} /> Trocar PDV
             </button>
           )}
