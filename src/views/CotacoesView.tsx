@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -58,6 +58,31 @@ async function notificarSetor(args: {
   } catch {
     // Notificação é best-effort — não bloqueia o fluxo principal.
   }
+}
+
+// Congela as opções de um <select> enquanto ele está aberto.
+//
+// Esta tela ouve realtime de cinco tabelas e a turma inteira trabalha nela ao
+// mesmo tempo: cada proposta salva por um colega, cada cadeado de reserva
+// renovado (batimento de 60s por aluno) redesenha os <option>. Trocar o
+// conteúdo dos <option> com o popup nativo aberto faz o Chrome repintar e
+// pular a lista — é o "tremendo" que se vê ao rolar a lista de requisições.
+// Congelado no instante em que o campo abre, o popup fica parado; a lista
+// volta a andar assim que a pessoa escolhe ou sai do campo.
+function useOpcoesEstaveis<T>(valor: T) {
+  const [congelado, setCongelado] = useState<T | null>(null);
+  const vivo = useRef(valor);
+  vivo.current = valor;
+  // Só congela se ainda não estiver congelado: teclas de navegação dentro do
+  // popup aberto não podem re-fotografar a lista com dado novo.
+  const congelar = () => setCongelado(c => (c === null ? vivo.current : c));
+  const soltar = () => setCongelado(null);
+  return {
+    opcoes: congelado ?? valor,
+    // Espalhar no <select>; o onChange do campo chama `soltar()`.
+    handlers: { onMouseDown: congelar, onKeyDown: congelar, onBlur: soltar },
+    soltar,
+  };
 }
 
 // `mode` existe pelo mesmo motivo que existe em OrcamentosView: a tela é
@@ -134,7 +159,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // `data` traz 50 linhas; usá-la para isso fazia o contador de propostas, o
   // modal de comparação e o cancelamento automático ignorarem toda proposta
   // que tivesse caído na página seguinte.
-  const { data: todasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial }, true);
+  const { data: todasCotacoes, setData: setTodasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -352,7 +377,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     return () => { cancelled = true; };
   }, [data]);
 
-  const requisicoesAprovadas = requisicoes.filter((r: any) => r.status === 'Aprovado');
+  const requisicoesAprovadas = useMemo(
+    () => requisicoes.filter((r: any) => r.status === 'Aprovado'),
+    [requisicoes]);
 
   // O que está parado esperando alguém desta tela. Conta sobre `todasCotacoes`
   // (sem paginação): trabalho na página 2 é trabalho igual, e um contador que
@@ -468,6 +495,20 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     };
   }, [requisicoesAprovadaOrdenadas, propostasPorRequisicao]);
 
+  // Snapshots estáveis para os três selects do formulário (ver
+  // `useOpcoesEstaveis`). Fornecedor leva junto as duas travas porque elas é
+  // que mudam o texto do <option> — congelar só o array de nomes deixaria o
+  // rótulo "🔒 fulano está cotando" aparecendo e sumindo com o popup aberto.
+  const selReq = useOpcoesEstaveis(requisicoesParaCotar);
+  const opcoesPJ = useMemo(
+    () => ({ grupos: fornecedoresPJ, jaCotados: fornecedoresJaCotados, reservas: reservasDaReq }),
+    [fornecedoresPJ, fornecedoresJaCotados, reservasDaReq]);
+  const opcoesPF = useMemo(
+    () => ({ grupos: fornecedoresPF, jaCotados: fornecedoresJaCotados, reservas: reservasDaReq }),
+    [fornecedoresPF, fornecedoresJaCotados, reservasDaReq]);
+  const selPJ = useOpcoesEstaveis(opcoesPJ);
+  const selPF = useOpcoesEstaveis(opcoesPF);
+
   // Modal de comparação — chave = requisicao_id.
   const [comparando, setComparando] = useState<string | null>(null);
   const propostasDoModal = useMemo(() => {
@@ -498,6 +539,22 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       return item.includes(q) || forn.includes(q) || status.includes(q) || obs.includes(q);
     });
   }, [enriched, debouncedSearch, modoFinanceiro]);
+
+  // Esta tela lê cotação por dois fetches: `data` é a página da tabela e
+  // `todasCotacoes` (sem paginação) é o que alimenta os contadores da fila, o
+  // agrupamento por requisição, o modal de comparação e — o que doía — o grupo
+  // "Já cotadas" do dropdown de Nova Cotação. Escrever só em `data` deixava o
+  // dropdown mentindo até o realtime chegar: a proposta acabava de ser salva e
+  // a requisição continuava listada em "Ainda sem cotação". Toda escrita
+  // otimista passa por aqui para as duas listas andarem juntas.
+  const inserirCotacaoLocal = (nova: any) => {
+    setData((prev: any[]) => [nova, ...prev]);
+    setTodasCotacoes((prev: any[]) => [nova, ...prev]);
+  };
+  const atualizarCotacaoLocal = (fn: (c: any) => any) => {
+    setData((prev: any[]) => prev.map(fn));
+    setTodasCotacoes((prev: any[]) => prev.map(fn));
+  };
 
   const closeForm = () => {
     setShowForm(false);
@@ -543,7 +600,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         status: 'Aguardando Financeiro',
         filial,
       });
-      setData((prev: any[]) => [saved ?? { id: Date.now(), ...form, ...extras, status: 'Aguardando Financeiro' }, ...prev]);
+      inserirCotacaoLocal(saved ?? { id: Date.now(), ...form, ...extras, status: 'Aguardando Financeiro' });
       closeForm();
       showToast('Cotação enviada. O Financeiro decide em Financeiro → Aprovações de cotação; enquanto isso dá para cadastrar outra proposta para a mesma requisição.', 'success', true);
 
@@ -593,9 +650,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
           p_motivo:     feedback,
         });
         if (error) throw error;
-        setData((prev: any[]) => prev.map(c => c.id === cot.id
+        atualizarCotacaoLocal(c => c.id === cot.id
           ? { ...c, status: 'Em correção', feedback, aprovado_por: null, aprovado_em: null }
-          : c));
+          : c);
 
         const reqItem  = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
         const fornNome = cot.forn?.nome ?? fornecedores.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? 'fornecedor';
@@ -645,14 +702,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         aprovado_por: profile.id,
         aprovado_em:  new Date().toISOString(),
       };
-      setData((prev: any[]) => prev.map(c => {
+      atualizarCotacaoLocal(c => {
         if (c.id === cot.id) return { ...c, ...updates };
         if (tipo === 'aprovar' && cot.requisicao_id &&
             c.requisicao_id === cot.requisicao_id && c.status === 'Aguardando Financeiro') {
           return { ...c, status: 'Cancelado' };
         }
         return c;
-      }));
+      });
 
       // Notifica Compras.
       const reqItem = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
@@ -791,12 +848,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         p_marca:         correcaoForm.marca.trim() || null,
       });
       if (error) throw error;
-      setData((prev: any[]) => prev.map(c => c.id === correcao.id
+      atualizarCotacaoLocal(c => c.id === correcao.id
         ? { ...c, status: 'Aguardando Financeiro', feedback: null,
             valor_total: valorNum, prazo_entrega: correcaoForm.prazo_entrega || c.prazo_entrega,
             validade: correcaoForm.validade || null,
             marca: correcaoForm.marca.trim() || null }
-        : c));
+        : c);
 
       const reqItem  = correcao.req?.item ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id)?.item ?? 'item';
       const fornNome = correcao.forn?.nome ?? fornecedores.find((f: any) => f.id === correcao.fornecedor_id)?.nome ?? 'fornecedor';
@@ -823,7 +880,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     if (!await confirm('Cancelar esta cotação?')) return;
     try {
       const updated = await dbUpdate('/api/cotacoesview', id, { status: 'Cancelado' });
-      setData((prev: any[]) => prev.map(c => c.id === id ? (updated ?? { ...c, status: 'Cancelado' }) : c));
+      atualizarCotacaoLocal(c => c.id === id ? (updated ?? { ...c, status: 'Cancelado' }) : c);
       showToast('Cotação cancelada.', 'info', true);
     } catch (err: any) {
       showToast(`Erro ao cancelar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -915,18 +972,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField label="Requisição *" error={errors.requisicao_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.requisicao_id ? 'border border-red-500/40' : ''}`}
-                        value={form.requisicao_id} onChange={e => { setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
+                        {...selReq.handlers}
+                        value={form.requisicao_id} onChange={e => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
                         <option value="">Selecione...</option>
-                        {requisicoesParaCotar.pendentes.length > 0 && (
-                          <optgroup label={`Ainda sem cotação (${requisicoesParaCotar.pendentes.length})`}>
-                            {requisicoesParaCotar.pendentes.map(({ r }) => (
+                        {selReq.opcoes.pendentes.length > 0 && (
+                          <optgroup label={`Ainda sem cotação (${selReq.opcoes.pendentes.length})`}>
+                            {selReq.opcoes.pendentes.map(({ r }) => (
                               <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
                             ))}
                           </optgroup>
                         )}
-                        {requisicoesParaCotar.cotadas.length > 0 && (
-                          <optgroup label={`Já cotadas (${requisicoesParaCotar.cotadas.length})`}>
-                            {requisicoesParaCotar.cotadas.map(({ r, vivas, aprovada }) => (
+                        {selReq.opcoes.cotadas.length > 0 && (
+                          <optgroup label={`Já cotadas (${selReq.opcoes.cotadas.length})`}>
+                            {selReq.opcoes.cotadas.map(({ r, vivas, aprovada }) => (
                               <option key={r.id} value={r.id} disabled={aprovada}>
                                 {r.item} (Qtd: {r.qtd}) — {vivas} proposta{vivas === 1 ? '' : 's'}
                                 {aprovada ? ' · aprovada, gere o pedido' : ''}
@@ -938,18 +996,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     </FormField>
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
+                        {...selPJ.handlers}
                         value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
-                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Empresa' : '' })); clearError('fornecedor_id'); }}>
+                        onChange={e => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Empresa' : '' })); clearError('fornecedor_id'); }}>
                         <option value="">Selecione um fornecedor PJ...</option>
-                        {fornecedoresPJ.map(g => (
+                        {selPJ.opcoes.grupos.map(g => (
                           <optgroup key={g.label} label={g.label}>
                             {g.items.map((f: any) => {
                               // Duas travas diferentes, e a ordem importa: a
                               // proposta que já existe é definitiva (o banco
                               // recusa, migr. 538); a reserva é transitória
                               // (passa em 3 min, migr. 537).
-                              const jaCotado = fornecedoresJaCotados.get(f.id);
-                              const res = reservasDaReq[f.id];
+                              const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
+                              const res = selPJ.opcoes.reservas[f.id];
                               const travado = !!res && res.usuario_id !== profile.id;
                               const rotulo = jaCotado
                                 ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
@@ -968,18 +1027,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     </FormField>
                     <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
+                        {...selPF.handlers}
                         value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
-                        onChange={e => { setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}>
+                        onChange={e => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}>
                         <option value="">Selecione um fornecedor PF...</option>
-                        {fornecedoresPF.map(g => (
+                        {selPF.opcoes.grupos.map(g => (
                           <optgroup key={g.label} label={g.label}>
                             {g.items.map((f: any) => {
                               // Duas travas diferentes, e a ordem importa: a
                               // proposta que já existe é definitiva (o banco
                               // recusa, migr. 538); a reserva é transitória
                               // (passa em 3 min, migr. 537).
-                              const jaCotado = fornecedoresJaCotados.get(f.id);
-                              const res = reservasDaReq[f.id];
+                              const jaCotado = selPF.opcoes.jaCotados.get(f.id);
+                              const res = selPF.opcoes.reservas[f.id];
                               const travado = !!res && res.usuario_id !== profile.id;
                               const rotulo = jaCotado
                                 ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
