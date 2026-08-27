@@ -125,11 +125,26 @@ export function useAlarmeGlobal(enabled: boolean) {
   const disparoRef = useRef(disparo);
   useEffect(() => { disparoRef.current = disparo; }, [disparo]);
 
+  // Silenciar de verdade é mais que `pause()`. Quando o `play()` anterior ainda
+  // está pendente, o pause chega antes de a promessa resolver e o navegador
+  // retoma a reprodução ao resolvê-la — é isso que produz o "apertei Entendi e
+  // não parou". Então: para, volta ao início, MUDA e desliga o loop. Se algo
+  // retomar, retoma calado e não repete.
+  const pararAudio = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    try {
+      a.loop = false;
+      a.muted = true;
+      a.pause();
+      a.currentTime = 0;
+    } catch {}
+  }, []);
+
   const silenciar = useCallback(() => {
     setDisparo(null);
-    const a = audioRef.current;
-    if (a) { try { a.pause(); a.currentTime = 0; } catch {} }
-  }, []);
+    pararAudio();
+  }, [pararAudio]);
 
   // O navegador só deixa tocar áudio depois de algum gesto do usuário, e em
   // parte deles a permissão fica no ELEMENTO, não na página. Por isso o
@@ -167,9 +182,21 @@ export function useAlarmeGlobal(enabled: boolean) {
     // login como se o alarme tivesse acabado de tocar.
     if (enabled) return;
     setDisparo(null);
-    const a = audioRef.current;
-    if (a) { try { a.pause(); a.currentTime = 0; } catch {} }
-  }, [enabled]);
+    pararAudio();
+  }, [enabled, pararAudio]);
+
+  // Desligar (ou apagar) o alarme na Central de Tempo cala TODAS as telas.
+  // Era o furo relatado pelo professor: o alarme começava a tocar em 45
+  // máquinas e não havia nada que o parasse de fora — cada pessoa tinha de
+  // apertar "Entendi" na sua. A lista já chega por realtime; o que faltava era
+  // reagir a ela quando o alarme que está tocando sai do ar.
+  useEffect(() => {
+    if (!disparo) return;
+    const aindaValendo = alarmes.some(a => a.id === disparo.id && a.ativo);
+    if (aindaValendo) return;
+    setDisparo(null);
+    pararAudio();
+  }, [alarmes, disparo, pararAudio]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -188,9 +215,11 @@ export function useAlarmeGlobal(enabled: boolean) {
       try {
         if (!audioRef.current) {
           audioRef.current = new Audio(ALARME_AUDIO_URL);
-          audioRef.current.loop = true;
           audioRef.current.volume = 0.7;
         }
+        // `loop` e `muted` são religados AQUI porque `pararAudio` os desliga
+        // — é o que garante que um play() pendente não volte a tocar sozinho.
+        audioRef.current.loop = true;
         audioRef.current.muted = false;
         audioRef.current.currentTime = 0;
         const p = audioRef.current.play();

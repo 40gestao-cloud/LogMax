@@ -7,8 +7,10 @@ import {
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAlarmesTurma } from '../hooks/useAlarmesTurma';
 import {
-  ALARME_TIPOS, ALARME_TITULO, textoDoAlarme, type AlarmeTipo,
+  ALARME_TIPOS, ALARME_TITULO, textoDoAlarme, ACRE_HHMM, pad2,
+  type AlarmeTipo, type AlarmeTurma,
 } from '../lib/alarmes';
+// `pad2` vem de lib/alarmes — a cópia local que existia aqui era idêntica.
 
 // =================================================================
 // LogMax — Central de Tempo
@@ -43,7 +45,6 @@ const ACRE_DATE = new Intl.DateTimeFormat('pt-BR', {
   year:    'numeric',
 });
 
-const pad2 = (n: number) => String(n).padStart(2, '0');
 const pad3 = (n: number) => String(n).padStart(3, '0');
 
 // Cabeçalho neumórfico reutilizado pelos 4 cards.
@@ -124,6 +125,16 @@ function AlarmesCard() {
   const [erro, setErro]         = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // Que minuto é agora no Acre — para marcar o alarme que está TOCANDO e
+  // oferecer o botão que o cala em todas as telas. 10s é folga suficiente:
+  // o que se quer é o minuto, não o segundo.
+  const [agora, setAgora] = useState(() => ACRE_HHMM.format(new Date()));
+  useEffect(() => {
+    const id = setInterval(() => setAgora(ACRE_HHMM.format(new Date())), 10_000);
+    return () => clearInterval(id);
+  }, []);
+  const tocandoAgora = (a: AlarmeTurma) => a.ativo && `${pad2(a.hora)}:${pad2(a.minuto)}` === agora;
+
   const addAlarm = async () => {
     const h = Number.parseInt(hourIn, 10);
     const m = Number.parseInt(minIn, 10);
@@ -145,6 +156,11 @@ function AlarmesCard() {
 
       {podeGerenciar ? (
         <>
+          <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
+            O alarme toca na tela de todo mundo até cada pessoa apertar “Entendi”.
+            Para calar a turma inteira de uma vez, desligue o alarme aqui enquanto
+            ele estiver tocando.
+          </p>
           <div className="flex items-end gap-2 mb-3">
             <div className="flex flex-col gap-1.5 flex-1">
               <label htmlFor="alarme-hora" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Hora</label>
@@ -215,18 +231,33 @@ function AlarmesCard() {
             {alarmes.map(a => (
               <motion.div key={a.id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
-                className="neu-pressed rounded-xl p-3 flex items-center gap-3 border border-white/5">
+                className="neu-pressed rounded-xl p-3 flex items-center gap-3 border"
+                style={{ borderColor: tocandoAgora(a) ? 'rgba(212,175,55,0.45)' : 'rgba(255,255,255,0.05)' }}>
                 <span className={`font-mono tabular-nums text-lg font-black shrink-0 ${a.ativo ? 'text-accent' : 'text-gray-600'}`}>
                   {pad2(a.hora)}:{pad2(a.minuto)}
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">
                     {ALARME_TITULO[a.tipo]}
+                    {tocandoAgora(a) && (
+                      <span className="ml-2 text-accent animate-pulse">· tocando agora</span>
+                    )}
                   </span>
                   <span className="block text-[11px] text-gray-400 truncate">
                     {textoDoAlarme(a.tipo, a.mensagem)}
                   </span>
                 </span>
+                {podeGerenciar && tocandoAgora(a) && (
+                  // O botão que faltava: durante o toque, desligar aqui cala o
+                  // alarme em TODAS as telas da turma (o desligamento chega por
+                  // realtime). Sem ele, parar era tarefa de 45 pessoas
+                  // apertando "Entendi" cada uma na sua máquina.
+                  <button onClick={() => alternar(a.id, false)}
+                    className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent shrink-0"
+                    title="Desliga este alarme e silencia todas as telas. Ele fica desligado até você ligar de novo.">
+                    Silenciar todos
+                  </button>
+                )}
                 {podeGerenciar && (
                   <>
                     {/* Toggle neumórfico (track + bolinha) */}
