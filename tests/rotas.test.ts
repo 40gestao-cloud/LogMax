@@ -124,3 +124,51 @@ describe('AULA_SUBMENUS', () => {
     expect(orfas).toEqual([]);
   });
 });
+
+// Os hubs da Matriz (Sessões Gerais / Análise com IA) são a QUARTA lista, e
+// ficaram de fora deste guarda até 28/08 — foi assim que 'Relógio das Máquinas'
+// nasceu com um `case 'ti-relogiodasmaquinas'` no App.tsx enquanto o `slug()`
+// da hub produz `ti-relógiodasmáquinas`. O submenu aparecia no card e abria em
+// "Módulo em Desenvolvimento": o acento basta para não casar, e ninguém repara
+// olhando os dois arquivos lado a lado.
+const HUB = readFileSync(resolve(__dirname, '../src/views/SessoesGeraisView.tsx'), 'utf8')
+  .replace(/\r\n/g, '\n');
+
+/** Extrai os viewIds que os cards da Matriz geram (leafs e grupos). */
+function lerViewIdsDosHubs(): string[] {
+  const inicio = HUB.indexOf('export const SESSOES_MATRIZ_MACROS');
+  expect(inicio, 'SESSOES_MATRIZ_MACROS não encontrado').toBeGreaterThan(-1);
+  const bloco = HUB.slice(inicio).replace(/require(Role|Setor):\s*\[[^\]]*\]/g, '');
+
+  const ids: string[] = [];
+  // Leaf: o clique navega para o `viewId` declarado.
+  for (const m of bloco.matchAll(/viewId:\s*'([^']+)'/g)) ids.push(m[1]);
+  // Grupo: o clique no submenu navega para `${modulo.id}-${slug(label)}`, o
+  // mesmo cálculo do menu da filial.
+  for (const modulo of bloco.split(/\{ id: '/).slice(1)) {
+    const id = modulo.match(/^([a-z-]+)'/)?.[1];
+    const i = modulo.indexOf('submenus:');
+    if (!id || i < 0) continue;
+    const fim = modulo.indexOf('] }', i);
+    const trecho = fim < 0 ? modulo.slice(i) : modulo.slice(i, fim);
+    const labels = [...trecho.matchAll(/(?:^|[[\s,])'([^']+)'|label:\s*'([^']+)'/g)]
+      .map(m => m[1] ?? m[2])
+      .filter(Boolean) as string[];
+    for (const label of labels) ids.push(viewIdDe(id, label));
+  }
+  return ids;
+}
+
+describe('hubs da Matriz', () => {
+  it('acha os cards e submenus', () => {
+    const ids = lerViewIdsDosHubs();
+    expect(ids.length).toBeGreaterThan(10);
+    expect(ids).toContain('ti-relógiodasmáquinas');
+  });
+
+  it('todo card e submenu tem case no switch de renderContent', () => {
+    const orfas = lerViewIdsDosHubs().filter(v => !casos.has(v));
+    expect(orfas, `cards/submenus da Matriz que cairiam no default ("Módulo em Desenvolvimento"):\n${orfas.join('\n')}`)
+      .toEqual([]);
+  });
+});

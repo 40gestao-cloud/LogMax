@@ -1355,7 +1355,11 @@ function LogMaxAppInner() {
       case 'metas':                        return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
-      case 'ti-relogiodasmaquinas':        return <RelogioMaquinasView profile={profile} />;
+      // Com acento: o viewId sai do `slug()` de SessoesGeraisView, que só tira
+      // espaço e barra — 'Relatórios' vira 'relatórios' em todos os módulos.
+      // Sem os acentos aqui, o case não casa e a tela cai no PlaceholderView
+      // ("Módulo em Desenvolvimento").
+      case 'ti-relógiodasmáquinas':        return <RelogioMaquinasView profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
