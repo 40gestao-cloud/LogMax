@@ -74,7 +74,9 @@ export function RecargaRemotaAviso({ comando }: { comando: ComandoTurma }) {
             <span className="hidden font-semibold opacity-70 md:inline"> · pedido por {comando.emitido_por_nome}</span>
           )}
         </div>
-        <span className="shrink-0 text-base font-black tabular-nums sm:text-lg">{restante}s</span>
+        {/* A contagem aparece UMA vez, dentro da frase. Havia também um número
+            grande ao lado, e ler "recarrega em 10s" seguido de "10s" solto se
+            lê como defeito, não como ênfase. */}
         <button
           type="button"
           onClick={() => void executarRecarga()}
