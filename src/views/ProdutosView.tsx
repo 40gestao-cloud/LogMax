@@ -782,6 +782,15 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // errado.
   const origemExigida = !editItem && ehVendavel(extras.tipo);
 
+  // O campo "Saldo de Abertura" só existe fora do fluxo de compra: com o
+  // produto vindo de pedido, quem enche o estoque é o Recebimento. A condição
+  // vivia escrita à mão lá embaixo no JSX; virou const porque o `handleSave`
+  // precisa da MESMA resposta para saber se o zero é erro do aluno (implantação
+  // sem quantidade) ou o estado correto (mercadoria que ainda vai chegar).
+  const mostraSaldoAbertura = !!editItem
+    || itemCompradoSel === SEM_COMPRA
+    || (!origemExigida && !reqVinculo && !veioDeCompra);
+
   // Mas OFERECIDO para tudo que TEM SALDO — mercadoria e uso e consumo.
   //
   // Exigir e oferecer eram a mesma coisa, e isso tinha um preço: a compra
@@ -1529,6 +1538,30 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         `O preço de venda (R$ ${formatBRL(vendaNum)}) está abaixo do custo (R$ ${formatBRL(custoNum)}).\n\n`
         + `Cada unidade vendida dá um prejuízo de R$ ${formatBRL(custoNum - vendaNum)}, e isso entra no DRE `
         + 'como lucro bruto negativo.\n\nÉ intencional (queima de estoque, isca de vitrine)?');
+      if (!segue) return;
+    }
+
+    // Produto nascendo sem saldo. Acontece de duas formas muito diferentes, e
+    // só uma é erro:
+    //
+    //   - veio de compra/requisição → zero é o CERTO. O Recebimento é que dá
+    //     entrada, e digitar aqui dobraria o estoque. Nem pergunta.
+    //   - implantação, com o campo na tela e em branco → o aluno cadastrou a
+    //     mercadoria que está na prateleira e não disse quanto tem. O item
+    //     nasce morto: o PDV recusa ("Sem estoque"), não sai em requisição, e
+    //     a turma só descobre na hora de vender.
+    //
+    // Em 28/08 metade do catálogo de uma turma estava assim. Não dá para
+    // BLOQUEAR — cadastrar antes de comprar é a régua desde a migr. 480 —,
+    // então o que cabe é a pergunta explícita, no momento em que ainda é
+    // barato responder.
+    if (!editItem && temEstoque(extras.tipo) && mostraSaldoAbertura && parseQtd(extras.estoque) <= 0) {
+      const segue = await confirm(
+        'Este produto vai nascer com 0 em estoque.\n\n'
+        + 'Sem saldo ele aparece como "Sem estoque" no PDV, não pode ser vendido nem sair em requisição — '
+        + 'até alguém dar entrada.\n\n'
+        + 'Se a mercadoria JÁ está na prateleira, cancele e informe o Saldo de Abertura. '
+        + 'Se ela ainda vai ser comprada, pode seguir: a quantidade entra pelo Recebimento.');
       if (!segue) return;
     }
 
@@ -2778,8 +2811,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       com a do recebimento, e o estoque vai ao dobro. É o mesmo
                       erro que a migr. 438 removeu ao tirar "Quantidade Comprada"
                       do cadastro, entrando por outra porta. */}
-                  {(editItem || itemCompradoSel === SEM_COMPRA
-                    || (!origemExigida && !reqVinculo && !veioDeCompra)) ? (
+                  {mostraSaldoAbertura ? (
                   <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
                     <input
                       type="text" inputMode="decimal"
@@ -2993,7 +3025,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   {filtered.map((item: any) => {
                     const estAtual = parseNum(item.estoque);
                     const estMin   = parseNum(item.estoque_minimo);
-                    const baixoEstoque = estMin > 0 && estAtual <= estMin;
+                    // Zero é estado PRÓPRIO, não "estoque baixo": produto sem
+                    // saldo não vende, e antes ele saía como um "0" cinza no
+                    // meio da coluna — indistinguível de um saldo qualquer para
+                    // quem varre a lista. Sem `estoque_minimo` cadastrado, nem o
+                    // alerta vermelho aparecia.
+                    const semSaldo     = temEstoque(item.tipo) && estAtual <= 0;
+                    const baixoEstoque = !semSaldo && estMin > 0 && estAtual <= estMin;
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                         className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${selecionados.has(item.id) ? 'bg-emerald-500/5' : ''}`}>
@@ -3112,8 +3150,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                               "/ 30" caindo para a linha de baixo lia como outro
                               número, e ainda desalinhava a altura da linha. */}
                           <div className="flex flex-nowrap items-center justify-center gap-1.5">
-                            {baixoEstoque && <AlertTriangle size={11} className="text-red-500 shrink-0" />}
-                            <span className={`text-xs font-bold tabular-nums ${baixoEstoque ? 'text-red-400' : 'text-gray-300'}`}>
+                            {(baixoEstoque || semSaldo) && <AlertTriangle size={11} className="text-red-500 shrink-0" />}
+                            <span className={`text-xs font-bold tabular-nums ${baixoEstoque || semSaldo ? 'text-red-400' : 'text-gray-300'}`}>
                               {(() => {
                                 const e = parseNum(item.estoque);
                                 return Number.isInteger(e) ? e : e.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -3121,6 +3159,12 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                             </span>
                             {item.unidade && item.unidade !== 'UN' && (
                               <span className="text-[9px] text-gray-600">{item.unidade}</span>
+                            )}
+                            {semSaldo && (
+                              <span className="text-[9px] font-bold text-red-400 uppercase tracking-wide whitespace-nowrap"
+                                title="Sem saldo: o PDV recusa a venda deste item até um Recebimento ou Ajuste dar entrada.">
+                                sem saldo
+                              </span>
                             )}
                             {estMin > 0 && (
                               // Mínimo virou numeric(15,3) na migr. 438 — sem
