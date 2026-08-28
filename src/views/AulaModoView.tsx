@@ -56,6 +56,37 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [simMensagem, setSimMensagem] = useState('');
   const confirmar = useConfirm();
 
+  // Recarga remota (migr. 564). Existe porque a alternativa era pedir
+  // "apertem Ctrl+Shift+R" para trinta pessoas — e metade da turma não aperta,
+  // fica com a versão antiga e reporta defeito já corrigido. O comando remoto
+  // ainda faz mais que a tecla: limpa o cache do service worker, que é quem
+  // serve arquivo velho aqui.
+  const [recargaEnviando, setRecargaEnviando] = useState(false);
+
+  const mandarRecarregar = async () => {
+    if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
+    if (!await confirmar(
+      'Recarregar a tela de todas as máquinas?\n\n' +
+      'Cada aluno vê um aviso e a tela recarrega em 10 segundos, com o cache limpo — ' +
+      'é o Ctrl+Shift+R aplicado à turma inteira, e alcança também a SUA máquina.\n\n' +
+      'Quem estiver com algo aberto sem gravar tem esses 10 segundos para gravar.')) return;
+
+    setRecargaEnviando(true);
+    try {
+      const { error } = await supabase.from('comandos_turma').insert({
+        tipo:             'recarregar',
+        emitido_por:      profile?.id ?? null,
+        emitido_por_nome: profile?.nome ?? null,
+      });
+      if (error) throw error;
+      showToast('Comando enviado — as máquinas conectadas recarregam em 10 s.', 'success');
+    } catch (err: any) {
+      showToast(err?.message ?? 'Falha ao enviar o comando.', 'error');
+    } finally {
+      setRecargaEnviando(false);
+    }
+  };
+
   const alternarSimulacao = async (ligar: boolean) => {
     if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
     if (ligar && !await confirmar(
@@ -937,6 +968,37 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           </div>
         ))}
       </div>
+
+      {/* Recarregar todas as máquinas. Só `role = 'admin'` literal: a RLS da
+          migr. 564 recusa CEO e conselheiro, que aqui são alunos — e botão que
+          só dá erro é pior que botão nenhum. */}
+      {profile?.role === 'admin' && (
+      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-sky-500/10">
+            <RefreshCw size={18} className="text-sky-400" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-gray-100">Recarregar todas as máquinas</h2>
+            <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
+              Manda a turma inteira recarregar com o cache limpo — o mesmo que o Ctrl+Shift+R,
+              e ainda apaga o cache do PWA, que é quem costuma servir a versão antiga.
+              Cada aluno vê um aviso e a tela recarrega em 10 segundos.
+              <strong className="text-gray-400"> Alcança a sua máquina também.</strong>
+              {' '}Quem estiver fechado obedece ao abrir, se for dentro de 30 minutos.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={mandarRecarregar}
+          disabled={recargaEnviando}
+          className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 transition-colors disabled:opacity-50 shrink-0"
+        >
+          {recargaEnviando ? '…' : 'Recarregar turma'}
+        </button>
+      </div>
+      )}
 
       {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
           esconde módulos para focar a aula, a outra tira o chão para ensinar por

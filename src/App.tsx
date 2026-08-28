@@ -9,6 +9,8 @@ import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
 import { AlarmeModal } from './components/AlarmeModal';
 import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
 import { reportarRelogioDaMaquina } from './lib/relogioDiagnostico';
+import { useComandoRecarga } from './hooks/useComandoRecarga';
+import { RecargaRemotaModal } from './components/RecargaRemotaModal';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
@@ -938,6 +940,10 @@ function LogMaxAppInner() {
   // morreria ao trocar de view — que era exatamente o defeito antigo.
   const { disparo: alarmeDisparo, silenciar: silenciarAlarme } = useAlarmeGlobal(isAuthenticated);
 
+  // Comando de recarga disparado pelo professor (migr. 564). Aqui em cima pelo
+  // mesmo motivo do alarme: tem de alcançar quem está em qualquer tela.
+  const comandoRecarga = useComandoRecarga(isAuthenticated);
+
   // O modal é montado em TODAS as telas de usuário logado, não só na shell.
   // O áudio começa a tocar no hook, que vive acima dos early returns: se o
   // modal só existisse na shell, quem estivesse no seletor de filial ou na
@@ -945,6 +951,12 @@ function LogMaxAppInner() {
   // nenhum para silenciar.
   const alarmeDaAula = alarmeDisparo
     ? <AlarmeModal alarme={alarmeDisparo} onFechar={silenciarAlarme} />
+    : null;
+
+  // Vai junto do alarme em todos os returns: a recarga precisa avisar mesmo
+  // quem está no seletor de filial ou na tela de "aguardando alocação".
+  const avisoDeRecarga = comandoRecarga
+    ? <RecargaRemotaModal comando={comandoRecarga} />
     : null;
 
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
@@ -1055,7 +1067,7 @@ function LogMaxAppInner() {
   if (authLoading || (isAuthenticated && profileLoading && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base">
-        {alarmeDaAula}
+        {alarmeDaAula}{avisoDeRecarga}
         <div className="flex flex-col items-center gap-4">
           <Loader2 size={32} className="text-accent animate-spin" />
           <span className="text-xs text-gray-500 font-bold tracking-widest uppercase">
@@ -1073,7 +1085,7 @@ function LogMaxAppInner() {
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
-        {alarmeDaAula}
+        {alarmeDaAula}{avisoDeRecarga}
         <UserCog size={40} className="text-gray-600" />
         <h2 className="text-lg font-bold text-gray-300">Acesso não configurado</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
@@ -1100,7 +1112,7 @@ function LogMaxAppInner() {
         onSair={handleSignOut}
       >
       <div className="min-h-screen flex flex-col bg-base">
-        {alarmeDaAula}
+        {alarmeDaAula}{avisoDeRecarga}
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
           <button
             onClick={handleSignOut}
@@ -1144,7 +1156,7 @@ function LogMaxAppInner() {
   if (!filialAtiva && !podeEscolherFilial) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base">
-        {alarmeDaAula}
+        {alarmeDaAula}{avisoDeRecarga}
         <Building2 size={40} className="text-gray-600" />
         <h2 className="text-lg font-bold text-gray-300">Aguardando alocação</h2>
         <p className="text-sm text-gray-500 max-w-sm text-center">
@@ -1432,7 +1444,7 @@ function LogMaxAppInner() {
         />
       )}
       {/* Alarme da aula: modal central em qualquer tela (migr. 529). */}
-      {alarmeDaAula}
+      {alarmeDaAula}{avisoDeRecarga}
       {/* Comunicação, não bloqueio: quem barra a escrita do desligado é a RLS
           (migr. 307). Ver o comentário no próprio componente. */}
       <DesligamentoAviso profile={profile} />
