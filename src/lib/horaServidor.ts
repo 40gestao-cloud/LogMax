@@ -43,6 +43,13 @@ const TOLERANCIA_MS = 60_000;
 /** Desvio adotado, para o boot seguinte já nascer ancorado. */
 const CHAVE = 'logmax:offsetServidorMs';
 
+/**
+ * Id da ESTAÇÃO (não da pessoa). Sorteado uma vez por navegador e guardado
+ * aqui, é o que deixa a tela de TI dizer "a máquina 3f2a está 1 h adiantada"
+ * em vez de "alguém, em algum lugar, está".
+ */
+const CHAVE_MAQUINA = 'logmax:maquinaId';
+
 /** Referências originais — capturadas antes de qualquer troca. */
 const DateOriginal = Date;
 const nowOriginal = Date.now.bind(Date);
@@ -51,6 +58,31 @@ const nowOriginal = Date.now.bind(Date);
 let offsetMs = 0;
 let instalado = false;
 let jaAncorou = false;
+
+/** Resolve quando a medição do boot termina (null = não deu para medir). */
+let medicaoBoot: Promise<number | null> = Promise.resolve(null);
+
+/** Espera a medição do boot — quem for reportar o diagnóstico precisa dela. */
+export function aguardarMedicao(): Promise<number | null> {
+  return medicaoBoot;
+}
+
+/**
+ * Id desta estação, criado na primeira visita. Limpar os dados do navegador
+ * cria um id novo: o erro por excesso é uma linha órfã na tela de TI; o erro
+ * por falta seria duas máquinas contando a mesma história.
+ */
+export function idDaMaquina(): string | null {
+  try {
+    const salvo = localStorage.getItem(CHAVE_MAQUINA);
+    if (salvo && salvo.length >= 8) return salvo;
+    const novo = (crypto.randomUUID?.() ?? String(nowOriginal()) + Math.random().toString(16).slice(2));
+    localStorage.setItem(CHAVE_MAQUINA, novo);
+    return novo;
+  } catch {
+    return null;  // modo privado: sem id estável, não há o que registrar
+  }
+}
 
 /** Diagnóstico (TI/console): desvio em vigor, em ms. */
 export function offsetServidorMs(): number {
@@ -154,10 +186,10 @@ export function ancorarRelogioNoServidor(): void {
     }
   } catch { /* modo privado */ }
 
-  void medirOffset().then(medido => {
+  medicaoBoot = medirOffset().then(medido => {
     if (medido !== null) {
       adotar(medido);
-      return;
+      return medido;
     }
     // Sem rede no boot (comum no laboratório): tenta de novo quando voltar.
     const aoVoltar = async () => {
@@ -168,5 +200,6 @@ export function ancorarRelogioNoServidor(): void {
       }
     };
     window.addEventListener('online', aoVoltar);
+    return null;
   });
 }

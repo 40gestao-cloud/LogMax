@@ -8,6 +8,7 @@ import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
 import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
 import { AlarmeModal } from './components/AlarmeModal';
 import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
+import { reportarRelogioDaMaquina } from './lib/relogioDiagnostico';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
@@ -123,6 +124,7 @@ const ControleCaixaView                    = lazy(() => import('./views/Controle
 const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
 const RegistroPontoExpressView             = lazy(() => import('./views/RegistroPontoExpressView').then(m => ({ default: m.RegistroPontoExpressView })));
 const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
+const RelogioMaquinasView                  = lazy(() => import('./views/RelogioMaquinasView').then(m => ({ default: m.RelogioMaquinasView })));
 const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
 const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
 const LixeiraView                          = lazy(() => import('./views/LixeiraView').then(m => ({ default: m.LixeiraView })));
@@ -989,6 +991,16 @@ function LogMaxAppInner() {
   }, [profile?.id]);
 
 
+  // Diagnóstico de relógio desta estação (migr. 563), que alimenta
+  // Sessões Gerais → TI & Suporte → Relógio das Máquinas. Só depois do perfil:
+  // a RPC carimba quem estava na máquina a partir de `auth.uid()`. Falha em
+  // silêncio de propósito — é diagnóstico, não operação.
+  useEffect(() => {
+    if (!profile) return;
+    void reportarRelogioDaMaquina();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
   const toggleModule = (id: string) => setOpenModules(prev => ({ ...prev, [id]: !prev[id] }));
 
   const showToast = useCallback((message: string, type = 'info', autoHide = true) => {
@@ -1343,6 +1355,7 @@ function LogMaxAppInner() {
       case 'metas':                        return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'feedback-org':                 return <FeedbackRequerimentosView showToast={st} profile={profile} />;
       case 'ti-desenvolvimentocomia':      return <DesenvolvimentoIAView showToast={st} profile={profile} />;
+      case 'ti-relogiodasmaquinas':        return <RelogioMaquinasView profile={profile} />;
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;

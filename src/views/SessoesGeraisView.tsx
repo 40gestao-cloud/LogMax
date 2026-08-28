@@ -147,7 +147,13 @@ export const SESSOES_MATRIZ_MACROS: MacroDef[] = [
     kind: 'group', id: 'ti-matriz', label: 'TI & Suporte', icon: Monitor, color: 'from-red-500/20 to-red-500/5 border-red-500/30 text-red-400',
     modulos: [
       { id: 'ti', label: 'TI & Suporte', icon: Monitor, color: 'text-red-400',
-        submenus: ['Desenvolvimento com IA'] },
+        // 'Relógio das Máquinas' entra em 2026-08-28. Uma estação com o relógio
+        // adiantado fazia o token de sessão nascer vencido, renovava em laço e
+        // estourava o limite por IP — derrubando de volta pro login a turma
+        // inteira daquela rede. O app deixou de depender do relógio local
+        // (`lib/horaServidor.ts`); aqui é onde se vê QUAL máquina está fora de
+        // hora, sem depender de aluno relatando sintoma.
+        submenus: ['Desenvolvimento com IA', 'Relógio das Máquinas'] },
     ],
   },
   {
