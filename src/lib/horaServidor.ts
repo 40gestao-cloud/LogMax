@@ -27,15 +27,25 @@
 // sai certa, e de quebra `todayBR()`, ponto e lançamentos param de sair na hora
 // errada na máquina desregulada.
 //
-// De onde vem a hora do servidor: do header `Date` de uma resposta do NOSSO
-// domínio. O Supabase não serve — as respostas dele não trazem
-// `Access-Control-Expose-Headers`, então o browser esconde o `Date` delas. Um
-// `HEAD /api/hora` cai no rewrite do `vercel.json` (`/(.*)` → `/index.html`),
-// respondido pelo CDN: não gasta invocação de function (estamos em 12/12 no
-// plano Hobby) e o service worker não intercepta, porque não há
-// `runtimeCaching` no `vite.config.ts` e `fetch()` não é requisição de
-// navegação. Sem rede, o relógio local continua valendo — é degradar, não
-// quebrar.
+// De onde vem a hora do servidor: da RPC `hora_servidor()` do Supabase, que
+// devolve o `now()` do Postgres no CORPO da resposta.
+//
+// A primeira versão lia o header `Date` de um `HEAD` no próprio domínio, e
+// estava errada — reportou celular e desktop certos como "10 min atrasados".
+// O caminho passa pelo CDN da Vercel, e ali o `Date` não é relógio: medido em
+// 28/08, a MESMA rota devolveu `HIT` com carimbo preservado e velho (15 min no
+// passado, com `Age: 901`) e, noutra sondagem, `HIT` com carimbo fresco e
+// `Age: 770`. Somar o `Age` conserta o primeiro caso e estraga o segundo;
+// ignorá-lo faz o inverso. Não há fórmula que sirva para os dois.
+//
+// O corpo de uma resposta ninguém reescreve no caminho, e o `Date` do Supabase
+// seria ilegível de qualquer forma (as respostas dele não trazem
+// `Access-Control-Expose-Headers`). De quebra, o relógio consultado passa a ser
+// exatamente o que assina o `exp` do token — que é o que derruba a sessão. Não
+// gasta function da Vercel (12/12 no Hobby) e o service worker não cacheia a
+// API do Supabase, por decisão registrada no `vite.config.ts`.
+//
+// Sem rede, o relógio local continua valendo — é degradar, não quebrar.
 
 /** Abaixo disto o desvio não atrapalha nada e não vale mexer em global. */
 const TOLERANCIA_MS = 60_000;
@@ -136,34 +146,73 @@ function adotar(novo: number): void {
 }
 
 /**
- * Mede o desvio contra o header `Date` da resposta.
+ * Uma sondagem: pergunta a hora ao servidor e devolve o desvio estimado.
  *
- * O header tem resolução de 1 s e é carimbado em algum ponto entre o envio e a
- * chegada; por isso a hora do servidor é comparada com o MEIO da viagem de
- * rede. Erro final na casa da centena de ms, contra um desvio que interessa a
- * partir de um minuto.
+ * O header `Date` tem resolução de 1 s e é carimbado em algum ponto entre o
+ * envio e a chegada; por isso a hora do servidor é comparada com o MEIO da
+ * viagem de rede. Erro final na casa da centena de ms, contra um desvio que
+ * interessa a partir de um minuto.
  */
-async function medirOffset(): Promise<number | null> {
+async function sondar(): Promise<number | null> {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!url || !key) return null;
+
   try {
     const t0 = nowOriginal();
-    const resp = await fetch(`/api/hora?_=${t0}`, { method: 'HEAD', cache: 'no-store' });
+    // `fetch` cru, e não o client do Supabase: este módulo é chamado por
+    // `supabase.ts` antes do `createClient`, e importá-lo aqui fecharia um
+    // ciclo de import. A anon key basta — a RPC existe para responder antes de
+    // haver sessão, que é justamente quando o relógio precisa estar ancorado.
+    const resp = await fetch(`${url}/rest/v1/rpc/hora_servidor`, {
+      method:  'POST',
+      cache:   'no-store',
+      headers: {
+        'apikey':        key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type':  'application/json',
+      },
+      body: '{}',
+    });
     const t1 = nowOriginal();
+    if (!resp.ok) return null;
 
-    const header = resp.headers.get('date');
-    if (!header) return null;
-    let servidor = DateOriginal.parse(header);
+    // timestamptz sai do PostgREST como string ISO.
+    const iso = await resp.json();
+    const servidor = DateOriginal.parse(typeof iso === 'string' ? iso : '');
     if (!Number.isFinite(servidor)) return null;
-
-    // Resposta servida do cache de borda: `Age` diz há quanto tempo aquele
-    // `Date` foi carimbado. Sem isto, um HIT de CDN mediria um passado.
-    const idade = Number(resp.headers.get('age'));
-    if (Number.isFinite(idade) && idade > 0) servidor += idade * 1000;
 
     // Hora do servidor no instante t1 ≈ carimbo + meia viagem de rede.
     return servidor + (t1 - t0) / 2 - t1;
   } catch {
     return null;
   }
+}
+
+/** Quanto duas sondagens podem discordar e ainda serem a mesma verdade. */
+const TOLERANCIA_ENTRE_SONDAS_MS = 5000;
+
+/**
+ * Duas sondagens que precisam concordar.
+ *
+ * Uma sozinha acredita no que a borda disser, e borda erra: foi um `Date` de
+ * cache que fez um celular com a hora certa aparecer "10 min atrasado" na tela
+ * de TI. Desvio de relógio é estável — mede duas vezes e dá o mesmo. Artefato
+ * de cache não sobrevive à segunda pergunta.
+ *
+ * Discordando, devolve null: ficar sem âncora (e sem linha na tela de TI) é
+ * melhor do que publicar um número inventado, que foi exatamente o estrago da
+ * primeira versão.
+ */
+async function medirOffset(): Promise<number | null> {
+  const a = await sondar();
+  if (a === null) return null;
+  await new Promise(r => setTimeout(r, 300));
+  const b = await sondar();
+  if (b === null) return null;
+  if (Math.abs(a - b) > TOLERANCIA_ENTRE_SONDAS_MS) return null;
+  // A de menor módulo é a menos contaminada por latência de ida e volta.
+  return Math.abs(a) <= Math.abs(b) ? a : b;
 }
 
 /**
