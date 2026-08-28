@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlarmClock, RefreshCw, Monitor, Smartphone, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { AlarmClock, RefreshCw, Monitor, Smartphone, ShieldCheck, AlertTriangle, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
 import { BotaoRecarregarTurma } from '../components/BotaoRecarregarTurma';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Sessões Gerais → TI & Suporte → Relógio das Máquinas.
@@ -98,6 +99,7 @@ export function RelogioMaquinasView({ profile, showToast }: {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const confirmar = useConfirm();
 
   const carregar = useCallback(async () => {
     if (!supabase) return;
@@ -112,6 +114,22 @@ export function RelogioMaquinasView({ profile, showToast }: {
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Linha vira lixo com facilidade: máquina reinstalada, navegador de teste,
+  // celular que abriu o app uma vez. Apagar não destrói informação — o
+  // navegador que ainda existir volta a aparecer no próximo acesso (migr. 566).
+  const remover = async (m: Maquina) => {
+    if (!supabase) return;
+    if (!await confirmar(
+      `Remover a estação ${m.maquina_id.slice(0, 8)} da lista?
+
+`
+      + 'Se este navegador ainda existir, ele volta a aparecer no próximo acesso. '
+      + 'Serve para limpar máquina reinstalada ou navegador que abriu o sistema uma vez só.')) return;
+    const { error } = await supabase.from('ti_relogio_maquinas').delete().eq('maquina_id', m.maquina_id);
+    if (error) { showToast?.(error.message, 'error', true); return; }
+    setMaquinas(prev => prev.filter(x => x.maquina_id !== m.maquina_id));
+  };
 
   // Pior desvio primeiro: a tela existe para achar a máquina problemática, não
   // para listar as saudáveis em ordem alfabética.
@@ -150,6 +168,11 @@ export function RelogioMaquinasView({ profile, showToast }: {
             ela renova em laço, estoura o limite do servidor e derruba a sessão de quem está
             na mesma rede — inclusive de quem está com a hora certa.
           </p>
+          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl leading-relaxed">
+            Cada linha é um <strong>navegador</strong>, não um computador: abrir o sistema em dois
+            navegadores da mesma máquina cria duas linhas. Use a lixeira para tirar da lista o que
+            não vai mais voltar.
+          </p>
         </div>
         {/* Os dois botões juntos de propósito: esta é a tela onde se VÊ que uma
             máquina está com relógio fora de hora ou com versão velha, e mandar
@@ -170,7 +193,11 @@ export function RelogioMaquinasView({ profile, showToast }: {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
-          { rotulo: 'Estações vistas', valor: ordenadas.length, cor: 'text-gray-200', Icone: Monitor },
+          // "Navegadores", não "estações": a chave é um id do localStorage, que
+          // é por navegador e por origem. Dois navegadores no mesmo PC contam
+          // duas vezes, e chamar isso de "estação" faz o professor procurar um
+          // computador que não existe — foi o que aconteceu na estreia da tela.
+          { rotulo: 'Navegadores vistos', valor: ordenadas.length, cor: 'text-gray-200', Icone: Monitor },
           { rotulo: 'Fora de hora',    valor: foraDeHora,       cor: foraDeHora ? 'text-yellow-400' : 'text-emerald-400', Icone: foraDeHora ? AlertTriangle : ShieldCheck },
           { rotulo: 'Derrubam sessão', valor: graves,           cor: graves ? 'text-red-400' : 'text-emerald-400', Icone: graves ? AlertTriangle : ShieldCheck },
         ].map(({ rotulo, valor, cor, Icone }) => (
@@ -232,6 +259,18 @@ export function RelogioMaquinasView({ profile, showToast }: {
                     {estilo.rotulo}
                   </span>
                 </div>
+
+                {/* Só `role='admin'` literal — a policy da migr. 566 recusa o
+                    resto, e botão que só dá erro é pior que botão nenhum. */}
+                {profile?.role === 'admin' && (
+                  <button
+                    onClick={() => remover(m)}
+                    title="Remover esta linha da lista"
+                    className="action-btn-delete"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
               </motion.div>
             );
           })}
