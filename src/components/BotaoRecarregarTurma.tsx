@@ -31,10 +31,8 @@ export function BotaoRecarregarTurma({
     if (!supabase) { showToast?.('Supabase não configurado', 'error'); return; }
     if (!await confirmar(
       'Recarregar a tela de todas as máquinas?\n\n'
-      + 'Cada aluno vê uma tarja no topo (sem travar a tela, dá para continuar gravando) '
-      + 'e recarrega em 10 segundos, com o cache limpo — '
-      + 'é o Ctrl+Shift+R aplicado à turma inteira, e alcança também a SUA máquina.\n\n'
-      + 'Quem estiver com algo aberto sem gravar tem esses 10 segundos para gravar.')) return;
+      + 'Cada aluno vê um aviso e a tela recarrega em 10 segundos, com o cache limpo — '
+      + 'é o Ctrl+Shift+R aplicado à turma inteira, e alcança também a SUA máquina.')) return;
 
     setEnviando(true);
     try {

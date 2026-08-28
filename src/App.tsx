@@ -10,7 +10,7 @@ import { AlarmeModal } from './components/AlarmeModal';
 import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
 import { reportarRelogioDaMaquina } from './lib/relogioDiagnostico';
 import { useComandoRecarga } from './hooks/useComandoRecarga';
-import { RecargaRemotaAviso } from './components/RecargaRemotaAviso';
+import { RecargaRemotaModal } from './components/RecargaRemotaModal';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
@@ -954,11 +954,9 @@ function LogMaxAppInner() {
     : null;
 
   // Vai junto do alarme em todos os returns: a recarga precisa avisar mesmo
-  // quem está no seletor de filial ou na tela de "aguardando alocação". É
-  // TARJA, e não modal: o aviso manda gravar o que está aberto, então não pode
-  // ser ele a tapar o botão de gravar.
+  // quem está no seletor de filial ou na tela de "aguardando alocação".
   const avisoDeRecarga = comandoRecarga
-    ? <RecargaRemotaAviso comando={comandoRecarga} />
+    ? <RecargaRemotaModal comando={comandoRecarga} />
     : null;
 
   // Publica os setores concedidos pela aula para o `hasSetor` global. Feito no
