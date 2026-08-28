@@ -47,6 +47,10 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'PDV roda em layout de operação, fora da grade de telas administrativas.',
   'views/PDVView.tsx':
     'idem PDVViewSupermax: layout de operação.',
+  'components/ArteLightbox.tsx':
+    'visor de arte em tela cheia sobre `bg-black/95`: os controles (tela cheia, fechar, anterior/próxima) são chrome do visor — redondos e translúcidos sobre a foto. `.modal-close-btn` pinta var(--color-bg-base) e viraria um quadrado opaco no meio da arte.',
+  'components/CrachaVirtual.tsx':
+    'a fileira de controles do crachá flutua direto no fundo escuro, fora do cartão (para não sair na impressão): não há painel de modal onde o X do design system se apoie, e ele acompanha o botão Imprimir ao lado.',
 
   // ── Chip sobre imagem: o botão flutua na miniatura, não numa fileira ──
   'components/ImagemCadastro.tsx':
@@ -69,8 +73,6 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'cancelar convite, inline dentro do span do badge de status.',
 
   // ── Não é ação: é controle de estado/filtro ──
-  'views/ArtesPromocionaisView.tsx':
-    'estrelas do widget de nota — controle de rating, não ação de linha.',
   'views/FrequenciaTrabalhoView.tsx':
     'marcador de presença da linha: tamanho casado com o botão Salvar ao lado, decisão registrada no próprio componente.',
   'views/MatrizRequerimentosView.tsx':

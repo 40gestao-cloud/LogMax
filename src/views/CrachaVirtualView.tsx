@@ -403,7 +403,7 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
                 <ScanLine size={15} className="text-accent" /> Ler crachá
               </p>
               <button type="button" onClick={() => setScannerAberto(false)} title="Fechar"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-colors">
+                className="modal-close-btn">
                 <X size={16} />
               </button>
             </div>
