@@ -20,7 +20,6 @@ import {
 import { isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
-import { RelogioDesajustadoAviso } from './components/RelogioDesajustadoAviso';
 import { setViewAtual } from './lib/viewAtual';
 import { DesligamentoAviso } from './components/DesligamentoAviso';
 import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
@@ -1627,7 +1626,6 @@ export default function LogMaxApp() {
         <ConfirmProvider>
           <PromptProvider>
             <PwaUpdatePrompt />
-            <RelogioDesajustadoAviso />
             <LogMaxAppInner />
           </PromptProvider>
         </ConfirmProvider>
