@@ -89,6 +89,17 @@ let offsetMs = 0;
 let instalado = false;
 let jaAncorou = false;
 
+/**
+ * De onde veio o desvio em vigor, em ordem de confiança.
+ *
+ * `sonda` é a medição direta (duas perguntas ao banco, com RTT conhecido) e
+ * manda em todas. `token` é o `iat` de um token recém-emitido — chega sem custo
+ * nenhum e no momento em que a rede está comprovadamente de pé. `salvo` é a
+ * lembrança do boot anterior, que serve enquanto as outras não chegam.
+ */
+type Procedencia = 'nenhuma' | 'salvo' | 'token' | 'sonda';
+let procedencia: Procedencia = 'nenhuma';
+
 /** Resolve quando a medição do boot termina (null = não deu para medir). */
 let medicaoBoot: Promise<number | null> = Promise.resolve(null);
 
@@ -170,7 +181,8 @@ function instalar(): void {
   globalThis.Date = DataAncorada as DateConstructor;
 }
 
-function adotar(novo: number): void {
+function adotar(novo: number, de: Procedencia = 'sonda'): void {
+  procedencia = de;
   const relevante = Math.abs(novo) > TOLERANCIA_MS && Math.abs(novo) <= LIMITE_ABSURDO_MS;
   if (relevante) instalar();
   // Só zera de fato quando o desvio some: assim a máquina acertada no meio do
@@ -267,6 +279,43 @@ async function medirOffset(): Promise<number | null> {
 }
 
 /**
+ * Ancora pelo `iat` de um token RECÉM-EMITIDO (login ou renovação).
+ *
+ * Fecha a única janela que a sondagem não cobre: máquina desregulada cuja
+ * sondagem falhou (rede engasgada no boot) e que, mesmo assim, consegue logar.
+ * Sem isto, o `auth-js` compararia o `exp` com o relógio cru e o laço de
+ * renovação voltaria — o defeito original. O login é, por definição, o momento
+ * em que a rede está de pé, e a resposta dele já traz a hora do servidor de
+ * graça.
+ *
+ * SÓ para token fresco. A primeira tentativa desta feature usava o `iat` do
+ * token restaurado do `localStorage`, que é velho por natureza, e acusava
+ * "relógio adiantado" em celular com a hora certa. Quem chama tem de garantir
+ * que o token acabou de nascer — hoje, os eventos SIGNED_IN e TOKEN_REFRESHED.
+ *
+ * Não atropela a sondagem: ela mede com o RTT na mão e continua mandando.
+ */
+export function ancorarComTokenFresco(accessToken: string | null | undefined): void {
+  if (!accessToken) return;
+  // Sondagem em vigor é medição melhor: não se troca o bom pelo suficiente.
+  if (procedencia === 'sonda') return;
+
+  try {
+    const parte = accessToken.split('.')[1];
+    if (!parte) return;
+    const base64 = parte.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4)));
+    const iat = payload?.iat;
+    if (typeof iat !== 'number' || !Number.isFinite(iat)) return;
+
+    // O `iat` é de quando o servidor assinou; a resposta levou uma viagem de
+    // rede para chegar. O erro é dessa ordem (menos de um segundo, na prática),
+    // contra uma tolerância de sessenta.
+    adotar(iat * 1000 - nowOriginal(), 'token');
+  } catch { /* token ilegível: não é problema nosso resolver aqui */ }
+}
+
+/**
  * Chamado uma vez, no boot, ANTES de criar o client do Supabase.
  *
  * O desvio guardado da última visita entra na hora (síncrono), porque a
@@ -296,6 +345,7 @@ export function ancorarRelogioNoServidor(): void {
     if (plausivel && recente) {
       instalar();
       offsetMs = salvo;
+      procedencia = 'salvo';
     } else if (!plausivel || !recente) {
       localStorage.removeItem(CHAVE);
       localStorage.removeItem(CHAVE_MEDIDO_EM);

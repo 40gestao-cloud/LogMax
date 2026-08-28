@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, AlertCircle, Eye, EyeOff, LogIn, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ancorarComTokenFresco } from '../lib/horaServidor';
 import { consumirMotivoSaida } from '../lib/sessaoGuard';
 import { VitrineCarousel } from './VitrineCarousel';
 
@@ -54,7 +55,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
     setIsLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) {
         setError(
           authError.message.includes('Invalid login credentials')
@@ -63,6 +64,14 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         );
         return;
       }
+      // Este token nasceu agora, nesta resposta: o `iat` dele é a hora do
+      // servidor, e a rede está comprovadamente de pé. É a rede de segurança do
+      // relógio para a máquina cuja sondagem do boot falhou — sem ela o
+      // `auth-js` compara o `exp` com o relógio cru e o laço de renovação que
+      // derrubava a turma inteira volta. Aqui, e não no evento SIGNED_IN,
+      // porque só aqui há garantia de token recém-emitido: o evento também
+      // dispara em sessão restaurada do localStorage, cujo token é velho.
+      ancorarComTokenFresco(authData?.session?.access_token);
       onLoginSuccess();
     } catch {
       setError('Erro inesperado. Tente novamente.');

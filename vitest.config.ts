@@ -23,6 +23,7 @@ const ESTATICOS = [
   'tests/catalogoNichoPdf.test.ts',
   'tests/confirm.test.ts',
   'tests/fichaProduto.test.ts',
+  'tests/horaServidor.test.ts',
   'tests/imei.test.ts',
   'tests/importarProdutos.test.ts',
   'tests/perecivel.test.ts',

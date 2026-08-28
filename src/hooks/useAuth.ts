@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { ancorarComTokenFresco } from '../lib/horaServidor';
 
 interface AuthState {
   user: User | null;
@@ -34,6 +35,13 @@ export function useAuth() {
     // Escuta mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (_event === 'TOKEN_REFRESHED') {
+        // Token recém-renovado: o `iat` dele é a hora do servidor, de graça.
+        // Rede de segurança do relógio para a máquina cuja sondagem falhou.
+        // SÓ neste evento (e no login, em LoginScreen): SIGNED_IN também
+        // dispara em sessão restaurada do localStorage, cujo token é velho —
+        // foi assim que uma primeira versão acusou "relógio adiantado" em
+        // celular com a hora certa.
+        ancorarComTokenFresco(session?.access_token);
         // Refresh silencioso: atualiza só o token, preserva a referência de user
         // para não disparar re-fetch de perfil nem re-render global
         setAuthState(prev => ({ ...prev, session }));
