@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { registrarSkewDoToken } from '../lib/relogio';
 
 interface AuthState {
   user: User | null;
@@ -25,6 +26,9 @@ export function useAuth() {
     // Busca a sessão atual ao montar
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
+        // Relógio da máquina contra o do servidor (ver src/lib/relogio.ts):
+        // adiantado demais, o token nasce vencido e a sessão cai em laço.
+        registrarSkewDoToken(session?.access_token);
         setAuthState({ user: session?.user ?? null, session, isLoading: false });
       })
       .catch(() => {
@@ -33,6 +37,7 @@ export function useAuth() {
 
     // Escuta mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      registrarSkewDoToken(session?.access_token);
       if (_event === 'TOKEN_REFRESHED') {
         // Refresh silencioso: atualiza só o token, preserva a referência de user
         // para não disparar re-fetch de perfil nem re-render global
