@@ -1,5 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { purgarSessaoSeExpirada } from './sessaoGuard';
+import { ancorarRelogioNoServidor } from './horaServidor';
+
+// Relógio ancorado no servidor (ver `horaServidor.ts`). PRIMEIRA linha de tudo,
+// antes do guard de sessão e do createClient: os dois decidem por hora, e numa
+// máquina com o relógio adiantado é essa conta que derruba o login em laço.
+ancorarRelogioNoServidor();
 
 // Camada 2 do guard de sessão (ver `sessaoGuard.ts`): em máquina compartilhada,
 // derruba a sessão que ficou da turma anterior.
