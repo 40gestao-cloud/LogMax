@@ -184,12 +184,25 @@ export function purgarSessaoSeExpirada(): boolean {
 
   const agora = Date.now();
   const ociosaDemais = agora - ultima >= IDLE_MS;
+
+  // Carimbo no FUTURO: a régua de tempo mudou entre uma sessão e outra. Foi o
+  // que aconteceu quando o app passou a ancorar o relógio no servidor
+  // (`horaServidor.ts`): numa máquina adiantada, a sessão anterior carimbou com
+  // a hora local (à frente) e este boot compara com a hora do servidor. A
+  // subtração dá NEGATIVA, `ociosaDemais` fica false e a purga não acontece —
+  // justamente na máquina compartilhada que ela existe para proteger. Um minuto
+  // de folga absorve jitter de relógio; acima disso, o carimbo não é confiável
+  // e a saída segura é derrubar a sessão.
+  const carimboNoFuturo = ultima - agora > 60_000;
+
   // O início da sessão pode não existir (versão anterior do app): a última
-  // atividade serve de piso conservador para o corte de turno.
-  const inicio = lerNumero(CHAVE_INICIO_SESSAO) ?? ultima;
+  // atividade serve de piso conservador para o corte de turno. E, pelo mesmo
+  // motivo acima, um início no futuro não pode virar "sessão que nunca cruzou o
+  // turno" — daí o teto em `agora`.
+  const inicio = Math.min(lerNumero(CHAVE_INICIO_SESSAO) ?? ultima, agora);
   const trocouTurno = cruzouFimDoTurno(inicio, agora);
 
-  if (!ociosaDemais && !trocouTurno) return false;
+  if (!ociosaDemais && !trocouTurno && !carimboNoFuturo) return false;
 
   purgarTokenSupabase();
   limparCarimbos();

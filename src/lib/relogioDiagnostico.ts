@@ -11,7 +11,7 @@
 // (ela lê `auth.uid()` para carimbar quem estava na máquina).
 
 import { supabase } from './supabase';
-import { aguardarMedicao, idDaMaquina } from './horaServidor';
+import { aguardarMedicao, aoMedir, idDaMaquina } from './horaServidor';
 import { isDispositivoCompartilhado } from './sessaoGuard';
 
 let jaReportou = false;
@@ -21,26 +21,39 @@ function plataforma(): string | null {
   return ua.userAgentData?.platform ?? navigator.platform ?? null;
 }
 
+/** Grava a linha desta estação. Falha em silêncio: é diagnóstico, não operação. */
+async function gravar(offsetMs: number): Promise<boolean> {
+  const maquina = idDaMaquina();
+  if (!maquina || !supabase) return false;  // modo privado: sem id estável
+
+  const { error } = await supabase.rpc('registrar_relogio_maquina', {
+    p_maquina_id:    maquina,
+    p_offset_ms:     Math.round(offsetMs),
+    p_navegador:     navigator.userAgent.slice(0, 120),
+    p_plataforma:    plataforma(),
+    p_compartilhada: isDispositivoCompartilhado(),
+  });
+  return !error;
+}
+
 export async function reportarRelogioDaMaquina(): Promise<void> {
   if (jaReportou || !supabase) return;
   jaReportou = true;
 
   const medido = await aguardarMedicao();
-  // Sem medição não há notícia: registrar 0 aqui seria dizer "esta máquina está
-  // certa" quando o que houve foi falta de rede.
-  if (medido === null) { jaReportou = false; return; }
 
-  const maquina = idDaMaquina();
-  if (!maquina) return;  // navegador em modo privado: sem id estável
+  // Medição do boot falhou (rede ainda subindo, caso comum no laboratório).
+  // Registrar 0 aqui seria dizer "esta máquina está certa" quando o que houve
+  // foi falta de rede — então espera-se a medição tardia, a que acontece quando
+  // a conexão volta. Sem isto a estação de rede instável, que é a mais
+  // suspeita, sumia do painel a sessão inteira.
+  if (medido === null) {
+    const cancelar = aoMedir(offset => {
+      cancelar();
+      void gravar(offset).then(ok => { if (!ok) jaReportou = false; });
+    });
+    return;
+  }
 
-  // Falha de rede/RLS aqui não pode atrapalhar quem está usando o sistema —
-  // é diagnóstico, não operação.
-  const { error } = await supabase.rpc('registrar_relogio_maquina', {
-    p_maquina_id:    maquina,
-    p_offset_ms:     Math.round(medido),
-    p_navegador:     navigator.userAgent.slice(0, 120),
-    p_plataforma:    plataforma(),
-    p_compartilhada: isDispositivoCompartilhado(),
-  });
-  if (error) jaReportou = false;  // deixa a próxima sessão tentar de novo
+  if (!await gravar(medido)) jaReportou = false;  // a próxima sessão tenta de novo
 }

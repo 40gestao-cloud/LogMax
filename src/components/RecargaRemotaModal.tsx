@@ -59,7 +59,7 @@ export function RecargaRemotaModal({ comando }: { comando: ComandoTurma }) {
           A tela vai recarregar em <span className="font-black text-accent tabular-nums">{restante}s</span>.
         </p>
         <button
-          onClick={() => void executarRecarga()}
+          onClick={() => void executarRecarga(0)}
           className="neu-button px-5 py-2.5 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors mt-1"
         >
           Recarregar agora

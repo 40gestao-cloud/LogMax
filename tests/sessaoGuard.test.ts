@@ -88,6 +88,34 @@ describe('purgarSessaoSeExpirada', () => {
     expect(sessao.getItem(CHAVE_MOTIVO_SAIDA)).toBe('inatividade');
   });
 
+  // Regressão da revisão de 28/08: quando o app passou a ancorar o relógio no
+  // servidor (`horaServidor.ts`), a sessão anterior de uma máquina adiantada
+  // tinha carimbado com a hora LOCAL, à frente. No primeiro boot ancorado a
+  // subtração dava negativa, nada era considerado ocioso e a purga não
+  // acontecia — na máquina compartilhada, que é onde ela importa.
+  it('derruba a sessão cujo carimbo está no futuro (relógio recuado pela ancoragem)', async () => {
+    vi.setSystemTime(ACRE_09H);
+    const { purgarSessaoSeExpirada } = await carregar();
+    local.setItem(TOKEN, '{"access_token":"x"}');
+    // Carimbos de uma hora à frente: o que a máquina adiantada gravou antes.
+    local.setItem('logmax:ultimaAtividade', String(ACRE_09H.getTime() + 60 * MIN));
+    local.setItem('logmax:inicioSessao',    String(ACRE_09H.getTime() + 30 * MIN));
+
+    expect(purgarSessaoSeExpirada()).toBe(true);
+    expect(local.getItem(TOKEN)).toBeNull();
+  });
+
+  it('tolera carimbo alguns segundos à frente sem derrubar ninguém', async () => {
+    vi.setSystemTime(ACRE_09H);
+    const { purgarSessaoSeExpirada } = await carregar();
+    local.setItem(TOKEN, '{"access_token":"x"}');
+    local.setItem('logmax:ultimaAtividade', String(ACRE_09H.getTime() + 10_000));
+    local.setItem('logmax:inicioSessao',    String(ACRE_09H.getTime() - 30 * MIN));
+
+    expect(purgarSessaoSeExpirada()).toBe(false);
+    expect(local.getItem(TOKEN)).not.toBeNull();
+  });
+
   it('preserva a sessão que está só há 5 min parada', async () => {
     vi.setSystemTime(ACRE_09H);
     const { purgarSessaoSeExpirada } = await carregar();

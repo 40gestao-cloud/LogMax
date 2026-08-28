@@ -50,8 +50,28 @@
 /** Abaixo disto o desvio não atrapalha nada e não vale mexer em global. */
 const TOLERANCIA_MS = 60_000;
 
+/**
+ * Desvio maior que isto não é relógio errado, é lixo (localStorage corrompido,
+ * medição absurda). Mesmo teto que a RPC de diagnóstico aplica: ~10 anos.
+ */
+const LIMITE_ABSURDO_MS = 315_360_000_000;
+
+/**
+ * Validade do desvio guardado. Passado isso ele não é aplicado no boot.
+ *
+ * Sem prazo, uma máquina que foi ACERTADA e abre o app sem rede continua
+ * ancorada no desvio antigo — e passa a errar a hora para o outro lado, o dia
+ * inteiro, sem nada que a corrija. Um dia é folgado para o uso diário do
+ * laboratório e curto o bastante para o conserto do técnico valer no dia
+ * seguinte.
+ */
+const VALIDADE_SALVO_MS = 24 * 60 * 60 * 1000;
+
 /** Desvio adotado, para o boot seguinte já nascer ancorado. */
 const CHAVE = 'logmax:offsetServidorMs';
+
+/** Quando aquele desvio foi medido, pelo relógio CRU da máquina. */
+const CHAVE_MEDIDO_EM = 'logmax:offsetServidorEm';
 
 /**
  * Id da ESTAÇÃO (não da pessoa). Sorteado uma vez por navegador e guardado
@@ -75,6 +95,23 @@ let medicaoBoot: Promise<number | null> = Promise.resolve(null);
 /** Espera a medição do boot — quem for reportar o diagnóstico precisa dela. */
 export function aguardarMedicao(): Promise<number | null> {
   return medicaoBoot;
+}
+
+/**
+ * Avisa quando uma medição é adotada — inclusive a tardia, depois de a rede
+ * voltar.
+ *
+ * Existe por um furo real: quando as sondagens do boot falhavam, quem reporta o
+ * diagnóstico (`relogioDiagnostico.ts`) recebia null e nunca mais era chamado,
+ * porque `medicaoBoot` já estava resolvida. A máquina de rede instável — a mais
+ * suspeita de todas — sumia do painel de TI a sessão inteira.
+ */
+type OuvinteMedicao = (offsetMs: number) => void;
+const ouvintes = new Set<OuvinteMedicao>();
+
+export function aoMedir(cb: OuvinteMedicao): () => void {
+  ouvintes.add(cb);
+  return () => ouvintes.delete(cb);
 }
 
 /**
@@ -134,15 +171,24 @@ function instalar(): void {
 }
 
 function adotar(novo: number): void {
-  const relevante = Math.abs(novo) > TOLERANCIA_MS;
+  const relevante = Math.abs(novo) > TOLERANCIA_MS && Math.abs(novo) <= LIMITE_ABSURDO_MS;
   if (relevante) instalar();
   // Só zera de fato quando o desvio some: assim a máquina acertada no meio do
   // expediente volta ao relógio próprio sem esperar o próximo boot.
   offsetMs = relevante ? novo : 0;
   try {
-    if (relevante) localStorage.setItem(CHAVE, String(Math.round(novo)));
-    else localStorage.removeItem(CHAVE);
+    if (relevante) {
+      localStorage.setItem(CHAVE, String(Math.round(novo)));
+      // Carimbo pelo relógio CRU: os dois lados da comparação de validade usam
+      // a mesma régua, então ela funciona mesmo na máquina desregulada.
+      localStorage.setItem(CHAVE_MEDIDO_EM, String(nowOriginal()));
+    } else {
+      localStorage.removeItem(CHAVE);
+      localStorage.removeItem(CHAVE_MEDIDO_EM);
+    }
   } catch { /* modo privado */ }
+
+  ouvintes.forEach(cb => { try { cb(offsetMs); } catch { /* ouvinte quebrado não derruba a medição */ } });
 }
 
 /**
@@ -153,7 +199,9 @@ function adotar(novo: number): void {
  * viagem de rede. Erro final na casa da centena de ms, contra um desvio que
  * interessa a partir de um minuto.
  */
-async function sondar(): Promise<number | null> {
+type Sondagem = { offset: number; rtt: number };
+
+async function sondar(): Promise<Sondagem | null> {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   if (!url || !key) return null;
@@ -183,7 +231,7 @@ async function sondar(): Promise<number | null> {
     if (!Number.isFinite(servidor)) return null;
 
     // Hora do servidor no instante t1 ≈ carimbo + meia viagem de rede.
-    return servidor + (t1 - t0) / 2 - t1;
+    return { offset: servidor + (t1 - t0) / 2 - t1, rtt: t1 - t0 };
   } catch {
     return null;
   }
@@ -210,9 +258,12 @@ async function medirOffset(): Promise<number | null> {
   await new Promise(r => setTimeout(r, 300));
   const b = await sondar();
   if (b === null) return null;
-  if (Math.abs(a - b) > TOLERANCIA_ENTRE_SONDAS_MS) return null;
-  // A de menor módulo é a menos contaminada por latência de ida e volta.
-  return Math.abs(a) <= Math.abs(b) ? a : b;
+  if (Math.abs(a.offset - b.offset) > TOLERANCIA_ENTRE_SONDAS_MS) return null;
+  // A de MENOR VIAGEM DE REDE é a menos contaminada — o erro da estimativa é
+  // metade do RTT. Escolher pelo menor módulo (como fazia antes) puxaria a
+  // leitura para zero de propósito nenhum, e subestimaria o desvio se alguém
+  // apertasse a tolerância mais tarde.
+  return (a.rtt <= b.rtt ? a : b).offset;
 }
 
 /**
@@ -228,10 +279,26 @@ export function ancorarRelogioNoServidor(): void {
   jaAncorou = true;
 
   try {
-    const salvo = Number(localStorage.getItem(CHAVE));
-    if (Number.isFinite(salvo) && Math.abs(salvo) > TOLERANCIA_MS) {
+    const salvo  = Number(localStorage.getItem(CHAVE));
+    const medido = Number(localStorage.getItem(CHAVE_MEDIDO_EM));
+    // Três perguntas antes de acreditar no que ficou guardado: é número de
+    // verdade, cabe numa faixa plausível e foi medido há pouco. A terceira é a
+    // que impede a máquina ACERTADA e sem rede de continuar ancorada no desvio
+    // de ontem, errando a hora para o outro lado o dia inteiro.
+    const plausivel = Number.isFinite(salvo)
+      && Math.abs(salvo) > TOLERANCIA_MS
+      && Math.abs(salvo) <= LIMITE_ABSURDO_MS;
+    // Carimbo ausente é herança da versão anterior: vale uma vez, e a medição
+    // do boot regrava com data.
+    const recente = !Number.isFinite(medido) || medido <= 0
+      || nowOriginal() - medido < VALIDADE_SALVO_MS;
+
+    if (plausivel && recente) {
       instalar();
       offsetMs = salvo;
+    } else if (!plausivel || !recente) {
+      localStorage.removeItem(CHAVE);
+      localStorage.removeItem(CHAVE_MEDIDO_EM);
     }
   } catch { /* modo privado */ }
 
