@@ -154,4 +154,19 @@ describe('separarQtdETermo', () => {
     expect(qtd).toBe(2);
     expect(nomes(buscarProdutos(CATALOGO, termo, 10))).toEqual(['Café Torrado 500g']);
   });
+
+  // Regressão: a regex era montada com `new RegExp('...\s*...')`, e dentro de
+  // uma string o `\s` vira um "s" literal — o padrão exigia a LETRA s onde
+  // devia aceitar espaço. Nenhum caso daqui usava espaço, então o defeito
+  // passou. Leitor que emite espaço entre os campos caía fora do multiplicador.
+  it('aceita espaço em volta do separador', () => {
+    expect(separarQtdETermo('2 * 7891')).toEqual({ qtd: 2, termo: '7891', temMultiplicador: true });
+    expect(separarQtdETermo('2* 7891')).toEqual({ qtd: 2, termo: '7891', temMultiplicador: true });
+    expect(separarQtdETermo('2 *7891')).toEqual({ qtd: 2, termo: '7891', temMultiplicador: true });
+    expect(separarQtdETermo('0,350 * 7891')).toEqual({ qtd: 0.35, termo: '7891', temMultiplicador: true });
+  });
+
+  it('"s" não é separador — só espaço em branco de verdade', () => {
+    expect(separarQtdETermo('2s*7891').temMultiplicador).toBe(false);
+  });
 });

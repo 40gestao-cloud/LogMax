@@ -95,7 +95,11 @@ export interface QtdETermo {
   temMultiplicador: boolean;
 }
 
-const MULTIPLICADOR = new RegExp('^([0-9.,]+)\s*[*xX×]\s*(.*)$');
+// `\\s` e não `\s`: dentro de uma string, `\s` não é escape reconhecido e o
+// JS o reduz a um "s" literal — o padrão passava a exigir a LETRA s no lugar
+// do espaço, e "2 * 7891" (leitor que emite espaço entre os campos) não
+// casava. As demais regex deste arquivo já usavam a forma escapada.
+const MULTIPLICADOR = new RegExp('^([0-9.,]+)\\s*[*xX×]\\s*(.*)$');
 
 export function separarQtdETermo(raw: string | null | undefined): QtdETermo {
   const t = String(raw ?? '').trim();
