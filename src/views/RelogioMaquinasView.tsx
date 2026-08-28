@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlarmClock, RefreshCw, Monitor, Smartphone, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { BotaoRecarregarTurma } from '../components/BotaoRecarregarTurma';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Sessões Gerais → TI & Suporte → Relógio das Máquinas.
@@ -90,7 +91,10 @@ function quandoFoi(iso: string): string {
   return `há ${Math.round(h / 24)} d`;
 }
 
-export function RelogioMaquinasView({ profile }: { profile: UserProfile | null }) {
+export function RelogioMaquinasView({ profile, showToast }: {
+  profile: UserProfile | null;
+  showToast?: (msg: string, tipo?: string, autoHide?: boolean) => void;
+}) {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -147,12 +151,21 @@ export function RelogioMaquinasView({ profile }: { profile: UserProfile | null }
             na mesma rede — inclusive de quem está com a hora certa.
           </p>
         </div>
-        <button
-          onClick={carregar}
-          className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-2"
-        >
-          <RefreshCw size={14} /> Atualizar
-        </button>
+        {/* Os dois botões juntos de propósito: esta é a tela onde se VÊ que uma
+            máquina está com relógio fora de hora ou com versão velha, e mandar
+            recarregar é a ação que se quer tomar em seguida. Sem isto, o
+            professor teria de sair daqui e ir ao Modo Aula para apertar o
+            mesmo botão. "Atualizar" relê a lista; "Recarregar turma" mexe nas
+            máquinas — por isso um é neutro e o outro tem cor de comando. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={carregar}
+            className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-2"
+          >
+            <RefreshCw size={14} /> Atualizar
+          </button>
+          <BotaoRecarregarTurma profile={profile} showToast={showToast} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

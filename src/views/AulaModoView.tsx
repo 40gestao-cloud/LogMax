@@ -20,6 +20,7 @@ import { PendenciasView } from './PendenciasView';
 import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
+import { BotaoRecarregarTurma } from '../components/BotaoRecarregarTurma';
 
 interface Props {
   showToast: (msg: string, type?: string) => void;
@@ -55,37 +56,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const [simSalvando, setSimSalvando] = useState(false);
   const [simMensagem, setSimMensagem] = useState('');
   const confirmar = useConfirm();
-
-  // Recarga remota (migr. 564). Existe porque a alternativa era pedir
-  // "apertem Ctrl+Shift+R" para trinta pessoas — e metade da turma não aperta,
-  // fica com a versão antiga e reporta defeito já corrigido. O comando remoto
-  // ainda faz mais que a tecla: limpa o cache do service worker, que é quem
-  // serve arquivo velho aqui.
-  const [recargaEnviando, setRecargaEnviando] = useState(false);
-
-  const mandarRecarregar = async () => {
-    if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
-    if (!await confirmar(
-      'Recarregar a tela de todas as máquinas?\n\n' +
-      'Cada aluno vê um aviso e a tela recarrega em 10 segundos, com o cache limpo — ' +
-      'é o Ctrl+Shift+R aplicado à turma inteira, e alcança também a SUA máquina.\n\n' +
-      'Quem estiver com algo aberto sem gravar tem esses 10 segundos para gravar.')) return;
-
-    setRecargaEnviando(true);
-    try {
-      const { error } = await supabase.from('comandos_turma').insert({
-        tipo:             'recarregar',
-        emitido_por:      profile?.id ?? null,
-        emitido_por_nome: profile?.nome ?? null,
-      });
-      if (error) throw error;
-      showToast('Comando enviado — as máquinas conectadas recarregam em 10 s.', 'success');
-    } catch (err: any) {
-      showToast(err?.message ?? 'Falha ao enviar o comando.', 'error');
-    } finally {
-      setRecargaEnviando(false);
-    }
-  };
 
   const alternarSimulacao = async (ligar: boolean) => {
     if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
@@ -989,14 +959,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={mandarRecarregar}
-          disabled={recargaEnviando}
-          className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 transition-colors disabled:opacity-50 shrink-0"
-        >
-          {recargaEnviando ? '…' : 'Recarregar turma'}
-        </button>
+        <BotaoRecarregarTurma profile={profile} showToast={showToast} />
       </div>
       )}
 

@@ -1371,7 +1371,7 @@ function LogMaxAppInner() {
       // espaço e barra — 'Relatórios' vira 'relatórios' em todos os módulos.
       // Sem os acentos aqui, o case não casa e a tela cai no PlaceholderView
       // ("Módulo em Desenvolvimento").
-      case 'ti-relógiodasmáquinas':        return <RelogioMaquinasView profile={profile} />;
+      case 'ti-relógiodasmáquinas':        return <RelogioMaquinasView profile={profile} showToast={st} />;
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
