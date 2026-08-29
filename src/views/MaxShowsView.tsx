@@ -138,16 +138,26 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   const excluir = async (id: string) => {
     if (!supabase) return;
     if (!(await confirm({ message: 'Mover esta apresentação para a lixeira? Fica lá por 30 dias antes de sumir de vez.', confirmLabel: 'Mover para lixeira' }))) return;
-    const { error } = await supabase.from('max_shows').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    // `.select()` nao e enfeite: um UPDATE que a RLS recorta para zero
+    // linhas nao e erro — o PostgREST devolve 200 com lista vazia. Sem
+    // olhar para o que voltou, a tela anunciava "movido para a lixeira" e
+    // recarregava com o arquivo ainda la. Foi assim que a falta do ramo de
+    // admin na policy de UPDATE (migr. 253, corrigida na 567) passou
+    // despercebida: nunca houve mensagem de erro para investigar.
+    const { data, error } = await supabase.from('max_shows')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', id).select('id');
     if (error) { showToast?.(`Erro ao excluir: ${error.message}`, 'error'); return; }
+    if (!data?.length) { showToast?.('Sem permissão para excluir esta apresentação.', 'error'); return; }
     showToast?.('Movido para a lixeira.', 'success');
     load();
   };
 
   const restaurar = async (id: string) => {
     if (!supabase) return;
-    const { error } = await supabase.from('max_shows').update({ deleted_at: null }).eq('id', id);
+    const { data, error } = await supabase.from('max_shows')
+      .update({ deleted_at: null }).eq('id', id).select('id');
     if (error) { showToast?.(`Erro ao restaurar: ${error.message}`, 'error'); return; }
+    if (!data?.length) { showToast?.('Sem permissão para restaurar esta apresentação.', 'error'); return; }
     showToast?.('Apresentação restaurada.', 'success');
     load();
   };
@@ -157,20 +167,32 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
     if (!(await confirm({ message: 'Excluir permanentemente? Some pra todos agora e não dá pra recuperar.', confirmLabel: 'Excluir agora', danger: true }))) return;
     // Se for PDF, precisa remover o arquivo do storage antes (o hard delete
     // do banco não cascateia pra storage.objects).
+    // A linha cai primeiro. Na ordem antiga o PDF saia do storage ANTES do
+    // DELETE — e se a RLS recusasse a linha (o caso deste bug), o arquivo
+    // ja tinha sumido do bucket e sobrava um registro apontando para o
+    // vazio. O bucket nao cascateia do banco, entao a remocao continua
+    // manual; so deixou de acontecer antes da hora.
+    const { data, error } = await supabase.from('max_shows').delete().eq('id', id).select('id');
+    if (error) { showToast?.(`Erro ao excluir: ${error.message}`, 'error'); return; }
+    if (!data?.length) { showToast?.('Sem permissão para excluir esta apresentação.', 'error'); return; }
     const target = shows.find(s => s.id === id);
     if (target?.arquivo_url) {
       const path = extractStoragePath(target.arquivo_url);
       if (path) await supabase.storage.from('max-show-anexos').remove([path]);
     }
-    const { error } = await supabase.from('max_shows').delete().eq('id', id);
-    if (error) { showToast?.(`Erro ao excluir: ${error.message}`, 'error'); return; }
     showToast?.('Apresentação excluída permanentemente.', 'success');
     load();
   };
 
   const meus = useMemo(() => shows.filter(s => s.user_id === profile?.id), [shows, profile?.id]);
   const outros = useMemo(() => shows.filter(s => s.user_id !== profile?.id), [shows, profile?.id]);
+  // Ver o material da turma e a premissa do modulo (migr. 253). MEXER nele
+  // e outra coisa: CEO e conselheiro sao alunos, e apagar o trabalho de um
+  // colega nao e papel de colega. A migr. 567 recorta a policy em
+  // role='admin'; aqui o botao segue a mesma regua, para nao existir botao
+  // que so serve para dar erro.
   const ehDocente = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.is_conselheiro;
+  const podeGerirDeOutros = profile?.role === 'admin';
 
   if (openId) {
     return (
@@ -221,7 +243,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
           {ehDocente && outros.length > 0 && (
             <Section titulo="Apresentações de outros usuários (visão docente)" shows={outros}
               showOwner autores={autores}
-              onAbrir={abrir} onDelete={excluir} emptyMsg="" />
+              onAbrir={abrir} onDelete={podeGerirDeOutros ? excluir : undefined} emptyMsg="" />
           )}
         </>
       ) : (
@@ -235,7 +257,8 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
           {ehDocente && outros.length > 0 && (
             <TrashSection titulo="Excluídas de outros usuários (visão docente)"
               shows={outros} showOwner autores={autores}
-              onRestore={restaurar} onDeleteForever={excluirDefinitivo} emptyMsg="" />
+              onRestore={podeGerirDeOutros ? restaurar : undefined}
+              onDeleteForever={podeGerirDeOutros ? excluirDefinitivo : undefined} emptyMsg="" />
           )}
         </>
       )}
@@ -260,7 +283,8 @@ const fmtBytes = (b: number | null): string => {
 const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner, autores }: {
   titulo: string; shows: Show[];
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
-  onDelete: (id: string) => void;
+  /** Ausente = secao so de leitura (aluno olhando o material de outro). */
+  onDelete?: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
   autores?: Record<string, string>;
 }) => (
@@ -286,9 +310,11 @@ const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner, autore
               <button onClick={() => onAbrir(s.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir o PDF">
                 <Eye size={13} /> Abrir
               </button>
-              <button onClick={() => onDelete(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Mover para lixeira">
-                <Trash2 size={13} /> Excluir
-              </button>
+              {onDelete && (
+                <button onClick={() => onDelete(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Mover para lixeira">
+                  <Trash2 size={13} /> Excluir
+                </button>
+              )}
             </div>
           </li>
         ))}
@@ -299,8 +325,9 @@ const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner, autore
 
 const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, showOwner, autores }: {
   titulo: string; shows: Show[];
-  onRestore: (id: string) => void;
-  onDeleteForever: (id: string) => void;
+  /** Ausentes = secao so de leitura. Ver `podeGerirDeOutros`. */
+  onRestore?: (id: string) => void;
+  onDeleteForever?: (id: string) => void;
   emptyMsg: string; showOwner?: boolean;
   autores?: Record<string, string>;
 }) => (
@@ -328,12 +355,16 @@ const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, sho
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
-                <button onClick={() => onRestore(s.id)} className="btn-shimmer btn-shimmer--glass-green" title="Restaurar">
-                  <RotateCcw size={13} /> Restaurar
-                </button>
-                <button onClick={() => onDeleteForever(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Excluir permanentemente">
-                  <Trash2 size={13} /> Excluir agora
-                </button>
+                {onRestore && (
+                  <button onClick={() => onRestore(s.id)} className="btn-shimmer btn-shimmer--glass-green" title="Restaurar">
+                    <RotateCcw size={13} /> Restaurar
+                  </button>
+                )}
+                {onDeleteForever && (
+                  <button onClick={() => onDeleteForever(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Excluir permanentemente">
+                    <Trash2 size={13} /> Excluir agora
+                  </button>
+                )}
               </div>
             </li>
           );
