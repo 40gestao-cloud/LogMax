@@ -50,104 +50,282 @@ import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PromptProvider } from './contexts/PromptContext';
 
 // --- lazy views ---
-const InicioView              = lazy(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
-const DashboardAnalyticsView  = lazy(() => import('./views/DashboardAnalyticsView').then(m => ({ default: m.DashboardAnalyticsView })));
-const FiliaisView             = lazy(() => import('./views/FiliaisView').then(m => ({ default: m.FiliaisView })));
-const CRMView                 = lazy(() => import('./views/CRMView').then(m => ({ default: m.CRMView })));
-const ProdutosView            = lazy(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
-const RequisicoesView         = lazy(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
-const RequisicoesSetorView    = lazy(() => import('./views/RequisicoesSetorView').then(m => ({ default: m.RequisicoesSetorView })));
-const AprovacoesComprasView   = lazy(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
-const VitrinePublicaView      = lazy(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
-const MarketingConfigView     = lazy(() => import('./views/MarketingConfigView').then(m => ({ default: m.MarketingConfigView })));
-const ConfigJurosView         = lazy(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
-const CotacoesView            = lazy(() => import('./views/CotacoesView').then(m => ({ default: m.CotacoesView })));
-const PedidosView             = lazy(() => import('./views/PedidosView').then(m => ({ default: m.PedidosView })));
-const NotasRecebidasView      = lazy(() => import('./views/NotasRecebidasView').then(m => ({ default: m.NotasRecebidasView })));
-const RecebimentosView        = lazy(() => import('./views/RecebimentosView').then(m => ({ default: m.RecebimentosView })));
-const ContasPagarView         = lazy(() => import('./views/ContasPagarView').then(m => ({ default: m.ContasPagarView })));
-const ContasReceberView       = lazy(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
-const CaixaBancosView         = lazy(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
-const GenericCRUDView         = lazy(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
-const ServicosView            = lazy(() => import('./views/ServicosView').then(m => ({ default: m.ServicosView })));
-const MovimentacoesEstoqueView = lazy(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
-const SaldosEstoqueView       = lazy(() => import('./views/SaldosEstoqueView').then(m => ({ default: m.SaldosEstoqueView })));
-const RequisicoesEstoqueView  = lazy(() => import('./views/RequisicoesEstoqueView').then(m => ({ default: m.RequisicoesEstoqueView })));
-const AprovacoesEstoqueView   = lazy(() => import('./views/AprovacoesEstoqueView').then(m => ({ default: m.AprovacoesEstoqueView })));
-const ExpedicaoView           = lazy(() => import('./views/ExpedicaoView').then(m => ({ default: m.ExpedicaoView })));
-const InventariosView         = lazy(() => import('./views/InventariosView').then(m => ({ default: m.InventariosView })));
-const ValidadesView           = lazy(() => import('./views/ValidadesView').then(m => ({ default: m.ValidadesView })));
-const RelatoriosComprasView        = lazy(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
-const RelatoriosVendasView         = lazy(() => import('./views/RelatoriosVendasView').then(m => ({ default: m.RelatoriosVendasView })));
-const RelatoriosEstoqueView        = lazy(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
-const SugestoesComprasView         = lazy(() => import('./views/SugestoesComprasView').then(m => ({ default: m.SugestoesComprasView })));
-const GerenciamentoComprasView     = lazy(() => import('./views/GerenciamentoComprasView').then(m => ({ default: m.GerenciamentoComprasView })));
-const GerenciamentoEstoqueView     = lazy(() => import('./views/GerenciamentoEstoqueView').then(m => ({ default: m.GerenciamentoEstoqueView })));
-const RelatoriosFinanceirosView    = lazy(() => import('./views/RelatoriosFinanceirosView').then(m => ({ default: m.RelatoriosFinanceirosView })));
-const RecibosVendasView            = lazy(() => import('./views/RecibosVendasView').then(m => ({ default: m.RecibosVendasView })));
-const NotasEmitidasView            = lazy(() => import('./views/NotasEmitidasView').then(m => ({ default: m.NotasEmitidasView })));
-const GerenciamentoFinanceiroView  = lazy(() => import('./views/GerenciamentoFinanceiroView').then(m => ({ default: m.GerenciamentoFinanceiroView })));
-const PatrimonioView               = lazy(() => import('./views/PatrimonioView').then(m => ({ default: m.PatrimonioView })));
-const FuncionariosView             = lazy(() => import('./views/FuncionariosView').then(m => ({ default: m.FuncionariosView })));
-const FolhaPagamentoView           = lazy(() => import('./views/FolhaPagamentoView').then(m => ({ default: m.FolhaPagamentoView })));
-const FeriasView                   = lazy(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
-const PontoEletronicoView          = lazy(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
-const AfastamentosView             = lazy(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
-const DesligamentosView            = lazy(() => import('./views/DesligamentosView').then(m => ({ default: m.DesligamentosView })));
-const RecrutamentoView             = lazy(() => import('./views/RecrutamentoView').then(m => ({ default: m.RecrutamentoView })));
-const PainelBIView                 = lazy(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
-const BriefingDiarioView           = lazy(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
-const TreinamentosView             = lazy(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
-const AvaliacoesView               = lazy(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
-const CentralAvaliacaoView         = lazy(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
-const DemandasView                 = lazy(() => import('./views/DemandasView').then(m => ({ default: m.DemandasView })));
-const FeedbackRequerimentosView    = lazy(() => import('./views/FeedbackRequerimentosView').then(m => ({ default: m.FeedbackRequerimentosView })));
-const GerenciamentoRHView          = lazy(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
-const RelatoriosRHView             = lazy(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
-const UsuariosView                 = lazy(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
-const PDVView                              = lazy(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
-const HistoricoVendasView                  = lazy(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
-const DevolucoesView                       = lazy(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
-const PedidosOnlineView                    = lazy(() => import('./views/PedidosOnlineView').then(m => ({ default: m.PedidosOnlineView })));
-const AlcadasView                          = lazy(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
-const DREView                              = lazy(() => import('./views/DREView').then(m => ({ default: m.DREView })));
-const PromocoesMarketingView               = lazy(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
-const CampanhasMarketingView               = lazy(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
-const CuponsMarketingView                  = lazy(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
-const CalendarioEditorialView              = lazy(() => import('./views/CalendarioEditorialView').then(m => ({ default: m.CalendarioEditorialView })));
-const AprovacoesPromocaoFinanceiroView     = lazy(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
-const PesquisasView                        = lazy(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
-const MinhasPesquisasView                  = lazy(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
-const MeuCrachaView                        = lazy(() => import('./views/MeuCrachaView').then(m => ({ default: m.MeuCrachaView })));
-const CrachaVirtualView                    = lazy(() => import('./views/CrachaVirtualView').then(m => ({ default: m.CrachaVirtualView })));
-const ArtesPromocionaisView                = lazy(() => import('./views/ArtesPromocionaisView').then(m => ({ default: m.ArtesPromocionaisView })));
-const AprovacoesConteudoMarketingView      = lazy(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
-const ControleCaixaView                    = lazy(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
-const SimuladorPagamentoView               = lazy(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
-const RegistroPontoExpressView             = lazy(() => import('./views/RegistroPontoExpressView').then(m => ({ default: m.RegistroPontoExpressView })));
-const DesenvolvimentoIAView                = lazy(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
-const RelogioMaquinasView                  = lazy(() => import('./views/RelogioMaquinasView').then(m => ({ default: m.RelogioMaquinasView })));
-const CentralTempoView                     = lazy(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
-const CategoriasProdutoView                = lazy(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
-const LixeiraView                          = lazy(() => import('./views/LixeiraView').then(m => ({ default: m.LixeiraView })));
-const CatalogoProdutosView                 = lazy(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
-const OrcamentosView                       = lazy(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
-const PedidosVendaView                     = lazy(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
-const ClienteEspecialView                  = lazy(() => import('./views/ClienteEspecialView').then(m => ({ default: m.ClienteEspecialView })));
-const MetricasRedesSociaisView             = lazy(() => import('./views/MetricasRedesSociaisView').then(m => ({ default: m.MetricasRedesSociaisView })));
-const MatrizCompeticaoView                 = lazy(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
-const MatrizAvaliacoesView                 = lazy(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
-const MatrizCapitalView                    = lazy(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
-const MatrizConteudoView                   = lazy(() => import('./views/MatrizConteudoView').then(m => ({ default: m.MatrizConteudoView })));
-const MandatosView                         = lazy(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
-const FilialCapitalView                    = lazy(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
-const RateioAdministrativoView             = lazy(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
-const HubView                              = lazy(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
-const AulaModoView                         = lazy(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
-const AulaAtividadeView                    = lazy(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
-const MaxShowsView                         = lazy(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
-const DocumentosView                       = lazy(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
-const PendenciasView                       = lazy(() => import('./views/PendenciasView').then(m => ({ default: m.PendenciasView })));
+const InicioView              = lazyView(() => import('./views/InicioView').then(m => ({ default: m.InicioView })));
+const DashboardAnalyticsView  = lazyView(() => import('./views/DashboardAnalyticsView').then(m => ({ default: m.DashboardAnalyticsView })));
+const FiliaisView             = lazyView(() => import('./views/FiliaisView').then(m => ({ default: m.FiliaisView })));
+const CRMView                 = lazyView(() => import('./views/CRMView').then(m => ({ default: m.CRMView })));
+const ProdutosView            = lazyView(() => import('./views/ProdutosView').then(m => ({ default: m.ProdutosView })));
+const RequisicoesView         = lazyView(() => import('./views/RequisicoesView').then(m => ({ default: m.RequisicoesView })));
+const RequisicoesSetorView    = lazyView(() => import('./views/RequisicoesSetorView').then(m => ({ default: m.RequisicoesSetorView })));
+const AprovacoesComprasView   = lazyView(() => import('./views/AprovacoesComprasView').then(m => ({ default: m.AprovacoesComprasView })));
+const VitrinePublicaView      = lazyView(() => import('./views/VitrinePublicaView').then(m => ({ default: m.VitrinePublicaView })));
+const MarketingConfigView     = lazyView(() => import('./views/MarketingConfigView').then(m => ({ default: m.MarketingConfigView })));
+const ConfigJurosView         = lazyView(() => import('./views/ConfigJurosView').then(m => ({ default: m.ConfigJurosView })));
+const CotacoesView            = lazyView(() => import('./views/CotacoesView').then(m => ({ default: m.CotacoesView })));
+const PedidosView             = lazyView(() => import('./views/PedidosView').then(m => ({ default: m.PedidosView })));
+const NotasRecebidasView      = lazyView(() => import('./views/NotasRecebidasView').then(m => ({ default: m.NotasRecebidasView })));
+const RecebimentosView        = lazyView(() => import('./views/RecebimentosView').then(m => ({ default: m.RecebimentosView })));
+const ContasPagarView         = lazyView(() => import('./views/ContasPagarView').then(m => ({ default: m.ContasPagarView })));
+const ContasReceberView       = lazyView(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
+const CaixaBancosView         = lazyView(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
+const GenericCRUDView         = lazyView(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
+const ServicosView            = lazyView(() => import('./views/ServicosView').then(m => ({ default: m.ServicosView })));
+const MovimentacoesEstoqueView = lazyView(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
+const SaldosEstoqueView       = lazyView(() => import('./views/SaldosEstoqueView').then(m => ({ default: m.SaldosEstoqueView })));
+const RequisicoesEstoqueView  = lazyView(() => import('./views/RequisicoesEstoqueView').then(m => ({ default: m.RequisicoesEstoqueView })));
+const AprovacoesEstoqueView   = lazyView(() => import('./views/AprovacoesEstoqueView').then(m => ({ default: m.AprovacoesEstoqueView })));
+const ExpedicaoView           = lazyView(() => import('./views/ExpedicaoView').then(m => ({ default: m.ExpedicaoView })));
+const InventariosView         = lazyView(() => import('./views/InventariosView').then(m => ({ default: m.InventariosView })));
+const ValidadesView           = lazyView(() => import('./views/ValidadesView').then(m => ({ default: m.ValidadesView })));
+const RelatoriosComprasView        = lazyView(() => import('./views/RelatoriosComprasView').then(m => ({ default: m.RelatoriosComprasView })));
+const RelatoriosVendasView         = lazyView(() => import('./views/RelatoriosVendasView').then(m => ({ default: m.RelatoriosVendasView })));
+const RelatoriosEstoqueView        = lazyView(() => import('./views/RelatoriosEstoqueView').then(m => ({ default: m.RelatoriosEstoqueView })));
+const SugestoesComprasView         = lazyView(() => import('./views/SugestoesComprasView').then(m => ({ default: m.SugestoesComprasView })));
+const GerenciamentoComprasView     = lazyView(() => import('./views/GerenciamentoComprasView').then(m => ({ default: m.GerenciamentoComprasView })));
+const GerenciamentoEstoqueView     = lazyView(() => import('./views/GerenciamentoEstoqueView').then(m => ({ default: m.GerenciamentoEstoqueView })));
+const RelatoriosFinanceirosView    = lazyView(() => import('./views/RelatoriosFinanceirosView').then(m => ({ default: m.RelatoriosFinanceirosView })));
+const RecibosVendasView            = lazyView(() => import('./views/RecibosVendasView').then(m => ({ default: m.RecibosVendasView })));
+const NotasEmitidasView            = lazyView(() => import('./views/NotasEmitidasView').then(m => ({ default: m.NotasEmitidasView })));
+const GerenciamentoFinanceiroView  = lazyView(() => import('./views/GerenciamentoFinanceiroView').then(m => ({ default: m.GerenciamentoFinanceiroView })));
+const PatrimonioView               = lazyView(() => import('./views/PatrimonioView').then(m => ({ default: m.PatrimonioView })));
+const FuncionariosView             = lazyView(() => import('./views/FuncionariosView').then(m => ({ default: m.FuncionariosView })));
+const FolhaPagamentoView           = lazyView(() => import('./views/FolhaPagamentoView').then(m => ({ default: m.FolhaPagamentoView })));
+const FeriasView                   = lazyView(() => import('./views/FeriasView').then(m => ({ default: m.FeriasView })));
+const PontoEletronicoView          = lazyView(() => import('./views/PontoEletronicoView').then(m => ({ default: m.PontoEletronicoView })));
+const AfastamentosView             = lazyView(() => import('./views/AfastamentosView').then(m => ({ default: m.AfastamentosView })));
+const DesligamentosView            = lazyView(() => import('./views/DesligamentosView').then(m => ({ default: m.DesligamentosView })));
+const RecrutamentoView             = lazyView(() => import('./views/RecrutamentoView').then(m => ({ default: m.RecrutamentoView })));
+const PainelBIView                 = lazyView(() => import('./views/PainelBIView').then(m => ({ default: m.PainelBIView })));
+const BriefingDiarioView           = lazyView(() => import('./views/BriefingDiarioView').then(m => ({ default: m.BriefingDiarioView })));
+const TreinamentosView             = lazyView(() => import('./views/TreinamentosView').then(m => ({ default: m.TreinamentosView })));
+const AvaliacoesView               = lazyView(() => import('./views/AvaliacoesView').then(m => ({ default: m.AvaliacoesView })));
+const CentralAvaliacaoView         = lazyView(() => import('./views/CentralAvaliacaoView').then(m => ({ default: m.CentralAvaliacaoView })));
+const DemandasView                 = lazyView(() => import('./views/DemandasView').then(m => ({ default: m.DemandasView })));
+const FeedbackRequerimentosView    = lazyView(() => import('./views/FeedbackRequerimentosView').then(m => ({ default: m.FeedbackRequerimentosView })));
+const GerenciamentoRHView          = lazyView(() => import('./views/GerenciamentoRHView').then(m => ({ default: m.GerenciamentoRHView })));
+const RelatoriosRHView             = lazyView(() => import('./views/RelatoriosRHView').then(m => ({ default: m.RelatoriosRHView })));
+const UsuariosView                 = lazyView(() => import('./views/UsuariosView').then(m => ({ default: m.UsuariosView })));
+const PDVView                              = lazyView(() => import('./views/PDVView').then(m => ({ default: m.PDVView })));
+const HistoricoVendasView                  = lazyView(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
+const DevolucoesView                       = lazyView(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
+const PedidosOnlineView                    = lazyView(() => import('./views/PedidosOnlineView').then(m => ({ default: m.PedidosOnlineView })));
+const AlcadasView                          = lazyView(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
+const DREView                              = lazyView(() => import('./views/DREView').then(m => ({ default: m.DREView })));
+const PromocoesMarketingView               = lazyView(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
+const CampanhasMarketingView               = lazyView(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
+const CuponsMarketingView                  = lazyView(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
+const CalendarioEditorialView              = lazyView(() => import('./views/CalendarioEditorialView').then(m => ({ default: m.CalendarioEditorialView })));
+const AprovacoesPromocaoFinanceiroView     = lazyView(() => import('./views/AprovacoesPromocaoFinanceiroView').then(m => ({ default: m.AprovacoesPromocaoFinanceiroView })));
+const PesquisasView                        = lazyView(() => import('./views/PesquisasView').then(m => ({ default: m.PesquisasView })));
+const MinhasPesquisasView                  = lazyView(() => import('./views/MinhasPesquisasView').then(m => ({ default: m.MinhasPesquisasView })));
+const MeuCrachaView                        = lazyView(() => import('./views/MeuCrachaView').then(m => ({ default: m.MeuCrachaView })));
+const CrachaVirtualView                    = lazyView(() => import('./views/CrachaVirtualView').then(m => ({ default: m.CrachaVirtualView })));
+const ArtesPromocionaisView                = lazyView(() => import('./views/ArtesPromocionaisView').then(m => ({ default: m.ArtesPromocionaisView })));
+const AprovacoesConteudoMarketingView      = lazyView(() => import('./views/AprovacoesConteudoMarketingView').then(m => ({ default: m.AprovacoesConteudoMarketingView })));
+const ControleCaixaView                    = lazyView(() => import('./views/ControleCaixaView').then(m => ({ default: m.ControleCaixaView })));
+const SimuladorPagamentoView               = lazyView(() => import('./views/SimuladorPagamentoView').then(m => ({ default: m.SimuladorPagamentoView })));
+const RegistroPontoExpressView             = lazyView(() => import('./views/RegistroPontoExpressView').then(m => ({ default: m.RegistroPontoExpressView })));
+const DesenvolvimentoIAView                = lazyView(() => import('./views/DesenvolvimentoIAView').then(m => ({ default: m.DesenvolvimentoIAView })));
+const RelogioMaquinasView                  = lazyView(() => import('./views/RelogioMaquinasView').then(m => ({ default: m.RelogioMaquinasView })));
+const CentralTempoView                     = lazyView(() => import('./views/CentralTempoView').then(m => ({ default: m.CentralTempoView })));
+const CategoriasProdutoView                = lazyView(() => import('./views/CategoriasProdutoView').then(m => ({ default: m.CategoriasProdutoView })));
+const LixeiraView                          = lazyView(() => import('./views/LixeiraView').then(m => ({ default: m.LixeiraView })));
+const CatalogoProdutosView                 = lazyView(() => import('./views/CatalogoProdutosView').then(m => ({ default: m.CatalogoProdutosView })));
+const OrcamentosView                       = lazyView(() => import('./views/OrcamentosView').then(m => ({ default: m.OrcamentosView })));
+const PedidosVendaView                     = lazyView(() => import('./views/PedidosVendaView').then(m => ({ default: m.PedidosVendaView })));
+const ClienteEspecialView                  = lazyView(() => import('./views/ClienteEspecialView').then(m => ({ default: m.ClienteEspecialView })));
+const MetricasRedesSociaisView             = lazyView(() => import('./views/MetricasRedesSociaisView').then(m => ({ default: m.MetricasRedesSociaisView })));
+const MatrizCompeticaoView                 = lazyView(() => import('./views/MatrizCompeticaoView').then(m => ({ default: m.MatrizCompeticaoView })));
+const MatrizAvaliacoesView                 = lazyView(() => import('./views/MatrizAvaliacoesView').then(m => ({ default: m.MatrizAvaliacoesView })));
+const MatrizCapitalView                    = lazyView(() => import('./views/MatrizCapitalView').then(m => ({ default: m.MatrizCapitalView })));
+const MatrizConteudoView                   = lazyView(() => import('./views/MatrizConteudoView').then(m => ({ default: m.MatrizConteudoView })));
+const MandatosView                         = lazyView(() => import('./views/MandatosView').then(m => ({ default: m.MandatosView })));
+const FilialCapitalView                    = lazyView(() => import('./views/FilialCapitalView').then(m => ({ default: m.FilialCapitalView })));
+const RateioAdministrativoView             = lazyView(() => import('./views/RateioAdministrativoView').then(m => ({ default: m.RateioAdministrativoView })));
+const HubView                              = lazyView(() => import('./views/SessoesGeraisView').then(m => ({ default: m.HubView })));
+const AulaModoView                         = lazyView(() => import('./views/AulaModoView').then(m => ({ default: m.AulaModoView })));
+const AulaAtividadeView                    = lazyView(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
+const MaxShowsView                         = lazyView(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
+const DocumentosView                       = lazyView(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
+const PendenciasView                       = lazyView(() => import('./views/PendenciasView').then(m => ({ default: m.PendenciasView })));
+
+// --- prefetch das views ---
+//
+// Toda view e `lazy`, entao o chunk dela so comecava a baixar no CLIQUE do
+// menu — e ate chegar o utilizador olhava para o PageLoadingFallback. Sao
+// 49 KB em Usuarios, 192 KB no PDV, 388 KB no Dashboard: na primeira visita
+// de cada tela isso e uma espera visivel, e some na segunda (modulo ja em
+// memoria). Era a maior fatia do "atraso ao apertar o menu".
+//
+// `lazyView` guarda o proprio loader do `lazy()` em `.preload`. Isto importa:
+// a primeira versao repetia `import('./views/X')` numa tabela a parte, o que
+// dava ao Rollup um segundo ponto de entrada dinamico para cada uma das 110
+// views — o grafo de chunks inchou e o build morreu por falta de memoria.
+// Assim nao existe nenhum import novo: o grafo e exatamente o de antes.
+//
+// A tabela e derivada do switch do `renderContent()`. View nova que nao entrar
+// aqui apenas nao ganha prefetch — degrada para o comportamento antigo, nunca
+// quebra.
+type PreloadableView<T extends React.ComponentType<any>> =
+  React.LazyExoticComponent<T> & { preload: () => Promise<unknown> };
+
+function lazyView<T extends React.ComponentType<any>>(
+  loader: () => Promise<{ default: T }>,
+): PreloadableView<T> {
+  const Componente = lazy(loader) as PreloadableView<T>;
+  Componente.preload = loader;
+  return Componente;
+}
+
+const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
+  'inicio': InicioView,
+  'sessoes-gerais': HubView,
+  'analise-ia': HubView,
+  'dashboard': DashboardAnalyticsView,
+  'cadastros-categorias': CategoriasProdutoView,
+  'empresa-filiais': FiliaisView,
+  'requisicoes-dosetor': RequisicoesSetorView,
+  'cadastros-fornecedores': CRMView,
+  'cadastros-produtos': ProdutosView,
+  'cadastros-serviços': ServicosView,
+  'cadastros-lixeira': LixeiraView,
+  'empresa-projetos': GenericCRUDView,
+  'financeiro-dre': DREView,
+  'financeiro-centrosdecusto': GenericCRUDView,
+  'empresa-condiçõesdepagamento': GenericCRUDView,
+  'empresa-formasdepagamento': GenericCRUDView,
+  'compras-requisiçõesdecompra': RequisicoesView,
+  'compras-cotações': CotacoesView,
+  'compras-pedidos': PedidosView,
+  'compras-notasrecebidas': NotasRecebidasView,
+  'requisicoes-aprovações': AprovacoesComprasView,
+  'compras-sugestõesdecompras': SugestoesComprasView,
+  'compras-gerenciamento': GerenciamentoComprasView,
+  'compras-relatórios': RelatoriosComprasView,
+  'relatorio-vendas': RelatoriosVendasView,
+  'estoque-liberarrequisições': AprovacoesEstoqueView,
+  'estoque-recebimentos': RecebimentosView,
+  'estoque-requisiçõesdematerial': RequisicoesEstoqueView,
+  'estoque-expedição': ExpedicaoView,
+  'estoque-movimentações': MovimentacoesEstoqueView,
+  'estoque-saldos': SaldosEstoqueView,
+  'estoque-validades': ValidadesView,
+  'estoque-inventários': InventariosView,
+  'estoque-gerenciamento': GerenciamentoEstoqueView,
+  'estoque-relatórios': RelatoriosEstoqueView,
+  'financeiro-controledecaixa': ControleCaixaView,
+  'financeiro-contasareceber': ContasReceberView,
+  'financeiro-contasapagar': ContasPagarView,
+  'financeiro-patrimônio': PatrimonioView,
+  'financeiro-caixabancos': CaixaBancosView,
+  'financeiro-capital': FilialCapitalView,
+  'financeiro-rateioadministrativo': RateioAdministrativoView,
+  'rh-mandatos': MandatosView,
+  'financeiro-juros&multa': ConfigJurosView,
+  'financeiro-aprovaçõesdecotação': CotacoesView,
+  'financeiro-aprovaçõesdepromoções': AprovacoesPromocaoFinanceiroView,
+  'financeiro-aprovaçõesdeconteúdo': AprovacoesConteudoMarketingView,
+  'financeiro-gerenciamento': GerenciamentoFinanceiroView,
+  'financeiro-relatórios': RelatoriosFinanceirosView,
+  'financeiro-recibosdevendas': RecibosVendasView,
+  'financeiro-notasemitidas': NotasEmitidasView,
+  'rh-funcionários': FuncionariosView,
+  'rh-departamentos': GenericCRUDView,
+  'rh-cargos': GenericCRUDView,
+  'rh-folhadepagamento': FolhaPagamentoView,
+  'rh-férias': FeriasView,
+  'rh-registrodeponto': PontoEletronicoView,
+  'rh-afastamentos': AfastamentosView,
+  'rh-desligamento': DesligamentosView,
+  'rh-recrutamentoeseleção': RecrutamentoView,
+  'rh-benefícios': GenericCRUDView,
+  'rh-treinamentos': TreinamentosView,
+  'rh-pesquisas': PesquisasView,
+  'rh-gerenciamento': GerenciamentoRHView,
+  'rh-relatórios': RelatoriosRHView,
+  'vendas-pdv': PDVView,
+  'vendas-clientes': CRMView,
+  'vendas-históricodevendas': HistoricoVendasView,
+  'vendas-devoluções': DevolucoesView,
+  'vendas-pedidosonline': PedidosOnlineView,
+  'financeiro-alçadas': AlcadasView,
+  'vendas-orçamentos': OrcamentosView,
+  'vendas-pedidosdevenda': PedidosVendaView,
+  'vendas-clienteespecial': ClienteEspecialView,
+  'estoque-pedidosdevenda': PedidosVendaView,
+  'financeiro-pedidosdevenda': PedidosVendaView,
+  'financeiro-aprovaçõesdeorçamento': OrcamentosView,
+  'marketing-redessociais': MetricasRedesSociaisView,
+  'marketing-campanhas': CampanhasMarketingView,
+  'marketing-promoções': PromocoesMarketingView,
+  'marketing-cupons': CuponsMarketingView,
+  'marketing-calendário': CalendarioEditorialView,
+  'marketing-vitrinepública': VitrinePublicaView,
+  'marketing-configurações': MarketingConfigView,
+  'minhas-pesquisas': MinhasPesquisasView,
+  'artes-promocionais': ArtesPromocionaisView,
+  'usuarios': UsuariosView,
+  'meu-cracha': MeuCrachaView,
+  'cracha-virtual': CrachaVirtualView,
+  'catalogo-produtos': CatalogoProdutosView,
+  'avaliacoes': CentralAvaliacaoView,
+  'demandas': DemandasView,
+  'demandas-metas': DemandasView,
+  'demandas-conselho': DemandasView,
+  'metas': DemandasView,
+  'feedback-org': FeedbackRequerimentosView,
+  'ti-desenvolvimentocomia': DesenvolvimentoIAView,
+  'ti-relógiodasmáquinas': RelogioMaquinasView,
+  'central-tempo': CentralTempoView,
+  'painel-bi': PainelBIView,
+  'briefing-diario': BriefingDiarioView,
+  'matriz-competicao': MatrizCompeticaoView,
+  'matriz-avaliacoes': CentralAvaliacaoView,
+  'matriz-capital': MatrizCapitalView,
+  'matriz-conteudo': MatrizConteudoView,
+  'aula-modo': AulaModoView,
+  'aula-atividade': AulaAtividadeView,
+  'max-show': MaxShowsView,
+  'documentos': DocumentosView,
+  'pendencias': PendenciasView,
+};
+
+// Hover-intent. Sem isto, arrastar o rato do topo da sidebar ate "Sair"
+// atravessa todos os itens do caminho e dispara um import() em cada um — 10 a
+// 20 chunks que ninguem pediu, e com a turma inteira a fazer o mesmo isso e um
+// pico na wifi do laboratorio. Com 80ms de pousio, so o item onde o ponteiro
+// realmente para e que baixa. O pointerdown nao passa por aqui: la a intencao
+// e inequivoca e cada milissegundo conta.
+//
+// Um temporizador so chega: apenas um item pode estar sob o ponteiro de cada
+// vez, e entrar no seguinte cancela o anterior.
+const HOVER_INTENT_MS = 80;
+let hoverIntentTimer: ReturnType<typeof setTimeout> | null = null;
+
+function prefetchOnHover(view: string) {
+  if (hoverIntentTimer !== null) clearTimeout(hoverIntentTimer);
+  hoverIntentTimer = setTimeout(() => {
+    hoverIntentTimer = null;
+    prefetchView(view);
+  }, HOVER_INTENT_MS);
+}
+
+function cancelPrefetchHover() {
+  if (hoverIntentTimer === null) return;
+  clearTimeout(hoverIntentTimer);
+  hoverIntentTimer = null;
+}
+
+const viewPrefetched = new Set<string>();
+function prefetchView(view: string) {
+  if (viewPrefetched.has(view)) return;
+  const alvo = PREFETCH_VIEW[view];
+  if (!alvo) return;
+  viewPrefetched.add(view);
+  // Falha de rede aqui e irrelevante: o `lazy()` tenta de novo na montagem.
+  // Tiramos do Set para o proximo toque poder reaquecer.
+  alvo.preload().catch(() => viewPrefetched.delete(view));
+}
 
 // --- menu ---
 // Submenu pode ser uma string (acesso conforme o módulo pai) ou um objeto
@@ -412,14 +590,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
 
     <nav className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
       <div className="flex flex-col gap-2">
-        <button onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+        <button onPointerEnter={() => prefetchOnHover('inicio')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('inicio')} onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
         </button>
         {/* Atividade da aula: só aparece para quem recebeu alguma vigente, e por
             isso não tem condição de role — o filtro é a própria existência da
             atividade (a RLS da migr. 403 já recorta por filial e público). */}
         {atividadesAula > 0 && (
-          <button onClick={() => { navigate('aula-atividade'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'aula-atividade' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('aula-atividade')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('aula-atividade')} onClick={() => { navigate('aula-atividade'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'aula-atividade' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <ClipboardList size={18} /><span className="flex-1 text-left">Atividade da aula</span>
             {atividadesNaoLidas > 0 && (
               <span className="text-[9px] font-black min-w-5 h-5 px-1.5 rounded-full bg-accent text-black flex items-center justify-center">
@@ -430,7 +608,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         )}
         {aulaAllow('dashboard') && (profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
           || profile?.role === 'gerente') && (
-          <button onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('dashboard')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('dashboard')} onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
         )}
@@ -439,7 +617,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         {aulaAllow('usuarios') && (profile?.role === 'admin' || profile?.role === 'ceo'
           || (profile?.role === 'gerente' && profile?.pode_acessar_usuarios !== false)
           || hasSetor(profile, 'rh')) && (
-          <button onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('usuarios')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('usuarios')} onClick={() => { navigate('usuarios'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'usuarios' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
@@ -453,7 +631,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             este módulo tiraria o crachá da tela justamente no dia em que ele é
             usado. */}
         {profile?.role !== 'admin' && (
-        <button onClick={() => { navigate('meu-cracha'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'meu-cracha' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+        <button onPointerEnter={() => prefetchOnHover('meu-cracha')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('meu-cracha')} onClick={() => { navigate('meu-cracha'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'meu-cracha' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <IdCard size={18} /><span>Meu Crachá</span>
         </button>
         )}
@@ -462,7 +640,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             as unidades (a turma inteira passa na mesma fila), e de dentro de uma
             filial a lista viria pela metade. */}
         {matrizMode && profile?.role === 'admin' && (
-          <button onClick={() => { navigate('cracha-virtual'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'cracha-virtual' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('cracha-virtual')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('cracha-virtual')} onClick={() => { navigate('cracha-virtual'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'cracha-virtual' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <ScanLine size={18} /><span>Crachá Virtual</span>
           </button>
         )}
@@ -471,7 +649,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             Modo Aula (evita lockout). Some no modo filial: não faz sentido configurar
             turmas a partir de dentro de uma unidade. */}
         {matrizMode && (profile?.role === 'admin' || profile?.role === 'ceo') && (
-          <button onClick={() => { navigate('aula-modo'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'aula-modo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('aula-modo')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('aula-modo')} onClick={() => { navigate('aula-modo'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'aula-modo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <GraduationCap size={18} /><span>Modo Aula</span>
           </button>
         )}
@@ -484,13 +662,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             Aberto pra todo mundo; cada aluno edita só o próprio material; docente
             (admin/CEO/conselheiro) enxerga todos via RLS. Aula-aware. */}
         {aulaAllow('max-show') && (
-          <button onClick={() => { navigate('max-show'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'max-show' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('max-show')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('max-show')} onClick={() => { navigate('max-show'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'max-show' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Presentation size={18} /><span>Max Show</span>
           </button>
         )}
         {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
         {aulaAllow('catalogo-produtos') && (
-          <button onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('catalogo-produtos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('catalogo-produtos')} onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BookOpen size={18} /><span>Catálogo</span>
           </button>
         )}
@@ -511,7 +689,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             entra em Matriz, então para ele é o contrário. `viewPermitidaNoModo`
             repete a mesma régua — o menu não é a única porta. */}
         {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
-          <button onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('pendencias')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('pendencias')} onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
           </button>
         )}
@@ -519,13 +697,13 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             baixa. Sem aulaAllow de propósito: o roteiro da atividade costuma
             ser um PDF, e some-lo no Modo Aula tiraria o módulo justamente da
             hora em que ele serve. */}
-        <button onClick={() => { navigate('documentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'documentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+        <button onPointerEnter={() => prefetchOnHover('documentos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('documentos')} onClick={() => { navigate('documentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'documentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <FileText size={18} /><span>Documentos</span>
         </button>
         {/* Central de Avaliação (modo filial): hub com abas Padrão/Metas.
             No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
         {!matrizMode && aulaAllow('avaliacoes') && (
-          <button onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('avaliacoes')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('avaliacoes')} onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Star size={18} /><span>Central de Avaliação</span>
           </button>
         )}
@@ -533,7 +711,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             Admin/CEO em filial mode também veem — permite controlar o que
             chegou pra filial. Some em modo Matriz (lá as demandas são criadas). */}
         {!matrizMode && aulaAllow('demandas') && (
-          <button onClick={() => { navigate('demandas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold ${activeView === 'demandas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('demandas')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('demandas')} onClick={() => { navigate('demandas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'demandas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Inbox size={18} /><span>Demandas</span>
           </button>
         )}
@@ -545,7 +723,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             a view decide internamente Requerimentos vs MatrizRequerimentos
             olhando filialAtiva. */}
         {aulaAllow('feedback-org') && (
-          <button onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-start gap-3 p-2.5 rounded-xl transition-all text-sm font-semibold text-left ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+          <button onPointerEnter={() => prefetchOnHover('feedback-org')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('feedback-org')} onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-start gap-3 p-2.5 rounded-xl text-sm font-semibold text-left ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <MessageSquare size={18} className="shrink-0 mt-0.5" /><span className="leading-tight">Feedback & Requerimentos</span>
           </button>
         )}
@@ -565,30 +743,30 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                   <Layers size={10} /> Matriz
                 </span>
               </div>
-              <button onClick={() => { navigate('sessoes-gerais'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'sessoes-gerais' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onPointerEnter={() => prefetchOnHover('sessoes-gerais')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('sessoes-gerais')} onClick={() => { navigate('sessoes-gerais'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'sessoes-gerais' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Layers size={16} /><span>Sessões Gerais</span>
               </button>
-              <button onClick={() => { navigate('analise-ia'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'analise-ia' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onPointerEnter={() => prefetchOnHover('analise-ia')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('analise-ia')} onClick={() => { navigate('analise-ia'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'analise-ia' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Brain size={16} /><span>Análise com IA</span>
               </button>
-              <button onClick={() => { navigate('matriz-capital'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onPointerEnter={() => prefetchOnHover('matriz-capital')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('matriz-capital')} onClick={() => { navigate('matriz-capital'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'matriz-capital' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Landmark size={16} /><span>Capital</span>
               </button>
               {profile?.role === 'admin' && (
-                <button onClick={() => { navigate('matriz-conteudo'); onClose?.(); }}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-conteudo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <button onPointerEnter={() => prefetchOnHover('matriz-conteudo')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('matriz-conteudo')} onClick={() => { navigate('matriz-conteudo'); onClose?.(); }}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'matriz-conteudo' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                   <Dices size={16} /><span>Conteúdo</span>
                 </button>
               )}
-              <button onClick={() => { navigate('matriz-competicao'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onPointerEnter={() => prefetchOnHover('matriz-competicao')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('matriz-competicao')} onClick={() => { navigate('matriz-competicao'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Trophy size={16} /><span>Competição</span>
               </button>
-              <button onClick={() => { navigate('avaliacoes'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl transition-all text-sm font-medium ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+              <button onPointerEnter={() => prefetchOnHover('avaliacoes')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('avaliacoes')} onClick={() => { navigate('avaliacoes'); onClose?.(); }}
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Star size={16} /><span>Central de Avaliação</span>
               </button>
             </>
@@ -617,7 +795,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                     </span>
                   </div>
                 )}
-                <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl transition-all text-sm font-medium ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
+                <button onClick={() => toggleModule(mod.id)} className={`flex items-center justify-between p-2.5 rounded-xl text-sm font-medium ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
                   <div className="flex items-center gap-3">
                     <Icon size={16}
                       className={isOpen && !mod.color ? 'text-accent' : ''}
@@ -650,7 +828,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             const isActive = activeView === viewId;
                             return (
                               <div key={label} className="relative">
-                                <button onClick={() => { navigate(viewId); onClose?.(); }}
+                                <button onPointerEnter={() => prefetchOnHover(viewId)} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView(viewId)} onClick={() => { navigate(viewId); onClose?.(); }}
                                   className={`w-full nav-subitem flex items-center justify-between gap-2 text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 text-left ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
                                   style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                                   <span className="flex-1 min-w-0 text-left">{label}</span>
@@ -1464,7 +1642,7 @@ function LogMaxAppInner() {
               onClick={() => setMobileMenuOpen(false)}
               className="fixed inset-0 bg-black/60 z-40 lg:hidden" />
             <motion.aside initial={{ x: -288 }} animate={{ x: 0 }} exit={{ x: -288 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              transition={{ type: 'tween', duration: 0.18, ease: 'easeOut' }}
               className="fixed top-0 left-0 w-72 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat sidebar-dark lg:hidden">
               <SidebarNav
                 activeView={activeView} navigate={navigate}

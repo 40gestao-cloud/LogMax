@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* O `hover:` do Tailwind sai como `.hover\:x:hover{...}` puro — sem
+   `@media (hover: hover)`. Em tela de toque o :hover e pegajoso: o botao
+   fica no estado de hover depois que o dedo ja saiu, e so larga quando se
+   toca noutro sitio. Sao ~280 regras assim no bundle.
+
+   Redefinir a variante cobre todas de uma vez, sem tocar em JSX nenhum. No
+   rato nada muda. `group-hover` fica de proposito como estava: ali o estado
+   grudado e util (a camera sobre o avatar em Usuarios, por exemplo, aparece
+   ao tocar na linha). */
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 /* ── Montserrat (subset latin, self-hosted em /public/fonts) ──
    Substitui a Inter/system stack anterior. Vem antes de qualquer
    outra regra pra ficar disponível assim que o CSS carrega.
@@ -1141,6 +1158,13 @@ main.main-scrollbar,
   background-color: var(--color-scrollbar-hover);
 }
 
+/* ── Fallback de Suspense: aparece so se a espera passar de 150ms ── */
+@keyframes page-loading-reveal { to { opacity: 1; } }
+.page-loading-fallback {
+  opacity: 0;
+  animation: page-loading-reveal 0.12s ease 0.15s forwards;
+}
+
 /* ── Shimmer / Shine button effect ── */
 @keyframes btn-shine {
   0%   { transform: translateX(-150%) skewX(-15deg); }
@@ -1834,6 +1858,15 @@ main.main-scrollbar,
    Botão top-level e botões de módulo. No hover: salta 2px, ganha cor
    do accent, borda accent e glow sutil — usa a variável --color-accent
    pra acompanhar o tema escolhido (dark/light). */
+.nav-item,
+.nav-subitem {
+  /* `manipulation` desliga o duplo-toque-pra-zoom NESTES elementos: o
+     navegador para de segurar o evento esperando o segundo toque. O
+     tap-highlight cinza do Android sai porque ja temos :active proprio. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .nav-item {
   transition:
     color 0.18s ease,
@@ -1868,14 +1901,30 @@ main.main-scrollbar,
   flex-shrink: 0;
 }
 
-.nav-item:hover:not(.is-active) {
+/* O hover fica atras de `hover: hover`. Em tela de toque o :hover e pegajoso:
+   o dedo encosta, o item sobe 2px e FICA subido depois que o dedo ja saiu — e
+   como nao havia :active, entre encostar e ver qualquer coisa passava a rampa
+   de 0.18s desta transicao. Era isso que se sentia como atraso no menu. */
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover:not(.is-active) {
+    color: var(--color-accent);
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    box-shadow:
+      0 6px 18px -6px color-mix(in srgb, var(--color-accent) 55%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent) inset;
+    background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+}
+
+/* Resposta ao toque: instantanea de proposito (`transition-duration: 0s`).
+   Qualquer rampa aqui volta a ser o atraso que estamos tirando. */
+.nav-item:active,
+.nav-subitem:active {
+  transform: scale(0.98);
+  transition-duration: 0s;
+  background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent);
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  box-shadow:
-    0 6px 18px -6px color-mix(in srgb, var(--color-accent) 55%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent) inset;
-  background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
 }
 
 /* ── Hover destacado dos submódulos ──
@@ -1889,11 +1938,13 @@ main.main-scrollbar,
     background-color 0.18s ease;
 }
 
-.nav-subitem:hover:not(.is-active) {
-  color: var(--color-accent);
-  transform: translateX(4px);
-  border-left-color: var(--color-accent);
-  background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .nav-subitem:hover:not(.is-active) {
+    color: var(--color-accent);
+    transform: translateX(4px);
+    border-left-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
 }
 
 /* ── Frequência de Trabalho — botões de status com glass + shimmer ──

@@ -100,8 +100,13 @@ export const LoadingSpinner = () => (
   </div>
 );
 
+// O spinner so aparece depois de 150ms — e a diferenca entre "trocou de tela"
+// e "piscou um spinner no meio do caminho". Chunk que resolve rapido (tela ja
+// visitada, ou prefetch do menu que chegou a tempo) desmonta este componente
+// antes do delay e nada chega a ser pintado. O atraso e CSS puro
+// (`animation-delay`), sem timer nem estado.
 export const PageLoadingFallback = () => (
-  <div className="flex flex-col items-center justify-center w-full h-full min-h-[300px] gap-4">
+  <div className="page-loading-fallback flex flex-col items-center justify-center w-full h-full min-h-[300px] gap-4">
     <Loader2 size={36} className="animate-spin" style={{ color: '#FACC15' }} />
     <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#FACC15', opacity: 0.65 }}>
       Carregando módulo...
