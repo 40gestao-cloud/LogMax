@@ -1110,8 +1110,27 @@ html.theme-switching *::after {
 /* <main> tem overflow-y-auto — no CSS quando um eixo eh auto e o outro
    visible, o visible vira auto na pratica, entao qualquer filho que
    passe da largura habilita scroll horizontal + rubber-band no touch
-   ("view balancando"). Forcamos overflow-x hidden + contain no bounce. */
-main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contain; }
+   ("view balancando"). Forcamos overflow-x hidden + contain no bounce.
+
+   O seletor era `main.main-scrollbar` e por isso so cobria o <main>. Cada
+   view tem o proprio root com `overflow-y-auto main-scrollbar` (86 deles) —
+   scroll container aninhado que caia na mesma armadilha, sem o guard. Agora
+   a regra segue a classe do Tailwind: qualquer scroller VERTICAL com
+   main-scrollbar. Fica de fora quem declara `overflow-x-auto` de proposito
+   (wrappers de tabela e o grafico do DashboardAnalytics, que tem os dois). */
+.main-scrollbar.overflow-y-auto:not(.overflow-x-auto),
+main.main-scrollbar {
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
+/* A barra vertical aparecendo/sumindo tira e devolve 8px de largura. Numa
+   tabela `table-layout: auto` isso redistribui todas as colunas, o que pode
+   religar a barra horizontal, que muda a altura, que mexe na vertical — laco
+   de layout que so converge depois de alguns frames ("view tremendo, depois
+   normaliza", relato de Usuarios 2026-08-29). Reservar a calha mata o laco. */
+main.main-scrollbar,
+.main-scrollbar.overflow-y-auto { scrollbar-gutter: stable; }
 .main-scrollbar::-webkit-scrollbar       { width: 8px; }
 .main-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .main-scrollbar::-webkit-scrollbar-thumb {
@@ -1527,6 +1546,17 @@ main.main-scrollbar { overflow-x: hidden !important; overscroll-behavior: contai
 
 .action-btn-neutral:disabled::before {
   animation-play-state: paused;
+}
+
+/* Respeita preferencia por menos animacao — faltava aqui, e e onde mais pesa:
+   estes botoes sao POR LINHA de tabela. Em Usuarios sao tres (Editar,
+   Redefinir senha, Excluir) vezes a turma inteira, ~120 camadas em laco
+   infinito ao mesmo tempo. Numa maquina de laboratorio isso satura o
+   compositor e a tela treme enquanto monta. */
+@media (prefers-reduced-motion: reduce) {
+  .action-btn-edit::before,
+  .action-btn-delete::before,
+  .action-btn-neutral::before { animation: none; }
 }
 
 [data-theme="light"] .action-btn-neutral {

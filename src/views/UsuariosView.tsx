@@ -934,11 +934,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-2 w-10"></th>
                   <th className="pb-4 font-bold px-4">Nome</th>
                   <th className="pb-4 font-bold px-4">E-mail</th>
-                  {isAdmin && <th className="pb-4 font-bold px-4">Senha</th>}
+                  {isAdmin && <th className="pb-4 font-bold px-4 min-w-[9.5rem]">Senha</th>}
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
-                  <th className="pb-4 font-bold px-4">Vínculo RH</th>
+                  <th className="pb-4 font-bold px-4 min-w-[10rem]">Vínculo RH</th>
                   <th className="pb-4 font-bold px-4 text-center">Criado em</th>
                   <th className="pb-4 px-4"></th>
                 </tr>
@@ -946,7 +946,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               <tbody>
                 <AnimatePresence>
                   {filteredUsers.map(u => (
-                    <motion.tr key={u.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                    <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors group/row">
                       <td className="py-3 px-2 w-10">
                         <div className="relative w-8 h-8 shrink-0">
@@ -971,7 +971,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         <td className="py-3 px-4">
                           {senhas[u.id] ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-mono text-gray-300 select-all min-w-[5.5rem]">
+                              <span className="inline-block text-xs font-mono text-gray-300 select-all min-w-[5.5rem]">
                                 {senhaVisivel[u.id] ? senhas[u.id] : '••••••••'}
                               </span>
                               <button
@@ -988,7 +988,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                               )}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-600" title="Senha definida antes do cofre existir — o hash do Auth não pode ser lido de volta. Use Redefinir senha.">
+                            <span className="inline-block min-w-[5.5rem] text-xs text-gray-600" title="Senha definida antes do cofre existir — o hash do Auth não pode ser lido de volta. Use Redefinir senha.">
                               não registrada
                             </span>
                           )}
