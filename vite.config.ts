@@ -74,12 +74,30 @@ export default defineConfig(({ mode }) => {
       // Gera bundle-stats.html (project root, fora de /dist) com treemap do
       // que está em cada chunk. Ferramenta de análise local — NÃO deve ser
       // deployada nem incluída no PWA precache.
-      visualizer({
+      //
+      // Roda só sob pedido. Estava ligado em TODO build, inclusive o da
+      // Vercel, que gerava 1,7 MB de treemap a cada deploy — um artefato que
+      // só se abre localmente. O motivo é esse e só esse: não fazer trabalho
+      // que ninguém consome no CI.
+      //
+      // NÃO é otimização de tempo de build. A hipótese era que `gzipSize` +
+      // `brotliSize` (que comprimem cada um dos ~3800 módulos) dominassem o
+      // tempo, mas a medição não sustenta: 3m33s COM o plugin, 6m19s SEM, na
+      // mesma máquina. A variação do hardware é maior que o efeito, então não
+      // há ganho demonstrado — e a máquina que interessa é a da Vercel, que
+      // daqui não se mede. Se algum dia o tempo de build incomodar, comece
+      // por medir lá, não por aqui.
+      //
+      //   ANALYZE=true npm run build           (bash)
+      //   $env:ANALYZE='true'; npm run build   (PowerShell)
+      //
+      // ou ANALYZE=true no .env, para quem analisa com frequência.
+      ...(env.ANALYZE === 'true' ? [visualizer({
         filename: 'bundle-stats.html',
         gzipSize: true,
         brotliSize: true,
         template: 'treemap',
-      }),
+      })] : []),
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
