@@ -68,6 +68,7 @@ const RecebimentosView        = lazyView(() => import('./views/RecebimentosView'
 const ContasPagarView         = lazyView(() => import('./views/ContasPagarView').then(m => ({ default: m.ContasPagarView })));
 const ContasReceberView       = lazyView(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
 const CaixaBancosView         = lazyView(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
+const ConciliacaoMaquininhaView = lazyView(() => import('./views/ConciliacaoMaquininhaView').then(m => ({ default: m.ConciliacaoMaquininhaView })));
 const GenericCRUDView         = lazyView(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
 const ServicosView            = lazyView(() => import('./views/ServicosView').then(m => ({ default: m.ServicosView })));
 const MovimentacoesEstoqueView = lazyView(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
@@ -218,6 +219,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'financeiro-contasapagar': ContasPagarView,
   'financeiro-patrimônio': PatrimonioView,
   'financeiro-caixabancos': CaixaBancosView,
+  'financeiro-conciliaçãodamaquininha': ConciliacaoMaquininhaView,
   'financeiro-capital': FilialCapitalView,
   'financeiro-rateioadministrativo': RateioAdministrativoView,
   'rh-mandatos': MandatosView,
@@ -409,7 +411,12 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // 'Duplicatas' e 'Integração bancária' saíram do menu em 2026-07-28
     // (auditoria de veracidade): eram formulários que não geravam conta nem
     // conciliavam nada. As tabelas seguem no banco, como nas votações.
-    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Patrimônio',
+    submenus: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos',
+      // Migr. 570: onde a taxa da maquininha deixa de ser número na proposta e
+      // vira despesa de verdade. Entra logo depois de Caixa / Bancos porque é a
+      // tela que explica a diferença entre o que foi vendido e o que caiu na
+      // conta.
+      'Conciliação da Maquininha', 'Patrimônio',
       // Centros de Custo saiu de Empresa e ficou sem tela nenhuma: a tabela é
       // truncada no reset de produção e não havia por onde repovoar, então o
       // select de centro de custo da Requisição só mostrava "Não informar".
@@ -1488,6 +1495,9 @@ function LogMaxAppInner() {
       case 'financeiro-contasapagar':         return <ContasPagarView showToast={st} />;
       case 'financeiro-patrimônio':           return <PatrimonioView showToast={st} />;
       case 'financeiro-caixabancos':          return <CaixaBancosView showToast={st} profile={profile} />;
+      // Migr. 570. Fica ao lado de Caixa / Bancos porque é o lançamento que
+      // faz o saldo do banco fechar com o extrato da adquirente.
+      case 'financeiro-conciliaçãodamaquininha': return <ConciliacaoMaquininhaView showToast={st} profile={profile} />;
       case 'financeiro-capital':               return <FilialCapitalView showToast={st} profile={profile} />;
       // Só no hub da Matriz (migr. 323): distribui o custo da holding entre as
       // 3 unidades e gera o par conta a pagar (filial) / conta a receber (Matriz).

@@ -175,6 +175,9 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   // para liberar o índice único e permitir reconvocação, mas o RH precisa
   // continuar vendo quem aceitou e quem recusou.
   '/api/vagaconvitesview':            'vaga_convites',
+  // Conciliação da maquininha (migr. 570). Escrita só por RPC — a tela lê os
+  // lotes já fechados por aqui.
+  '/api/conciliacoesmaquininhaview': 'conciliacoes_maquininha',
   // Rateio administrativo da Matriz (migr. 323). A escrita é só por RPC;
   // estes dois entram no mapa apenas para o useFetchData conseguir ler.
   'rateio_administrativo':            'rateio_administrativo',
@@ -194,6 +197,7 @@ export const TABLES_WITH_ATIVO = new Set<string>([
   'requisicoes_estoque', 'expedicao', 'movimentacoes_estoque', 'inventarios',
   'vencimentos_estoque',
   'contas_receber', 'contas_pagar', 'duplicatas', 'previsoes', 'controle_caixa',
+  'conciliacoes_maquininha',
   'integracoes_bancarias',
   'folha_pagamento', 'ferias', 'treinamentos',
   'vendas',
