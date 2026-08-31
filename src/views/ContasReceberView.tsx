@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, CreditCard } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
@@ -485,11 +485,21 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <HistoricoOperacoes entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                            {RECEBIVEL.has(item.status) && (
+                            {/* Título de cartão não recebe por aqui: quem paga é
+                                a adquirente, e ela desconta a taxa. O banco
+                                recusa a baixa (migr. 571) — o botão sai da frente
+                                em vez de levar o aluno a um erro. */}
+                            {RECEBIVEL.has(item.status) && (item.exige_conciliacao ? (
+                              <span
+                                title="Recebimento de cartão entra por Financeiro → Conciliação da Maquininha, que credita o líquido e lança a taxa como despesa."
+                                className="py-1.5 px-3 rounded-lg text-xs font-bold text-cyan-400/80 border border-cyan-400/20 flex items-center gap-1 cursor-help">
+                                <CreditCard size={11} /> Via conciliação
+                              </span>
+                            ) : (
                               <button onClick={() => openReceber(item)} className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1">
                                 <Check size={11} /> {item.status === 'Parcial' ? 'Receber saldo' : 'Receber'}
                               </button>
-                            )}
+                            ))}
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>

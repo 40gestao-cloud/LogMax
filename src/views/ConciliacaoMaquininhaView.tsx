@@ -276,8 +276,16 @@ const ConciliacaoMaquininhaViewInner = ({
                           </td>
                           <td className="py-2 px-3 text-gray-200">
                             {t.descricao ?? '—'}
-                            {daForma && (
+                            {daForma ? (
                               <span className="ml-2 text-[10px] text-cyan-400">• desta forma</span>
+                            ) : t.exige_conciliacao ? (
+                              // Título de cartão de OUTRA forma: cabe no lote se o
+                              // extrato mostrar, mas o operador tem de ver que não
+                              // é o que o "Sugerir" escolheria.
+                              <span className="ml-2 text-[10px] text-gray-500">• cartão</span>
+                            ) : (
+                              // Não é de maquininha: entra só se o operador insistir.
+                              <span className="ml-2 text-[10px] text-yellow-500/70">• não é de cartão</span>
                             )}
                           </td>
                           <td className="py-2 px-3 font-mono text-gray-400">{t.vencimento ?? '—'}</td>
