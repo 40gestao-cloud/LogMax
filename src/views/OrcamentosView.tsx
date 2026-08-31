@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, AlertTriangle } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
@@ -9,6 +9,10 @@ import { ehVendavel } from '../lib/tipoProduto';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
+import {
+  calcularCondicao, parcelasMaximas, rotuloCondicao, vencimentosPrevistos,
+  type FormaPagamento,
+} from '../lib/condicaoPagamento';
 import { supabase } from '../lib/supabase';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -82,6 +86,10 @@ const OrcamentosViewInner = ({
     { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
+  // Formas de pagamento da unidade (Empresa → Formas de Pagamento). É este
+  // cadastro que define desconto à vista, juros, teto de parcelas e taxa —
+  // migr. 568.
+  const { data: formasPagamento } = useFetchData<any>('/api/formaspagamentoview', { filial });
   // View mascarada: usa custo para margem do orçamento (migr. 262).
   const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
 
@@ -114,6 +122,8 @@ const OrcamentosViewInner = ({
   useTravaAtualizacao(itens.length > 0, 'orcamento-em-montagem',
     'há um orçamento em montagem, ainda sem enviar');
   const [extras, setExtras] = useState({ desconto: '', observacoes: '' });
+  // Condição de pagamento: qual forma e em quantas vezes. O preço sai daqui.
+  const [condicao, setCondicao] = useState({ forma_pagamento_id: '', parcelas: '1' });
   const [produtoBusca, setProdutoBusca] = useState('');
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
@@ -167,7 +177,68 @@ const OrcamentosViewInner = ({
     [itens]
   );
   const descontoNum = parseBRL(extras.desconto);
-  const valorTotal  = Math.max(0, subtotal - descontoNum);
+
+  // Só as formas ativas da unidade entram no select — cadastro inativo o banco
+  // recusa, e oferecer o que vai ser recusado é a armadilha da lista suspensa.
+  const formasAtivas: FormaPagamento[] = useMemo(
+    () => (formasPagamento as FormaPagamento[])
+      .filter(f => (f.status ?? 'Ativo') === 'Ativo')
+      .sort((a, b) => (a.descricao ?? '').localeCompare(b.descricao ?? '', 'pt-BR', { sensitivity: 'base' })),
+    [formasPagamento]
+  );
+
+  const formaEscolhida = useMemo(
+    () => formasAtivas.find(f => f.id === condicao.forma_pagamento_id) ?? null,
+    [formasAtivas, condicao.forma_pagamento_id]
+  );
+
+  const parcelasNum = Math.max(1, parseInt(condicao.parcelas) || 1);
+  const maxParcelas = parcelasMaximas(formaEscolhida);
+
+  // PRÉVIA. O número que fica gravado é o que o gatilho do banco recalcula no
+  // INSERT/UPDATE (migr. 568) — aqui é só para o vendedor ver a conta antes de
+  // salvar. As duas contas são a mesma; ver src/lib/condicaoPagamento.ts.
+  const resumo = useMemo(
+    () => calcularCondicao(subtotal, descontoNum, formaEscolhida, parcelasNum),
+    [subtotal, descontoNum, formaEscolhida, parcelasNum]
+  );
+  const valorTotal = resumo.valorTotal;
+
+  const vencimentos = useMemo(
+    () => vencimentosPrevistos(formaEscolhida, resumo.parcelas, new Date()),
+    [formaEscolhida, resumo.parcelas]
+  );
+
+  // Crediário é crédito da própria loja: o teto é o do cliente. A conversão em
+  // pedido TRAVA (migr. 569); aqui é só o aviso, porque no momento da proposta
+  // a compra ainda não aconteceu e o cliente pode acertar antes de aprovar.
+  const ehCrediario = !!formaEscolhida?.exige_limite_credito;
+  const [credito, setCredito] = useState<{ saldo: number; vencidos: number } | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    if (!ehCrediario || !form.cliente_id || !supabase) { setCredito(null); return; }
+    (async () => {
+      try {
+        const [s, v] = await Promise.all([
+          supabase.rpc('cliente_saldo_devedor',   { p_cliente_id: form.cliente_id }),
+          supabase.rpc('cliente_titulos_vencidos', { p_cliente_id: form.cliente_id }),
+        ]);
+        if (!cancelado) setCredito({ saldo: Number(s.data ?? 0), vencidos: Number(v.data ?? 0) });
+      } catch {
+        if (!cancelado) setCredito(null);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [ehCrediario, form.cliente_id]);
+
+  const limiteCliente = useMemo(() => {
+    const c = clientes.find((x: any) => x.id === form.cliente_id);
+    const v = c?.limite_credito;
+    return v == null || v === '' ? null : Number(v);
+  }, [clientes, form.cliente_id]);
+
+  const estouraLimite = ehCrediario && credito != null && limiteCliente != null
+    && credito.saldo + valorTotal > limiteCliente;
 
   const enriched = data.map((o: any) => ({
     ...o,
@@ -184,6 +255,7 @@ const OrcamentosViewInner = ({
     setForm({ cliente_id: '', validade_dias: '3' });
     setItens([]);
     setExtras({ desconto: '', observacoes: '' });
+    setCondicao({ forma_pagamento_id: '', parcelas: '1' });
     setProdutoBusca('');
     setErrors({});
   };
@@ -198,6 +270,10 @@ const OrcamentosViewInner = ({
     setExtras({
       desconto: orc.desconto ? formatBRL(Number(orc.desconto)) : '',
       observacoes: orc.observacoes ?? '',
+    });
+    setCondicao({
+      forma_pagamento_id: orc.forma_pagamento_id ?? '',
+      parcelas: String(orc.parcelas ?? 1),
     });
     setErrors({});
     setShowForm(false);
@@ -253,7 +329,12 @@ const OrcamentosViewInner = ({
         itens,
         subtotal,
         desconto:      descontoNum,
+        // `valor_total` e os derivados vão junto para a tela não piscar com o
+        // valor antigo até o retorno, mas quem manda é o gatilho da migr. 568:
+        // ele recalcula tudo no INSERT/UPDATE e devolve o número oficial.
         valor_total:   valorTotal,
+        forma_pagamento_id: condicao.forma_pagamento_id || null,
+        parcelas:      resumo.parcelas,
         observacoes:   extras.observacoes || null,
         status:        enviarAoFinanceiro ? 'Aguardando Financeiro' : 'Rascunho',
         filial,
@@ -484,7 +565,7 @@ const OrcamentosViewInner = ({
                     onChange={e => setForm(f => ({ ...f, validade_dias: e.target.value }))}
                   />
                 </FormField>
-                <FormField label="Desconto (R$)">
+                <FormField label="Desconto comercial (R$)">
                   <input
                     type="text"
                     inputMode="numeric"
@@ -495,7 +576,80 @@ const OrcamentosViewInner = ({
                     placeholder="0,00"
                   />
                 </FormField>
+                <FormField label="Forma de pagamento">
+                  <select
+                    className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={condicao.forma_pagamento_id}
+                    onChange={e => {
+                      const id = e.target.value;
+                      const f = formasAtivas.find(x => x.id === id) ?? null;
+                      // Trocar de forma pode baixar o teto de parcelas: 6x no
+                      // cartão não sobrevive à mudança para Pix.
+                      const teto = parcelasMaximas(f);
+                      setCondicao(c => ({
+                        forma_pagamento_id: id,
+                        parcelas: String(Math.min(Math.max(1, parseInt(c.parcelas) || 1), teto)),
+                      }));
+                    }}
+                  >
+                    <option value="">A combinar</option>
+                    {formasAtivas.map(f => (
+                      <option key={f.id} value={f.id}>{f.descricao}</option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Parcelas">
+                  <select
+                    className="neu-input py-2 px-3 rounded-xl text-sm disabled:opacity-40"
+                    value={String(Math.min(parcelasNum, maxParcelas))}
+                    disabled={!formaEscolhida || maxParcelas <= 1}
+                    onChange={e => setCondicao(c => ({ ...c, parcelas: e.target.value }))}
+                  >
+                    {Array.from({ length: maxParcelas }, (_, i) => i + 1).map(n => (
+                      <option key={n} value={String(n)}>
+                        {n === 1 ? 'À vista' : `${n}x`}
+                        {formaEscolhida && n > Math.max(1, Number(formaEscolhida.parcelas_sem_juros ?? 1)) && Number(formaEscolhida.juros_mensal ?? 0) > 0
+                          ? ' (com juros)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
               </div>
+
+              {/* Crediário: o dinheiro é da própria loja. Aviso agora, trava na
+                  conversão em pedido (migr. 569). */}
+              {ehCrediario && (
+                <div className={`rounded-xl p-3 text-xs flex items-start gap-2 border ${
+                  (credito?.vencidos ?? 0) > 0 || estouraLimite
+                    ? 'border-red-500/30 bg-red-500/5 text-red-300'
+                    : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'}`}>
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold">Crediário — crédito da própria loja</span>
+                    {!form.cliente_id ? (
+                      <span>Selecione o cliente para consultar o limite.</span>
+                    ) : credito == null ? (
+                      <span>Consultando o crédito do cliente…</span>
+                    ) : (
+                      <>
+                        <span>
+                          Limite: {limiteCliente == null ? 'não cadastrado' : `R$ ${formatBRL(limiteCliente)}`}
+                          {' · '}Já em aberto: R$ {formatBRL(credito.saldo)}
+                          {' · '}Esta proposta: R$ {formatBRL(valorTotal)}
+                        </span>
+                        {credito.vencidos > 0 && (
+                          <span className="font-bold">
+                            {credito.vencidos} título(s) vencido(s) — a conversão em pedido será recusada até a baixa em Financeiro → Contas a Receber.
+                          </span>
+                        )}
+                        {estouraLimite && (
+                          <span className="font-bold">Passa do limite do cliente — a conversão em pedido será recusada.</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Itens da proposta */}
               <div className="flex flex-col gap-2">
@@ -572,20 +726,69 @@ const OrcamentosViewInner = ({
                 />
               </FormField>
 
-              {/* Totais */}
-              <div className="flex justify-end gap-6 text-xs border-t border-white/5 pt-3">
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Subtotal</span>
-                  <span className="font-mono text-gray-300">R$ {formatBRL(subtotal)}</span>
+              {/* Totais — a conta inteira, linha a linha. O aluno tem de ver
+                  de onde saiu cada número: mercadoria, o que ele negociou, o
+                  que a condição abateu, o que o parcelamento acrescentou, e o
+                  que a maquininha vai comer do que a loja recebe. */}
+              <div className="flex flex-col gap-3 border-t border-white/5 pt-3">
+                <div className="flex justify-end gap-6 text-xs flex-wrap">
+                  <div className="flex flex-col items-end">
+                    <span className="text-gray-500 uppercase tracking-widest text-[10px]">Mercadoria</span>
+                    <span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(subtotal)}</span>
+                  </div>
+                  {descontoNum > 0 && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. comercial</span>
+                      <span className="font-mono text-gray-300 tabular-nums">- R$ {formatBRL(descontoNum)}</span>
+                    </div>
+                  )}
+                  {resumo.descontoCondicao > 0 && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. à vista</span>
+                      <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(resumo.descontoCondicao)}</span>
+                    </div>
+                  )}
+                  {resumo.acrescimoJuros > 0 && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Juros ({formatBRL(Number(formaEscolhida?.juros_mensal ?? 0))}% a.m.)</span>
+                      <span className="font-mono text-yellow-400 tabular-nums">+ R$ {formatBRL(resumo.acrescimoJuros)}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col items-end">
+                    <span className="text-gray-500 uppercase tracking-widest text-[10px]">Total ao cliente</span>
+                    <span className="font-mono text-lg font-black text-accent tabular-nums">R$ {formatBRL(valorTotal)}</span>
+                    {resumo.parcelas > 1 && (
+                      <span className="font-mono text-[11px] text-gray-400 tabular-nums">
+                        {resumo.parcelas}x de R$ {formatBRL(resumo.valorParcela)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desconto</span>
-                  <span className="font-mono text-gray-300">- R$ {formatBRL(descontoNum)}</span>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Total</span>
-                  <span className="font-mono text-lg font-black text-accent tabular-nums">R$ {formatBRL(valorTotal)}</span>
-                </div>
+
+                {formaEscolhida && (
+                  <div className="flex justify-end gap-6 text-[11px] flex-wrap text-gray-500">
+                    {resumo.taxaAdquirente > 0 && (
+                      <span>
+                        Taxa da maquininha ({formatBRL(Number(formaEscolhida.taxa ?? 0))}%):
+                        {' '}<span className="font-mono text-red-400 tabular-nums">- R$ {formatBRL(resumo.taxaAdquirente)}</span>
+                        {' '}<span className="text-gray-600">— custo da loja, não do cliente</span>
+                      </span>
+                    )}
+                    <span>
+                      A loja recebe:
+                      {' '}<span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(resumo.valorLiquido)}</span>
+                    </span>
+                    <span>
+                      1º vencimento:
+                      {' '}<span className="font-mono text-gray-300">
+                        {vencimentos[0]?.toLocaleDateString('pt-BR')}
+                      </span>
+                      {vencimentos.length > 1 && (
+                        <span className="text-gray-600"> · último em {vencimentos[vencimentos.length - 1].toLocaleDateString('pt-BR')}</span>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 justify-end flex-wrap">
@@ -649,7 +852,14 @@ const OrcamentosViewInner = ({
                             {o.validade_dias}d
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(o.valor_total ?? 0))}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                          R$ {formatBRL(Number(o.valor_total ?? 0))}
+                          {o.forma_pagamento && (
+                            <span className="block text-[10px] text-gray-500 font-sans">
+                              {rotuloCondicao(o.forma_pagamento, o.parcelas, o.valor_parcela)}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={o.status} /></td>
                         <td className="py-3 px-4 text-xs max-w-xs">
                           {o.feedback_financeiro || o.feedback_cliente ? (
@@ -878,12 +1088,57 @@ const OrcamentosViewInner = ({
                 )}
               </div>
 
-              {Number(detalhes.desconto ?? 0) > 0 && (
-                <div className="flex justify-end items-baseline gap-2 text-xs">
-                  <span className="text-gray-500">Desconto aplicado:</span>
-                  <span className="font-mono text-yellow-400">R$ {formatBRL(Number(detalhes.desconto ?? 0))}</span>
+              {/* A conta da proposta, na ordem em que ela acontece. Quem aprova
+                  precisa ver o que é negociação do vendedor, o que é condição
+                  de pagamento e o que é custo da maquininha — as três coisas
+                  entravam num número só antes da migr. 568. */}
+              <div className="flex flex-col gap-1 text-xs neu-pressed rounded-xl p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Mercadoria</span>
+                  <span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(Number(detalhes.subtotal ?? 0))}</span>
                 </div>
-              )}
+                {Number(detalhes.desconto ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Desconto comercial</span>
+                    <span className="font-mono text-yellow-400 tabular-nums">- R$ {formatBRL(Number(detalhes.desconto ?? 0))}</span>
+                  </div>
+                )}
+                {Number(detalhes.desconto_condicao ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Desconto à vista ({detalhes.forma_pagamento})</span>
+                    <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(Number(detalhes.desconto_condicao))}</span>
+                  </div>
+                )}
+                {Number(detalhes.acrescimo_juros ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Juros do parcelamento</span>
+                    <span className="font-mono text-yellow-400 tabular-nums">+ R$ {formatBRL(Number(detalhes.acrescimo_juros))}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
+                  <span className="text-gray-400 font-bold">
+                    Total ao cliente
+                    {detalhes.forma_pagamento && (
+                      <span className="block text-[10px] text-gray-600 font-normal">
+                        {rotuloCondicao(detalhes.forma_pagamento, detalhes.parcelas, detalhes.valor_parcela)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-mono text-accent font-bold tabular-nums">R$ {formatBRL(Number(detalhes.valor_total ?? 0))}</span>
+                </div>
+                {Number(detalhes.taxa_adquirente ?? 0) > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Taxa da maquininha <span className="text-gray-600">(custo da loja)</span></span>
+                      <span className="font-mono text-red-400 tabular-nums">- R$ {formatBRL(Number(detalhes.taxa_adquirente))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 font-bold">A loja recebe</span>
+                      <span className="font-mono text-gray-200 font-bold tabular-nums">R$ {formatBRL(Number(detalhes.valor_liquido ?? 0))}</span>
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="flex flex-col gap-1.5">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Observações</span>

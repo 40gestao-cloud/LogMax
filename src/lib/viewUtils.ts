@@ -26,7 +26,7 @@ function drawPdfHeader(doc: any, subtitle: string, contextLine: string, rightMet
   doc.text(rightMeta, pageWidth - margin, 27, { align: 'right' });
 }
 
-export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency' | 'textarea'; options?: string[]; required?: boolean; placeholder?: string; fullWidth?: boolean };
+export type GField = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'date' | 'currency' | 'textarea' | 'boolean'; options?: string[]; required?: boolean; placeholder?: string; fullWidth?: boolean };
 
 export function useFormValidation<T extends Record<string, string>>(fields: T) {
   const [errors, setErrors] = useState<Partial<Record<keyof T, string>>>({});

@@ -1444,8 +1444,25 @@ function LogMaxAppInner() {
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'grupo_dre', label: 'Grupo no DRE', type: 'select', options: ['Pessoal', 'Comerciais', 'Administrativas', 'Ocupação', 'Outras'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Gerencie as formas de pagamento aceitas." endpoint="/api/formaspagamentoview"
-        fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Boleto Bancário' }, { key: 'taxa', label: 'Taxa (%)', type: 'number', placeholder: '0,00' }, { key: 'prazo', label: 'Prazo (dias)', type: 'number', placeholder: '0' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
+      // Migr. 568: este cadastro deixou de ser decorativo. Cada campo aqui
+      // MUDA o preço da proposta em Vendas → Orçamentos:
+      //   · Desconto à vista abate o total (Pix, dinheiro);
+      //   · Juros a.m. + Parcelas sem juros acrescem pela Tabela Price;
+      //   · Taxa é CUSTO DA LOJA — sai do líquido, não entra no preço;
+      //   · Prazo é o D+n do 1º vencimento e Intervalo o espaço entre parcelas.
+      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Cada forma define o preço da proposta: desconto à vista, juros do parcelamento, taxa da maquininha e prazo de recebimento." endpoint="/api/formaspagamentoview"
+        fields={[
+          { key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Cartão de Crédito' },
+          { key: 'desconto_percentual', label: 'Desconto à vista (%)', type: 'number', placeholder: '0' },
+          { key: 'taxa', label: 'Taxa da maquininha (%)', type: 'number', placeholder: '0' },
+          { key: 'juros_mensal', label: 'Juros ao cliente (% a.m.)', type: 'number', placeholder: '0' },
+          { key: 'parcelas_max', label: 'Parcelas (máx.)', type: 'number', placeholder: '1' },
+          { key: 'parcelas_sem_juros', label: 'Parcelas sem juros', type: 'number', placeholder: '1' },
+          { key: 'prazo', label: 'Prazo do 1º recebimento (dias)', type: 'number', placeholder: '0' },
+          { key: 'intervalo_dias', label: 'Intervalo entre parcelas (dias)', type: 'number', placeholder: '30' },
+          { key: 'exige_limite_credito', label: 'Crediário da loja?', type: 'boolean' },
+          { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] },
+        ]} />;
       case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} profile={profile} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} profile={profile} />;

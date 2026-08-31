@@ -5,6 +5,7 @@ import { Check, X, Loader2, UserCircle2, ShieldCheck, FileText, MessageSquare, A
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
+import { rotuloCondicao } from '../lib/condicaoPagamento';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -151,7 +152,14 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
                 <p className="text-xs text-gray-500">{(o.itens?.length ?? 0)} item(s) • Validade {o.validade_dias}d</p>
                 <div className="flex items-end justify-between pt-2 border-t border-white/5">
                   <span className="text-[10px] text-gray-500 uppercase tracking-widest">Total</span>
-                  <span className="text-xl font-black text-accent tabular-nums">R$ {formatBRL(Number(o.valor_total ?? 0))}</span>
+                  <div className="text-right">
+                    <span className="text-xl font-black text-accent tabular-nums block">R$ {formatBRL(Number(o.valor_total ?? 0))}</span>
+                    {o.forma_pagamento && (
+                      <span className="text-[10px] text-gray-500">
+                        {rotuloCondicao(o.forma_pagamento, o.parcelas, o.valor_parcela)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </motion.button>
             ))}
@@ -221,6 +229,20 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
             {selecionado.desconto > 0 && (
               <span className="text-xs text-gray-500">Desconto aplicado: R$ {formatBRL(Number(selecionado.desconto ?? 0))}</span>
             )}
+            {/* O cliente decide sobre PREÇO + CONDIÇÃO, não sobre um número
+                solto: aprovar 12x com juros sem ver os juros não é decisão.
+                A taxa da maquininha não aparece aqui de propósito — é custo da
+                loja, e o cliente não tem nada com ela. */}
+            {Number(selecionado.desconto_condicao ?? 0) > 0 && (
+              <span className="text-xs text-emerald-400">
+                Desconto à vista ({selecionado.forma_pagamento}): R$ {formatBRL(Number(selecionado.desconto_condicao))}
+              </span>
+            )}
+            {Number(selecionado.acrescimo_juros ?? 0) > 0 && (
+              <span className="text-xs text-yellow-400">
+                Juros do parcelamento: R$ {formatBRL(Number(selecionado.acrescimo_juros))}
+              </span>
+            )}
             {selecionado.observacoes && (
               <span className="text-xs text-gray-400 italic max-w-md">"{selecionado.observacoes}"</span>
             )}
@@ -228,6 +250,11 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
           <div className="text-right">
             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block">Total</span>
             <span className="text-3xl font-black text-accent tabular-nums">R$ {formatBRL(Number(selecionado.valor_total ?? 0))}</span>
+            {selecionado.forma_pagamento && (
+              <span className="text-xs text-gray-400 block mt-0.5">
+                {rotuloCondicao(selecionado.forma_pagamento, selecionado.parcelas, selecionado.valor_parcela)}
+              </span>
+            )}
           </div>
         </div>
 

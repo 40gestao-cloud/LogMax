@@ -62,6 +62,8 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
       const raw = item[f.key];
       // currency é armazenado como número no banco; convertemos pra "1.234,56" no form.
       if (f.type === 'currency') return [f.key, formatBRL(raw)];
+      // boolean vira Sim/Não na tela e volta a booleano no save.
+      if (f.type === 'boolean')  return [f.key, raw ? 'Sim' : 'Não'];
       return [f.key, String(raw ?? '')];
     })));
     setValErrors({});
@@ -78,9 +80,11 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
       const numericKeys  = new Set(fields.filter(f => f.type === 'number').map(f => f.key));
       const dateKeys     = new Set(fields.filter(f => f.type === 'date').map(f => f.key));
       const currencyKeys = new Set(fields.filter(f => f.type === 'currency').map(f => f.key));
+      const boolKeys     = new Set(fields.filter(f => f.type === 'boolean').map(f => f.key));
       // Date vazio vira null — Postgres rejeita '' em colunas date/timestamp.
       const parsed = Object.fromEntries(
         Object.entries(formState).map(([k, v]) => {
+          if (boolKeys.has(k))     return [k, v === 'Sim'];
           if (currencyKeys.has(k)) return [k, parseBRL(v as string)];
           if (numericKeys.has(k))  return [k, Number(v) || 0];
           if (dateKeys.has(k))     return [k, v === '' ? null : v];
@@ -170,11 +174,11 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                     <React.Fragment key={f.key}>
                       <div className={spanClass}>
                         <FormField label={`${f.label}${f.required ? ' *' : ''}`} error={valErrors[f.key]}>
-                          {f.type === 'select' ? (
+                          {f.type === 'select' || f.type === 'boolean' ? (
                             <select className={`neu-input py-2 px-3 rounded-xl text-sm ${valErrors[f.key] ? 'border border-red-500/40' : ''}`}
                               value={formState[f.key]} onChange={e => { setFormState(s => ({ ...s, [f.key]: e.target.value })); setValErrors(ev => { const n = { ...ev }; delete n[f.key]; return n; }); }}>
                               <option value="">Selecione...</option>
-                              {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                              {(f.type === 'boolean' ? ['Não', 'Sim'] : f.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           ) : f.type === 'currency' ? (
                             <input type="text" inputMode="numeric"
@@ -248,9 +252,11 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
                                 ? <StatusBadge status={raw} />
                                 : f.type === 'currency'
                                   ? (raw != null && raw !== '' ? `R$ ${formatBRL(Number(raw))}` : '—')
-                                  : f.type === 'textarea'
-                                    ? renderTextarea()
-                                    : String(raw ?? '—')}
+                                  : f.type === 'boolean'
+                                    ? (raw ? 'Sim' : 'Não')
+                                    : f.type === 'textarea'
+                                      ? renderTextarea()
+                                      : String(raw ?? '—')}
                             </td>
                           );
                         })}
