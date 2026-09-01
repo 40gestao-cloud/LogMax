@@ -18,6 +18,7 @@ import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { usePrompt } from '../contexts/PromptContext';
 import { isConselheiro } from '../lib/rbac';
 import { formatDataHoraBR } from '../lib/dates';
+import { FiltroSolicitante } from '../components/FiltroSolicitante';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -85,11 +86,49 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const podeReabrir = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
   const [verExcluidas, setVerExcluidas] = useState(false);
 
+  // ── Filtro por solicitante (2026-09-01) ─────────────────────────
+  //
+  // Mesmo controle de Requisições > Aprovações. Aqui, porém, a lista é
+  // paginada pelo servidor: recortar o array já carregado filtraria só a
+  // página aberta e mentiria no total. Por isso o nome escolhido vira um `eq`
+  // no filtro da consulta — e o `totalCount` que volta é, literalmente,
+  // quantas aquela pessoa pediu nesta unidade.
+  const [solicitante, setSolicitante] = useState<string | null>(null);
+  useEffect(() => { setPage(0); }, [solicitante]);
+  const filtroBusca = useMemo(
+    () => (solicitante === null ? { filial } : { filial, solicitante }),
+    [filial, solicitante],
+  );
+
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/requisicoesview', { filial }, true,
+    '/api/requisicoesview', filtroBusca, true,
     { page, searchTerm: debouncedSearch, includeInactive: verExcluidas,
       searchColumns: ['item', 'solicitante', 'setor_solicitante', 'urgencia', 'centro_custo', 'status'] }
   );
+
+  // O catálogo de nomes não pode sair da página aberta — ela traz 20 linhas e
+  // esconderia justamente quem pediu pouco. Uma consulta de uma coluna só,
+  // sobre a mesma fila, dá a lista e a contagem de cada um.
+  const [nomes, setNomes] = useState<string[]>([]);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelado = false;
+    (async () => {
+      let q = supabase!.from('requisicoes').select('solicitante').eq('filial', filial);
+      if (!verExcluidas) q = q.eq('ativo', true);
+      const { data: rows } = await q;
+      if (cancelado) return;
+      setNomes(((rows ?? []) as any[])
+        .map(r => String(r.solicitante ?? '').trim())
+        // Linha sem nome não vira opção: o filtro é um `eq` no servidor e não
+        // teria como casar NULL e '' no mesmo valor. Ela continua visível em
+        // "Todos os solicitantes".
+        .filter(Boolean));
+    })();
+    return () => { cancelado = true; };
+    // Sem `data` na lista: a requisição nasce em outra tela e a correção não
+    // troca quem pediu, então a lista de nomes não muda a cada página virada.
+  }, [filial, verExcluidas]);
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const produtosOrdenados = useMemo(
     () => [...produtos]
@@ -287,6 +326,9 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          {/* Quem pediu — o mesmo seletor de Aprovações, com a contagem de
+              cada um ao lado do nome. */}
+          <FiltroSolicitante nomes={nomes} valor={solicitante} onChange={setSolicitante} />
           {/* A exclusão saiu (migr. 340), mas o que já foi excluído continua no
               banco — e é a direção quem traz de volta. */}
           {podeReabrir && (
@@ -385,7 +427,11 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : data.length === 0 ? <EmptyState message="Nenhuma requisição encontrada" /> : (
+      {isLoading ? <LoadingSpinner /> : data.length === 0 ? (
+        <EmptyState message={solicitante !== null
+          ? `Nenhuma requisição de ${solicitante} nesta unidade${debouncedSearch ? ' com esta busca' : ''}.`
+          : 'Nenhuma requisição encontrada'} />
+      ) : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">

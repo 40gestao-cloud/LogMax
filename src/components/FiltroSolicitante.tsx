@@ -7,9 +7,10 @@ import { Users, X } from 'lucide-react';
 // gerente que quer conferir o que UMA pessoa mandou — e quantas vezes — tinha
 // de ler a fila inteira card a card. Aqui ele escolhe o nome e a fila encolhe.
 //
-// A contagem ao lado do nome é da aba ATIVA, não do total: é essa a pergunta
-// de quem está decidindo ("quantas ele tem esperando aqui?"). Trocar de aba
-// mantém o nome escolhido e recalcula os números.
+// A contagem ao lado do nome sai da lista que a tela passa em `nomes`, e cada
+// tela escolhe o recorte que responde à pergunta de quem está ali: em
+// Aprovações é a aba ATIVA ("quantas ele tem esperando aqui?"); em Requisições
+// é a fila inteira da unidade ("quantas ele já pediu").
 //
 // Régua da casa: catálogo fechado em `<select>`, nunca campo livre — nome
 // digitado à mão não casa com o que está gravado (vide
