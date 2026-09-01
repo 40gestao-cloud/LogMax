@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
 import { X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { supabase } from '../lib/supabase';
 import { EmptyState, SelecioneUnidade, IdadeBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -27,7 +28,11 @@ type EnrichedAp = AprovacaoEstoque & {
  *  só, para as duas telas não divergirem com o tempo. */
 export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
 
-export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos' }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque }) => {
+export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos', solicitante }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque;
+  /** Filtro por quem pediu, mandado de fora (aba de Requisições > Aprovações,
+   *  onde um controle só vale para as quatro abas). Sozinha, esta tela tem o
+   *  seu próprio seletor. */
+  solicitante?: string | null }) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
   const { data: requisicoes, setData: setRequisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
@@ -37,6 +42,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [obs, setObs] = useState<Record<string, string>>({});
+  const [solicLocal, setSolicLocal] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [devolvendo, setDevolvendo] = useState<string | null>(null);
   // Guard sincrônico: `processing` (state React) atualiza assíncronamente,
@@ -255,8 +261,16 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   // decidir por baixo de quem está corrigindo é exatamente o que a 522
   // passou a recusar no banco. Aqui embaixo, sem botão nenhum: nada foi
   // decidido, só se aguarda o reenvio.
-  const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
-  const devolvidas  = enriched.filter(ap => ap.req.status === 'Em correção');
+  // Filtro por solicitante (2026-09-01). Embutida em Aprovações, quem manda é
+  // a tela de fora; sozinha, a fila tem o seu próprio seletor logo acima.
+  const solicAtivo = mostrar === 'ambos' ? solicLocal : (solicitante ?? null);
+  const casaSolicitante = (nome: unknown) =>
+    solicAtivo === null || chaveSolicitante(nome) === solicAtivo;
+
+  const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção' && casaSolicitante(ap.req.solicitante));
+  const devolvidas  = enriched.filter(ap => ap.req.status === 'Em correção' && casaSolicitante(ap.req.solicitante));
+  const decididasVisiveis = decididas.filter(ap =>
+    casaSolicitante(requisicoes.find(r => r.id === ap.requisicao_estoque_id)?.solicitante));
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -285,7 +299,18 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           Falta aqui o que `requisicoes_estoque` não tem — número sequencial
           e urgência não existem nesta tabela; o código curto (REQ-xxxxxx) é
           o que dá para nomear o documento numa conversa. */}
-      {veFila && (paraDecidir.length === 0 ? <EmptyState message="Nenhum material esperando liberação" /> : (
+      {mostrar === 'ambos' && (
+        <FiltroSolicitante
+          valor={solicLocal}
+          onChange={setSolicLocal}
+          nomes={enriched.filter(ap => ap.req.status !== 'Em correção').map(ap => ap.req.solicitante)}
+        />
+      )}
+      {veFila && (paraDecidir.length === 0 ? (
+        <EmptyState message={solicAtivo !== null
+          ? `Nada de ${solicAtivo} esperando liberação.`
+          : 'Nenhum material esperando liberação'} />
+      ) : (
         <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
           {paraDecidir.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -397,7 +422,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
       )}
 
       {/* Decisões já tomadas — só para a direção. */}
-      {veDecididas && podeDevolver && decididas.length > 0 && (
+      {veDecididas && podeDevolver && decididasVisiveis.length > 0 && (
         <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
             {mostrar === 'ambos' ? 'Decisões já tomadas' : 'Decisões já tomadas — material do estoque'}
@@ -412,7 +437,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           <div className={mostrar === 'ambos'
             ? 'flex flex-col gap-2 max-h-80 overflow-y-auto main-scrollbar pr-1'
             : 'flex flex-col gap-2'}>
-            {decididas.slice(0, 15).map(ap => {
+            {decididasVisiveis.slice(0, 15).map(ap => {
               const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
               const prod = req ? produtos.find(p => p.id === req.produto_id) : undefined;
               const nome = prod?.nome ?? 'material';
@@ -465,7 +490,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
               );
             })}
           </div>
-          {decididas.length > 15 && (
+          {decididasVisiveis.length > 15 && (
             <p className="text-[10px] text-gray-600 mt-3">
               Mostrando as 15 decisões mais recentes.
             </p>

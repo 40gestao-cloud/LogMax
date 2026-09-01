@@ -17,8 +17,9 @@ import { numeroRequisicao } from '../lib/documentos';
 import { formatDataHoraBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
-import type { AprovacaoCompras, AprovacaoEstoque, Requisicao } from '../types/domain';
+import type { AprovacaoCompras, AprovacaoEstoque, Requisicao, RequisicaoEstoque } from '../types/domain';
 import { AprovacoesEstoqueBloco } from './AprovacoesEstoqueView';
+import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 
 type ShowToast = (msg: string, type: string, persist?: boolean) => void;
 
@@ -35,6 +36,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   // esperando SEM ter de clicar na aba. A fila em si é renderizada pelo
   // componente de Estoque, que traz os seus próprios dados.
   const { data: filaMaterial } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
+  // Só para o filtro por solicitante e para o número da pílula de material: o
+  // nome de quem pediu não está na aprovação, está na requisição de estoque.
+  // A fila em si continua sendo desenhada pelo bloco de Estoque.
+  const { data: reqMaterial } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [processing, setProcessing] = useState<string | null>(null);
@@ -330,8 +335,28 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   //
   // Devolvida não é fila de decisão: é acompanhamento. Por isso sai da fila e
   // ganha aba própria.
-  const paraDecidir = enriched.filter(ap => ap.req.status !== 'Em correção');
-  const devolvidas = enriched.filter(ap => ap.req.status === 'Em correção');
+  // ── Filtro por solicitante (2026-09-01) ─────────────────────────
+  //
+  // Um controle só, valendo para as quatro abas — inclusive a de material, que
+  // é desenhada pelo bloco de Estoque e recebe o nome escolhido por prop. O
+  // gerente escolhe a pessoa uma vez e passeia pelas filas dela.
+  const [solicitante, setSolicitante] = useState<string | null>(null);
+  const casaSolicitante = (nome: unknown) =>
+    solicitante === null || chaveSolicitante(nome) === solicitante;
+
+  const paraDecidirTodas = enriched.filter(ap => ap.req.status !== 'Em correção');
+  const devolvidasTodas = enriched.filter(ap => ap.req.status === 'Em correção');
+  const paraDecidir = paraDecidirTodas.filter(ap => casaSolicitante(ap.req.solicitante));
+  const devolvidas = devolvidasTodas.filter(ap => casaSolicitante(ap.req.solicitante));
+  // A decisão já tomada guarda só o id da requisição; o nome vem da linha
+  // correspondente. Quando ela não é legível (inativada ou fora da RLS) o
+  // documento cai no grupo "sem solicitante" do filtro em vez de sumir.
+  const reqDaDecisao = (ap: AprovacaoCompras) =>
+    requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
+  const decididasFiltradas = decididas.filter(ap => casaSolicitante(reqDaDecisao(ap)?.solicitante));
+  const materialFiltrado = filaMaterial.filter(ap =>
+    casaSolicitante(reqMaterial.find(r => r.id === (ap as any).requisicao_estoque_id)?.solicitante));
+
   const ABAS = [
     // "Compra" nomeava o assunto, não a pendência: numa tela de aprovações
     // toda linha é uma requisição de compra, então o rótulo não dizia nada ao
@@ -344,11 +369,11 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     // decide os dois é a MESMA pessoa, e ela procurava a segunda fila em
     // Estoque > Liberar Requisições, um módulo adiante. Aba, não mistura: os
     // cards continuam com o vocabulário e os botões de cada fluxo.
-    { key: 'material' as const, label: 'Material a liberar', n: filaMaterial.length },
+    { key: 'material' as const, label: 'Material a liberar', n: materialFiltrado.length },
     { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
     // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
     // decidiu. Sem essa autoridade, a aba nem existe.
-    ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididas.length }] : []),
+    ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididasFiltradas.length }] : []),
   ];
   type AbaKey = 'decidir' | 'material' | 'devolvidas' | 'decididas';
   const [aba, setAba] = useState<AbaKey | null>(null);
@@ -399,12 +424,28 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
         })}
       </div>
 
+      {/* Quem pediu — o mesmo controle para as quatro abas. A contagem ao lado
+          de cada nome é da aba aberta: é ela que responde "quantas ele tem
+          esperando aqui". */}
+      <FiltroSolicitante
+        valor={solicitante}
+        onChange={setSolicitante}
+        nomes={
+          abaAtiva === 'decidir'    ? paraDecidirTodas.map(ap => ap.req.solicitante)
+          : abaAtiva === 'devolvidas' ? devolvidasTodas.map(ap => ap.req.solicitante)
+          : abaAtiva === 'decididas'  ? decididas.map(ap => reqDaDecisao(ap)?.solicitante)
+          : filaMaterial.map(ap => reqMaterial.find(r => r.id === (ap as any).requisicao_estoque_id)?.solicitante)
+        }
+      />
+
       {abaAtiva === 'material' && (
-        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="fila" />
+        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="fila" solicitante={solicitante} />
       )}
 
       {(abaAtiva === 'decidir' || abaAtiva === 'devolvidas') && (visiveis.length === 0 ? (
-        <EmptyState message={abaAtiva === 'devolvidas'
+        <EmptyState message={solicitante !== null
+          ? `Nada de ${solicitante} nesta aba. Troque o solicitante ou volte para "Todos".`
+          : abaAtiva === 'devolvidas'
           ? 'Nada devolvido para correção — o que você mandar consertar fica aqui até o solicitante reenviar.'
           : 'Nenhuma aprovação pendente'} />
       ) : (
@@ -652,11 +693,15 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             fila dele com o seu motivo. Excluir é o último recurso — some com o documento e com a
             correspondência dele nas outras telas.
           </p>
-          {decididas.length === 0 && (
-            <p className="text-xs text-gray-600">Nenhuma decisão tomada nesta unidade ainda.</p>
+          {decididasFiltradas.length === 0 && (
+            <p className="text-xs text-gray-600">
+              {solicitante === null
+                ? 'Nenhuma decisão tomada nesta unidade ainda.'
+                : `Nenhuma decisão tomada sobre requisições de ${solicitante}.`}
+            </p>
           )}
           <div className="flex flex-col gap-2">
-            {decididas.slice(0, 15).map(ap => {
+            {decididasFiltradas.slice(0, 15).map(ap => {
               const req = requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
               const negado = ap.status === 'Negado';
               const indo = devolvendo === ap.id;
@@ -699,7 +744,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
               );
             })}
           </div>
-          {decididas.length > 15 && (
+          {decididasFiltradas.length > 15 && (
             <p className="text-[10px] text-gray-600 mt-3">
               Mostrando as 15 decisões mais recentes. As anteriores continuam em Compras → Requisições.
             </p>
@@ -710,7 +755,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
             procurar a outra no mesmo lugar. Liberação de material não volta —
             o material já saiu da prateleira —, e o bloco explica isso onde a
             pergunta nasce. */}
-        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="decididas" />
+        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="decididas" solicitante={solicitante} />
         </div>
       )}
       </>
