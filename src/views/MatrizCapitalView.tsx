@@ -75,6 +75,9 @@ type Emprestimo = {
   // Preenchido = histórico fechado: não conta capital, não aceita UPDATE, e é
   // o único que o professor pode apagar.
   arquivado_em: string | null;
+  // Migr. 573 — a conta da Matriz debitada na aprovação, o par de `banco_id`.
+  // NULL nos empréstimos anteriores: nesses, o estorno pergunta.
+  banco_origem_id: string | null;
 };
 
 type Banco = { id: string; banco: string; conta: string; tipo: string; filial: string | null; saldo: number | null };
@@ -751,6 +754,159 @@ function ModalEstornoAporte({
   );
 }
 
+// ── Modal: Apagar empréstimo vivo (com estorno) ────────────────────────────
+// A 572 preservou o empréstimo no reset e deu a lixeira ao professor, mas
+// recusava o aprovado ainda VIVO — o dinheiro está em caixa e apagar a linha
+// não devolveria nada. A 573 faz a devolução acontecer, e este modal é onde
+// ela é confirmada.
+//
+// O que a tela precisa mostrar, e por quê:
+//   · o saldo da conta que devolve, porque é ele que decide se o estorno passa
+//     (unidade que já gastou o dinheiro não tem como devolver);
+//   · a conta da Matriz que recebe, obrigatória para empréstimo anterior à 573
+//     — o banco não sabe de onde saiu e chutar seria devolver no lugar errado.
+//
+// As parcelas já pagas não aparecem aqui de propósito: elas se revertem
+// sozinhas quando os títulos são apagados (`trg_sync_saldo_*`), cada uma na
+// conta que de fato pagou. O que se confirma aqui é só o principal.
+function ModalApagarEmprestimo({
+  emp, bancos, onClose, onSaved, showToast,
+}: {
+  emp: Emprestimo; bancos: Banco[]; onClose: () => void; onSaved: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const bancosMatriz = useMemo(() => bancos.filter(b => b.filial === 'Matriz'), [bancos]);
+  const [origemId, setOrigemId] = useState<string>(
+    emp.banco_origem_id ?? (bancosMatriz.length === 1 ? bancosMatriz[0].id : ''),
+  );
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const destino = bancos.find(b => b.id === emp.banco_id) ?? null;
+  const origem = bancosMatriz.find(b => b.id === origemId) ?? null;
+  const saldoDestino = Number(destino?.saldo ?? 0);
+  const semCaixa = !!destino && saldoDestino < Number(emp.valor);
+
+  const handleApagar = async () => {
+    if (!supabase) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc('apagar_emprestimo', {
+        p_emprestimo_id: emp.id,
+        p_estornar: true,
+        p_banco_origem_id: origemId || null,
+        p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      showToast(`Empréstimo de ${BRL(emp.valor)} apagado e principal devolvido.`, 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao apagar.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
+        className="neu-flat rounded-3xl p-6 w-full max-w-sm border border-red-500/30 flex flex-col gap-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-100">Apagar Empréstimo</h2>
+            <span className="text-xs font-bold text-red-400">
+              {BRL(emp.valor)} · {emp.filial}
+            </span>
+          </div>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+        </div>
+
+        <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5 text-[11px] text-gray-400">
+          <div className="flex justify-between gap-3">
+            <span>Aprovado em</span>
+            <span className="text-gray-300">{fmtDateTime(emp.created_at)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Devolve da conta</span>
+            <span className="text-gray-300 text-right">
+              {destino ? `${destino.banco} — ${destino.conta}` : 'conta inativa ou removida'}
+            </span>
+          </div>
+          {destino && (
+            <div className="flex justify-between gap-3">
+              <span>Saldo atual dessa conta</span>
+              <span className={`tabular-nums ${semCaixa ? 'text-red-400' : 'text-gray-300'}`}>
+                {BRL(saldoDestino)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Empréstimo anterior à 573 não registrou a origem. Perguntar é a
+            única saída honesta: devolver ao caixa errado seria dinheiro criado
+            num lugar e sumido noutro. */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Conta da Matriz que recebe de volta
+          </label>
+          <select
+            value={origemId} onChange={e => setOrigemId(e.target.value)}
+            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+          >
+            <option value="">Selecione a conta…</option>
+            {bancosMatriz.map(b => (
+              <option key={b.id} value={b.id}>
+                {b.banco} — {b.conta} ({BRL(Number(b.saldo ?? 0))})
+              </option>
+            ))}
+          </select>
+          {!emp.banco_origem_id && (
+            <span className="text-[10px] text-gray-500">
+              Este empréstimo é anterior ao registro da conta de origem, então ela precisa ser informada.
+            </span>
+          )}
+        </div>
+
+        {semCaixa ? (
+          <div className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              A conta de {emp.filial} tem menos do que o empréstimo — a unidade já usou o dinheiro.
+              Devolver deixaria o saldo negativo, então o banco vai recusar. O caminho é a unidade
+              pagar as parcelas, ou esperar um reset arquivar o contrato.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 text-[11px] text-gray-400 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+            <Info size={13} className="shrink-0 mt-0.5 text-accent" />
+            <span>
+              {BRL(emp.valor)} sai da conta de {emp.filial}
+              {origem ? ` e volta para ${origem.banco}` : ''}. As parcelas e os títulos dos dois lados
+              são apagados — o que já tiver sido pago volta sozinho para a conta que pagou. Fica no
+              histórico de operações.
+            </span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Motivo</label>
+          <textarea
+            value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
+            className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
+            placeholder="Ex.: empréstimo aprovado na unidade errada"
+          />
+        </div>
+
+        <NeuButtonAccent onClick={handleApagar} isLoading={saving} disabled={semCaixa || !origemId}>
+          Apagar e devolver {BRL(emp.valor)}
+        </NeuButtonAccent>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Card por filial (Aportes) ──────────────────────────────────────────────
 function FilialCapitalCard({
   filial, registros, saldo, profile, onNovo, onExcluir,
@@ -967,6 +1123,7 @@ function TabEmprestimos({
   showToast: (msg: string, t?: string) => void;
 }) {
   const [modalEmp, setModalEmp] = useState<Emprestimo | null>(null);
+  const [modalApagar, setModalApagar] = useState<Emprestimo | null>(null);
   const [modalAplicar, setModalAplicar] = useState(false);
   const confirm = useConfirm();
   // Migr. 572 — arquivado é histórico fechado: o gatilho recusa aprovar e
@@ -980,9 +1137,12 @@ function TabEmprestimos({
     return <Clock size={13} className="text-yellow-400" />;
   };
 
-  // A RPC recusa contrato aprovado e vivo — apagar a linha não devolveria o
-  // dinheiro à Matriz. Aqui só chega o que ela aceita.
+  // Duas portas, porque são dois atos diferentes. Contrato vivo mexe em caixa:
+  // vai para o modal, que mostra os saldos e pede a conta que recebe de volta
+  // (573). Arquivado, Pendente e Negado não têm principal em lugar nenhum —
+  // basta o confirm.
   const handleApagar = async (emp: Emprestimo) => {
+    if (emp.status === 'Aprovado' && !emp.arquivado_em) { setModalApagar(emp); return; }
     const ok = await confirm({
       message: `Apagar de vez este empréstimo de ${emp.filial} (${BRL(emp.valor)})? As parcelas e os títulos que restarem vão junto. Esta ação não pode ser desfeita.`,
       danger: true,
@@ -1109,6 +1269,14 @@ function TabEmprestimos({
           <ModalAprovarEmprestimo
             emp={modalEmp} bancos={bancos} taxaPadrao={taxaPadrao}
             onClose={() => setModalEmp(null)}
+            onSaved={onReload}
+            showToast={showToast}
+          />
+        )}
+        {modalApagar && (
+          <ModalApagarEmprestimo
+            emp={modalApagar} bancos={bancos}
+            onClose={() => setModalApagar(null)}
             onSaved={onReload}
             showToast={showToast}
           />
