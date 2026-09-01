@@ -17,7 +17,7 @@ import { numeroRequisicao } from '../lib/documentos';
 import { formatDataHoraBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
-import type { AprovacaoCompras, AprovacaoEstoque, Requisicao, RequisicaoEstoque } from '../types/domain';
+import type { AprovacaoCompras, AprovacaoEstoque, Requisicao } from '../types/domain';
 import { AprovacoesEstoqueBloco } from './AprovacoesEstoqueView';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 
@@ -36,10 +36,6 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   // esperando SEM ter de clicar na aba. A fila em si é renderizada pelo
   // componente de Estoque, que traz os seus próprios dados.
   const { data: filaMaterial } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
-  // Só para o filtro por solicitante e para o número da pílula de material: o
-  // nome de quem pediu não está na aprovação, está na requisição de estoque.
-  // A fila em si continua sendo desenhada pelo bloco de Estoque.
-  const { data: reqMaterial } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [processing, setProcessing] = useState<string | null>(null);
@@ -354,8 +350,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const reqDaDecisao = (ap: AprovacaoCompras) =>
     requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
   const decididasFiltradas = decididas.filter(ap => casaSolicitante(reqDaDecisao(ap)?.solicitante));
-  const materialFiltrado = filaMaterial.filter(ap =>
-    casaSolicitante(reqMaterial.find(r => r.id === (ap as any).requisicao_estoque_id)?.solicitante));
+  // Os nomes da fila de material vêm do próprio bloco de Estoque, que já os
+  // tem carregados — a alternativa era esta tela buscar `requisicoes_estoque`
+  // de novo, uma consulta idêntica à do filho só para montar a lista.
+  const [nomesMaterial, setNomesMaterial] = useState<string[]>([]);
 
   const ABAS = [
     // "Compra" nomeava o assunto, não a pendência: numa tela de aprovações
@@ -369,7 +367,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     // decide os dois é a MESMA pessoa, e ela procurava a segunda fila em
     // Estoque > Liberar Requisições, um módulo adiante. Aba, não mistura: os
     // cards continuam com o vocabulário e os botões de cada fluxo.
-    { key: 'material' as const, label: 'Material a liberar', n: materialFiltrado.length },
+    // O número aqui é o total da fila, sem o filtro por solicitante: o nome de
+    // quem pediu está em `requisicoes_estoque`, que só o bloco de Estoque
+    // carrega. Dentro da aba a fila obedece ao filtro.
+    { key: 'material' as const, label: 'Material a liberar', n: filaMaterial.length },
     { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
     // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
     // decidiu. Sem essa autoridade, a aba nem existe.
@@ -434,12 +435,12 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
           abaAtiva === 'decidir'    ? paraDecidirTodas.map(ap => ap.req.solicitante)
           : abaAtiva === 'devolvidas' ? devolvidasTodas.map(ap => ap.req.solicitante)
           : abaAtiva === 'decididas'  ? decididas.map(ap => reqDaDecisao(ap)?.solicitante)
-          : filaMaterial.map(ap => reqMaterial.find(r => r.id === (ap as any).requisicao_estoque_id)?.solicitante)
+          : nomesMaterial
         }
       />
 
       {abaAtiva === 'material' && (
-        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="fila" solicitante={solicitante} />
+        <AprovacoesEstoqueBloco showToast={showToast} profile={profile} filial={filial} mostrar="fila" solicitante={solicitante} onSolicitantes={setNomesMaterial} />
       )}
 
       {(abaAtiva === 'decidir' || abaAtiva === 'devolvidas') && (visiveis.length === 0 ? (

@@ -28,11 +28,14 @@ type EnrichedAp = AprovacaoEstoque & {
  *  só, para as duas telas não divergirem com o tempo. */
 export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
 
-export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos', solicitante }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque;
+export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos', solicitante, onSolicitantes }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque;
   /** Filtro por quem pediu, mandado de fora (aba de Requisições > Aprovações,
    *  onde um controle só vale para as quatro abas). Sozinha, esta tela tem o
    *  seu próprio seletor. */
-  solicitante?: string | null }) => {
+  solicitante?: string | null;
+  /** Os nomes da fila pendente, devolvidos para quem embute o bloco montar o
+   *  seletor sem repetir a consulta de `requisicoes_estoque`. */
+  onSolicitantes?: (nomes: string[]) => void }) => {
   const { data: aprovacoes, setData: setAprovacoes, isLoading: loadingAp, reload: reloadPendentes } = useFetchData<AprovacaoEstoque>('/api/minhasaprovacoesestoqueview', { status: 'Pendente', filial }, true);
   const { data: requisicoes, setData: setRequisicoes, isLoading: loadingReq, reload: reloadReq } = useFetchData<RequisicaoEstoque>('/api/requisicoesestoqueview', { filial }, true);
   const { data: produtos } = useFetchData<Produto>('/api/produtosview', { filial });
@@ -271,6 +274,17 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   const devolvidas  = enriched.filter(ap => ap.req.status === 'Em correção' && casaSolicitante(ap.req.solicitante));
   const decididasVisiveis = decididas.filter(ap =>
     casaSolicitante(requisicoes.find(r => r.id === ap.requisicao_estoque_id)?.solicitante));
+
+  // A fila pendente INTEIRA (sem o filtro aplicado) é o catálogo de nomes de
+  // quem embute o bloco. Sai por efeito, comparando a lista já serializada:
+  // avisar durante o render remontaria o pai a cada passada.
+  const nomesFila = enriched
+    .filter(ap => ap.req.status !== 'Em correção')
+    .map(ap => String(ap.req.solicitante ?? ''));
+  const chaveNomesFila = JSON.stringify(nomesFila);
+  useEffect(() => {
+    onSolicitantes?.(JSON.parse(chaveNomesFila) as string[]);
+  }, [chaveNomesFila]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
