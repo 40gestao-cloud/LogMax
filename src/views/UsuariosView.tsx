@@ -284,6 +284,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         // (504) Documentos da Matriz: sempre atravessaram o reset, mas isso só
         // aparecia por ausência. Agora aparece por número.
         d?.documentos_preservados   != null ? `${d.documentos_preservados} documento(s)` : null,
+        // (572) O empréstimo da Matriz para a unidade passou a atravessar o
+        // reset. O contrato e a tabela de amortização ficam; os títulos (conta
+        // a pagar da filial, a receber da Matriz) saem com o resto do
+        // financeiro, e o contrato vira histórico fechado.
+        d?.emprestimos_preservados  != null ? `${d.emprestimos_preservados} empréstimo(s)` : null,
         // (505) O reset carimba a virada de turma. Sem isto na mensagem, a
         // trava que aparece depois ("dia da turma anterior") não tem origem.
         d?.corte_turma              != null ? `ponto anterior a ${d.corte_turma} vira histórico` : null,

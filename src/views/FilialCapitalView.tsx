@@ -42,6 +42,9 @@ type Emprestimo = {
   aprovado_por_nome: string | null;
   justificativa_resposta: string | null;
   created_at: string;
+  // Migr. 572 — o contrato atravessa o reset; `arquivado_em` marca o que virou
+  // histórico fechado (não conta capital, não se reescreve).
+  arquivado_em: string | null;
 };
 
 type Distribuicao = {
@@ -238,7 +241,10 @@ export function FilialCapitalView({
 
   useEffect(() => { carregarSaldo(); }, [carregarSaldo]);
 
-  const empAprovados = emprestimos.filter(e => e.status === 'Aprovado');
+  // Migr. 572 — o contrato preservado pelo reset perdeu os títulos, mas as
+  // parcelas ficaram (com status congelado). Sem este filtro, a turma nova
+  // abriria a tela com parcelas "em aberto" que não têm conta a pagar nenhuma.
+  const empAprovados = emprestimos.filter(e => e.status === 'Aprovado' && !e.arquivado_em);
   const empPendentes = emprestimos.filter(e => e.status === 'Pendente');
   const empNegados   = emprestimos.filter(e => e.status === 'Negado');
 
@@ -476,6 +482,14 @@ export function FilialCapitalView({
                   )}
                   {emp.banco_nome && (
                     <span className="text-xs text-gray-500 truncate ml-auto">{emp.banco_nome}</span>
+                  )}
+                  {emp.arquivado_em && (
+                    <span
+                      title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. Fica para consulta: as parcelas e os títulos daquela turma já não existem.`}
+                      className={`text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0 ${emp.banco_nome ? '' : 'ml-auto'}`}
+                    >
+                      Turma anterior
+                    </span>
                   )}
                 </div>
                 <p className="text-[11px] text-gray-400 italic">"{emp.justificativa}"</p>

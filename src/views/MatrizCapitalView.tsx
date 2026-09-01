@@ -71,6 +71,10 @@ type Emprestimo = {
   aprovado_por_nome: string | null;
   justificativa_resposta: string | null;
   created_at: string;
+  // Migr. 572 — carimbado pelos dois resets nos contratos que eles preservam.
+  // Preenchido = histórico fechado: não conta capital, não aceita UPDATE, e é
+  // o único que o professor pode apagar.
+  arquivado_em: string | null;
 };
 
 type Banco = { id: string; banco: string; conta: string; tipo: string; filial: string | null; saldo: number | null };
@@ -131,6 +135,12 @@ function podeCriar(p: UserProfile | null) {
 function podeExcluir(p: UserProfile | null) {
   if (!p) return false;
   return p.role === 'admin' || p.role === 'ceo';
+}
+// Migr. 572 — a válvula do professor. `role === 'admin'` LITERAL, do mesmo
+// jeito que a RPC: `podeExcluir` acima inclui o CEO, que é aluno.
+function podeApagarEmprestimo(p: UserProfile | null) {
+  if (!p) return false;
+  return p.role === 'admin';
 }
 function podeAprovar(p: UserProfile | null) {
   if (!p) return false;
@@ -958,13 +968,30 @@ function TabEmprestimos({
 }) {
   const [modalEmp, setModalEmp] = useState<Emprestimo | null>(null);
   const [modalAplicar, setModalAplicar] = useState(false);
-  const pendentes = emprestimos.filter(e => e.status === 'Pendente');
-  const historico = emprestimos.filter(e => e.status !== 'Pendente');
+  const confirm = useConfirm();
+  // Migr. 572 — arquivado é histórico fechado: o gatilho recusa aprovar e
+  // negar, então ele sai da fila de análise mesmo continuando 'Pendente'.
+  const pendentes = emprestimos.filter(e => e.status === 'Pendente' && !e.arquivado_em);
+  const historico = emprestimos.filter(e => e.status !== 'Pendente' || !!e.arquivado_em);
 
   const statusIcon = (s: string) => {
     if (s === 'Aprovado') return <CheckCircle size={13} className="text-green-400" />;
     if (s === 'Negado') return <XCircle size={13} className="text-red-400" />;
     return <Clock size={13} className="text-yellow-400" />;
+  };
+
+  // A RPC recusa contrato aprovado e vivo — apagar a linha não devolveria o
+  // dinheiro à Matriz. Aqui só chega o que ela aceita.
+  const handleApagar = async (emp: Emprestimo) => {
+    const ok = await confirm({
+      message: `Apagar de vez este empréstimo de ${emp.filial} (${BRL(emp.valor)})? As parcelas e os títulos que restarem vão junto. Esta ação não pode ser desfeita.`,
+      danger: true,
+    });
+    if (!ok || !supabase) return;
+    const { error } = await supabase.rpc('apagar_emprestimo', { p_emprestimo_id: emp.id });
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast('Empréstimo apagado.', 'success');
+    onReload();
   };
 
   return (
@@ -1051,7 +1078,26 @@ function TabEmprestimos({
                     <p className="text-[11px] text-gray-500 mt-0.5 italic truncate">"{emp.justificativa_resposta}"</p>
                   )}
                 </div>
+                {/* Migr. 572 — o contrato atravessou um reset. Fica para
+                    consulta, sem aprovar/negar e fora da conta de capital. */}
+                {emp.arquivado_em && (
+                  <span
+                    title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. Só consulta.`}
+                    className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0"
+                  >
+                    Turma anterior
+                  </span>
+                )}
                 <span className="text-[10px] text-gray-500">{fmtDate(emp.created_at)}</span>
+                {podeApagarEmprestimo(profile) && (
+                  <button
+                    onClick={() => handleApagar(emp)}
+                    title="Apagar empréstimo"
+                    className="action-btn-delete shrink-0"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
               </div>
             );
           })}
