@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, SelecioneUnidade } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 
 const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
@@ -23,9 +24,15 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const enriched = data.map((r: any) => ({ ...r, prod: produtos.find((p: any) => p.id === r.produto_id) }));
-  const filtered = enriched.filter((r: any) =>
+  const porBusca = enriched.filter((r: any) =>
     [r.solicitante, r.status, r.destino, r.prod?.nome].some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
+  // Filtro por solicitante (2026-09-01), o mesmo de Requisições e Aprovações.
+  // Vem DEPOIS da busca: assim a contagem ao lado de cada nome é sempre a do
+  // que a tabela está mostrando, e não um número que a busca já descartou.
+  const [solicitante, setSolicitante] = useState<string | null>(null);
+  const filtered = porBusca.filter((r: any) =>
+    solicitante === null || chaveSolicitante(r.solicitante) === solicitante);
 
   const closeForm = () => { setEditItem(null); setForm({ produto_id: '' }); setExtras({ qtd: '1', destino: '' }); setErrors({}); };
   const openEdit = (item: any) => { setEditItem(item); setForm({ produto_id: item.produto_id ?? '' }); setExtras({ qtd: String(item.qtd ?? 1), destino: item.destino ?? '' }); setErrors({}); };
@@ -89,6 +96,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>
+          <FiltroSolicitante nomes={porBusca.map((r: any) => r.solicitante)} valor={solicitante} onChange={setSolicitante} />
         </div>
       </div>
       <AnimatePresence>
@@ -131,7 +139,9 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
           <table className="w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Destino</th><th className="pb-4 font-bold px-4">Solicitante</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>) : (
+              {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState message={solicitante !== null
+                ? `Nenhuma requisição de material de ${solicitante}${search ? ' com esta busca' : ''}.`
+                : undefined} /></td></tr>) : (
                 <AnimatePresence>
                   {filtered.map((item: any) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">

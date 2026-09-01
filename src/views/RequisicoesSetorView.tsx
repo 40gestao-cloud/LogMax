@@ -4,6 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { supabase } from '../lib/supabase';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -412,7 +413,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // Abre onde há trabalho. Só uma vez: depois disso quem manda é o clique.
   const [aba, setAba] = useState<AbaKey | null>(null);
   const abaAtiva: AbaKey = aba ?? (porAba.corrigir.length > 0 ? 'corrigir' : 'pendentes');
-  const visiveis = porAba[abaAtiva];
+  // ── Filtro por solicitante (2026-09-01) ─────────────────────────
+  //
+  // Não confundir com o comentário lá em cima: o RECORTE continua sendo o do
+  // setor, feito pela RLS. Isto aqui é leitura — o gerente do setor estreita a
+  // lista que já é dele para conferir o que uma pessoa mandou, e quantas.
+  const [solicitante, setSolicitante] = useState<string | null>(null);
+  const casaSolicitante = (nome: unknown) =>
+    solicitante === null || chaveSolicitante(nome) === solicitante;
+  const visiveis = porAba[abaAtiva].filter(r => casaSolicitante(r.solicitante));
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
@@ -1127,7 +1136,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       <div className="flex gap-2 flex-wrap shrink-0">
         {ABAS.map(a => {
           const ativa = a.key === abaAtiva;
-          const n = porAba[a.key].length;
+          const n = porAba[a.key].filter(r => casaSolicitante(r.solicitante)).length;
           const chama = a.key === 'corrigir' && minhasParaCorrigir > 0;
           return (
             <button key={a.key} onClick={() => setAba(a.key)}
@@ -1143,8 +1152,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           );
         })}
       </div>
+      {/* Quem pediu — a contagem ao lado do nome é da aba aberta. */}
+      <FiltroSolicitante
+        valor={solicitante}
+        onChange={setSolicitante}
+        nomes={porAba[abaAtiva].map(r => r.solicitante)}
+      />
       {visiveis.length === 0 ? (
-        <EmptyState message={abaAtiva === 'corrigir'
+        <EmptyState message={solicitante !== null
+          ? `Nada de ${solicitante} nesta aba. Troque o solicitante ou volte para "Todos".`
+          : abaAtiva === 'corrigir'
           ? 'Nada devolvido para correção — o que o gerente pediu para consertar aparece aqui.'
           : 'Nenhuma requisição nesta situação.'} />
       ) : (
