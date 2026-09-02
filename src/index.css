@@ -951,6 +951,36 @@ table,
   }
 }
 
+/* ── Pílulas de lista: gradiente sim, corrida não ────────────────────────
+   `.filial-badge`, `.role-badge` e `.meta-status` animavam `background-position`
+   em laço infinito. A diferença para `.btn-shimmer` e `.medal-card`, que
+   CONTINUAM animando, não é estética — é quantas aparecem de uma vez: botão de
+   ação e pódio saem em três ou quatro por tela, estas saem uma por LINHA. O
+   Catálogo desenha uma `.filial-badge` por card, até 50 numa página; Usuários
+   desenha uma `.role-badge` por linha.
+
+   `background-position` é propriedade de PINTURA: não vai para o compositor,
+   então cada quadro repinta o elemento. Cinquenta desses dentro de um container
+   com rolagem estouram o orçamento de pintura no meio do scroll, e o que se vê
+   é ladrilho velho — cabeçalho desenhado duas vezes, texto do card cortado ao
+   meio. Relato de 2026-09-02: treme no Catálogo sem parar, treme em Usuários e
+   normaliza (uma pílula por linha contra cinquenta), nas duas telas ao descer e
+   subir com o rato. A máquina tinha a aceleração gráfica do Chrome DESLIGADA,
+   que é o caso em que isto dói mais: a composição toda sai na CPU.
+
+   Não dá para deixar isto por conta do `prefers-reduced-motion` (bloco mais
+   abaixo): esse interruptor é do Windows, a poupança de bateria liga e desliga
+   sozinha, e na hora do relato ele estava em `false`.
+
+   Fica o gradiente, parado no ponto mais claro — que é a cor que o olho já lia
+   como sendo da unidade. O que sai é só o corre-corre. */
+[class*="filial-badge"],
+[class*="role-badge"],
+[class*="meta-status"] {
+  animation: none !important;
+  background-position: 50% center !important;
+}
+
 /* ── Cards de pódio (Central de Avaliação → resultado da competição) ────── */
 .medal-card {
   position: relative;

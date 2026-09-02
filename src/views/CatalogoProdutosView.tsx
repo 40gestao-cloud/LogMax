@@ -196,7 +196,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
       ) : produtosVisiveis.length === 0 ? (
         <EmptyState message="Nenhum produto encontrado com os filtros atuais." />
       ) : (
-        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
+        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4 shrink-0">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
             {produtosVisiveis.map((p: any) => {
               const badge = estoqueBadge(p);
