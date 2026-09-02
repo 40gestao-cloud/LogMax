@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2, AlertTriangle } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -209,6 +209,31 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   };
 
   const cargoEscolhido = cargosAtivos.find((c: any) => c.id === cargoSel);
+
+  // Só a palavra "gerente" entra na régua. É a única da hierarquia de RH que
+  // tem par no `role` — "Assistente", "Coordenador" e "Analista" são degraus
+  // de carreira sem correspondência no acesso, e avisar sobre eles seria
+  // ruído em cima do trabalho normal do RH.
+  const tituloDeGerente = (cargo: string | null | undefined) => /ger[êe]nc|gerent/i.test(cargo ?? '');
+
+  // O título que o RH está digitando contradiz o papel da conta ligada?
+  //
+  // A trava entre os dois campos é de MÃO ÚNICA: mudar o papel em Usuários
+  // reescreve `funcionarios.cargo` (api/users.ts), mas escrever aqui não muda
+  // o acesso de ninguém. Um cadastro que diz "Gerente de Vendas" numa conta
+  // `colaborador` não dá poder nenhum — dá um crachá que mente, e quem
+  // descobre isso é a própria pessoa, na fila do ponto.
+  //
+  // Aviso, e não bloqueio: o RH pode estar cadastrando alguém que vai virar
+  // gerente amanhã, e recusar o texto obrigaria a fazer as duas coisas na
+  // ordem certa. O que não pode é a divergência passar em silêncio.
+  const perfilLigado = form.user_profile_id
+    ? (usuarios ?? []).find((u: any) => u.id === form.user_profile_id)
+    : null;
+  const papelLigado: string | null = perfilLigado?.role ?? null;
+  const cargoContradizPapel = !!papelLigado && !!form.cargo && (
+    papelLigado === 'gerente' ? !tituloDeGerente(form.cargo) : tituloDeGerente(form.cargo)
+  );
 
   // A coluna `dependentes` chega com a migr. 319. Enquanto a turma não aplicou,
   // esconder o campo é mais seguro que mostrá-lo: mandar coluna inexistente no
@@ -471,6 +496,16 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   <input id="func-cargo" type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
                     onChange={e => setForm((p: any) => ({ ...p, cargo: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                )}
+                {cargoContradizPapel && (
+                  <p className="text-[10px] text-amber-400/90 flex items-start gap-1.5 leading-relaxed">
+                    <AlertTriangle size={11} className="shrink-0 mt-[2px]" />
+                    <span>
+                      A conta de <span className="font-semibold">{perfilLigado?.nome ?? 'quem está ligado aqui'}</span> é{' '}
+                      <span className="font-semibold">{roleLabel(papelLigado)}</span> em Usuários, e este título diz outra
+                      coisa. É este texto que sai no crachá — quem muda o acesso é o professor, em Usuários.
+                    </span>
+                  </p>
                 )}
                 {cargoEscolhido && Number(cargoEscolhido.salario_base) > 0 && (
                   <p className="text-[10px] text-gray-500">
