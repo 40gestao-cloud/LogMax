@@ -15,6 +15,53 @@ const VALID_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'];
 
 type Log = ReturnType<typeof createLogger>;
 
+// Rótulo do papel como a turma o lê. É a GÊMEA de `ROLE_LABEL` em
+// `src/lib/rbac.ts` — mudou lá, muda aqui. A cópia existe porque `api/` é
+// serverless Node e não importa de `src/`; é o mesmo motivo de `VALID_ROLES`
+// acima ser uma segunda lista.
+const ROLE_CARGO: Record<string, string> = {
+  admin:       'Administrador',
+  ceo:         'CEO',
+  gerente:     'Gerente',
+  colaborador: 'Colaborador',
+  conselheiro: 'Conselheiro',
+};
+
+/**
+ * O papel mudou em Usuários → o cargo do cadastro de RH acompanha.
+ *
+ * `user_profiles.role` (o acesso) e `funcionarios.cargo` (o título do RH) são
+ * campos diferentes, e o crachá mostra o SEGUNDO. Sem esta ponte, rebaixar um
+ * gerente a colaborador deixava o crachá dele dizendo "Gerente" — e o crachá é
+ * justamente o que a pessoa mostra para se identificar. O cadastro de RH nasce
+ * com `roleLabel(role)` no momento do vínculo (RH → Funcionários); o que
+ * faltava era ele seguir a mudança depois disso.
+ *
+ * Sobrescreve o texto inteiro, de propósito: um cargo como "Gerente De Vendas
+ * e Atendimentos" numa pessoa que não é mais gerente é exatamente o que se
+ * quer apagar. O RH pode reescrever o título em Funcionários logo depois — a
+ * régua aqui é "nunca contradizer o papel", não "redigir o cargo".
+ *
+ * O vínculo é gravado nos DOIS lados e nem sempre nos dois ao mesmo tempo, daí
+ * casar por `funcionario_id` OU por `user_profile_id`.
+ *
+ * Falha NÃO derruba a edição: o papel já mudou no perfil, e reverter o acesso
+ * de alguém porque o texto do crachá não gravou seria pior que o texto velho.
+ */
+async function sincronizarCargoFuncionario(
+  admin: SupabaseClient, userId: string, funcionarioId: string | null,
+  role: string, log: Log,
+) {
+  const cargo = ROLE_CARGO[role];
+  if (!cargo) return;
+  const alvo = admin.from('funcionarios').update({ cargo });
+  const { error } = funcionarioId
+    ? await alvo.eq('id', funcionarioId)
+    : await alvo.eq('user_profile_id', userId);
+  if (error) log.warn('funcionario.cargo_sync_failed', { target_id: userId, error: error.message });
+  else log.info('funcionario.cargo_synced', { target_id: userId, cargo });
+}
+
 // ── Cofre de senhas (migr. 409) ─────────────────────────────────────────
 // O hash do Auth é irreversível, então a senha só existe legível no instante
 // em que o painel a define. Aqui é esse instante. Falha ao anotar NÃO derruba
@@ -260,7 +307,7 @@ async function handleUpdate(
   }
 
   const { data: targetProfile } = await admin
-    .from('user_profiles').select('role, setor, filial').eq('id', userId).single();
+    .from('user_profiles').select('role, setor, filial, funcionario_id').eq('id', userId).single();
   if (!targetProfile) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   if (targetProfile.role === 'admin' && callerId !== userId) {
@@ -414,6 +461,14 @@ async function handleUpdate(
   if (profileErr) {
     log.error('profile.update_failed', profileErr, { target_id: userId });
     return res.status(500).json({ error: 'Erro ao atualizar perfil.' });
+  }
+
+  // Só quando o papel REALMENTE mudou: reenviar o mesmo cargo no formulário
+  // não pode apagar um título que o RH redigiu à mão depois do vínculo.
+  if (updates.role && updates.role !== targetProfile.role) {
+    await sincronizarCargoFuncionario(
+      admin, userId, targetProfile.funcionario_id ?? null, updates.role, log,
+    );
   }
 
   log.info('user.updated', { target_id: userId, caller_id: callerId, fields: Object.keys(updates) });

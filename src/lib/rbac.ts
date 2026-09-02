@@ -6,6 +6,10 @@ import type { UserProfile, Setor } from '../hooks/useUserProfile';
  * mostrar a mesma palavra ao trazer o cadastro de um usuário: duas cópias do
  * mapa acabariam divergindo, e o aluno veria "gerente" numa tela e "Gerente"
  * na outra para a mesma pessoa.
+ *
+ * Há uma cópia inevitável em `api/users.ts` (`ROLE_CARGO`), que sincroniza
+ * `funcionarios.cargo` quando o papel muda — serverless não importa de `src/`.
+ * Mudou aqui, muda lá.
  */
 export const ROLE_LABEL: Record<string, string> = {
   admin:       'Administrador',
