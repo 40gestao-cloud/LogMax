@@ -85,6 +85,28 @@ export function useAlarmesTurma() {
     return null;
   }, [load]);
 
+  // Editar em vez de apagar-e-recriar: mudar o horário de um alarme que a
+  // turma inteira já enxerga era, até aqui, excluir e cadastrar de novo — e
+  // no meio do caminho o alarme sumia da tela de todo mundo.
+  const editar = useCallback(async (
+    id: string, hora: number, minuto: number, tipo: AlarmeTipo, mensagem: string | null,
+  ): Promise<string | null> => {
+    if (!supabase) return 'Supabase não configurado.';
+    const { error } = await supabase.from('alarmes_turma').update({
+      hora, minuto, tipo,
+      // Trocar `aviso` por um tipo de texto fixo tem de LIMPAR a mensagem:
+      // deixá-la ali guardaria um texto que ninguém mais vê e que voltaria
+      // sozinho se o tipo fosse revertido.
+      mensagem: tipo === 'aviso' ? (mensagem ?? '').trim() : null,
+    }).eq('id', id);
+    if (error) {
+      if (error.code === '23505') return 'Já existe um alarme nesse horário.';
+      return error.message;
+    }
+    await load();
+    return null;
+  }, [load]);
+
   const alternar = useCallback(async (id: string, ativo: boolean) => {
     if (!supabase) return;
     await supabase.from('alarmes_turma').update({ ativo }).eq('id', id);
@@ -97,7 +119,7 @@ export function useAlarmesTurma() {
     await load();
   }, [load]);
 
-  return { alarmes, isLoading, criar, alternar, remover, recarregar: load };
+  return { alarmes, isLoading, criar, editar, alternar, remover, recarregar: load };
 }
 
 /**

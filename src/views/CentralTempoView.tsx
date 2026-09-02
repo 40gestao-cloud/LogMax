@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Clock, AlarmClock, Timer as TimerIcon, Hourglass,
-  Play, Pause, RotateCcw, Flag, Plus, Trash2,
+  Play, Pause, RotateCcw, Flag, Plus, Trash2, Pencil, Check, X,
 } from 'lucide-react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAlarmesTurma } from '../hooks/useAlarmesTurma';
@@ -113,7 +113,7 @@ function RelogioCard() {
 // estivesse nesta tela ouviria dois alarmes sobrepostos.
 function AlarmesCard() {
   const { profile } = useUserProfile();
-  const { alarmes, isLoading, criar, alternar, remover } = useAlarmesTurma();
+  const { alarmes, isLoading, criar, editar, alternar, remover } = useAlarmesTurma();
   // Escrita é só do professor (`role = 'admin'` literal, igual à RLS da
   // migr. 529): alarme interrompe a tela de 45 pessoas.
   const podeGerenciar = profile?.role === 'admin';
@@ -124,6 +124,12 @@ function AlarmesCard() {
   const [mensagem, setMensagem] = useState('');
   const [erro, setErro]         = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // O MESMO formulário cadastra e edita: com `editandoId` preenchido ele
+  // salva por cima do alarme escolhido em vez de criar outro. Duplicar o
+  // formulário só para editar dobraria a validação e as duas cópias
+  // divergiriam no primeiro ajuste.
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement | null>(null);
 
   // Que minuto é agora no Acre — para marcar o alarme que está TOCANDO e
   // oferecer o botão que o cala em todas as telas. 10s é folga suficiente:
@@ -135,7 +141,37 @@ function AlarmesCard() {
   }, []);
   const tocandoAgora = (a: AlarmeTurma) => a.ativo && `${pad2(a.hora)}:${pad2(a.minuto)}` === agora;
 
-  const addAlarm = async () => {
+  // O alarme em edição pode sumir debaixo do formulário: outra máquina do
+  // professor apaga e o realtime tira a linha da lista. Sem isto o "Salvar
+  // alterações" ficaria apontando para um id que não existe mais.
+  useEffect(() => {
+    if (editandoId && !alarmes.some(a => a.id === editandoId)) {
+      setEditandoId(null);
+      setErro(null);
+    }
+  }, [alarmes, editandoId]);
+
+  const emEdicao = editandoId ? alarmes.find(a => a.id === editandoId) ?? null : null;
+
+  const abrirEdicao = (a: AlarmeTurma) => {
+    setEditandoId(a.id);
+    setHourIn(pad2(a.hora));
+    setMinIn(pad2(a.minuto));
+    setTipo(a.tipo);
+    setMensagem(a.mensagem ?? '');
+    setErro(null);
+    // A lista pode estar longe do formulário numa tela pequena; sem isto o
+    // clique no lápis não parece ter feito nada.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setMensagem('');
+    setErro(null);
+  };
+
+  const salvarAlarme = async () => {
     const h = Number.parseInt(hourIn, 10);
     const m = Number.parseInt(minIn, 10);
     if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return;
@@ -144,10 +180,15 @@ function AlarmesCard() {
       return;
     }
     setSalvando(true);
-    const falha = await criar(h, m, tipo, mensagem);
+    const falha = editandoId
+      ? await editar(editandoId, h, m, tipo, mensagem)
+      : await criar(h, m, tipo, mensagem);
     setSalvando(false);
     setErro(falha);
-    if (!falha) setMensagem('');
+    if (!falha) {
+      setMensagem('');
+      setEditandoId(null);
+    }
   };
 
   return (
@@ -155,12 +196,21 @@ function AlarmesCard() {
       <CardHeader icon={AlarmClock} title="Alarmes" subtitle="Toca para a turma · em qualquer tela" />
 
       {podeGerenciar ? (
-        <>
+        <div ref={formRef}>
           <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
             O alarme toca na tela de todo mundo até cada pessoa apertar “Entendi”.
             Para calar a turma inteira de uma vez, desligue o alarme aqui enquanto
             ele estiver tocando.
           </p>
+          {emEdicao && (
+            // O horário mostrado é o do BANCO, não o dos campos: eles mudam
+            // conforme o professor digita e deixariam de dizer qual alarme
+            // está sendo alterado.
+            <p className="text-[11px] font-bold text-accent mb-3 neu-pressed rounded-xl p-3 border border-accent/25">
+              Editando o alarme das {pad2(emEdicao.hora)}:{pad2(emEdicao.minuto)}.
+              A mudança chega na tela da turma na hora.
+            </p>
+          )}
           <div className="flex items-end gap-2 mb-3">
             <div className="flex flex-col gap-1.5 flex-1">
               <label htmlFor="alarme-hora" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Hora</label>
@@ -207,11 +257,20 @@ function AlarmesCard() {
 
           {erro && <p className="text-[11px] text-red-400 mb-2">{erro}</p>}
 
-          <button onClick={addAlarm} disabled={salvando}
-            className="neu-button rounded-xl px-4 py-2.5 flex items-center justify-center gap-1.5 text-xs font-bold text-accent hover:bg-accent/5 transition-colors mb-4 disabled:opacity-40">
-            <Plus size={14} /> {salvando ? 'Salvando…' : 'Adicionar alarme'}
-          </button>
-        </>
+          <div className="flex items-center gap-2 mb-4">
+            <button onClick={salvarAlarme} disabled={salvando}
+              className="neu-button rounded-xl px-4 py-2.5 flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-accent hover:bg-accent/5 transition-colors disabled:opacity-40">
+              {editandoId ? <Check size={14} /> : <Plus size={14} />}
+              {salvando ? 'Salvando…' : editandoId ? 'Salvar alterações' : 'Adicionar alarme'}
+            </button>
+            {editandoId && (
+              <button onClick={cancelarEdicao} disabled={salvando}
+                className="neu-button rounded-xl px-4 py-2.5 flex items-center justify-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-40">
+                <X size={14} /> Cancelar
+              </button>
+            )}
+          </div>
+        </div>
       ) : (
         <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
           Os alarmes são definidos pelo professor. Quando o horário chegar, o
@@ -232,7 +291,7 @@ function AlarmesCard() {
               <motion.div key={a.id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
                 className="neu-pressed rounded-xl p-3 flex items-center gap-3 border"
-                style={{ borderColor: tocandoAgora(a) ? 'rgba(212,175,55,0.45)' : 'rgba(255,255,255,0.05)' }}>
+                style={{ borderColor: tocandoAgora(a) || a.id === editandoId ? 'rgba(212,175,55,0.45)' : 'rgba(255,255,255,0.05)' }}>
                 <span className={`font-mono tabular-nums text-lg font-black shrink-0 ${a.ativo ? 'text-accent' : 'text-gray-600'}`}>
                   {pad2(a.hora)}:{pad2(a.minuto)}
                 </span>
@@ -271,6 +330,11 @@ function AlarmesCard() {
                           left: a.ativo ? 'calc(100% - 1.375rem)' : '0.125rem',
                           background: a.ativo ? 'var(--color-accent)' : 'var(--color-bg-base)',
                         }} />
+                    </button>
+                    <button onClick={() => abrirEdicao(a)}
+                      className="action-btn-edit shrink-0"
+                      aria-label={`Editar alarme ${pad2(a.hora)}:${pad2(a.minuto)}`}>
+                      <Pencil size={12} />
                     </button>
                     <button onClick={() => remover(a.id)}
                       className="action-btn-delete shrink-0"
