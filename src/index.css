@@ -923,6 +923,34 @@ table,
 [data-theme="light"] .btn-shimmer--glass-gray  { color: #1f2937; border-color: rgba(107,114,128,0.70) !important; }
 [data-theme="light"] .btn-shimmer--glass-purple { color: #4c1d95; border-color: rgba(147,51,234,0.70) !important; }
 
+/* ── Shimmer das pílulas e botões: parar quando o sistema pede menos animação ──
+   Todas estas famílias animam `background-position` em laço infinito. É uma
+   propriedade de PINTURA: o navegador não a entrega ao compositor, repinta o
+   elemento a cada quadro, e nenhuma delas aparece sozinha na tela — o Catálogo
+   desenha uma `.filial-badge` por card (até 50 numa página), o placar desenha
+   uma `.role-badge` por linha. Numa máquina modesta isso é repintura contínua
+   de dezenas de elementos, e passar o rato por cima (que ainda dispara a
+   transição do `.neu-button`) é o que faz a grelha estremecer.
+
+   O guard não é performance disfarçada de acessibilidade: é a mesma regra que
+   `.vitrine-card-shimmer`, `.fs-card-shimmer` e os `.action-btn-*` já seguem —
+   e quem liga "reduzir animações" no Windows costuma ser exatamente a máquina
+   que não aguenta o laço. O Windows também liga esse interruptor sozinho na
+   poupança de bateria.
+
+   Fica a pílula PARADA, com o gradiente centrado no ponto mais claro (é o que
+   o olho já lia como a cor da unidade); o que sai é só o corre-corre. */
+@media (prefers-reduced-motion: reduce) {
+  [class*="filial-badge"],
+  [class*="role-badge"],
+  [class*="meta-status"],
+  [class*="btn-shimmer"],
+  [class*="medal-card"] {
+    animation: none !important;
+    background-position: 50% center !important;
+  }
+}
+
 /* ── Cards de pódio (Central de Avaliação → resultado da competição) ────── */
 .medal-card {
   position: relative;
