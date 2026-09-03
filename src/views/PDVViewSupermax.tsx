@@ -5,7 +5,7 @@ import { codigoCobranca } from '../lib/cobranca';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
   Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
-  Pencil, Trash2,
+  Pencil, Trash2, DollarSign,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
@@ -71,7 +71,7 @@ function trapTab(e: React.KeyboardEvent, container: HTMLElement | null) {
   }
 }
 
-const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
+const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Fiado'];
 
 // Busca de produto (prefixo, acento-insensível) vive em lib/produtoBusca.ts —
 // compartilhada com PDVView.tsx. `norm` segue em uso aqui para outras buscas
@@ -681,6 +681,9 @@ export const PDVViewSupermax = ({
   const reallyCancelSale = () => {
     clearAll();
     setConfirmCancel(false);
+    // Cancelar de dentro do modal de pagamento deixava o modal aberto sobre um
+    // carrinho ja vazio — o operador ficava preso numa tela sem venda.
+    setPaymentModalOpen(false);
     codeInputRef.current?.focus();
   };
 
@@ -2010,7 +2013,7 @@ export const PDVViewSupermax = ({
       {/* Forma de pagamento — nav por teclado: ↑↓←→ ou Tab/Shift+Tab, F1/F2/F3 atalho, Enter confirma o botão focado */}
       {paymentModalOpen && (
         <div
-          className="fixed inset-0 z-[180] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[180] flex items-start justify-center overflow-y-auto p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           onKeyDown={(e) => {
             if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
@@ -2078,7 +2081,7 @@ export const PDVViewSupermax = ({
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
-          <div className="bg-white border-4 max-w-2xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+          <div className="bg-white border-4 max-w-2xl w-full shadow-2xl my-4" style={{ borderColor: NAVY_DARK }}>
             <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Total a pagar</div>
@@ -2090,7 +2093,7 @@ export const PDVViewSupermax = ({
                   <div className="text-3xl font-black tabular-nums" style={{ color: restante <= 0.001 ? '#22c55e' : YELLOW }}>R$ {fmt(restante)}</div>
                 </div>
               )}
-              <button onClick={() => setPaymentModalOpen(false)} className="text-white p-1" tabIndex={-1}><X size={20} /></button>
+              <button onClick={() => setPaymentModalOpen(false)} className="text-white p-1 shrink-0" tabIndex={-1} title="Voltar para a leitura (Esc)"><X size={20} /></button>
             </div>
 
             {paymentError && (
@@ -2121,8 +2124,8 @@ export const PDVViewSupermax = ({
                   if (/^F\d+$/.test(e.key)) e.stopPropagation();
                 }}
                 placeholder={`Restante: ${fmt(restante)}`}
-                className="w-full bg-white border-2 text-xl font-bold tabular-nums px-3 py-1.5 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-500/30"
-                style={{ borderColor: '#9ca3af', color: NAVY_DARK, fontFamily: 'Consolas, "Courier New", monospace' }}
+                className="w-full bg-white border-2 text-xl font-bold text-gray-900 tabular-nums px-3 py-1.5 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-500/30"
+                style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
               />
               {/* Valor acima do restante entra cortado no restante — dizer isso ANTES
                   do clique evita a conta que nao fecha na cabeca do operador. */}
@@ -2211,67 +2214,122 @@ export const PDVViewSupermax = ({
               )}
             </div>
 
-            <div className="p-6 pt-4 grid grid-cols-2 gap-3">
-              {([
-                ['Dinheiro',       Banknote,    'F1'],
-                ['Cartão Débito',  CreditCard,  'F2'],
-                ['Cartão Crédito', CreditCard,  'F2'],
-                ['PIX',            Wallet,      'F3'],
-                ['Fiado',          UsersIcon,   ''],
-              ] as const).map(([forma, Icon, hint], i) => {
-                const active = i === payChoiceIdx;
-                // PIX e Fiado só funcionam como forma única (sem parcial),
-                // por causa de realtime / RPC que cria conta_receber pelo
-                // valor cheio. Dinheiro e Cartão D/C aceitam misto.
-                const parcial = parseBRL(parcialValor);
-                const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
-                const isPixOrFiado = forma === 'PIX' || forma === 'Fiado';
-                const isDisabled = isMistoActive && isPixOrFiado;
-                return (
-                  <button
-                    key={forma}
-                    ref={(el) => { payBtnRefs.current[i] = el; }}
-                    disabled={isDisabled}
-                    onClick={() => handlePayChoice(forma as FormaPagamento)}
-                    onFocus={() => setPayChoiceIdx(i)}
-                    onMouseEnter={() => setPayChoiceIdx(i)}
-                    title={isDisabled ? `${forma} só funciona como forma única — limpe os pagamentos lançados pra usar` : undefined}
-                    className={`relative border-2 px-4 py-5 flex flex-col items-center gap-2 font-black uppercase tracking-wide transition focus:outline-none ${active && !isDisabled ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}
-                    style={{ borderColor: active && !isDisabled ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active && !isDisabled ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
-                  >
-                    <Icon size={28} />
-                    <span>{forma}</span>
-                    {hint && (
-                      <span className="absolute top-1 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ background: '#f3f4f6', borderColor: '#9ca3af', color: NAVY_DARK }}>
-                        {hint}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+            {/* Formas de pagamento — mesmo desenho do MaxPOS: titulo com a regua
+                de teclas, 3 colunas, cartao branco de borda cinza que vira azul
+                no foco. O amarelo saiu: quem manda no realce e o foco real. */}
+            <div className="px-6 pt-4">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">
+                FORMA DE PAGAMENTO <span className="text-gray-400 normal-case font-medium">(Tab/← → navegar · Enter selecionar · F1 Dinheiro · F2 Cartão · F3 PIX/Fiado)</span>
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ['Dinheiro',       DollarSign,  'F1', 'DINHEIRO'],
+                  ['Cartão Crédito', CreditCard,  'F2', 'CRÉDITO'],
+                  ['Cartão Débito',  Banknote,    'F2', 'DÉBITO'],
+                  ['PIX',            Wallet,      'F3', 'PIX'],
+                  ['Fiado',          UsersIcon,   'F3', 'FIADO'],
+                ] as const).map(([forma, Icon, hint, label], i) => {
+                  const active = i === payChoiceIdx;
+                  // PIX e Fiado só funcionam como forma única (sem parcial),
+                  // por causa de realtime / RPC que cria conta_receber pelo
+                  // valor cheio. Dinheiro e Cartão D/C aceitam misto.
+                  const parcial = parseBRL(parcialValor);
+                  const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+                  const isPixOrFiado = forma === 'PIX' || forma === 'Fiado';
+                  const isDisabled = restante <= 0.001 || (isMistoActive && isPixOrFiado);
+                  return (
+                    <button
+                      key={forma}
+                      ref={(el) => { payBtnRefs.current[i] = el; }}
+                      data-pay-method={forma}
+                      disabled={isDisabled}
+                      onClick={() => handlePayChoice(forma as FormaPagamento)}
+                      onFocus={() => setPayChoiceIdx(i)}
+                      onMouseEnter={() => setPayChoiceIdx(i)}
+                      title={isDisabled && isMistoActive && isPixOrFiado
+                        ? `${forma} só funciona como forma única — limpe os pagamentos lançados pra usar`
+                        : undefined}
+                      className={`relative border-2 bg-white rounded py-4 flex flex-col items-center gap-1.5 transition disabled:opacity-30 focus:outline-none hover:border-blue-700 hover:text-blue-700 focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${active && !isDisabled ? 'border-blue-700 text-blue-700' : 'text-gray-900'}`}
+                      style={{ borderColor: active && !isDisabled ? '#1d4ed8' : '#9ca3af' }}
+                    >
+                      {hint && (
+                        <span className="absolute top-1 right-1.5 text-[9px] font-black text-gray-400 tracking-wider">{hint}</span>
+                      )}
+                      <Icon size={26} />
+                      <span className="text-[11px] font-bold tracking-wide">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Botão FECHAR VENDA — aparece após o 1º pagamento, ativo quando restante=0 */}
-            {pagamentos.length > 0 && (
-              <div className="px-6 pb-4">
-                <button
-                  data-action="confirmar-venda"
-                  onClick={finalizarVendaMisto}
-                  disabled={restante > 0.001 || isClosing}
-                  className="w-full px-6 py-4 text-white font-black uppercase tracking-wide text-lg disabled:opacity-30 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-green-700"
-                  style={{ background: MONEY }}
-                >
-                  {isClosing
-                    ? <><Loader2 size={20} className="animate-spin" /> Finalizando...</>
-                    : restante > 0.001
-                      ? `Faltam R$ ${fmt(restante)} para finalizar`
-                      : 'FECHAR VENDA (Enter)'}
-                </button>
-              </div>
-            )}
+            {/* Extra do fechamento — o LogMax só tem desconto no total (o MaxPOS
+                põe CPF na nota e cliente vinculado ao lado; aqui não existem). */}
+            <div className="px-6 pt-4">
+              <button
+                data-extra-action="desconto"
+                tabIndex={-1}
+                onClick={() => { setDiscountKind('percent'); setDiscountValue(''); setDiscountModalOpen(true); }}
+                disabled={subtotal <= 0 || pagamentos.length > 0}
+                className="w-full py-2 text-[11px] font-black uppercase tracking-wider border-2 disabled:opacity-30 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
+                style={{ borderColor: YELLOW_DARK, color: NAVY_DARK }}
+                title={pagamentos.length > 0
+                  ? 'Com pagamento lançado o total não muda mais — remova os pagamentos para dar desconto'
+                  : 'Desconto no total (F6)'}
+              >
+                {descontoAplicado > 0 ? `− R$ ${fmt(descontoAplicado)} · F6 DESCONTO` : 'F6 DESCONTO'}
+              </button>
+            </div>
+
+            {/* VOLTAR / CANCELAR / FECHAR VENDA — os tres sempre na tela, como no
+                MaxPOS. Antes so aparecia o FECHAR VENDA, e depois do primeiro
+                pagamento: sair do modal so pelo X ou pelo Esc. */}
+            <div className="px-6 pt-4 pb-2 flex gap-2">
+              <button
+                tabIndex={-1}
+                onClick={() => {
+                  if (pagamentos.length > 0) {
+                    setPagamentos([]);
+                    showToast?.('Pagamentos lançados descartados.', 'success');
+                  }
+                  setParcialValor('');
+                  setPaymentModalOpen(false);
+                }}
+                className="px-4 py-3 border-2 text-gray-700 text-sm font-bold hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
+                style={{ borderColor: '#9ca3af' }}
+                title={pagamentos.length > 0
+                  ? 'Voltar para a leitura — descarta os pagamentos lançados (Esc)'
+                  : 'Voltar para a leitura (Esc)'}
+              >
+                VOLTAR
+              </button>
+              <button
+                tabIndex={-1}
+                onClick={cancelSale}
+                className="px-4 py-3 text-white text-sm font-bold hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-red-400"
+                style={{ background: RED }}
+                title="Cancelar venda (F9)"
+              >
+                CANCELAR
+              </button>
+              <button
+                data-action="confirmar-venda"
+                onClick={finalizarVendaMisto}
+                disabled={pagamentos.length === 0 || restante > 0.001 || isClosing}
+                className="flex-1 px-5 py-3 text-white font-black uppercase tracking-wide text-base disabled:opacity-30 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-green-700"
+                style={{ background: MONEY }}
+                title="Confirma a venda quando o restante chega a R$ 0,00"
+              >
+                {isClosing
+                  ? <><Loader2 size={20} className="animate-spin" /> SALVANDO...</>
+                  : restante > 0.001
+                    ? `FALTAM R$ ${fmt(restante)}`
+                    : 'FECHAR VENDA (Enter)'}
+              </button>
+            </div>
 
             <div className="px-6 pb-4 text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-              ↑↓←→ navegar · Enter confirmar · Esc voltar · F1 Dinheiro · F2 Cartão · F3 PIX
+              ↑↓←→ navegar · Enter confirmar · Esc voltar · F1 Dinheiro · F2 Cartão · F3 PIX/Fiado · F6 Desconto · F9 Cancelar
             </div>
           </div>
         </div>
