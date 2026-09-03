@@ -84,7 +84,21 @@ interface CartItem {
 
 // MaxLook/TechMax não aceitam MaxBank Benefícios — só faz sentido no
 // SuperMax (supermercado tem itens elegíveis, roupa e eletrônico não).
-const FORMAS = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX', 'Fiado'];
+//
+// A prazo muda de nome e de existência conforme a unidade:
+//   MaxLook — a loja de moda chama de CREDIÁRIO. É só o rótulo do balcão: o
+//             valor gravado em `vendas.forma_pagamento` continua 'Fiado',
+//             porque é ele que faz `criar_venda_pdv` abrir a conta a receber
+//             em vez de dar a venda por recebida.
+//   TechMax — não vende a prazo: o aparelho não sai da loja sem pagamento, e
+//             quem quer parcelar usa Cartão Crédito.
+const FORMAS_BASE = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX'];
+
+const formasDaUnidade = (filial: string): string[] =>
+  filial === 'TechMax' ? FORMAS_BASE : [...FORMAS_BASE, 'Fiado'];
+
+const rotuloFiado = (filial: string): string =>
+  filial === 'MaxLook' ? 'Crediário' : 'Fiado';
 
 // `subtitulo` aparece no header do PDV aberto (personalidade da unidade);
 // `layout` define o estilo do card na grade; `accentBar` é a cor decorativa da
@@ -954,7 +968,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const handleFecharVenda = async () => {
     if (networkError) return;
     if (cart.length === 0) { showToast?.('Carrinho vazio.', 'error', true); return; }
-    if (formaPagamento === 'Fiado' && !clienteId) { showToast?.('Selecione o cliente para venda Fiado.', 'error', true); return; }
+    if (formaPagamento === 'Fiado' && filialFiltro === 'TechMax') {
+      showToast?.('TechMax não vende a prazo — para parcelar, use Cartão Crédito.', 'error', true);
+      return;
+    }
+    if (formaPagamento === 'Fiado' && !clienteId) { showToast?.(`Selecione o cliente para venda ${rotuloFiado(filialFiltro)}.`, 'error', true); return; }
     // Crédito reconsultado na hora de fechar, não o do state: entre escolher o
     // cliente e bater o total, outro caixa pode ter vendido fiado pra ele. A
     // trigger da migr. 416 recusaria a venda de qualquer jeito — isto só troca
@@ -2278,7 +2296,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             <div className="flex flex-col gap-2 pt-3 border-t border-white/5 shrink-0">
               <span id="pdv-forma-pagto-label" className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Forma de pagamento</span>
               <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-labelledby="pdv-forma-pagto-label">
-                {FORMAS.map(f => {
+                {formasDaUnidade(filialFiltro).map(f => {
                   const ativo = formaPagamento === f;
                   return (
                     <button key={f} onClick={() => setFormaPagamento(f)}
@@ -2297,7 +2315,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                             color: '#404040',
                           }
                       }>
-                      {f}
+                      {f === 'Fiado' ? rotuloFiado(filialFiltro) : f}
                     </button>
                   );
                 })}
@@ -2896,7 +2914,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   {devolucao.venda.formaPagamento === 'Fiado' || devolucao.venda.formaPagamento === 'Cartão Crédito' ? (
                     <p className="text-[10px] text-amber-500 flex items-start gap-1.5">
                       <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                      Venda {devolucao.venda.formaPagamento} — após confirmar, ajuste manualmente em Financeiro → Contas a Receber.
+                      Venda {devolucao.venda.formaPagamento === 'Fiado' ? rotuloFiado(filialFiltro) : devolucao.venda.formaPagamento} — após confirmar, ajuste manualmente em Financeiro → Contas a Receber.
                     </p>
                   ) : null}
 
