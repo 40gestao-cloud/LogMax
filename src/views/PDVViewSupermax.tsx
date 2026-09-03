@@ -22,6 +22,7 @@ import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 import { normalizarBusca as norm, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -51,26 +52,6 @@ type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fia
 // ('venda', cartão como forma única) ou devolver o valor como uma linha da
 // lista do pagamento misto ('linha').
 type DestinoCartao = 'venda' | 'linha';
-
-// Foco fica preso dentro do modal — Tab/Shift+Tab ciclam só nos focáveis dele.
-const FOCUSABLE_SELECTOR =
-  'input:not([disabled]):not([tabindex="-1"]),button:not([disabled]):not([tabindex="-1"]),select:not([disabled]):not([tabindex="-1"]),textarea:not([disabled]):not([tabindex="-1"]),a[href]:not([tabindex="-1"]),[tabindex]:not([tabindex="-1"])';
-
-function trapTab(e: React.KeyboardEvent, container: HTMLElement | null) {
-  if (e.key !== 'Tab' || !container) return;
-  const focusables = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter(el => el.offsetParent !== null || el === document.activeElement);
-  if (focusables.length === 0) { e.preventDefault(); return; }
-  const first = focusables[0];
-  const last  = focusables[focusables.length - 1];
-  const active = document.activeElement as HTMLElement | null;
-  const insideModal = !!active && container.contains(active);
-  if (e.shiftKey) {
-    if (!insideModal || active === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (!insideModal || active === last) { e.preventDefault(); first.focus(); }
-  }
-}
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Vale-Alimentação', 'Fiado'];
 
@@ -325,6 +306,8 @@ export const PDVViewSupermax = ({
   const [nowTick, setNowTick] = useState(0);
   const codeInputRef   = useRef<HTMLInputElement>(null);
   const codeNativeRef  = useRef('');
+  // Raiz do PDV: escopo do Tab. Ver `devolverTabAoPdv` em lib/focoPdv.
+  const rootRef        = useRef<HTMLDivElement>(null);
   // `limpoEm` existe por causa do Enter que o leitor manda DEPOIS dos dígitos:
   // quando o auto-add do buffer já consumiu o código e limpou o campo, esse
   // Enter chega num campo vazio — e Enter vazio é "fechar venda". O operador
@@ -933,6 +916,27 @@ export const PDVViewSupermax = ({
       const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || cpfModalOpen || !!valeModal || confirmSuspender || !!descAuth || isClosing;
       const target = e.target as HTMLElement | null;
       const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+
+      // TAB — o foco NUNCA sai da operação.
+      //
+      // Dentro do PDV o Tab já é preso pelo `trapTab` do escopo (o modal
+      // aberto, ou a raiz). O que faltava era o caso em que o foco JÁ ESTÁ
+      // FORA: com o foco em `document.body` — clique numa área não focável,
+      // modal que fechou levando o elemento focado, primeiro Tab antes do
+      // autofocus — o onKeyDown do React não dispara, porque o target não está
+      // na subárvore. Aí o Tab caía na sidebar e na topbar do app (que
+      // continuam no DOM, tabuláveis e invisíveis sob o `fixed inset-0`) e, em
+      // seguida, na barra do navegador. Num caixa isso é básico: o Tab é da
+      // operação, não da janela.
+      //
+      // Este listener é de `window` em captura, o único lugar que vê a tecla
+      // sem foco dentro do PDV. Vale em qualquer modo, com ou sem modal: com
+      // modal aberto a reentrada devolve o foco ao PDV e o trap do próprio
+      // modal reassume no toque seguinte.
+      if (e.key === 'Tab') {
+        devolverTabAoPdv(e, rootRef.current, anyModal ? null : codeInputRef.current);
+        return;
+      }
 
       // Dígito solto = bipe que caiu fora do campo. O foco sai do CÓDIGO a cada
       // clique num botão, num item do carrinho ou no header — e a partir dali o
@@ -2103,6 +2107,7 @@ export const PDVViewSupermax = ({
 
   return (
     <motion.div
+      ref={rootRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className={`flex flex-col ${rootClass}`}
@@ -2111,6 +2116,10 @@ export const PDVViewSupermax = ({
         // Trava TAB dentro do PDV: ao chegar no último focável, volta pro
         // primeiro; ao Shift+Tab no primeiro, vai pro último. Operador nunca
         // escapa pra barra do navegador nem pra outros apps da página.
+        //
+        // Este handler cobre o foco DENTRO do PDV. O foco fora dele (body,
+        // sidebar atrás do overlay) não dispara onKeyDown nenhum e é tratado
+        // por `devolverTabAoPdv` no listener global de captura.
         if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
       }}
     >
@@ -3037,6 +3046,7 @@ export const PDVViewSupermax = ({
                     ['F10', 'Sangria — retirada de dinheiro do caixa.'],
                     ['F11', 'Suprimento — entrada de dinheiro no caixa.'],
                     ['F12', 'Fechar / suspender caixa (fora de venda).'],
+                    ['Tab', 'Anda entre os campos do cupom. Nunca sai do PDV: no último focável volta ao primeiro.'],
                     ['Del', 'Remove o último item — ou o item selecionado por ↑↓.'],
                     ['↑ ↓', 'Sugestões enquanto digita · com campo vazio: seleciona item do carrinho.'],
                     ['Esc', 'Limpa o campo / desmarca item / sai da tela cheia / cancela venda.'],
@@ -3107,7 +3117,7 @@ export const PDVViewSupermax = ({
                 <ul className="space-y-2 list-disc list-inside" style={{ color: '#374151' }}>
                   <li>Antes de operar, garanta que o <b>caixa está aberto</b> em Financeiro → Controle de Caixa. O badge verde no header confirma.</li>
                   <li>Badge <span className="px-1.5 py-0.5 text-[10px] font-black uppercase rounded border" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}>Ruptura</span> aparece quando a quantidade vendida supera o estoque — confira o produto antes de fechar.</li>
-                  <li>Pra deixar dinheiro no caixa (troco inicial, reforço): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F11</kbd>. Pra retirar (depósito, pagto fornecedor): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F12</kbd> — sempre registrando o motivo.</li>
+                  <li>Pra deixar dinheiro no caixa (troco inicial, reforço): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F11</kbd>. Pra retirar (depósito, pagto fornecedor): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F10</kbd> — sempre registrando o motivo.</li>
                   <li><b>PIX/Fiado não aceitam pagamento parcial</b>. Pra dividir entre formas, use Dinheiro + Cartão.</li>
                   <li>Pra alternar entre filiais (SuperMax/MaxLook/TechMax) sem perder o turno: <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Ctrl+M</kbd> (só com carrinho vazio).</li>
                 </ul>

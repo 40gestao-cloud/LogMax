@@ -29,6 +29,7 @@ import { PDVViewSupermax } from './PDVViewSupermax';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { ProdutoDetalheModal } from '../components/ProdutoDetalheModal';
 import { normalizarBusca, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
+import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -445,12 +446,36 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   }, [formaPagamento]);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  // Raiz do PDV: escopo do Tab. Ver `devolverTabAoPdv` em lib/focoPdv.
+  const rootRef = useRef<HTMLDivElement>(null);
   // Buffer da leitura digitada no campo. Existe porque leitor SEM sufixo Enter
   // (configuração comum, e o padrão de vários modelos) não tinha caminho nenhum
   // neste PDV: o listener global só processa quando vem Enter, então o operador
   // via o leitor ler, os dígitos aparecerem no campo — e nada acontecer.
   const scanBufferRef = useRef({ chars: '', timer: 0 as any });
   useEffect(() => { searchRef.current?.focus(); }, []);
+
+  // TAB — o foco NUNCA sai da operação. Mesma régua do PDV da SuperMax e do
+  // MaxPOS: num caixa o Tab é da operação, não da janela.
+  //
+  // Aqui não havia trava nenhuma: o operador tabulava e o foco ia para a
+  // sidebar e a topbar do app (que continuam no DOM, tabuláveis e invisíveis
+  // sob o `fixed inset-0`) e depois para a barra do navegador — ou seja, saía
+  // da venda pela tecla que mais se usa para andar dentro dela.
+  //
+  // Este listener é de `window` em captura porque é o único que vê a tecla
+  // quando o foco JÁ ESTÁ FORA do PDV (foco em `document.body` após um clique
+  // em área não focável): nesse caso o onKeyDown da raiz não dispara, porque o
+  // target não está na subárvore. `rootRef` é null enquanto a SuperMax está
+  // montada (ela retorna antes desta raiz), então o handler não interfere no
+  // PDV dela.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      devolverTabAoPdv(e, rootRef.current, searchRef.current);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1656,8 +1681,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      ref={rootRef}
       className={`flex flex-col ${rootClass} ${rootExtraClass}`}
-      style={rootStyle}>
+      style={rootStyle}
+      onKeyDown={(e) => {
+        // Trava TAB dentro do PDV: no último focável volta ao primeiro, no
+        // primeiro com Shift+Tab vai ao último. Só intercepta nas PONTAS, então
+        // no meio da grade o foco continua andando produto a produto.
+        if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
+      }}>
       {/* Header com identidade da filial — sempre em fundo preto, pra manter
           contraste marca (logo) e servir de âncora visual no topo do PDV. */}
       <div className={`flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 shrink-0 relative ${paleta?.lightMode ? 'pdv-filial-header' : 'border-b border-white/5'}`}
@@ -1815,7 +1847,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 if (e.key === 'Enter') { e.preventDefault(); handleSearchEnter(); return; }
                 if (e.key === 'Escape' && (search.length > 0 || qtdArmada !== null)) {
                   // Esc é o "desisti": limpa a busca E desarma a quantidade.
+                  //
+                  // stopPropagation porque sem ele o mesmo Esc seguia até o
+                  // handler global, que derruba o PDV da tela cheia: limpar a
+                  // busca não pode ser o mesmo gesto que sair do modo caixa.
+                  // Mesma régua do MaxPOS.
                   e.preventDefault();
+                  e.stopPropagation();
                   qtdArmadaRef.current = null;
                   setQtdArmada(null);
                   cancelarAutoAdd();
@@ -1956,8 +1994,16 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       onClick={onClick}
                       whileTap={!semEstoque ? { scale: 0.98 } : {}}
                       disabled={semEstoque}
-                      className="neu-button rounded-xl p-2.5 sm:p-3 flex items-center gap-3 text-left transition-all border border-transparent relative"
-                      style={cardStyle}
+                      // O produto sob o Tab tem de estar MARCADO, não apenas
+                      // contornado pela borda do navegador: quem opera de
+                      // teclado precisa ver qual item o Enter vai adicionar.
+                      className="neu-button rounded-xl p-2.5 sm:p-3 flex items-center gap-3 text-left transition-all border border-transparent relative outline-none focus-visible:ring-4 focus-visible:ring-offset-1 focus-visible:shadow-lg"
+                      style={{
+                        ...cardStyle,
+                        // Tailwind não aceita cor dinâmica em classe
+                        // (`ring-${x}` não existe em build); vai pela variável.
+                        ['--tw-ring-color' as any]: filialMeta.accentBar,
+                      }}
                     >
                       {inCart && (
                         <span className="absolute top-1.5 right-1.5 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black z-10"
@@ -1969,7 +2015,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                           o botão de adicionar — sem isso, consultar venderia. */}
                       <span
                         role="button"
-                        tabIndex={0}
+                        // Fora da ordem do Tab: com tabIndex 0 cada produto
+                        // custava DOIS toques de Tab, e o primeiro parava no
+                        // selo em vez do produto. No caixa o Tab anda de
+                        // produto em produto; a ficha continua no clique.
+                        tabIndex={-1}
                         aria-label={`Ver ficha de ${p.nome}`}
                         onClick={e => { e.stopPropagation(); setDetalheProduto(p); }}
                         onKeyDown={e => {
@@ -2034,11 +2084,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       onClick={onClick}
                       whileTap={!semEstoque ? { scale: 0.98 } : {}}
                       disabled={semEstoque}
-                      className="rounded-xl p-2 flex flex-col gap-1.5 text-left transition-all border relative bg-white hover:shadow-md disabled:opacity-40"
+                      // Mesmo anel de foco do TechMax e do MaxPOS: no teclado,
+                      // o item que o Enter vai adicionar fica marcado.
+                      className="rounded-xl p-2 flex flex-col gap-1.5 text-left transition-all border relative bg-white hover:shadow-md disabled:opacity-40 outline-none focus-visible:ring-4 focus-visible:ring-offset-1 focus-visible:shadow-lg"
                       style={{
                         borderColor: inCartFashion ? filialMeta.accentBar : 'rgba(0,0,0,0.08)',
                         background: inCartFashion ? `${filialMeta.accentBar}15` : 'white',
                         boxShadow: inCartFashion ? undefined : '0 1px 2px rgba(0,0,0,0.04)',
+                        ['--tw-ring-color' as any]: filialMeta.accentBar,
                       }}
                     >
                       {inCartFashion && (
@@ -2051,7 +2104,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                           o botão de adicionar — sem isso, consultar venderia. */}
                       <span
                         role="button"
-                        tabIndex={0}
+                        // Fora da ordem do Tab: com tabIndex 0 cada produto
+                        // custava DOIS toques de Tab, e o primeiro parava no
+                        // selo em vez do produto. No caixa o Tab anda de
+                        // produto em produto; a ficha continua no clique.
+                        tabIndex={-1}
                         aria-label={`Ver ficha de ${p.nome}`}
                         onClick={e => { e.stopPropagation(); setDetalheProduto(p); }}
                         onKeyDown={e => {
