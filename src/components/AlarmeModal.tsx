@@ -9,10 +9,10 @@ interface Props {
 
 // Cada tipo com ícone e cor próprios: no meio da tela, quem olha de longe
 // reconhece "intervalo" pela cor antes de ler a frase.
-const ESTILO: Record<AlarmeTurma['tipo'], { icone: any; cor: string; fundo: string; borda: string }> = {
-  aviso:     { icone: AlertTriangle, cor: '#D4AF37', fundo: 'rgba(212,175,55,0.12)', borda: 'rgba(212,175,55,0.30)' },
-  intervalo: { icone: Coffee,        cor: '#4ade80', fundo: 'rgba(74,222,128,0.12)', borda: 'rgba(74,222,128,0.30)' },
-  saida:     { icone: LogOut,        cor: '#60a5fa', fundo: 'rgba(96,165,250,0.12)', borda: 'rgba(96,165,250,0.30)' },
+const ESTILO: Record<AlarmeTurma['tipo'], { icone: any; cor: string; fundo: string; borda: string; halo: string }> = {
+  aviso:     { icone: AlertTriangle, cor: '#D4AF37', fundo: 'rgba(212,175,55,0.14)', borda: 'rgba(212,175,55,0.45)', halo: 'rgba(212,175,55,0.55)' },
+  intervalo: { icone: Coffee,        cor: '#4ade80', fundo: 'rgba(74,222,128,0.14)', borda: 'rgba(74,222,128,0.45)', halo: 'rgba(74,222,128,0.55)' },
+  saida:     { icone: LogOut,        cor: '#60a5fa', fundo: 'rgba(96,165,250,0.14)', borda: 'rgba(96,165,250,0.45)', halo: 'rgba(96,165,250,0.55)' },
 };
 
 /**
@@ -22,11 +22,16 @@ const ESTILO: Record<AlarmeTurma['tipo'], { icone: any; cor: string; fundo: stri
  * Não fecha no backdrop nem no Esc de propósito — o alarme existe para
  * interromper, e o áudio só para no botão. Mesma decisão do
  * `SessaoExpirandoModal`.
+ *
+ * O dimensionamento é deliberadamente maior que o dos outros modais: o aviso
+ * é lido pela turma inteira, às vezes do fundo da sala e de relance. Título,
+ * recado e botão sobem de escala junto com a largura do card, e a cor do tipo
+ * pulsa no halo para o aluno perceber a interrupção sem estar olhando a tela.
  */
 export function AlarmeModal({ alarme, onFechar }: Props) {
   const [visivel, setVisivel] = useState(false);
   const botaoRef = useRef<HTMLButtonElement>(null);
-  const { icone: Icone, cor, fundo, borda } = ESTILO[alarme.tipo];
+  const { icone: Icone, cor, fundo, borda, halo } = ESTILO[alarme.tipo];
   const texto = textoDoAlarme(alarme.tipo, alarme.mensagem);
 
   useEffect(() => {
@@ -36,16 +41,16 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[10001] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[10001] flex items-center justify-center p-3 sm:p-6"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="alarme-titulo"
       style={{ transition: 'opacity 180ms', opacity: visivel ? 1 : 0 }}
     >
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
 
       <div
-        className="relative w-full max-w-md"
+        className="relative w-full max-w-2xl"
         style={{
           transition: 'transform 180ms cubic-bezier(0.34,1.56,0.64,1), opacity 180ms',
           transform: visivel ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(10px)',
@@ -53,30 +58,35 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
         }}
       >
         <div
+          className="alarme-card p-6 sm:p-10"
           style={{
-            maxHeight: '85vh',
+            ['--alarme-borda' as any]: borda,
+            ['--alarme-halo' as any]: halo,
+            maxHeight: '90vh',
             overflowY: 'auto',
-            background: 'rgba(10,10,10,0.90)',
-            border: `1px solid ${borda}`,
-            borderRadius: '1rem',
-            padding: '1.5rem',
+            background: 'rgba(10,10,10,0.94)',
+            borderRadius: '1.25rem',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.06) inset',
           }}
         >
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex flex-col items-center text-center gap-4 sm:gap-5">
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 animate-pulse"
-              style={{ background: fundo, border: `1px solid ${borda}` }}
+              className="alarme-icone rounded-2xl flex items-center justify-center shrink-0 w-20 h-20 sm:w-24 sm:h-24"
+              style={{ background: fundo, border: `2px solid ${borda}` }}
             >
-              <Icone size={22} style={{ color: cor }} />
+              <Icone className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: cor }} />
             </div>
+
             <div>
-              <h2 id="alarme-titulo" className="text-base font-bold text-gray-100">
+              <h2
+                id="alarme-titulo"
+                className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight"
+                style={{ color: cor }}
+              >
                 {ALARME_TITULO[alarme.tipo]}
               </h2>
-              <p className="text-xs text-gray-500 font-mono tabular-nums">
+              <p className="mt-1.5 text-sm sm:text-base text-gray-400 font-mono tabular-nums">
                 {pad2(alarme.hora)}:{pad2(alarme.minuto)} · horário do Acre
               </p>
             </div>
@@ -85,23 +95,21 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
           {/* Rola em vez de esticar: aviso longo em tela de celular empurraria o
               botão para fora da viewport, e sem o botão não há como calar o
               áudio — o alarme viraria armadilha. */}
-          <p className="text-sm text-gray-200 leading-relaxed mb-6 whitespace-pre-line max-h-[45vh] overflow-y-auto main-scrollbar">
+          <p className="mt-6 sm:mt-8 text-center text-xl sm:text-3xl font-semibold text-gray-100 leading-snug whitespace-pre-line max-h-[42vh] overflow-y-auto main-scrollbar">
             {texto}
           </p>
 
-          <div className="flex justify-end">
-            <button
-              ref={botaoRef}
-              onClick={onFechar}
-              className="btn-shimmer px-6 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors"
-              style={{
-                background: 'linear-gradient(135deg, #ca9a00 0%, #D4AF37 60%, #e8c84a 100%)',
-                border: '1px solid rgba(212,175,55,0.4)',
-              }}
-            >
-              Entendi
-            </button>
-          </div>
+          <button
+            ref={botaoRef}
+            onClick={onFechar}
+            className="btn-shimmer mt-8 sm:mt-10 w-full py-4 sm:py-5 rounded-xl text-lg sm:text-xl font-bold text-white transition-colors"
+            style={{
+              background: 'linear-gradient(135deg, #ca9a00 0%, #D4AF37 60%, #e8c84a 100%)',
+              border: '1px solid rgba(212,175,55,0.4)',
+            }}
+          >
+            Entendi
+          </button>
         </div>
       </div>
     </div>

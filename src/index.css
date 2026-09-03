@@ -2709,3 +2709,31 @@ main.main-scrollbar,
     print-color-adjust: exact;
   }
 }
+
+
+/* ── Alarme da aula: o card respira na cor do tipo ───────────────────────
+   O modal interrompe a turma inteira e precisa ser visto do fundo da sala.
+   O halo pulsa em `box-shadow` (não em `transform`), então não desloca nada
+   e não briga com o scroll do texto. A cor vem do inline `--alarme-cor`, que
+   o componente define por tipo. */
+@keyframes alarme-halo {
+  0%, 100% { box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px var(--alarme-borda), 0 0 28px -4px var(--alarme-halo); }
+  50%      { box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 3px var(--alarme-borda), 0 0 64px 2px var(--alarme-halo); }
+}
+.alarme-card { animation: alarme-halo 2s ease-in-out infinite; }
+
+@keyframes alarme-icone {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.alarme-icone { animation: alarme-icone 2s ease-in-out infinite; }
+
+/* Mesma régua do resto do arquivo: quem pediu menos animação fica com o card
+   parado no ponto mais forte — o destaque não depende do movimento. */
+@media (prefers-reduced-motion: reduce) {
+  .alarme-card,
+  .alarme-icone { animation: none !important; }
+  .alarme-card {
+    box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 3px var(--alarme-borda), 0 0 64px 2px var(--alarme-halo) !important;
+  }
+}
