@@ -43,13 +43,6 @@ interface CartItem {
   subtotal: number;
   estoque: number;
   unidade: string;
-  /**
-   * Desconto em R$ desta linha (F6 com o item selecionado). Fica AQUI e não no
-   * `preco_unitario`: `criar_venda_pdv` confere o preço de cada item contra o
-   * catálogo (migr. 554), então abater no unitário faria a RPC recusar a
-   * venda. Na hora de fechar, a soma das linhas entra no desconto da venda.
-   */
-  desconto?: number;
 }
 
 type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fiado' | 'PIX' | 'Vale-Alimentação';
@@ -261,10 +254,6 @@ export const PDVViewSupermax = ({
   // "abra em Financeiro → Controle de Caixa": o operador começava o dia numa
   // tela que não é dele. A RLS de `controle_caixa` já autorizava o setor
   // vendas na própria unidade — só a tela não oferecia.
-  // Onde o F6 vai aplicar: no item selecionado (leitura) ou no total (botão do
-  // fechamento). Mesma divisão do MaxPOS.
-  const [discountAlvo, setDiscountAlvo] = useState<{ tipo: 'total' } | { tipo: 'item'; produto_id: string }>({ tipo: 'total' });
-
   // Gancheira: UMA venda suspensa por vez, como no MaxPOS. Serve pro cliente
   // que voltou pra buscar o que esqueceu — a fila anda em vez de esperar.
   const [vendaSuspensa, setVendaSuspensa] = useState<{
@@ -389,12 +378,9 @@ export const PDVViewSupermax = ({
   [produtos, filial]);
 
   const subtotal   = cart.reduce((s, i) => s + i.subtotal, 0);
-  // Desconto de item entra clampado na própria linha: diminuir a quantidade
-  // depois de descontar não pode fazer a linha valer negativo.
-  const descontoItens = cart.reduce((s, i) => s + Math.min(i.desconto ?? 0, i.subtotal), 0);
   // desconto pode ser maior que subtotal se o operador errou — clampa pra
   // evitar totalFinal negativo (a RPC criar_venda_pdv rejeita valores < 0).
-  const descontoAplicado = Math.min(desconto + descontoItens, subtotal);
+  const descontoAplicado = Math.min(desconto, subtotal);
   const totalFinal = Math.max(0, parseFloat((subtotal - descontoAplicado).toFixed(2)));
   const totalItens = cart.reduce((s, i) => s + i.qtd, 0);
   const totalPago  = pagamentos.reduce((s, p) => s + p.valor, 0);
@@ -1023,14 +1009,10 @@ export const PDVViewSupermax = ({
         }
         return;
       }
-      // F6 na leitura é desconto NO ITEM (o selecionado pela seta, ou o último
-      // lido) — padrão do MaxPOS. O desconto no total tem botão próprio dentro
-      // do fechamento, que é onde o operador enxerga o que está abatendo.
+      // F6 — desconto no total (só faz sentido com itens)
       if (e.key === 'F6') {
         e.preventDefault();
         if (!anyModal && cart.length > 0) {
-          const alvo = cart[selectedCartIdx >= 0 ? selectedCartIdx : cart.length - 1];
-          if (alvo) setDiscountAlvo({ tipo: 'item', produto_id: alvo.produto_id });
           setDiscountKind('percent');
           setDiscountValue('');
           setDiscountModalOpen(true);
@@ -2062,16 +2044,7 @@ export const PDVViewSupermax = ({
                 <div className="text-right">{fmtQtd(item.qtd)}</div>
                 <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
                 <div className="text-right">{fmt(item.preco_unitario)}</div>
-                <div className="text-right font-bold">
-                  {(item.desconto ?? 0) > 0 ? (
-                    <>
-                      <span className="block text-xs font-normal text-gray-400 line-through">{fmt(item.subtotal)}</span>
-                      <span style={{ color: RED }} title={`Desconto de R$ ${fmt(Math.min(item.desconto!, item.subtotal))} neste item`}>
-                        {fmt(Math.max(0, item.subtotal - Math.min(item.desconto!, item.subtotal)))}
-                      </span>
-                    </>
-                  ) : fmt(item.subtotal)}
-                </div>
+                <div className="text-right font-bold">{fmt(item.subtotal)}</div>
                 <button
                   onClick={() => removeFromCart(item.produto_id)}
                   tabIndex={-1}
@@ -2294,7 +2267,7 @@ export const PDVViewSupermax = ({
           <span className="opacity-40">·</span>
           <span><b>2*</b> Qtd — sozinho arma p/ o próximo item, ou <b>2*código</b> / <b>2*nome</b> (peso: <b>0,350*</b>)</span>
           <span className="opacity-40">·</span>
-          <span><b>F6</b> Desconto no item · <b>Ctrl+G</b> Suspender/recuperar</span>
+          <span><b>F6</b> Desconto · <b>Ctrl+G</b> Suspender/recuperar</span>
           <span className="opacity-40">·</span>
           <span><b>F7</b> Consulta preço</span>
           <span className="opacity-40">·</span>
@@ -2566,7 +2539,7 @@ export const PDVViewSupermax = ({
               <button
                 data-extra-action="desconto"
                 tabIndex={-1}
-                onClick={() => { setDiscountAlvo({ tipo: 'total' }); setDiscountKind('percent'); setDiscountValue(''); setDiscountModalOpen(true); }}
+                onClick={() => { setDiscountKind('percent'); setDiscountValue(''); setDiscountModalOpen(true); }}
                 disabled={subtotal <= 0 || pagamentos.length > 0}
                 className="py-2 text-[11px] font-black uppercase tracking-wider border-2 disabled:opacity-30 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
                 style={{ borderColor: YELLOW_DARK, color: NAVY_DARK }}
@@ -2875,7 +2848,7 @@ export const PDVViewSupermax = ({
                     ['F3 / F9', 'Cancelar cupom (pede confirmação).'],
                     ['F4', 'Subtotal — abre o modal de pagamento.'],
                     ['F5', 'Pagamentos — mesmo destino do F4 (padrão Linx/VR).'],
-                    ['F6', 'Desconto NO ITEM selecionado (ou no último lido). O desconto no total fica no botão do fechamento.'],
+                    ['F6', 'Desconto no total (% ou R$) — em supermercado, promoção já vem do preço.'],
                     ['F7', 'Consulta de preço (não adiciona ao carrinho).'],
                     ['F8', 'Buscar produto por nome ou código.'],
                     ['F10', 'Sangria — retirada de dinheiro do caixa.'],
@@ -4090,38 +4063,18 @@ export const PDVViewSupermax = ({
 
       {/* Desconto (F6) — % ou R$ aplicado no total · Enter aplica · Esc cancela */}
       {discountModalOpen && (() => {
-        // Item: a base é a linha do carrinho. Total: o subtotal da venda.
-        const itemAlvo = discountAlvo.tipo === 'item'
-          ? cart.find(i => i.produto_id === discountAlvo.produto_id) ?? null
-          : null;
-        const noItem = itemAlvo !== null;
-        const base = noItem ? itemAlvo!.subtotal : subtotal;
         const parsed = parseBRL(discountValue);
         const valorReais = discountKind === 'percent'
-          ? parseFloat(((base * parsed) / 100).toFixed(2))
+          ? parseFloat(((subtotal * parsed) / 100).toFixed(2))
           : parsed;
-        const valorClamp = Math.min(valorReais, base);
-        const novoTotal = Math.max(0, base - valorClamp);
-        const descontoAtual = noItem ? (itemAlvo!.desconto ?? 0) : desconto;
-        const limparDesconto = () => {
-          if (noItem) {
-            setCart(prev => prev.map(i => i.produto_id === itemAlvo!.produto_id ? { ...i, desconto: 0 } : i));
-          } else {
-            setDesconto(0);
-          }
-        };
+        const valorClamp = Math.min(valorReais, subtotal);
+        const novoTotal = Math.max(0, subtotal - valorClamp);
         const fecharDesconto = () => {
           setDiscountModalOpen(false);
           requestAnimationFrame(() => codeInputRef.current?.focus());
         };
         const aplicar = () => {
           if (valorClamp <= 0) { showToast?.('Informe um desconto maior que zero.', 'error', true); return; }
-          if (noItem) {
-            setCart(prev => prev.map(i => i.produto_id === itemAlvo!.produto_id ? { ...i, desconto: valorClamp } : i));
-            setDiscountModalOpen(false);
-            requestAnimationFrame(() => codeInputRef.current?.focus());
-            return;
-          }
           setDesconto(valorClamp);
           setDiscountModalOpen(false);
           focusFecharVendaPDV();
@@ -4140,14 +4093,8 @@ export const PDVViewSupermax = ({
           >
             <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
               <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-                <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">
-                  {noItem ? 'F6 · Desconto no item' : 'Desconto no total'}
-                </div>
-                <div className="text-2xl font-black tracking-wide mt-0.5 truncate">
-                  {noItem
-                    ? `${(itemAlvo!.nome_produto || '').toUpperCase()} · R$ ${fmt(base)}`
-                    : `Subtotal R$ ${fmt(subtotal)}`}
-                </div>
+                <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F6 · Desconto no total</div>
+                <div className="text-2xl font-black tracking-wide mt-0.5">Subtotal R$ {fmt(subtotal)}</div>
               </div>
               <div className="p-6 space-y-4">
                 <div className="flex gap-2">
@@ -4191,13 +4138,13 @@ export const PDVViewSupermax = ({
                     <span className="font-bold tabular-nums" style={{ color: RED }}>− R$ {fmt(valorClamp)}</span>
                   </div>
                   <div className="flex justify-between text-base font-bold mt-1">
-                    <span>{noItem ? 'Item fica em' : 'Novo total'}</span>
+                    <span>Novo total</span>
                     <span className="tabular-nums" style={{ color: MONEY }}>R$ {fmt(novoTotal)}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { limparDesconto(); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
-                    {descontoAtual > 0 ? 'Remover' : 'Voltar'}
+                  <button onClick={() => { setDesconto(0); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
+                    {desconto > 0 ? 'Remover' : 'Voltar'}
                   </button>
                   <button onClick={aplicar} className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm" style={{ background: NAVY_DARK }}>
                     Aplicar (Enter)
