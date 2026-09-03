@@ -250,6 +250,52 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const { data: produtos, isLoading: loadingProd } = useFetchData<Produto>('/api/produtosview', { filial: filialFiltro }, true);
   const { data: clientes } = useFetchData<Cliente>('/api/crmview', { filial: filialFiltro });
 
+  // Ofertas valendo hoje nesta unidade (view `v_promocao_vigente`).
+  //
+  // MIGR 578: a promoção virou REGRA DE PREÇO — o cadastro guarda o preço de
+  // tabela e não é mais sobrescrito pela liberação. Então é daqui que sai o
+  // preço cobrado, e o nicho precisa disto tanto quanto o supermercado:
+  // boutique e loja de eletrônico fazem oferta e anunciam de/por igual. Sem
+  // este mapa o carrinho monta pelo preço cheio e `criar_venda_pdv` recusa a
+  // venda, porque ela confere contra `preco_efetivo`.
+  const [ofertas, setOfertas] = useState<Map<string, { de: number; por: number }>>(new Map());
+  const ofertasRef = useRef<Map<string, { de: number; por: number }>>(new Map());
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('v_promocao_vigente')
+        .select('produto_id, preco_de, preco_por')
+        .eq('filial', filialFiltro);
+      if (!vivo) return;
+      if (error) {
+        // Erra para o lado seguro: sem a oferta o carrinho usa o preço de
+        // tabela e o banco recusa a venda dizendo qual é o preço de hoje.
+        console.warn('[PDV] Não foi possível carregar as ofertas vigentes:', error.message);
+        return;
+      }
+      const mapa = new Map<string, { de: number; por: number }>();
+      for (const o of data ?? []) {
+        mapa.set(String(o.produto_id), { de: Number(o.preco_de ?? 0), por: Number(o.preco_por ?? 0) });
+      }
+      ofertasRef.current = mapa;
+      setOfertas(mapa);
+    })();
+    return () => { vivo = false; };
+  }, [filialFiltro]);
+
+  /** Preço que o caixa cobra: a oferta vigente, se houver; senão o de tabela. */
+  const precoDeVenda = (produto: any): number =>
+    ofertasRef.current.get(String(produto?.id))?.por ?? (Number(produto?.preco) || 0);
+
+  /** A oferta do item, só quando o "de" está acima do que está sendo cobrado. */
+  const ofertaDoItem = (produtoId: string, precoCobrado: number) => {
+    const o = ofertas.get(String(produtoId));
+    return o && o.de > precoCobrado + 0.001 ? o : null;
+  };
+
   const [search, setSearch] = useState('');
   // Quantidade ARMADA — mesma régua do PDV SuperMax e do caixa de mercado: o
   // operador diz quantos são ("2*" + Enter) e a próxima identificação do item
@@ -532,7 +578,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       });
       return;
     }
-    const preco = Number(produto.preco) || 0;
+    // MIGR 578: preço EFETIVO — a oferta vigente, se houver; senão o de tabela.
+    const preco = precoDeVenda(produto);
     const estoque = Number(produto.estoque ?? 999);
     const noCarrinho = cart.find(i => i.produto_id === produto.id);
     const disponivel = estoque - (noCarrinho?.qtd ?? 0);
@@ -623,7 +670,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       showToast?.(`Estoque insuficiente: disponível ${formatQtd(estoque, produto.unidade)} ${produto.unidade}.`, 'error', true);
       return;
     }
-    const preco = Number(produto.preco) || 0;
+    // MIGR 578: preço EFETIVO — a oferta vigente, se houver; senão o de tabela.
+    const preco = precoDeVenda(produto);
     const subtotal = Math.round(pesoArred * preco * 100) / 100;
     setCart(prev => {
       if (editIndex !== null && prev[editIndex]) {
@@ -2137,8 +2185,24 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                         initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
                         className="flex items-center gap-2 p-3 neu-pressed rounded-xl">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-200 truncate">{item.nome_produto}</p>
+                          <p className="text-xs font-bold text-gray-200 truncate flex items-center gap-1.5">
+                            <span className="truncate">{item.nome_produto}</span>
+                            {ofertaDoItem(item.produto_id, item.preco_unitario) && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/25"
+                                title="Preço promocional liberado — veio da oferta, não do caixa">
+                                Oferta
+                              </span>
+                            )}
+                          </p>
+                          {/* MIGR 578: de/por. O preço cobrado é o da oferta; o
+                              riscado é o de tabela, que o cadastro preserva. */}
                           <p className="text-[10px] text-gray-500">
+                            {ofertaDoItem(item.produto_id, item.preco_unitario) && (
+                              <span className="line-through text-gray-600 mr-1">
+                                {ofertaDoItem(item.produto_id, item.preco_unitario)!.de
+                                  .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            )}
                             {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /{unidadeLabel}
                           </p>
                         </div>

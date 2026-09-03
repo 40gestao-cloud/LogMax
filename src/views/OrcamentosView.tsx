@@ -93,6 +93,33 @@ const OrcamentosViewInner = ({
   // View mascarada: usa custo para margem do orçamento (migr. 262).
   const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
 
+  // Ofertas valendo hoje (MIGR 578). O orçamento é uma proposta de venda: tem
+  // de sair pelo preço que o caixa vai cobrar. Com a promoção virando regra de
+  // preço, `produtos.preco` é o de tabela — orçar por ele prometeria ao cliente
+  // um preço acima do que a loja está anunciando.
+  const [ofertas, setOfertas] = useState<Map<string, { de: number; por: number }>>(new Map());
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('v_promocao_vigente')
+        .select('produto_id, preco_de, preco_por')
+        .eq('filial', filial);
+      if (!vivo || error) return;
+      const mapa = new Map<string, { de: number; por: number }>();
+      for (const o of data ?? []) {
+        mapa.set(String(o.produto_id), { de: Number(o.preco_de ?? 0), por: Number(o.preco_por ?? 0) });
+      }
+      setOfertas(mapa);
+    })();
+    return () => { vivo = false; };
+  }, [filial]);
+
+  /** Preço de venda de hoje: oferta vigente, se houver; senão o de tabela. */
+  const precoDeVenda = (p: any): number =>
+    ofertas.get(String(p?.id))?.por ?? (Number(p?.preco) || 0);
+
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');
   const isAdminOuCeo   = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
@@ -303,7 +330,7 @@ const OrcamentosViewInner = ({
     updateItem(idx, {
       produto_id: p.id,
       nome: p.nome,
-      preco_unitario: Number(p.preco) || 0,
+      preco_unitario: precoDeVenda(p),
     });
   };
 

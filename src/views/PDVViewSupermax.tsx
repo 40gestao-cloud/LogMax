@@ -266,10 +266,12 @@ export const PDVViewSupermax = ({
   } | null>(null);
   const [confirmSuspender, setConfirmSuspender] = useState(false);
 
-  // Ofertas vigentes da unidade (view `v_promocao_vigente`, migr. 575). A
-  // aprovação da promoção já trocou `produtos.preco` pelo promocional (migr.
-  // 402) — o que falta no caixa é o "de", que mora na promoção. Sem isto o
-  // operador não sabe que o item está em oferta e o cliente não vê a economia.
+  // Ofertas valendo hoje na unidade (view `v_promocao_vigente`).
+  //
+  // MIGR 578: isto deixou de ser enfeite. A promoção virou REGRA DE PREÇO — o
+  // cadastro guarda o preço de tabela e não é mais sobrescrito —, então é daqui
+  // que sai o preço que o caixa cobra. O "de" continua vindo junto, para o
+  // de/por na linha e a economia no rodapé do cupom.
   const [ofertas, setOfertas] = useState<Map<string, { de: number; por: number }>>(new Map());
 
   // Desconto no caixa de supermercado não é decisão do operador: ele existe
@@ -335,6 +337,10 @@ export const PDVViewSupermax = ({
   const parcialInputRef = useRef<HTMLInputElement>(null);
   const cartRef              = useRef(cart);
   cartRef.current            = cart;
+  // MIGR 578: o bipe lê a oferta por ref, não pelo state. O item é montado
+  // dentro do callback do leitor — com o state, uma oferta carregada depois do
+  // primeiro render entraria no carrinho pelo preço de tabela.
+  const ofertasRef           = useRef<Map<string, { de: number; por: number }>>(new Map());
   // Último caixa aberto conhecido — segura a árvore de render de pé se o
   // hook devolver null por um instante (hiccup de rede/RLS) no meio de uma
   // cobrança. Ver caixaAtivo, antes do RENDER.
@@ -362,8 +368,10 @@ export const PDVViewSupermax = ({
         .eq('filial', filial);
       if (!vivo) return;
       if (error) {
-        // Oferta é informação de vitrine: se a consulta falhar, o PDV segue
-        // vendendo pelo preço do catálogo (que já é o promocional).
+        // Falha aqui não cobra preço errado: sem a oferta o carrinho monta pelo
+        // preço de tabela e `criar_venda_pdv` recusa a venda dizendo qual é o
+        // preço de hoje. Erra para o lado seguro — chateia o operador, não o
+        // cliente.
         console.warn('[PDV] Não foi possível carregar as ofertas vigentes:', error.message);
         return;
       }
@@ -371,6 +379,7 @@ export const PDVViewSupermax = ({
       for (const o of data ?? []) {
         mapa.set(String(o.produto_id), { de: Number(o.preco_de ?? 0), por: Number(o.preco_por ?? 0) });
       }
+      ofertasRef.current = mapa;
       setOfertas(mapa);
     })();
     return () => { vivo = false; };
@@ -494,7 +503,13 @@ export const PDVViewSupermax = ({
       }
       const id      = produto?.id ?? `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const nome    = produto?.nome ?? '(sem nome)';
-      const preco   = Number(produto?.preco) || 0;
+      // MIGR 578: o preço cobrado é o EFETIVO — a oferta valendo hoje, se
+      // houver; senão o preço de tabela. O cadastro deixou de ser sobrescrito
+      // pela aprovação da promoção, então ler `produto.preco` cru aqui cobraria
+      // o preço cheio de um item em oferta (e a venda seria recusada no banco,
+      // que confere contra `preco_efetivo`).
+      const precoTabela = Number(produto?.preco) || 0;
+      const preco   = ofertasRef.current.get(String(id))?.por ?? precoTabela;
       const eRaw    = produto?.estoque;
       const eNum    = (eRaw === null || eRaw === undefined || eRaw === '') ? 999 : Number(eRaw);
       // Estoque ZERO é zero, não "sem informação". O `> 0` daqui trocava 0 por

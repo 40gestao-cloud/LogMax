@@ -36,6 +36,34 @@ const MAX_QTD_ITEM = 99;
 const JANELA_ORIGEM_MS = 24 * 3600_000;
 
 /**
+ * Ofertas valendo hoje na unidade, por produto (MIGR 578).
+ *
+ * A promoção é uma REGRA DE PREÇO: o cadastro guarda o preço de tabela e a
+ * regra diz quanto custa hoje. A vitrine e o checkout têm de resolver o mesmo
+ * número que o caixa cobra, e a `v_promocao_vigente` é a definição única disso
+ * — por isso aqui não se repete o predicado de vigência.
+ *
+ * Falha de leitura devolve mapa vazio de propósito: a loja cai para o preço de
+ * tabela, que é o preço cheio. Nunca vende mais barato por engano; no máximo
+ * deixa de anunciar uma oferta.
+ */
+async function ofertasVigentes(
+  admin: any,
+  filial: string,
+): Promise<Map<string, { de: number; por: number }>> {
+  const mapa = new Map<string, { de: number; por: number }>();
+  const { data, error } = await admin
+    .from('v_promocao_vigente')
+    .select('produto_id, preco_de, preco_por')
+    .eq('filial', filial);
+  if (error) return mapa;
+  for (const o of data ?? []) {
+    mapa.set(String(o.produto_id), { de: Number(o.preco_de ?? 0), por: Number(o.preco_por ?? 0) });
+  }
+  return mapa;
+}
+
+/**
  * Só o suficiente para contar pedidos por janela. O IP cru nunca é gravado.
  *
  * CUIDADO ao tratar isto como identidade de pessoa: a turma toda sai pela
@@ -134,6 +162,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: 'Não foi possível carregar o catálogo.' });
       }
 
+      // MIGR 578: a vitrine anuncia o preço EFETIVO. A promoção virou regra de
+      // preço e o cadastro guarda o de tabela, então mostrar `produtos.preco`
+      // cru aqui anunciaria o preço cheio de um item em oferta — e o pedido
+      // seria fechado por um valor que o caixa não cobra.
+      const ofertas = await ofertasVigentes(admin, filial);
+
       // O hub filtra por `filtro`; o dado real mora em atributos->genero, que
       // os alunos preenchem no cadastro do produto. Calçados viram acessórios
       // por categoria, que é como a MaxLook organiza a vitrine.
@@ -160,7 +194,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           nome:      p.nome,
           categoria: p.categoria ?? 'Geral',
           marca:     p.marca ?? null,
-          preco:     Number(p.preco),
+          preco:     ofertas.get(String(p.id))?.por ?? Number(p.preco),
+          // "De" só aparece quando há oferta — é o preço riscado da vitrine.
+          preco_de:  ofertas.get(String(p.id))?.de ?? null,
           estoque:   Number(p.estoque),
           imagem:    p.imagem_url,
           genero:    p.atributos?.genero ?? null,
@@ -348,6 +384,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const itens: Array<{ produto_id: string; nome_produto: string; qtd: number; preco_unitario: number; subtotal: number }> = [];
       let total = 0;
+      // MIGR 578: o mesmo preço efetivo que a vitrine anunciou. Resolvido aqui
+      // no servidor, nunca no navegador — é a regra de preço do banco, não o
+      // número que o cliente tinha na tela quando abriu a página.
+      const ofertasCheckout = await ofertasVigentes(admin, filial);
 
       for (const [produtoId, qtd] of pedidoPorProduto) {
         const p = (produtos ?? []).find((x: any) => x.id === produtoId);
@@ -357,7 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (Number(p.estoque) < qtd) {
           return res.status(409).json({ error: `Estoque insuficiente de "${p.nome}". Disponível: ${Number(p.estoque)}.` });
         }
-        const precoUnit = Number(p.preco);
+        const precoUnit = ofertasCheckout.get(String(p.id))?.por ?? Number(p.preco);
         const subtotal = Math.round(precoUnit * qtd * 100) / 100;
         total += subtotal;
         itens.push({ produto_id: p.id, nome_produto: p.nome, qtd, preco_unitario: precoUnit, subtotal });
