@@ -14,7 +14,7 @@ import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
-import { supabase } from '../lib/supabase';
+import { supabase, criarClienteEfemero } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { consultarCreditoCliente, bloqueioFiado } from '../lib/credito';
@@ -131,6 +131,7 @@ export const PDVViewSupermax = ({
     forma: string;
     cliente: string | null;
     cpfNota?: string | null;
+    economia?: number;
     itens: { nome_produto: string; qtd: number; preco_unitario: number; subtotal: number }[];
   } | null>(null);
   const [codeMsg, setCodeMsg]           = useState<{ type: 'err'; text: string } | null>(null);
@@ -265,6 +266,24 @@ export const PDVViewSupermax = ({
   } | null>(null);
   const [confirmSuspender, setConfirmSuspender] = useState(false);
 
+  // Ofertas vigentes da unidade (view `v_promocao_vigente`, migr. 575). A
+  // aprovação da promoção já trocou `produtos.preco` pelo promocional (migr.
+  // 402) — o que falta no caixa é o "de", que mora na promoção. Sem isto o
+  // operador não sabe que o item está em oferta e o cliente não vê a economia.
+  const [ofertas, setOfertas] = useState<Map<string, { de: number; por: number }>>(new Map());
+
+  // Desconto no caixa de supermercado não é decisão do operador: ele existe
+  // para divergência de etiqueta e avaria, e sai com a senha do gerente da
+  // unidade (é o "desconto supervisionado" dos PDVs de mercado). O motivo fica
+  // gravado na venda — desconto sem motivo é buraco de margem sem dono.
+  const [descAuth, setDescAuth] = useState<{ valor: number } | null>(null);
+  const [descAuthEmail, setDescAuthEmail] = useState('');
+  const [descAuthSenha, setDescAuthSenha] = useState('');
+  const [descAuthMotivo, setDescAuthMotivo] = useState('Divergência de preço na gôndola');
+  const [descAuthObs, setDescAuthObs] = useState('');
+  const [descAuthLoading, setDescAuthLoading] = useState(false);
+  const [descontoAutorizacao, setDescontoAutorizacao] = useState<{ por: string; motivo: string } | null>(null);
+
   const [aberturaValor, setAberturaValor] = useState('');
   const [aberturaObs, setAberturaObs] = useState('');
   const [abrindoCaixa, setAbrindoCaixa] = useState(false);
@@ -333,6 +352,30 @@ export const PDVViewSupermax = ({
   useTravaAtualizacao(cart.length > 0 || vendaSuspensa !== null, 'venda-pdv-supermax',
     'há uma venda aberta ou suspensa no caixa');
 
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('v_promocao_vigente')
+        .select('produto_id, preco_de, preco_por')
+        .eq('filial', filial);
+      if (!vivo) return;
+      if (error) {
+        // Oferta é informação de vitrine: se a consulta falhar, o PDV segue
+        // vendendo pelo preço do catálogo (que já é o promocional).
+        console.warn('[PDV] Não foi possível carregar as ofertas vigentes:', error.message);
+        return;
+      }
+      const mapa = new Map<string, { de: number; por: number }>();
+      for (const o of data ?? []) {
+        mapa.set(String(o.produto_id), { de: Number(o.preco_de ?? 0), por: Number(o.preco_por ?? 0) });
+      }
+      setOfertas(mapa);
+    })();
+    return () => { vivo = false; };
+  }, [filial]);
+
   useEffect(() => { codeInputRef.current?.focus(); }, []);
 
   // Se o carrinho encolheu, reseta seleção pra não ficar apontando pra idx inválido
@@ -382,6 +425,18 @@ export const PDVViewSupermax = ({
   // evitar totalFinal negativo (a RPC criar_venda_pdv rejeita valores < 0).
   const descontoAplicado = Math.min(desconto, subtotal);
   const totalFinal = Math.max(0, parseFloat((subtotal - descontoAplicado).toFixed(2)));
+  // Só é oferta se o "de" for maior que o preço que está sendo cobrado — o
+  // preço do catálogo é a fonte da verdade da venda, a promoção só explica.
+  const ofertaDoItem = (produto_id: string, precoCobrado: number) => {
+    const o = ofertas.get(produto_id);
+    return o && o.de > precoCobrado + 0.001 ? o : null;
+  };
+  // Economia do cupom: a diferença entre o preço de tabela e o cobrado, item a
+  // item. É o número que a rede imprime no rodapé do cupom.
+  const economiaOfertas = cart.reduce((s, i) => {
+    const o = ofertaDoItem(i.produto_id, i.preco_unitario);
+    return o ? s + (o.de - i.preco_unitario) * i.qtd : s;
+  }, 0);
   const totalItens = cart.reduce((s, i) => s + i.qtd, 0);
   const totalPago  = pagamentos.reduce((s, p) => s + p.valor, 0);
   const restante   = Math.max(0, parseFloat((totalFinal - totalPago).toFixed(2)));
@@ -527,6 +582,7 @@ export const PDVViewSupermax = ({
     setParcialValor('');
     setCpfNota('');
     setClienteVinculado(null);
+    setDescontoAutorizacao(null);
   };
 
   const iniciarEdicaoPagamento = (idx: number) => {
@@ -859,7 +915,7 @@ export const PDVViewSupermax = ({
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F3/F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || cpfModalOpen || !!valeModal || confirmSuspender || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || cpfModalOpen || !!valeModal || confirmSuspender || !!descAuth || isClosing;
       const target = e.target as HTMLElement | null;
       const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
 
@@ -1041,7 +1097,7 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, cpfModalOpen, valeModal, confirmSuspender, vendaSuspensa, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint, registrarDigitacao]);
+  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, cpfModalOpen, valeModal, confirmSuspender, vendaSuspensa, descAuth, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint, registrarDigitacao]);
 
   // === FINALIZAR ===
   // Devolve o id da venda criada — o fluxo misto precisa dele pra registrar a
@@ -1079,6 +1135,16 @@ export const PDVViewSupermax = ({
       p_cpf_nota:        cpfNota || null,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
+    // Desconto autorizado deixa rastro na própria venda. A RPC não recebe
+    // observação, então vai num update logo depois — mesmo caminho que o PDV
+    // dos nichos usa para os campos de vitrine.
+    if (descontoAutorizacao && descontoAplicado > 0) {
+      const { error: obsErr } = await supabase
+        .from('vendas')
+        .update({ observacao: `Desconto de ${formatBRL(descontoAplicado)} autorizado por ${descontoAutorizacao.por} — ${descontoAutorizacao.motivo}` })
+        .eq('id', vendaId);
+      if (obsErr) console.warn('[PDV] Venda registrada, mas a autorização do desconto não foi gravada:', obsErr.message);
+    }
     const shortId = String(vendaId).slice(-6).toUpperCase();
     const clienteNome = cid ? ((clientes as any[]).find(c => c.id === cid)?.nome ?? null) : null;
     setLastVenda({
@@ -1089,8 +1155,10 @@ export const PDVViewSupermax = ({
       forma,
       cliente: clienteNome,
       // Guardado aqui porque `clearAll()` logo abaixo zera o campo da tela —
-      // e o recibo só é gerado depois, no clique do operador.
+      // e o recibo só é gerado depois, no clique do operador. Mesmo motivo
+      // para a economia: ela é calculada sobre o carrinho, que some em seguida.
       cpfNota: cpfNota || null,
+      economia: parseFloat(economiaOfertas.toFixed(2)),
       itens: itensPayload.map(i => ({
         nome_produto: i.nome_produto,
         qtd: i.qtd,
@@ -1150,6 +1218,58 @@ export const PDVViewSupermax = ({
     setVendaSuspensa(null);
     showToast?.('Venda recuperada da gancheira.', 'success');
     requestAnimationFrame(() => codeInputRef.current?.focus());
+  };
+
+  // Valida a senha do gerente num cliente descartável: a sessão do operador
+  // continua de pé (é ele quem opera o caixa), e o gerente só carimba.
+  const confirmarAutorizacaoDesconto = async () => {
+    if (!descAuth) return;
+    const email = descAuthEmail.trim().toLowerCase();
+    const motivo = descAuthMotivo === 'Outro' ? descAuthObs.trim() : descAuthMotivo;
+    if (!email || !descAuthSenha) {
+      showToast?.('Informe o e-mail e a senha do gerente.', 'error', true);
+      return;
+    }
+    if (!motivo) {
+      showToast?.('Descreva o motivo do desconto.', 'error', true);
+      return;
+    }
+    const cliente = criarClienteEfemero();
+    if (!cliente) { showToast?.('Supabase indisponível.', 'error', true); return; }
+    setDescAuthLoading(true);
+    try {
+      const { data: auth, error: authErr } = await cliente.auth.signInWithPassword({ email, password: descAuthSenha });
+      if (authErr || !auth?.user) {
+        showToast?.('E-mail ou senha não conferem.', 'error', true);
+        return;
+      }
+      const { data: perfil } = await cliente
+        .from('user_profiles')
+        .select('nome, role, filial')
+        .eq('id', auth.user.id)
+        .maybeSingle();
+      const ehGerenteDaUnidade = perfil?.role === 'gerente' && perfil?.filial === filial;
+      // O professor (admin) também autoriza: em aula é ele quem faz o papel do
+      // fiscal quando o gerente da filial não está na sala.
+      const ehAdmin = perfil?.role === 'admin';
+      if (!ehGerenteDaUnidade && !ehAdmin) {
+        showToast?.(`${perfil?.nome ?? 'Essa conta'} não é gerente de ${filial} — só o gerente da unidade autoriza desconto.`, 'error', true);
+        return;
+      }
+      setDesconto(descAuth.valor);
+      setDescontoAutorizacao({ por: perfil?.nome ?? email, motivo });
+      showToast?.(`Desconto de ${formatBRL(descAuth.valor)} autorizado por ${perfil?.nome ?? email}.`, 'success');
+      setDescAuth(null);
+      setDescAuthEmail(''); setDescAuthSenha(''); setDescAuthObs('');
+      setDescAuthMotivo('Divergência de preço na gôndola');
+      focusFecharVendaPDV();
+    } catch (err: any) {
+      showToast?.(`Erro na autorização: ${err?.message ?? '—'}`, 'error', true);
+    } finally {
+      // O cliente descartável não pode ficar segurando a sessão do gerente.
+      await cliente.auth.signOut().catch(() => {});
+      setDescAuthLoading(false);
+    }
   };
 
   const abrirCaixa = async () => {
@@ -2031,6 +2151,15 @@ export const PDVViewSupermax = ({
                 <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
                 <div className="truncate font-semibold flex items-center gap-2">
                   <span className="truncate">{(item.nome_produto || '').toUpperCase()}</span>
+                  {ofertaDoItem(item.produto_id, item.preco_unitario) && (
+                    <span
+                      className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
+                      style={{ background: '#dcfce7', color: '#166534', borderColor: MONEY }}
+                      title="Preço promocional aprovado — veio do cadastro, não do caixa"
+                    >
+                      Oferta
+                    </span>
+                  )}
                   {ruptura && (
                     <span
                       className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
@@ -2043,7 +2172,18 @@ export const PDVViewSupermax = ({
                 </div>
                 <div className="text-right">{fmtQtd(item.qtd)}</div>
                 <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
-                <div className="text-right">{fmt(item.preco_unitario)}</div>
+                <div className="text-right">
+                  {(() => {
+                    const o = ofertaDoItem(item.produto_id, item.preco_unitario);
+                    if (!o) return fmt(item.preco_unitario);
+                    return (
+                      <>
+                        <span className="block text-xs font-normal text-gray-400 line-through">{fmt(o.de)}</span>
+                        <span style={{ color: MONEY }} title={`Em oferta — preço de tabela R$ ${fmt(o.de)}`}>{fmt(item.preco_unitario)}</span>
+                      </>
+                    );
+                  })()}
+                </div>
                 <div className="text-right font-bold">{fmt(item.subtotal)}</div>
                 <button
                   onClick={() => removeFromCart(item.produto_id)}
@@ -2075,6 +2215,23 @@ export const PDVViewSupermax = ({
                 <div className="text-base text-gray-600 tabular-nums">
                   {lastAdded.qtd} {(lastAdded.unidade || '').toLowerCase()} × R$ {fmt(lastAdded.preco_unitario)}
                 </div>
+                {(() => {
+                  const o = ofertaDoItem(lastAdded.produto_id, lastAdded.preco_unitario);
+                  if (!o) return null;
+                  return (
+                    <div className="mt-1 flex items-center gap-2 text-sm">
+                      <span
+                        className="px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wider rounded border"
+                        style={{ background: '#dcfce7', color: '#166534', borderColor: MONEY }}
+                      >
+                        Oferta
+                      </span>
+                      <span className="text-gray-500 tabular-nums">
+                        de <span className="line-through">R$ {fmt(o.de)}</span> por R$ {fmt(lastAdded.preco_unitario)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div className="text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
                   R$ {fmt(lastAdded.subtotal)}
                 </div>
@@ -2096,6 +2253,12 @@ export const PDVViewSupermax = ({
               <div className="flex justify-between items-baseline">
                 <span className="text-gray-600">DESCONTO</span>
                 <span className="tabular-nums font-bold text-2xl" style={{ color: RED }}>− R$ {fmt(descontoAplicado)}</span>
+              </div>
+            )}
+            {economiaOfertas > 0.001 && (
+              <div className="flex justify-between items-baseline border-t pt-3" style={{ borderColor: '#d1d5db' }}>
+                <span className="text-gray-600">VOCÊ ECONOMIZOU</span>
+                <span className="tabular-nums font-bold text-2xl" style={{ color: MONEY }}>R$ {fmt(economiaOfertas)}</span>
               </div>
             )}
           </div>
@@ -2267,7 +2430,7 @@ export const PDVViewSupermax = ({
           <span className="opacity-40">·</span>
           <span><b>2*</b> Qtd — sozinho arma p/ o próximo item, ou <b>2*código</b> / <b>2*nome</b> (peso: <b>0,350*</b>)</span>
           <span className="opacity-40">·</span>
-          <span><b>F6</b> Desconto · <b>Ctrl+G</b> Suspender/recuperar</span>
+          <span><b>F6</b> Desconto (gerente) · <b>Ctrl+G</b> Suspender/recuperar</span>
           <span className="opacity-40">·</span>
           <span><b>F7</b> Consulta preço</span>
           <span className="opacity-40">·</span>
@@ -2848,7 +3011,7 @@ export const PDVViewSupermax = ({
                     ['F3 / F9', 'Cancelar cupom (pede confirmação).'],
                     ['F4', 'Subtotal — abre o modal de pagamento.'],
                     ['F5', 'Pagamentos — mesmo destino do F4 (padrão Linx/VR).'],
-                    ['F6', 'Desconto no total (% ou R$) — em supermercado, promoção já vem do preço.'],
+                    ['F6', 'Desconto no total — pede autorização do gerente da unidade e o motivo. Promoção não passa por aqui: já vem no preço.'],
                     ['F7', 'Consulta de preço (não adiciona ao carrinho).'],
                     ['F8', 'Buscar produto por nome ou código.'],
                     ['F10', 'Sangria — retirada de dinheiro do caixa.'],
@@ -2985,6 +3148,12 @@ export const PDVViewSupermax = ({
                   ))}
                 </tbody>
               </table>
+              {(lastVenda.economia ?? 0) > 0.001 && (
+                <div className="flex justify-between text-xs mt-2 font-bold" style={{ color: MONEY }}>
+                  <span>Você economizou</span>
+                  <span>R$ {fmt(lastVenda.economia!)}</span>
+                </div>
+              )}
               {lastVenda.desconto > 0 && (
                 <div className="flex justify-between text-xs mt-2 text-red-600 font-bold">
                   <span>Desconto</span>
@@ -3007,6 +3176,7 @@ export const PDVViewSupermax = ({
                   filial,
                   cliente: lastVenda.cliente,
                   cpfNota: lastVenda.cpfNota ?? null,
+                  economia: lastVenda.economia ?? null,
                   operador: operadorNome,
                   itens: lastVenda.itens,
                   subtotal: lastVenda.subtotal,
@@ -3382,6 +3552,112 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Confirmar cancelar venda — ← → escolher · Enter confirma · Esc volta */}
+      {/* Autorização do gerente para o desconto (padrão "desconto supervisionado"
+          dos PDVs de supermercado: o operador pede, o gerente libera). */}
+      {descAuth && (
+        <div
+          className="fixed inset-0 z-[205] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && descAuth && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
+            if (e.key === 'Escape') {
+              e.preventDefault(); e.stopPropagation();
+              setDescAuth(null); setDescAuthSenha('');
+              requestAnimationFrame(() => codeInputRef.current?.focus());
+              return;
+            }
+            if (e.key === 'Enter' && (e.target as HTMLElement)?.tagName !== 'BUTTON') {
+              e.preventDefault(); e.stopPropagation();
+              if (!descAuthLoading) confirmarAutorizacaoDesconto();
+              return;
+            }
+            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Autorização do gerente</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">Desconto de R$ {fmt(descAuth.valor)}</div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                No caixa, desconto sai com o gerente de <b>{filial}</b> — é para divergência de etiqueta
+                e avaria, não para negociação. Promoção já vem no preço. O motivo fica gravado na venda.
+              </p>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Motivo</label>
+                <select
+                  value={descAuthMotivo}
+                  onChange={(e) => setDescAuthMotivo(e.target.value)}
+                  className="w-full bg-white border-2 text-sm font-bold px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
+                >
+                  <option>Divergência de preço na gôndola</option>
+                  <option>Produto avariado</option>
+                  <option>Produto perto do vencimento</option>
+                  <option value="Outro">Outro (descrever)</option>
+                </select>
+              </div>
+              {descAuthMotivo === 'Outro' && (
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={descAuthObs}
+                  onChange={(e) => setDescAuthObs(e.target.value)}
+                  placeholder="Descreva o motivo"
+                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af' }}
+                />
+              )}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">E-mail do gerente</label>
+                <input
+                  autoFocus
+                  type="email"
+                  autoComplete="off"
+                  value={descAuthEmail}
+                  onChange={(e) => setDescAuthEmail(e.target.value)}
+                  placeholder="gerente@empresa.com"
+                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af' }}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Senha</label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={descAuthSenha}
+                  onChange={(e) => setDescAuthSenha(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af' }}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => { setDescAuth(null); setDescAuthSenha(''); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+                  className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
+                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarAutorizacaoDesconto}
+                  disabled={descAuthLoading}
+                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-40 flex items-center justify-center gap-2"
+                  style={{ background: NAVY_DARK }}
+                >
+                  {descAuthLoading ? <><Loader2 size={16} className="animate-spin" /> Conferindo…</> : 'Autorizar (Enter)'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gancheira ocupada — suspender de novo descarta a venda que está lá. */}
       {confirmSuspender && (
         <div
@@ -4075,9 +4351,10 @@ export const PDVViewSupermax = ({
         };
         const aplicar = () => {
           if (valorClamp <= 0) { showToast?.('Informe um desconto maior que zero.', 'error', true); return; }
-          setDesconto(valorClamp);
+          // Não aplica aqui: em supermercado o desconto sai com a senha do
+          // gerente. O modal seguinte pede a autorização e o motivo.
           setDiscountModalOpen(false);
-          focusFecharVendaPDV();
+          setDescAuth({ valor: valorClamp });
         };
         return (
           <div
@@ -4093,7 +4370,7 @@ export const PDVViewSupermax = ({
           >
             <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
               <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-                <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F6 · Desconto no total</div>
+                <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F6 · Desconto no total (com o gerente)</div>
                 <div className="text-2xl font-black tracking-wide mt-0.5">Subtotal R$ {fmt(subtotal)}</div>
               </div>
               <div className="p-6 space-y-4">
@@ -4143,11 +4420,11 @@ export const PDVViewSupermax = ({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setDesconto(0); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
+                  <button onClick={() => { setDesconto(0); setDescontoAutorizacao(null); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
                     {desconto > 0 ? 'Remover' : 'Voltar'}
                   </button>
                   <button onClick={aplicar} className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm" style={{ background: NAVY_DARK }}>
-                    Aplicar (Enter)
+                    Pedir autorização (Enter)
                   </button>
                 </div>
                 <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">

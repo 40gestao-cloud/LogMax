@@ -36,6 +36,30 @@ export const supabase: SupabaseClient | null =
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
 
+/**
+ * Cliente descartável, sem sessão persistida — serve para VALIDAR a senha de
+ * outra pessoa sem derrubar quem está logado. É o caso da autorização do
+ * gerente no PDV: o operador continua na sessão dele, o gerente digita a
+ * própria senha e o app só confirma que é ela.
+ *
+ * `persistSession: false` mantém o token fora do localStorage e
+ * `autoRefreshToken: false` evita que este cliente fique renovando sessão em
+ * segundo plano. Feche com `signOut()` assim que terminar a checagem.
+ */
+export function criarClienteEfemero(): SupabaseClient | null {
+  if (!supabaseUrl || !supabaseKey) return null;
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      // storageKey próprio: sem ele os dois GoTrueClient compartilham a chave
+      // do cliente principal e passam a disputar o mesmo lock/canal.
+      storageKey: 'logmax-auth-efemero',
+    },
+  });
+}
+
 // Mapeamento: endpoint fictício → tabela real no Supabase
 export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/filiaisview':                  'filiais',

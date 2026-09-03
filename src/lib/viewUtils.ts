@@ -284,6 +284,12 @@ export type ReciboVenda = {
   /** CPF/CNPJ pedido pelo cliente no fechamento (migr. 574), só dígitos. */
   cpfNota?: string | null;
   /**
+   * Quanto as ofertas vigentes abateram nesta compra (preço de tabela − preço
+   * cobrado, item a item). É o "você economizou" que o cupom de supermercado
+   * imprime no rodapé — não é desconto do operador, vem do preço aprovado.
+   */
+  economia?: number | null;
+  /**
    * Garantia por item, já calculada (data da venda + `garantia_dias` da ficha
    * do produto). Vazio some do recibo. Existe porque o campo era preenchido no
    * cadastro da TechMax e não chegava a lugar nenhum: garantia que o cliente
@@ -381,6 +387,14 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
   doc.text('TOTAL', 140, cursorY);
   doc.text(fmtBR(venda.total), 196, cursorY, { align: 'right' });
   cursorY += 8;
+
+  // Economia das ofertas — o rodapé que o cliente procura no cupom.
+  if ((venda.economia ?? 0) > 0.001) {
+    doc.setFontSize(10);
+    doc.setTextColor(22, 101, 52);
+    doc.text(`VOCE ECONOMIZOU ${fmtBR(venda.economia!)}`, 196, cursorY, { align: 'right' });
+    cursorY += 7;
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
