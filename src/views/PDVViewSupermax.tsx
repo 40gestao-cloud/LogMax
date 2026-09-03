@@ -248,6 +248,15 @@ export const PDVViewSupermax = ({
   const [valeModal, setValeModal] = useState<{ valor: number } | null>(null);
   const [valeDigitos, setValeDigitos] = useState('');
 
+  // Abertura do caixa PELO OPERADOR, na própria tela do PDV (padrão de
+  // supermercado e do MaxPOS, onde a turma treina). Antes o PDV só dizia
+  // "abra em Financeiro → Controle de Caixa": o operador começava o dia numa
+  // tela que não é dele. A RLS de `controle_caixa` já autorizava o setor
+  // vendas na própria unidade — só a tela não oferecia.
+  const [aberturaValor, setAberturaValor] = useState('');
+  const [aberturaObs, setAberturaObs] = useState('');
+  const [abrindoCaixa, setAbrindoCaixa] = useState(false);
+
   // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
   // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
   const [parcelasModalOpen, setParcelasModalOpen] = useState(false);
@@ -1077,6 +1086,42 @@ export const PDVViewSupermax = ({
   // qualquer finalização — inclusive no callback do PIX (que pode demorar
   // minutos entre abrir o QR e o cliente pagar; nesse intervalo o gerente
   // pode ter fechado o caixa).
+  const abrirCaixa = async () => {
+    const valor = parseBRL(aberturaValor);
+    if (!valor || valor <= 0) {
+      showToast?.('Informe o fundo de troco para abrir o caixa.', 'error', true);
+      return;
+    }
+    if (!supabase) { showToast?.('Supabase indisponível.', 'error', true); return; }
+    setAbrindoCaixa(true);
+    try {
+      const { error } = await supabase.from('controle_caixa').insert({
+        data:            todayBR(),
+        filial,
+        valor_abertura:  valor,
+        status:          'Aberto',
+        aberto_por:      user?.id ?? null,
+        aberto_por_nome: profile?.nome ?? user?.email ?? 'Operador',
+        aberto_em:       new Date().toISOString(),
+        observacao:      aberturaObs.trim() || null,
+      });
+      if (error) {
+        // 23505: já existe sessão do dia para a unidade — alguém abriu antes.
+        if (error.code === '23505') showToast?.(`Já existe caixa aberto hoje em ${filial}.`, 'error', true);
+        else throw error;
+      } else {
+        showToast?.(`Caixa aberto com ${formatBRL(valor)} de fundo de troco.`, 'success');
+        setAberturaValor('');
+        setAberturaObs('');
+      }
+      await refreshCaixa();
+    } catch (err: any) {
+      showToast?.(`Erro ao abrir o caixa: ${err?.message ?? '—'}`, 'error', true);
+    } finally {
+      setAbrindoCaixa(false);
+    }
+  };
+
   const caixaAindaAberto = useCallback(async (): Promise<boolean> => {
     if (!supabase) return true;
     const today = todayBR();
@@ -1794,11 +1839,56 @@ export const PDVViewSupermax = ({
             <Lock size={48} className="mx-auto mb-4" style={{ color: RED }} />
             <h2 className="text-2xl font-black uppercase tracking-wide" style={{ color: NAVY_DARK }}>Caixa fechado</h2>
             <p className="text-sm text-gray-700 mt-3 leading-relaxed">
-              O caixa do <b>SuperMax</b> não está aberto hoje. Abra em <b>Financeiro → Controle de Caixa</b> antes de operar vendas.
+              O caixa de <b>{filial}</b> não está aberto hoje. Conte o fundo de troco da gaveta e abra o caixa para começar a operar.
             </p>
-            <button onClick={() => refreshCaixa()} className="mt-6 px-6 py-3 text-white font-black uppercase tracking-wide text-sm" style={{ background: NAVY_DARK }}>
-              Verificar novamente
-            </button>
+            <div className="mt-6 text-left space-y-3">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
+                  Fundo de troco <span className="text-gray-400 normal-case font-medium">(dinheiro que já está na gaveta)</span>
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="numeric"
+                  value={aberturaValor}
+                  onChange={(e) => setAberturaValor(formatBRL(parseBRL(e.target.value)))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abrirCaixa(); } }}
+                  placeholder="0,00"
+                  className="w-full bg-white border-2 text-2xl font-bold text-gray-900 tabular-nums px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
+                  Observação <span className="text-gray-400 normal-case font-medium">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={200}
+                  value={aberturaObs}
+                  onChange={(e) => setAberturaObs(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abrirCaixa(); } }}
+                  placeholder="Ex.: troco conferido com o gerente"
+                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af' }}
+                />
+              </div>
+              <button
+                onClick={abrirCaixa}
+                disabled={abrindoCaixa || parseBRL(aberturaValor) <= 0}
+                className="w-full px-6 py-4 text-white font-black uppercase tracking-wide text-base disabled:opacity-30 flex items-center justify-center gap-2"
+                style={{ background: MONEY }}
+              >
+                {abrindoCaixa ? <><Loader2 size={18} className="animate-spin" /> Abrindo…</> : 'Abrir Caixa (Enter)'}
+              </button>
+              <button
+                onClick={() => refreshCaixa()}
+                className="w-full px-6 py-2 font-bold uppercase tracking-wide text-xs border-2"
+                style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
+              >
+                Já abriram para mim · Verificar novamente
+              </button>
+            </div>
           </div>
         </div>
       </div>
