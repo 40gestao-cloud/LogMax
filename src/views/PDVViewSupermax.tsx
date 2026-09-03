@@ -5,6 +5,7 @@ import { codigoCobranca } from '../lib/cobranca';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
   Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
+  Pencil, Trash2,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
@@ -12,7 +13,6 @@ import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
-import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
@@ -137,7 +137,11 @@ export const PDVViewSupermax = ({
   const [fullscreen, setFullscreen] = useState(true);
   // Sem isto o overlay cobria só a shell, e a barra do navegador e a do
   // sistema continuavam ocupando a tela do caixa.
-  useFullscreenNativo(fullscreen, useCallback(() => setFullscreen(false), []));
+  // Tela cheia e SO overlay CSS (rootClass): o PDV cobre sidebar e topbar.
+  // Com a Fullscreen API do navegador, o Esc do operador era consumido por ele
+  // pra sair da tela cheia — quem so queria voltar da operacao perdia a tela.
+  // Quem quiser esconder tambem a barra do navegador usa o F11 do proprio
+  // navegador, que nao rouba o Esc do PDV.
 
   // Índices de seleção por teclado nos modais (Arrow keys + Enter).
   const [payChoiceIdx, setPayChoiceIdx]       = useState(0);
@@ -207,6 +211,11 @@ export const PDVViewSupermax = ({
   type PaymentLine = { forma: Exclude<FormaPagamento, 'Fiado'>; valor: number; troco?: number; parcelas?: number };
   const [pagamentos, setPagamentos] = useState<PaymentLine[]>([]);
   const [parcialValor, setParcialValor] = useState('');
+  // Editar o valor de um pagamento ja lancado sem remover e refazer (padrao
+  // MaxPOS). Linha de dinheiro COM troco fica fora: o troco foi calculado
+  // sobre o valor antigo e nao guardamos quanto o cliente entregou.
+  const [editPagIdx, setEditPagIdx] = useState<number | null>(null);
+  const [editPagValor, setEditPagValor] = useState('');
 
   // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
   // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
@@ -251,6 +260,8 @@ export const PDVViewSupermax = ({
   const scanBufferRef  = useRef({ chars: '' as string, lastTime: 0, timer: 0 as any, limpoEm: 0 });
   const cashInputRef   = useRef<HTMLInputElement>(null);
   const payBtnRefs   = useRef<(HTMLButtonElement | null)[]>([]);
+  // Campo VALOR DESTA FORMA: e o foco de entrada do modal de pagamento.
+  const parcialInputRef = useRef<HTMLInputElement>(null);
   const cartRef              = useRef(cart);
   cartRef.current            = cart;
   // Último caixa aberto conhecido — segura a árvore de render de pé se o
@@ -457,6 +468,28 @@ export const PDVViewSupermax = ({
     setDiscountValue('');
     setPagamentos([]);
     setParcialValor('');
+  };
+
+  const iniciarEdicaoPagamento = (idx: number) => {
+    const p = pagamentos[idx];
+    if (!p) return;
+    setEditPagIdx(idx);
+    setEditPagValor(formatBRL(p.valor));
+  };
+
+  const confirmarEdicaoPagamento = () => {
+    if (editPagIdx === null) return;
+    const idx = editPagIdx;
+    const novo = parseBRL(editPagValor);
+    setEditPagIdx(null);
+    setEditPagValor('');
+    if (novo <= 0) return;
+    setPagamentos(prev => {
+      const outros = prev.reduce((acc, p, i) => i === idx ? acc : acc + p.valor, 0);
+      const teto = parseFloat((totalFinal - outros).toFixed(2));
+      const valor = parseFloat(Math.min(novo, Math.max(teto, 0)).toFixed(2));
+      return prev.map((p, i) => i === idx ? { ...p, valor } : p);
+    });
   };
 
   // Foco vai pro botão CONFIRMAR após adicionar pagamento. Tenta em rAF
@@ -853,13 +886,18 @@ export const PDVViewSupermax = ({
         if (anyModal) return;
         // Se input tem texto, deixa o input limpar (a propria onKeyDown trata)
         if (document.activeElement === codeInputRef.current && code.length > 0) return;
-        // Prioridade: sair do modo tela cheia antes de cancelar venda
+        // Prioridade: a OPERACAO vem antes da tela cheia. Com cupom aberto o Esc
+        // volta/cancela a venda; sair da tela cheia so quando nao ha o que voltar.
+        if (cart.length > 0) {
+          e.preventDefault();
+          cancelSale();
+          return;
+        }
         if (fullscreen) {
           e.preventDefault();
           setFullscreen(false);
           return;
         }
-        if (cart.length > 0) cancelSale();
         return;
       }
       if (e.key === 'Delete') {
@@ -1595,7 +1633,11 @@ export const PDVViewSupermax = ({
   // "Dinheiro/Cartão não funciona, fechar venda não faz nada".
   useEffect(() => {
     if (!paymentModalOpen) return;
-    const id = setTimeout(() => payBtnRefs.current[0]?.focus(), 0);
+    // ANTES o foco ia pro botao DINHEIRO: o operador abria o pagamento, digitava
+    // o valor parcial e nada aparecia — a tecla morria no botao focado, porque o
+    // redirecionamento de digito do PDV se desliga com modal aberto. O foco entra
+    // no campo (padrao do MaxPOS); F1/F2/F3 e setas seguem escolhendo a forma.
+    const id = setTimeout(() => parcialInputRef.current?.focus(), 0);
     return () => clearTimeout(id);
   }, [paymentModalOpen]);
 
@@ -1995,6 +2037,24 @@ export const PDVViewSupermax = ({
                 return;
               }
             }
+            // Com o foco no campo de valor, seta e digito pertencem ao campo. Sem
+            // isto, ←/→ (mover o cursor) pulavam pro botao de forma no meio da
+            // digitacao.
+            const tgtEl = e.target as HTMLElement | null;
+            const emInput = !!tgtEl && (tgtEl.tagName === 'INPUT' || tgtEl.tagName === 'TEXTAREA');
+            if (emInput && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+            // Digito com o foco num botao volta pro campo de valor — mesma ideia
+            // do digito solto na leitura: dentro do pagamento, numero e valor.
+            if (
+              !emInput && !e.ctrlKey && !e.altKey && !e.metaKey &&
+              e.key.length === 1 && e.key >= '0' && e.key <= '9'
+            ) {
+              e.preventDefault(); e.stopPropagation();
+              const centavos = Math.round(parseBRL(parcialValor) * 100);
+              setParcialValor(formatBRL(`${centavos > 0 ? centavos : ''}${e.key}`));
+              parcialInputRef.current?.focus();
+              return;
+            }
             if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
               e.preventDefault(); e.stopPropagation();
               const next = (payChoiceIdx + 1) % FORMAS_PAGAMENTO.length;
@@ -2042,9 +2102,10 @@ export const PDVViewSupermax = ({
             {/* Misto: input parcial + lista de pagamentos lançados */}
             <div className="px-6 pt-4">
               <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
-                Valor desta forma <span className="text-gray-400 normal-case font-medium">(vazio = restante · PIX e Fiado só como forma única)</span>
+                VALOR DESTA FORMA <span className="text-gray-400 normal-case font-medium">(vazio = restante · PIX e Fiado só como forma única)</span>
               </label>
               <input
+                ref={parcialInputRef}
                 type="text"
                 inputMode="numeric"
                 value={parcialValor}
@@ -2060,35 +2121,92 @@ export const PDVViewSupermax = ({
                   if (/^F\d+$/.test(e.key)) e.stopPropagation();
                 }}
                 placeholder={`Restante: ${fmt(restante)}`}
-                className="w-full border-2 text-xl font-black tabular-nums px-3 py-1.5 outline-none focus:border-blue-700"
+                className="w-full bg-white border-2 text-xl font-bold tabular-nums px-3 py-1.5 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-500/30"
                 style={{ borderColor: '#9ca3af', color: NAVY_DARK, fontFamily: 'Consolas, "Courier New", monospace' }}
               />
+              {/* Valor acima do restante entra cortado no restante — dizer isso ANTES
+                  do clique evita a conta que nao fecha na cabeca do operador. */}
+              {parcialValor && parseBRL(parcialValor) > restante + 0.001 && restante > 0 && (
+                <p className="mt-1 text-[11px] font-bold" style={{ color: '#a16207' }}>
+                  Valor maior que o restante (R$ {fmt(restante)}) — sera lancado so R$ {fmt(restante)}.
+                </p>
+              )}
               {pagamentos.length > 0 && (
                 <div className="mt-3 border-2 rounded overflow-hidden" style={{ borderColor: NAVY_DARK }}>
-                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white" style={{ background: NAVY_DARK }}>
-                    Pagamentos lançados
+                  <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: NAVY_DARK }}>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-white">Pagamentos Lançados</span>
+                    <span
+                      className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full"
+                      style={{ background: YELLOW, color: NAVY_DARK }}
+                    >
+                      {pagamentos.length} {pagamentos.length === 1 ? 'forma' : 'formas'}
+                    </span>
                   </div>
-                  {pagamentos.map((p, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0 border-gray-200">
-                      <span className="font-bold">
-                        {p.forma}
-                        {p.parcelas && p.parcelas > 1 ? ` ${p.parcelas}x` : ''}
-                        {p.troco && p.troco > 0.001 ? ` (troco R$ ${fmt(p.troco)})` : ''}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <span className="tabular-nums font-bold" style={{ color: MONEY }}>R$ {fmt(p.valor)}</span>
-                        <button
-                          tabIndex={-1}
-                          onClick={() => setPagamentos(prev => prev.filter((_, i) => i !== idx))}
-                          className="w-6 h-6 flex items-center justify-center text-white rounded hover:brightness-110"
-                          style={{ background: RED }}
-                          title="Remover este pagamento"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="p-2 space-y-1.5 bg-white max-h-40 overflow-y-auto">
+                    {pagamentos.map((p, idx) => {
+                      const editando = editPagIdx === idx;
+                      const temTroco = !!p.troco && p.troco > 0.001;
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-300 px-2.5 py-1.5 gap-2 rounded">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] font-bold text-gray-700 uppercase tracking-wide truncate">
+                              {p.forma}
+                              {p.parcelas && p.parcelas > 1 ? ` ${p.parcelas}x (R$ ${fmt(p.valor / p.parcelas)}/parc.)` : ''}
+                              {temTroco ? ` · troco R$ ${fmt(p.troco!)}` : ''}
+                            </div>
+                            {editando ? (
+                              <input
+                                autoFocus
+                                value={editPagValor}
+                                onChange={(e) => setEditPagValor(formatBRL(parseBRL(e.target.value)))}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === 'Enter') { e.preventDefault(); confirmarEdicaoPagamento(); }
+                                  else if (e.key === 'Escape') { e.preventDefault(); setEditPagIdx(null); setEditPagValor(''); }
+                                }}
+                                // Blur CANCELA a edicao (previsivel): confirma no Enter ou no lapis.
+                                onBlur={() => { setEditPagIdx(null); setEditPagValor(''); }}
+                                className="w-full mt-0.5 bg-white border-2 text-sm font-bold tabular-nums px-1.5 py-0.5 outline-none focus:border-blue-700"
+                                style={{ borderColor: '#9ca3af', color: NAVY_DARK, fontFamily: 'Consolas, "Courier New", monospace' }}
+                              />
+                            ) : (
+                              <span className="text-base font-bold tabular-nums" style={{ color: MONEY }}>R$ {fmt(p.valor)}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              tabIndex={-1}
+                              disabled={temTroco && !editando}
+                              // mousedown com preventDefault evita o blur do input (que
+                              // cancela) antes do click — assim o lapis confirma o valor.
+                              onMouseDown={editando ? (e) => e.preventDefault() : undefined}
+                              onClick={() => editando ? confirmarEdicaoPagamento() : iniciarEdicaoPagamento(idx)}
+                              className="w-6 h-6 flex items-center justify-center text-white rounded hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed"
+                              style={{ background: NAVY_DARK }}
+                              title={temTroco
+                                ? 'Pagamento com troco — remova e lance de novo para mudar o valor'
+                                : editando ? 'Confirmar valor (Enter)' : 'Editar valor'}
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              tabIndex={-1}
+                              onClick={() => {
+                                setPagamentos(prev => prev.filter((_, i) => i !== idx));
+                                setEditPagIdx(null);
+                                setEditPagValor('');
+                              }}
+                              className="w-6 h-6 flex items-center justify-center text-white rounded hover:brightness-110"
+                              style={{ background: RED }}
+                              title="Remover este pagamento"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
