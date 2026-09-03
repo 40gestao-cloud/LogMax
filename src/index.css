@@ -2737,3 +2737,39 @@ main.main-scrollbar,
     box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 3px var(--alarme-borda), 0 0 64px 2px var(--alarme-halo) !important;
   }
 }
+
+
+/* ── Alarme da aula: botão "Entendi" ──────────────────────────────────────
+   Classe própria, e não `.btn-shimmer`: aquela é dimensionada para os botões
+   de ação do Placar (11px, padding 7px, `inline-flex`) e, por morar fora das
+   camadas do Tailwind, vencia as utilitárias de tamanho — o botão do alarme
+   saía miúdo e grudado à esquerda. Aqui ele é a única saída do modal: ocupa a
+   largura toda e é o maior alvo da tela. */
+.alarme-botao {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1.125rem 1.5rem;
+  border-radius: 0.875rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #1a1300;
+  cursor: pointer;
+  border: 1px solid #F0B429;
+  background: linear-gradient(100deg, #B8860B 0%, #F0B429 35%, #f0d878 50%, #F0B429 65%, #B8860B 100%);
+  background-size: 200% auto;
+  animation: btn-shimmer 2.4s linear infinite;
+  transition: filter .12s ease, transform .12s ease;
+}
+.alarme-botao:hover  { filter: brightness(1.08); }
+.alarme-botao:active { transform: translateY(1px); }
+
+@media (max-width: 639px) {
+  .alarme-botao { padding: 1rem 1.25rem; font-size: 1.0625rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarme-botao { animation: none !important; background-position: 50% center !important; }
+}

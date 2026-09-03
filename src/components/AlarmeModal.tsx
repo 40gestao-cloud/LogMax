@@ -7,12 +7,15 @@ interface Props {
   onFechar: () => void;
 }
 
-// Cada tipo com ícone e cor próprios: no meio da tela, quem olha de longe
-// reconhece "intervalo" pela cor antes de ler a frase.
-const ESTILO: Record<AlarmeTurma['tipo'], { icone: any; cor: string; fundo: string; borda: string; halo: string }> = {
-  aviso:     { icone: AlertTriangle, cor: '#D4AF37', fundo: 'rgba(212,175,55,0.14)', borda: 'rgba(212,175,55,0.45)', halo: 'rgba(212,175,55,0.55)' },
-  intervalo: { icone: Coffee,        cor: '#4ade80', fundo: 'rgba(74,222,128,0.14)', borda: 'rgba(74,222,128,0.45)', halo: 'rgba(74,222,128,0.55)' },
-  saida:     { icone: LogOut,        cor: '#60a5fa', fundo: 'rgba(96,165,250,0.14)', borda: 'rgba(96,165,250,0.45)', halo: 'rgba(96,165,250,0.55)' },
+// Só o ícone muda por tipo. A cor é sempre o dourado da casa: o modal do
+// alarme é um evento da operação, não um estado semaforizado — verde e azul
+// aqui liam como "status" e brigavam com a identidade visual.
+const OURO = { cor: '#F0B429', fundo: 'rgba(240,180,41,0.14)', borda: 'rgba(240,180,41,0.45)', halo: 'rgba(240,180,41,0.55)' };
+
+const ICONE: Record<AlarmeTurma['tipo'], any> = {
+  aviso:     AlertTriangle,
+  intervalo: Coffee,
+  saida:     LogOut,
 };
 
 /**
@@ -31,7 +34,8 @@ const ESTILO: Record<AlarmeTurma['tipo'], { icone: any; cor: string; fundo: stri
 export function AlarmeModal({ alarme, onFechar }: Props) {
   const [visivel, setVisivel] = useState(false);
   const botaoRef = useRef<HTMLButtonElement>(null);
-  const { icone: Icone, cor, fundo, borda, halo } = ESTILO[alarme.tipo];
+  const Icone = ICONE[alarme.tipo];
+  const { cor, fundo, borda, halo } = OURO;
   const texto = textoDoAlarme(alarme.tipo, alarme.mensagem);
 
   useEffect(() => {
@@ -99,14 +103,14 @@ export function AlarmeModal({ alarme, onFechar }: Props) {
             {texto}
           </p>
 
+          {/* Sem `.btn-shimmer` aqui de propósito: aquela classe mora fora das
+              camadas do Tailwind e vence as utilitárias — fixava o botão em
+              `inline-flex`, 11px e padding de 7px, que era o que o deixava
+              pequeno e encolhido à esquerda. */}
           <button
             ref={botaoRef}
             onClick={onFechar}
-            className="btn-shimmer mt-8 sm:mt-10 w-full py-4 sm:py-5 rounded-xl text-lg sm:text-xl font-bold text-white transition-colors"
-            style={{
-              background: 'linear-gradient(135deg, #ca9a00 0%, #D4AF37 60%, #e8c84a 100%)',
-              border: '1px solid rgba(212,175,55,0.4)',
-            }}
+            className="alarme-botao mt-8 sm:mt-10"
           >
             Entendi
           </button>
