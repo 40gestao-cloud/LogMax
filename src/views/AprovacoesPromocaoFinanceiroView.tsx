@@ -9,7 +9,10 @@ import { playPlim } from '../utils/audioUtils';
 
 // ── Aba Promoções (código original) ──────────────────────────────────────────
 function AbaPromocoes({ showToast, filial }: any) {
-  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { status: 'Aguardando Aprovação', filial }, true);
+  // MIGR 576: a fila tem DOIS passos. 'Aguardando Aprovação' espera o parecer
+  // do Financeiro; 'Em Análise' já tem parecer e espera o gerente liberar. Por
+  // isso a busca não filtra mais por um status só.
+  const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { filial }, true);
   const [obs,       setObs]       = useState<Record<string, string>>({});
   const [expanded,  setExpanded]  = useState<string | null>(null);
   const [processing,setProcessing]= useState<string | null>(null);
@@ -36,7 +39,7 @@ function AbaPromocoes({ showToast, filial }: any) {
         p_observacao:  obs[promo.id] ?? '',
       });
       if (error) throw new Error(error.message);
-      setData((prev: any[]) => prev.filter(p => p.id !== promo.id));
+      setData((prev: any[]) => prev.map(p => p.id === promo.id ? { ...p, status: 'Aprovado' } : p));
       playPlim();
       // Só anuncia o preço quando ele mudou de fato: promoção de serviço não
       // tem produto, e dizer "preço atualizado no PDV" ali era falso.
@@ -53,6 +56,38 @@ function AbaPromocoes({ showToast, filial }: any) {
     } finally { setProcessing(null); }
   };
 
+  // Passo 1 — o Financeiro confere a margem e manda para o gerente. O texto é
+  // obrigatório: é o que o gerente lê antes de liberar o preço.
+  const handleParecer = async (promo: any) => {
+    if (processing || !supabase) return;
+    const parecer = (obs[promo.id] ?? '').trim();
+    if (parecer.length < 5) {
+      setExpanded(promo.id);
+      showToast('Escreva o parecer — é o que o gerente lê antes de liberar o preço.', 'error', true);
+      return;
+    }
+    setProcessing(promo.id);
+    try {
+      const { data: res, error } = await supabase.rpc('analisar_promocao_financeiro', {
+        p_promocao_id: promo.id,
+        p_parecer:     parecer,
+      });
+      if (error) throw new Error(error.message);
+      const margem = (res as any)?.margem_pct;
+      setData((prev: any[]) => prev.map(p => p.id === promo.id
+        ? { ...p, status: 'Em Análise', parecer_financeiro: parecer, margem_pct: margem }
+        : p));
+      setObs(o => ({ ...o, [promo.id]: '' }));
+      showToast(
+        margem != null
+          ? `Parecer enviado ao gerente. Margem no preço promocional: ${Number(margem).toFixed(1)}%.`
+          : 'Parecer enviado ao gerente.',
+        'success', true);
+    } catch (err: any) {
+      showToast(`Não foi possível enviar o parecer: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setProcessing(null); }
+  };
+
   const handleReprovar = async (promo: any) => {
     if (processing || !supabase) return;
     if (!obs[promo.id]?.trim()) { showToast('Informe uma observação para reprovar.', 'error', true); return; }
@@ -63,12 +98,16 @@ function AbaPromocoes({ showToast, filial }: any) {
         p_observacao:  obs[promo.id],
       });
       if (error) throw new Error(error.message);
-      setData((prev: any[]) => prev.filter(p => p.id !== promo.id));
+      setData((prev: any[]) => prev.map(p => p.id === promo.id ? { ...p, status: 'Reprovado' } : p));
       showToast('Promoção reprovada.', 'info', true);
     } catch (err: any) {
       showToast(`Não foi possível reprovar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally { setProcessing(null); }
   };
+
+  // Só o que está em curso aparece: aprovada já virou preço, reprovada morreu.
+  const naFila = (promocoes ?? []).filter(
+    (p: any) => p.status === 'Aguardando Aprovação' || p.status === 'Em Análise');
 
   const calcDesconto = (promo: any) => {
     const atual = Number(promo.preco_atual || 0);
@@ -83,16 +122,17 @@ function AbaPromocoes({ showToast, filial }: any) {
         style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }}>
         <Info size={16} className="text-accent shrink-0 mt-0.5" />
         <p className="text-xs text-gray-400 leading-relaxed">
-          Ao <span className="text-accent font-bold">Aprovar</span>, o preço do produto será atualizado imediatamente no PDV.
-          Ao fim da campanha, o preço original é restaurado automaticamente.
+          A oferta anda em dois passos, como na loja: o <span className="text-accent font-bold">Financeiro</span> confere
+          o custo e dá o parecer de viabilidade; depois o <span className="text-accent font-bold">gerente da filial</span> revisa
+          e libera. É a liberação do gerente que troca o preço no PDV — e ao fim da campanha o preço original volta sozinho.
         </p>
       </div>
 
-      {promocoes.length === 0 ? (
-        <EmptyState message="Nenhuma promoção aguardando aprovação" />
+      {naFila.length === 0 ? (
+        <EmptyState message="Nenhuma oferta na fila — nem para parecer do Financeiro, nem para liberação do gerente" />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {promocoes.map((promo: any) => {
+          {naFila.map((promo: any) => {
             const desc = calcDesconto(promo);
             return (
               <motion.div key={promo.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -108,6 +148,12 @@ function AbaPromocoes({ showToast, filial }: any) {
                       <p className="text-[10px] font-mono text-gray-600 mt-1">Período: {promo.data_inicio ?? '?'} → {promo.data_fim ?? '?'}</p>
                     )}
                     {promo.nome_criador && <p className="text-[10px] text-gray-600 mt-0.5">Proposto por: {promo.nome_criador}</p>}
+                    <p className="text-[10px] font-bold uppercase tracking-widest mt-1"
+                      style={{ color: promo.status === 'Em Análise' ? 'var(--color-accent)' : '#9ca3af' }}>
+                      {promo.status === 'Em Análise'
+                        ? 'Passo 2 · com o gerente da filial'
+                        : 'Passo 1 · com o Financeiro'}
+                    </p>
                   </div>
                   {desc && (
                     <div className="flex items-center gap-1 text-[10px] font-black text-accent shrink-0 px-2 py-1 rounded-full border border-accent/20"
@@ -136,24 +182,54 @@ function AbaPromocoes({ showToast, filial }: any) {
                     </p>
                   </div>
                 </div>
+                {promo.status === 'Em Análise' && (
+                  <div className="neu-pressed rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">
+                      Parecer do Financeiro
+                      {promo.analisado_por_nome ? ` · ${promo.analisado_por_nome}` : ''}
+                      {promo.margem_pct != null ? ` · margem ${Number(promo.margem_pct).toFixed(1)}%` : ''}
+                    </p>
+                    <p className="text-xs text-gray-300 whitespace-pre-wrap break-words">
+                      {promo.parecer_financeiro || '—'}
+                    </p>
+                    {promo.margem_pct != null && Number(promo.margem_pct) < 0 && (
+                      <p className="text-[11px] font-bold text-red-500 mt-1.5">
+                        Margem negativa: este preço vende abaixo do custo. Só libere se a oferta for assumida como custo de marketing.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {expanded === promo.id && (
                   <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
-                    placeholder="Observação (obrigatória para reprovar)..."
+                    placeholder={promo.status === 'Em Análise'
+                      ? 'Observação da liberação (obrigatória para reprovar)...'
+                      : 'Parecer do Financeiro (obrigatório) — a margem e a decisão...'}
                     value={obs[promo.id] ?? ''} onChange={e => setObs(o => ({ ...o, [promo.id]: e.target.value }))} />
                 )}
                 <div className="flex gap-2 justify-end items-center">
                   {expanded !== promo.id && (
                     <button onClick={() => setExpanded(promo.id)} disabled={!!processing}
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">Adicionar obs.</button>
+                      className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">
+                      {promo.status === 'Em Análise' ? 'Adicionar obs.' : 'Escrever parecer'}
+                    </button>
                   )}
                   <button onClick={() => handleReprovar(promo)} disabled={processing === promo.id}
                     className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
                     {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Reprovar
                   </button>
-                  <button onClick={() => handleAprovar(promo)} disabled={processing === promo.id}
-                    className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
-                    {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Aprovar
-                  </button>
+                  {promo.status === 'Em Análise' ? (
+                    <button onClick={() => handleAprovar(promo)} disabled={processing === promo.id}
+                      title="Libera a oferta: o preço muda no PDV agora"
+                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
+                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Liberar (gerente)
+                    </button>
+                  ) : (
+                    <button onClick={() => handleParecer(promo)} disabled={processing === promo.id}
+                      title="Envia o parecer de viabilidade ao gerente da filial"
+                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
+                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Enviar parecer
+                    </button>
+                  )}
                 </div>
               </motion.div>
             );
