@@ -281,6 +281,8 @@ export type ReciboVenda = {
   total: number;
   formaPagamento: string;
   operador?: string | null;
+  /** CPF/CNPJ pedido pelo cliente no fechamento (migr. 574), só dígitos. */
+  cpfNota?: string | null;
   /**
    * Garantia por item, já calculada (data da venda + `garantia_dias` da ficha
    * do produto). Vazio some do recibo. Existe porque o campo era preenchido no
@@ -325,6 +327,14 @@ export async function gerarReciboVendaPDF(venda: ReciboVenda) {
   linha('Data/Hora:', emissao || '—');
   if (venda.filial) linha('Filial:', venda.filial);
   if (venda.cliente) linha('Cliente:', venda.cliente);
+  if (venda.cpfNota) {
+    const d = venda.cpfNota.replace(/\D/g, '');
+    linha('CPF/CNPJ:', d.length === 11
+      ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+      : d.length === 14
+        ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+        : d);
+  }
   if (venda.operador) linha('Operador:', venda.operador);
 
   const fmtBR = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

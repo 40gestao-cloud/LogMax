@@ -105,6 +105,7 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
       hora: created.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       filial: v.filial ?? null,
       cliente: v.cliente?.nome ?? null,
+      cpfNota: v.cpf_cnpj_nota ?? null,
       itens: v.itens.map((i: any) => ({
         nome_produto: i.nome_produto ?? '—',
         qtd: Number(i.qtd ?? 0),

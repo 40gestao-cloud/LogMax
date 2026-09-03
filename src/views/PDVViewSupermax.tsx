@@ -44,7 +44,7 @@ interface CartItem {
   unidade: string;
 }
 
-type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fiado' | 'PIX';
+type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fiado' | 'PIX' | 'Vale-Alimentação';
 
 // O que fazer quando o MaxBank autorizar a maquininha: fechar a venda inteira
 // ('venda', cartão como forma única) ou devolver o valor como uma linha da
@@ -71,7 +71,23 @@ function trapTab(e: React.KeyboardEvent, container: HTMLElement | null) {
   }
 }
 
-const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Fiado'];
+const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Vale-Alimentação', 'Fiado'];
+
+// CPF/CNPJ na nota: só dígitos no banco (migr. 574), máscara só na tela.
+const mascararDocumento = (v: string): string => {
+  const d = v.replace(/\D/g, '').slice(0, 14);
+  if (d.length <= 11) {
+    return d
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return d
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+};
 
 // Busca de produto (prefixo, acento-insensível) vive em lib/produtoBusca.ts —
 // compartilhada com PDVView.tsx. `norm` segue em uso aqui para outras buscas
@@ -113,6 +129,7 @@ export const PDVViewSupermax = ({
     desconto: number;
     forma: string;
     cliente: string | null;
+    cpfNota?: string | null;
     itens: { nome_produto: string; qtd: number; preco_unitario: number; subtotal: number }[];
   } | null>(null);
   const [codeMsg, setCodeMsg]           = useState<{ type: 'err'; text: string } | null>(null);
@@ -216,6 +233,20 @@ export const PDVViewSupermax = ({
   // sobre o valor antigo e nao guardamos quanto o cliente entregou.
   const [editPagIdx, setEditPagIdx] = useState<number | null>(null);
   const [editPagValor, setEditPagValor] = useState('');
+
+  // Extras do fechamento — os mesmos do MaxPOS, onde a turma treina:
+  // documento na nota, cliente vinculado a qualquer venda (não só ao Fiado) e
+  // Vale-Alimentação como forma. Sem eles o aluno aprendia um fechamento que
+  // não existia aqui.
+  const [cpfNota, setCpfNota] = useState('');          // só dígitos
+  const [cpfModalOpen, setCpfModalOpen] = useState(false);
+  const [cpfInput, setCpfInput] = useState('');
+  const [clienteVinculado, setClienteVinculado] = useState<{ id: string; nome: string } | null>(null);
+  // O picker de cliente serve a dois donos: escolher o pagador do Fiado
+  // (finaliza a venda) e vincular cliente (só carimba a venda).
+  const [clientPickerModo, setClientPickerModo] = useState<'fiado' | 'vincular'>('fiado');
+  const [valeModal, setValeModal] = useState<{ valor: number } | null>(null);
+  const [valeDigitos, setValeDigitos] = useState('');
 
   // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
   // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
@@ -468,6 +499,8 @@ export const PDVViewSupermax = ({
     setDiscountValue('');
     setPagamentos([]);
     setParcialValor('');
+    setCpfNota('');
+    setClienteVinculado(null);
   };
 
   const iniciarEdicaoPagamento = (idx: number) => {
@@ -767,7 +800,7 @@ export const PDVViewSupermax = ({
     if (!supabase) return;
     try {
       const [{ data: venda, error: vErr }, { data: itens, error: iErr }] = await Promise.all([
-        supabase.from('vendas').select('id, total_final, total, desconto, forma_pagamento, cliente_id').eq('id', vendaId).single(),
+        supabase.from('vendas').select('id, total_final, total, desconto, forma_pagamento, cliente_id, cpf_cnpj_nota').eq('id', vendaId).single(),
         supabase.from('itens_venda').select('nome_produto, qtd, preco_unitario, subtotal').eq('venda_id', vendaId),
       ]);
       if (vErr) throw vErr;
@@ -780,6 +813,7 @@ export const PDVViewSupermax = ({
         desconto: Number(venda!.desconto ?? 0),
         forma: String(venda!.forma_pagamento ?? '—'),
         cliente: cli,
+        cpfNota: (venda as any)?.cpf_cnpj_nota ?? null,
         itens: (itens ?? []).map((it: any) => ({
           nome_produto: it.nome_produto,
           qtd: Number(it.qtd ?? 0),
@@ -799,7 +833,7 @@ export const PDVViewSupermax = ({
     const handler = (e: KeyboardEvent) => {
       // isClosing entra aqui pra F3/F4/F5/F8/F9 não dispararem ações novas durante
       // RPC pendente (evita dupla venda, dupla busca, etc.).
-      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || isClosing;
+      const anyModal = paymentModalOpen || cashModalOpen || !!pixModal || !!cartaoModal || clientPickerOpen || confirmCancel || !!changeModal || searchModalOpen || cardPickerOpen || parcelasModalOpen || priceQueryOpen || !!cashMoveModal || discountModalOpen || reciboModalOpen || thankYouOpen || helpOpen || !!caixaOpModal || payerPickerOpen || reprintOpen || cpfModalOpen || !!valeModal || isClosing;
       const target = e.target as HTMLElement | null;
       const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
 
@@ -972,7 +1006,7 @@ export const PDVViewSupermax = ({
     // (ex: F5 = recarregar página) antes de chegar aqui.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint, registrarDigitacao]);
+  }, [cart, cart.length, paymentModalOpen, cashModalOpen, pixModal, clientPickerOpen, confirmCancel, changeModal, searchModalOpen, cardPickerOpen, parcelasModalOpen, priceQueryOpen, cashMoveModal, discountModalOpen, reciboModalOpen, thankYouOpen, helpOpen, caixaOpModal, payerPickerOpen, reprintOpen, cpfModalOpen, valeModal, isClosing, code.length, fullscreen, caixa, openPayment, cancelSale, showToast, selectedCartIdx, onSwitchFilial, openReprint, registrarDigitacao]);
 
   // === FINALIZAR ===
   // Devolve o id da venda criada — o fluxo misto precisa dele pra registrar a
@@ -985,7 +1019,9 @@ export const PDVViewSupermax = ({
   // fim do dia. Troco NÃO entra: o que volta para o cliente não fica na gaveta.
   const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1, dinheiroEmEspecie: number = 0): Promise<string> => {
     if (!supabase) throw new Error('Supabase indisponível.');
-    const cid = cidOverride !== undefined ? cidOverride : null;
+    // Sem override (Fiado escolhe o pagador), vale o cliente vinculado na tela
+    // de fechamento — é o que carimba a venda, a conta a receber e a nota.
+    const cid = cidOverride !== undefined ? cidOverride : (clienteVinculado?.id ?? null);
     const itensPayload = cart.map(item => ({
       produto_id:     item.produto_id,
       nome_produto:   item.nome_produto,
@@ -1005,6 +1041,7 @@ export const PDVViewSupermax = ({
       p_cupom_codigo:    null,
       p_cupom_desconto:  0,
       p_valor_dinheiro:  parseFloat(dinheiroEmEspecie.toFixed(2)),
+      p_cpf_nota:        cpfNota || null,
     });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
     const shortId = String(vendaId).slice(-6).toUpperCase();
@@ -1016,6 +1053,9 @@ export const PDVViewSupermax = ({
       desconto: descontoAplicado,
       forma,
       cliente: clienteNome,
+      // Guardado aqui porque `clearAll()` logo abaixo zera o campo da tela —
+      // e o recibo só é gerado depois, no clique do operador.
+      cpfNota: cpfNota || null,
       itens: itensPayload.map(i => ({
         nome_produto: i.nome_produto,
         qtd: i.qtd,
@@ -1143,7 +1183,7 @@ export const PDVViewSupermax = ({
     // PIX e Fiado precisam de etapa assíncrona (realtime, picker de cliente)
     // e a RPC criar_venda_pdv trata cada um especificamente — então só
     // funcionam como pagamento único, na venda inteira.
-    if (forma === 'PIX' || forma === 'Fiado') {
+    if (forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação') {
       if (pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001)) {
         showToast?.(`${forma} não aceita pagamento parcial — use só como forma única.`, 'error', true);
         return;
@@ -1155,7 +1195,14 @@ export const PDVViewSupermax = ({
         await refreshCaixa();
         return;
       }
-      if (forma === 'Fiado') { setClientPickerOpen(true); return; }
+      if (forma === 'Fiado') { setClientPickerModo('fiado'); setClientPickerOpen(true); return; }
+      // Vale-Alimentação: a maquininha do voucher pede os 4 últimos dígitos do
+      // cartão. É simulação, como no MaxPOS — qualquer 4 dígitos autorizam.
+      if (forma === 'Vale-Alimentação') {
+        setValeDigitos('');
+        setValeModal({ valor: parseFloat(restante.toFixed(2)) });
+        return;
+      }
       // PIX — cria pendente, realtime finaliza quando MaxBank confirma.
       try {
         if (!supabase) throw new Error('Supabase indisponível.');
@@ -1314,6 +1361,53 @@ export const PDVViewSupermax = ({
     setCashReceived('');
     setCashModalOpen(false);
     focusFecharVenda();
+  };
+
+  const confirmarCpf = () => {
+    const digitos = cpfInput.replace(/\D/g, '');
+    if (digitos === '') {
+      setCpfNota('');
+      setCpfModalOpen(false);
+      return;
+    }
+    // Simulação didática: conferimos o tamanho (11 CPF / 14 CNPJ), não o
+    // dígito verificador. O banco recusa qualquer outro tamanho (migr. 574).
+    if (digitos.length !== 11 && digitos.length !== 14) {
+      showToast?.('CPF tem 11 dígitos e CNPJ tem 14. Digite um dos dois.', 'error', true);
+      return;
+    }
+    setCpfNota(digitos);
+    setCpfModalOpen(false);
+  };
+
+  const confirmarVale = async () => {
+    if (!valeModal) return;
+    if (!/^\d{4}$/.test(valeDigitos)) {
+      showToast?.('Digite os 4 últimos dígitos do cartão Vale.', 'error', true);
+      return;
+    }
+    setValeModal(null);
+    setValeDigitos('');
+    try {
+      setIsClosing(true);
+      // Vale não é dinheiro na gaveta: `p_valor_dinheiro` fica zero e a RPC
+      // lança a conta a receber como paga no dia (migr. 574).
+      await finalizarVenda('Vale-Alimentação', undefined, 1, 0);
+      setReciboModalOpen(true);
+    } catch (err: any) {
+      showToast?.(`Erro Vale: ${err?.message ?? '—'}`, 'error', true);
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  // Um clique no picker: no Fiado fecha a venda no nome do pagador; no
+  // vincular só carimba o cliente e devolve o operador ao pagamento.
+  const escolherCliente = (c: { id: string; nome: string }) => {
+    if (clientPickerModo === 'fiado') { handleFiadoConfirm(c.id); return; }
+    setClienteVinculado({ id: c.id, nome: c.nome });
+    setClientPickerOpen(false);
+    setPaymentModalOpen(true);
   };
 
   const handleFiadoConfirm = async (cid: string) => {
@@ -2219,7 +2313,7 @@ export const PDVViewSupermax = ({
                 no foco. O amarelo saiu: quem manda no realce e o foco real. */}
             <div className="px-6 pt-4">
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">
-                FORMA DE PAGAMENTO <span className="text-gray-400 normal-case font-medium">(Tab/← → navegar · Enter selecionar · F1 Dinheiro · F2 Cartão · F3 PIX/Fiado)</span>
+                FORMA DE PAGAMENTO <span className="text-gray-400 normal-case font-medium">(Tab/← → navegar · Enter selecionar · F1 Dinheiro · F2 Cartão · F3 PIX/Vale/Fiado)</span>
               </h3>
               <div className="grid grid-cols-3 gap-2">
                 {([
@@ -2227,6 +2321,7 @@ export const PDVViewSupermax = ({
                   ['Cartão Crédito', CreditCard,  'F2', 'CRÉDITO'],
                   ['Cartão Débito',  Banknote,    'F2', 'DÉBITO'],
                   ['PIX',            Wallet,      'F3', 'PIX'],
+                  ['Vale-Alimentação', Wallet,    'F3', 'VALE'],
                   ['Fiado',          UsersIcon,   'F3', 'FIADO'],
                 ] as const).map(([forma, Icon, hint, label], i) => {
                   const active = i === payChoiceIdx;
@@ -2235,7 +2330,7 @@ export const PDVViewSupermax = ({
                   // valor cheio. Dinheiro e Cartão D/C aceitam misto.
                   const parcial = parseBRL(parcialValor);
                   const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
-                  const isPixOrFiado = forma === 'PIX' || forma === 'Fiado';
+                  const isPixOrFiado = forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação';
                   const isDisabled = restante <= 0.001 || (isMistoActive && isPixOrFiado);
                   return (
                     <button
@@ -2263,21 +2358,50 @@ export const PDVViewSupermax = ({
               </div>
             </div>
 
-            {/* Extra do fechamento — o LogMax só tem desconto no total (o MaxPOS
-                põe CPF na nota e cliente vinculado ao lado; aqui não existem). */}
-            <div className="px-6 pt-4">
+            {/* Extras do fechamento — desconto, documento na nota e cliente
+                vinculado, os mesmos três do MaxPOS e na mesma posição. */}
+            <div className="px-6 pt-4 grid grid-cols-2 gap-2">
               <button
                 data-extra-action="desconto"
                 tabIndex={-1}
                 onClick={() => { setDiscountKind('percent'); setDiscountValue(''); setDiscountModalOpen(true); }}
                 disabled={subtotal <= 0 || pagamentos.length > 0}
-                className="w-full py-2 text-[11px] font-black uppercase tracking-wider border-2 disabled:opacity-30 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
+                className="py-2 text-[11px] font-black uppercase tracking-wider border-2 disabled:opacity-30 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
                 style={{ borderColor: YELLOW_DARK, color: NAVY_DARK }}
                 title={pagamentos.length > 0
                   ? 'Com pagamento lançado o total não muda mais — remova os pagamentos para dar desconto'
                   : 'Desconto no total (F6)'}
               >
                 {descontoAplicado > 0 ? `− R$ ${fmt(descontoAplicado)} · F6 DESCONTO` : 'F6 DESCONTO'}
+              </button>
+              <button
+                data-extra-action="cpf"
+                tabIndex={-1}
+                onClick={() => { setCpfInput(cpfNota ? mascararDocumento(cpfNota) : ''); setCpfModalOpen(true); }}
+                className="py-2 text-[11px] font-black uppercase tracking-wider border-2 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
+                style={{ borderColor: NAVY_DARK, color: NAVY_DARK }}
+                title="CPF / CNPJ na nota"
+              >
+                {cpfNota ? `CPF: ${mascararDocumento(cpfNota)}` : '+ CPF NA NOTA'}
+              </button>
+              <button
+                data-extra-action="cliente"
+                tabIndex={-1}
+                onClick={() => { setClientSearch(''); setClientPickerModo('vincular'); setClientPickerOpen(true); }}
+                className="col-span-2 py-2 text-[11px] font-black uppercase tracking-wider border-2 hover:bg-yellow-50 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
+                style={{ borderColor: NAVY_DARK, color: NAVY_DARK }}
+                title="Vincular cliente à venda"
+              >
+                <UsersIcon size={12} />
+                {clienteVinculado ? `CLIENTE: ${clienteVinculado.nome.toUpperCase()}` : '+ VINCULAR CLIENTE'}
+                {clienteVinculado && (
+                  <span
+                    tabIndex={-1}
+                    onClick={(e) => { e.stopPropagation(); setClienteVinculado(null); }}
+                    className="ml-1 text-xs px-1 border rounded hover:bg-red-100"
+                    style={{ borderColor: RED, color: RED }}
+                  >×</span>
+                )}
               </button>
             </div>
 
@@ -2293,6 +2417,10 @@ export const PDVViewSupermax = ({
                     showToast?.('Pagamentos lançados descartados.', 'success');
                   }
                   setParcialValor('');
+                  // Os extras são desta venda, não do operador: voltar à leitura
+                  // devolve documento e cliente ao estado vazio (padrão MaxPOS).
+                  setCpfNota('');
+                  setClienteVinculado(null);
                   setPaymentModalOpen(false);
                 }}
                 className="px-4 py-3 border-2 text-gray-700 text-sm font-bold hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:border-blue-700"
@@ -2329,7 +2457,7 @@ export const PDVViewSupermax = ({
             </div>
 
             <div className="px-6 pb-4 text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-              ↑↓←→ navegar · Enter confirmar · Esc voltar · F1 Dinheiro · F2 Cartão · F3 PIX/Fiado · F6 Desconto · F9 Cancelar
+              ↑↓←→ navegar · Enter confirmar · Esc voltar · F1 Dinheiro · F2 Cartão · F3 PIX/Vale/Fiado · F6 Desconto · F9 Cancelar
             </div>
           </div>
         </div>
@@ -2702,6 +2830,7 @@ export const PDVViewSupermax = ({
                   hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Rio_Branco', hour: '2-digit', minute: '2-digit' }),
                   filial,
                   cliente: lastVenda.cliente,
+                  cpfNota: lastVenda.cpfNota ?? null,
                   operador: operadorNome,
                   itens: lastVenda.itens,
                   subtotal: lastVenda.subtotal,
@@ -2778,7 +2907,9 @@ export const PDVViewSupermax = ({
         >
           <div className="bg-white border-4 max-w-xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
             <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase">Fiado · Selecione o cliente</span>
+              <span className="font-black tracking-wide text-sm uppercase">
+                {clientPickerModo === 'fiado' ? 'Fiado · Selecione o cliente' : 'Vincular cliente à venda'}
+              </span>
               <button onClick={() => setClientPickerOpen(false)} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
             </div>
             <div className="p-4 space-y-3">
@@ -2802,7 +2933,7 @@ export const PDVViewSupermax = ({
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     const pick = clientesFiltrados[clientIdx >= 0 ? clientIdx : 0];
-                    if (pick) handleFiadoConfirm(pick.id);
+                    if (pick) escolherCliente(pick);
                     return;
                   }
                 }}
@@ -2818,7 +2949,7 @@ export const PDVViewSupermax = ({
                   return (
                     <button
                       key={c.id}
-                      onClick={() => handleFiadoConfirm(c.id)}
+                      onClick={() => escolherCliente(c)}
                       onMouseEnter={() => setClientIdx(i)}
                       tabIndex={-1}
                       ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
@@ -3445,6 +3576,139 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
+      {/* CPF / CNPJ na nota — mesmo modal do MaxPOS. Vazio + confirmar remove. */}
+      {cpfModalOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && cpfModalOpen && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCpfModalOpen(false); return; }
+            if (e.key === 'Enter') {
+              if ((e.target as HTMLElement)?.tagName === 'BUTTON') { e.stopPropagation(); return; }
+              e.preventDefault(); e.stopPropagation(); confirmarCpf();
+              return;
+            }
+            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-3 text-white" style={{ background: NAVY_DARK }}>
+              <span className="font-black tracking-wide text-sm uppercase">CPF / CNPJ na nota</span>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-gray-600">
+                Informe CPF (11 dígitos) ou CNPJ (14 dígitos). Deixe vazio e confirme para remover.
+              </p>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Documento</label>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="numeric"
+                  value={cpfInput}
+                  onChange={(e) => setCpfInput(mascararDocumento(e.target.value))}
+                  onFocus={(e) => e.currentTarget.select()}
+                  placeholder="000.000.000-00"
+                  className="w-full bg-white border-2 text-2xl font-bold text-gray-900 tabular-nums px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setCpfModalOpen(false)}
+                  className="flex-1 px-4 py-3 border-2 text-gray-700 font-bold hover:bg-gray-50"
+                  style={{ borderColor: '#9ca3af' }}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={confirmarCpf}
+                  className="flex-1 px-4 py-3 text-white font-bold"
+                  style={{ background: NAVY_DARK }}
+                >
+                  CONFIRMAR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vale-Alimentação — a maquininha do voucher pede os 4 últimos dígitos.
+          Simulação, igual ao MaxPOS: qualquer combinação de 4 autoriza. */}
+      {valeModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          tabIndex={-1}
+          ref={(el) => { if (el && valeModal && !el.contains(document.activeElement)) el.focus(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
+            if (e.key === 'Escape') {
+              e.preventDefault(); e.stopPropagation();
+              setValeModal(null); setValeDigitos(''); setPaymentModalOpen(true);
+              return;
+            }
+            if (e.key === 'Enter') {
+              if ((e.target as HTMLElement)?.tagName === 'BUTTON') { e.stopPropagation(); return; }
+              e.preventDefault(); e.stopPropagation(); confirmarVale();
+              return;
+            }
+            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
+          }}
+        >
+          <div className="bg-white border-4 max-w-sm w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
+            <div className="px-5 py-3 text-white" style={{ background: NAVY_DARK }}>
+              <span className="font-black tracking-wide text-sm uppercase">Vale-Alimentação · Autorização</span>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-gray-600">
+                Peça ao cliente os <b>4 últimos dígitos</b> do cartão Vale. É simulação — qualquer combinação de 4 dígitos autoriza.
+              </p>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Valor</span>
+                <span className="font-bold tabular-nums">R$ {fmt(valeModal.valor)}</span>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Últimos 4 dígitos</label>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={valeDigitos}
+                  onChange={(e) => setValeDigitos(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onFocus={(e) => e.currentTarget.select()}
+                  placeholder="0000"
+                  className="w-full bg-white border-2 text-3xl font-bold text-gray-900 tabular-nums text-center tracking-[0.4em] px-3 py-2 outline-none focus:border-blue-700"
+                  style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => { setValeModal(null); setValeDigitos(''); setPaymentModalOpen(true); }}
+                  className="flex-1 px-4 py-3 border-2 text-gray-700 font-bold hover:bg-gray-50"
+                  style={{ borderColor: '#9ca3af' }}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={confirmarVale}
+                  disabled={!/^\d{4}$/.test(valeDigitos) || isClosing}
+                  className="flex-1 px-4 py-3 text-white font-bold disabled:opacity-30 flex items-center justify-center gap-2"
+                  style={{ background: NAVY_DARK }}
+                >
+                  {isClosing ? <><Loader2 size={18} className="animate-spin" /> ...</> : 'AUTORIZAR'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {payerPickerOpen && (
         <div
           className="fixed inset-0 z-[195] flex items-center justify-center p-4"
@@ -3455,17 +3719,17 @@ export const PDVViewSupermax = ({
             if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPayerPickerOpen(false); return; }
             if (e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowRight') {
               e.preventDefault(); e.stopPropagation();
-              setPayerPickerIdx(i => (i === 0 ? 1 : 0));
+              setPayerPickerIdx(i => (i + 1) % 3);
               return;
             }
             if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
               e.preventDefault(); e.stopPropagation();
-              setPayerPickerIdx(i => (i === 0 ? 1 : 0));
+              setPayerPickerIdx(i => (i + 2) % 3);
               return;
             }
             if (e.key === 'Enter') {
               e.preventDefault(); e.stopPropagation();
-              const forma: FormaPagamento = payerPickerIdx === 0 ? 'PIX' : 'Fiado';
+              const forma: FormaPagamento = payerPickerIdx === 0 ? 'PIX' : payerPickerIdx === 1 ? 'Vale-Alimentação' : 'Fiado';
               setPayerPickerOpen(false);
               handlePayChoice(forma);
               return;
@@ -3476,19 +3740,20 @@ export const PDVViewSupermax = ({
           <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
             <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
               <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F3 · Outras formas</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">PIX ou Fiado?</div>
+              <div className="text-2xl font-black tracking-wide mt-0.5">PIX, Vale ou Fiado?</div>
             </div>
             <div className="p-6 space-y-3">
               {([
-                { forma: 'PIX' as const,   Icon: Wallet },
-                { forma: 'Fiado' as const, Icon: UsersIcon },
+                { forma: 'PIX' as const,              Icon: Wallet },
+                { forma: 'Vale-Alimentação' as const, Icon: Wallet },
+                { forma: 'Fiado' as const,            Icon: UsersIcon },
               ]).map(({ forma, Icon }, idx) => {
                 const active = idx === payerPickerIdx;
                 return (
                   <button
                     key={forma}
                     onClick={() => { setPayerPickerOpen(false); handlePayChoice(forma); }}
-                    onMouseEnter={() => setPayerPickerIdx(idx as 0 | 1)}
+                    onMouseEnter={() => setPayerPickerIdx(idx)}
                     className={`w-full border-2 px-4 py-4 flex items-center gap-3 font-black uppercase tracking-wide text-left ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
                     style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
                   >
