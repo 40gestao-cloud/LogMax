@@ -105,9 +105,39 @@ function AbaPromocoes({ showToast, filial }: any) {
     } finally { setProcessing(null); }
   };
 
+  // MIGR 579: puxar a oferta do ar antes do prazo é rotina de loja — rompeu o
+  // estoque, o preço saiu errado, a campanha caiu. Depois da 578 encerrar a
+  // REGRA basta: o preço de tabela nunca saiu do cadastro, então o caixa volta
+  // a cobrá-lo sozinho. Não há preço para restaurar.
+  const handleEncerrar = async (promo: any) => {
+    if (processing || !supabase) return;
+    const motivo = (obs[promo.id] ?? '').trim();
+    if (motivo.length < 5) {
+      showToast('Diga por que a oferta está saindo do ar — o cliente vai perguntar.', 'error', true);
+      setExpanded(promo.id);
+      return;
+    }
+    setProcessing(promo.id);
+    try {
+      const { error } = await supabase.rpc('encerrar_promocao', {
+        p_promocao_id: promo.id,
+        p_motivo:      motivo,
+      });
+      if (error) throw new Error(error.message);
+      setData((prev: any[]) => prev.map(p => p.id === promo.id ? { ...p, status: 'Encerrada' } : p));
+      showToast('Oferta encerrada. O preço de tabela volta a valer no caixa.', 'success', true);
+      setExpanded(null);
+    } catch (err: any) {
+      showToast(`Não foi possível encerrar: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally { setProcessing(null); }
+  };
+
   // Só o que está em curso aparece: aprovada já virou preço, reprovada morreu.
   const naFila = (promocoes ?? []).filter(
     (p: any) => p.status === 'Aguardando Aprovação' || p.status === 'Em Análise');
+  // O que está no ar agora. Fica nesta tela porque é aqui que mora a autoridade
+  // sobre o preço — quem libera é quem tira do ar.
+  const vigentes = (promocoes ?? []).filter((p: any) => p.status === 'Aprovado');
 
   const calcDesconto = (promo: any) => {
     const atual = Number(promo.preco_atual || 0);
@@ -234,6 +264,51 @@ function AbaPromocoes({ showToast, filial }: any) {
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {/* Ofertas no ar — e o botão para tirá-las. */}
+      {vigentes.length > 0 && (
+        <div className="mt-6">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+            No ar agora · {vigentes.length}
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {vigentes.map((promo: any) => (
+              <div key={promo.id} className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-200 truncate">{promo.nome_produto ?? 'Produto'}</p>
+                    <p className="text-[10px] font-mono text-gray-600 mt-0.5">
+                      até {promo.data_fim ?? 'sem prazo'}
+                    </p>
+                  </div>
+                  <p className="text-xs font-mono font-black text-accent shrink-0">
+                    R$ {Number(promo.preco_promocional || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {expanded === promo.id && (
+                  <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
+                    placeholder="Por que está saindo do ar? (ruptura de estoque, preço errado, campanha cancelada…)"
+                    value={obs[promo.id] ?? ''} onChange={e => setObs(o => ({ ...o, [promo.id]: e.target.value }))} />
+                )}
+                <div className="flex gap-2 justify-end">
+                  {expanded !== promo.id ? (
+                    <button onClick={() => setExpanded(promo.id)} disabled={!!processing}
+                      className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">
+                      Encerrar antes do prazo
+                    </button>
+                  ) : (
+                    <button onClick={() => handleEncerrar(promo)} disabled={processing === promo.id}
+                      title="Tira a oferta do ar agora. O preço de tabela volta a valer sozinho — não há preço a restaurar."
+                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-orange-400 hover:bg-orange-900/20 border border-orange-500/20 disabled:opacity-40 flex items-center gap-1">
+                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Confirmar encerramento
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </>

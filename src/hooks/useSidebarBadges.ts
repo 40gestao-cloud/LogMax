@@ -34,6 +34,11 @@ type BadgeDef = {
   // pergunta, senão a bolinha vira mentira.
   isNull?: string[];
   neq?: Record<string, string>;
+  // Vários valores aceitos na mesma coluna (`.in`). Existe porque uma fila pode
+  // ter mais de um estado em aberto: a promoção espera o Financeiro em
+  // 'Aguardando Aprovação' e o gerente em 'Em Análise', e a mesma tela mostra
+  // os dois. Contar só um deixaria o gerente sem aviso do que espera por ele.
+  inList?: Record<string, string[]>;
   select?: string;
   listenTables?: string[];
   // Coluna de filial na `table` (ou embedded via inner-join no `select`).
@@ -110,7 +115,11 @@ const BADGE_DEFS: BadgeDef[] = [
   // ─── Financeiro ───────────────────────────────────────────────────────────
   { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
-  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' }, filialColumn: 'filial' },
+  // MIGR 576/579: a fila da oferta tem DOIS estados em aberto — 'Aguardando
+  // Aprovação' espera o Financeiro, 'Em Análise' espera o gerente da filial. A
+  // tela mostra os dois; contar só o primeiro deixava o gerente sem nenhum
+  // aviso de que havia oferta esperando a liberação dele.
+  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: {}, inList: { status: ['Aguardando Aprovação', 'Em Análise'] }, filialColumn: 'filial' },
   { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' }, filialColumn: 'filial' },
   // Pedidos de Venda chega no Financeiro pra registrar pagamento: conta o que
   // ainda não foi recebido. Mesmo recorte que PedidosVendaView mode="financeiro".
@@ -136,7 +145,9 @@ const BADGE_DEFS: BadgeDef[] = [
   // o badge não tinha onde aparecer.
 
   // ─── Marketing ────────────────────────────────────────────────────────────
-  { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: { status: 'Aguardando Aprovação' }, filialColumn: 'filial' },
+  // Mesma régua do lado do marketing: a proposta segue "em curso" enquanto não
+  // for liberada, reprovada ou expirar.
+  { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: {}, inList: { status: ['Aguardando Aprovação', 'Em Análise'] }, filialColumn: 'filial' },
   // 'Tarefas' do marketing usa a tabela própria marketing_tarefas — status_link
   // 'Aguardando Aprovação' já vira o badge 'financeiro-aprovaçõesdeconteúdo';
   // não duplicamos aqui pra não inflar dois badges com a mesma fila.
@@ -245,6 +256,9 @@ export function useSidebarBadges(
         }
         for (const [col, val] of Object.entries(def.neq ?? {})) {
           q = q.neq(col, val);
+        }
+        for (const [col, vals] of Object.entries(def.inList ?? {})) {
+          q = q.in(col, vals);
         }
         // Filial-aware: em modo filial, só conta pendências da filial ativa.
         // Em modo Matriz (filialAtiva=null), vê tudo.

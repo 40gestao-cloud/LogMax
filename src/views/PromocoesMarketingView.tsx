@@ -40,6 +40,12 @@ const STATUS_STYLE: Record<string, { badge: string; icon: React.ReactNode }> = {
     badge: 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
     icon: <Clock size={10} />,
   },
+  // MIGR 576: a oferta passa pelo Financeiro antes do gerente. Sem esta chave
+  // o chip saía sem cor e sem ícone (`style?.badge ?? ''` não quebra, só some).
+  'Em Análise': {
+    badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    icon: <Clock size={10} />,
+  },
   'Aprovado': {
     badge: 'bg-accent/10 text-accent border-accent/20',
     icon: <CheckCircle2 size={10} />,
@@ -51,6 +57,12 @@ const STATUS_STYLE: Record<string, { badge: string; icon: React.ReactNode }> = {
   'Encerrada': {
     badge: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
     icon: <Archive size={10} />,
+  },
+  // MIGR 579: venceu esperando decisão. Não é reprovação — ninguém olhou —,
+  // por isso cor própria e não a vermelha do Reprovado.
+  'Expirada': {
+    badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    icon: <Clock size={10} />,
   },
 };
 
@@ -288,13 +300,19 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const aguardando = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
+  // MIGR 576/579: a proposta anda por dois estados em aberto antes de virar
+  // preço. Contar só 'Aguardando Aprovação' fazia a oferta que já tinha o
+  // parecer sumir de TODOS os contadores — quem propôs via "Aguardando 0,
+  // Em Vigor 0, Encerradas 0" e não sabia para onde ela tinha ido.
+  const comFinanceiro = promocoes.filter((p: any) => p.status === 'Aguardando Aprovação').length;
+  const comGerente    = promocoes.filter((p: any) => p.status === 'Em Análise').length;
   const aprovadas  = promocoes.filter((p: any) => p.status === 'Aprovado' || p.status === 'Ativa').length;
-  const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada').length;
+  const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada' || p.status === 'Expirada').length;
 
   const kpis = [
     { label: 'Total de Campanhas',     value: promocoes.length, warn: false },
-    { label: 'Aguardando Aprovação',   value: aguardando,       warn: aguardando > 0 },
+    { label: 'Com o Financeiro',       value: comFinanceiro,    warn: comFinanceiro > 0 },
+    { label: 'Com o gerente',          value: comGerente,       warn: comGerente > 0 },
     { label: 'Em Vigor',               value: aprovadas,        warn: false },
     { label: 'Encerradas',             value: encerradas,       warn: false },
   ];
@@ -609,7 +627,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a aprovação pelo Financeiro.</p>
+          <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a cadeia: o Financeiro dá o parecer de margem, o gerente da filial libera.</p>
         </div>
         {/* Sessão de apresentação: abre a primeira arte da unidade e caminha
             pelas outras com as setas. É o botão que o aluno usa para mostrar à
