@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet } from 'lucide-react';
+import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet, Info } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
@@ -285,38 +285,10 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
     onChanged();
   };
 
-  const handleAbrir = async () => {
-    const valor = parseBRL(valorAbertura);
-    if (!valor || valor <= 0) { showToast('Informe um valor de abertura válido.', 'error'); return; }
-    if (!supabase) { showToast('Supabase não configurado.', 'error'); return; }
-
-    setSaving(true);
-    try {
-      const { error } = await supabase.from('controle_caixa').insert({
-        data:             today,
-        filial,
-        valor_abertura:   valor,
-        status:           'Aberto',
-        aberto_por:       user?.id ?? null,
-        aberto_por_nome:  profile?.nome ?? user?.email ?? 'Usuário',
-        aberto_em:        new Date().toISOString(),
-        observacao:       observacao || null,
-      });
-      if (error) {
-        if (error.code === '23505') showToast(`Já existe sessão aberta hoje para ${filial}.`, 'error');
-        else throw error;
-        return;
-      }
-      setValorAbertura('');
-      setObservacao('');
-      onChanged();
-      showToast(`Caixa ${filial} aberto!`, 'success');
-    } catch {
-      showToast('Erro ao abrir o caixa.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  // A abertura saiu daqui: quem abre o caixa e o operador, na tela do PDV.
+  // O Financeiro acompanha, confere e fecha, e recebe o aviso de abertura e
+  // de fechamento pelo sino (migr. 581). Deixar o insert morto aqui era
+  // convite para religarem a porta que acabou de ser fechada.
 
   // ── CAIXA AGUARDANDO CONFIRMAÇÃO (operador do PDV solicitou fechamento) ──
   if (caixa && caixa.status === 'Aguardando Confirmação') {
@@ -553,35 +525,24 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
             <FilialBadge filial={filial} />
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Fechado</span>
           </div>
-          <p className="text-xs text-gray-400">Informe o valor para abrir.</p>
+          <p className="text-xs text-gray-400">Aguardando a abertura do turno.</p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="relative">
-          <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text" inputMode="numeric"
-            className="neu-input py-2.5 pl-8 pr-3 rounded-xl text-sm w-full"
-            placeholder="Valor de abertura"
-            value={valorAbertura}
-            onChange={e => setValorAbertura(formatBRL(e.target.value))}
-            onKeyDown={e => {
-              handleMoneyKeyDown(e);
-              if (e.key === 'Enter') handleAbrir();
-            }}
-          />
-        </div>
-        <input className="neu-input py-2.5 px-3 rounded-xl text-xs"
-          placeholder="Observação (opcional)"
-          value={observacao}
-          onChange={e => setObservacao(e.target.value)} />
-      </div>
-
-      <div className="flex justify-end">
-        <NeuButtonAccent onClick={handleAbrir} isLoading={saving}>
-          <LockOpen size={14} /> Abrir Caixa
-        </NeuButtonAccent>
+      {/* Quem abre o caixa é o OPERADOR, na tela do PDV: é ele que conta o
+          fundo de troco e assume a gaveta. O Financeiro acompanha, confere e
+          responde pela diferença — como na frente de loja de verdade, onde o
+          supervisor não abre o caixa de ninguém. O aviso de abertura e de
+          fechamento chega aqui pelo sino (migr. 581). */}
+      <div className="neu-pressed rounded-2xl p-4 flex items-start gap-3">
+        <Info size={15} className="text-accent shrink-0 mt-0.5" />
+        <p className="text-xs text-gray-400 leading-relaxed">
+          A abertura é do <span className="text-gray-200 font-bold">operador</span>, na tela do
+          <span className="text-gray-200 font-bold"> PDV</span> — é ele que conta o fundo de troco e
+          assume a gaveta. Aqui o Financeiro acompanha, confere e fecha.
+          <br />
+          Você recebe um aviso quando o caixa abrir e outro quando fechar, com a diferença apurada.
+        </p>
       </div>
     </motion.div>
   );

@@ -1307,9 +1307,14 @@ export const PDVViewSupermax = ({
         observacao:      aberturaObs.trim() || null,
       });
       if (error) {
-        // 23505: já existe sessão do dia para a unidade — alguém abriu antes.
-        if (error.code === '23505') showToast?.(`Já existe caixa aberto hoje em ${filial}.`, 'error', true);
-        else throw error;
+        // 23505: o índice cobre só o caixa EM OPERAÇÃO (migr. 580), então aqui
+        // isto significa mesmo que há um caixa ABERTO — outro operador chegou
+        // primeiro. Antes o índice pegava também o caixa já FECHADO, e esta
+        // mensagem mentia: dizia "já existe caixa aberto" para um caixa
+        // fechado, sem saída nenhuma para o operador.
+        if (error.code === '23505') {
+          showToast?.(`Outro operador já abriu o caixa de ${filial} — atualizando a tela.`, 'error', true);
+        } else throw error;
       } else {
         showToast?.(`Caixa aberto com ${formatBRL(valor)} de fundo de troco.`, 'success');
         setAberturaValor('');
