@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "functions": {
     "api/ai-*.ts": { "maxDuration": 60 }
   },
