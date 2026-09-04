@@ -1471,7 +1471,7 @@ function LogMaxAppInner() {
           { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] },
         ]} />;
       case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} profile={profile} />;
-      case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" />;
+      case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" onNavigate={navigate} />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} profile={profile} />;
       case 'compras-notasrecebidas':          return <NotasRecebidasView showToast={st} />;
       case 'requisicoes-aprovações':          return <AprovacoesComprasView showToast={st} profile={profile} />;

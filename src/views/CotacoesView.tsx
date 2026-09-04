@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil } from 'lucide-react';
+import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal } from '../components/ui';
@@ -13,6 +13,7 @@ import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos
 import { ehContratado } from '../lib/naturezaServico';
 import { supabase } from '../lib/supabase';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
+import { podeVerModulo } from '../lib/sectorAccess';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
@@ -136,7 +137,7 @@ function useOpcoesEstaveis<T>(valor: T) {
 //
 // 'financeiro' é a fila de decisão: só o que está aguardando o Financeiro, sem
 // o formulário de coleta. 'compras' (default) é a bancada de trabalho inteira.
-const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'compras' | 'financeiro' }) => {
+const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'compras' | 'financeiro'; onNavigate?: (view: string) => void }) => {
   const modoFinanceiro = mode === 'financeiro';
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
@@ -156,7 +157,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     { page }
   );
   const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial }, true);
-  const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  // `isLoading` importa aqui: durante o carregamento a lista chega vazia, e
+  // sem distinguir os dois casos a tela anunciaria "nenhum fornecedor
+  // cadastrado" por um instante toda vez que abrisse.
+  const { data: fornecedores, isLoading: fornecedoresCarregando } = useFetchData<any>('/api/crmview-fornecedores', { filial });
   // Catálogo da unidade: é aqui que o comprador amarra o texto livre da
   // requisição a um item de verdade (migr. 480). Realtime porque o produto
   // pode estar sendo cadastrado noutra tela, agora, exatamente para este
@@ -536,6 +540,22 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   };
   const fornecedoresPJ = useMemo(() => agruparFornecedoresPorFilial('Empresa'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
   const fornecedoresPF = useMemo(() => agruparFornecedoresPorFilial('Pessoa Física'), [fornecedores]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cotação é preço DE ALGUÉM: sem fornecedor na unidade os dois selects
+  // abrem vazios e não há como salvar. Antes a tela deixava o aluno preencher
+  // requisição, itens e valores para só então travar na validação, sem dizer
+  // o que estava faltando nem onde resolver.
+  const semFornecedor = !fornecedoresCarregando && fornecedores.length === 0;
+  const temPJ = fornecedoresPJ.some(g => g.items.length > 0);
+  const temPF = fornecedoresPF.some(g => g.items.length > 0);
+  // O atalho só é oferecido a quem tem o módulo Cadastros no menu — mandar
+  // para uma view fora da régua abriria a tela negada. As duas condições são
+  // separadas de propósito: sem o módulo a mensagem manda pedir à Logística,
+  // e não faria sentido dizer isso a quem TEM acesso e só está numa rota que
+  // não passou `onNavigate`.
+  const temAcessoCadastros = podeVerModulo(profile, 'cadastros');
+  const podeCadastrarFornecedor = temAcessoCadastros && !!onNavigate;
+  const irParaFornecedores = () => onNavigate?.('cadastros-fornecedores');
 
   const enriched = data.map((c: any) => ({
     ...c,
@@ -1127,7 +1147,30 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
               <p className="text-[11px] text-gray-500 -mt-2">
                 Ao salvar, a cotação será enviada ao <span className="text-cyan-400 font-bold">Financeiro</span> para aprovação.
               </p>
-              {requisicoesAprovadaOrdenadas.length === 0 ? (
+              {semFornecedor ? (
+                <div className="neu-pressed rounded-2xl p-6 border border-yellow-500/30 flex flex-col items-center text-center gap-3">
+                  <AlertTriangle size={22} className="text-yellow-400" />
+                  <p className="text-sm font-bold text-yellow-400">
+                    Nenhum fornecedor cadastrado nesta unidade.
+                  </p>
+                  <p className="text-xs text-gray-400 max-w-md leading-relaxed">
+                    Cotação é o preço que um fornecedor informa, então só dá para abrir uma
+                    depois que existir pelo menos um fornecedor cadastrado — pessoa jurídica
+                    (PJ) ou pessoa física (PF).
+                  </p>
+                  {podeCadastrarFornecedor ? (
+                    <button type="button" onClick={irParaFornecedores}
+                      className="neu-button rounded-xl py-2.5 px-5 flex items-center justify-center gap-2 text-xs font-bold text-accent hover:bg-accent/5 transition-colors mt-1">
+                      <Plus size={14} /> Cadastrar fornecedor
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      O cadastro fica em <span className="font-bold text-gray-400">Cadastros › Fornecedores</span>
+                      {temAcessoCadastros ? '.' : ', fora do seu acesso — peça à Logística.'}
+                    </p>
+                  )}
+                </div>
+              ) : requisicoesAprovadaOrdenadas.length === 0 ? (
                 <p className="text-sm text-yellow-400/80 text-center py-4">Nenhuma requisição aprovada disponível. Aprove uma requisição primeiro.</p>
               ) : (
                 <>
@@ -1226,6 +1269,21 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         ))}
                       </select>
                     </FormField>
+                    {/* Atalho permanente: a lista pode ter fornecedor e ainda
+                        assim faltar justo o que o aluno precisa cotar, e o
+                        caminho de volta (sair da tela, achar Cadastros, voltar
+                        e refazer o formulário) custa o formulário inteiro. */}
+                    {podeCadastrarFornecedor && (
+                      <p className="text-[11px] text-gray-500 md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {!temPJ && <span className="text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
+                        {!temPF && <span className="text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
+                        <span>Falta o fornecedor na lista?</span>
+                        <button type="button" onClick={irParaFornecedores}
+                          className="text-accent font-bold hover:underline inline-flex items-center gap-1">
+                          <Plus size={11} /> Cadastrar fornecedor
+                        </button>
+                      </p>
+                    )}
                     {reserva.travado && (
                       <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
                         🔒 {reserva.dono?.usuario_nome} já está cotando este fornecedor para esta requisição agora.
@@ -2135,8 +2193,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   );
 };
 
-export const CotacoesView = ({ showToast, profile, mode }: { showToast: any; profile: UserProfile; mode?: 'compras' | 'financeiro' }) => {
+export const CotacoesView = ({ showToast, profile, mode, onNavigate }: { showToast: any; profile: UserProfile; mode?: 'compras' | 'financeiro'; onNavigate?: (view: string) => void }) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A cotação com fornecedores" />;
-  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} mode={mode} />;
+  return <CotacoesViewInner showToast={showToast} profile={profile} filial={filialAtiva} mode={mode} onNavigate={onNavigate} />;
 };

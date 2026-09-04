@@ -30,6 +30,7 @@ const ESTATICOS = [
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',
   'tests/schemaDrift.test.ts',
+  'tests/sectorAccess.test.ts',
   'tests/sessaoGuard.test.ts',
   'tests/sorteioCatalogo.test.ts',
   'tests/tipoProduto.test.ts',

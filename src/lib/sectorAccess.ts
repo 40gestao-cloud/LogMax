@@ -30,3 +30,19 @@ export const SETOR_MODULES: Record<string, string[]> = {
   // (api/create-user.ts, api/update-user.ts) sempre que setor='gerencia'.
   gerencia:   ['empresa', 'requisicoes', 'cadastros', 'compras', 'estoque', 'financeiro', 'rh', 'vendas', 'marketing', 'ti'],
 };
+
+// Mesma régua que a sidebar usa para decidir quais módulos aparecem. Foi
+// extraída daqui porque tela que oferece um ATALHO para outro módulo precisa
+// perguntar a mesma coisa — mandar o aluno para um módulo que o menu dele não
+// tem é pior do que não oferecer o atalho: a tela abre negada e ele acha que
+// quebrou. Continua sendo UX, não segurança: quem manda é a RLS.
+export function podeVerModulo(
+  profile: { role?: string | null; setor?: string | null; setores_extras?: string[] | null } | null | undefined,
+  modulo: string,
+): boolean {
+  if (!profile) return false;
+  // Gerente vê todos os módulos da própria filial (RLS recorta a linha).
+  if (profile.role === 'gerente') return SETOR_MODULES.all.includes(modulo);
+  const setores = [profile.setor, ...(profile.setores_extras ?? [])].filter(Boolean) as string[];
+  return setores.some(s => (SETOR_MODULES[s] ?? []).includes(modulo));
+}
