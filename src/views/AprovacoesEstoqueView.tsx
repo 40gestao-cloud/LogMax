@@ -338,7 +338,14 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
-                  <p className="text-sm font-bold text-gray-200 truncate">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
+                  <p className="text-sm font-bold text-gray-200 truncate">
+                    {ap.prod?.nome ?? 'Produto não encontrado'}
+                    {/* Material sai do estoque da casa: a marca é a do cadastro,
+                        e quem autoriza a saída vê qual item está saindo. */}
+                    {ap.prod?.marca && (
+                      <span className="text-xs font-normal text-gray-400 ml-1.5">· {ap.prod.marca}</span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">
                     Solicitante: {ap.req.solicitante ?? '—'} · Qtd: {ap.req.qtd} · Destino: {ap.req.destino || '—'}
                   </p>

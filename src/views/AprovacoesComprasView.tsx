@@ -474,7 +474,15 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                     </div>
                     <div className="text-left min-w-0">
                       <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(req)}</p>
-                      <p className="text-sm font-bold text-gray-200 truncate">{req.item}</p>
+                      <p className="text-sm font-bold text-gray-200 truncate">
+                        {req.item}
+                        {/* MIGR 582. Sem a marca o gerente aprova "papel A4"
+                            sem saber se está autorizando o de R$ 18 ou o de
+                            R$ 35 — e é ele que responde pelo orçamento. */}
+                        {req.marca && (
+                          <span className="text-xs font-normal text-gray-400 ml-1.5">· {req.marca}</span>
+                        )}
+                      </p>
                       <p className="text-xs text-gray-500 mt-0.5 truncate">Solicitante: {req.solicitante} · Qtd: {req.qtd} · {req.data}</p>
                     </div>
                   </div>
@@ -517,6 +525,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             { label: 'Centro de Custo', val: req.centro_custo || '—' },
                             { label: 'Urgência', val: req.urgencia ?? 'Normal' },
                             { label: 'Quantidade', val: `${req.qtd} ${req.unidade ?? ''}`.trim() },
+                            // Vazio não é omissão: é o solicitante dizendo que
+                            // serve qualquer marca. O gerente decide sabendo.
+                            { label: 'Marca', val: req.marca || 'Qualquer marca' },
                             { label: 'Necessário até', val: req.data_necessidade ?? '—' },
                             { label: 'Aberta em', val: req.data ?? '—' },
                           ].map(({ label, val }) => (

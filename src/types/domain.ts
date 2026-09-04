@@ -20,6 +20,8 @@ export interface Produto {
   /** Medida do conteúdo (G/KG/ML/L). NULL nas linhas herdadas sem medida. */
   peso_unidade?: string | null;
   estoque_minimo?: number | null;
+  /** Marca do cadastro — é ela que a requisição de reposição carimba (migr. 582). */
+  marca?: string | null;
   filial?: string | null;
   status: 'Ativo' | 'Inativo' | string;
   tipo?: string | null;
@@ -135,6 +137,9 @@ export interface Requisicao {
   /** Para quando o item é necessário. */
   data_necessidade?: string | null;
   unidade?: string | null;
+  /** Marca pedida (migr. 582). Na Eventual é digitada pelo solicitante; na
+   *  Reposição vem carimbada do produto do catálogo. */
+  marca?: string | null;
   /** 'Reposição' (saiu do catálogo, com saldo fotografado) ou 'Eventual' (item
    *  escrito à mão). NULL nas linhas abertas antes da migr. 358. */
   tipo_requisicao?: string | null;
