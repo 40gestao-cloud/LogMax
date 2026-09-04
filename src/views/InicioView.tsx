@@ -278,12 +278,15 @@ export const InicioView = ({
             )}
             {/* No lugar do card de Metas (que já tem entrada própria no menu):
                 a porta para o PortalMax, que é onde o curso vive. A logo tem
-                fundo transparente e o "Max" é branco com contorno — daí o
-                fundo escuro fixo do quadro, que a mantém legível nos dois
-                temas. */}
+                fundo transparente e o "Max" é branco com contorno, então some
+                sobre fundo claro — no tema light o quadro escuro fica, é o que
+                a mantém legível. No dark o card já é preto: ali o quadro só
+                aparecia como um retângulo cinza contornado atrás da logo, e sai. */}
             <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
               <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Portal do curso</h4>
-              <div className="w-full max-w-[240px] rounded-2xl bg-[#0A0A0A] border border-white/10 px-5 py-4 mb-4">
+              <div className={`w-full max-w-[240px] rounded-2xl px-5 py-4 mb-4 ${
+                theme === 'light' ? 'bg-[#0A0A0A] border border-white/10' : ''
+              }`}>
                 <img src="/icon-portalmax.png" alt="PortalMax" className="w-full h-auto" />
               </div>
               <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
