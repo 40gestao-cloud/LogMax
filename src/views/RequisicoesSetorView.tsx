@@ -1164,7 +1164,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         )}
       </AnimatePresence>
 
-      {(isLoading || loadingEst) ? <LoadingSpinner /> : pedidos.length === 0 ? (
+      {/* Formulário aberto tampa a lista: as abas ("Para corrigir", "Pendentes")
+          são para acompanhar o que já foi pedido, e ficavam disputando a tela
+          com o pedido que está sendo escrito — inclusive rolando para fora dele. */}
+      {showForm ? null : (isLoading || loadingEst) ? <LoadingSpinner /> : pedidos.length === 0 ? (
         <EmptyState message="O seu setor ainda não abriu nenhum pedido" />
       ) : (
       <>
