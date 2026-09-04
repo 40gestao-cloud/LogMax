@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard } from 'lucide-react';
+import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ExternalLink } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
@@ -14,6 +14,13 @@ import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, 
 import { useConfirm } from '../contexts/ConfirmContext';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
+
+// MaxID — app irmão que gera CPF, CNPJ e celular de treino com dígito
+// verificador válido. O aluno precisa de documento para cadastrar cliente e
+// fornecedor, e inventar número na mão produz cadastro que nenhuma validação
+// aceita (e ensina que documento é enfeite). Abre em aba nova: cadastro pela
+// metade nesta tela não se perde.
+const MAXID_URL = 'https://max-id.vercel.app';
 
 const makeEmptyExtras = (filial: string) => ({
   pessoa_tipo: 'Empresa' as PessoaTipo,
@@ -356,6 +363,15 @@ const CRMViewInner = ({ type, showToast, filial }: {
                     value={extras.cpf_cnpj}
                     onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
                     placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
+                  <button type="button"
+                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                    className="mt-2 neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-1.5 transition-colors">
+                    <CreditCard size={12} /> Gerar no MaxID <ExternalLink size={10} />
+                  </button>
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} de treino com dígito verificador válido —
+                    gere no MaxID, copie e cole aqui. Abre em outra aba; o que você já preencheu continua nesta.
+                  </p>
                 </FormField>
 
                 {!isClientes && (
