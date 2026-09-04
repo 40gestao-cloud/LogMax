@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ClipboardList, Target, Trophy } from 'lucide-react';
+import { ArrowRight, ClipboardList, Trophy, ExternalLink } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import { dataExtensoBR, saudacaoBR } from '../lib/dates';
@@ -10,6 +10,10 @@ import { useFilial } from '../contexts/FilialContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { LoadingSpinner, FilialBadge } from '../components/ui';
 import { PainelGovernanca } from './PainelGovernanca';
+
+// PortalMax — onde o curso vive (material, turmas, avisos). O LogMax é a
+// empresa-escola; o portal é a escola.
+const PORTALMAX_URL = 'https://portalmax.vercel.app';
 
 const PESQUISA_LS_PREFIX = 'logmax:pesquisa-respondida:';
 
@@ -272,17 +276,21 @@ export const InicioView = ({
                 </div>
               </>
             )}
+            {/* No lugar do card de Metas (que já tem entrada própria no menu):
+                a porta para o PortalMax, que é onde o curso vive. A logo tem
+                fundo transparente e o "Max" é branco com contorno — daí o
+                fundo escuro fixo do quadro, que a mantém legível nos dois
+                temas. */}
             <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Metas</h4>
-              <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-4">
-                <Target size={28} />
+              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Portal do curso</h4>
+              <div className="w-full max-w-[240px] rounded-2xl bg-[#0A0A0A] border border-white/10 px-5 py-4 mb-4">
+                <img src="/icon-portalmax.png" alt="PortalMax" className="w-full h-auto" />
               </div>
-              <span className="text-sm font-bold text-gray-200 mb-1">Suas metas em andamento</span>
               <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
-                Acompanhe metas ativas, progresso e histórico.
+                Material, turmas e avisos do curso ficam no PortalMax.
               </span>
-              <button
-                onClick={() => onNavigate?.('metas')}
+              <a
+                href={PORTALMAX_URL} target="_blank" rel="noopener noreferrer"
                 className="btn-shimmer w-full py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all mt-auto"
                 style={{
                   background: 'var(--color-accent)',
@@ -290,8 +298,8 @@ export const InicioView = ({
                   border:     'none',
                   boxShadow:  '0 1px 2px rgba(0, 0, 0, 0.35)',
                 }}>
-                Ver Metas <ArrowRight size={14} />
-              </button>
+                Abrir PortalMax <ExternalLink size={14} />
+              </a>
             </div>
           </div>
         </div>
