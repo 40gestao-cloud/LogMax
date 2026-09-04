@@ -3,7 +3,7 @@ import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -24,6 +24,12 @@ const MASK_FOR: Record<string, (v: string) => string> = {
 // catálogo, mas quem já estava gravado como texto livre continua válido e
 // reaparece aqui como "Outro". Por isso ligar os catálogos não exigiu migração.
 const OUTRO = '__outro__';
+
+// MaxID — app irmão que gera CPF e celular de treino com dígito verificador
+// válido. Aqui vale pelo mesmo motivo de Clientes e Fornecedores: cadastro de
+// pessoa pede documento, e número inventado à mão não passa em validação
+// nenhuma — nem ensina que documento tem regra.
+const MAXID_URL = 'https://max-id.vercel.app';
 
 const makeEmpty = (filial: string) => ({ nome: '', cpf: '', email: '', telefone: '', cargo: '', departamento: '', data_admissao: '', data_nascimento: '', salario: '', dependentes: 0, status: 'Ativo', foto_url: '', filial });
 
@@ -374,7 +380,16 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   </span>
                 )}
               </div>
-              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
+              <div className="flex items-center gap-3 shrink-0">
+                <button type="button"
+                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                  title="Gera CPF e celular de treino com dígito verificador válido. Abre em outra aba — o que você já preencheu continua aqui."
+                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
+                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                  Gerar no MaxID <ExternalLink size={13} />
+                </button>
+                <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
+              </div>
             </div>
 
             {/* Foto */}
