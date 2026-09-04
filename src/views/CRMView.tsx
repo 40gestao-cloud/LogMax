@@ -288,9 +288,23 @@ const CRMViewInner = ({ type, showToast, filial }: {
         {isFormOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
-              <h3 className="text-sm font-bold text-gray-200">
-                {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
-              </h3>
+              <div className="flex items-start justify-between gap-4">
+                <h3 className="text-sm font-bold text-gray-200">
+                  {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
+                </h3>
+                {/* MaxID no alto à direita: é ferramenta do formulário inteiro
+                    (documento e celular saem de lá), não do campo de CPF/CNPJ
+                    sozinho — e ali o aluno o encontra assim que a tela abre.
+                    O PNG tem fundo preto próprio, daí o canto arredondado em
+                    vez de tentar dissolvê-lo no fundo do tema. */}
+                <button type="button"
+                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                  title="Gera CPF, CNPJ e celular de treino com dígito verificador válido. Abre em outra aba — o que você já preencheu continua aqui."
+                  className="neu-button py-1.5 px-3 rounded-xl text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-2 transition-colors shrink-0">
+                  <img src="/icon-maxid.png" alt="" className="h-6 w-auto rounded" />
+                  Gerar no MaxID <ExternalLink size={10} />
+                </button>
+              </div>
 
               {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
                   monograma, que não precisa de campo. */}
@@ -363,22 +377,9 @@ const CRMViewInner = ({ type, showToast, filial }: {
                     value={extras.cpf_cnpj}
                     onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
                     placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
-                  {/* A marca do app antes do botão: o aluno reconhece para onde
-                      vai antes de clicar, e reencontra a mesma logo do outro
-                      lado. O PNG tem fundo preto próprio — daí o `rounded` em
-                      vez de tentar encaixá-lo no fundo do tema. */}
-                  <div className="mt-2 flex flex-col items-start gap-1.5">
-                    <img src="/icon-maxid.png" alt="MaxID"
-                      className="h-9 w-auto rounded-md border border-white/10" />
-                    <button type="button"
-                      onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                      className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-1.5 transition-colors">
-                      <CreditCard size={12} /> Gerar no MaxID <ExternalLink size={10} />
-                    </button>
-                  </div>
                   <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
                     {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} de treino com dígito verificador válido —
-                    gere no MaxID, copie e cole aqui. Abre em outra aba; o que você já preencheu continua nesta.
+                    gere no MaxID (canto superior direito), copie e cole aqui.
                   </p>
                 </FormField>
 
