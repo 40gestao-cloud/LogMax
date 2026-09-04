@@ -166,6 +166,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // Export PDF/Excel — admin only.
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingCred, setExportingCred] = useState(false);
   const usuariosExportColumns = ['Nome', 'E-mail', 'Cargo', 'Setor (+extras)', 'Filial', 'Criado em'];
   const buildUsuariosExportRows = () => filteredUsers.map(u => {
     const extras = (u.setores_extras ?? []).map(s => SETOR_LABEL[s] ?? s).join(', ');
@@ -223,6 +224,83 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       setExportingPdf(false);
     }
   };
+  // PDF de credenciais (migr. 409 é a origem do cofre). Só o administrador
+  // chega aqui: a RLS de `senhas_visiveis` devolve linha só para `role =
+  // 'admin'`, então para qualquer outro este PDF sairia com a coluna vazia —
+  // e o botão nem aparece.
+  //
+  // Existe porque o começo de turma é ditar login para trinta pessoas de uma
+  // vez, e ditar da tela obriga a rolar a lista inteira. Em papel o professor
+  // recorta a linha de cada aluno.
+  const handleExportCredenciais = async () => {
+    setExportingCred(true);
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 14;
+
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, 30, 'F');
+      doc.setTextColor(16, 185, 129);
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+      doc.text('LogMax — Credenciais de acesso', margin, 13);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180, 180, 180);
+      doc.text(`${filteredUsers.length} conta(s)`, margin, 20);
+      // O aviso vai no documento, não só na tela: o PDF sai da tela e circula
+      // sozinho, e quem o encontrar depois precisa saber o que tem na mão.
+      doc.setTextColor(239, 68, 68);
+      doc.setFontSize(8);
+      doc.text('CONFIDENCIAL — contém senhas em texto. Entregue em mãos e destrua depois de usar.', margin, 26);
+      doc.setTextColor(120, 120, 120);
+      doc.text(
+        `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}`,
+        pageWidth - margin, 20, { align: 'right' }
+      );
+
+      const rows = filteredUsers.map(u => [
+        u.nome ?? '—',
+        u.email ?? '—',
+        senhas[u.id] ?? 'não registrada',
+        `${ROLE_LABEL[u.role] ?? u.role} · ${filialLabel(u.filial)}`,
+      ]);
+
+      autoTable(doc, {
+        startY: 36,
+        head: [['Nome', 'E-mail', 'Senha', 'Cargo / Unidade']],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
+        alternateRowStyles: { fillColor: [245, 247, 245] },
+        // Courier pelo mesmo motivo da `.font-credencial` na tela: e-mail e
+        // senha são ditados, e em fonte proporcional o "l" e o "1" viram o
+        // mesmo traço.
+        columnStyles: {
+          1: { font: 'courier', fontSize: 9 },
+          2: { font: 'courier', fontStyle: 'bold', fontSize: 10 },
+        },
+        margin: { left: margin, right: margin },
+      });
+
+      doc.save(`logmax-credenciais-${todayBR()}.pdf`);
+      const semSenha = rows.filter(r => r[2] === 'não registrada').length;
+      showToast(
+        semSenha === 0
+          ? 'PDF gerado. Ele contém senhas — entregue em mãos.'
+          : `PDF gerado. ${semSenha} conta(s) sem senha no cofre: use Redefinir senha para registrá-la.`,
+        semSenha === 0 ? 'success' : 'info', true);
+    } catch (err: any) {
+      showToast(`Erro ao gerar PDF: ${err?.message ?? '—'}`, 'error');
+    } finally {
+      setExportingCred(false);
+    }
+  };
+
   const handleExportExcel = async () => {
     setExportingExcel(true);
     try {
@@ -758,6 +836,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
               title="Baixar lista em PDF">
               <FileDown size={14} />{exportingPdf ? 'Gerando...' : 'PDF'}
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={handleExportCredenciais} disabled={exportingCred || filteredUsers.length === 0}
+              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-400 flex items-center gap-2 disabled:opacity-40"
+              title="Baixar e-mails e senhas em PDF — documento confidencial, entregue em mãos">
+              <KeyRound size={14} />{exportingCred ? 'Gerando...' : 'Credenciais'}
             </button>
           )}
           {isAdmin && (
