@@ -42,14 +42,26 @@ case "$MSG" in
     ;;
 esac
 
-# Sem o commit anterior (clone raso, primeiro deploy do projeto) não dá para
-# comparar: na dúvida, publica.
-if ! git rev-parse --verify -q HEAD^ >/dev/null; then
-  echo "Sem HEAD^ para comparar — seguindo com o build."
+# Base da comparação. O padrão é HEAD^, mas um push com vários commits vira UM
+# deploy só, no último commit: se esse último for só migração ou doc, HEAD^ deixaria
+# de fora a mudança de `src/` que veio junto no mesmo push e ela nunca seria
+# publicada. Quando a Vercel informa o commit do deploy anterior, comparamos com
+# ele, que cobre o push inteiro.
+BASE=""
+if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ] && git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null; then
+  BASE="$VERCEL_GIT_PREVIOUS_SHA"
+elif git rev-parse --verify -q HEAD^ >/dev/null; then
+  BASE="HEAD^"
+fi
+
+# Sem base (clone raso, primeiro deploy do projeto) não dá para comparar: na
+# dúvida, publica.
+if [ -z "$BASE" ]; then
+  echo "Sem commit anterior para comparar — seguindo com o build."
   exit 1
 fi
 
-if git diff --quiet HEAD^ HEAD -- "${ALVOS_IGNORADOS[@]}"; then
+if git diff --quiet "$BASE" HEAD -- "${ALVOS_IGNORADOS[@]}"; then
   echo "Nada fora de SQL/testes/docs mudou — build ignorado (economiza deploy)."
   exit 0
 fi
