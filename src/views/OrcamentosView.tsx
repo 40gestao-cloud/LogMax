@@ -56,6 +56,10 @@ interface ItemOrcamento {
   subtotal: number;
 }
 
+// Lista canônica dos status do documento. Não é usada em runtime desde que
+// as abas passaram a agrupar por fase — quem a consome é
+// tests/orcamentoFases.test.ts, que falha se algum status ficar sem aba.
+// Status novo entra AQUI e em FASES, nessa ordem.
 const STATUS_LIST = [
   'Rascunho',
   'Aguardando Financeiro',
@@ -69,6 +73,25 @@ const STATUS_LIST = [
   'Cancelado',
 ] as const;
 
+// Os dez status enfileirados numa régua só não diziam nada sobre o
+// documento: 'Aguardando Financeiro' e 'Cancelado' apareciam com o mesmo
+// peso, lado a lado, e achar "o que está comigo agora" exigia ler os dez.
+// Agrupados por FASE do ciclo, a pergunta que a tela responde vira "de quem
+// é a bola" — que é a pergunta que o vendedor faz.
+//
+// A ordem é a do fluxo: nasce em elaboração, passa pelo Financeiro, vai ao
+// cliente, e termina ganho ou encerrado.
+const FASES = [
+  { id: 'elaboracao', label: 'Em elaboração',    dica: 'Rascunho ainda com Vendas',            status: ['Rascunho'] },
+  { id: 'financeiro', label: 'Com o Financeiro', dica: 'Esperando aprovação interna',          status: ['Aguardando Financeiro'] },
+  { id: 'cliente',    label: 'Com o cliente',    dica: 'Liberado ou já enviado ao cliente',    status: ['Aprovado Financeiro', 'Enviado ao Cliente'] },
+  { id: 'ganhos',     label: 'Ganhos',           dica: 'Cliente aceitou',                      status: ['Aprovado Cliente', 'Convertido em Pedido'] },
+  { id: 'encerrados', label: 'Encerrados',       dica: 'Sem seguimento: reprovado, expirado ou cancelado',
+    status: ['Reprovado Financeiro', 'Reprovado Cliente', 'Expirado', 'Cancelado'] },
+] as const;
+
+type FaseId = typeof FASES[number]['id'] | 'todos';
+
 const OrcamentosViewInner = ({
   showToast, profile, mode, filial,
 }: {
@@ -79,10 +102,28 @@ const OrcamentosViewInner = ({
 }) => {
   const confirm = useConfirm();
   const [page, setPage] = useState(0);
-  const [statusFiltro, setStatusFiltro] = useState<string>('todos');
-  useEffect(() => { setPage(0); }, [statusFiltro]);
+  // Fase do ciclo (a aba) e, dentro dela, o status exato (o refino). Separar
+  // os dois é o que permite a régua curta em cima sem perder o filtro fino
+  // que a tela tinha: quem quer só 'Cancelado' continua chegando lá, em dois
+  // cliques em vez de garimpar entre dez botões iguais.
+  const [fase, setFase] = useState<FaseId>(mode === 'financeiro' ? 'financeiro' : 'todos');
+  const [statusFino, setStatusFino] = useState<string | null>(null);
+  useEffect(() => { setPage(0); }, [fase, statusFino]);
+
+  const faseAtual = FASES.find(f => f.id === fase) ?? null;
+  // O filtro vai para o SERVIDOR. Antes ele recortava o array já paginado:
+  // com 50 por página, filtrar por 'Cancelado' mostrava só os cancelados que
+  // por acaso caíssem na página aberta — a tela dizia "nenhum orçamento"
+  // havendo dezenas, e o rodapé seguia contando o total sem filtro.
+  const statusFiltrados: string[] | null =
+    statusFino ? [statusFino] : faseAtual ? [...faseAtual.status] : null;
+  const filtroLista = useMemo(
+    () => (statusFiltrados ? { filial, status: statusFiltrados } : { filial }),
+    [filial, statusFiltrados?.join('|')], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/orcamentosview', { filial }, true,
+    '/api/orcamentosview', filtroLista, true,
     { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
@@ -272,9 +313,8 @@ const OrcamentosViewInner = ({
     cliente: clientes.find((c: any) => c.id === o.cliente_id),
   }));
 
-  const filtrados = statusFiltro === 'todos'
-    ? enriched
-    : enriched.filter((o: any) => o.status === statusFiltro);
+  // Sem recorte aqui: `filtroLista` já pediu ao banco só o que a aba mostra.
+  const filtrados = enriched;
 
   const closeForm = () => {
     setShowForm(false);
@@ -510,6 +550,34 @@ const OrcamentosViewInner = ({
   // morto. Orçamento entrou na mesma régua de requisição, cotação e pedido:
   // documento é rastro, cancela-se. O banco agora recusa a inativação.
 
+  // Contagem por status para os números das abas. Precisa ser uma consulta
+  // própria: `data` é uma página de 50 e `totalCount` só conhece o filtro
+  // corrente, então nenhum dos dois sabe quantos existem nas OUTRAS abas.
+  // Traz só a coluna `status` (linha de poucos bytes) e conta no cliente.
+  const [contagemStatus, setContagemStatus] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!supabase) return;
+    let vivo = true;
+    (async () => {
+      const { data: linhas, error } = await supabase
+        .from('orcamentos')
+        .select('status')
+        .eq('filial', filial)
+        .eq('ativo', true);
+      if (!vivo || error || !linhas) return;
+      const acc: Record<string, number> = {};
+      for (const l of linhas as { status: string }[]) acc[l.status] = (acc[l.status] ?? 0) + 1;
+      setContagemStatus(acc);
+    })();
+    return () => { vivo = false; };
+    // `data` na dependência mantém os números em dia quando a lista muda
+    // (criou, aprovou, converteu) — inclusive pelo realtime da própria tela.
+  }, [filial, data]);
+
+  const contarStatus = (lista: readonly string[]) =>
+    lista.reduce((n, st) => n + (contagemStatus[st] ?? 0), 0);
+  const totalGeral = Object.values(contagemStatus).reduce((a, b) => a + b, 0);
+
   // Expirado helper (visual): considera expirado se passa data_emissao + validade_dias
   // e ainda está em status que esperam ação. Não muda no banco aqui (cliente_especial
   // ou um cron futuro fariam o flip oficial); só destaca em vermelho.
@@ -547,19 +615,66 @@ const OrcamentosViewInner = ({
         </div>
       </div>
 
-      {/* Filtro de status */}
-      <div className="flex gap-2 flex-wrap shrink-0">
-        <button
-          onClick={() => setStatusFiltro('todos')}
-          className={`py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-widest border transition-all ${statusFiltro === 'todos' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-        >Todos</button>
-        {STATUS_LIST.map(s => (
+      {/* Filtro em duas camadas: a fase do ciclo (sempre visível) e, dentro
+          dela, o status exato (só quando a fase reúne mais de um). */}
+      <div className="flex flex-col gap-2 shrink-0">
+        <div className="flex gap-2 flex-wrap">
           <button
-            key={s}
-            onClick={() => setStatusFiltro(s)}
-            className={`py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-widest border transition-all ${statusFiltro === s ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-          >{s}</button>
-        ))}
+            type="button"
+            onClick={() => { setFase('todos'); setStatusFino(null); }}
+            className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
+              fase === 'todos' ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+            }`}
+          >
+            Todos
+            <span className="font-mono tabular-nums text-gray-500">{totalGeral}</span>
+          </button>
+          {FASES.map(f => {
+            const n = contarStatus(f.status);
+            const ativa = fase === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                title={f.dica}
+                onClick={() => { setFase(f.id); setStatusFino(null); }}
+                className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
+                  ativa ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+                } ${!ativa && n === 0 ? 'opacity-50' : ''}`}
+              >
+                {f.label}
+                <span className="font-mono tabular-nums text-gray-500">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Refino: os status de dentro da fase. Fase de um status só não
+            ganha esta linha — repetir o nome da aba logo abaixo dela não
+            acrescenta nada e é o tipo de ruído que fez a régua antiga
+            crescer até dez botões. */}
+        {faseAtual && faseAtual.status.length > 1 && (
+          <div className="flex gap-2 flex-wrap items-center pl-1">
+            <span className="text-[10px] uppercase tracking-widest text-gray-600 font-bold">Situação:</span>
+            <button
+              type="button"
+              onClick={() => setStatusFino(null)}
+              className={`py-1 px-2.5 rounded-lg text-[10px] font-bold transition-all ${
+                statusFino === null ? 'text-accent bg-accent/10' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >Todas ({contarStatus(faseAtual.status)})</button>
+            {faseAtual.status.map(st => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFino(st)}
+                className={`py-1 px-2.5 rounded-lg text-[10px] font-bold transition-all ${
+                  statusFino === st ? 'text-accent bg-accent/10' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >{st} ({contagemStatus[st] ?? 0})</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Form de criação/edição */}

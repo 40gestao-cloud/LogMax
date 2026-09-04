@@ -26,6 +26,7 @@ const ESTATICOS = [
   'tests/horaServidor.test.ts',
   'tests/imei.test.ts',
   'tests/importarProdutos.test.ts',
+  'tests/orcamentoFases.test.ts',
   'tests/perecivel.test.ts',
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',
