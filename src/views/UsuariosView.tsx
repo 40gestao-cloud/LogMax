@@ -831,7 +831,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <div key={k} className="flex flex-col gap-1.5">
                   <label htmlFor={`user-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
                   <input id={`user-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${k === 'email' ? 'font-credencial' : ''}`} />
                 </div>
               ))}
 
@@ -841,7 +841,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <div className="relative">
                   <input id="user-password" type={showPass ? 'text' : 'password'} value={form.password}
                     onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
+                    className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full font-credencial" />
                   <button type="button" onClick={() => setShowPass(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                     {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -971,12 +971,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         </div>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400 font-mono">{u.email}</td>
+                      <td className="py-3 px-4 text-xs text-gray-400 font-credencial select-all">{u.email}</td>
                       {isAdmin && (
                         <td className="py-3 px-4">
                           {senhas[u.id] ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-block text-xs font-mono text-gray-300 select-all min-w-[5.5rem]">
+                              <span className="inline-block text-xs font-credencial text-gray-300 select-all min-w-[5.5rem]">
                                 {senhaVisivel[u.id] ? senhas[u.id] : '••••••••'}
                               </span>
                               <button
@@ -1448,7 +1448,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <label htmlFor="user-edit-email" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">E-mail *</label>
                   <input id="user-edit-email" type="email" value={editForm.email}
                     onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm font-credencial" />
                 </div>
 
                 {/* Nova senha (opcional) — trocar a de OUTRA pessoa é só do
@@ -1462,7 +1462,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     <input id="user-edit-password" type={editShowPass ? 'text' : 'password'} value={editForm.password}
                       placeholder="Deixe em branco para manter"
                       onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
-                      className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
+                      className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full font-credencial" />
                     <button type="button" onClick={() => setEditShowPass(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                       {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}

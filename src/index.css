@@ -483,6 +483,21 @@ html, body {
 [style*="overflow-x:auto"], [style*="overflow-x: auto"],
 [style*="overflow-x:scroll"], [style*="overflow-x: scroll"] { touch-action: pan-x pan-y; }
 
+/* ── Credencial: e-mail e senha que o professor dita em voz alta ──────────
+   A Montserrat é ótima para leitura corrida e péssima para credencial: o "I"
+   maiúsculo e o "l" minúsculo são o mesmo traço, e o zero não tem corte.
+   Ditar "Girassol0473" com essa fonte vira "Girasso1O473" do outro lado.
+   Aqui a ordem começa em fontes que separam esses pares — a Consolas, que é a
+   que existe nas máquinas da turma, desenha o zero cortado —, e `slashed-zero`
+   liga o corte onde a fonte souber fazê-lo. O `tracking` largo separa
+   caracteres que colam (rn/m). */
+.font-credencial {
+  font-family: 'Consolas', 'DejaVu Sans Mono', 'Liberation Mono', 'Menlo',
+               ui-monospace, monospace;
+  font-variant-numeric: slashed-zero lining-nums tabular-nums;
+  letter-spacing: 0.06em;
+}
+
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
