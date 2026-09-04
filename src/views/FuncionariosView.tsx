@@ -380,14 +380,21 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <button type="button"
-                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                  title="Gera CPF e celular de treino com dígito verificador válido. Abre em outra aba — o que você já preencheu continua aqui."
-                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
-                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                  Gerar no MaxID <ExternalLink size={13} />
-                </button>
+              <div className="flex items-start gap-3 shrink-0">
+                <div className="flex flex-col items-end gap-1.5">
+                  <button type="button"
+                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                    className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
+                    <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                    Gerar no MaxID <ExternalLink size={13} />
+                  </button>
+                  {/* Dizer o que o botão faz vale mais que o tooltip: em tablet
+                      não há hover, e é justamente ali que a turma preenche. */}
+                  <p className="text-[10px] text-gray-500 leading-relaxed text-right max-w-[15rem]">
+                    Precisa de CPF e celular para preencher? Acesse o MaxID, gere os dados e volte para colar
+                    aqui — abre em outra aba, o que você já digitou continua nesta.
+                  </p>
+                </div>
                 <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
               </div>
             </div>

@@ -297,13 +297,21 @@ const CRMViewInner = ({ type, showToast, filial }: {
                     sozinho — e ali o aluno o encontra assim que a tela abre.
                     O PNG tem fundo preto próprio, daí o canto arredondado em
                     vez de tentar dissolvê-lo no fundo do tema. */}
-                <button type="button"
-                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                  title="Gera CPF, CNPJ e celular de treino com dígito verificador válido. Abre em outra aba — o que você já preencheu continua aqui."
-                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
-                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                  Gerar no MaxID <ExternalLink size={13} />
-                </button>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <button type="button"
+                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                    className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
+                    <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                    Gerar no MaxID <ExternalLink size={13} />
+                  </button>
+                  {/* Dizer o que o botão faz vale mais que o tooltip: em tablet
+                      não há hover, e é justamente ali que a turma preenche. */}
+                  <p className="text-[10px] text-gray-500 leading-relaxed text-right max-w-[15rem]">
+                    Precisa de {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} e celular para preencher?
+                    Acesse o MaxID, gere os dados e volte para colar aqui — abre em outra aba, o que você já
+                    digitou continua nesta.
+                  </p>
+                </div>
               </div>
 
               {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
