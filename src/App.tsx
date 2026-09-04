@@ -110,6 +110,7 @@ const PDVView                              = lazyView(() => import('./views/PDVV
 const HistoricoVendasView                  = lazyView(() => import('./views/HistoricoVendasView').then(m => ({ default: m.HistoricoVendasView })));
 const DevolucoesView                       = lazyView(() => import('./views/DevolucoesView').then(m => ({ default: m.DevolucoesView })));
 const PedidosOnlineView                    = lazyView(() => import('./views/PedidosOnlineView').then(m => ({ default: m.PedidosOnlineView })));
+const TreinamentoVendasView                = lazyView(() => import('./views/TreinamentoVendasView').then(m => ({ default: m.TreinamentoVendasView })));
 const AlcadasView                          = lazyView(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
 const DREView                              = lazyView(() => import('./views/DREView').then(m => ({ default: m.DREView })));
 const PromocoesMarketingView               = lazyView(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
@@ -250,6 +251,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'vendas-históricodevendas': HistoricoVendasView,
   'vendas-devoluções': DevolucoesView,
   'vendas-pedidosonline': PedidosOnlineView,
+  'vendas-treinamento': TreinamentoVendasView,
   'financeiro-alçadas': AlcadasView,
   'vendas-orçamentos': OrcamentosView,
   'vendas-pedidosdevenda': PedidosVendaView,
@@ -505,7 +507,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // filial decidia algo que não é dela. A rota 'vendas-clienteespecial'
     // continua existindo, servindo o hub da Matriz.
     submenus: ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Pedidos Online', 'Histórico de Vendas',
-      { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] }],
+      { label: 'Devoluções', requireRole: ['admin', 'ceo', 'gerente'] }, 'Treinamento'],
   },
   {
     // Vitrine Pública saiu daqui em 2026-07-24 — passou a ser controlada
@@ -1538,6 +1540,7 @@ function LogMaxAppInner() {
       case 'vendas-históricodevendas':     return <HistoricoVendasView showToast={st} />;
       case 'vendas-devoluções':            return <DevolucoesView showToast={st} profile={profile} />;
       case 'vendas-pedidosonline':          return <PedidosOnlineView showToast={st} profile={profile} />;
+      case 'vendas-treinamento':            return <TreinamentoVendasView />;
       case 'financeiro-alçadas':           return <AlcadasView showToast={st} profile={profile} />;
       case 'vendas-orçamentos':            return <OrcamentosView showToast={st} profile={profile} />;
       case 'vendas-pedidosdevenda':        return <PedidosVendaView showToast={st} profile={profile} mode="vendas" />;
