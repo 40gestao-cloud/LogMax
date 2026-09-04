@@ -718,10 +718,14 @@ function BotaoFerramenta({
 // MODAL DA FERRAMENTA
 // ─────────────────────────────────────────────────────────────────
 function ModalFerramenta({
-  icon, title, subtitle, onClose, children,
+  icon, title, subtitle, onClose, children, fecharNoFundo = true,
 }: {
   icon: any; title: string; subtitle: string;
   onClose: () => void; children: React.ReactNode;
+  /** Clique no fundo escuro fecha. Desligado onde há formulário: o clique
+   *  fora é acidental e levaria embora o que a pessoa acabou de digitar —
+   *  os relógios não perdem nada ao fechar, um alarme meio preenchido sim. */
+  fecharNoFundo?: boolean;
 }) {
   // Esc fecha. O modal não guarda estado nenhum — quem guarda é a view —,
   // então fechar por engano não custa uma medição.
@@ -743,7 +747,7 @@ function ModalFerramenta({
       transition={{ duration: 0.15 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={onClose}
+      onClick={fecharNoFundo ? onClose : undefined}
     >
       <motion.div
         initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }}
@@ -824,7 +828,8 @@ export const CentralTempoView = () => {
       )}
       {aberta === 'alarmes' && (
         <ModalFerramenta icon={AlarmClock} title="Alarmes"
-          subtitle="Toca para a turma · em qualquer tela" onClose={fechar}>
+          subtitle="Toca para a turma · em qualquer tela" onClose={fechar}
+          fecharNoFundo={false}>
           <AlarmesPainel alarmesApi={alarmesApi} />
         </ModalFerramenta>
       )}

@@ -460,6 +460,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const searchRef = useRef<HTMLInputElement>(null);
   // Raiz do PDV: escopo do Tab. Ver `devolverTabAoPdv` em lib/focoPdv.
   const rootRef = useRef<HTMLDivElement>(null);
+  // A tela de operação não está no ar (caixa por abrir, ou aguardando o
+  // Financeiro confirmar o fechamento). Espelhado em ref porque quem precisa
+  // saber é o listener global do leitor, registrado uma vez só.
+  const foraDaOperacaoRef = useRef(false);
   // Buffer da leitura digitada no campo. Existe porque leitor SEM sufixo Enter
   // (configuração comum, e o padrão de vários modelos) não tinha caminho nenhum
   // neste PDV: o listener global só processa quando vem Enter, então o operador
@@ -882,6 +886,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       // tem outro propósito (overlay Pix, finalização em curso, banner
       // de "venda concluída" antes do operador clicar OK).
       const blocked =
+        // Telas que substituem a operação inteira (abrir caixa, aguardando o
+        // Financeiro). Sem isto o operador digitava o fundo de troco — cinco
+        // dígitos seguidos entram na janela de 120ms de uma "rajada de
+        // leitor" — e o Enter era engolido aqui por `stopPropagation` em
+        // captura: o caixa não abria e o valor digitado ainda ia parar na
+        // busca de produto como se fosse um código de barras.
+        foraDaOperacaoRef.current ||
         pixPendenteRef.current !== null ||
         cartaoModalRef.current !== null ||
         falhaPosPagamentoRef.current !== null ||
@@ -1546,6 +1557,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     : 'Trocar PDV';
   if (caixa) ultimoCaixaRef.current = caixa;
   const caixaAtivo = caixa ?? (cobrancaEmCurso ? ultimoCaixaRef.current : null);
+  foraDaOperacaoRef.current =
+    !caixaAtivo || (caixaAtivo.status === 'Aguardando Confirmação' && !cobrancaEmCurso);
 
   if ((loadingProd || caixaLoading) && !cobrancaEmCurso) return <LoadingSpinner />;
 

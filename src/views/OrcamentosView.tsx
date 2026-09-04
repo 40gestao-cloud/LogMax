@@ -550,24 +550,32 @@ const OrcamentosViewInner = ({
   // morto. Orçamento entrou na mesma régua de requisição, cotação e pedido:
   // documento é rastro, cancela-se. O banco agora recusa a inativação.
 
-  // Contagem por status para os números das abas. Precisa ser uma consulta
+  // Contagem por status para os números das abas. Precisa ser consulta
   // própria: `data` é uma página de 50 e `totalCount` só conhece o filtro
   // corrente, então nenhum dos dois sabe quantos existem nas OUTRAS abas.
-  // Traz só a coluna `status` (linha de poucos bytes) e conta no cliente.
+  //
+  // `head: true` + `count: 'exact'`, um por status: só o número trafega, e
+  // o número é do banco. Trazer as linhas e contar no cliente parece mais
+  // simples, mas o PostgREST tem teto de linhas por resposta — passando
+  // dele a contagem sairia CALADAMENTE menor do que a realidade, que é a
+  // pior falha possível num contador (ninguém desconfia de um número).
   const [contagemStatus, setContagemStatus] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!supabase) return;
+    const sb = supabase;
     let vivo = true;
     (async () => {
-      const { data: linhas, error } = await supabase
-        .from('orcamentos')
-        .select('status')
-        .eq('filial', filial)
-        .eq('ativo', true);
-      if (!vivo || error || !linhas) return;
-      const acc: Record<string, number> = {};
-      for (const l of linhas as { status: string }[]) acc[l.status] = (acc[l.status] ?? 0) + 1;
-      setContagemStatus(acc);
+      const pares = await Promise.all(STATUS_LIST.map(async st => {
+        const { count, error } = await sb
+          .from('orcamentos')
+          .select('id', { count: 'exact', head: true })
+          .eq('filial', filial)
+          .eq('ativo', true)
+          .eq('status', st);
+        return [st, error ? 0 : (count ?? 0)] as const;
+      }));
+      if (!vivo) return;
+      setContagemStatus(Object.fromEntries(pares));
     })();
     return () => { vivo = false; };
     // `data` na dependência mantém os números em dia quando a lista muda
