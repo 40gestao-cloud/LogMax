@@ -258,6 +258,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     return { ...x, valor_total: total, valor_unitario: temQtd ? formatBRL(parseBRL(total) / qtdReq) : x.valor_unitario };
   });
 
+  // MIGR 582: a requisição eventual agora diz a marca pedida. Ela entra
+  // preenchida na proposta porque o caso comum é cotar o que foi pedido — e
+  // continua editável, porque o fornecedor pode oferecer outra e é isso que a
+  // comparação entre propostas precisa mostrar.
+  useEffect(() => {
+    const pedida = String(reqSelecionada?.marca ?? '').trim();
+    if (!pedida) return;
+    setExtras(x => (x.marca ? x : { ...x, marca: pedida }));
+  }, [reqSelecionada]);
+
   // Trocar de requisição troca a quantidade: o total tem de acompanhar, senão
   // fica o valor da requisição anterior parecendo conferido.
   useEffect(() => {
@@ -1215,6 +1225,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           value={extras.marca}
                           onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
                           placeholder="Ex.: Foxton" />
+                        {reqSelecionada?.marca && (
+                          <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">
+                            Marca pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>.
+                            Propor outra é legítimo — só deixe explícito aqui, porque é isso que o Financeiro compara.
+                          </p>
+                        )}
                         <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
                           Compra eventual: o item ainda não está no catálogo, e a marca faz parte do que
                           está sendo oferecido. Quem cadastrar o produto depois recebe esta marca já

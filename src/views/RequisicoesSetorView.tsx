@@ -89,7 +89,7 @@ const VAI_PRA_COMPRAS = (t: TipoReq) => t === 'reposicao' || t === 'eventual';
 // cabeçalho é só o padrão de quem pede várias coisas pela mesma razão
 // (migr. 354).
 let seqLinha = 0;
-const linhaVazia = () => ({ uid: ++seqLinha, item: '', qtd: '1', unidade: 'UN', justificativa: '' });
+const linhaVazia = () => ({ uid: ++seqLinha, item: '', marca: '', qtd: '1', unidade: 'UN', justificativa: '' });
 
 const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   // Sem filtro por autor: o recorte é o setor, e quem faz esse recorte é a
@@ -133,6 +133,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       .sort((a: string, b: string) => a.localeCompare(b, 'pt-BR')),
     [produtos],
   );
+
+  // Marcas que a empresa já compra. Mesma lógica do nome: o campo é livre
+  // (a marca certa pode ser uma que nunca se comprou), a lista só evita que
+  // "Foxton" vire "foxton" na segunda vez e que Compras leia duas coisas
+  // diferentes onde há uma.
+  const marcasConhecidas = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of produtos as any[]) {
+      const m = String(p?.marca ?? '').trim();
+      if (m) set.add(m);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [produtos]);
 
   // Catálogo para reposição: tudo que está ativo, inclusive com saldo zero —
   // saldo zero é justamente o que mais se repõe. `abaixoMin` é o ponto de
@@ -201,7 +214,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       // aparecem como 'Compra', sem fingir que sabemos o que eram.
       id: r.id, tipo: (r.tipo_requisicao === 'Reposição' ? 'reposicao' : 'eventual') as TipoReq,
       tipoLabel: r.tipo_requisicao ?? 'Compra',
-      item: r.item, qtd: r.qtd, unidade: r.unidade,
+      item: r.item, marca: r.marca ?? null, qtd: r.qtd, unidade: r.unidade,
       numero: numeroRequisicao(r),
       complemento: r.centro_custo, prazo: r.data_necessidade, urgencia: r.urgencia ?? 'Normal',
       abertura: r.data ?? (r.created_at ?? '').slice(0, 10), status: r.status,
@@ -218,6 +231,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const materiais = reqEstoque.map((r: any) => ({
       id: r.id, tipo: 'estoque' as TipoReq, tipoLabel: 'Estoque', numero: null as string | null,
       item: produtos.find((p: any) => p.id === r.produto_id)?.nome ?? 'Produto',
+      // Material sai do estoque da casa: a marca é a do produto cadastrado.
+      marca: produtos.find((p: any) => p.id === r.produto_id)?.marca ?? null,
       // 'UN' fixo mentia para o queijo: `requisicoes_estoque` não guarda unidade
       // porque a unidade é a do produto pedido. Lê de lá.
       qtd: r.qtd,
@@ -254,13 +269,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // correção que o gerente devolveu, some inteiro se a PWA recarregar por
   // baixo. Enquanto houver formulário com conteúdo, a versão nova espera.
   const rascunhoAberto =
-    (showForm && (repo.size > 0 || itens.some(r => r.item.trim() !== '' || r.justificativa.trim() !== '')))
+    (showForm && (repo.size > 0 || itens.some(r => r.item.trim() !== '' || r.marca.trim() !== '' || r.justificativa.trim() !== '')))
     || corrigindo != null;
   useTravaAtualizacao(rascunhoAberto, 'requisicao-rascunho', 'há uma requisição aberta sem enviar');
   const [corrForm, setCorrForm] = useState({
-    item: '', qtd: '1', unidade: '', justificativa: '',
+    item: '', marca: '', qtd: '1', unidade: '', justificativa: '',
     urgencia: 'Normal', centro_custo: '', data_necessidade: '',
   });
+  // Reposição tem produto do catálogo: ali a marca é do cadastro, e a RPC
+  // ignora o que a tela mandar (migr. 582). Só a eventual digita marca.
+  const corrEhEventual = corrigindo?.tipo === 'eventual';
   // Material não tem item, unidade, urgência, centro de custo nem prazo — só
   // quantidade e destino (`requisicoes_estoque` não guarda os outros campos,
   // e corrigir o produto trocaria o documento por outro). Formulário próprio
@@ -294,6 +312,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     const bruta = data.find((x: any) => x.id === r.id);
     setCorrForm({
       item:             r.item ?? '',
+      marca:            r.marca ?? '',
       qtd:              qtdBR(r.qtd ?? 1),
       unidade:          normalizarUnidade(r.unidade) || '',
       justificativa:    r.justificativa ?? '',
@@ -348,6 +367,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       const { data: res, error } = await supabase.rpc('reenviar_requisicao_corrigida', {
         p_id:               corrigindo.id,
         p_item:             corrForm.item,
+        // String vazia limpa a marca de propósito: voltar para "qualquer
+        // marca" é decisão, e a RPC distingue isso de "não mexi" (NULL).
+        p_marca:            corrEhEventual ? corrForm.marca.trim() : null,
         p_qtd:              qtd,
         p_unidade:          corrForm.unidade || null,
         p_justificativa:    corrForm.justificativa || null,
@@ -425,7 +447,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
-  const updateLinha = (i: number, patch: Partial<{ item: string; qtd: string; unidade: string; justificativa: string }>) =>
+  const updateLinha = (i: number, patch: Partial<{ item: string; marca: string; qtd: string; unidade: string; justificativa: string }>) =>
     setItens(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
 
   // Quais linhas estão com campo de motivo próprio aberto. Fica fora do estado
@@ -663,6 +685,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           }))
         : itens.map(r => ({
             item:    r.item.trim(),
+            // MIGR 582: em branco é "qualquer marca" — a RPC grava NULL, e
+            // Compras lê isso como liberdade de escolha, não como esquecimento.
+            marca:   r.marca.trim(),
             qtd:     parseQtd(r.qtd) || 1,
             unidade: r.unidade,
             // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
@@ -1033,6 +1058,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   {sugestoes.map(nome => <option key={nome} value={nome} />)}
                 </datalist>
 
+                {/* MIGR 582. "Papel" não é um pedido: é um assunto. Quem vai
+                    comprar precisa saber QUAL produto e de QUE marca, senão
+                    volta perguntando — ou compra errado, que é pior. */}
+                <p className="text-[11px] text-gray-400 leading-snug bg-white/[0.03] border border-white/5 rounded-lg py-2 px-3">
+                  Escreva o <strong className="text-gray-300">nome do produto</strong> e a{' '}
+                  <strong className="text-gray-300">marca</strong> como quem vai à loja comprar. Compras
+                  não adivinha: quanto mais preciso o pedido, mais rápido a cotação volta com o item certo.
+                  Se a marca for indiferente, deixe em branco — isso também é uma resposta.
+                </p>
+
                 {itens.map((row, i) => (
                   <div key={row.uid} className="flex flex-col gap-1.5">
                     <div className="flex flex-wrap md:flex-nowrap gap-2 items-start">
@@ -1040,13 +1075,22 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         <input
                           list="sugestoes-catalogo"
                           className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
-                          placeholder={`Descreva o item — ${exemploItemRequisicao(filial)}`}
+                          placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
                           value={row.item}
                           onChange={e => updateLinha(i, { item: e.target.value })}
                         />
                         {erros[`item_${i}`] && (
                           <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
                         )}
+                      </div>
+                      <div className="w-full md:w-44">
+                        <input
+                          list="sugestoes-marcas"
+                          className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                          placeholder="Marca (opcional)"
+                          value={row.marca}
+                          onChange={e => updateLinha(i, { marca: e.target.value })}
+                        />
                       </div>
                       <input
                         type="text" inputMode="decimal"
@@ -1201,6 +1245,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         <ClipboardList size={13} className="text-gray-600 shrink-0" />
                         {r.item}
                       </span>
+                      {r.marca && (
+                        <span className="block text-[10px] text-gray-400 ml-[21px]">
+                          <span className="text-gray-500 font-bold uppercase tracking-widest">Marca:</span>{' '}
+                          <span className="text-gray-300 font-bold">{r.marca}</span>
+                        </span>
+                      )}
                       {r.numero && (
                         <span className="block font-mono text-[10px] text-gray-500 ml-[21px] tracking-wider">{r.numero}</span>
                       )}
@@ -1362,6 +1412,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       </>
       )}
 
+      {/* Marcas conhecidas: fica na raiz da tela porque dois formulários a
+          usam — o de abrir requisição e o de corrigir a devolvida —, e o
+          segundo abre com o primeiro fechado. */}
+      <datalist id="sugestoes-marcas">
+        {marcasConhecidas.map(m => <option key={m} value={m} />)}
+      </datalist>
+
       {/* Correcao da requisicao devolvida (migr. 517, material na 522).
           Compra: item, quantidade, unidade, prazo, urgencia, centro de custo
           e justificativa — o que foi PEDIDO. Material: so quantidade e
@@ -1409,6 +1466,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 </div>
               ) : (
               <div className="flex flex-col gap-3">
+                {corrEhEventual && (
+                  <FormField label="Marca">
+                    <input list="sugestoes-marcas" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      value={corrForm.marca}
+                      onChange={e => setCorrForm(f => ({ ...f, marca: e.target.value }))}
+                      placeholder="Marca (opcional)" />
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      Se o gerente devolveu pedindo precisão, é aqui que ela entra: a marca é o que faz
+                      Compras achar o produto certo. Em branco significa "qualquer marca".
+                    </p>
+                  </FormField>
+                )}
                 <FormField label="Item *">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
                     value={corrForm.item}

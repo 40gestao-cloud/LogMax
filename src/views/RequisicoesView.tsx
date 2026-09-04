@@ -147,7 +147,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   // em Requisições → Do Setor, onde qualquer setor pede o que precisa.
   // Compras recebe a fila e executa — não pede para si por uma porta própria.
   const [produtoSel, setProdutoSel] = useState<string>('');
-  const [form, setForm] = useState({ item: '' });
+  const [form, setForm] = useState({ item: '', marca: '' });
   const [extras, setExtras] = useState({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
   // A unidade vem da requisição em edição — quem corrige não escolhe a medida.
   const editFrac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(editItem?.unidade));
@@ -160,7 +160,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
 
   const openEdit = (item: any) => {
     setEditItem(item);
-    setForm({ item: item.item ?? '' });
+    setForm({ item: item.item ?? '', marca: item.marca ?? '' });
     setExtras({ qtd: qtdBR(item.qtd ?? 1), urgencia: item.urgencia ?? 'Normal', centro_custo: item.centro_custo ?? '' });
     // O vínculo gravado manda (migr. 545): `produto_id` é o que o pedido e o
     // recebimento vão obedecer, e é ele que precisa aparecer no campo — não o
@@ -177,7 +177,7 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   const closeForm = () => {
     setEditItem(null);
     setProdutoSel('');
-    setForm({ item: '' });
+    setForm({ item: '', marca: '' });
     setExtras({ qtd: '1', urgencia: 'Normal', centro_custo: '' });
     setErrors({});
   };
@@ -191,7 +191,9 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
       setForm(f => ({ ...f, item: '' }));
     } else {
       const p = produtosOrdenados.find((pr: any) => pr.id === value);
-      setForm(f => ({ ...f, item: p?.nome ?? '' }));
+      // MIGR 582: a marca acompanha o produto — a RPC vai carimbar a do
+      // cadastro de qualquer jeito, e o campo mostrar outra coisa mentiria.
+      setForm(f => ({ ...f, item: p?.nome ?? '', marca: p?.marca ?? '' }));
     }
   };
 
@@ -216,13 +218,18 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
     const vincula   = produtoSel !== '';
     const produtoId = produtoSel === ITEM_OUTRO ? null : (produtoSel || null);
     const trocouProduto = vincula && (produtoId ?? null) !== (editItem.produto_id ?? null);
+    // MIGR 582: a marca entra na mesma régua do item e da quantidade —
+    // "papel A4 Chamex" e "papel A4 genérico" não são a mesma compra.
+    const ehTextoLivre = produtoSel === ITEM_OUTRO || (produtoSel === '' && !editItem.produto_id);
+    const marcaNova = ehTextoLivre ? form.marca.trim() : null;
     const mudouDecisao = form.item.trim() !== (editItem.item ?? '')
       || qtd !== Number(editItem.qtd)
+      || (marcaNova !== null && marcaNova !== (editItem.marca ?? ''))
       || trocouProduto;
     if (editItem.status === 'Aprovado' && mudouDecisao) {
       const ok = await confirm(
         `O gerente aprovou "${editItem.item}" na quantidade ${editItem.qtd}.\n\n` +
-        'Mudar o item, o produto do catálogo ou a quantidade devolve a requisição para aprovação — ' +
+        'Mudar o item, a marca, o produto do catálogo ou a quantidade devolve a requisição para aprovação — ' +
         'ela sai da sua fila e volta para a do gerente. Urgência e centro de custo você corrige ' +
         'sem reabrir nada.\n\n' +
         'Corrigir mesmo assim?');
@@ -240,12 +247,15 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
         p_centro_custo: extras.centro_custo,
         p_produto_id:   produtoId,
         p_vincula:      vincula,
+        // null = "não mexi" (item do catálogo manda a marca dele); string
+        // vazia = "sem marca definida", que é decisão e não esquecimento.
+        p_marca:        marcaNova,
       });
       if (error) throw error;
       const atualizada = (res as any)?.requisicao;
       const reaberta   = !!(res as any)?.reaberta;
       setData((prev: any[]) => prev.map(d => d.id === editItem.id
-        ? (atualizada ?? { ...d, item: form.item, qtd, urgencia: extras.urgencia,
+        ? (atualizada ?? { ...d, item: form.item, marca: marcaNova ?? d.marca, qtd, urgencia: extras.urgencia,
                            centro_custo: extras.centro_custo,
                            produto_id: vincula ? produtoId : d.produto_id })
         : d));
@@ -380,6 +390,30 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         <ProdutoResumo produto={produtosOrdenados.find((p: any) => p.id === produtoSel)} />
                       )}
                     </FormField>
+                    {/* MIGR 582. Com produto do catálogo a marca é a do
+                        cadastro (a RPC carimba de lá); em texto livre é o que
+                        o solicitante pediu, e Compras pode precisar do ajuste
+                        que faz o item ser encontrável. */}
+                    {produtoSel && produtoSel !== ITEM_OUTRO ? (
+                      <FormField label="Marca">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                          {produtosOrdenados.find((p: any) => p.id === produtoSel)?.marca || '—'}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Item do catálogo: a marca é a do cadastro. Para trocar de marca, troque de produto.
+                        </p>
+                      </FormField>
+                    ) : (
+                      <FormField label="Marca">
+                        <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                          value={form.marca}
+                          onChange={e => setForm(f => ({ ...f, marca: e.target.value }))}
+                          placeholder="Marca (opcional)" />
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          É o que o comprador leva para a cotação. Em branco significa "qualquer marca".
+                        </p>
+                      </FormField>
+                    )}
                     {/* Solicitante e setor vêm de quem abriu a requisição
                         (migr. 283) — Compras corrige o item e a quantidade, não
                         a autoria do pedido. */}
@@ -460,7 +494,15 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         <span className="flex items-center gap-1.5">
                           <ChevronRight size={13}
                             className={`text-gray-500 shrink-0 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
-                          <span className="block truncate" title={item.item}>{item.item}</span>
+                          <span className="block truncate" title={item.item}>
+                            {item.item}
+                            {/* A marca é metade do que identifica o produto:
+                                sem ela a lista mostra dois pedidos diferentes
+                                com a mesma cara. */}
+                            {item.marca && (
+                              <span className="text-[10px] text-gray-500 font-normal ml-1.5">· {item.marca}</span>
+                            )}
+                          </span>
                         </span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
