@@ -40,6 +40,17 @@ const dataBR = (iso?: string | null) =>
 const propostaVencida = (validade?: string | null): boolean =>
   !!validade && String(validade).slice(0, 10) < todayBR();
 
+// MIGR 584. As condições que o banco aceita (CHECK em `cotacoes`), na ordem
+// em que um comprador pensa: da que aperta o caixa para a que o alivia. É o
+// mesmo vocabulário do orçamento de venda, visto do lado de quem compra — e é
+// idêntico nas três lojas, porque comprar é processo da rede.
+const CONDICOES_PAGAMENTO = ['À vista', '15 dias', '30 dias', '30/60', '30/60/90'] as const;
+
+// Quantos títulos cada condição abre. Serve só para o aviso da tela; quem
+// gera de verdade é `condicao_pagamento_dias` no banco.
+const parcelasDaCondicao = (c: string): number =>
+  c === '30/60' ? 2 : c === '30/60/90' ? 3 : 1;
+
 // Data ISO daqui a N dias, no fuso da operação. Mesma disciplina do dataBR
 // acima: a aritmética é feita em UTC ao meio-dia para o dia não escorregar.
 const emDias = (n: number): string => {
@@ -202,7 +213,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
-  const [extras, setExtras] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
+  const [extras, setExtras] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
   // `useFormValidation` só cobre `form` (requisição e fornecedor) — era por
   // isso que valor e validade passavam em branco. Estes campos têm régua
   // própria: valor precisa ser positivo, validade precisa existir e estar viva.
@@ -358,7 +369,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
   // proposta, não correção desta.
   const [correcao, setCorrecao] = useState<any | null>(null);
-  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
 
   // Mesma régua do formulário de nova cotação: a quantidade é da requisição, e
   // é ela que liga unitário e total. Aqui a requisição não muda (trocar de
@@ -658,7 +669,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const closeForm = () => {
     setShowForm(false);
     setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
-    setExtras({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
+    setExtras({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
     setErrors({});
     setErrosExtras({});
   };
@@ -716,6 +727,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         marca: ehEventual ? (extras.marca.trim() || null) : null,
         // O que veio junto do preço (migr. 583): frete, garantia, instalação.
         observacao: extras.observacao.trim() || null,
+        // MIGR 584: é daqui que saem os vencimentos dos títulos quando a
+        // proposta virar pedido.
+        condicao_pagamento: extras.condicao_pagamento,
         status: 'Aguardando Financeiro',
         filial,
       });
@@ -923,10 +937,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       // Serviço não chega em caixa: o que fecha o pedido é o aceite da execução,
       // e é ele que libera o pagamento. Mandar o aluno avisar o Estoque de uma
       // dedetização seria mandá-lo esperar uma carga que não vem.
+      // MIGR 584: dizer quantos títulos nasceram fecha o ciclo na cabeça de
+      // quem comprou — a condição que ele negociou virou dívida com data.
+      const nParc = parcelasDaCondicao(String(novo?.condicao_pagamento ?? ''));
+      const contas = nParc > 1
+        ? `com ${nParc} parcelas no contas a pagar (${novo.condicao_pagamento})`
+        : 'com a conta a pagar';
       showToast(
         novo?.servico_id
-          ? `${numeroPedido(novo)} gerado, com a conta a pagar. Serviço não entra em estoque: quando for executado, registre o aceite em Estoque → Recebimentos — é ele que libera o pagamento.`
-          : `${numeroPedido(novo)} gerado, com a conta a pagar. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`,
+          ? `${numeroPedido(novo)} gerado, ${contas}. Serviço não entra em estoque: quando for executado, registre o aceite em Estoque → Recebimentos — é ele que libera o pagamento.`
+          : `${numeroPedido(novo)} gerado, ${contas}. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`,
         'success', true);
     } catch (err: any) {
       showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -956,6 +976,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                        ? cot.validade : emDias(VALIDADE_PADRAO_DIAS),
       marca:         cot.marca ?? '',
       observacao:    cot.observacao ?? '',
+      condicao_pagamento: cot.condicao_pagamento ?? 'À vista',
     });
   };
 
@@ -987,6 +1008,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         // legítima, e guardar o valor antigo diria que deu certo sem ter dado.
         p_marca:         correcaoForm.marca.trim() || null,
         p_observacao:    correcaoForm.observacao.trim() || null,
+        p_condicao_pagamento: correcaoForm.condicao_pagamento || null,
       });
       if (error) throw error;
       atualizarCotacaoLocal(c => c.id === correcao.id
@@ -994,7 +1016,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
             valor_total: valorNum, prazo_entrega: correcaoForm.prazo_entrega || c.prazo_entrega,
             validade: correcaoForm.validade || null,
             marca: correcaoForm.marca.trim() || null,
-            observacao: correcaoForm.observacao.trim() || null }
+            observacao: correcaoForm.observacao.trim() || null,
+            condicao_pagamento: correcaoForm.condicao_pagamento }
         : c);
 
       const reqItem  = correcao.req?.item ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id)?.item ?? 'item';
@@ -1293,6 +1316,28 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         Até quando o fornecedor garante este preço. Passou disso, o Financeiro devolve para revalidar.
                       </p>
                     </FormField>
+                    {/* MIGR 584. Prazo é negociação, não detalhe: duas
+                        propostas de mesmo valor não são a mesma compra se uma
+                        é à vista e a outra é 30/60/90. Daqui saem os
+                        vencimentos dos títulos no contas a pagar. */}
+                    <FormField label="Condição de pagamento *">
+                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.condicao_pagamento}
+                        onChange={e => setExtras(x => ({ ...x, condicao_pagamento: e.target.value }))}>
+                        {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        {(() => {
+                          const n = parcelasDaCondicao(extras.condicao_pagamento);
+                          const base = extras.prazo_entrega
+                            ? `a partir da entrega (${dataBR(extras.prazo_entrega)})`
+                            : 'a partir da entrega prevista';
+                          return extras.condicao_pagamento === 'À vista'
+                            ? `Vira 1 título vencendo ${base}.`
+                            : `Vira ${n} ${n > 1 ? 'títulos' : 'título'} no contas a pagar, contados ${base}.`;
+                        })()}
+                      </p>
+                    </FormField>
                     {/* Marca (migr. 526). Na eventual é campo da proposta; na
                         reposição é o que o catálogo já diz, em cinza. */}
                     {form.requisicao_id && (ehEventual ? (
@@ -1424,6 +1469,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
                           <span>R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
+                          {/* Preço sem prazo é meia informação: o Financeiro
+                              decide com os dois na mesma célula. */}
+                          {item.condicao_pagamento && (
+                            <span className="text-[10px] text-gray-500 font-sans">{item.condicao_pagamento}</span>
+                          )}
                           {item.status === 'Aguardando Financeiro' && (() => {
                             const a = alcadaLabel(item);
                             return (
@@ -1622,6 +1672,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           coisas diferentes como se fossem a mesma. */}
                       <th className="pb-3 font-bold px-3">Marca</th>
                       <th className="pb-3 font-bold px-3 text-right">Valor</th>
+                      <th className="pb-3 font-bold px-3">Pagamento</th>
                       <th className="pb-3 font-bold px-3">Entrega no prazo</th>
                       <th className="pb-3 font-bold px-3">Prazo</th>
                       <th className="pb-3 font-bold px-3">Validade</th>
@@ -1653,6 +1704,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           </td>
                           <td className={`py-2.5 px-3 text-xs font-mono text-right tabular-nums ${isMenor ? 'text-emerald-300 font-bold' : 'text-gray-200'}`}>
                             R$ {formatBRL(Number(c.valor_total ?? 0))}
+                          </td>
+                          {/* O menor preço à vista pode custar mais caro que o
+                              maior em 30/60/90 — quem paga a diferença é o
+                              caixa da unidade. */}
+                          <td className="py-2.5 px-3 text-xs text-gray-300">
+                            {c.condicao_pagamento || <span className="text-gray-600">—</span>}
                           </td>
                           <td className="py-2.5 px-3">
                             {desempenhoDisponivel && c.fornecedor_id
@@ -1867,6 +1924,13 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       placeholder="Ex.: Foxton" />
                   </FormField>
                 )}
+                <FormField label="Condição de pagamento *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.condicao_pagamento}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, condicao_pagamento: e.target.value }))}>
+                    {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </FormField>
                 <div className="sm:col-span-3">
                   <FormField label="Condições / observações do fornecedor">
                     <textarea maxLength={240}

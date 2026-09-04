@@ -229,7 +229,15 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.forn?.nome ?? '—'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.forn?.nome ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
+                          R$ {Number(item.valor_total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          {/* MIGR 584: o pedido carimba a condição negociada, e
+                              é ela que explica por que o contas a pagar tem uma
+                              ou três linhas deste mesmo pedido. */}
+                          {item.condicao_pagamento && (
+                            <span className="block text-[10px] text-gray-500 font-sans">{item.condicao_pagamento}</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-xs hidden lg:table-cell">
                           <span className={atraso && !atraso.entregue ? 'text-red-400 font-semibold' : 'text-gray-400'}>
                             {fmtData(item.prazo_entrega)}
