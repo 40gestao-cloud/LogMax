@@ -47,15 +47,15 @@ const ACRE_DATE = new Intl.DateTimeFormat('pt-BR', {
 
 const pad3 = (n: number) => String(n).padStart(3, '0');
 
-// Cabeçalho neumórfico reutilizado pelos 4 cards.
+// Cabeçalho do modal de cada ferramenta.
 function CardHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
-    <div className="flex items-center gap-3 mb-5">
-      <div className="w-11 h-11 neu-circle flex items-center justify-center text-accent shrink-0">
-        <Icon size={18} />
+    <div className="flex items-center gap-3">
+      <div className="w-12 h-12 neu-circle flex items-center justify-center text-accent shrink-0">
+        <Icon size={20} />
       </div>
       <div>
-        <h3 className="text-sm font-bold text-gray-200">{title}</h3>
+        <h3 className="text-base sm:text-lg font-bold text-gray-100">{title}</h3>
         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{subtitle}</span>
       </div>
     </div>
@@ -65,7 +65,9 @@ function CardHeader({ icon: Icon, title, subtitle }: { icon: any; title: string;
 // ─────────────────────────────────────────────────────────────────
 // 1. RELÓGIO DIGITAL — Acre (America/Rio_Branco)
 // ─────────────────────────────────────────────────────────────────
-function RelogioCard() {
+// O tick vive na VIEW, não no painel: o painel só existe enquanto o modal
+// está aberto, e o botão da grade precisa da hora o tempo todo.
+function useRelogioAcre() {
   // Estado guarda só o snapshot atual; setInterval é a fonte de verdade
   // do tick. useRef garante limpeza correta mesmo se o componente
   // remontar várias vezes (StrictMode em dev).
@@ -81,21 +83,21 @@ function RelogioCard() {
     };
   }, []);
 
-  const hora    = ACRE_FORMATTER.format(now);
-  const dataStr = ACRE_DATE.format(now);
+  return { hora: ACRE_FORMATTER.format(now), dataStr: ACRE_DATE.format(now) };
+}
 
+function RelogioPainel({ hora, dataStr }: ReturnType<typeof useRelogioAcre>) {
   return (
-    <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col">
-      <CardHeader icon={Clock} title="Relógio Digital" subtitle="Acre · America/Rio_Branco" />
-      <div className="neu-pressed rounded-2xl py-8 px-4 flex flex-col items-center justify-center gap-2 border border-white/5">
-        <div className="font-mono tabular-nums text-5xl sm:text-6xl font-black text-accent tracking-tight">
+    <div className="flex flex-col">
+      <div className="neu-pressed rounded-2xl py-10 sm:py-14 px-4 flex flex-col items-center justify-center gap-4 border border-white/5">
+        <div className="font-mono tabular-nums text-6xl sm:text-8xl font-black text-accent tracking-tight">
           {hora}
         </div>
-        <p className="text-[11px] uppercase tracking-widest text-gray-500 font-bold text-center">
+        <p className="text-sm sm:text-base uppercase tracking-widest text-gray-400 font-bold text-center">
           {dataStr}
         </p>
       </div>
-      <p className="text-[10px] text-gray-600 mt-4 text-center leading-relaxed">
+      <p className="text-xs text-gray-500 mt-5 text-center leading-relaxed">
         Fuso travado independente do horário do dispositivo.
       </p>
     </div>
@@ -111,9 +113,12 @@ function RelogioCard() {
 // QUEM TOCA é a shell do App (useAlarmeGlobal), que não desmonta.
 // Este card só cadastra e lista — nada de áudio aqui, senão quem
 // estivesse nesta tela ouviria dois alarmes sobrepostos.
-function AlarmesCard() {
+// A lista dos alarmes vem da VIEW (um `useAlarmesTurma` só): o botão da
+// grade precisa contar os ativos mesmo com o modal fechado, e duas
+// instâncias do hook dobrariam fetch e assinatura realtime à toa.
+function AlarmesPainel({ alarmesApi }: { alarmesApi: ReturnType<typeof useAlarmesTurma> }) {
   const { profile } = useUserProfile();
-  const { alarmes, isLoading, criar, editar, alternar, remover } = useAlarmesTurma();
+  const { alarmes, isLoading, criar, editar, alternar, remover } = alarmesApi;
   // Escrita é só do professor (`role = 'admin'` literal, igual à RLS da
   // migr. 529): alarme interrompe a tela de 45 pessoas.
   const podeGerenciar = profile?.role === 'admin';
@@ -192,9 +197,7 @@ function AlarmesCard() {
   };
 
   return (
-    <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col">
-      <CardHeader icon={AlarmClock} title="Alarmes" subtitle="Toca para a turma · em qualquer tela" />
-
+    <div className="flex flex-col">
       {podeGerenciar ? (
         <div ref={formRef}>
           <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
@@ -355,7 +358,9 @@ function AlarmesCard() {
 // ─────────────────────────────────────────────────────────────────
 // 3. CRONÔMETRO — minutos, segundos, ms + voltas
 // ─────────────────────────────────────────────────────────────────
-function CronometroCard() {
+// Estado do cronômetro na VIEW: fechar o modal não pode zerar uma medição
+// em andamento — é justamente o caso de uso (dispara, fecha, trabalha).
+function useCronometro() {
   // Modelo "performance.now() + accumulated": ao iniciar guardamos
   // o momento de início; o elapsed atual = (now - start) + acumulado
   // de pausas anteriores. Evita drift do setInterval e cobre janelas
@@ -422,12 +427,22 @@ function CronometroCard() {
     return `${pad2(minutes)}:${pad2(seconds)}.${pad3(millis)}`;
   };
 
-  return (
-    <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col">
-      <CardHeader icon={TimerIcon} title="Cronômetro" subtitle="Operação · com voltas" />
+  // Versão sem milissegundos, para o botão da grade: ali o dígito de ms
+  // pisca 32 vezes por segundo sem ninguém conseguir ler.
+  const fmtCurto = (ms: number) => {
+    const totalMs = Math.max(0, Math.floor(ms));
+    return `${pad2(Math.floor(totalMs / 60000))}:${pad2(Math.floor((totalMs % 60000) / 1000))}`;
+  };
 
-      <div className="neu-pressed rounded-2xl py-6 px-4 flex items-center justify-center mb-4 border border-white/5">
-        <div className="font-mono tabular-nums text-4xl sm:text-5xl font-black text-accent tracking-tight">
+  return { running, elapsed, laps, start, pause, reset, lap, fmt, fmtCurto };
+}
+
+function CronometroPainel({ running, elapsed, laps, start, pause, reset, lap, fmt }: ReturnType<typeof useCronometro>) {
+  // fmtCurto é só do botão da grade; aqui o visor mostra os milissegundos.
+  return (
+    <div className="flex flex-col">
+      <div className="neu-pressed rounded-2xl py-8 sm:py-12 px-4 flex items-center justify-center mb-5 border border-white/5">
+        <div className="font-mono tabular-nums text-5xl sm:text-7xl font-black text-accent tracking-tight">
           {fmt(elapsed)}
         </div>
       </div>
@@ -476,7 +491,9 @@ function CronometroCard() {
 // ─────────────────────────────────────────────────────────────────
 // 4. TIMER REGRESSIVO
 // ─────────────────────────────────────────────────────────────────
-function TimerCard() {
+// Mesmo motivo do cronômetro, e mais um: o timer TOCA no fim. Se o estado
+// morresse com o modal, fechar a janela cancelaria o alarme silenciosamente.
+function useTimerRegressivo() {
   const [hours,   setHours]   = useState(0);
   const [minutes, setMinutes] = useState(5);
   const [seconds, setSeconds] = useState(0);
@@ -577,14 +594,25 @@ function TimerCard() {
 
   const configurable = !running && remaining === 0;
 
-  return (
-    <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col">
-      <CardHeader icon={Hourglass} title="Timer Regressivo" subtitle="Contagem para zero" />
+  return {
+    hours, setHours, minutes, setMinutes, seconds, setSeconds,
+    running, remaining, finished, setFinished,
+    start, pause, clear, totalSetMs,
+    dH, dM, dS, configurable,
+  };
+}
 
-      <div className={`neu-pressed rounded-2xl py-6 px-4 flex items-center justify-center mb-4 border ${
+function TimerPainel({
+  hours, setHours, minutes, setMinutes, seconds, setSeconds,
+  running, remaining, finished, setFinished,
+  start, pause, clear, totalSetMs, dH, dM, dS, configurable,
+}: ReturnType<typeof useTimerRegressivo>) {
+  return (
+    <div className="flex flex-col">
+      <div className={`neu-pressed rounded-2xl py-8 sm:py-12 px-4 flex items-center justify-center mb-5 border ${
         finished ? 'border-red-500/40' : 'border-white/5'
       }`}>
-        <div className={`font-mono tabular-nums text-4xl sm:text-5xl font-black tracking-tight transition-colors ${
+        <div className={`font-mono tabular-nums text-5xl sm:text-7xl font-black tracking-tight transition-colors ${
           finished ? 'text-red-500 animate-pulse' : 'text-accent'
         }`}>
           {pad2(dH)}:{pad2(dM)}:{pad2(dS)}
@@ -640,7 +668,7 @@ function TimerCard() {
 
       {finished && (
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="text-xs font-bold text-red-400 text-center mt-3">
+          className="text-sm font-bold text-red-400 text-center mt-4">
           ⏰ Tempo esgotado!
         </motion.p>
       )}
@@ -649,24 +677,169 @@ function TimerCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// BOTÃO DA GRADE — a ferramenta fechada
+// ─────────────────────────────────────────────────────────────────
+// Cada ferramenta virou botão: os quatro painéis abertos ao mesmo tempo
+// espremiam relógio e cronômetro em fonte pequena e enchiam a tela de
+// controles que ninguém estava usando. Fechado, o botão ainda mostra o
+// que interessa de relance (`resumo`) — o estado dos relógios vive na
+// view, então continua correndo com o modal fechado.
+function BotaoFerramenta({
+  icon: Icon, title, subtitle, resumo, ativo, onClick,
+}: {
+  icon: any; title: string; subtitle: string;
+  resumo: string; ativo?: boolean; onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`neu-flat rounded-3xl p-6 border text-left flex items-center gap-4 w-full transition-all hover:border-accent/40 ${
+        ativo ? 'border-accent/50' : 'border-white/5'
+      }`}>
+      <div className="w-12 h-12 neu-circle flex items-center justify-center text-accent shrink-0">
+        <Icon size={20} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+          {title}
+          {ativo && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />}
+        </h3>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block truncate">
+          {subtitle}
+        </span>
+      </div>
+      <span className="font-mono tabular-nums text-sm sm:text-base font-bold text-gray-300 shrink-0">
+        {resumo}
+      </span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MODAL DA FERRAMENTA
+// ─────────────────────────────────────────────────────────────────
+function ModalFerramenta({
+  icon, title, subtitle, onClose, children,
+}: {
+  icon: any; title: string; subtitle: string;
+  onClose: () => void; children: React.ReactNode;
+}) {
+  // Esc fecha. O modal não guarda estado nenhum — quem guarda é a view —,
+  // então fechar por engano não custa uma medição.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    // Sem `exit` e sem AnimatePresence de propósito. O overlay é
+    // `fixed inset-0`: com animação de saída ele fica no DOM durante o
+    // fade-out e engole o clique de quem fecha uma ferramenta e vai direto
+    // abrir a outra — que é o gesto natural nesta tela. Medido aqui: com
+    // `exit` o nó nem chegava a ser removido, ficava preso em opacity 0.
+    // Fechar é instantâneo; abrir continua animado.
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }}
+        transition={{ duration: 0.15 }}
+        className="neu-flat rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto main-scrollbar border border-white/5"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <CardHeader icon={icon} title={title} subtitle={subtitle} />
+          <button onClick={onClose} className="modal-close-btn shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
 // VIEW PRINCIPAL — grid 2x2 desktop, coluna única mobile
 // ─────────────────────────────────────────────────────────────────
-export const CentralTempoView = () => (
-  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-    className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-    <div className="shrink-0">
-      <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Tempo</h2>
-      <p className="text-sm text-gray-400 mt-1">
-        Quatro ferramentas operacionais num só lugar: relógio do Acre,
-        alarmes, cronômetro e timer.
-      </p>
-    </div>
+type Ferramenta = 'relogio' | 'alarmes' | 'cronometro' | 'timer';
 
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <RelogioCard />
-      <AlarmesCard />
-      <CronometroCard />
-      <TimerCard />
-    </div>
-  </motion.div>
-);
+export const CentralTempoView = () => {
+  const [aberta, setAberta] = useState<Ferramenta | null>(null);
+
+  // Os quatro estados moram AQUI, não nos painéis: o modal monta e desmonta,
+  // a view não. Cronômetro disparado e timer contando sobrevivem ao fechar.
+  const relogio = useRelogioAcre();
+  const cron    = useCronometro();
+  const timer   = useTimerRegressivo();
+  const alarmesApi = useAlarmesTurma();
+
+  const ativos = alarmesApi.alarmes.filter(a => a.ativo).length;
+
+  const fechar = () => setAberta(null);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+      <div className="shrink-0">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Tempo</h2>
+        <p className="text-sm text-gray-400 mt-1">
+          Quatro ferramentas operacionais num só lugar: relógio do Acre,
+          alarmes, cronômetro e timer. Toque para abrir.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <BotaoFerramenta icon={Clock} title="Relógio Digital"
+          subtitle="Acre · America/Rio_Branco"
+          resumo={relogio.hora} onClick={() => setAberta('relogio')} />
+
+        <BotaoFerramenta icon={AlarmClock} title="Alarmes"
+          subtitle="Toca para a turma · em qualquer tela"
+          resumo={alarmesApi.isLoading ? '—' : `${ativos} ativo${ativos === 1 ? '' : 's'}`}
+          ativo={ativos > 0}
+          onClick={() => setAberta('alarmes')} />
+
+        <BotaoFerramenta icon={TimerIcon} title="Cronômetro"
+          subtitle="Operação · com voltas"
+          resumo={cron.fmtCurto(cron.elapsed)} ativo={cron.running}
+          onClick={() => setAberta('cronometro')} />
+
+        <BotaoFerramenta icon={Hourglass} title="Timer Regressivo"
+          subtitle="Contagem para zero"
+          resumo={`${pad2(timer.dH)}:${pad2(timer.dM)}:${pad2(timer.dS)}`}
+          ativo={timer.running || timer.finished}
+          onClick={() => setAberta('timer')} />
+      </div>
+
+      {aberta === 'relogio' && (
+        <ModalFerramenta icon={Clock} title="Relógio Digital"
+          subtitle="Acre · America/Rio_Branco" onClose={fechar}>
+          <RelogioPainel {...relogio} />
+        </ModalFerramenta>
+      )}
+      {aberta === 'alarmes' && (
+        <ModalFerramenta icon={AlarmClock} title="Alarmes"
+          subtitle="Toca para a turma · em qualquer tela" onClose={fechar}>
+          <AlarmesPainel alarmesApi={alarmesApi} />
+        </ModalFerramenta>
+      )}
+      {aberta === 'cronometro' && (
+        <ModalFerramenta icon={TimerIcon} title="Cronômetro"
+          subtitle="Operação · com voltas" onClose={fechar}>
+          <CronometroPainel {...cron} />
+        </ModalFerramenta>
+      )}
+      {aberta === 'timer' && (
+        <ModalFerramenta icon={Hourglass} title="Timer Regressivo"
+          subtitle="Contagem para zero" onClose={fechar}>
+          <TimerPainel {...timer} />
+        </ModalFerramenta>
+      )}
+    </motion.div>
+  );
+};
