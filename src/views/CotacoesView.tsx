@@ -5,6 +5,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { todayBR } from '../lib/dates';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
 import { normalizarUnidade } from '../lib/unidades';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -32,6 +33,26 @@ const STATUS_VIVOS = new Set(['Aguardando Financeiro', 'Em correção', 'Aprovad
 // comparação entre prazo e necessidade é feita na string ISO, que já ordena.
 const dataBR = (iso?: string | null) =>
   iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '';
+
+// Proposta vencida: comparação na string ISO, que já ordena (mesma razão do
+// dataBR acima). O Financeiro não aprova depois desta data (migr. 583), então
+// ela precisa saltar aos olhos antes do clique, não depois do erro.
+const propostaVencida = (validade?: string | null): boolean =>
+  !!validade && String(validade).slice(0, 10) < todayBR();
+
+// Data ISO daqui a N dias, no fuso da operação. Mesma disciplina do dataBR
+// acima: a aritmética é feita em UTC ao meio-dia para o dia não escorregar.
+const emDias = (n: number): string => {
+  const [y, m, d] = todayBR().split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d, 12));
+  base.setUTCDate(base.getUTCDate() + n);
+  return base.toISOString().slice(0, 10);
+};
+
+// Validade padrão da proposta. 15 dias é o costume do mercado para cotação de
+// material — e o ponto pedagógico é que a data nasce preenchida em vez de
+// virar campo em branco que ninguém entende para que serve.
+const VALIDADE_PADRAO_DIAS = 15;
 
 // notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
 async function notificarSetor(args: {
@@ -181,7 +202,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
-  const [extras, setExtras] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+  const [extras, setExtras] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
+  // `useFormValidation` só cobre `form` (requisição e fornecedor) — era por
+  // isso que valor e validade passavam em branco. Estes campos têm régua
+  // própria: valor precisa ser positivo, validade precisa existir e estar viva.
+  const [errosExtras, setErrosExtras] = useState<{ valor_total?: string; validade?: string }>({});
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   // Trava de trabalho (migr. 537) — chave é requisição+fornecedor, não a
@@ -333,7 +358,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
   // proposta, não correção desta.
   const [correcao, setCorrecao] = useState<any | null>(null);
-  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
 
   // Mesma régua do formulário de nova cotação: a quantidade é da requisição, e
   // é ela que liga unitário e total. Aqui a requisição não muda (trocar de
@@ -633,13 +658,31 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const closeForm = () => {
     setShowForm(false);
     setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
-    setExtras({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+    setExtras({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '' });
     setErrors({});
+    setErrosExtras({});
   };
 
   // Compras cria a cotação → vai direto para 'Aguardando Financeiro' e notifica.
   const handleSave = async () => {
     if (!validate()) return;
+    // MIGR 583. Preço e validade são a proposta: sem preço não há o que
+    // comparar, e sem validade não se sabe até quando o que foi comparado
+    // continua valendo. O banco recusa os dois casos — a tela avisa antes.
+    const erros: { valor_total?: string; validade?: string } = {};
+    if (!(parseBRL(extras.valor_total) > 0)) {
+      erros.valor_total = 'Informe o valor da proposta.';
+    }
+    if (!extras.validade) {
+      erros.validade = 'Diga até quando este preço vale.';
+    } else if (extras.validade < todayBR()) {
+      erros.validade = 'Esta data já passou — a proposta nasceria vencida.';
+    }
+    setErrosExtras(erros);
+    if (Object.keys(erros).length > 0) {
+      showToast('Confira o valor e a validade da proposta.', 'error');
+      return;
+    }
     // O select já vem com a opção travada, mas o banco é quem decide de
     // verdade: sem esta checagem no Salvar, o cadeado da tela é decoração.
     if (reserva.travado) {
@@ -671,6 +714,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         // Reposição manda null: o gatilho zeraria de qualquer jeito, e enviar
         // texto daria a impressão de que foi gravado.
         marca: ehEventual ? (extras.marca.trim() || null) : null,
+        // O que veio junto do preço (migr. 583): frete, garantia, instalação.
+        observacao: extras.observacao.trim() || null,
         status: 'Aguardando Financeiro',
         filial,
       });
@@ -904,8 +949,13 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
       valor_unitario: Number.isFinite(qtd) && qtd > 0 ? formatBRL(total / qtd) : '',
       valor_total:   formatBRL(total),
       prazo_entrega: cot.prazo_entrega ?? '',
-      validade:      cot.validade ?? '',
+      // Proposta devolvida costuma voltar com a validade já vencida — e o
+      // banco recusa reenviar assim (migr. 583). Sugere a data nova em vez de
+      // deixar o aluno bater no erro para descobrir.
+      validade:      (cot.validade && String(cot.validade) >= todayBR())
+                       ? cot.validade : emDias(VALIDADE_PADRAO_DIAS),
       marca:         cot.marca ?? '',
+      observacao:    cot.observacao ?? '',
     });
   };
 
@@ -914,6 +964,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     const valorNum = parseBRL(correcaoForm.valor_total);
     if (!(valorNum > 0)) {
       showToast('Informe o valor da proposta.', 'error', true);
+      return;
+    }
+    // Reenviar é revalidar: o banco recusa devolver ao Financeiro uma proposta
+    // com a validade vencida (migr. 583), e o erro cru não diria o porquê.
+    if (!correcaoForm.validade) {
+      showToast('Diga até quando este preço vale.', 'error', true);
+      return;
+    }
+    if (correcaoForm.validade < todayBR()) {
+      showToast('A validade informada já passou. Confirme com o fornecedor até quando o preço vale.', 'error', true);
       return;
     }
     setReenviando(true);
@@ -926,13 +986,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
         // Migr. 526: branco LIMPA. "Tirei a marca da proposta" é correção
         // legítima, e guardar o valor antigo diria que deu certo sem ter dado.
         p_marca:         correcaoForm.marca.trim() || null,
+        p_observacao:    correcaoForm.observacao.trim() || null,
       });
       if (error) throw error;
       atualizarCotacaoLocal(c => c.id === correcao.id
         ? { ...c, status: 'Aguardando Financeiro', feedback: null,
             valor_total: valorNum, prazo_entrega: correcaoForm.prazo_entrega || c.prazo_entrega,
             validade: correcaoForm.validade || null,
-            marca: correcaoForm.marca.trim() || null }
+            marca: correcaoForm.marca.trim() || null,
+            observacao: correcaoForm.observacao.trim() || null }
         : c);
 
       const reqItem  = correcao.req?.item ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id)?.item ?? 'item';
@@ -1020,7 +1082,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
             />
           </div>
           {isCompras && !modoFinanceiro && (
-            <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
+            <NeuButtonAccent onClick={() => {
+              const abrindo = !showForm;
+              closeForm();
+              setShowForm(abrindo);
+              if (abrindo) setExtras(x => ({ ...x, validade: emDias(VALIDADE_PADRAO_DIAS) }));
+            }}>
               <Plus size={16} /> Nova Cotação
             </NeuButtonAccent>
           )}
@@ -1178,10 +1245,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           : 'Escolha a requisição para o total ser calculado pela quantidade.'}
                       </p>
                     </FormField>
-                    <FormField label="Valor Total (R$)">
-                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    <FormField label="Valor Total (R$) *" error={errosExtras.valor_total}>
+                      <input type="text" inputMode="numeric"
+                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.valor_total ? 'border border-red-500/40' : ''}`}
                         value={extras.valor_total}
-                        onChange={e => setTotal(e.target.value)}
+                        onChange={e => { setTotal(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
                         onKeyDown={handleMoneyKeyDown}
                         placeholder="0,00" />
                       {temQtd && (
@@ -1213,9 +1281,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         </p>
                       )}
                     </FormField>
-                    <FormField label="Validade da Proposta">
-                      <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.validade} onChange={e => setExtras(x => ({ ...x, validade: e.target.value }))} />
+                    <FormField label="Validade da Proposta *" error={errosExtras.validade}>
+                      <input type="date" min={todayBR()}
+                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.validade ? 'border border-red-500/40' : ''}`}
+                        value={extras.validade}
+                        onChange={e => { setExtras(x => ({ ...x, validade: e.target.value })); setErrosExtras(x => ({ ...x, validade: undefined })); }} />
+                      {/* Preço de fornecedor vence. Depois desta data o
+                          Financeiro não aprova (migr. 583) — a saída é devolver
+                          para Compras revalidar, que é o que se faz na rua. */}
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        Até quando o fornecedor garante este preço. Passou disso, o Financeiro devolve para revalidar.
+                      </p>
                     </FormField>
                     {/* Marca (migr. 526). Na eventual é campo da proposta; na
                         reposição é o que o catálogo já diz, em cinza. */}
@@ -1248,6 +1324,21 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         </p>
                       </FormField>
                     ))}
+                    {/* MIGR 583. Proposta real não é só um número: vem com
+                        frete, garantia, prazo de troca. Sem lugar para isso, o
+                        aluno comparava dois preços fingindo que as condições
+                        eram iguais — e é aqui que a diferença dos três nichos
+                        aparece sem precisar de campo por nicho. */}
+                    <FormField label="Condições / observações do fornecedor">
+                      <textarea maxLength={240}
+                        className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-[42px] md:col-span-2"
+                        value={extras.observacao}
+                        onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
+                        placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        O que veio junto do preço. Duas propostas com o mesmo valor podem não ser a mesma compra.
+                      </p>
+                    </FormField>
                   </div>
                   <div className="flex gap-3 justify-end">
                     <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -1323,6 +1414,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           {desempenhoDisponivel && item.fornecedor_id && (
                             <SeloDesempenho d={desempenho[item.fornecedor_id]} compacto />
                           )}
+                          {item.observacao && (
+                            <span className="text-[10px] text-gray-500 line-clamp-2" title={item.observacao}>
+                              {item.observacao}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
@@ -1352,7 +1448,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-500 font-mono whitespace-nowrap">{item.validade || '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono whitespace-nowrap">
+                        {item.validade ? (
+                          <span className={propostaVencida(item.validade) && STATUS_VIVOS.has(item.status)
+                            ? 'text-red-400 font-bold' : 'text-gray-500'}
+                            title={propostaVencida(item.validade) && STATUS_VIVOS.has(item.status)
+                              ? 'Preço vencido: o Financeiro não aprova. Devolva para Compras revalidar.' : undefined}>
+                            {dataBR(item.validade)}
+                            {propostaVencida(item.validade) && STATUS_VIVOS.has(item.status) && ' · vencida'}
+                          </span>
+                        ) : <span className="text-gray-500">—</span>}
+                      </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-xs max-w-xs">
                         {item.feedback
@@ -1535,6 +1641,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               {isMenor && <span title="Menor preço"><Award size={12} className="text-emerald-400 shrink-0" /></span>}
                               {c.forn?.nome ?? '—'}
                             </div>
+                            {/* O menor preço pode ser o mais caro: frete e
+                                garantia entram aqui, e é isto que separa duas
+                                propostas de mesmo valor (migr. 583). */}
+                            {c.observacao && (
+                              <span className="block text-[10px] text-gray-500 mt-0.5 max-w-[16rem]">{c.observacao}</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-3 text-xs text-gray-300">
                             {c.marca || <span className="text-gray-600">—</span>}
@@ -1555,7 +1667,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                               </span>
                             ) : '—'}
                           </td>
-                          <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{c.validade || '—'}</td>
+                          <td className="py-2.5 px-3 text-xs font-mono">
+                            {c.validade ? (
+                              <span className={propostaVencida(c.validade) && STATUS_VIVOS.has(c.status)
+                                ? 'text-red-400 font-bold' : 'text-gray-500'}>
+                                {dataBR(c.validade)}
+                                {propostaVencida(c.validade) && STATUS_VIVOS.has(c.status) && ' · vencida'}
+                              </span>
+                            ) : <span className="text-gray-500">—</span>}
+                          </td>
                           <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} /></td>
                           {podeDecidir && (
                             <td className="py-2.5 px-3 text-right">
@@ -1728,10 +1848,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                     value={correcaoForm.prazo_entrega}
                     onChange={e => setCorrecaoForm(x => ({ ...x, prazo_entrega: e.target.value }))} />
                 </FormField>
-                <FormField label="Validade da Proposta">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                <FormField label="Validade da Proposta *">
+                  <input type="date" min={todayBR()}
+                    className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={correcaoForm.validade}
                     onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    Reenviar é revalidar: confirme com o fornecedor até quando o preço vale.
+                  </p>
                 </FormField>
                 {/* Migr. 526: só na eventual. Na reposição o campo nem existe
                     na proposta — a marca é do produto do catálogo. */}
@@ -1743,6 +1867,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                       placeholder="Ex.: Foxton" />
                   </FormField>
                 )}
+                <div className="sm:col-span-3">
+                  <FormField label="Condições / observações do fornecedor">
+                    <textarea maxLength={240}
+                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-[42px] w-full"
+                      value={correcaoForm.observacao}
+                      onChange={e => setCorrecaoForm(x => ({ ...x, observacao: e.target.value }))}
+                      placeholder="Ex.: frete incluso; garantia de 12 meses" />
+                  </FormField>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 mt-6">
