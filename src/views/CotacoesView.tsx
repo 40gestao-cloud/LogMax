@@ -5,7 +5,8 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
+import { normalizarUnidade } from '../lib/unidades';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos';
 import { ehContratado } from '../lib/naturezaServico';
@@ -180,7 +181,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
-  const [extras, setExtras] = useState({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+  const [extras, setExtras] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   // Trava de trabalho (migr. 537) — chave é requisição+fornecedor, não a
@@ -236,6 +237,34 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
     () => requisicoes.find((r: any) => r.id === form.requisicao_id),
     [requisicoes, form.requisicao_id],
   );
+  // Quantidade da requisição — é ela que transforma preço unitário em proposta.
+  // O fornecedor cota "R$ 4,50 a unidade"; quem digitava só o total fazia a
+  // conta de cabeça e errava (e a comparação entre propostas de quantidades
+  // iguais deixava de bater). Sem requisição escolhida ainda não há por quanto
+  // multiplicar: aí o total volta a ser digitado direto.
+  const qtdReq = Number(reqSelecionada?.qtd ?? 0);
+  const temQtd = Number.isFinite(qtdReq) && qtdReq > 0;
+  const unidadeReq = normalizarUnidade(reqSelecionada?.unidade);
+
+  // As duas direções da mesma conta. Unitário é o que o fornecedor informa;
+  // total continua editável porque frete e desconto entram lá — e nesse caso o
+  // unitário passa a ser o preço médio real, não o de tabela.
+  const setUnitario = (v: string) => setExtras(x => {
+    const unit = formatBRL(v);
+    return { ...x, valor_unitario: unit, valor_total: temQtd ? formatBRL(parseBRL(unit) * qtdReq) : x.valor_total };
+  });
+  const setTotal = (v: string) => setExtras(x => {
+    const total = formatBRL(v);
+    return { ...x, valor_total: total, valor_unitario: temQtd ? formatBRL(parseBRL(total) / qtdReq) : x.valor_unitario };
+  });
+
+  // Trocar de requisição troca a quantidade: o total tem de acompanhar, senão
+  // fica o valor da requisição anterior parecendo conferido.
+  useEffect(() => {
+    if (!temQtd) return;
+    setExtras(x => (x.valor_unitario ? { ...x, valor_total: formatBRL(parseBRL(x.valor_unitario) * qtdReq) } : x));
+  }, [qtdReq, temQtd]);
+
   // Prazo prometido depois da data em que o item é necessário: não é erro de
   // preenchimento (o fornecedor pode mesmo não dar conta), é informação de
   // decisão — o preço menor não compensa a entrega atrasada.
@@ -568,7 +597,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   const closeForm = () => {
     setShowForm(false);
     setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
-    setExtras({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+    setExtras({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
     setErrors({});
   };
 
@@ -1082,12 +1111,45 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         <SeloDesempenho d={desempenho[form.fornecedor_id]} />
                       </div>
                     )}
+                    {/* Quantidade não é digitada aqui: ela é da requisição.
+                        Mostrar em cinza tira a conta da cabeça do comprador e
+                        deixa claro sobre quantas unidades o preço incide. */}
+                    {reqSelecionada && (
+                      <FormField label="Quantidade solicitada">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                          {temQtd ? `${qtdBR(qtdReq)} ${unidadeReq}` : '—'}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Quem pediu definiu a medida. Cotar é dar preço para esta quantidade — não para outra.
+                        </p>
+                      </FormField>
+                    )}
+                    <FormField label={`Valor Unitário (R$${temQtd ? ` / ${unidadeReq}` : ''})`}>
+                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                        value={extras.valor_unitario}
+                        onChange={e => setUnitario(e.target.value)}
+                        onKeyDown={handleMoneyKeyDown}
+                        placeholder="0,00" />
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        {temQtd
+                          ? `O preço de uma ${unidadeReq}. O total sai da multiplicação por ${qtdBR(qtdReq)}.`
+                          : 'Escolha a requisição para o total ser calculado pela quantidade.'}
+                      </p>
+                    </FormField>
                     <FormField label="Valor Total (R$)">
                       <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
                         value={extras.valor_total}
-                        onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                        onChange={e => setTotal(e.target.value)}
                         onKeyDown={handleMoneyKeyDown}
                         placeholder="0,00" />
+                      {temQtd && (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          {extras.valor_unitario
+                            ? `${extras.valor_unitario} × ${qtdBR(qtdReq)} ${unidadeReq}. É este valor que vai ao Financeiro.`
+                            : 'É este valor que vai ao Financeiro.'}
+                          {' '}Frete ou desconto fechado entram aqui — o unitário se ajusta ao preço médio.
+                        </p>
+                      )}
                     </FormField>
                     <FormField label="Prazo de Entrega">
                       <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
