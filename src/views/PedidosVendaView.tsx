@@ -192,7 +192,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                                         && !p.conta_receber_id && p.status !== 'Cancelado';
                     return (
                       <motion.tr key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-500">{numeroPedidoVenda(p)}</td>
+                        <td className="py-3 px-4 text-xs font-credencial text-gray-500">{numeroPedidoVenda(p)}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.cliente?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{p.vendedor_nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{Array.isArray(p.itens) ? p.itens.length : 0}</td>

@@ -1423,7 +1423,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                         {/* A cotação tem número próprio e cita a requisição de
                             onde nasceu: as duas pontas da conversa entre Compras
                             e Financeiro numa linha só. */}
-                        <span className="block font-mono text-[10px] text-accent/70 tracking-wider">
+                        <span className="block font-credencial text-[10px] text-accent/70 tracking-wider">
                           {numeroCotacao(item)}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1436,7 +1436,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
                             </span>
                           )}
                           {item.req && (
-                            <span className="block font-mono text-[10px] text-gray-600 tracking-wider">
+                            <span className="block font-credencial text-[10px] text-gray-600 tracking-wider">
                               {numeroRequisicao(item.req)}
                             </span>
                           )}

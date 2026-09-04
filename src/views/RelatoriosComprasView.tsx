@@ -233,7 +233,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
                   <tbody><AnimatePresence>
                     {filteredNot.map((n: any) => (
                       <motion.tr key={n.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-300">{n.numero_nf ?? '—'}</td>
+                        <td className="py-3 px-4 text-xs font-credencial text-gray-300">{n.numero_nf ?? '—'}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{n.forn?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {Number(n.valor_total || 0).toFixed(2)}</td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-400">{n.data_emissao ?? '—'}</td>

@@ -490,7 +490,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                       onClick={() => setAberto(a => a === item.id ? null : item.id)}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[9rem] sm:max-w-[200px]">
-                        <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
+                        <span className="block font-credencial text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
                         <span className="flex items-center gap-1.5">
                           <ChevronRight size={13}
                             className={`text-gray-500 shrink-0 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
@@ -584,7 +584,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                             {/* Cabeçalho: o nome inteiro, quebrando linha se
                                 precisar. É a informação que faltava. */}
                             <div>
-                              <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
+                              <span className="block font-credencial text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
                               <h4 className="text-sm sm:text-base font-bold text-gray-100 leading-snug break-words">{item.item}</h4>
                               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                                 {item.tipo_requisicao && (

@@ -1248,7 +1248,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         </span>
                       )}
                       {r.numero && (
-                        <span className="block font-mono text-[10px] text-gray-500 ml-[21px] tracking-wider">{r.numero}</span>
+                        <span className="block font-credencial text-[10px] text-gray-500 ml-[21px]">{r.numero}</span>
                       )}
                       {r.complemento && (
                         <span className="text-[10px] text-gray-500 ml-[21px]">{r.complemento}</span>
@@ -1433,7 +1433,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               <h3 className="text-sm font-bold text-gray-300 mb-1">
                 Corrigir e reenviar
                 {corrigindo.numero
-                  ? <span className="text-accent ml-2 font-mono text-xs">{corrigindo.numero}</span>
+                  ? <span className="text-accent ml-2 font-credencial text-xs">{corrigindo.numero}</span>
                   : <span className="text-accent ml-2 text-xs">{corrigindo.item}</span>}
               </h3>
               <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 my-4">

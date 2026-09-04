@@ -337,7 +337,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                   compra. */}
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
+                  <p className="text-[10px] font-credencial text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
                   <p className="text-sm font-bold text-gray-200 truncate">
                     {ap.prod?.nome ?? 'Produto não encontrado'}
                     {/* Material sai do estoque da casa: a marca é a do cadastro,
@@ -415,7 +415,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
             <div key={ap.id} className="neu-pressed rounded-xl p-3 border border-amber-400/20">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
+                  <p className="text-[10px] font-credencial text-gray-500 tracking-wider">{numeroRequisicao(ap.req)}</p>
                   <p className="text-sm font-semibold text-gray-200 truncate">{ap.prod?.nome ?? 'Produto não encontrado'}</p>
                   <p className="text-xs text-gray-300 mt-1">{ap.req.correcao_motivo || 'Sem motivo registrado.'}</p>
                   {((ap.req as any).correcao_solicitada_em || (ap.req as any).correcao_solicitada_por) && (

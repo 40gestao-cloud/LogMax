@@ -734,7 +734,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                             o carrega (Reposição) e da descrição da requisição
                             quando é compra eventual. */}
                         <td className="py-3 px-4 text-xs">
-                          <span className="font-mono text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</span>
+                          <span className="font-credencial text-gray-300">{numeroPedido(item.ped ?? { id: item.pedido_id })}</span>
                           {nomeDoItem(item.pedido_id) && (
                             <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{nomeDoItem(item.pedido_id)}</div>
                           )}
@@ -1161,7 +1161,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-300">
                   Nota fiscal da carga
-                  <span className="text-accent ml-2">— {numeroPedido(notaAtrasada.ped ?? { id: notaAtrasada.pedido_id })}</span>
+                  <span className="text-accent ml-2 font-credencial">— {numeroPedido(notaAtrasada.ped ?? { id: notaAtrasada.pedido_id })}</span>
                 </h3>
                 <button onClick={() => !notaSalvando && setNotaAtrasada(null)}
                   className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">

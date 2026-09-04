@@ -222,9 +222,9 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                     const atraso = calcAtraso(item, hoje);
                     return (
                       <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{numeroPedido(item)}</td>
+                        <td className="py-3 px-4 text-xs font-credencial text-gray-500 hidden sm:table-cell">{numeroPedido(item)}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
-                          <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{numeroPedido(item)}</span>
+                          <span className="sm:hidden text-[10px] font-credencial text-gray-500 block">{numeroPedido(item)}</span>
                           {itemDisplay}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.forn?.nome ?? '—'}</span>
                         </td>

@@ -473,7 +473,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                       <ClipboardList size={18} className="text-accent" />
                     </div>
                     <div className="text-left min-w-0">
-                      <p className="text-[10px] font-mono text-gray-500 tracking-wider">{numeroRequisicao(req)}</p>
+                      <p className="text-[10px] font-credencial text-gray-500 tracking-wider">{numeroRequisicao(req)}</p>
                       <p className="text-sm font-bold text-gray-200 truncate">
                         {req.item}
                         {/* MIGR 582. Sem a marca o gerente aprova "papel A4"
@@ -577,7 +577,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             <div className="flex flex-col gap-0.5">
                               {irmasVivas(req).map(o => (
                                 <span key={o.id} className="text-xs text-gray-300">
-                                  <span className="font-mono text-gray-400">{numeroRequisicao(o)}</span>
+                                  <span className="font-credencial text-gray-400">{numeroRequisicao(o)}</span>
                                   {' — '}
                                   <span className={o.status === 'Em correção' ? 'text-amber-300 font-bold' : ''}>
                                     {o.status === 'Em correção' ? 'devolvida para correção' : String(o.status).toLowerCase()}
@@ -721,7 +721,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                 <div key={ap.id} className="neu-pressed rounded-xl p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-gray-500 tracking-wider">
+                      <span className="text-[10px] font-credencial text-gray-500 tracking-wider">
                         {req ? numeroRequisicao(req) : `#${String(ap.requisicao_id).slice(-6).toUpperCase()}`}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${negado

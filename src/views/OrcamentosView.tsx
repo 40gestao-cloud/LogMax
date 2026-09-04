@@ -868,7 +868,7 @@ const OrcamentosViewInner = ({
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           {/* O orçamento vai ao cliente: é por este número que
                               ele volta perguntando. */}
-                          <span className="block font-mono text-[10px] text-gray-500 tracking-wider">{numeroOrcamento(o)}</span>
+                          <span className="block font-credencial text-[10px] text-gray-500 tracking-wider">{numeroOrcamento(o)}</span>
                           {o.cliente?.nome ?? '—'}
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400">{o.vendedor_nome ?? '—'}</td>
