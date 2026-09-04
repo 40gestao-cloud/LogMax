@@ -6,7 +6,8 @@ import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet,
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
-import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel } from '../lib/viewUtils';
+import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel, drawPdfHeader } from '../lib/viewUtils';
+import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
@@ -277,30 +278,18 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
       const doc = new jsPDF();
       const titulo = `Contas a Pagar — ${filial}${periodoLabel}`;
 
-      doc.setFillColor(10, 10, 10);
-      doc.rect(0, 0, 210, 32, 'F');
-      doc.setTextColor(16, 185, 129);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('LogMax', 14, 14);
-      doc.setFontSize(9);
-      doc.setTextColor(150, 150, 150);
-      doc.text('Relatório Financeiro', 14, 21);
-      doc.setFontSize(11);
-      doc.setTextColor(220, 220, 220);
-      doc.text(titulo, 14, 29);
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} · ${allData.length} registros`, 210 - 14, 29, { align: 'right' });
+      // Padrão dos relatórios da casa: faixa preta, filete dourado
+      // e LogMax em dourado (`drawPdfHeader`, em viewUtils).
+      drawPdfHeader(doc, 'Relatório Financeiro', titulo, `Gerado em: ${new Date().toLocaleString('pt-BR')} · ${allData.length} registros`);
 
       autoTable(doc, {
-        startY: 38,
+        startY: 40,
         head: [exportCols],
         body: buildExportRows(allData),
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
-        alternateRowStyles: { fillColor: [245, 247, 245] },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+        alternateRowStyles: { fillColor: GOLD_TINT },
       });
 
       doc.save(`logmax-contas-pagar-${exportSlug}.pdf`);

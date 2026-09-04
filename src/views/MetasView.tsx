@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { setorLabel } from '../lib/setores';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { GOLD, GOLD_DARK, BLACK } from '../lib/pdfPalette';
 
 const statusCls = (s: string) => {
   if (s === 'Em Produção') return 'meta-status meta-status--producao';
@@ -241,11 +242,13 @@ export const MetasView = ({ showToast, profile }: any) => {
     const { jsPDF } = await import('jspdf');
     const { applyPlugin } = await import('jspdf-autotable');
     applyPlugin(jsPDF);
+    // Este PDF é em pontos, não em milímetros: o `drawPdfHeader` da casa
+    // desenharia a faixa fora da página. O que se alinha aqui é a cor —
+    // cabeçalho de tabela preto sobre dourado, como nos demais.
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const accent = [34, 197, 94] as [number, number, number];
 
-    doc.setFontSize(11).setFont('helvetica', 'normal').setTextColor(150);
-    doc.text('Meta Estratégica', 40, 40);
+    doc.setFontSize(11).setFont('helvetica', 'normal').setTextColor(...GOLD_DARK);
+    doc.text('LogMax · Meta Estratégica', 40, 40);
     doc.setFontSize(16).setFont('helvetica', 'bold').setTextColor(0);
     const titleLines = doc.splitTextToSize(m.titulo || m.descricao || '', 515);
     doc.text(titleLines, 40, 56);
@@ -276,7 +279,7 @@ export const MetasView = ({ showToast, profile }: any) => {
         ...(m.nota != null ? [['Nota', String(m.nota)]] : []),
         ...(m.status === 'Encerrada' ? [['Resultado', m.pool_distribuido ? 'Alcançada' : 'Não alcançada']] : []),
       ],
-      headStyles: { fillColor: accent, fontSize: 9, fontStyle: 'bold' },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontSize: 9, fontStyle: 'bold' },
       bodyStyles: { fontSize: 10 },
       columnStyles: { 0: { cellWidth: 200, fontStyle: 'bold' } },
       margin: { left: 40, right: 40 },

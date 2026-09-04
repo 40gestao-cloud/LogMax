@@ -539,15 +539,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     }
   };
 
-  const isGlobalRole = (u: UserProfile) =>
-    u.role === 'admin' || u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true);
-
   // Filtragem por filial e setor (lista do banco já filtrada por setor para gerente).
   // Setor casa primário OU extras — `all` (CEO/admin) sempre passa em qualquer filtro.
   const filteredUsers = users.filter(u => {
-    // Modo filial: só globais (admin/CEO/conselheiro) + gerente/colaborador
-    // da própria filial ativa — nada de outra unidade aparece.
-    if (filialAtiva && !isGlobalRole(u) && (u.filial ?? SEM_ALOCACAO) !== filialAtiva) return false;
+    // Modo filial: a lista é a da UNIDADE, e só. Antes os cargos globais
+    // (admin, CEO, conselheiro) viajavam junto para toda unidade que se
+    // abrisse — quem entrava na SuperMax via a holding no meio do quadro dela,
+    // e a conta sem alocação também. Quem é da Matriz aparece no modo Matriz;
+    // aqui aparece quem trabalha aqui.
+    if (filialAtiva && (u.filial ?? SEM_ALOCACAO) !== filialAtiva) return false;
     if (filialFiltro !== 'todas' && (u.filial ?? SEM_ALOCACAO) !== filialFiltro) return false;
     if (setorFiltro !== 'todos') {
       const setores = [u.setor, ...(u.setores_extras ?? [])];

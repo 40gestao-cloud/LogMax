@@ -13,7 +13,8 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
+import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR, drawPdfHeader } from '../lib/viewUtils';
+import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc, gerarEanInterno } from '../lib/barcode';
 import { FILIAL_DEFAULT } from '../lib/filiais';
 import {
@@ -1076,30 +1077,19 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       ]);
       const doc = new jsPDF();
 
-      doc.setFillColor(10, 10, 10);
-      doc.rect(0, 0, 210, 32, 'F');
-      doc.setTextColor(16, 185, 129);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('LogMax', 14, 14);
-      doc.setFontSize(9);
-      doc.setTextColor(150, 150, 150);
-      doc.text('Relatório Operacional', 14, 21);
-      doc.setFontSize(11);
-      doc.setTextColor(220, 220, 220);
-      doc.text('Catálogo de Produtos', 14, 29);
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 210 - 14, 29, { align: 'right' });
+      // Padrão dos relatórios da casa: faixa preta, filete dourado e LogMax
+      // em dourado (`drawPdfHeader`, em viewUtils).
+      drawPdfHeader(doc, 'Relatório Operacional', 'Catálogo de Produtos',
+        `Gerado em: ${new Date().toLocaleString('pt-BR')}`);
 
       autoTable(doc, {
-        startY: 38,
+        startY: 40,
         head: [exportCols],
         body: buildExportRows(todos),
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
-        alternateRowStyles: { fillColor: [245, 247, 245] },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+        alternateRowStyles: { fillColor: GOLD_TINT },
       });
 
       const etiquetaInput = todos.map((p: any) => ({

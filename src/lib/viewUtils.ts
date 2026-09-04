@@ -251,9 +251,9 @@ export async function exportToPDFAgrupado(title: string, columns: string[], grup
       head: [columns],
       body: grupo.rows,
       theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { textColor: [60, 60, 60], fontSize: 8 },
-      alternateRowStyles: { fillColor: [245, 247, 245] },
+      headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+      alternateRowStyles: { fillColor: GOLD_TINT },
     });
     cursorY = (doc as any).lastAutoTable.finalY + 12;
   }
