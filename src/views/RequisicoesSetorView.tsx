@@ -123,16 +123,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const [erros, setErros] = useState<Record<string, string>>({});
   const [detalhe, setDetalhe] = useState<string | null>(null);
 
-  // Sugestões do catálogo — o campo continua livre, a lista só ajuda a
-  // escrever o nome de algo que a empresa já compra.
-  const sugestoes = useMemo(
-    () => [...produtos]
-      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo')
-      .map((p: any) => p.nome)
-      .filter(Boolean)
-      .sort((a: string, b: string) => a.localeCompare(b, 'pt-BR')),
-    [produtos],
-  );
+  // O nome do item NÃO tem lista de sugestões, e isso é de propósito: compra
+  // eventual é justamente o que o catálogo não tem. Oferecer os nomes do
+  // cadastro empurrava o aluno a escolher um produto que já existe — e item
+  // que já existe se pede por Reposição, com saldo e código. A marca é o
+  // contrário: ela se repete entre produtos diferentes, então lá a lista
+  // aproveita o que a empresa já compra.
 
   // Marcas que a empresa já compra. Mesma lógica do nome: o campo é livre
   // (a marca certa pode ser uma que nunca se comprou), a lista só evita que
@@ -1054,9 +1050,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   use <em>Motivo próprio</em> quando a razão de pedir for diferente da geral.
                 </p>
 
-                <datalist id="sugestoes-catalogo">
-                  {sugestoes.map(nome => <option key={nome} value={nome} />)}
-                </datalist>
 
                 {/* MIGR 582. "Papel" não é um pedido: é um assunto. Quem vai
                     comprar precisa saber QUAL produto e de QUE marca, senão
@@ -1065,7 +1058,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   Escreva o <strong className="text-gray-300">nome do produto</strong> e a{' '}
                   <strong className="text-gray-300">marca</strong> como quem vai à loja comprar. Compras
                   não adivinha: quanto mais preciso o pedido, mais rápido a cotação volta com o item certo.
-                  Se a marca for indiferente, deixe em branco — isso também é uma resposta.
+                  Se a marca for indiferente, deixe em branco — isso também é uma resposta. Item que já
+                  existe no catálogo se pede por <strong className="text-gray-300">Reposição</strong>, não aqui.
                 </p>
 
                 {itens.map((row, i) => (
@@ -1073,7 +1067,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <div className="flex flex-wrap md:flex-nowrap gap-2 items-start">
                       <div className="flex-1 min-w-[180px]">
                         <input
-                          list="sugestoes-catalogo"
                           className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
                           placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
                           value={row.item}
