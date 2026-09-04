@@ -26,8 +26,6 @@ export function TreinamentoVendasView() {
       </div>
 
       <div className="neu-flat rounded-3xl p-5 sm:p-7 flex flex-col items-center justify-center text-center border border-accent/20 max-w-sm w-full mx-auto">
-        <h4 className="text-xs font-bold text-gray-400 mb-5 self-start uppercase tracking-widest">Simulador de PDV</h4>
-
         <div className="w-full max-w-[200px] rounded-2xl bg-white border border-black/10 px-6 py-6 mb-5">
           <img src="/icon-maxpos.png" alt="MaxPOS" className="w-full h-auto" />
         </div>
