@@ -290,7 +290,7 @@ export const InicioView = ({
                 <img src="/icon-portalmax.png" alt="PortalMax" className="w-full h-auto" />
               </div>
               <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
-                Material, turmas e avisos do curso ficam no PortalMax.
+                Ecossistema Max Educacional
               </span>
               <a
                 href={PORTALMAX_URL} target="_blank" rel="noopener noreferrer"
