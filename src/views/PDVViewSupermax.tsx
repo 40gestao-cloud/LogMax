@@ -12,6 +12,7 @@ import { ehVendavel } from '../lib/tipoProduto';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
+import { useAbrirCaixa } from '../hooks/useAbrirCaixa';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { supabase, criarClienteEfemero } from '../lib/supabase';
@@ -267,9 +268,16 @@ export const PDVViewSupermax = ({
   const [descAuthLoading, setDescAuthLoading] = useState(false);
   const [descontoAutorizacao, setDescontoAutorizacao] = useState<{ por: string; motivo: string } | null>(null);
 
-  const [aberturaValor, setAberturaValor] = useState('');
-  const [aberturaObs, setAberturaObs] = useState('');
-  const [abrindoCaixa, setAbrindoCaixa] = useState(false);
+  // Abertura de caixa: a regra vive em `useAbrirCaixa` porque as três
+  // unidades têm de abrir do mesmo jeito. Aqui fica só a aparência de caixa
+  // de mercado.
+  const abertura = useAbrirCaixa({
+    filial,
+    userId: user?.id,
+    operadorNome: profile?.nome ?? user?.email ?? 'Operador',
+    showToast,
+    refreshCaixa,
+  });
 
   // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
   // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
@@ -1291,47 +1299,6 @@ export const PDVViewSupermax = ({
     }
   };
 
-  const abrirCaixa = async () => {
-    const valor = parseBRL(aberturaValor);
-    if (!valor || valor <= 0) {
-      showToast?.('Informe o fundo de troco para abrir o caixa.', 'error', true);
-      return;
-    }
-    if (!supabase) { showToast?.('Supabase indisponível.', 'error', true); return; }
-    setAbrindoCaixa(true);
-    try {
-      const { error } = await supabase.from('controle_caixa').insert({
-        data:            todayBR(),
-        filial,
-        valor_abertura:  valor,
-        status:          'Aberto',
-        aberto_por:      user?.id ?? null,
-        aberto_por_nome: profile?.nome ?? user?.email ?? 'Operador',
-        aberto_em:       new Date().toISOString(),
-        observacao:      aberturaObs.trim() || null,
-      });
-      if (error) {
-        // 23505: o índice cobre só o caixa EM OPERAÇÃO (migr. 580), então aqui
-        // isto significa mesmo que há um caixa ABERTO — outro operador chegou
-        // primeiro. Antes o índice pegava também o caixa já FECHADO, e esta
-        // mensagem mentia: dizia "já existe caixa aberto" para um caixa
-        // fechado, sem saída nenhuma para o operador.
-        if (error.code === '23505') {
-          showToast?.(`Outro operador já abriu o caixa de ${filial} — atualizando a tela.`, 'error', true);
-        } else throw error;
-      } else {
-        showToast?.(`Caixa aberto com ${formatBRL(valor)} de fundo de troco.`, 'success');
-        setAberturaValor('');
-        setAberturaObs('');
-      }
-      await refreshCaixa();
-    } catch (err: any) {
-      showToast?.(`Erro ao abrir o caixa: ${err?.message ?? '—'}`, 'error', true);
-    } finally {
-      setAbrindoCaixa(false);
-    }
-  };
-
   const caixaAindaAberto = useCallback(async (): Promise<boolean> => {
     if (!supabase) return true;
     const today = todayBR();
@@ -2060,9 +2027,9 @@ export const PDVViewSupermax = ({
                   autoFocus
                   type="text"
                   inputMode="numeric"
-                  value={aberturaValor}
-                  onChange={(e) => setAberturaValor(formatBRL(parseBRL(e.target.value)))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abrirCaixa(); } }}
+                  value={abertura.valor}
+                  onChange={(e) => abertura.onChangeValor(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abertura.abrir(); } }}
                   placeholder="0,00"
                   className="w-full bg-white border-2 text-2xl font-bold text-gray-900 tabular-nums px-3 py-2 outline-none focus:border-blue-700"
                   style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
@@ -2075,21 +2042,21 @@ export const PDVViewSupermax = ({
                 <input
                   type="text"
                   maxLength={200}
-                  value={aberturaObs}
-                  onChange={(e) => setAberturaObs(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abrirCaixa(); } }}
+                  value={abertura.obs}
+                  onChange={(e) => abertura.setObs(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); abertura.abrir(); } }}
                   placeholder="Ex.: troco conferido com o gerente"
                   className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
                   style={{ borderColor: '#9ca3af' }}
                 />
               </div>
               <button
-                onClick={abrirCaixa}
-                disabled={abrindoCaixa || parseBRL(aberturaValor) <= 0}
+                onClick={abertura.abrir}
+                disabled={!abertura.podeAbrir}
                 className="w-full px-6 py-4 text-white font-black uppercase tracking-wide text-base disabled:opacity-30 flex items-center justify-center gap-2"
                 style={{ background: MONEY }}
               >
-                {abrindoCaixa ? <><Loader2 size={18} className="animate-spin" /> Abrindo…</> : 'Abrir Caixa (Enter)'}
+                {abertura.abrindo ? <><Loader2 size={18} className="animate-spin" /> Abrindo…</> : 'Abrir Caixa (Enter)'}
               </button>
               <button
                 onClick={() => refreshCaixa()}

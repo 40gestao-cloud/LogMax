@@ -9,6 +9,7 @@ import { useCaixaAberto } from '../hooks/useCaixaAberto';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { useAuth } from '../hooks/useAuth';
+import { useAbrirCaixa } from '../hooks/useAbrirCaixa';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { LoadingSpinner, FilialBadge, ProdutoThumb } from '../components/ui';
@@ -245,6 +246,17 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const podeAlternar = podeAlternarFilial(profile);
   const [filialFiltro] = useState<FilialPDV>(filialInicial);
   const { caixa, isLoading: caixaLoading, refresh: refreshCaixa } = useCaixaAberto(filialFiltro);
+  // Abrir o caixa é do operador, nas três unidades. Até aqui só o PDV
+  // SuperMax oferecia a abertura e MaxLook/TechMax mandavam chamar o
+  // Financeiro — travando a aula das duas num passo que a RLS sempre
+  // permitiu (policy `caixa_filial_write`, migr. 172).
+  const abertura = useAbrirCaixa({
+    filial: filialFiltro,
+    userId: user?.id,
+    operadorNome: profile?.nome ?? user?.email ?? 'Operador',
+    showToast,
+    refreshCaixa,
+  });
   // Realtime enabled: any other cashier's sale triggers a produtos update via the stock trigger.
   // Filtrado por filial na própria query — não só no client — pra não trafegar
   // produtos de outras unidades pro browser do operador.
@@ -1574,22 +1586,70 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   }
 
   if (!caixaAtivo) return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 text-center">
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 py-12 px-4">
       <div className="w-16 h-16 neu-pressed rounded-2xl flex items-center justify-center">
         <Lock size={28} className="text-gray-600" />
       </div>
-      <div>
+      <div className="text-center">
         <h3 className="text-lg font-bold text-gray-300">Caixa de {filialFiltro} não aberto</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs">
-          O caixa de hoje da unidade <span className="text-gray-300 font-bold">{filialFiltro}</span> ainda não foi aberto. Vá até{' '}
-          <span className="text-accent font-bold">Financeiro → Controle de Caixa</span>{' '}
-          para abrir.
+        <p className="text-sm text-gray-500 mt-1 max-w-sm">
+          Conte o fundo de troco da gaveta e abra o caixa para começar a operar.
         </p>
       </div>
+
+      <div className="neu-flat rounded-2xl p-6 border border-white/5 w-full max-w-sm flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pdv-fundo-troco" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            Fundo de troco <span className="normal-case tracking-normal text-gray-600">(dinheiro que já está na gaveta)</span>
+          </label>
+          {/* type=text + inputMode=numeric: a máscara R$ do projeto não
+              funciona em type=number. */}
+          <input
+            id="pdv-fundo-troco"
+            autoFocus
+            type="text"
+            inputMode="numeric"
+            placeholder="0,00"
+            value={abertura.valor}
+            onChange={e => abertura.onChangeValor(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); abertura.abrir(); } }}
+            className="neu-input py-2.5 px-3 rounded-xl text-xl font-bold font-mono tabular-nums text-center"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pdv-abertura-obs" className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            Observação <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+          </label>
+          <input
+            id="pdv-abertura-obs"
+            type="text"
+            maxLength={200}
+            placeholder="Ex.: troco conferido com o gerente"
+            value={abertura.obs}
+            onChange={e => abertura.setObs(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); abertura.abrir(); } }}
+            className="neu-input py-2 px-3 rounded-xl text-sm"
+          />
+        </div>
+        <button
+          onClick={abertura.abrir}
+          disabled={!abertura.podeAbrir}
+          className="neu-button-accent btn-shimmer py-3 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {abertura.abrindo
+            ? <><Loader2 size={16} className="animate-spin" /> Abrindo…</>
+            : <>Abrir caixa (Enter)</>}
+        </button>
+        <p className="text-[10px] text-gray-600 text-center leading-relaxed">
+          O Financeiro é avisado da abertura e confere os valores no fechamento,
+          em <span className="text-gray-500 font-bold">Controle de Caixa</span>.
+        </p>
+      </div>
+
       <div className="flex gap-3 flex-wrap justify-center">
         <button onClick={refreshCaixa}
           className="neu-button px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-accent transition-colors">
-          Verificar novamente
+          Já abriram para mim · Verificar novamente
         </button>
         {onVoltar && (
           <button onClick={onVoltar}
