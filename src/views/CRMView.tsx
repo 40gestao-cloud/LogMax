@@ -300,9 +300,9 @@ const CRMViewInner = ({ type, showToast, filial }: {
                 <button type="button"
                   onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
                   title="Gera CPF, CNPJ e celular de treino com dígito verificador válido. Abre em outra aba — o que você já preencheu continua aqui."
-                  className="neu-button py-1.5 px-3 rounded-xl text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-2 transition-colors shrink-0">
-                  <img src="/icon-maxid.png" alt="" className="h-6 w-auto rounded" />
-                  Gerar no MaxID <ExternalLink size={10} />
+                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
+                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                  Gerar no MaxID <ExternalLink size={13} />
                 </button>
               </div>
 
