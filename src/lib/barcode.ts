@@ -1,6 +1,8 @@
 // EAN-13 — encoder em JS puro + render canvas + etiqueta PDF.
 // Sem dependências novas (jspdf já no projeto).
 
+import { GOLD, BLACK } from './pdfPalette';
+
 const L_CODE = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
 const G_CODE = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
 const R_CODE = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
@@ -232,9 +234,13 @@ export function drawEtiquetasGridOnDoc(
   const totalPages = Math.ceil(items.length / perPage);
 
   const drawHeader = (pageIdx: number) => {
-    doc.setFillColor(10, 10, 10);
+    doc.setFillColor(...BLACK);
     doc.rect(0, 0, W, 10, 'F');
-    doc.setTextColor(16, 185, 129);
+    // Faixa fina (10mm) porque a folha é de etiquetas: o filete grosso dos
+    // relatórios comeria a primeira fileira. A cor é a mesma da casa.
+    doc.setFillColor(...GOLD);
+    doc.rect(0, 10, W, 0.5, 'F');
+    doc.setTextColor(...GOLD);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.text('LogMax', margin, 6.5);
