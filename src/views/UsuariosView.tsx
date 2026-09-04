@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2 } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -1164,84 +1164,101 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-red-500/30 w-full max-w-md">
-              <div className="flex items-center gap-3 mb-4">
+              className="neu-flat rounded-3xl border border-red-500/30 w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+              {/* Três faixas: cabeçalho, corpo com rolagem própria e rodapé.
+                  Antes era um bloco só, e a régua inteira (dez parágrafos que
+                  as migrações 482, 504, 505 e 514 acrescentaram) empurrava o
+                  campo de confirmação e os botões para fora da tela — o modal
+                  crescia até não caber e não rolava. */}
+              <div className="flex items-center gap-3 px-6 pt-6 pb-4 shrink-0">
                 <AlertTriangle size={20} className="text-red-500" />
                 <h3 className="text-base font-bold text-red-400">Apagar TODOS os dados?</h3>
               </div>
-              <div className="text-sm text-gray-300 space-y-2 mb-4">
-                <p>Esta operação vai <strong className="text-red-400">apagar permanentemente</strong>:</p>
-                <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
-                  <li>Vendas, estoque, recebimentos, expedição</li>
-                  <li>Financeiro: contas a pagar/receber, caixa, conciliações</li>
-                  {/* (504) "ponto" e "afastamentos" saíram desta linha: estão
-                      do lado de preservar. A linha dizia como perda o que a
-                      régua agora mantém — e o Registro de Ponto era justamente
-                      o que não podia sumir. */}
-                  {/* (514) "folha de pagamento" saiu desta linha: o holerite
-                      mudou de lado, junto com as rubricas que o explicam. */}
-                  <li>RH: férias e inscrições em treinamento</li>
-                  <li>Avaliações, pesquisas, feedbacks, PDIs</li>
-                  <li>Marketing: campanhas, promoções, cupons, calendário</li>
-                  <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
-                  <li>Cadastros: produtos, serviços e clientes</li>
-                  {/* Dizia "configurações, formas de pagamento e categorias de
-                      produto", e as três estão do lado de preservar: as duas
-                      primeiras desde a migr. 377, a categoria desde a 482. A
-                      linha listava como perda o que o reset nunca apagou. */}
-                  <li>Projetos, orçamento por categoria e governança (mandatos, riscos, prestações de contas)</li>
-                </ul>
-                <p className="text-emerald-400 text-xs pt-2">
-                  ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial),
-                  os <strong>funcionários</strong> e o <strong>histórico de frequência</strong>,
-                  as carteiras MaxBank (saldo de salário, benefícios e bonificações)
-                  e as <strong>filiais</strong> (com CNPJ e demais cadastros).
-                </p>
-                {/* Migr. 504: o ponto era truncado enquanto esta mesma tela
-                    prometia "histórico de frequência". Parágrafo próprio pelo
-                    mesmo motivo do de fornecedor — é a mudança de lado que o
-                    professor precisa ver antes de digitar APAGAR TUDO. */}
-                <p className="text-emerald-400 text-xs">
-                  ✓ Também preserva o <strong>Registro de Ponto</strong>: a frequência lançada, os{' '}
-                  <strong>afastamentos</strong> e as <strong>justificativas de falta</strong>. São histórico da
-                  pessoa, não exercício da turma — e é deles que o eixo de frequência do placar é calculado.
-                </p>
-                {/* Migr. 505: a contrapartida de preservar. Sem dizer isto, a
-                    turma nova esbarra numa trava sem entender de onde veio. */}
-                <p className="text-gray-400 text-xs">
-                  A partir deste reset, tudo o que foi lançado <strong>até hoje</strong> vira histórico fechado:
-                  segue visível na tela, mas não conta na folha da turma nova e não se reescreve por lá.
-                </p>
-                <p className="text-emerald-400 text-xs">
-                  ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
-                  foi assim; a régua só não dizia. O material do professor não se refaz a cada turma.
-                </p>
-                {/* Migr. 514: a folha muda de lado; os três cadastros só passam
-                    a estar escritos. Parágrafo próprio pelo mesmo motivo do de
-                    fornecedor — é a mudança que o professor precisa ver antes
-                    de digitar APAGAR TUDO. */}
-                <p className="text-emerald-400 text-xs">
-                  ✓ Agora também preserva a <strong>Folha de Pagamento</strong> com as rubricas de cada
-                  holerite — é histórico da pessoa e a base do FGTS acumulado. As <strong>contas a pagar</strong> da
-                  folha continuam sendo apagadas: lançar e pagar é exercício da turma. E a folha de antes deste
-                  reset vira <strong>só leitura</strong> — não se processa, não se paga, não se recalcula.
-                </p>
-                <p className="text-emerald-400 text-xs">
-                  ✓ E os cadastros de estrutura: <strong>Departamentos</strong>, <strong>Cargos</strong> e{' '}
-                  <strong>Centros de Custo</strong>. Nunca foram apagados; a régua é que não dizia.
-                </p>
-                {/* Migr. 482: fornecedor e categoria mudaram de lado. Ganham
-                    parágrafo próprio porque é a novidade que o professor
-                    precisa ver antes de digitar APAGAR TUDO — se ele espera
-                    banco limpo e encontra 27 fornecedores, a régua é que
-                    parece quebrada. */}
-                <p className="text-emerald-400 text-xs">
-                  ✓ Também preserva os <strong>fornecedores</strong> (CNPJ, prazo, condição de pagamento e logo)
-                  e as <strong>categorias de produto</strong> com suas subcategorias — é a categoria que carrega
-                  o markup-alvo usado para sugerir preço de venda. Montar o <strong>catálogo de produtos</strong> segue
-                  sendo exercício da turma.
-                </p>
+
+              <div className="px-6 overflow-y-auto main-scrollbar flex-1 min-h-0">
+                <div className="text-sm text-gray-300 space-y-2 pb-4">
+                  <p>Esta operação vai <strong className="text-red-400">apagar permanentemente</strong>:</p>
+                  <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
+                    <li>Vendas, estoque, recebimentos, expedição</li>
+                    <li>Financeiro: contas a pagar/receber, caixa, conciliações</li>
+                    <li>RH: férias e inscrições em treinamento</li>
+                    <li>Avaliações, pesquisas, feedbacks, PDIs</li>
+                    <li>Marketing: campanhas, promoções, cupons, calendário</li>
+                    <li>MaxBank: transações, transferências, metas, folgas (carteiras preservadas)</li>
+                    <li>Cadastros: produtos, serviços e clientes</li>
+                    <li>Projetos, orçamento por categoria e governança (mandatos, riscos, prestações de contas)</li>
+                  </ul>
+
+                  {/* O resumo do que fica é o que decide o clique; a régua
+                      inteira continua aqui embaixo, para quem precisar dela na
+                      hora. Nada saiu — só deixou de disputar a tela. */}
+                  <p className="text-emerald-400 text-xs pt-2">
+                    ✓ <strong>Preserva:</strong> usuários e funcionários, ponto e folha, carteiras MaxBank,
+                    filiais, fornecedores e categorias, documentos da Matriz e os cadastros de estrutura.
+                  </p>
+
+                  <details className="group">
+                    <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-300 select-none list-none flex items-center gap-1.5">
+                      <ChevronRight size={12} className="transition-transform group-open:rotate-90 shrink-0" />
+                      O que exatamente é preservado, e por quê
+                    </summary>
+                    <div className="space-y-2 pt-2">
+                    <p className="text-emerald-400 text-xs pt-2">
+                      ✓ <strong>Preserva:</strong> todos os usuários (login + setor + filial),
+                      os <strong>funcionários</strong> e o <strong>histórico de frequência</strong>,
+                      as carteiras MaxBank (saldo de salário, benefícios e bonificações)
+                      e as <strong>filiais</strong> (com CNPJ e demais cadastros).
+                    </p>
+                    {/* Migr. 504: o ponto era truncado enquanto esta mesma tela
+                        prometia "histórico de frequência". Parágrafo próprio pelo
+                        mesmo motivo do de fornecedor — é a mudança de lado que o
+                        professor precisa ver antes de digitar APAGAR TUDO. */}
+                    <p className="text-emerald-400 text-xs">
+                      ✓ Também preserva o <strong>Registro de Ponto</strong>: a frequência lançada, os{' '}
+                      <strong>afastamentos</strong> e as <strong>justificativas de falta</strong>. São histórico da
+                      pessoa, não exercício da turma — e é deles que o eixo de frequência do placar é calculado.
+                    </p>
+                    {/* Migr. 505: a contrapartida de preservar. Sem dizer isto, a
+                        turma nova esbarra numa trava sem entender de onde veio. */}
+                    <p className="text-gray-400 text-xs">
+                      A partir deste reset, tudo o que foi lançado <strong>até hoje</strong> vira histórico fechado:
+                      segue visível na tela, mas não conta na folha da turma nova e não se reescreve por lá.
+                    </p>
+                    <p className="text-emerald-400 text-xs">
+                      ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
+                      foi assim; a régua só não dizia. O material do professor não se refaz a cada turma.
+                    </p>
+                    {/* Migr. 514: a folha muda de lado; os três cadastros só passam
+                        a estar escritos. Parágrafo próprio pelo mesmo motivo do de
+                        fornecedor — é a mudança que o professor precisa ver antes
+                        de digitar APAGAR TUDO. */}
+                    <p className="text-emerald-400 text-xs">
+                      ✓ Agora também preserva a <strong>Folha de Pagamento</strong> com as rubricas de cada
+                      holerite — é histórico da pessoa e a base do FGTS acumulado. As <strong>contas a pagar</strong> da
+                      folha continuam sendo apagadas: lançar e pagar é exercício da turma. E a folha de antes deste
+                      reset vira <strong>só leitura</strong> — não se processa, não se paga, não se recalcula.
+                    </p>
+                    <p className="text-emerald-400 text-xs">
+                      ✓ E os cadastros de estrutura: <strong>Departamentos</strong>, <strong>Cargos</strong> e{' '}
+                      <strong>Centros de Custo</strong>. Nunca foram apagados; a régua é que não dizia.
+                    </p>
+                    {/* Migr. 482: fornecedor e categoria mudaram de lado. Ganham
+                        parágrafo próprio porque é a novidade que o professor
+                        precisa ver antes de digitar APAGAR TUDO — se ele espera
+                        banco limpo e encontra 27 fornecedores, a régua é que
+                        parece quebrada. */}
+                    <p className="text-emerald-400 text-xs">
+                      ✓ Também preserva os <strong>fornecedores</strong> (CNPJ, prazo, condição de pagamento e logo)
+                      e as <strong>categorias de produto</strong> com suas subcategorias — é a categoria que carrega
+                      o markup-alvo usado para sugerir preço de venda. Montar o <strong>catálogo de produtos</strong> segue
+                      sendo exercício da turma.
+                    </p>
+                    </div>
+                  </details>
+                </div>
               </div>
+
+              <div className="px-6 pb-6 pt-4 shrink-0 border-t border-white/5">
               <div className="flex flex-col gap-2 mb-4">
                 <label htmlFor="reset-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Digite <span className="text-red-400">{TEXTO_CONFIRMACAO}</span> para liberar o botão
@@ -1264,6 +1281,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                              disabled:opacity-30 disabled:cursor-not-allowed">
                   {resetRunning ? 'Apagando...' : 'Confirmar e apagar tudo'}
                 </button>
+              </div>
               </div>
             </motion.div>
           </motion.div>

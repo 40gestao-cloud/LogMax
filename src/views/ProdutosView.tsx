@@ -2087,7 +2087,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Código *" error={errors.codigo}>
                     <div className="flex gap-2">
-                      <input className={`neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 font-mono ${errors.codigo ? 'border border-red-500/40' : ''}`}
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 font-credencial ${errors.codigo ? 'border border-red-500/40' : ''}`}
                         value={form.codigo} onChange={e => {
                           // Digitou por cima do número gerado: a reserva não é
                           // mais dele, volta para a fila na hora.
@@ -2111,7 +2111,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                     </div>
                     <p className="text-[10px] text-gray-500 mt-1">
                       {codigoReservado === form.codigo && codigoReservado
-                        ? <>O <span className="font-mono text-accent">{codigoReservado}</span> está reservado para você — quem clicar em Gerar agora recebe o próximo. A reserva cai se você fechar o formulário sem salvar.</>
+                        ? <>O <span className="font-credencial text-accent">{codigoReservado}</span> está reservado para você — quem clicar em Gerar agora recebe o próximo. A reserva cai se você fechar o formulário sem salvar.</>
                         : <>Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.</>}
                     </p>
                   </FormField>
@@ -2284,7 +2284,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   {ehVendavel(extras.tipo) && (
                   <FormField label="Cód. Barras EAN *" error={extrasErrors.ean}>
                     <div className="flex gap-2">
-                      <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono flex-1 min-w-0 ${extrasErrors.ean ? 'border border-red-500/40' : ''}`}
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm font-credencial flex-1 min-w-0 ${extrasErrors.ean ? 'border border-red-500/40' : ''}`}
                         value={extras.ean}
                         onChange={e => { setExtras(x => ({ ...x, ean: e.target.value })); setExtrasErrors(ev => ({ ...ev, ean: '' })); }}
                         placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />

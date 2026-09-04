@@ -343,7 +343,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
                 </div>
                 <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1">
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">EAN</span>
-                  <span className="text-sm font-mono text-gray-300 flex items-center gap-1.5 truncate">
+                  <span className="text-sm font-credencial text-gray-300 flex items-center gap-1.5 truncate">
                     <Barcode size={12} className="text-gray-500 shrink-0" />
                     {selecionado.ean || '—'}
                   </span>

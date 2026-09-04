@@ -242,7 +242,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
                 <label htmlFor="cup-codigo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Código *</label>
                 <input id="cup-codigo" type="text" value={form.codigo}
                   onChange={e => setForm(f => ({ ...f, codigo: sanitizeCodigo(e.target.value) }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono uppercase tracking-wider"
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-credencial uppercase"
                   placeholder="VERAO10" disabled={!!editing}
                   title={editing ? 'Código não pode ser editado depois de criado.' : 'Maiúsculas, números, _ ou -'}
                 />
@@ -372,7 +372,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
                         className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4">
                           <button onClick={() => copyCodigo(c.codigo)}
-                            className="inline-flex items-center gap-1.5 text-sm font-mono font-bold text-accent hover:text-accent/80 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-sm font-credencial font-bold text-accent hover:text-accent/80 transition-colors"
                             title="Copiar código">
                             <Ticket size={11} />{c.codigo}
                             {copied === c.codigo ? <CheckCircle2 size={10} /> : <Copy size={10} className="opacity-50" />}

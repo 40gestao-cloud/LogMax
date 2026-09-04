@@ -2377,7 +2377,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                       value={cupomCodigo}
                       onChange={e => setCupomCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32))}
                       placeholder="código"
-                      className={`neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-mono tabular-nums uppercase tracking-wider ${
+                      className={`neu-input py-1.5 px-3 rounded-xl text-xs text-right w-28 font-credencial uppercase ${
                         cupomAplicado ? 'text-accent font-bold' : cupomErro ? 'text-red-400' : ''
                       }`}
                     />
@@ -2711,7 +2711,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                     mesmo valor coexistem. Sem ele, o aluno não sabe qual é a
                     dele e o operador escolhe no chute. */}
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-2">
-                  Cobrança nº <span className="font-mono text-accent tracking-normal">{codigoCobranca(pixPendente.id)}</span>
+                  Cobrança nº <span className="font-credencial text-accent">{codigoCobranca(pixPendente.id)}</span>
                 </p>
               </div>
 
