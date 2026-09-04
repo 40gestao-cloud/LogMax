@@ -4,7 +4,7 @@ import { GOLD, GOLD_DARK, BLACK, GRAY_INK, GRAY_SOFT, GOLD_TINT } from './pdfPal
 // Header premium reutilizado por todos os PDFs deste arquivo: faixa preta
 // 30mm + filete dourado + LogMax dourado, subtítulo caps prateado e uma
 // linha de contexto. pageWidth default = A4 retrato (210mm).
-function drawPdfHeader(doc: any, subtitle: string, contextLine: string, rightMeta: string, pageWidth = 210) {
+export function drawPdfHeader(doc: any, subtitle: string, contextLine: string, rightMeta: string, pageWidth = 210) {
   const margin = 14;
   doc.setFillColor(...BLACK);
   doc.rect(0, 0, pageWidth, 30, 'F');

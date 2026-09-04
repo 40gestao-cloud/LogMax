@@ -9,7 +9,8 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../com
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING } from '../lib/filiais';
-import { exportToExcel } from '../lib/viewUtils';
+import { exportToExcel, drawPdfHeader } from '../lib/viewUtils';
+import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { useFilial } from '../contexts/FilialContext';
 import { ROLE_LABEL } from '../lib/rbac';
 
@@ -168,7 +169,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingCred, setExportingCred] = useState(false);
   const usuariosExportColumns = ['Nome', 'E-mail', 'Cargo', 'Setor (+extras)', 'Filial', 'Criado em'];
-  const buildUsuariosExportRows = () => filteredUsers.map(u => {
+  const buildUsuariosExportRows = () => usuariosParaExport.map(u => {
     const extras = (u.setores_extras ?? []).map(s => SETOR_LABEL[s] ?? s).join(', ');
     return [
       u.nome ?? '—',
@@ -190,30 +191,25 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 14;
 
-      doc.setFillColor(10, 10, 10);
-      doc.rect(0, 0, pageWidth, 28, 'F');
-      doc.setTextColor(16, 185, 129);
-      doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-      doc.text('LogMax — Usuários', margin, 13);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.setTextColor(180, 180, 180);
-      doc.text(`Total: ${filteredUsers.length}`, margin, 20);
-      doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-      doc.text(
+      // Mesma faixa preta com filete dourado dos outros relatórios
+      // (`drawPdfHeader`, em viewUtils). Estes dois PDFs tinham cabeçalho
+      // próprio, em verde, de antes de a paleta existir.
+      drawPdfHeader(
+        doc, 'Contas e acessos', `${usuariosParaExport.length} conta(s)`,
         `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}`,
-        pageWidth - margin, 20, { align: 'right' }
+        pageWidth,
       );
 
       const rows = buildUsuariosExportRows();
 
       autoTable(doc, {
-        startY: 34,
+        startY: 40,
         head: [usuariosExportColumns],
         body: rows,
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { textColor: [50, 50, 50], fontSize: 8 },
-        alternateRowStyles: { fillColor: [245, 247, 245] },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+        alternateRowStyles: { fillColor: GOLD_TINT },
         margin: { left: margin, right: margin },
       });
 
@@ -243,26 +239,24 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 14;
 
-      doc.setFillColor(10, 10, 10);
-      doc.rect(0, 0, pageWidth, 30, 'F');
-      doc.setTextColor(16, 185, 129);
-      doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-      doc.text('LogMax — Credenciais de acesso', margin, 13);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.setTextColor(180, 180, 180);
-      doc.text(`${filteredUsers.length} conta(s)`, margin, 20);
-      // O aviso vai no documento, não só na tela: o PDF sai da tela e circula
-      // sozinho, e quem o encontrar depois precisa saber o que tem na mão.
-      doc.setTextColor(239, 68, 68);
-      doc.setFontSize(8);
-      doc.text('CONFIDENCIAL — contém senhas em texto. Entregue em mãos e destrua depois de usar.', margin, 26);
-      doc.setTextColor(120, 120, 120);
-      doc.text(
+      drawPdfHeader(
+        doc, 'Credenciais de acesso', `${usuariosParaExport.length} conta(s)`,
         `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}`,
-        pageWidth - margin, 20, { align: 'right' }
+        pageWidth,
       );
 
-      const rows = filteredUsers.map(u => [
+      // O aviso vai no documento, não só na tela: o PDF sai da tela e circula
+      // sozinho, e quem o encontrar depois precisa saber o que tem na mão.
+      // Tarja dourada com texto preto em vez do vermelho de antes — a régua da
+      // casa é preto, dourado e branco, e a tarja salta sem sair dela.
+      doc.setFillColor(...GOLD);
+      doc.rect(0, 31.2, pageWidth, 7, 'F');
+      doc.setTextColor(...BLACK);
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.text('CONFIDENCIAL — CONTÉM SENHAS EM TEXTO. ENTREGUE EM MÃOS E DESTRUA DEPOIS DE USAR.', margin, 36);
+      doc.setFont('helvetica', 'normal');
+
+      const rows = usuariosParaExport.map(u => [
         u.nome ?? '—',
         u.email ?? '—',
         senhas[u.id] ?? 'não registrada',
@@ -270,13 +264,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       ]);
 
       autoTable(doc, {
-        startY: 36,
+        startY: 44,
         head: [['Nome', 'E-mail', 'Senha', 'Cargo / Unidade']],
         body: rows,
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: [10, 10, 10], fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
-        alternateRowStyles: { fillColor: [245, 247, 245] },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
+        alternateRowStyles: { fillColor: GOLD_TINT },
         // Courier pelo mesmo motivo da `.font-credencial` na tela: e-mail e
         // senha são ditados, e em fonte proporcional o "l" e o "1" viram o
         // mesmo traço.
@@ -562,6 +556,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     return true;
   });
 
+  // Papel que sai da tela não leva a conta do professor: nem no PDF da lista,
+  // nem no de credenciais, nem na planilha. A migr. 586 já esconde o admin de
+  // todo mundo — mas quem gera o arquivo é ele mesmo, e é o único que enxerga
+  // a própria linha. Um PDF com a senha do administrador circulando pela sala
+  // é o buraco que todo o resto desta auditoria fechou.
+  const usuariosParaExport = filteredUsers.filter((u: any) => u.role !== 'admin');
+
   // KPIs
   const totalGerentes     = filteredUsers.filter(u => u.role === 'gerente').length;
   const totalColaboradores = filteredUsers.filter(u => u.role === 'colaborador').length;
@@ -832,21 +833,21 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         </div>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
-            <button onClick={handleExportPdf} disabled={exportingPdf || filteredUsers.length === 0}
+            <button onClick={handleExportPdf} disabled={exportingPdf || usuariosParaExport.length === 0}
               className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
               title="Baixar lista em PDF">
               <FileDown size={14} />{exportingPdf ? 'Gerando...' : 'PDF'}
             </button>
           )}
           {isAdmin && (
-            <button onClick={handleExportCredenciais} disabled={exportingCred || filteredUsers.length === 0}
+            <button onClick={handleExportCredenciais} disabled={exportingCred || usuariosParaExport.length === 0}
               className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-400 flex items-center gap-2 disabled:opacity-40"
               title="Baixar e-mails e senhas em PDF — documento confidencial, entregue em mãos">
               <KeyRound size={14} />{exportingCred ? 'Gerando...' : 'Credenciais'}
             </button>
           )}
           {isAdmin && (
-            <button onClick={handleExportExcel} disabled={exportingExcel || filteredUsers.length === 0}
+            <button onClick={handleExportExcel} disabled={exportingExcel || usuariosParaExport.length === 0}
               className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
               title="Baixar lista em Excel">
               <FileSpreadsheet size={14} />{exportingExcel ? 'Gerando...' : 'Excel'}
