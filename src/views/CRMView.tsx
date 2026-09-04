@@ -363,11 +363,19 @@ const CRMViewInner = ({ type, showToast, filial }: {
                     value={extras.cpf_cnpj}
                     onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
                     placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
-                  <button type="button"
-                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                    className="mt-2 neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-1.5 transition-colors">
-                    <CreditCard size={12} /> Gerar no MaxID <ExternalLink size={10} />
-                  </button>
+                  {/* A marca do app antes do botão: o aluno reconhece para onde
+                      vai antes de clicar, e reencontra a mesma logo do outro
+                      lado. O PNG tem fundo preto próprio — daí o `rounded` em
+                      vez de tentar encaixá-lo no fundo do tema. */}
+                  <div className="mt-2 flex flex-col items-start gap-1.5">
+                    <img src="/icon-maxid.png" alt="MaxID"
+                      className="h-9 w-auto rounded-md border border-white/10" />
+                    <button type="button"
+                      onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                      className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-1.5 transition-colors">
+                      <CreditCard size={12} /> Gerar no MaxID <ExternalLink size={10} />
+                    </button>
+                  </div>
                   <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
                     {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} de treino com dígito verificador válido —
                     gere no MaxID, copie e cole aqui. Abre em outra aba; o que você já preencheu continua nesta.
