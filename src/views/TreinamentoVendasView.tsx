@@ -25,20 +25,20 @@ export function TreinamentoVendasView() {
         </p>
       </div>
 
-      <div className="neu-flat rounded-3xl p-6 sm:p-10 flex flex-col items-center justify-center text-center border border-accent/20 max-w-xl w-full mx-auto">
-        <h4 className="text-xs font-bold text-gray-400 mb-6 self-start uppercase tracking-widest">Simulador de PDV</h4>
+      <div className="neu-flat rounded-3xl p-5 sm:p-7 flex flex-col items-center justify-center text-center border border-accent/20 max-w-sm w-full mx-auto">
+        <h4 className="text-xs font-bold text-gray-400 mb-5 self-start uppercase tracking-widest">Simulador de PDV</h4>
 
-        <div className="w-full max-w-[340px] rounded-3xl bg-white border border-black/10 px-8 py-8 mb-6">
+        <div className="w-full max-w-[200px] rounded-2xl bg-white border border-black/10 px-6 py-6 mb-5">
           <img src="/icon-maxpos.png" alt="MaxPOS" className="w-full h-auto" />
         </div>
 
-        <span className="text-sm text-gray-500 leading-snug mb-8 max-w-[320px]">
+        <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[260px]">
           Ambiente de treino da frente de caixa — venda, pagamento e fechamento sem afetar o estoque nem o caixa do LogMax.
         </span>
 
         <a
           href={MAXPOS_URL} target="_blank" rel="noopener noreferrer"
-          className="btn-shimmer w-full max-w-[340px] py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
+          className="btn-shimmer w-full max-w-[260px] py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
           style={{
             background: 'var(--color-accent)',
             color:      'var(--color-accent-text)',
