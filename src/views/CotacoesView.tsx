@@ -323,7 +323,33 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
   // proposta, não correção desta.
   const [correcao, setCorrecao] = useState<any | null>(null);
-  const [correcaoForm, setCorrecaoForm] = useState({ valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_total: '', prazo_entrega: '', validade: '', marca: '' });
+
+  // Mesma régua do formulário de nova cotação: a quantidade é da requisição, e
+  // é ela que liga unitário e total. Aqui a requisição não muda (trocar de
+  // requisição seria outra proposta), então a quantidade é fixa enquanto o
+  // modal está aberto. `req` vem do enriched; a busca na lista é a rede para a
+  // proposta cujo join ainda não chegou.
+  const qtdCorrecao = useMemo(() => {
+    if (!correcao) return 0;
+    const req = correcao.req ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id);
+    const n = Number(req?.qtd ?? 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [correcao, requisicoes]);
+  const unidadeCorrecao = useMemo(() => {
+    if (!correcao) return '';
+    const req = correcao.req ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id);
+    return normalizarUnidade(req?.unidade);
+  }, [correcao, requisicoes]);
+
+  const setCorrecaoUnitario = (v: string) => setCorrecaoForm(x => {
+    const unit = formatBRL(v);
+    return { ...x, valor_unitario: unit, valor_total: qtdCorrecao ? formatBRL(parseBRL(unit) * qtdCorrecao) : x.valor_total };
+  });
+  const setCorrecaoTotal = (v: string) => setCorrecaoForm(x => {
+    const total = formatBRL(v);
+    return { ...x, valor_total: total, valor_unitario: qtdCorrecao ? formatBRL(parseBRL(total) / qtdCorrecao) : x.valor_unitario };
+  });
   const [reenviando, setReenviando] = useState(false);
 
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
@@ -859,8 +885,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
   // 'Em correção'); aqui é só o formulário.
   const abrirCorrecao = (cot: any) => {
     setCorrecao(cot);
+    // O unitário nasce da divisão porque o banco só guarda o total: é o preço
+    // que a proposta devolvida de fato praticou, não o de tabela.
+    const req = cot.req ?? requisicoes.find((r: any) => r.id === cot.requisicao_id);
+    const qtd = Number(req?.qtd ?? 0);
+    const total = Number(cot.valor_total ?? 0);
     setCorrecaoForm({
-      valor_total:   formatBRL(Number(cot.valor_total ?? 0)),
+      valor_unitario: Number.isFinite(qtd) && qtd > 0 ? formatBRL(total / qtd) : '',
+      valor_total:   formatBRL(total),
       prazo_entrega: cot.prazo_entrega ?? '',
       validade:      cot.validade ?? '',
       marca:         cot.marca ?? '',
@@ -1648,12 +1680,32 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode }: { showToast: an
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {qtdCorrecao > 0 && (
+                  <FormField label="Quantidade solicitada">
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                      {`${qtdBR(qtdCorrecao)} ${unidadeCorrecao}`}
+                    </div>
+                  </FormField>
+                )}
+                <FormField label={`Valor Unitário (R$${qtdCorrecao > 0 ? ` / ${unidadeCorrecao}` : ''})`}>
+                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.valor_unitario}
+                    onChange={e => setCorrecaoUnitario(e.target.value)}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="0,00" />
+                </FormField>
                 <FormField label="Valor Total (R$)">
                   <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={correcaoForm.valor_total}
-                    onChange={e => setCorrecaoForm(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                    onChange={e => setCorrecaoTotal(e.target.value)}
                     onKeyDown={handleMoneyKeyDown}
                     placeholder="0,00" />
+                  {qtdCorrecao > 0 && (
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      É este valor que volta ao Financeiro. Frete ou desconto fechado entram aqui — o
+                      unitário se ajusta ao preço médio.
+                    </p>
+                  )}
                 </FormField>
                 <FormField label="Prazo de Entrega">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
