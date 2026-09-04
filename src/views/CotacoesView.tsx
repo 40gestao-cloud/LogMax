@@ -1159,10 +1159,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     (PJ) ou pessoa física (PF).
                   </p>
                   {podeCadastrarFornecedor ? (
-                    <button type="button" onClick={irParaFornecedores}
-                      className="neu-button rounded-xl py-2.5 px-5 flex items-center justify-center gap-2 text-xs font-bold text-accent hover:bg-accent/5 transition-colors mt-1">
-                      <Plus size={14} /> Cadastrar fornecedor
-                    </button>
+                    // Botão de ação de verdade (mesmo peso visual de "Nova
+                    // Cotação"), não um `neu-button` apagado: aqui ele é a
+                    // única saída da tela, e um botão discreto no meio de
+                    // texto explicativo lê como mais uma linha do aviso.
+                    <div className="mt-2">
+                      <NeuButtonAccent onClick={irParaFornecedores}>
+                        <Plus size={16} /> Cadastrar fornecedor
+                      </NeuButtonAccent>
+                    </div>
                   ) : (
                     <p className="text-[11px] text-gray-500 mt-1">
                       O cadastro fica em <span className="font-bold text-gray-400">Cadastros › Fornecedores</span>
@@ -1274,15 +1279,18 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         caminho de volta (sair da tela, achar Cadastros, voltar
                         e refazer o formulário) custa o formulário inteiro. */}
                     {podeCadastrarFornecedor && (
-                      <p className="text-[11px] text-gray-500 md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        {!temPJ && <span className="text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
-                        {!temPF && <span className="text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
-                        <span>Falta o fornecedor na lista?</span>
+                      <div className="md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        {!temPJ && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
+                        {!temPF && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
+                        <span className="text-[11px] text-gray-500">Falta o fornecedor na lista?</span>
+                        {/* Contorno e fundo: como texto sublinhado no meio da
+                            frase, isto lia como nota de rodapé e o aluno
+                            passava batido. */}
                         <button type="button" onClick={irParaFornecedores}
-                          className="text-accent font-bold hover:underline inline-flex items-center gap-1">
-                          <Plus size={11} /> Cadastrar fornecedor
+                          className="neu-button rounded-xl py-1.5 px-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-accent border border-accent/30 hover:bg-accent/10 transition-colors">
+                          <Plus size={12} /> Cadastrar fornecedor
                         </button>
-                      </p>
+                      </div>
                     )}
                     {reserva.travado && (
                       <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
