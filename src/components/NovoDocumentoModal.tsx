@@ -34,9 +34,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileText, X, Check, Download, Building2, Loader2 } from 'lucide-react';
+import { FileText, X, Check, Download, Building2, Loader2, Eye } from 'lucide-react';
 import { formatDataHoraBR } from '../lib/dates';
-import { useDocumentos, baixarDocumento } from '../hooks/useDocumentos';
+import { useDocumentos, baixarDocumento, podeVisualizar, type Documento } from '../hooks/useDocumentos';
+import { VisualizadorDocumento } from './VisualizadorDocumento';
 import { emOperacao, digitandoAgora } from '../lib/naoInterromper';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -65,6 +66,9 @@ export function NovoDocumentoModal({ profile, showToast, activeView, hideTrigger
   const [indice, setIndice] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [baixando, setBaixando] = useState(false);
+  // Visor por cima deste modal: o aviso cobra a leitura, e agora dá para ler
+  // ali mesmo em vez de sair para a pasta de downloads.
+  const [vendo, setVendo] = useState<Documento | null>(null);
   // Abre sozinho uma vez por documento. Sem esta memória, fechar sem confirmar
   // faria o modal voltar a cada re-render da fila — e aí ele deixa de ser
   // aviso e vira armadilha.
@@ -106,6 +110,12 @@ export function NovoDocumentoModal({ profile, showToast, activeView, hideTrigger
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // Fechou o aviso, fecha o arquivo junto: o visor é filho deste modal, e
+  // deixá-lo aberto sobre a tela vazia daria um overlay órfão sem nada atrás.
+  // (O Escape com o visor aberto é dele — ele para a propagação em captura,
+  // então não fecha os dois de uma vez.)
+  useEffect(() => { if (!open) setVendo(null); }, [open]);
 
   useEffect(() => {
     if (!openSignal) return;
@@ -206,14 +216,34 @@ export function NovoDocumentoModal({ profile, showToast, activeView, hideTrigger
                   <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{doc.descricao}</p>
                 )}
 
-                <button
-                  onClick={baixar}
-                  disabled={baixando}
-                  className="neu-pressed rounded-xl px-4 py-3 flex items-center gap-2.5 text-sm text-gray-200 hover:text-white disabled:opacity-50"
-                >
-                  {baixando ? <Loader2 size={15} className="animate-spin text-sky-300" /> : <Download size={15} className="text-sky-300" />}
-                  <span className="truncate">{doc.arquivo_nome}</span>
-                </button>
+                {/* O nome do arquivo ABRE o arquivo quando dá para mostrá-lo
+                    — é o clique que a pessoa tenta primeiro. Baixar continua
+                    ali do lado, em botão próprio. Sendo Word, o nome volta a
+                    ser o botão de baixar: é a única coisa que ele faz. */}
+                <div className="flex items-stretch gap-2">
+                  <button
+                    onClick={() => (podeVisualizar(doc) ? setVendo(doc) : baixar())}
+                    disabled={baixando}
+                    className="flex-1 min-w-0 neu-pressed rounded-xl px-4 py-3 flex items-center gap-2.5 text-sm text-gray-200 hover:text-white disabled:opacity-50"
+                  >
+                    {baixando && !podeVisualizar(doc)
+                      ? <Loader2 size={15} className="animate-spin text-sky-300" />
+                      : podeVisualizar(doc)
+                        ? <Eye size={15} className="text-sky-300 shrink-0" />
+                        : <Download size={15} className="text-sky-300 shrink-0" />}
+                    <span className="truncate">{doc.arquivo_nome}</span>
+                  </button>
+                  {podeVisualizar(doc) && (
+                    <button
+                      onClick={baixar}
+                      disabled={baixando}
+                      title="Baixar"
+                      className="neu-pressed rounded-xl px-3 text-sky-300 hover:text-sky-100 disabled:opacity-50 shrink-0"
+                    >
+                      {baixando ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-white/5 text-[11px] text-gray-500">
                   <span>{formatDataHoraBR(doc.created_at)}</span>
@@ -244,6 +274,18 @@ export function NovoDocumentoModal({ profile, showToast, activeView, hideTrigger
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {vendo && (
+          <VisualizadorDocumento
+            key={vendo.id}
+            doc={vendo}
+            onClose={() => setVendo(null)}
+            showToast={showToast}
+            onSumiu={() => { setVendo(null); setOpen(false); recarregar(); }}
+          />
         )}
       </AnimatePresence>
     </>

@@ -1,7 +1,9 @@
 // Documentos — mão única da Matriz para as unidades (migr. 476).
 //
 // O professor (role='admin') publica um arquivo — PDF, Word ou imagem (PNG,
-// JPG, WEBP); todo mundo baixa.
+// JPG, WEBP); todo mundo lê. PDF e imagem abrem na própria tela pelo botão
+// "Ver" (VisualizadorDocumento); Word só baixa, porque o navegador não desenha
+// .docx e converter seria outra promessa.
 // Aluno não sobe nada, e isso não depende desta tela: a RLS e as policies do
 // bucket recusam INSERT de quem não é admin. O que muda aqui é só o que
 // aparece — esconder botão que o banco já barra evita erro de permissão na
@@ -15,14 +17,15 @@ import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info, Send, FileClock,
-  ChevronDown, ImageIcon,
+  ChevronDown, ImageIcon, Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
-import { useDocumentos, baixarDocumento, ehRascunho, type Documento } from '../hooks/useDocumentos';
+import { useDocumentos, baixarDocumento, podeVisualizar, ehRascunho, type Documento } from '../hooks/useDocumentos';
+import { VisualizadorDocumento } from '../components/VisualizadorDocumento';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -410,6 +413,9 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   // seguinte some da tela. Um por vez: abrir o segundo fecha o primeiro, senão
   // a lista volta a crescer sozinha.
   const [descricaoAberta, setDescricaoAberta] = useState<string | null>(null);
+  // Documento aberto no visor (PDF/imagem). Fica aqui, e não dentro do card,
+  // porque o visor é tela cheia: montá-lo por linha faria N overlays dormindo.
+  const [vendo, setVendo] = useState<Documento | null>(null);
   const confirm = useConfirm();
 
   // Publicar deixou de ser só do professor (migr. 528): o gerente emite para a
@@ -465,6 +471,14 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
     novos: naoLidos.filter(d => daAba(d, f)).length,
   }])) as Record<FilialAlvo, { rascunhos: number; novos: number }>,
   [documentos, naoLidos]);
+
+  // Ver conta como ter recebido, igual a baixar: os dois querem dizer que a
+  // pessoa abriu o arquivo. Confirmar a leitura ("Recebi") continua sendo um
+  // clique à parte — ver é ter olhado, confirmar é assumir que leu.
+  const ver = (doc: Documento) => {
+    setVendo(doc);
+    if (idsNaoLidos.has(doc.id)) marcarLido(doc.id);
+  };
 
   const baixar = async (doc: Documento) => {
     setBaixando(doc.id);
@@ -690,6 +704,18 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 w-full justify-end flex-wrap sm:w-auto sm:flex-nowrap">
+                    {/* Ver antes de Baixar: para PDF e imagem, abrir na tela
+                        é o que a pessoa quer em nove de dez cliques. Word não
+                        ganha o botão — vide `podeVisualizar`. */}
+                    {podeVisualizar(doc) && (
+                      <button
+                        onClick={() => ver(doc)}
+                        title={`Ver ${extensaoDe(doc.arquivo_nome)} sem baixar`}
+                        className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5"
+                      >
+                        <Eye size={13} /> Ver
+                      </button>
+                    )}
                     <button
                       onClick={() => baixar(doc)}
                       disabled={baixando === doc.id}
@@ -747,6 +773,18 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
           })}
         </div>
       )}
+
+      <AnimatePresence>
+        {vendo && (
+          <VisualizadorDocumento
+            key={vendo.id}
+            doc={vendo}
+            onClose={() => setVendo(null)}
+            showToast={showToast}
+            onSumiu={() => { setVendo(null); recarregar(); }}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {modal && (

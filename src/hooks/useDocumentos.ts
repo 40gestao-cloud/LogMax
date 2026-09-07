@@ -4,8 +4,8 @@
 // já confirmou, porque é a diferença entre os dois que faz o modal "Novo
 // Documento Disponível" aparecer.
 //
-// O bucket é privado: baixar passa por URL assinada, que expira. Por isso a
-// assinatura é pedida na hora do clique, nunca guardada na lista.
+// O bucket é privado: ver e baixar passam por URL assinada, que expira. Por
+// isso a assinatura é pedida na hora do clique, nunca guardada na lista.
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -35,6 +35,61 @@ const CAMPOS =
 /** Rascunho: existe no sistema, ainda não foi ao ar (migr. 513). */
 export const ehRascunho = (d: Pick<Documento, 'publicado_em'>) => !d.publicado_em;
 
+/** O que o navegador consegue mostrar sem converter nada.
+ *
+ * PDF e imagem ele desenha sozinho. Word, não: renderizar .docx exigiria ou
+ * converter no servidor ou mandar o arquivo para um visualizador de terceiros
+ * — e o documento da Matriz não sai daqui. Para esses o caminho continua sendo
+ * baixar e abrir no Word, que é o que o aluno faria no trabalho de qualquer
+ * jeito.
+ */
+export function podeVisualizar(doc: Pick<Documento, 'arquivo_mime' | 'arquivo_nome'>): boolean {
+  const mime = String(doc.arquivo_mime ?? '');
+  if (mime.startsWith('image/') || mime === 'application/pdf') return true;
+  // `arquivo_mime` é nullable (documento anterior à migr. 476 ter a coluna, ou
+  // upload que gravou vazio). A extensão do nome bonito é o desempate, mesmo
+  // critério do upload em DocumentosView.
+  const ext = doc.arquivo_nome.slice(doc.arquivo_nome.lastIndexOf('.') + 1).toLowerCase();
+  return ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+}
+
+/** Excluído pela Matriz entre o carregamento da lista e o clique. A policy de
+ *  leitura resolve pela linha em `documentos`, então some a linha, some o
+ *  acesso — e o erro cru do storage ("Object not found") não diz isso a
+ *  ninguém. Vale a tradução: quem lê a tela precisa saber que o documento saiu
+ *  de circulação, não que o sistema quebrou. */
+function traduzErro(cru: string): { error: string; sumiu: boolean } {
+  const sumiu = /not found|does not exist|404/i.test(cru);
+  return {
+    error: sumiu
+      ? 'Este documento foi removido pela Matriz e não está mais disponível.'
+      : (cru || 'Não foi possível gerar o link.'),
+    sumiu,
+  };
+}
+
+/**
+ * URL assinada para MOSTRAR o arquivo na tela — sem `download`, que é a única
+ * diferença para a de baixar: com ele o storage manda `Content-Disposition:
+ * attachment` e o navegador salva em vez de desenhar, dentro do iframe
+ * inclusive.
+ *
+ * Cinco minutos, e não os 60s do download: aquele é um clique e acabou, este
+ * fica aberto enquanto a pessoa lê. O visor de PDF do navegador refaz pedidos
+ * de faixa do arquivo conforme a rolagem — com a assinatura vencida no meio da
+ * leitura, a página 4 vem em branco.
+ */
+export async function urlDeVisualizacao(
+  doc: Pick<Documento, 'arquivo_path'>,
+): Promise<{ url?: string; error?: string; sumiu?: boolean }> {
+  if (!supabase) return { error: 'Sem conexão.' };
+  const { data, error } = await supabase.storage
+    .from('documentos')
+    .createSignedUrl(doc.arquivo_path, 300);
+  if (error || !data?.signedUrl) return traduzErro(error?.message ?? '');
+  return { url: data.signedUrl };
+}
+
 /**
  * Baixa o documento.
  *
@@ -55,21 +110,7 @@ export async function baixarDocumento(
     .from('documentos')
     .createSignedUrl(doc.arquivo_path, 60, { download: doc.arquivo_nome });
 
-  // Excluído pela Matriz entre o carregamento da lista e o clique. A policy de
-  // leitura resolve pela linha em `documentos`, então some a linha, some o
-  // acesso — e o erro cru do storage ("Object not found") não diz isso a
-  // ninguém. Vale a tradução: quem lê a tela precisa saber que o documento
-  // saiu de circulação, não que o sistema quebrou.
-  if (error || !data?.signedUrl) {
-    const cru = error?.message ?? '';
-    const sumiu = /not found|does not exist|404/i.test(cru);
-    return {
-      error: sumiu
-        ? 'Este documento foi removido pela Matriz e não está mais disponível.'
-        : (cru || 'Não foi possível gerar o link.'),
-      sumiu,
-    };
-  }
+  if (error || !data?.signedUrl) return traduzErro(error?.message ?? '');
 
   const a = document.createElement('a');
   a.href = data.signedUrl;
