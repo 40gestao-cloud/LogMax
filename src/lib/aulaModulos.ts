@@ -81,7 +81,7 @@ export const AULA_SUBMENUS: Record<string, string[]> = {
   estoque:    ['Requisições de Material', 'Liberar Requisições', 'Recebimentos', 'Expedição', 'Movimentações', 'Saldos', 'Validades', 'Inventários', 'Pedidos de Venda', 'Gerenciamento', 'Relatórios'],
   financeiro: ['Controle de Caixa', 'Contas a receber', 'Contas a pagar', 'Caixa / Bancos', 'Conciliação da Maquininha', 'Patrimônio', 'Centros de Custo', 'DRE', 'Juros & Multa', 'Alçadas', 'Notas Emitidas', 'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo', 'Pedidos de Venda', 'Recibos de Vendas', 'Capital', 'Gerenciamento', 'Relatórios'],
   rh:         ['Funcionários', 'Departamentos', 'Cargos', 'Registro de Ponto', 'Férias', 'Afastamentos', 'Desligamento', 'Recrutamento e Seleção', 'Folha de Pagamento', 'Mandatos', 'Benefícios', 'Treinamentos', 'Pesquisas', 'Gerenciamento', 'Relatórios'],
-  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Pedidos Online', 'Histórico de Vendas', 'Devoluções'],
+  vendas:     ['PDV', 'Clientes', 'Orçamentos', 'Pedidos de Venda', 'Pedidos Online', 'Histórico de Vendas', 'Devoluções', 'Treinamento'],
   marketing:  ['Redes Sociais', 'Campanhas', 'Promoções', 'Cupons', 'Calendário'],
   ti:         ['Desenvolvimento com IA'],
   // `max-show` fica FORA daqui de propósito: virou view top-level sem submenu, e
