@@ -99,6 +99,34 @@ describe('arredondamento para embalagem fechada', () => {
   });
 });
 
+describe('o estoque nunca conta embalagem de compra', () => {
+  // A régua está escrita no topo de `src/lib/unidades.ts`. Estes três casos
+  // são o que impede alguém de desfazê-la sem perceber.
+
+  it('nenhuma embalagem de compra é oferecida como unidade de estoque', () => {
+    // Se 'FARDO' (ou 'CX' como apelido de caixa de compra) entrar na lista de
+    // unidades, o saldo passa a poder ser contado em fardo — e é aí que a
+    // divergência de inventário nasce.
+    for (const e of EMBALAGENS_COMPRA) {
+      expect(UNIDADES_PRODUTO as readonly string[]).not.toContain(e);
+    }
+  });
+
+  it('a conversão sempre devolve unidade de estoque, nunca embalagem', () => {
+    const fardo = { nome: 'FARDO', fator: 30 };
+    // 20 fardos entram como 600 unidades: o 20 não sobrevive à conversão.
+    expect(qtdEmEstoque('20', fardo, true)).toBe(600);
+    // E sem embalagem o número passa como está — não há multiplicação oculta.
+    expect(qtdEmEstoque('20', fardo, false)).toBe(20);
+  });
+
+  it('embalagem de uma unidade não vira fator', () => {
+    // Seria a porta dos fundos: fator 1 passaria despercebido e faria a tela
+    // oferecer conversão onde não há conversão nenhuma.
+    expect(embalagemDoProduto({ embalagem_compra: 'CAIXA', embalagem_qtd: 1 })).toBeNull();
+  });
+});
+
 describe('rótulos', () => {
   it('plural de prateleira', () => {
     expect(pluralEmbalagem('FARDO', 1)).toBe('FARDO');

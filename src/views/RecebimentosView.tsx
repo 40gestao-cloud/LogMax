@@ -680,7 +680,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   value={extras.qtd_recebida}
                   onChange={v => setExtras(x => ({ ...x, qtd_recebida: v }))}
                   ajuda={embPedidoSel
-                    ? 'Conte como a carga chegou. O estoque recebe a conversão — é ela que o Confirmar dá entrada.'
+                    ? `Conte como a carga chegou na doca. O fardo não entra no saldo: a conversão é aqui, e daí em diante o estoque fala só em ${unidadePedidoSel || 'UN'} — é esse número que o Confirmar dá entrada.`
                     : undefined}
                 />
                 <FormField label="Data da chegada">

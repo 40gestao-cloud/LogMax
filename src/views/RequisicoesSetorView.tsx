@@ -1125,6 +1125,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   </div>
                   <span className="text-[10px] text-gray-500">
                     Cada item marcado vira uma requisição própria, com o saldo do momento anexado — é isso que Compras lê no lugar da justificativa.
+                    {' '}Pedir em fardo é só a forma de pedir: o estoque continua contando na unidade do produto, e a conversão fica registrada no documento.
                   </span>
                 </div>
               ) : (

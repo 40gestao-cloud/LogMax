@@ -732,6 +732,14 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   //   `mostraPesoConteudo` → a embalagem tem conteúdo a declarar. Granel não
   //                          tem: a unidade de estoque já é a medida.
   const fracionario = UNIDADES_FRACIONARIAS.has(normalizarUnidade(extras.unidade));
+
+  // MIGR 594: a unidade de medida é o que dá sentido ao saldo. Com mercadoria
+  // na prateleira, trocá-la reinterpretaria de uma vez o saldo, o mínimo, o
+  // preço, o custo e todo o histórico — sem nenhum lançamento no meio. O saldo
+  // vem do item aberto (`editItem`), não de `extras.estoque`, que é o campo da
+  // tela e fica vazio na edição.
+  const saldoAtual = editItem ? parseNum(editItem.estoque) : 0;
+  const unidadeTravada = !!editItem && saldoAtual !== 0;
   const mostraPesoConteudo = filial === 'SuperMax'
     && temEstoque(extras.tipo)
     && temConteudoDeEmbalagem(extras.unidade);
@@ -2810,7 +2818,11 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField label="Unidade">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    <select className={`neu-input py-2 px-3 rounded-xl text-sm ${unidadeTravada ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      disabled={unidadeTravada}
+                      title={unidadeTravada
+                        ? `Há ${qtdBR(saldoAtual)} ${normalizarUnidade(extras.unidade)} em estoque. A unidade dá sentido a esse número — zere o saldo antes de trocá-la.`
+                        : undefined}
                       value={extras.unidade}
                       onChange={e => setExtras(x => {
                         const u = e.target.value;
@@ -2838,7 +2850,19 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         dizer "fardo de 30", porque não havia onde dizer isso.
                         Aí o estoque conta fardos, o PDV vende o fardo inteiro
                         ao cliente e o "30" fica no nome, onde não soma. */}
-                    {['PCT', 'CX', 'PC'].includes(normalizarUnidade(extras.unidade)) && (
+                    {/* MIGR 594: a trava é do banco; aqui ela aparece ANTES,
+                        com a saída. Deixar o seletor aberto para o save
+                        estourar seria ensinar pelo erro — e o erro chega
+                        depois de a pessoa ter preenchido a tela inteira. */}
+                    {unidadeTravada && (
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        Travada porque há <span className="font-bold text-gray-400">{qtdBR(saldoAtual)} {normalizarUnidade(extras.unidade)}</span> em
+                        estoque: trocar a medida faria esse número virar outra coisa sem entrada nem saída que
+                        explicasse. Para mudar, zere o saldo por um ajuste em{' '}
+                        <span className="text-gray-400">Estoque &gt; Movimentações</span>, troque aqui, e reentre o saldo na medida nova.
+                      </p>
+                    )}
+                    {!unidadeTravada && ['PCT', 'CX', 'PC'].includes(normalizarUnidade(extras.unidade)) && (
                       <p className="text-[10px] text-amber-500/90 mt-1 leading-snug flex items-start gap-1">
                         <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                         <span>
@@ -2935,7 +2959,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           )}
                           <span className="text-gray-500">
                             O estoque conta em <span className="font-bold text-gray-400">{un}</span>, e é em {un} que
-                            o caixa vende.
+                            o caixa vende.{temEmb && (
+                              <> O {extras.embalagem_compra.toLowerCase()} <span className="font-bold text-gray-400">não entra no
+                              saldo</span>: ele é convertido no recebimento, e daí em diante o estoque fala em {un}.</>
+                            )}
                           </span>
                         </p>
                       </div>

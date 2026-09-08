@@ -1,5 +1,38 @@
 // Unidades de medida — régua única.
 //
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║ A REGRA QUE MANDA EM TUDO NESTE ARQUIVO                                   ║
+// ║                                                                           ║
+// ║   O ESTOQUE NUNCA CONTA EMBALAGEM DE COMPRA.                              ║
+// ║                                                                           ║
+// ║ O fardo não existe no saldo. Ele é uma forma de PEDIR e de RECEBER — a    ║
+// ║ conversão acontece no recebimento, e daí para frente o saldo é sempre na  ║
+// ║ unidade de estoque. Um produto tem três medidas, e só a do meio vira      ║
+// ║ número na coluna `produtos.estoque`:                                      ║
+// ║                                                                           ║
+// ║   Compra em    como o FORNECEDOR vende     1 FARDO = 30 UN   (589)        ║
+// ║   Unidade      como o ESTOQUE conta        UN                             ║
+// ║                e como o CAIXA vende                                       ║
+// ║   Conteúdo     o que vem DENTRO de uma     1 UN = 1 KG       (438/593)    ║
+// ║                                                                           ║
+// ║ Por que assim: saldo em duas medidas ao mesmo tempo (12 fardos e 4 soltas)║
+// ║ obriga toda venda, todo inventário e todo relatório a decidir em qual das ║
+// ║ duas está falando — e é onde nasce a divergência que ninguém reconcilia.  ║
+// ║ Supermercado grande resolve isso com "quebra de fardo" como movimentação  ║
+// ║ própria; aqui a escolha é mais simples e explícita: converte na entrada,  ║
+// ║ conta numa medida só.                                                     ║
+// ║                                                                           ║
+// ║ Onde a conversão acontece, e em lugar nenhum além destes:                 ║
+// ║   • requisição de reposição/eventual → `criar_requisicoes_compra_lote`    ║
+// ║     grava `qtd` já na unidade, com o fardo ao lado como registro          ║
+// ║   • recebimento → `QuantidadeEmbalagem` converte antes de gravar          ║
+// ║   • sugestão de compra → arredonda para fardo fechado, envia em unidade   ║
+// ║                                                                           ║
+// ║ `FD` não entra em `UNIDADES_PRODUTO` por isto. E `PCT`/`CX`/`PC` só são   ║
+// ║ unidade de estoque quando a loja VENDE a embalagem fechada no caixa —     ║
+// ║ usá-las para dizer "fardo de 30" é o erro que a migr. 594 passou a avisar.║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+//
 // A lista existia em três lugares (`ProdutosView`, `modelosPlanilha`,
 // `RequisicoesSetorView`) e as três discordavam. A de Requisições estava em
 // minúscula, e como a Reposição (migr. 358) grava a unidade lida do catálogo
