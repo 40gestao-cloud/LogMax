@@ -110,7 +110,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: { user: caller }, error: tokenErr } = await admin.auth.getUser(token);
     if (tokenErr || !caller) {
       log.warn('auth.invalid_token', { error: tokenErr?.message });
-      return res.status(401).json({ error: 'Token inválido.' });
+      // "Token inválido" não dizia o que fazer, e o estado que ele descreve é
+      // invisível: o token continua com assinatura boa, então o app segue
+      // lendo pelo PostgREST e só ESTE endpoint recusa — a tela parecia
+      // funcionar e o botão de salvar, não. (A causa mais comum era o
+      // `signOut` em escopo global derrubando a sessão de outra máquina; vide
+      // useAuth.signOut. Sobra o caso legítimo: sessão encerrada em outro
+      // lugar, ou expirada com a aba aberta.)
+      return res.status(401).json({
+        error: 'Sua sessão não vale mais — ela foi encerrada em outro lugar ou expirou. Saia e entre de novo para continuar.',
+      });
     }
     const { data: callerProfile } = await admin
       .from('user_profiles')

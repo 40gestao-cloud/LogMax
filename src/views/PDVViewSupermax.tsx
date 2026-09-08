@@ -1294,7 +1294,22 @@ export const PDVViewSupermax = ({
       showToast?.(`Erro na autorização: ${err?.message ?? '—'}`, 'error', true);
     } finally {
       // O cliente descartável não pode ficar segurando a sessão do gerente.
-      await cliente.auth.signOut().catch(() => {});
+      //
+      // `scope: 'local'` NÃO É DETALHE. O padrão do supabase-js é 'global', que
+      // revoga TODAS as sessões daquele usuário — em toda máquina, em todo
+      // navegador. Como aqui quem acabou de entrar foi o gerente (ou o
+      // professor, que também autoriza), sair em escopo global derrubava a
+      // sessão dele na PRÓPRIA máquina dele, do outro lado da sala.
+      //
+      // E derrubava de um jeito difícil de ligar à causa: o access token
+      // continua com assinatura válida, então o app segue lendo pelo PostgREST
+      // como se nada fosse; só os endpoints em /api quebram, porque eles
+      // conferem a sessão no GoTrue e recebem "Session not found" — que a tela
+      // de Usuários mostra como "Token inválido". Nada aponta para o PDV.
+      //
+      // 'local' descarta só a sessão deste cliente efêmero, que é o que se quer:
+      // ele nasceu com `persistSession: false` e nunca chegou ao localStorage.
+      await cliente.auth.signOut({ scope: 'local' }).catch(() => {});
       setDescAuthLoading(false);
     }
   };

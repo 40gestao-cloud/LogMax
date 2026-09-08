@@ -57,9 +57,29 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
+  /**
+   * Sair DESTA máquina — e só desta.
+   *
+   * O padrão do supabase-js é `scope: 'global'`, que revoga todas as sessões do
+   * usuário em todo lugar. Numa sala de aula isso é o oposto do esperado: o
+   * professor abre o app no notebook e na máquina do lab, uma das duas fica
+   * ociosa 15 minutos, o logout automático dispara — e a sessão da OUTRA morre
+   * junto, no meio do trabalho.
+   *
+   * Pior: morre em silêncio. O access token continua com assinatura válida, o
+   * PostgREST segue respondendo, e só os endpoints em /api recusam (eles
+   * conferem a sessão no GoTrue). Foi assim que "Token inválido" apareceu ao
+   * salvar setores extras em Usuários, sem nada na tela ligando uma coisa à
+   * outra.
+   *
+   * O que protege a máquina compartilhada não é a revogação no servidor: é a
+   * purga do token no boot e o logout por inatividade (`sessaoGuard.ts`), que
+   * tiram o token DESTA máquina. Quem sai daqui não precisa derrubar ninguém
+   * do outro lado da sala.
+   */
   const signOut = async () => {
     if (!supabase) return;
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     setAuthState({ user: null, session: null, isLoading: false });
   };
 
