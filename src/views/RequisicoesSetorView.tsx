@@ -16,7 +16,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Ur
 import { todayBR } from '../lib/dates';
 import {
   unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
-  embalagemDoProduto, rotuloEmbalagem, pluralEmbalagem, rotuloUnidade,
+  embalagemDoProduto, rotuloEmbalagem, pluralEmbalagem, rotuloUnidade, EMBALAGENS_COMPRA,
 } from '../lib/unidades';
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque } from '../lib/tipoProduto';
@@ -92,7 +92,13 @@ const VAI_PRA_COMPRAS = (t: TipoReq) => t === 'reposicao' || t === 'eventual';
 // cabeçalho é só o padrão de quem pede várias coisas pela mesma razão
 // (migr. 354).
 let seqLinha = 0;
-const linhaVazia = () => ({ uid: ++seqLinha, item: '', marca: '', qtd: '1', unidade: 'UN', justificativa: '' });
+// `embalagem`/`fator` vazios = pedido na unidade solta, que é o caso comum.
+// Na eventual não há catálogo de onde tirar o fator (migr. 591): quem pede
+// declara, e a declaração é o documento que Compras vai cotar.
+const linhaVazia = () => ({
+  uid: ++seqLinha, item: '', marca: '', qtd: '1', unidade: 'UN', justificativa: '',
+  embalagem: '', fator: '',
+});
 
 const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   // Sem filtro por autor: o recorte é o setor, e quem faz esse recorte é a
@@ -452,7 +458,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
   const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
-  const updateLinha = (i: number, patch: Partial<{ item: string; marca: string; qtd: string; unidade: string; justificativa: string }>) =>
+  const updateLinha = (i: number, patch: Partial<{ item: string; marca: string; qtd: string; unidade: string; justificativa: string; embalagem: string; fator: string }>) =>
     setItens(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
 
   // Quais linhas estão com campo de motivo próprio aberto. Fica fora do estado
@@ -557,6 +563,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       if (!r.item.trim()) e[`item_${i}`] = 'Descreva o item';
       const j = r.justificativa.trim();
       if (j.length > 0 && j.length < 10) e[`just_${i}`] = 'Mín. 10 caracteres';
+      // Migr. 591: embalagem declarada tem de vir completa. A RPC recusa os
+      // mesmos casos; aqui o aluno descobre antes de enviar seis linhas.
+      if (r.embalagem) {
+        const f = parseQtd(r.fator);
+        if (r.unidade === 'SV') {
+          e[`fator_${i}`] = 'Serviço não vem em embalagem fechada';
+        } else if (f <= 1) {
+          e[`fator_${i}`] = `Quantas ${r.unidade} em cada ${r.embalagem.toLowerCase()}? Mais de uma.`;
+        } else if (!ehFracionaria(r.unidade) && f % 1 !== 0) {
+          e[`fator_${i}`] = `A unidade ${r.unidade} não aceita meia`;
+        }
+      }
     });
     setErros(e);
     return Object.keys(e).length === 0;
@@ -714,8 +732,15 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             // MIGR 582: em branco é "qualquer marca" — a RPC grava NULL, e
             // Compras lê isso como liberdade de escolha, não como esquecimento.
             marca:   r.marca.trim(),
-            qtd:     parseQtd(r.qtd) || 1,
             unidade: r.unidade,
+            // MIGR 591: com embalagem declarada, a quantidade digitada é o
+            // número de FARDOS — a RPC multiplica pelo fator e grava as duas
+            // leituras. Sem ela, segue sendo a quantidade na unidade.
+            ...(r.embalagem
+              ? { qtd_embalagens: parseQtd(r.qtd) || 1,
+                  embalagem_nome: r.embalagem,
+                  embalagem_fator: parseQtd(r.fator) }
+              : { qtd: parseQtd(r.qtd) || 1 }),
             // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
             justificativa: r.justificativa.trim() || null,
           }));
@@ -1173,12 +1198,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           onChange={e => updateLinha(i, { marca: e.target.value })}
                         />
                       </div>
+                      {/* Quantidade: de FARDOS quando a linha declara
+                          embalagem, de unidades quando não (migr. 591). Fardo
+                          não se parte, então lá a máscara não aceita vírgula. */}
                       <input
                         type="text" inputMode="decimal"
+                        title={row.embalagem
+                          ? `Quantidade a pedir, em ${pluralEmbalagem(row.embalagem, 2).toLowerCase()}`
+                          : `Quantidade a pedir (${normalizarUnidade(row.unidade)})`}
                         className="neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums"
                         value={row.qtd}
-                        onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
-                        onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
+                        onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, !row.embalagem && ehFracionaria(row.unidade)) })}
+                        onKeyDown={handleQtdKeyDown(!row.embalagem && ehFracionaria(row.unidade))}
                       />
                       <select
                         className="neu-input py-2 px-3 rounded-xl text-sm w-24"
@@ -1187,11 +1218,56 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           // Trocar a unidade remascara a quantidade da linha —
                           // "12,5" digitado em KG não pode virar 125 em UN.
                           const u = e.target.value;
-                          updateLinha(i, { unidade: u, qtd: formatQtd(row.qtd, ehFracionaria(u)) });
+                          // Serviço não vem em embalagem: escolher SV desfaz a
+                          // declaração em vez de deixá-la barrar o envio.
+                          const emb = u === 'SV' ? '' : row.embalagem;
+                          updateLinha(i, {
+                            unidade: u, embalagem: emb, fator: emb ? row.fator : '',
+                            qtd: formatQtd(row.qtd, !emb && ehFracionaria(u)),
+                          });
                         }}
                       >
                         {unidadesReq.map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                       </select>
+                      {/* A embalagem que o fornecedor vende. Vazia = unidade
+                          solta, que é a maioria — por isso o select nasce em
+                          "avulso" e o fator só aparece quando há o que
+                          multiplicar. Antes disso, o aluno escrevia o fardo no
+                          NOME do item ("sacola 50x60 — fardo com 500") e
+                          Compras cotava adivinhando. */}
+                      {row.unidade !== 'SV' && (
+                        <div className="w-full md:w-auto flex gap-2 items-start">
+                          <select
+                            className="neu-input py-2 px-2 rounded-xl text-xs w-28 shrink-0"
+                            value={row.embalagem}
+                            title="Como o fornecedor vende este item"
+                            onChange={e => {
+                              const emb = e.target.value;
+                              updateLinha(i, {
+                                embalagem: emb,
+                                fator: emb ? row.fator : '',
+                                qtd: formatQtd(row.qtd, !emb && ehFracionaria(row.unidade)),
+                              });
+                            }}
+                          >
+                            <option value="">Avulso</option>
+                            {EMBALAGENS_COMPRA.map(e => <option key={e} value={e}>{e}</option>)}
+                          </select>
+                          {row.embalagem && (
+                            <div className="w-24 shrink-0">
+                              <input
+                                type="text" inputMode="decimal"
+                                className={`neu-input py-2 px-2 rounded-xl text-xs w-full tabular-nums ${erros[`fator_${i}`] ? 'border border-red-500/40' : ''}`}
+                                placeholder={`${normalizarUnidade(row.unidade)} por ${row.embalagem.toLowerCase()}`}
+                                title={`Quantas ${normalizarUnidade(row.unidade)} vêm em um ${row.embalagem.toLowerCase()}`}
+                                value={row.fator}
+                                onChange={e => updateLinha(i, { fator: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
+                                onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <button
                         onClick={() => toggleJust(i, row.uid)}
                         title={justAberta[row.uid] ? 'Voltar a usar a justificativa geral' : 'Dar um motivo só para este item'}
@@ -1212,6 +1288,17 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         <Trash2 size={12} />
                       </button>
                     </div>
+
+                    {/* A conta à vista, antes de enviar (migr. 591) — e o erro
+                        da declaração incompleta no mesmo lugar. */}
+                    {row.embalagem && (erros[`fator_${i}`] ? (
+                      <span className="text-[10px] text-red-500 font-semibold">{erros[`fator_${i}`]}</span>
+                    ) : parseQtd(row.fator) > 1 && parseQtd(row.qtd) > 0 ? (
+                      <span className="text-[10px] text-accent/90 tabular-nums">
+                        {qtdBR(row.qtd)} {pluralEmbalagem(row.embalagem, parseQtd(row.qtd))} × {qtdBR(row.fator)} ={' '}
+                        <span className="font-bold">{qtdBR(parseQtd(row.qtd) * parseQtd(row.fator))} {normalizarUnidade(row.unidade)}</span>
+                      </span>
+                    ) : null)}
 
                     {justAberta[row.uid] && (
                       <div className="pl-3 border-l-2 border-accent/30 ml-1">
@@ -1586,6 +1673,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       value={corrForm.qtd}
                       onChange={e => setCorrForm(f => ({ ...f, qtd: formatQtd(e.target.value, corrFrac) }))}
                       onKeyDown={handleQtdKeyDown(corrFrac)} />
+                    {/* Aqui a quantidade é sempre a de estoque, mesmo no pedido
+                        que nasceu em fardo — e o aluno precisa saber disso antes
+                        de digitar. Mantendo múltiplo do fardo, o documento
+                        continua contando em fardo (migr. 590); saindo do
+                        múltiplo, ele passa a falar só em unidade, porque 610 não
+                        são 20 fardos de 30. */}
+                    {corrigindo?.embNome && corrigindo?.embFator ? (
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                        Pedido em <span className="text-gray-400">{qtdBR(corrigindo.qtdEmb)} {pluralEmbalagem(corrigindo.embNome, Number(corrigindo.qtdEmb))} de {qtdBR(corrigindo.embFator)}</span>.
+                        Digite em {normalizarUnidade(corrForm.unidade)}: múltiplo de {qtdBR(corrigindo.embFator)} continua contando em {corrigindo.embNome.toLowerCase()}.
+                      </p>
+                    ) : null}
                   </FormField>
                   <FormField label="Unidade">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"

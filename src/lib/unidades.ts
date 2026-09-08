@@ -228,13 +228,16 @@ export const unidadesDeRequisicao = (filial: string): readonly string[] =>
   [...unidadesDeProduto(filial), UNIDADE_SERVICO];
 
 /**
- * Exemplo de item para o placeholder. Ajuda contextual, não regra: "papel A4
+ * Exemplo de item para o placeholder.
+ *
+ * O da SuperMax dizia "— fardo com 500" porque não havia onde declarar isso; a
+ * migr. 591 deu campo à embalagem, e o exemplo voltou a ser só o nome do item. Ajuda contextual, não regra: "papel A4
  * 75g, resma" não diz nada a quem trabalha na TechMax. O formulário em si é o
  * mesmo nas três — requisição de compra é documento corporativo único, e
  * ramificar campos por filial faria a tela mentir sobre o processo.
  */
 export const EXEMPLO_ITEM_REQUISICAO: Record<string, string> = {
-  SuperMax: 'Sacola plástica reforçada 50x60 — fardo com 500',
+  SuperMax: 'Sacola plástica reforçada 50x60',
   MaxLook:  'Manequim de vitrine, corpo inteiro',
   TechMax:  'Cabo HDMI 2.1 — 2 metros',
   Matriz:   'Papel A4 75g — resma 500 folhas',
