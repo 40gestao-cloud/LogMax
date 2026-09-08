@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink, ListChecks } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -19,6 +19,81 @@ import { useFilial } from '../contexts/FilialContext';
 // pergunta diferente a fazer ao mesmo documento, e é isso que `mode` recorta:
 // Estoque quer o que falta separar, Financeiro o que falta receber, Vendas
 // acompanha o pedido do início ao fim.
+
+// AS ABAS, E POR QUE ELAS FALTAVAM.
+//
+// O recorte por módulo resolvia metade do problema e criava a outra: a fila
+// mostra o que FALTA fazer, então o documento sumia do módulo no instante em
+// que era resolvido. Quem acabou de separar não tinha onde conferir o que
+// separou — nem em que estado o pedido ficou —, e a única lista completa
+// morava em Vendas, que Logística e Financeiro não abrem.
+//
+// Mesma solução do Orçamentos (que agrupou dez status em cinco fases): a aba
+// responde "de quem é a bola", e o módulo abre na sua. A diferença é que aqui
+// as fases não saem do status, e sim dos MARCOS (`separado_em`, `pago_em`) —
+// é o marco que decide a fila, e o status é derivado dele
+// (`fn_pedido_venda_status_pelos_marcos`). Filtrar por status seria uma
+// segunda régua para o mesmo fato.
+//
+// Toda aba filtra no SERVIDOR e conta no banco, pelos motivos da migr. 592 e
+// do comentário de `filtro`, abaixo.
+type Aba = {
+  id: string;
+  label: string;
+  dica: string;
+  /** Mesma forma que `useFetchData` aceita — e a mesma que `contarAba` aplica. */
+  filtro: Record<string, unknown>;
+};
+
+const VIVOS = { status: { neq: 'Cancelado' } };
+
+const ABAS: Record<'vendas' | 'estoque' | 'financeiro', readonly Aba[]> = {
+  estoque: [
+    { id: 'a-separar', label: 'A separar', dica: 'Aprovado pelo cliente, mercadoria ainda na prateleira',
+      filtro: { separado_em: { notNull: false }, ...VIVOS } },
+    { id: 'separados', label: 'Já separados', dica: 'Mercadoria baixada do estoque — o que você já fez',
+      filtro: { separado_em: { notNull: true } } },
+    { id: 'todos',     label: 'Todos',       dica: 'O ciclo inteiro, inclusive cancelados', filtro: {} },
+  ],
+  financeiro: [
+    { id: 'a-receber', label: 'A receber', dica: 'Com alguma parcela em aberto',
+      filtro: { pago_em: { notNull: false }, ...VIVOS } },
+    { id: 'recebidos', label: 'Recebidos', dica: 'Última parcela quitada',
+      filtro: { pago_em: { notNull: true } } },
+    { id: 'todos',     label: 'Todos',     dica: 'O ciclo inteiro, inclusive cancelados', filtro: {} },
+  ],
+  vendas: [
+    { id: 'em-aberto',  label: 'Em aberto',  dica: 'Falta separar, falta receber, ou os dois',
+      filtro: { status: ['Aguardando Separação', 'Separado', 'Pago'] } },
+    { id: 'concluidos', label: 'Concluídos', dica: 'Separado e recebido',
+      filtro: { status: 'Concluído' } },
+    { id: 'cancelados', label: 'Cancelados', dica: 'Desfeitos: estoque devolvido e cobrança cancelada',
+      filtro: { status: 'Cancelado' } },
+    { id: 'todos',      label: 'Todos',      dica: 'O ciclo inteiro', filtro: {} },
+  ],
+};
+
+/**
+ * Aplica o mesmo formato de filtro do `useFetchData` numa consulta de
+ * contagem. A duplicação é assumida: o hook não expõe o aplicador, e contar
+ * trazendo as linhas seria pior — o PostgREST tem teto de linhas por resposta
+ * e o número sairia CALADAMENTE menor que a realidade, que é a pior falha
+ * possível num contador (ninguém desconfia de um número).
+ */
+const aplicarFiltro = (q: any, filtro: Record<string, unknown>) => {
+  for (const [col, val] of Object.entries(filtro)) {
+    if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'notNull' in (val as object)) {
+      q = (val as { notNull: boolean }).notNull ? q.not(col, 'is', null) : q.is(col, null);
+    } else if (val !== null && typeof val === 'object' && !Array.isArray(val) && 'neq' in (val as object)) {
+      q = q.neq(col, (val as { neq: unknown }).neq);
+    } else if (Array.isArray(val)) {
+      q = q.in(col, val);
+    } else {
+      q = q.eq(col, val);
+    }
+  }
+  return q;
+};
 const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'vendas' | 'estoque' | 'financeiro' }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
@@ -37,11 +112,14 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
   //
   // `useFetchData` sabe resolver isto no servidor (`notNull`, `neq`) — é o que
   // o próprio comentário do hook manda fazer.
-  const filtro = mode === 'estoque'
-    ? { filial, separado_em: { notNull: false }, status: { neq: 'Cancelado' } }
-    : mode === 'financeiro'
-      ? { filial, pago_em: { notNull: false }, status: { neq: 'Cancelado' } }
-      : { filial };
+  const abas = ABAS[mode ?? 'vendas'];
+  const [abaId, setAbaId] = useState<string>(abas[0].id);
+  const aba = abas.find(a => a.id === abaId) ?? abas[0];
+  // Trocar de aba volta para a primeira página: continuar na 3 depois de mudar
+  // de fila mostra "1–0 de 12" e parece tela quebrada.
+  useEffect(() => { setPage(0); }, [abaId]);
+
+  const filtro = useMemo(() => ({ filial, ...aba.filtro }), [filial, aba]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/pedidosvendaview', filtro, true, { page }
@@ -53,6 +131,33 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [processando, setProcessando] = useState<string | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
+
+  // Contagem de cada aba, do banco. `data` é uma página e `totalCount` só
+  // conhece o filtro corrente — nenhum dos dois sabe quantos há nas OUTRAS
+  // abas, que é justamente o número que faz a tela deixar de esconder coisa.
+  const [contagem, setContagem] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!supabase) return;
+    const sb = supabase;
+    let vivo = true;
+    (async () => {
+      const pares = await Promise.all(abas.map(async a => {
+        let q = sb.from('pedidos_venda')
+          .select('id', { count: 'exact', head: true })
+          .eq('filial', filial)
+          .eq('ativo', true);
+        q = aplicarFiltro(q, a.filtro);
+        const { count, error } = await q;
+        return [a.id, error ? 0 : (count ?? 0)] as const;
+      }));
+      if (!vivo) return;
+      setContagem(Object.fromEntries(pares));
+    })();
+    return () => { vivo = false; };
+    // `data` na dependência mantém os números em dia quando a lista muda —
+    // separar, receber ou cancelar move o pedido de uma aba para a outra, e é
+    // exatamente aí que o contador precisa acompanhar.
+  }, [filial, abas, data]);
 
   const isLogistica  = hasSetor(profile, 'logistica');
   const isFinanceiro = hasSetor(profile, 'financeiro');
@@ -76,11 +181,14 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     : mode === 'financeiro' ? 'Pedidos a Receber'
     : 'Pedidos de Venda';
 
+  // O subtítulo descreve o MÓDULO; quem descreve a fila aberta é a dica da aba,
+  // logo abaixo dela. Antes o subtítulo falava da primeira aba e continuava lá
+  // depois de trocar de aba, contradizendo a lista na tela.
   const subtituloModo =
     mode === 'estoque'
-      ? 'Pedidos aprovados pelo cliente aguardando separação no almoxarifado.'
+      ? 'O que o almoxarifado separa a partir de proposta aprovada pelo cliente. Separar baixa o estoque.'
     : mode === 'financeiro'
-      ? 'Pedidos com alguma parcela ainda em aberto. O pedido só sai daqui quando o último título é quitado.'
+      ? 'O recebimento dos pedidos de venda. O pedido só se dá por pago quando a última parcela é quitada.'
       : 'Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.';
 
   // Status final 'Concluído' é atribuído pela ação que completar o par
@@ -103,7 +211,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       // separado — e sumir sem explicação é o que fazia parecer que a
       // informação se perdeu. O aviso diz para onde ele foi.
       showToast(
-        `${numeroPedidoVenda(p)} separado e estoque baixado. Ele sai desta fila e continua em Vendas → Pedidos de Venda.`,
+        `${numeroPedidoVenda(p)} separado e estoque baixado. Ele sai desta fila e passa para a aba "Já separados".`,
         'success', true);
     } catch (err: any) {
       showToast(`Não foi possível separar: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -125,7 +233,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       await dbUpdate('/api/pedidosvendaview', p.id, updates);
       setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
       showToast(
-        `Pagamento do ${numeroPedidoVenda(p)} registrado. Ele sai desta fila e continua em Vendas → Pedidos de Venda.`,
+        `Pagamento do ${numeroPedidoVenda(p)} registrado. Ele sai desta fila e passa para a aba "Recebidos".`,
         'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
@@ -187,10 +295,36 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
         </div>
       </div>
 
+      {/* As abas com o número ao lado: é o número que impede a tela de esconder
+          documento. Antes, resolvido o pedido, ele saía da fila e não havia
+          onde reencontrá-lo sem trocar de módulo. */}
+      <div className="flex flex-wrap gap-2 shrink-0">
+        {abas.map(a => {
+          const ativa = a.id === abaId;
+          const n = contagem[a.id];
+          return (
+            <button key={a.id} onClick={() => setAbaId(a.id)} title={a.dica}
+              className={`py-2 px-4 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+                ativa ? 'bg-accent text-black' : 'neu-button text-gray-400 hover:text-gray-200'
+              }`}>
+              {a.label}
+              {n !== undefined && (
+                <span className={`tabular-nums text-[10px] font-black px-1.5 py-0.5 rounded ${
+                  ativa ? 'bg-black/20' : 'bg-white/5 text-gray-500'
+                }`}>{n}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-gray-500 -mt-3 shrink-0">{aba.dica}</p>
+
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
         <EmptyState message={
-          mode === 'estoque'      ? 'Nada a separar. Pedido aprovado pelo cliente cai aqui; o que já foi separado fica em Vendas → Pedidos de Venda.'
-          : mode === 'financeiro' ? 'Nada a receber. Pedido com parcela em aberto cai aqui; o que já foi quitado fica em Vendas → Pedidos de Venda.'
+          abaId !== abas[0].id
+            ? `Nada em "${aba.label}" — ${aba.dica.toLowerCase()}.`
+          : mode === 'estoque'      ? 'Nada a separar. Pedido aprovado pelo cliente cai aqui; o que já foi separado está na aba ao lado.'
+          : mode === 'financeiro' ? 'Nada a receber. Pedido com parcela em aberto cai aqui; o que já foi quitado está na aba ao lado.'
           : 'Nenhum pedido de venda. Quando um cliente aprovar uma proposta, ele aparece aqui.'
         } />
       ) : (
