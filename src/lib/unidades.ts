@@ -11,6 +11,95 @@
 
 export const UNIDADES_PRODUTO = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'CX', 'PC', 'PCT'] as const;
 
+/**
+ * Embalagem em que o FORNECEDOR vende — a terceira medida do produto (migr. 589).
+ *
+ * As outras duas já existiam e são outra coisa:
+ *
+ *   `unidade`              como o item entra e sai do estoque      (UN)
+ *   `peso`/`peso_unidade`  o conteúdo da embalagem de venda        (1 KG)
+ *   embalagem de compra    como o item é comprado                  (fardo com 30 UN)
+ *
+ * `FD` NÃO entra em `UNIDADES_PRODUTO` de propósito. Fardo não é unidade de
+ * estoque: pôr o estoque em fardo faz o PDV vender fardo ao cliente, o mínimo
+ * virar mínimo de fardo e o custo unitário ficar 30× maior. Foi por não ter
+ * este campo que a turma começou a cadastrar assim.
+ */
+export const EMBALAGENS_COMPRA = ['FARDO', 'CAIXA', 'PACOTE', 'SACO', 'ENGRADADO', 'DÚZIA'] as const;
+
+export type EmbalagemCompra = { nome: string; fator: number };
+
+/**
+ * A embalagem do produto, ou null quando ele só se compra na unidade solta.
+ *
+ * Fator 1 é tratado como ausência: "fardo com 1" é a própria unidade, e
+ * oferecer "pedir em fardo" para converter 20 em 20 só confunde. O banco já
+ * recusa (`chk_produtos_embalagem_qtd`); aqui a tela não chega a oferecer.
+ */
+export const embalagemDoProduto = (p: {
+  embalagem_compra?: string | null;
+  embalagem_qtd?: number | string | null;
+} | null | undefined): EmbalagemCompra | null => {
+  const nome = String(p?.embalagem_compra ?? '').trim().toUpperCase();
+  const fator = Number(String(p?.embalagem_qtd ?? '').replace(',', '.'));
+  return nome !== '' && Number.isFinite(fator) && fator > 1 ? { nome, fator } : null;
+};
+
+/** Plural de prateleira: 1 FARDO, 2 FARDOS. Todas as seis pluralizam com S. */
+export const pluralEmbalagem = (nome: string, n: number): string =>
+  `${String(nome ?? '').toUpperCase()}${Math.abs(n) === 1 ? '' : 'S'}`;
+
+/**
+ * "FARDO com 30 UN" — o rótulo que a ficha e o catálogo mostram.
+ *
+ * O fator é expresso NA UNIDADE DE ESTOQUE do produto: fardo de arroz com 30
+ * (UN), saco de café com 60 (KG). Não é o conteúdo da embalagem de venda, que
+ * é `peso`/`peso_unidade` e responde outra pergunta.
+ */
+export const rotuloEmbalagem = (emb: EmbalagemCompra | null, unidade: string | null | undefined): string =>
+  emb ? `${emb.nome} com ${String(Number(emb.fator.toFixed(3))).replace('.', ',')} ${normalizarUnidade(unidade)}` : '';
+
+/**
+ * O que cada sigla quer dizer — e o motivo de ela aparecer por extenso na tela.
+ *
+ * Os selects mostravam "UN / KG / L / M / M² / M³ / CX / PC / PCT / SV": dez
+ * pares de letras sem legenda nenhuma. `PC` e `PCT` são a pior parte — peça e
+ * pacote, que num supermercado são coisas diferentes e ficavam a um caractere
+ * de distância. `SV` não se adivinha, e o aluno que procurava "fardo" não
+ * achava (fardo é embalagem de compra, `EMBALAGENS_COMPRA` — outra pergunta,
+ * outro campo).
+ *
+ * O VALOR GRAVADO CONTINUA A SIGLA. É só rótulo: o banco, o PDV, os relatórios
+ * e a régua acima seguem falando 'UN' e 'PCT'. Trocar o dado por "Pacote"
+ * quebraria de `unidade_fracionaria()` (migr. 456) ao filtro do PDV.
+ *
+ * `RL` está aqui sem estar em `UNIDADES_PRODUTO` de propósito: a turma Adm tem
+ * produtos gravados com ela (vide migr. 438), e o rótulo tem de saber ler o que
+ * já existe mesmo que a lista não ofereça mais.
+ */
+export const NOME_UNIDADE: Record<string, string> = {
+  UN:   'unidade',
+  KG:   'quilo',
+  L:    'litro',
+  M:    'metro',
+  'M²': 'metro quadrado',
+  'M³': 'metro cúbico',
+  CX:   'caixa',
+  PC:   'peça',
+  PCT:  'pacote',
+  SV:   'serviço',
+  RL:   'rolo',
+  G:    'grama',
+  ML:   'mililitro',
+};
+
+/** "PCT — pacote". Sigla sozinha quando não se conhece o nome. */
+export const rotuloUnidade = (u: string | null | undefined): string => {
+  const sigla = normalizarUnidade(u, '');
+  const nome = NOME_UNIDADE[sigla];
+  return sigla === '' ? '' : (nome ? `${sigla} — ${nome}` : sigla);
+};
+
 /** Sem fracionário: quem não vende por peso não compra por peso. */
 export const UNIDADES_DISCRETAS = ['UN', 'CX', 'PC', 'PCT'] as const;
 

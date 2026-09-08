@@ -11,7 +11,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
 import { useFormValidation, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
-import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade, pluralEmbalagem } from '../lib/unidades';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
@@ -506,7 +506,17 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         </span>
                         <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">{qtdBR(item.qtd)}</td>
+                      {/* Migr. 589: quem pediu em fardo pediu em fardo. A
+                          quantidade de estoque continua sendo a de cima — é
+                          ela que a cotação e o pedido usam. */}
+                      <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">
+                        {qtdBR(item.qtd)}
+                        {item.embalagem_nome && item.qtd_embalagens != null && (
+                          <span className="block text-[10px] text-accent/80 leading-tight">
+                            {qtdBR(item.qtd_embalagens)} {pluralEmbalagem(item.embalagem_nome, Number(item.qtd_embalagens))}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-center"><UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} /></td>
                       <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.centro_custo || '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">
@@ -615,6 +625,13 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                                 o que a tabela esconde em tela pequena. */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
                               <Campo rotulo="Quantidade" valor={`${qtdBR(item.qtd)} ${normalizarUnidade(item.unidade)}`} />
+                              {/* Migr. 589: como o setor pediu, e com que fator
+                                  NAQUELE dia — o cadastro pode ter mudado
+                                  desde então, e o documento não muda junto. */}
+                              {item.embalagem_nome && item.qtd_embalagens != null && (
+                                <Campo rotulo="Pedido em embalagem"
+                                  valor={`${qtdBR(item.qtd_embalagens)} ${pluralEmbalagem(item.embalagem_nome, Number(item.qtd_embalagens))} de ${qtdBR(item.embalagem_fator)} ${normalizarUnidade(item.unidade)}`} />
+                              )}
                               <Campo rotulo="Urgência" valor={<UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} />} />
                               <Campo rotulo="Status" valor={<StatusBadge status={item.status} />} />
                               <Campo rotulo="Centro de custo" valor={item.centro_custo || '—'} />

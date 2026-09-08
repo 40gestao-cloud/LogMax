@@ -38,6 +38,10 @@ import {
   normalizarUnidade,
   formatarConteudo,
   exemploProduto,
+  EMBALAGENS_COMPRA,
+  embalagemDoProduto,
+  rotuloEmbalagem,
+  rotuloUnidade,
 } from '../lib/unidades';
 import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, type AtributoDef } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
@@ -89,6 +93,10 @@ const EMPTY_EXTRAS = {
   // do estoque). Arroz 5 KG em pacote: peso=5, peso_unidade=KG, unidade=UN.
   // Migr. 438 — antes o rótulo usava `unidade` e produzia "Peso / Volume (UN)".
   peso_unidade:           'KG' as string,
+  // Embalagem de COMPRA — a terceira medida (migr. 589). Fardo de arroz com 30
+  // UN: o estoque continua em UN, e é só a requisição que pede em fardo.
+  embalagem_compra:       '',
+  embalagem_qtd:          '',
   filial:                 FILIAL_DEFAULT as string,
   tipo:                   'estoque_venda' as TipoProduto,
   patrimonio_numero:      '',
@@ -1045,7 +1053,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // migr. 438 acabou de fechar dentro dele.
   // Markup E margem: a planilha tem espaço para as duas, e é onde a turma
   // compara linha a linha. Antes saía uma coluna "Margem" com valor de markup.
-  const exportCols = ['Código', 'Nome', 'Conteúdo', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Markup %', 'Margem %', 'Estoque', 'Un.', 'Est. Mín', 'EAN', 'Status'];
+  const exportCols = ['Código', 'Nome', 'Conteúdo', 'Compra em', 'Categoria', 'Fornecedor', 'P. Custo', 'P. Venda', 'Markup %', 'Margem %', 'Estoque', 'Un.', 'Est. Mín', 'EAN', 'Status'];
   const buildExportRows = (rows: any[]) => rows.map((d: any) => {
     const mk = calcMarkup(parseNum(d.preco), parseNum(d.preco_custo));
     const mg = calcMargem(parseNum(d.preco), parseNum(d.preco_custo));
@@ -1056,6 +1064,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     return [
       d.codigo ?? '', d.nome ?? '',
       formatarConteudo(d.peso, d.peso_unidade),
+      rotuloEmbalagem(embalagemDoProduto(d), d.unidade),
       d.categoria ?? '', d.fornecedor ?? '',
       d.preco_custo ? fmtBRL(parseNum(d.preco_custo)) : '',
       d.preco ? fmtBRL(parseNum(d.preco)) : '',
@@ -1200,6 +1209,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       // que peso foi gravado sem medida (migr. 438 não adivinha g vs kg). O
       // select mostra "— Selecione —" e a validação cobra na primeira edição.
       peso_unidade:           item.peso_unidade ?? '',
+      embalagem_compra:       item.embalagem_compra ?? '',
+      embalagem_qtd:          item.embalagem_qtd != null ? String(Number(item.embalagem_qtd)).replace('.', ',') : '',
       filial:                 filial,
       // `normalizarTipo`, não o ternário que estava aqui: ele mapeava tudo que
       // não fosse 'patrimonio' para 'estoque_venda', então abrir um item de
@@ -1432,6 +1443,19 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       // um valor novo sem unidade, mesmo que exista dado herdado assim.
       else if (!extras.peso_unidade)  ee.peso = 'Informe a medida (G, KG, ML ou L)';
     }
+    // Embalagem de compra: os dois campos ou nenhum (migr. 589). Nome sem fator
+    // é rótulo que não converte nada; fator sem nome é número que a requisição
+    // não sabe ler. Fardo com 1 não é embalagem — é a própria unidade.
+    if (temEstoque(extras.tipo)) {
+      const fatorEmb = parseQtd(extras.embalagem_qtd);
+      if (extras.embalagem_compra && !extras.embalagem_qtd.trim()) {
+        ee.embalagem_qtd = `Quantas ${extras.unidade || 'UN'} vêm em um ${extras.embalagem_compra.toLowerCase()}?`;
+      } else if (extras.embalagem_compra && fatorEmb <= 1) {
+        ee.embalagem_qtd = 'Tem de ser mais de 1 — embalagem com uma unidade é a própria unidade.';
+      } else if (!extras.embalagem_compra && extras.embalagem_qtd.trim()) {
+        ee.embalagem_qtd = 'Escolha a embalagem ao lado (fardo, caixa, pacote...).';
+      }
+    }
     // Categoria carrega o markup-alvo que sugere o preço de venda: não faz
     // sentido exigi-la de quem não vende.
     if (vendavel && !extras.categoria_id) ee.categoria_id = 'Selecione uma categoria';
@@ -1600,6 +1624,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         // barra unidade sem valor no banco; aqui a regra é a mesma, antes.
         peso:                   mostraPesoConteudo && extras.peso !== '' ? parseQtd(extras.peso) : null,
         peso_unidade:           mostraPesoConteudo && extras.peso !== '' ? (extras.peso_unidade || null) : null,
+        // Embalagem de compra (migr. 589), também em par. Patrimônio não tem:
+        // freezer não vem em fardo, e a seção Estoque inteira some da tela.
+        embalagem_compra:       temEstoque(extras.tipo) && extras.embalagem_compra ? extras.embalagem_compra : null,
+        embalagem_qtd:          temEstoque(extras.tipo) && extras.embalagem_compra ? parseQtd(extras.embalagem_qtd) : null,
         filial:                 filial,
         categoria_id:           extras.categoria_id || null,
         subcategoria_id:        extras.subcategoria_id || null,
@@ -2787,8 +2815,61 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       })}>
                       {/* Régua única (src/lib/unidades.ts): KG/L/M só em mercearia.
                           Esta era a última das cinco cópias da lista. */}
-                      {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{u}</option>)}
+                      {/* Sigla + nome: "PC" e "PCT" são peça e pacote, e a
+                          diferença não se lê em duas letras. O valor gravado
+                          continua sendo a sigla. */}
+                      {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                     </select>
+                  </FormField>
+                  {/* Embalagem de COMPRA (migr. 589) — a terceira medida do
+                      produto, e a que faltava: "arroz 1 kg, 30 no fardo".
+
+                      Não é a unidade de estoque (esta aqui do lado) nem o
+                      conteúdo da embalagem de venda (o Peso / Volume lá em
+                      cima). É como o FORNECEDOR vende. Sem ela, quem comprava
+                      por fardo punha o estoque em PCT — e aí o PDV passava a
+                      vender fardo ao cliente e o custo unitário ficava 30×
+                      maior. */}
+                  <FormField label="Compra em (embalagem do fornecedor)" error={extrasErrors.embalagem_qtd}>
+                    <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.embalagem_qtd ? 'border border-red-500/40' : ''}`}>
+                      <select
+                        className="bg-transparent text-xs font-bold text-accent px-2 py-2 border-r border-white/5 outline-none shrink-0"
+                        value={extras.embalagem_compra}
+                        onChange={e => {
+                          const v = e.target.value;
+                          // Tirar a embalagem tira o fator junto: fator órfão é
+                          // o que o CHECK do banco recusa, e guardá-lo na tela
+                          // só faria o erro aparecer no save.
+                          setExtras(x => ({ ...x, embalagem_compra: v, embalagem_qtd: v ? x.embalagem_qtd : '' }));
+                          setExtrasErrors(ev => ({ ...ev, embalagem_qtd: '' }));
+                        }}
+                        title="Como o fornecedor vende este item — nada a ver com a unidade de estoque">
+                        <option value="">— Unidade solta —</option>
+                        {EMBALAGENS_COMPRA.map(e => <option key={e} value={e}>{e}</option>)}
+                      </select>
+                      <input
+                        className="flex-1 bg-transparent py-2 px-3 outline-none tabular-nums disabled:opacity-40"
+                        value={extras.embalagem_qtd} inputMode="decimal"
+                        disabled={!extras.embalagem_compra}
+                        onChange={e => {
+                          // Fracionário segue a unidade de estoque: saco de café
+                          // com 60 KG é legítimo; fardo com 30,5 UN não.
+                          setExtras(x => ({ ...x, embalagem_qtd: formatQtd(e.target.value, fracionario) }));
+                          setExtrasErrors(ev => ({ ...ev, embalagem_qtd: '' }));
+                        }}
+                        onKeyDown={handleQtdKeyDown(fracionario)}
+                        placeholder={extras.embalagem_compra ? `Quantas ${extras.unidade || 'UN'}?` : '—'} />
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      {extras.embalagem_compra && parseQtd(extras.embalagem_qtd) > 1 ? (
+                        <>
+                          A requisição vai poder pedir <span className="font-bold text-gray-400">em {extras.embalagem_compra.toLowerCase()}</span>:
+                          20 = <span className="text-accent font-bold">{qtdBR(20 * parseQtd(extras.embalagem_qtd))} {extras.unidade || 'UN'}</span> no estoque.
+                        </>
+                      ) : (
+                        <>Como o fornecedor vende — <span className="text-gray-400">fardo com 30</span>. O estoque continua contando em {extras.unidade || 'UN'}.</>
+                      )}
+                    </p>
                   </FormField>
                   {/* Quantidade é `type=text inputMode=decimal`, não `type=number`
                       (migr. 438): o teclado pt-BR digita vírgula e o número
@@ -3090,7 +3171,11 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           {(() => {
                             const conteudo = formatarConteudo(item.peso, item.peso_unidade);
                             const semMedida = !!conteudo && !item.peso_unidade;
-                            return (item.fornecedor || conteudo) ? (
+                            // Embalagem de compra (migr. 589) na mesma linha:
+                            // é o que responde "compro de quantos em quantos?"
+                            // sem abrir o cadastro.
+                            const emb = rotuloEmbalagem(embalagemDoProduto(item), item.unidade);
+                            return (item.fornecedor || conteudo || emb) ? (
                               <p className="text-[10px] text-gray-600 mt-0.5">
                                 {item.fornecedor}
                                 {item.fornecedor && conteudo && ' • '}
@@ -3098,6 +3183,12 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                                   <span className={semMedida ? 'text-amber-500/80' : ''}
                                     title={semMedida ? 'Peso gravado sem medida (cadastro antigo) — abra o produto e informe se é G, KG, ML ou L.' : 'Conteúdo da embalagem'}>
                                     {conteudo}
+                                  </span>
+                                )}
+                                {(item.fornecedor || conteudo) && emb && ' • '}
+                                {emb && (
+                                  <span className="text-gray-500" title="Embalagem em que o fornecedor vende — o estoque continua contando na unidade">
+                                    {emb}
                                   </span>
                                 )}
                               </p>

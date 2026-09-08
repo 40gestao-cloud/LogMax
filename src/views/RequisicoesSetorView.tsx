@@ -14,7 +14,10 @@ import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
 import { todayBR } from '../lib/dates';
-import { unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import {
+  unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
+  embalagemDoProduto, rotuloEmbalagem, pluralEmbalagem, rotuloUnidade,
+} from '../lib/unidades';
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque } from '../lib/tipoProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -218,6 +221,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: r.justificativa, solicitante: r.solicitante,
       saldo: r.saldo_no_pedido, minimo: r.minimo_no_pedido,
+      // Migr. 589: `qtd` é sempre a medida de estoque; estes três dizem que a
+      // conversa foi em fardo, e com que fator NAQUELE dia.
+      qtdEmb: r.qtd_embalagens, embNome: r.embalagem_nome, embFator: r.embalagem_fator,
       // Devolvida pelo gerente (migr. 517): o motivo vem na própria requisição,
       // porque o solicitante não enxerga `aprovacoes_compras`.
       correcaoMotivo: r.correcao_motivo ?? null,
@@ -238,6 +244,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       criadoEm: r.created_at, atualizadoEm: r.updated_at,
       justificativa: null, solicitante: r.solicitante,
       saldo: null as number | null, minimo: null as number | null,
+      // Material sai do almoxarifado da casa: não se pede em fardo o que já
+      // está aberto na prateleira. Nulos para a lista ter uma forma só.
+      qtdEmb: null as number | null, embNome: null as string | null, embFator: null as number | null,
       // Devolvida (migr. 522, espelha a 517 de compra): o motivo vem na
       // própria requisição, porque o solicitante não enxerga `aprovacoes_estoque`.
       correcaoMotivo: r.correcao_motivo ?? null,
@@ -464,6 +473,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     setJustAberta({});
     setEstoqueForm({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
     setRepo(new Map());
+    setRepoEmb(new Set());
     setBuscaCat('');
     setSoAbaixoMin(false);
     setErros({});
@@ -475,6 +485,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     return n;
   });
   const setQtdRepo = (id: string, qtd: string) => setRepo(m => new Map(m).set(id, qtd));
+
+  // Em que medida a linha está pedindo (migr. 589): na unidade de estoque, ou
+  // em embalagem fechada. Set à parte do `repo` de propósito — a quantidade
+  // digitada é a mesma caixa de texto nos dois modos, e o que muda é só como o
+  // número é lido. Desmarcar o item não limpa a escolha: quem remarca costuma
+  // ser quem se enganou no clique.
+  const [repoEmb, setRepoEmb] = useState<Set<string>>(new Set());
+  const setModoRepo = (id: string, emFardo: boolean) => setRepoEmb(s => {
+    const n = new Set(s);
+    if (emFardo) n.add(id); else n.delete(id);
+    return n;
+  });
 
   // Material do almoxarifado: sai do que já existe, então o produto vem do
   // catálogo — e o Estoque é quem libera (migr. 284).
@@ -675,10 +697,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       // Na reposição só o `produto_id` viaja: nome e unidade a RPC lê do
       // catálogo, e o saldo ela mesma fotografa (migr. 358). Mandar o nome
       // daqui seria deixar o navegador escrever o que o comprador vai ler.
+      // MIGR 589: quem pede em embalagem fechada manda `qtd_embalagens` e mais
+      // nada. O FATOR não viaja daqui — a RPC lê do cadastro e grava a
+      // conversão junto, senão o navegador estaria dizendo quantas unidades
+      // cabem num fardo (mesma lição da marca, migr. 582).
       const p_itens = ehRepo
-        ? [...repo.entries()].map(([produto_id, qtd]) => ({
-            produto_id, qtd: parseQtd(qtd) || 1,
-          }))
+        ? [...repo.entries()].map(([produto_id, qtd]) => {
+            const n = parseQtd(qtd) || 1;
+            const emb = embalagemDoProduto(produtos.find((p: any) => p.id === produto_id));
+            return emb && repoEmb.has(produto_id)
+              ? { produto_id, qtd_embalagens: n }
+              : { produto_id, qtd: n };
+          })
         : itens.map(r => ({
             item:    r.item.trim(),
             // MIGR 582: em branco é "qualquer marca" — a RPC grava NULL, e
@@ -989,6 +1019,12 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                               {p.codigo ? `${p.codigo} · ` : ''}saldo {qtdBR(p.saldo)}
                               {p.minimo > 0 ? ` · mínimo ${qtdBR(p.minimo)}` : ''}
                               {' '}{p.unidade ?? 'un'}
+                              {/* Migr. 589: dizer como o item é comprado antes
+                                  de marcar. Quem não vê o fardo aqui pede 20
+                                  unidades quando queria 20 fardos. */}
+                              {embalagemDoProduto(p) && (
+                                <span className="text-gray-600"> · {rotuloEmbalagem(embalagemDoProduto(p), p.unidade)}</span>
+                              )}
                             </span>
                           </button>
                           {p.abaixoMin && (
@@ -996,16 +1032,68 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                               No mínimo
                             </span>
                           )}
-                          {marcado && (
-                            <input
-                              type="text" inputMode="decimal"
-                              className="neu-input py-1 px-2 rounded-lg text-xs w-20 shrink-0 tabular-nums"
-                              value={repo.get(p.id) ?? '1'}
-                              onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, ehFracionaria(p.unidade)))}
-                              onKeyDown={handleQtdKeyDown(ehFracionaria(p.unidade))}
-                              title={`Quantidade a repor (${normalizarUnidade(p.unidade)})`}
-                            />
-                          )}
+                          {marcado && (() => {
+                            // Migr. 589: só oferece "em fardo" quem tem
+                            // embalagem cadastrada. Sem ela o botão não aparece
+                            // — e o cadastro é onde se resolve isso.
+                            const emb = embalagemDoProduto(p);
+                            const emFardo = !!emb && repoEmb.has(p.id);
+                            // Em fardo a quantidade é inteira: fornecedor não
+                            // abre fardo, e a RPC recusa 2,5 (mesma régua).
+                            const frac = emFardo ? false : ehFracionaria(p.unidade);
+                            const digitado = parseQtd(repo.get(p.id) ?? '1');
+                            return (
+                              <div className="flex items-center gap-2 shrink-0">
+                                {emb && (
+                                  <div className="neu-pressed rounded-lg p-0.5 flex text-[9px] font-bold uppercase tracking-wider">
+                                    {[
+                                      { modo: false, txt: normalizarUnidade(p.unidade) },
+                                      { modo: true,  txt: emb.nome },
+                                    ].map(op => (
+                                      <button key={String(op.modo)}
+                                        onClick={() => {
+                                          setModoRepo(p.id, op.modo);
+                                          // Trocar de medida remascara: "2,5" em
+                                          // KG não sobrevive à virada para fardo.
+                                          setQtdRepo(p.id, formatQtd(repo.get(p.id) ?? '1', op.modo ? false : ehFracionaria(p.unidade)));
+                                        }}
+                                        title={op.modo
+                                          ? `Pedir em ${emb.nome.toLowerCase()} — ${rotuloEmbalagem(emb, p.unidade)}`
+                                          : `Pedir na unidade solta (${rotuloUnidade(p.unidade)})`}
+                                        className={`px-1.5 py-0.5 rounded transition-colors ${
+                                          (op.modo === emFardo) ? 'bg-accent text-black' : 'text-gray-500 hover:text-gray-300'
+                                        }`}>
+                                        {op.txt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="w-24 shrink-0">
+                                  <input
+                                    type="text" inputMode="decimal"
+                                    className="neu-input py-1 px-2 rounded-lg text-xs w-full tabular-nums"
+                                    value={repo.get(p.id) ?? '1'}
+                                    onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, frac))}
+                                    onKeyDown={handleQtdKeyDown(frac)}
+                                    // Sem artigo: "caixa" é feminino e "fardo"
+                                    // masculino, e a lista tem os dois.
+                                    title={emFardo
+                                      ? `Quantidade a repor, em ${pluralEmbalagem(emb!.nome, 2).toLowerCase()}`
+                                      : `Quantidade a repor (${normalizarUnidade(p.unidade)})`}
+                                  />
+                                  {/* A conta aparece ANTES de enviar: é ela que
+                                      o aluno precisa aprender a fazer, e vê-la
+                                      é o que evita pedir 20 unidades achando
+                                      que pediu 20 fardos. */}
+                                  {emFardo && digitado > 0 && (
+                                    <span className="block text-[9px] text-accent/90 text-right mt-0.5 tabular-nums leading-tight">
+                                      = {qtdBR(digitado * emb!.fator)} {normalizarUnidade(p.unidade)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -1102,7 +1190,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           updateLinha(i, { unidade: u, qtd: formatQtd(row.qtd, ehFracionaria(u)) });
                         }}
                       >
-                        {unidadesReq.map(u => <option key={u} value={u}>{u}</option>)}
+                        {unidadesReq.map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                       </select>
                       <button
                         onClick={() => toggleJust(i, row.uid)}
@@ -1279,7 +1367,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <td className="py-3 px-4 text-xs text-gray-300 capitalize hidden md:table-cell">
                       {r.solicitante ?? '—'}
                     </td>
-                    <td className="py-3 px-4 text-xs font-mono text-gray-300">{qtdBR(r.qtd)} {r.unidade ?? ''}</td>
+                    {/* Migr. 589: o que foi PEDIDO em cima, o que isso dá em
+                        estoque embaixo. Trocar a ordem esconderia a conta que
+                        o aluno acabou de fazer. */}
+                    <td className="py-3 px-4 text-xs font-mono text-gray-300">
+                      {r.embNome && r.qtdEmb != null ? (
+                        <>
+                          {qtdBR(r.qtdEmb)} {pluralEmbalagem(r.embNome, Number(r.qtdEmb))}
+                          <span className="block text-[10px] text-gray-500 leading-tight">
+                            {qtdBR(r.qtd)} {r.unidade ?? ''}
+                          </span>
+                        </>
+                      ) : <>{qtdBR(r.qtd)} {r.unidade ?? ''}</>}
+                    </td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-400 hidden lg:table-cell">{r.prazo ?? '—'}</td>
                     <td className="py-3 px-4"><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{r.abertura || '—'}</td>
@@ -1491,7 +1591,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
                       value={corrForm.unidade}
                       onChange={e => setCorrForm(f => ({ ...f, unidade: e.target.value }))}>
-                      {unidadesReq.map(u => <option key={u} value={u}>{u}</option>)}
+                      {unidadesReq.map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                     </select>
                   </FormField>
                   <FormField label="Necessário até">

@@ -11,6 +11,8 @@ import { usePrompt } from '../contexts/PromptContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { semelhancaDeItem } from '../lib/similaridadeItem';
+import { qtdBR } from '../lib/viewUtils';
+import { normalizarUnidade, pluralEmbalagem } from '../lib/unidades';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
@@ -483,7 +485,15 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                           <span className="text-xs font-normal text-gray-400 ml-1.5">· {req.marca}</span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">Solicitante: {req.solicitante} · Qtd: {req.qtd} · {req.data}</p>
+                      {/* Migr. 589: "600" e "20 fardos" são a mesma compra
+                          contada de dois jeitos, e o gerente decide melhor
+                          vendo o jeito em que o setor pediu. */}
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
+                        Solicitante: {req.solicitante} · Qtd: {qtdBR(req.qtd)} {normalizarUnidade(req.unidade)}
+                        {req.embalagem_nome && req.qtd_embalagens != null
+                          && ` (${qtdBR(req.qtd_embalagens)} ${pluralEmbalagem(req.embalagem_nome, Number(req.qtd_embalagens))})`}
+                        {' · '}{req.data}
+                      </p>
                     </div>
                   </div>
                   {/* `flex-wrap` no botão pai (acima) deixa este bloco cair
@@ -524,7 +534,13 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             { label: 'Setor', val: req.setor_solicitante || '—' },
                             { label: 'Centro de Custo', val: req.centro_custo || '—' },
                             { label: 'Urgência', val: req.urgencia ?? 'Normal' },
-                            { label: 'Quantidade', val: `${req.qtd} ${req.unidade ?? ''}`.trim() },
+                            { label: 'Quantidade', val: `${qtdBR(req.qtd)} ${normalizarUnidade(req.unidade)}`.trim() },
+                            // Migr. 589: o fator é o do DIA DO PEDIDO — o
+                            // cadastro pode ter mudado desde então.
+                            ...(req.embalagem_nome && req.qtd_embalagens != null ? [{
+                              label: 'Pedido em embalagem',
+                              val: `${qtdBR(req.qtd_embalagens)} ${pluralEmbalagem(req.embalagem_nome, Number(req.qtd_embalagens))} de ${qtdBR(req.embalagem_fator)} ${normalizarUnidade(req.unidade)}`,
+                            }] : []),
                             // Vazio não é omissão: é o solicitante dizendo que
                             // serve qualquer marca. O gerente decide sabendo.
                             { label: 'Marca', val: req.marca || 'Qualquer marca' },

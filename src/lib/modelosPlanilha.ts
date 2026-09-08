@@ -25,7 +25,7 @@
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
-import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, UNIDADES_CONTEUDO } from './unidades';
+import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, UNIDADES_CONTEUDO, EMBALAGENS_COMPRA } from './unidades';
 import { ATRIBUTOS_PRODUTO as ATRIBUTOS_FICHA, rotuloParaCliente, type AtributoDef } from './atributosProduto';
 import { supabase } from './supabase';
 
@@ -268,6 +268,13 @@ const modeloProdutos = (filial: string): Modelo => {
       dica: 'O que já está na prateleira hoje. Não é compra: não gera conta a pagar. Fração só faz sentido se a Unidade for KG ou L (12,5 KG) — em UN, CX, PC e PCT vai inteiro.' },
     { col: 'Estoque Mínimo', obrigatorio: true, formato: 'decimal', exemplo: '10',
       dica: 'Abaixo disso o produto aparece em Sugestões de Compra. Aceita fração para item vendido a peso (migr. 438).' },
+    // A terceira medida (migr. 589). Fica ao lado de Unidade porque é com ela
+    // que se confunde: uma é como o estoque conta, a outra é como o fornecedor
+    // vende. Opcional — item que só se compra avulso deixa as duas em branco.
+    { col: 'Compra em', lista: EMBALAGENS_COMPRA, exemplo: 'FARDO',
+      dica: 'Como o FORNECEDOR vende, se ele vender em embalagem fechada. Não é a Unidade: o estoque continua contando em UN. Em branco = compra avulsa.' },
+    { col: 'Qtd por embalagem', formato: 'decimal', exemplo: '30',
+      dica: 'Quantas UNIDADES (a coluna Unidade) vêm em uma embalagem: fardo de arroz com 30. Preencha junto com "Compra em" — uma sem a outra não vale.' },
   );
   if (isSuper) {
     campos.push({ col: 'Elegível a benefícios', lista: SIM_NAO, exemplo: 'Não',

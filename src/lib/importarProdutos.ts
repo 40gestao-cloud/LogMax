@@ -18,7 +18,7 @@
 
 import { getModelo, carregarListasDoLogMax, type ModeloCampo } from './modelosPlanilha';
 import { ATRIBUTOS_PRODUTO, rotuloParaCliente, type AtributoDef } from './atributosProduto';
-import { UNIDADES_FRACIONARIAS, normalizarUnidade } from './unidades';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade, EMBALAGENS_COMPRA } from './unidades';
 import { unidadesDeProduto } from './unidades';
 import { normalizeEan13, gerarEanInterno } from './barcode';
 import { parseBRL, parseQtd } from './viewUtils';
@@ -314,6 +314,34 @@ export async function lerPlanilhaProdutos(
       }
     }
 
+    // ── Embalagem de compra (migr. 589) ─────────────────────────────────────
+    // Vale nas três filiais: caixa de camiseta e caixa de fone são tão reais
+    // quanto o fardo de arroz. As duas colunas andam juntas, como no cadastro
+    // e como o CHECK do banco exige.
+    let embNome: string | null = null;
+    let embQtd: number | null = null;
+    {
+      const nome = normalizarUnidade(bruto['Compra em'] ?? '', '');
+      const qtdEmb = bruto['Qtd por embalagem'];
+      if (nome !== '' || qtdEmb) {
+        if (nome === '') erros.push('"Qtd por embalagem" preenchida sem "Compra em"');
+        else if (!EMBALAGENS_COMPRA.includes(nome as any)) {
+          erros.push(`"Compra em" inválido: use ${EMBALAGENS_COMPRA.join(', ')}`);
+        } else if (!qtdEmb) {
+          erros.push('"Compra em" preenchido sem "Qtd por embalagem"');
+        } else {
+          embNome = nome;
+          embQtd = parseQtd(qtdEmb);
+          // Espelha chk_produtos_embalagem_qtd: embalagem com uma unidade é a
+          // própria unidade, e a requisição não teria o que converter.
+          if (!(embQtd > 1)) erros.push('"Qtd por embalagem" tem de ser maior que 1');
+          else if (!frac && embQtd % 1 !== 0) {
+            erros.push(`"Qtd por embalagem" com fração, mas a unidade ${unidade} não aceita meia`);
+          }
+        }
+      }
+    }
+
     // ── Ficha do nicho ──────────────────────────────────────────────────────
     // O cabeçalho da coluna é `rotuloParaCliente(def.label)` — a MESMA função
     // que o gerador usa (`campoDaFicha`). Reescrever o rótulo aqui seria criar
@@ -364,6 +392,8 @@ export async function lerPlanilhaProdutos(
       unidade,
       peso,
       peso_unidade: pesoUnidade,
+      embalagem_compra: embNome,
+      embalagem_qtd: embQtd,
       filial,
       status: 'Ativo',
       tipo: 'estoque_venda',

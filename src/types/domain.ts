@@ -22,6 +22,10 @@ export interface Produto {
   estoque_minimo?: number | null;
   /** Marca do cadastro — é ela que a requisição de reposição carimba (migr. 582). */
   marca?: string | null;
+  /** Embalagem em que o FORNECEDOR vende (migr. 589) — fardo, caixa, saco. Não
+   *  é unidade de estoque: `embalagem_qtd` diz quantas `unidade` vêm em uma. */
+  embalagem_compra?: string | null;
+  embalagem_qtd?: number | null;
   filial?: string | null;
   status: 'Ativo' | 'Inativo' | string;
   tipo?: string | null;
@@ -157,6 +161,12 @@ export interface Requisicao {
   correcao_solicitada_em?: string | null;
   correcao_solicitada_por?: string | null;
   reenviada_em?: string | null;
+  /** Pedido em embalagem fechada (migr. 589). `qtd` continua na unidade de
+   *  estoque — 20 fardos de 30 gravam qtd = 600, qtd_embalagens = 20. O fator
+   *  é SNAPSHOT do dia do pedido: mudar o cadastro não reescreve o documento. */
+  qtd_embalagens?: number | null;
+  embalagem_nome?: string | null;
+  embalagem_fator?: number | null;
   created_at?: string;
   updated_at?: string | null;
 }
