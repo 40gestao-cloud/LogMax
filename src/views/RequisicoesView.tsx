@@ -433,6 +433,17 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         value={extras.qtd}
                         onChange={e => setExtras(x => ({ ...x, qtd: formatQtd(e.target.value, editFrac) }))}
                         onKeyDown={handleQtdKeyDown(editFrac)} />
+                      {/* Migr. 590: o pedido pode ter nascido em fardo — negociar
+                          "manda 610, o fornecedor aceita" é legítimo, mas quem
+                          digita precisa saber que está saindo do fardo fechado.
+                          Ficando múltiplo do fator, o documento continua contando
+                          em fardo; saindo, o gatilho apaga o rótulo sozinho. */}
+                      {editItem?.embalagem_nome && editItem?.qtd_embalagens != null ? (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                          Pedido em <span className="text-gray-400">{qtdBR(editItem.qtd_embalagens)} {pluralEmbalagem(editItem.embalagem_nome, Number(editItem.qtd_embalagens))} de {qtdBR(editItem.embalagem_fator)}</span>.
+                          Digite em {normalizarUnidade(editItem.unidade)}: múltiplo de {qtdBR(editItem.embalagem_fator)} continua contando em {editItem.embalagem_nome.toLowerCase()}.
+                        </p>
+                      ) : null}
                     </FormField>
                     <FormField label="Urgência">
                       <select className="neu-input py-2 px-3 rounded-xl text-sm"
