@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink } from 'lucide-react';
+import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink, ListChecks } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroPedidoVenda } from '../lib/documentos';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
-import { formatBRL } from '../lib/viewUtils';
+import { formatBRL, qtdBR } from '../lib/viewUtils';
+import { normalizarUnidade, embalagemDoProduto, pluralEmbalagem } from '../lib/unidades';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -21,11 +22,37 @@ import { useFilial } from '../contexts/FilialContext';
 const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast: any; profile: UserProfile; filial: FilialOp; mode?: 'vendas' | 'estoque' | 'financeiro' }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
+
+  // O RECORTE DE CADA MÓDULO VAI PARA O SERVIDOR.
+  //
+  // Até aqui a tela buscava uma PÁGINA de pedidos e filtrava o array no
+  // navegador (`!separado_em`, `!pago_em`). Com a fila maior que uma página,
+  // isso mente de dois jeitos ao mesmo tempo: a lista diz "Nada a separar"
+  // havendo dezenas nas páginas seguintes, e a paginação continua contando as
+  // linhas que o filtro escondeu — abrindo páginas vazias.
+  //
+  // O badge da sidebar já contava CERTO (`isNull: ['separado_em']`, contagem do
+  // banco), então os dois já discordavam: o menu dizia 7, a tela mostrava nada.
+  // Quem confere o número não tem como saber qual dos dois está mentindo.
+  //
+  // `useFetchData` sabe resolver isto no servidor (`notNull`, `neq`) — é o que
+  // o próprio comentário do hook manda fazer.
+  const filtro = mode === 'estoque'
+    ? { filial, separado_em: { notNull: false }, status: { neq: 'Cancelado' } }
+    : mode === 'financeiro'
+      ? { filial, pago_em: { notNull: false }, status: { neq: 'Cancelado' } }
+      : { filial };
+
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
-    '/api/pedidosvendaview', { filial }, true, { page }
+    '/api/pedidosvendaview', filtro, true, { page }
   );
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
+  // Catálogo só para LER a unidade e a embalagem de cada item na hora de
+  // separar — a lista de itens do pedido guarda nome e quantidade, e "174" sem
+  // a medida não diz se é peça, quilo ou caixa.
+  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const [processando, setProcessando] = useState<string | null>(null);
+  const [aberto, setAberto] = useState<string | null>(null);
 
   const isLogistica  = hasSetor(profile, 'logistica');
   const isFinanceiro = hasSetor(profile, 'financeiro');
@@ -37,15 +64,12 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     cliente: clientes.find((c: any) => c.id === p.cliente_id),
   }));
 
-  // O recorte espelha exatamente a ação que cada módulo pode executar mais
-  // abaixo (podeSeparar / podePagar): a fila mostra o que há para fazer ali,
-  // não o arquivo inteiro. Cancelado sai das filas — não há o que separar nem
-  // receber —, mas segue visível em Vendas, que acompanha o ciclo todo.
-  const enriched = mode === 'estoque'
-    ? todos.filter((p: any) => !p.separado_em && p.status !== 'Cancelado')
-    : mode === 'financeiro'
-      ? todos.filter((p: any) => !p.pago_em && p.status !== 'Cancelado')
-      : todos;
+  // O recorte espelha a ação que cada módulo executa mais abaixo (podeSeparar /
+  // podePagar): a fila mostra o que há para fazer ali, não o arquivo inteiro.
+  // Cancelado sai das filas — não há o que separar nem receber —, mas segue
+  // visível em Vendas, que acompanha o ciclo todo. Quem recorta agora é o
+  // `filtro` lá em cima, no servidor.
+  const enriched = todos;
 
   const tituloModo =
     mode === 'estoque'    ? 'Pedidos a Separar'
@@ -56,7 +80,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     mode === 'estoque'
       ? 'Pedidos aprovados pelo cliente aguardando separação no almoxarifado.'
     : mode === 'financeiro'
-      ? 'Pedidos aprovados pelo cliente com recebimento ainda em aberto.'
+      ? 'Pedidos com alguma parcela ainda em aberto. O pedido só sai daqui quando o último título é quitado.'
       : 'Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.';
 
   // Status final 'Concluído' é atribuído pela ação que completar o par
@@ -75,7 +99,12 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       const { data: atualizado, error } = await supabase.rpc('separar_pedido_venda', { p_pedido_id: p.id });
       if (error) throw new Error(error.message);
       setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...(atualizado ?? {}) } : x));
-      showToast('Pedido separado e estoque baixado.', 'success', true);
+      // A fila é do que FALTA fazer, então o pedido sai daqui assim que é
+      // separado — e sumir sem explicação é o que fazia parecer que a
+      // informação se perdeu. O aviso diz para onde ele foi.
+      showToast(
+        `${numeroPedidoVenda(p)} separado e estoque baixado. Ele sai desta fila e continua em Vendas → Pedidos de Venda.`,
+        'success', true);
     } catch (err: any) {
       showToast(`Não foi possível separar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -95,7 +124,9 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       };
       await dbUpdate('/api/pedidosvendaview', p.id, updates);
       setData((prev: any[]) => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
-      showToast('Pagamento registrado.', 'success', true);
+      showToast(
+        `Pagamento do ${numeroPedidoVenda(p)} registrado. Ele sai desta fila e continua em Vendas → Pedidos de Venda.`,
+        'success', true);
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
@@ -158,8 +189,8 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
 
       {isLoading ? <LoadingSpinner /> : enriched.length === 0 ? (
         <EmptyState message={
-          mode === 'estoque'      ? 'Nada a separar. Pedidos aprovados pelo cliente aparecem aqui.'
-          : mode === 'financeiro' ? 'Nada a receber. Pedidos com pagamento em aberto aparecem aqui.'
+          mode === 'estoque'      ? 'Nada a separar. Pedido aprovado pelo cliente cai aqui; o que já foi separado fica em Vendas → Pedidos de Venda.'
+          : mode === 'financeiro' ? 'Nada a receber. Pedido com parcela em aberto cai aqui; o que já foi quitado fica em Vendas → Pedidos de Venda.'
           : 'Nenhum pedido de venda. Quando um cliente aprovar uma proposta, ele aparece aqui.'
         } />
       ) : (
@@ -195,7 +226,22 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                         <td className="py-3 px-4 text-xs font-credencial text-gray-500">{numeroPedidoVenda(p)}</td>
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.cliente?.nome ?? '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{p.vendedor_nome ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-center text-gray-300">{Array.isArray(p.itens) ? p.itens.length : 0}</td>
+                        {/* A CONTAGEM NÃO ERA UMA LISTA.
+                            A Logística via "3" e um botão Marcar separado —
+                            ninguém separa mercadoria a partir de um número. Os
+                            itens sempre estiveram no documento (`itens`, com
+                            produto, quantidade e preço); faltava onde lê-los. */}
+                        <td className="py-3 px-4 text-xs font-mono text-center">
+                          <button
+                            onClick={() => setAberto(a => a === p.id ? null : p.id)}
+                            title={aberto === p.id ? 'Fechar a lista de itens' : 'Ver o que este pedido leva'}
+                            className={`neu-button py-1 px-2.5 rounded-lg font-bold inline-flex items-center gap-1 transition-colors ${
+                              aberto === p.id ? 'text-accent' : 'text-gray-300 hover:text-accent'
+                            }`}>
+                            <ListChecks size={11} />
+                            {Array.isArray(p.itens) ? p.itens.length : 0}
+                          </button>
+                        </td>
                         <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">R$ {formatBRL(Number(p.valor_total ?? 0))}</td>
                         <td className="py-3 px-4 text-xs text-center">
                           {p.separado_em ? (
@@ -256,6 +302,74 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                     );
                   })}
                 </AnimatePresence>
+                {/* Fora do AnimatePresence de cima porque uma <tr> extra entre
+                    as linhas quebraria a lista de chaves da animação. */}
+                {enriched.map((p: any) => aberto === p.id ? (
+                  <tr key={`${p.id}-itens`} className="bg-white/[0.02]">
+                    <td colSpan={9} className="px-4 pb-4">
+                      <div className="neu-inset rounded-2xl p-4">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                          {mode === 'estoque' ? 'O que separar' : 'Itens do pedido'}
+                        </p>
+                        {Array.isArray(p.itens) && p.itens.length > 0 ? (
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="text-[9px] text-gray-600 uppercase tracking-widest">
+                                <th className="pb-2 font-bold">Produto</th>
+                                <th className="pb-2 font-bold text-right">Qtd</th>
+                                <th className="pb-2 font-bold text-right">Preço un.</th>
+                                <th className="pb-2 font-bold text-right">Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {p.itens.map((it: any, idx: number) => {
+                                const prod = produtos.find((x: any) => x.id === it.produto_id);
+                                const un   = normalizarUnidade(prod?.unidade);
+                                const emb  = embalagemDoProduto(prod);
+                                const qtd  = Number(it.qtd ?? 0);
+                                // Migr. 589: quem vai ao estoque conta em fardo,
+                                // não em unidade solta. Só quando a conta fecha
+                                // exata — meio fardo não se separa.
+                                const emFardos = emb && qtd > 0 && qtd % emb.fator === 0
+                                  ? qtd / emb.fator : null;
+                                return (
+                                  <tr key={idx} className="border-t border-white/5">
+                                    <td className="py-2 text-xs text-gray-200">
+                                      {it.nome ?? prod?.nome ?? 'Item'}
+                                      {prod?.codigo && <span className="text-[10px] text-gray-600 ml-2 font-mono">{prod.codigo}</span>}
+                                      {!prod && (
+                                        <span className="text-[10px] text-amber-500/80 ml-2"
+                                          title="O item foi gravado no pedido, mas o produto não está no catálogo desta unidade — confira antes de separar.">
+                                          fora do catálogo
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
+                                      {qtdBR(qtd)} {un}
+                                      {emFardos && (
+                                        <span className="block text-[10px] text-accent/90">
+                                          {qtdBR(emFardos)} {pluralEmbalagem(emb!.nome, emFardos)}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 text-xs font-mono text-gray-400 text-right whitespace-nowrap">
+                                      R$ {formatBRL(Number(it.preco_unitario ?? 0))}
+                                    </td>
+                                    <td className="py-2 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
+                                      R$ {formatBRL(Number(it.subtotal ?? 0))}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p className="text-xs text-gray-500">Este pedido não tem itens gravados.</p>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null)}
               </tbody>
             </table>
           </div>
