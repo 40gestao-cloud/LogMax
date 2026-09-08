@@ -10,7 +10,8 @@ import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
-import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
+import { UNIDADES_FRACIONARIAS, normalizarUnidade, embalagemDoProduto } from '../lib/unidades';
+import { QuantidadeEmbalagem, qtdEmEstoque } from '../components/QuantidadeEmbalagem';
 import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
 import { requerImei, ATRIBUTOS_PRODUTO } from '../lib/atributosProduto';
 import { gerarImeis } from '../lib/imei';
@@ -346,14 +347,27 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     const p = pid ? produtos.find((x: any) => x.id === pid) : null;
     return p ? normalizarUnidade(p.unidade) : '';
   }, [pedidos, produtos, form.pedido_id]);
-  const recebFrac = UNIDADES_FRACIONARIAS.has(unidadePedidoSel);
+
+  // Migr. 589: a carga chega em fardo, o estoque conta em unidade. Contar 20
+  // fardos de 30 na mão e digitar 600 é onde nasce o inventário errado — e o
+  // erro só aparece semanas depois, no balanço.
+  const embPedidoSel = useMemo(() => {
+    const pid = produtoDoPedido(form.pedido_id);
+    return embalagemDoProduto(pid ? produtos.find((x: any) => x.id === pid) : null);
+  }, [pedidos, produtos, form.pedido_id]);
+  const [recebEmEmb, setRecebEmEmb] = useState(false);
+  // Trocar de pedido troca de produto: o modo do pedido anterior não pode
+  // sobreviver e multiplicar a quantidade pelo fardo errado.
+  useEffect(() => { setRecebEmEmb(false); }, [form.pedido_id]);
 
   const handleSave = async () => {
     if (!validate()) return;
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
-      const qtd = parseQtd(extras.qtd_recebida);
+      // O que entra no estoque é sempre a unidade — o fardo é só a forma de
+      // contar na doca (migr. 589).
+      const qtd = qtdEmEstoque(extras.qtd_recebida, embPedidoSel, recebEmEmb);
       if (qtd <= 0) { showToast('Informe uma quantidade válida.', 'error', true); return; }
       const maxAceito = maxPermitido(form.pedido_id, 0);
       if (semSaldoConhecido(maxAceito)) {
@@ -657,12 +671,18 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 {/* A unidade é a do produto do pedido — mercearia recebe 12,5 KG
                     (migr. 439). `type=number` recusava a vírgula do teclado pt-BR
                     e devolvia campo vazio. */}
-                <FormField label={`Qtd Recebida${unidadePedidoSel ? ` (${unidadePedidoSel})` : ''}`}>
-                  <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                    value={extras.qtd_recebida}
-                    onChange={e => setExtras(x => ({ ...x, qtd_recebida: formatQtd(e.target.value, recebFrac) }))}
-                    onKeyDown={handleQtdKeyDown(recebFrac)} placeholder="0" />
-                </FormField>
+                <QuantidadeEmbalagem
+                  label="Qtd Recebida"
+                  unidade={unidadePedidoSel}
+                  embalagem={embPedidoSel}
+                  emEmbalagem={recebEmEmb}
+                  onModo={setRecebEmEmb}
+                  value={extras.qtd_recebida}
+                  onChange={v => setExtras(x => ({ ...x, qtd_recebida: v }))}
+                  ajuda={embPedidoSel
+                    ? 'Conte como a carga chegou. O estoque recebe a conversão — é ela que o Confirmar dá entrada.'
+                    : undefined}
+                />
                 <FormField label="Data da chegada">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
                     max={todayBR()}
