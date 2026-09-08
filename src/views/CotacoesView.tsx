@@ -286,6 +286,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const temQtd = Number.isFinite(qtdReq) && qtdReq > 0;
   const unidadeReq = normalizarUnidade(reqSelecionada?.unidade);
 
+  // "3 CAIXAS" ao lado da quantidade em unidade — sem isso a lista mostrava
+  // "Qtd: 600" e quem cota não sabia se eram 600 unidades soltas ou 20 fardos.
+  const rotuloQtdReq = (r: any): string => {
+    const qtdE = Number(r?.qtd_embalagens ?? 0);
+    const nome = String(r?.embalagem_nome ?? '').trim();
+    if (qtdE > 0 && nome) {
+      return `${qtdBR(qtdE)} ${pluralEmbalagem(nome, qtdE)} — ${qtdBR(r.qtd)} ${normalizarUnidade(r.unidade)}`;
+    }
+    return `Qtd: ${r.qtd}`;
+  };
+
   // MIGR 589: a requisição pedida em fardo carrega em QUE fardo foi pedida.
   //
   // É aqui que a embalagem mais importa, e onde ela era mais invisível: o
@@ -1265,7 +1276,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         {selReq.opcoes.pendentes.length > 0 && (
                           <optgroup label={`Ainda sem cotação (${selReq.opcoes.pendentes.length})`}>
                             {selReq.opcoes.pendentes.map(({ r }) => (
-                              <option key={r.id} value={r.id}>{r.item} (Qtd: {r.qtd})</option>
+                              <option key={r.id} value={r.id}>{r.item} ({rotuloQtdReq(r)})</option>
                             ))}
                           </optgroup>
                         )}
@@ -1273,7 +1284,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <optgroup label={`Já cotadas (${selReq.opcoes.cotadas.length})`}>
                             {selReq.opcoes.cotadas.map(({ r, vivas, aprovada }) => (
                               <option key={r.id} value={r.id} disabled={aprovada}>
-                                {r.item} (Qtd: {r.qtd}) — {vivas} proposta{vivas === 1 ? '' : 's'}
+                                {r.item} ({rotuloQtdReq(r)}) — {vivas} proposta{vivas === 1 ? '' : 's'}
                                 {aprovada ? ' · aprovada, gere o pedido' : ''}
                               </option>
                             ))}
@@ -1617,7 +1628,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">{item.req?.qtd ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">
+                        {item.req ? rotuloQtdReq(item.req).replace(/^Qtd: /, '') : '—'}
+                      </td>
                       <td className="py-3 px-4 text-xs text-gray-400 min-w-[9rem]">
                         <div className="flex flex-col gap-0.5">
                           <span>{item.forn?.nome ?? '—'}</span>
