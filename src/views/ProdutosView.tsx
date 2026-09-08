@@ -1441,7 +1441,13 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       if (!extras.peso.trim())        ee.peso = 'Obrigatório';
       // Número sem medida é o defeito que a 438 veio desfazer: não deixa nascer
       // um valor novo sem unidade, mesmo que exista dado herdado assim.
-      else if (!extras.peso_unidade)  ee.peso = 'Informe a medida (G, KG, ML ou L)';
+      else if (!extras.peso_unidade)  ee.peso = 'Informe a medida (G, KG, ML, L ou UN)';
+      // Espelha `chk_produtos_conteudo_un_redundante` (migr. 593): "1 UN
+      // contém 6 UN" não descreve nada. Conteúdo contado só faz sentido
+      // quando o estoque conta embalagens.
+      else if (extras.peso_unidade === 'UN' && normalizarUnidade(extras.unidade) === 'UN') {
+        ee.peso = 'A unidade de estoque já é UN — conte em UN só quando o estoque contar pacote ou caixa.';
+      }
     }
     // Embalagem de compra: os dois campos ou nenhum (migr. 589). Nome sem fator
     // é rótulo que não converte nada; fator sem nome é número que a requisição
@@ -2394,7 +2400,11 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           onChange={e => { setExtras(x => ({ ...x, peso_unidade: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
                           title="Medida do conteúdo da embalagem — nada a ver com a unidade de estoque">
                           <option value="">— ? —</option>
-                          {UNIDADES_CONTEUDO.map(u => <option key={u} value={u}>{u}</option>)}
+                          {UNIDADES_CONTEUDO
+                            // "1 UN contém N UN" é ruído (migr. 593). A opção
+                            // some em vez de virar erro depois de digitada.
+                            .filter(u => !(u === 'UN' && normalizarUnidade(extras.unidade) === 'UN'))
+                            .map(u => <option key={u} value={u}>{u === 'UN' ? 'UN (contagem)' : u}</option>)}
                         </select>
                       </div>
                       {/* O nome do produto costuma trazer a medida ("Arroz 1kg").
@@ -2412,8 +2422,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                         ) : null;
                       })()}
                       <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        O que vem dentro de uma embalagem — <span className="text-gray-400">5 KG</span> de arroz.
-                        Quantas embalagens entram no estoque é a <span className="font-bold text-gray-400">Unidade</span> ({extras.unidade || 'UN'}), lá em Estoque.
+                        O que vem dentro de <span className="font-bold text-gray-400">UMA {extras.unidade || 'UN'}</span> —
+                        {' '}<span className="text-gray-400">5 KG</span> de arroz, ou{' '}
+                        <span className="text-gray-400">6 UN</span> num pacote de sabonete. Não é quanto o
+                        fornecedor entrega: isso é <span className="font-bold text-gray-400">Compra em</span>, lá em Estoque.
                       </p>
                     </FormField>
                   )}
@@ -2820,6 +2832,23 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           continua sendo a sigla. */}
                       {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                     </select>
+                    {/* O ERRO QUE ESTA FRASE EVITA JÁ ESTÁ NO CATÁLOGO.
+                        "Açúcar Cristal 1 (kg) 30 UN" está cadastrado com
+                        unidade PCT: o aluno usou a unidade de ESTOQUE para
+                        dizer "fardo de 30", porque não havia onde dizer isso.
+                        Aí o estoque conta fardos, o PDV vende o fardo inteiro
+                        ao cliente e o "30" fica no nome, onde não soma. */}
+                    {['PCT', 'CX', 'PC'].includes(normalizarUnidade(extras.unidade)) && (
+                      <p className="text-[10px] text-amber-500/90 mt-1 leading-snug flex items-start gap-1">
+                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                        <span>
+                          O estoque vai contar <span className="font-bold">{normalizarUnidade(extras.unidade)}</span>, e é
+                          isso que o caixa vende ao cliente — a embalagem fechada. Se a loja vende avulso, a
+                          Unidade é <span className="font-bold">UN</span>, e o pacote do fornecedor vai em{' '}
+                          <span className="font-bold">Compra em</span>, aqui do lado.
+                        </span>
+                      </p>
+                    )}
                   </FormField>
                   {/* Embalagem de COMPRA (migr. 589) — a terceira medida do
                       produto, e a que faltava: "arroz 1 kg, 30 no fardo".
@@ -2871,6 +2900,47 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       )}
                     </p>
                   </FormField>
+                  {/* AS TRÊS MEDIDAS NUMA FRASE SÓ.
+                      Separadas, cada campo está certo e o conjunto continua
+                      confuso — foi a pergunta que abriu esta correção: "e onde
+                      aparece quantas unidades vêm no pacote?". Aqui a cadeia
+                      inteira aparece com os números que a pessoa acabou de
+                      digitar, que é o único jeito de ela conferir se o que
+                      escreveu é o que quis dizer. */}
+                  {(() => {
+                    const un    = normalizarUnidade(extras.unidade);
+                    const fator = parseQtd(extras.embalagem_qtd);
+                    const temEmb = !!extras.embalagem_compra && fator > 1;
+                    const conte = parseQtd(extras.peso);
+                    const temConteudo = mostraPesoConteudo && conte > 0 && !!extras.peso_unidade;
+                    if (!temEmb && !temConteudo) return null;
+                    return (
+                      <div className="md:col-span-2 lg:col-span-3 neu-pressed rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">
+                          Como este produto fica
+                        </p>
+                        <p className="text-xs text-gray-300 leading-relaxed">
+                          {temEmb && (
+                            <>1 <span className="font-bold text-accent">{extras.embalagem_compra}</span> ={' '}
+                            <span className="font-bold">{qtdBR(fator)} {un}</span> — é assim que o fornecedor entrega.<br /></>
+                          )}
+                          {temConteudo && (
+                            <>1 <span className="font-bold text-accent">{un}</span> ={' '}
+                            <span className="font-bold">{qtdBR(conte)} {extras.peso_unidade}</span> — é o que vem dentro
+                            de cada uma.<br /></>
+                          )}
+                          {temEmb && temConteudo && extras.peso_unidade === 'UN' && (
+                            <>Logo, 1 {extras.embalagem_compra} traz{' '}
+                            <span className="font-bold text-accent">{qtdBR(fator * conte)} UN</span> no total.<br /></>
+                          )}
+                          <span className="text-gray-500">
+                            O estoque conta em <span className="font-bold text-gray-400">{un}</span>, e é em {un} que
+                            o caixa vende.
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {/* Quantidade é `type=text inputMode=decimal`, não `type=number`
                       (migr. 438): o teclado pt-BR digita vírgula e o número
                       nativo descarta o valor inteiro quando ela chega. A máscara

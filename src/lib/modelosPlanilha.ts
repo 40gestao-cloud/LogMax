@@ -248,7 +248,7 @@ const modeloProdutos = (filial: string): Modelo => {
       { col: 'Peso / Volume por embalagem', formato: 'decimal', exemplo: '5',
         dica: 'O que vem dentro de UMA embalagem. Deixe em branco se o produto é vendido a granel (Unidade em KG ou L).' },
       { col: 'Medida do conteúdo', lista: UNIDADES_CONTEUDO, exemplo: 'KG',
-        dica: 'A medida do conteúdo — nada a ver com a Unidade de estoque. Arroz de 5 kg em pacote: conteúdo 5 KG, Unidade UN.' },
+        dica: 'A medida do conteúdo — nada a ver com a Unidade de estoque. Arroz de 5 kg em pacote: conteúdo 5 KG, Unidade UN. Use UN quando o conteúdo se CONTA (pacote com 6 sabonetes): conteúdo 6 UN, Unidade PCT.' },
     );
   }
   campos.push(

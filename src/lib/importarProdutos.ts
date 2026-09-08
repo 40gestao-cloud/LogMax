@@ -311,6 +311,11 @@ export async function lerPlanilhaProdutos(
         // acusar aqui evita o insert que morre com erro de constraint.
         if (!pesoUnidade) erros.push('Peso / Volume preenchido sem a Medida do conteúdo');
         if (!(peso > 0)) erros.push('Peso / Volume inválido');
+        // Migr. 593: espelha `chk_produtos_conteudo_un_redundante` — "1 UN
+        // contém N UN" não descreve nada, e o banco recusa.
+        if (normalizarUnidade(pesoUnidade) === 'UN' && unidade === 'UN') {
+          erros.push('Conteúdo em UN só quando a Unidade de estoque for embalagem (PCT, CX, PC)');
+        }
       }
     }
 

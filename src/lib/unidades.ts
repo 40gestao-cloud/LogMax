@@ -116,8 +116,13 @@ export const UNIDADES_FRACIONARIAS = new Set(['KG', 'L', 'M', 'M²', 'M³']);
  * amarrava as duas ao mesmo seletor, então o aluno lia "Peso / Volume (UN)" e
  * digitava um número sem medida. Nas quatro turmas isso produziu peso 900 e
  * peso 0,5 na mesma coluna — grama e quilo convivendo sem rótulo (migr. 438).
+ *
+ * `UN` entrou na migr. 593: o conteúdo nem sempre se mede, às vezes se CONTA.
+ * Pacote com 6 sabonetes, cartela com 12 pilhas — sem `UN` aqui, o 6 e o 12
+ * iam parar no NOME do produto, onde não somam nem convertem. Está nos dados
+ * das turmas: "Açúcar Cristal 1 (kg) 30 UN", com a contagem no texto.
  */
-export const UNIDADES_CONTEUDO = ['G', 'KG', 'ML', 'L'] as const;
+export const UNIDADES_CONTEUDO = ['G', 'KG', 'ML', 'L', 'UN'] as const;
 
 /**
  * Item vendido a granel não tem conteúdo de embalagem: a unidade de estoque JÁ
@@ -181,6 +186,10 @@ export const divergenciaDeConteudo = (
 
   const n = typeof peso === 'number' ? peso : parseFloat(String(peso ?? '').replace(',', '.'));
   const u = normalizarUnidade(pesoUnidade, '');
+  // Conteúdo CONTADO (migr. 593) não se compara com o que o nome anuncia em
+  // peso: "Sabonete 90g — pacote com 6" tem as duas coisas, e avisar que "o
+  // nome diz 90 G e você preencheu 6 UN" seria alarme falso em cadastro certo.
+  if (u === 'UN') return null;
   // Campo ainda em branco não é divergência — é formulário pela metade.
   if (!Number.isFinite(n) || n <= 0 || u === '') return null;
 
