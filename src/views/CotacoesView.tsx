@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
@@ -550,23 +550,64 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       : { label: 'Gerente/CEO', color: 'text-amber-300 border-amber-400/20' }
   );
 
-  // IDs de cotações que já têm pedido gerado.
+  // IDs de cotações que já têm pedido gerado — é o que esconde o botão
+  // "Gerar Pedido" da linha. Precisa dizer EXATAMENTE o que a RPC diz, e
+  // precisa acompanhar o banco em tempo real:
+  //
+  //  • Filtra igual à RPC (`ativo AND status <> 'Cancelado'`). Sem o `neq`,
+  //    pedido cancelado escondia o botão para sempre — e cancelar existe
+  //    justamente para poder recomeçar a compra (migr. 544).
+  //  • Escopo de filial explícito: `auth_pode_filial` deixa admin/CEO passar
+  //    em todas as unidades, então sem o `.eq` a lista viria da rede inteira.
+  //  • ERRO NÃO ZERA A LISTA. Antes, qualquer falha na leitura caía em
+  //    `rows ?? []` e o conjunto virava vazio — ou seja, TODA cotação aprovada
+  //    voltava a exibir "Gerar Pedido", e o aluno só descobria clicando.
   const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());
+  const carregarCotacoesComPedido = useCallback(async () => {
+    if (!supabase) return;
+    const { data: rows, error } = await supabase
+      .from('pedidos')
+      .select('cotacao_id')
+      .eq('filial', filial)
+      .eq('ativo', true)
+      .neq('status', 'Cancelado');
+    if (error) {
+      console.warn('[Cotacoes] não consegui ler os pedidos já gerados:', error.message);
+      return;
+    }
+    setCotacoesComPedido(new Set<string>(
+      (rows ?? [])
+        .map((p: any) => p.cotacao_id)
+        .filter((id: any): id is string => Boolean(id))
+    ));
+  }, [filial]);
+
+  useEffect(() => { carregarCotacoesComPedido(); }, [carregarCotacoesComPedido, data]);
+
+  // Gerar pedido não mexe em `cotacoes`, então a lista da turma inteira ficava
+  // congelada no que era verdade quando a página abriu: o colega gerava o
+  // pedido às 20:59 e a tela dos outros seguia oferecendo "Gerar Pedido" da
+  // mesma cotação — o clique só devolvia "Esta cotação já tem pedido gerado".
+  // `pedidos` está na publicação de realtime; é ele que tem de avisar.
+  //
+  // Nome de canal único por instância: a tela vive em dois modos (Compras e
+  // Financeiro) e `supabase.channel(nome)` devolve o canal já assinado quando
+  // o nome se repete — o segundo `.on()` estoura e o realtime morre calado.
   useEffect(() => {
     if (!supabase) return;
-    let cancelled = false;
-    supabase.from('pedidos').select('cotacao_id').eq('ativo', true)
-      .then(({ data: rows }) => {
-        if (cancelled) return;
-        const ids = new Set<string>(
-          (rows ?? [])
-            .map((p: any) => p.cotacao_id)
-            .filter((id: any): id is string => Boolean(id))
-        );
-        setCotacoesComPedido(ids);
-      });
-    return () => { cancelled = true; };
-  }, [data]);
+    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    const canal = supabase
+      .channel(`cotacoes-pedidos-${canalId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' },
+        () => { carregarCotacoesComPedido(); })
+      // Reconexão do websocket é ponto cego: o que mudou com o socket fora não
+      // é reenviado. Sem esta releitura, quem fechou a tampa do notebook volta
+      // com o botão de um pedido que já existe.
+      .subscribe(status => { if (status === 'SUBSCRIBED') carregarCotacoesComPedido(); });
+    return () => { supabase?.removeChannel(canal); };
+  }, [carregarCotacoesComPedido]);
 
   const requisicoesAprovadas = useMemo(
     () => requisicoes.filter((r: any) => r.status === 'Aprovado'),
@@ -993,6 +1034,65 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const pediuServico = (cot: any) =>
     String(cot?.req?.unidade ?? '').trim().toUpperCase() === 'SV';
 
+  // Conferência do vínculo (o clique que ninguém revisa depois).
+  //
+  // O select do modal lista o catálogo inteiro da unidade, e o item da
+  // requisição é texto livre — nada impedia abrir "Óleo de cozinha" e amarrar
+  // "Leite condensado". O erro é silencioso e definitivo: o produto errado
+  // entra no pedido, a requisição guarda o vínculo (a próxima compra do mesmo
+  // item já nasce errada como Reposição), e o Recebimento abre com o item
+  // travado — a doca dá entrada de estoque no produto errado.
+  //
+  // A régua é grosseira de propósito: não decide por ninguém, só percebe que
+  // as duas frases não têm palavra nenhuma em comum e obriga a confirmar.
+  const RUIDO_VINCULO = new Set([
+    'para', 'com', 'sem', 'dos', 'das', 'por', 'una', 'uma', 'unidade', 'unidades',
+    'caixa', 'caixas', 'pacote', 'pacotes', 'fardo', 'fardos', 'kit', 'novo', 'nova',
+    'tamanho', 'cor', 'marca', 'tipo', 'modelo', 'linha',
+    // Qualificadores não identificam o item: "Meia masculina" e "Corrente
+    // masculina" combinariam por "masculin" e o alerta nunca apareceria.
+    'masculino', 'masculina', 'masculinos', 'masculinas',
+    'feminino', 'feminina', 'femininos', 'femininas',
+    'infantil', 'unissex', 'adulto', 'importado', 'importada',
+    'preto', 'preta', 'branco', 'branca', 'azul', 'verde', 'vermelho', 'vermelha',
+    'amarelo', 'amarela', 'cinza', 'rosa', 'bege', 'dourado', 'dourada', 'prata',
+    'grande', 'pequeno', 'pequena', 'medio', 'media',
+  ]);
+  const palavrasVinculo = (texto: string): string[] =>
+    String(texto ?? '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter(w => w.length >= 4 && !RUIDO_VINCULO.has(w));
+
+  /** As duas frases falam do mesmo item? Radical de 4 letras basta (plural, gênero). */
+  const vinculoParece = (itemReq: string, nomeCatalogo: string): boolean => {
+    const a = palavrasVinculo(itemReq);
+    const b = palavrasVinculo(nomeCatalogo);
+    // Sem palavra utilizável de um dos lados não dá para afirmar nada — e
+    // acusar sem base treinaria o aluno a ignorar o aviso.
+    if (a.length === 0 || b.length === 0) return true;
+    return a.some(x => b.some(y => x.slice(0, 4) === y.slice(0, 4)));
+  };
+
+  // O item escolhido no modal, para mostrar lado a lado com o que foi pedido.
+  const itemVinculoEscolhido = useMemo(() => {
+    if (!vinculando) return null;
+    return categoriaVinculo === 'produto'
+      ? produtos.find((p: any) => p.id === produtoVinculo) ?? null
+      : servicos.find((sv: any) => sv.id === servicoVinculo) ?? null;
+  }, [vinculando, categoriaVinculo, produtoVinculo, servicoVinculo, produtos, servicos]);
+
+  const vinculoDivergente = !!(
+    vinculando && itemVinculoEscolhido &&
+    !vinculoParece(vinculando.req?.item ?? '', itemVinculoEscolhido.nome ?? '')
+  );
+  // Confirmação explícita só é exigida quando as frases divergem. Pedir sempre
+  // vira clique automático, e clique automático não confere nada.
+  const [vinculoConferido, setVinculoConferido] = useState(false);
+  useEffect(() => { setVinculoConferido(false); }, [produtoVinculo, servicoVinculo, categoriaVinculo, vinculando]);
+
   const handleGerarPedido = async (
     cotacao: any,
     vinculo?: { produtoId?: string; servicoId?: string },
@@ -1046,7 +1146,20 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           : `${numeroPedido(novo)} gerado, ${contas}. Marque "em entrega" em Compras → Pedidos para avisar o Estoque.`,
         'success', true);
     } catch (err: any) {
-      showToast(`Falha ao gerar pedido: ${err?.message ?? 'verifique o console'}`, 'error', true);
+      const msg = String(err?.message ?? '');
+      // "Já tem pedido" quer dizer que esta tela estava atrasada em relação ao
+      // banco — quase sempre porque o colega gerou o pedido na máquina dele.
+      // Relê antes de reclamar: o botão some junto com o aviso, em vez de
+      // continuar ali convidando ao mesmo clique.
+      if (/já tem pedido|já foi atendida/i.test(msg)) {
+        await carregarCotacoesComPedido();
+        setVinculando(null);
+        showToast(
+          `${msg} Esta tela estava desatualizada — provavelmente outra pessoa gerou o pedido antes. A lista já foi atualizada; o pedido está em Compras > Pedidos.`,
+          'error', true);
+      } else {
+        showToast(`Falha ao gerar pedido: ${msg || 'verifique o console'}`, 'error', true);
+      }
     } finally {
       setGenerating(null);
     }
@@ -2296,6 +2409,52 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               </p>
               )}
 
+              {/* O par, escrito lado a lado. O erro que se quer evitar aqui é
+                  amarrar "Óleo de cozinha" em "Leite condensado" — e ele só é
+                  visível se as duas frases estiverem na mesma tela, no momento
+                  do clique. */}
+              {itemVinculoEscolhido && (
+                <div className={`neu-inset rounded-xl p-3 mt-3 border ${
+                  vinculoDivergente ? 'border-red-400/40' : 'border-emerald-400/20'}`}>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
+                    Vai entrar no pedido
+                  </p>
+                  <p className="text-xs text-gray-200">
+                    {itemVinculoEscolhido.nome}
+                    {itemVinculoEscolhido.codigo && (
+                      <span className="text-gray-500"> · {itemVinculoEscolhido.codigo}</span>
+                    )}
+                    {itemVinculoEscolhido.marca && (
+                      <span className="text-gray-500"> · {itemVinculoEscolhido.marca}</span>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {vinculoDivergente && (
+                <div className="mt-3 rounded-xl p-3 border border-red-400/40 bg-red-500/5">
+                  <p className="text-[11px] text-red-300 leading-snug flex gap-2">
+                    <AlertTriangle size={14} className="shrink-0 mt-px" />
+                    <span>
+                      A requisição pediu <span className="font-bold">
+                        “{String(vinculando.req?.item ?? 'este item').replace(/\s+/g, ' ').trim()}”
+                      </span> e você escolheu <span className="font-bold">“{itemVinculoEscolhido?.nome}”</span>.
+                      Não parecem o mesmo item. Se estiver errado, o pedido sai com o produto trocado,
+                      a requisição guarda esse vínculo para as próximas compras e o Recebimento dá
+                      entrada de estoque no item errado — desfazer isso depois é trabalho de correção.
+                    </span>
+                  </p>
+                  <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
+                    <input type="checkbox" checked={vinculoConferido}
+                      onChange={e => setVinculoConferido(e.target.checked)}
+                      className="accent-red-400 w-3.5 h-3.5" />
+                    <span className="text-[11px] font-bold text-red-200">
+                      Conferi: é este mesmo o item que o setor pediu.
+                    </span>
+                  </label>
+                </div>
+              )}
+
               <p className="text-[11px] text-emerald-400/80 leading-snug mt-3">
                 A requisição guarda esse vínculo: a próxima compra do mesmo item já nasce como
                 Reposição, escolhida do catálogo, sem passar por aqui.
@@ -2311,7 +2470,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     ? { servicoId: servicoVinculo }
                     : { produtoId: produtoVinculo })}
                   isLoading={generating === vinculando.id}
-                  disabled={categoriaVinculo === 'servico' ? !servicoVinculo : !produtoVinculo}>
+                  disabled={(categoriaVinculo === 'servico' ? !servicoVinculo : !produtoVinculo)
+                            || (vinculoDivergente && !vinculoConferido)}>
                   <ShoppingBag size={14} /> Gerar Pedido
                 </NeuButtonAccent>
               </div>
