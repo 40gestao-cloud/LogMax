@@ -1044,7 +1044,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // travado — a doca dá entrada de estoque no produto errado.
   //
   // A régua é grosseira de propósito: não decide por ninguém, só percebe que
-  // as duas frases não têm palavra nenhuma em comum e obriga a confirmar.
+  // as duas frases não têm palavra nenhuma em comum.
+  //
+  // MIGR 596: a mesma régua vive no banco, em `public.vinculo_item_parece()` —
+  // é ela que RECUSA o pedido. O que está aqui existe para dizer a mesma coisa
+  // antes do clique; mudou de um lado, muda do outro, senão a tela oferece o
+  // que o banco vai negar (ou, pior, bloqueia o que ele aceitaria).
   const RUIDO_VINCULO = new Set([
     'para', 'com', 'sem', 'dos', 'das', 'por', 'una', 'uma', 'unidade', 'unidades',
     'caixa', 'caixas', 'pacote', 'pacotes', 'fardo', 'fardos', 'kit', 'novo', 'nova',
@@ -1088,10 +1093,31 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     vinculando && itemVinculoEscolhido &&
     !vinculoParece(vinculando.req?.item ?? '', itemVinculoEscolhido.nome ?? '')
   );
-  // Confirmação explícita só é exigida quando as frases divergem. Pedir sempre
-  // vira clique automático, e clique automático não confere nada.
-  const [vinculoConferido, setVinculoConferido] = useState(false);
-  useEffect(() => { setVinculoConferido(false); }, [produtoVinculo, servicoVinculo, categoriaVinculo, vinculando]);
+
+  // MIGR 596: o select mostrava o catálogo inteiro, e a escolha errada estava
+  // sempre a um clique de distância — foi assim que uma corrente virou bermuda
+  // na MaxLook. Agora a lista abre já recortada no que tem palavra em comum
+  // com o que a requisição pediu; o resto continua alcançável, mas exige dizer
+  // que se quer ver o catálogo todo.
+  const [verCatalogoTodo, setVerCatalogoTodo] = useState(false);
+  useEffect(() => { setVerCatalogoTodo(false); }, [vinculando, categoriaVinculo]);
+  const itemPedido = String(vinculando?.req?.item ?? '');
+  const produtosProvaveis = useMemo(
+    () => produtosOrdenados.filter((p: any) => vinculoParece(itemPedido, p.nome ?? '')),
+    [produtosOrdenados, itemPedido], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const servicosProvaveis = useMemo(
+    () => servicosOrdenados.filter((s: any) => vinculoParece(itemPedido, s.nome ?? '')),
+    [servicosOrdenados, itemPedido], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // Sem nenhum parecido, esconder o catálogo seria mostrar um select vazio de
+  // um catálogo cheio. Nesse caso a lista abre inteira — e o alerta abaixo é
+  // que segura o clique errado.
+  const recorteAtivo = categoriaVinculo === 'produto'
+    ? produtosProvaveis.length > 0 && !verCatalogoTodo
+    : servicosProvaveis.length > 0 && !verCatalogoTodo;
+  const produtosDoSelect = recorteAtivo ? produtosProvaveis : produtosOrdenados;
+  const servicosDoSelect = recorteAtivo ? servicosProvaveis : servicosOrdenados;
 
   const handleGerarPedido = async (
     cotacao: any,
@@ -2352,10 +2378,35 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       ? 'Nenhum produto cadastrado nesta unidade'
                       : 'Selecione o produto...'}
                   </option>
-                  {produtosOrdenados.map((pr: any) => (
+                  {produtosDoSelect.map((pr: any) => (
                     <option key={pr.id} value={pr.id}>{pr.nome}</option>
                   ))}
                 </select>
+                {produtosOrdenados.length > 0 && (
+                  <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                    {recorteAtivo ? (
+                      <>
+                        A lista está mostrando {produtosProvaveis.length} de {produtosOrdenados.length}{' '}
+                        {produtosOrdenados.length === 1 ? 'produto' : 'produtos'} — os que têm palavra em comum
+                        com o que foi pedido.{' '}
+                        <button type="button" onClick={() => setVerCatalogoTodo(true)}
+                          className="underline text-gray-400 hover:text-gray-200">
+                          Ver o catálogo todo
+                        </button>
+                      </>
+                    ) : produtosProvaveis.length > 0 ? (
+                      <>
+                        Catálogo inteiro à mostra.{' '}
+                        <button type="button" onClick={() => setVerCatalogoTodo(false)}
+                          className="underline text-gray-400 hover:text-gray-200">
+                          Voltar aos parecidos
+                        </button>
+                      </>
+                    ) : (
+                      <>Nenhum produto do catálogo parece com o que foi pedido — a lista abriu inteira.</>
+                    )}
+                  </p>
+                )}
               </FormField>
               ) : (
               <FormField label="Serviço do catálogo *">
@@ -2367,12 +2418,37 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       ? 'Nenhum serviço cadastrado'
                       : 'Selecione o serviço...'}
                   </option>
-                  {servicosOrdenados.map((sv: any) => (
+                  {servicosDoSelect.map((sv: any) => (
                     <option key={sv.id} value={sv.id}>
                       {sv.nome}{sv.filial ? '' : ' — todas as unidades'}
                     </option>
                   ))}
                 </select>
+                {servicosOrdenados.length > 0 && (
+                  <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                    {recorteAtivo ? (
+                      <>
+                        A lista está mostrando {servicosProvaveis.length} de {servicosOrdenados.length}{' '}
+                        {servicosOrdenados.length === 1 ? 'serviço' : 'serviços'} — os que têm palavra em comum
+                        com o que foi pedido.{' '}
+                        <button type="button" onClick={() => setVerCatalogoTodo(true)}
+                          className="underline text-gray-400 hover:text-gray-200">
+                          Ver o catálogo todo
+                        </button>
+                      </>
+                    ) : servicosProvaveis.length > 0 ? (
+                      <>
+                        Catálogo inteiro à mostra.{' '}
+                        <button type="button" onClick={() => setVerCatalogoTodo(false)}
+                          className="underline text-gray-400 hover:text-gray-200">
+                          Voltar aos parecidos
+                        </button>
+                      </>
+                    ) : (
+                      <>Nenhum serviço do catálogo parece com o que foi pedido — a lista abriu inteira.</>
+                    )}
+                  </p>
+                )}
               </FormField>
               )}
 
@@ -2431,6 +2507,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                 </div>
               )}
 
+              {/* MIGR 596: isto era um aviso com caixinha de "Conferi", e a
+                  caixinha é o caminho de menor esforço — na MaxLook a corrente
+                  virou bermuda exatamente assim, com o alerta na tela. Agora o
+                  banco recusa, e a tela diz a mesma coisa antes do clique em
+                  vez de deixar o erro estourar depois. */}
               {vinculoDivergente && (
                 <div className="mt-3 rounded-xl p-3 border border-red-400/40 bg-red-500/5">
                   <p className="text-[11px] text-red-300 leading-snug flex gap-2">
@@ -2439,19 +2520,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       A requisição pediu <span className="font-bold">
                         “{String(vinculando.req?.item ?? 'este item').replace(/\s+/g, ' ').trim()}”
                       </span> e você escolheu <span className="font-bold">“{itemVinculoEscolhido?.nome}”</span>.
-                      Não parecem o mesmo item. Se estiver errado, o pedido sai com o produto trocado,
-                      a requisição guarda esse vínculo para as próximas compras e o Recebimento dá
-                      entrada de estoque no item errado — desfazer isso depois é trabalho de correção.
+                      Não são o mesmo item, e o pedido sairia com o produto trocado: a requisição guardaria
+                      esse vínculo para as próximas compras e o Recebimento daria entrada de estoque no item
+                      errado. <span className="font-bold">O pedido não vai ser gerado assim.</span>
+                      <span className="block mt-1.5 text-red-300/80">
+                        Se o catálogo ainda não tem este item, cadastre-o em{' '}
+                        <span className="font-bold">Cadastros &gt; {categoriaVinculo === 'servico' ? 'Serviços' : 'Produtos'} &gt; Novo</span>
+                        {categoriaVinculo === 'servico'
+                          ? <> com a natureza <span className="font-bold">Contratado de terceiro</span>.</>
+                          : <>, escolhendo esta requisição no campo <span className="font-bold">Origem deste cadastro</span>.</>}
+                        {' '}Se quem pediu é que escreveu errado, devolva a requisição para correção.
+                      </span>
                     </span>
                   </p>
-                  <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
-                    <input type="checkbox" checked={vinculoConferido}
-                      onChange={e => setVinculoConferido(e.target.checked)}
-                      className="accent-red-400 w-3.5 h-3.5" />
-                    <span className="text-[11px] font-bold text-red-200">
-                      Conferi: é este mesmo o item que o setor pediu.
-                    </span>
-                  </label>
                 </div>
               )}
 
@@ -2471,7 +2552,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     : { produtoId: produtoVinculo })}
                   isLoading={generating === vinculando.id}
                   disabled={(categoriaVinculo === 'servico' ? !servicoVinculo : !produtoVinculo)
-                            || (vinculoDivergente && !vinculoConferido)}>
+                            || vinculoDivergente}>
                   <ShoppingBag size={14} /> Gerar Pedido
                 </NeuButtonAccent>
               </div>
