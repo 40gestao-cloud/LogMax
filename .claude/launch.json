@@ -4,7 +4,10 @@
     {
       "name": "dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "dev"],
+      "runtimeArgs": [
+        "vite",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
     },
@@ -20,6 +23,17 @@
         "--port=3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "preview-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "4173"
+      ],
+      "port": 4173
     }
   ]
 }
