@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'crypto';
-import { authenticate, getAdminClient, applyCors } from '../lib/auth.js';
+import {
+  authenticate, getAdminClient, applyCors,
+  MSG_CONEXAO, ehFalhaDeConexao, descreverErro,
+} from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 import {
   CHECKPOINT_LABELS,
@@ -96,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Dedup por checkpoint no dia (Acre) + insert.
     const now = new Date();
     const { inicio, fim } = acreDayBoundsIso(now);
-    const { data: existing } = await admin
+    const { data: existing, error: dedupErr, status: dedupStatus } = await admin
       .from('ponto_qr_registros')
       .select('id')
       .eq('user_id', user.id)
@@ -104,6 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .gte('registrado_em', inicio)
       .lt('registrado_em', fim)
       .maybeSingle();
+
+    // Consulta que não respondeu NÃO é "ainda não bateu ponto": seguir em
+    // frente aqui grava a segunda entrada do dia e falsifica a frequência, que
+    // vale 20% do placar. Sem resposta, ninguém registra — o aluno tenta de novo.
+    if (ehFalhaDeConexao(dedupErr, dedupStatus)) {
+      log.error('ponto.dedup_unavailable', dedupErr, { user_id: user.id, checkpoint, ...descreverErro(dedupErr, dedupStatus) });
+      return res.status(503).json({ error: MSG_CONEXAO });
+    }
 
     if (existing) {
       log.info('ponto.duplicate', { user_id: user.id, checkpoint });

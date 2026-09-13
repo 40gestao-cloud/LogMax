@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getAdminClient, applyCors } from '../lib/auth.js';
+import {
+  getAdminClient, applyCors,
+  MSG_CONEXAO, ehFalhaDeConexao, descreverErro, comRetentativa,
+} from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
 
 // Endpoint unificado de gestão de usuários (Auth + user_profiles).
@@ -83,6 +86,68 @@ const PALAVRAS_SENHA = [
   'lucro', 'meta', 'equipe', 'filial', 'balanco', 'cliente',
 ];
 
+/**
+ * Lê UMA linha, separando "não existe" de "não deu para perguntar".
+ *
+ * O padrão antigo (`const { data: x } = await admin.from(...)`) descartava o
+ * `error`: qualquer falha de conexão virava `data === null`, e o handler
+ * respondia 404 "Usuário não encontrado" ou 403 "Perfil não encontrado" sobre
+ * um cadastro que está lá. Aqui a consulta é retentada e, se ainda assim não
+ * respondeu, quem chama devolve 503 em vez de inventar uma ausência.
+ */
+async function lerLinha<T>(
+  log: Log, rotulo: string,
+  consultar: () => PromiseLike<{ data: T | null; error: any; status?: number }>,
+): Promise<{ data: T | null; indisponivel: boolean }> {
+  const r = await comRetentativa(
+    async () => await consultar(),
+    x => ehFalhaDeConexao(x.error, x.status),
+    tentativa => log.warn('db.retry', { consulta: rotulo, tentativa }),
+  );
+  if (ehFalhaDeConexao(r.error, r.status)) {
+    log.error('db.unavailable', r.error, { consulta: rotulo, ...descreverErro(r.error, r.status) });
+    return { data: null, indisponivel: true };
+  }
+  return { data: r.data ?? null, indisponivel: false };
+}
+
+/**
+ * Conta que nasceu no Auth e ficou sem perfil.
+ *
+ * Existe por causa do meio do caminho: `createUser` grava no GoTrue e devolve
+ * a conta; se a RESPOSTA se perde na volta, a conta existe e o handler acha
+ * que falhou. O que sobra é invisível — a tela de Usuários lista
+ * `user_profiles`, não o Auth — e o e-mail fica preso em "já cadastrado" para
+ * sempre, porque toda retentativa esbarra na conta fantasma.
+ *
+ * Só devolve a conta se ela NÃO tiver perfil. Com perfil é cadastro de
+ * verdade, e aí "E-mail já cadastrado" é a resposta certa.
+ */
+async function contaOrfaDoEmail(
+  admin: SupabaseClient, email: string, log: Log,
+): Promise<{ id: string; email?: string } | null> {
+  try {
+    const alvo = email.trim().toLowerCase();
+    // O Auth não tem busca por e-mail na API de admin; a turma cabe numa
+    // página com folga.
+    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error || !data) return null;
+    const contas = (data.users ?? []) as Array<{ id: string; email?: string }>;
+    const conta = contas.find(u => (u.email ?? '').toLowerCase() === alvo);
+    if (!conta) return null;
+
+    const { data: perfil } = await admin
+      .from('user_profiles').select('id').eq('id', conta.id).maybeSingle();
+    if (perfil) return null;
+
+    log.warn('auth.conta_orfa_reaproveitada', { user_id: conta.id, email: alvo });
+    return conta;
+  } catch (err) {
+    log.warn('auth.conta_orfa_busca_falhou', descreverErro(err));
+    return null;
+  }
+}
+
 function gerarSenha(): string {
   const bytes = new Uint32Array(2);
   globalThis.crypto.getRandomValues(bytes);
@@ -107,9 +172,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log.warn('auth.missing_token');
       return res.status(401).json({ error: 'Token obrigatório.' });
     }
-    const { data: { user: caller }, error: tokenErr } = await admin.auth.getUser(token);
+    const { data: { user: caller }, error: tokenErr } = await comRetentativa(
+      () => admin.auth.getUser(token),
+      r => ehFalhaDeConexao(r.error),
+      tentativa => log.warn('auth.getuser_retry', { tentativa }),
+    );
+    // Pane de conexão NÃO é sessão inválida. Enquanto as duas caíam na mesma
+    // resposta, a tela mandava sair e entrar de novo — e quem obedecia perdia
+    // o formulário preenchido por um problema que passa em segundos.
+    if (ehFalhaDeConexao(tokenErr)) {
+      log.error('auth.upstream_unavailable', tokenErr, descreverErro(tokenErr));
+      return res.status(503).json({ error: MSG_CONEXAO });
+    }
     if (tokenErr || !caller) {
-      log.warn('auth.invalid_token', { error: tokenErr?.message });
+      log.warn('auth.invalid_token', descreverErro(tokenErr));
       // "Token inválido" não dizia o que fazer, e o estado que ele descreve é
       // invisível: o token continua com assinatura boa, então o app segue
       // lendo pelo PostgREST e só ESTE endpoint recusa — a tela parecia
@@ -121,12 +197,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: 'Sua sessão não vale mais — ela foi encerrada em outro lugar ou expirou. Saia e entre de novo para continuar.',
       });
     }
-    const { data: callerProfile } = await admin
+    const { data: callerProfile, indisponivel } = await lerLinha<any>(log, 'caller_profile', () => admin
       .from('user_profiles')
       .select('role, setor, setores_extras, filial, pode_acessar_usuarios, is_conselheiro')
       .eq('id', caller.id)
-      .single();
+      .single());
 
+    if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
     if (!callerProfile) {
       log.warn('caller.profile_missing', { caller_id: caller.id });
       return res.status(403).json({ error: 'Perfil não encontrado.' });
@@ -263,15 +340,38 @@ async function handleCreate(
     return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax) — ou de nenhuma, para alocar depois.' });
   }
 
-  const { data: { user: newUser }, error: createErr } = await admin.auth.admin.createUser({
+  // Sem retentativa aqui, de propósito: repetir um POST que pode ter dado
+  // certo do outro lado é como se fabrica conta duplicada. A recuperação é
+  // olhar o que ficou (`contaOrfaDoEmail`) em vez de mandar de novo às cegas.
+  const { data: criado, error: createErr } = await admin.auth.admin.createUser({
     email, password, email_confirm: true,
   });
+  let newUser = criado?.user ?? null;
+
   if (createErr || !newUser) {
-    const msg = createErr?.message ?? 'Erro ao criar usuário.';
-    const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
-    log.warn('auth.create_failed', { error: msg, friendly });
-    return res.status(400).json({ error: friendly });
+    // A conta pode ter nascido com a resposta perdida na volta — e é também o
+    // que "already registered" descreve quando a tentativa ANTERIOR morreu
+    // assim. Se existe conta sem perfil com este e-mail, ela é o resto desta
+    // mesma operação: seguir com ela termina o cadastro em vez de deixar o
+    // e-mail preso e a conta fantasma no Auth.
+    const orfa = await contaOrfaDoEmail(admin, email, log);
+    if (orfa) {
+      newUser = orfa as any;
+      // A senha do formulário é a que o professor vai ditar: a conta órfã
+      // nasceu com a senha da tentativa perdida, que ninguém anotou.
+      await admin.auth.admin.updateUserById(orfa.id, { password, email_confirm: true });
+    } else if (ehFalhaDeConexao(createErr)) {
+      log.error('auth.create_unavailable', createErr, descreverErro(createErr));
+      return res.status(503).json({ error: MSG_CONEXAO });
+    } else {
+      const msg = createErr?.message ?? 'Erro ao criar usuário.';
+      const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
+      log.warn('auth.create_failed', { ...descreverErro(createErr), friendly });
+      return res.status(400).json({ error: friendly });
+    }
   }
+
+  if (!newUser) return res.status(500).json({ error: 'Erro ao criar usuário.' });
 
   const profilePayload: any = {
     id: newUser.id, nome, email, role, setor,
@@ -283,9 +383,16 @@ async function handleCreate(
   profilePayload.filial = semAlocacao ? null : filialInformada;
   const { error: profileErr } = await admin.from('user_profiles').insert(profilePayload);
   if (profileErr) {
-    log.error('profile.insert_failed', profileErr, { new_user_id: newUser.id, rollback: 'deleting_auth_user' });
+    log.error('profile.insert_failed', profileErr, {
+      new_user_id: newUser.id, rollback: 'deleting_auth_user', ...descreverErro(profileErr),
+    });
+    // Desfaz a conta do Auth. Se ESTE delete também não passar (a pane pode
+    // durar os dois), o que fica é a conta sem perfil — e a próxima tentativa
+    // com o mesmo e-mail a reaproveita em `contaOrfaDoEmail`.
     await admin.auth.admin.deleteUser(newUser.id);
-    return res.status(500).json({ error: 'Erro ao criar perfil. Usuário removido.' });
+    return ehFalhaDeConexao(profileErr)
+      ? res.status(503).json({ error: MSG_CONEXAO })
+      : res.status(500).json({ error: 'Erro ao criar perfil. Usuário removido.' });
   }
 
   await anotarSenha(admin, newUser.id, password, callerId, log);
@@ -315,8 +422,9 @@ async function handleUpdate(
     return res.status(400).json({ error: 'userId obrigatório.' });
   }
 
-  const { data: targetProfile } = await admin
-    .from('user_profiles').select('role, setor, filial, funcionario_id').eq('id', userId).single();
+  const { data: targetProfile, indisponivel } = await lerLinha<any>(log, 'target_profile:update', () => admin
+    .from('user_profiles').select('role, setor, filial, funcionario_id').eq('id', userId).single());
+  if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!targetProfile) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   if (targetProfile.role === 'admin' && callerId !== userId) {
@@ -454,9 +562,13 @@ async function handleUpdate(
   if (Object.keys(authUpdates).length > 0) {
     const { error: authErr } = await admin.auth.admin.updateUserById(userId, authUpdates);
     if (authErr) {
+      if (ehFalhaDeConexao(authErr)) {
+        log.error('auth.update_unavailable', authErr, { target_id: userId, ...descreverErro(authErr) });
+        return res.status(503).json({ error: MSG_CONEXAO });
+      }
       const msg = authErr.message ?? 'Erro ao atualizar credenciais.';
       const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
-      log.warn('auth.update_failed', { error: msg, target_id: userId });
+      log.warn('auth.update_failed', { target_id: userId, ...descreverErro(authErr) });
       return res.status(400).json({ error: friendly });
     }
     if (authUpdates.password) await anotarSenha(admin, userId, authUpdates.password, callerId, log);
@@ -468,8 +580,10 @@ async function handleUpdate(
 
   const { error: profileErr } = await admin.from('user_profiles').update(updates).eq('id', userId);
   if (profileErr) {
-    log.error('profile.update_failed', profileErr, { target_id: userId });
-    return res.status(500).json({ error: 'Erro ao atualizar perfil.' });
+    log.error('profile.update_failed', profileErr, { target_id: userId, ...descreverErro(profileErr) });
+    return ehFalhaDeConexao(profileErr)
+      ? res.status(503).json({ error: MSG_CONEXAO })
+      : res.status(500).json({ error: 'Erro ao atualizar perfil.' });
   }
 
   // Só quando o papel REALMENTE mudou: reenviar o mesmo cargo no formulário
@@ -510,8 +624,9 @@ async function handleResetPassword(
     return res.status(400).json({ error: 'userId obrigatório.' });
   }
 
-  const { data: targetProfile } = await admin
-    .from('user_profiles').select('role').eq('id', userId).single();
+  const { data: targetProfile, indisponivel } = await lerLinha<any>(log, 'target_profile:reset', () => admin
+    .from('user_profiles').select('role').eq('id', userId).single());
+  if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!targetProfile) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   // Outro admin (outro professor) continua fora de alcance — a régua do
@@ -523,7 +638,11 @@ async function handleResetPassword(
   const password = gerarSenha();
   const { error: authErr } = await admin.auth.admin.updateUserById(userId, { password });
   if (authErr) {
-    log.warn('auth.reset_failed', { error: authErr.message, target_id: userId });
+    if (ehFalhaDeConexao(authErr)) {
+      log.error('auth.reset_unavailable', authErr, { target_id: userId, ...descreverErro(authErr) });
+      return res.status(503).json({ error: MSG_CONEXAO });
+    }
+    log.warn('auth.reset_failed', { target_id: userId, ...descreverErro(authErr) });
     return res.status(400).json({ error: authErr.message ?? 'Erro ao redefinir senha.' });
   }
 
@@ -570,11 +689,12 @@ async function handleCriarAcesso(
     return res.status(400).json({ error: 'funcionarioId obrigatório.' });
   }
 
-  const { data: func } = await admin
+  const { data: func, indisponivel } = await lerLinha<any>(log, 'funcionario:criar_acesso', () => admin
     .from('funcionarios')
     .select('id, nome, email, filial, status, user_profile_id')
     .eq('id', funcionarioId)
-    .single();
+    .single());
+  if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!func) return res.status(404).json({ error: 'Funcionário não encontrado.' });
   if (func.user_profile_id) {
     return res.status(400).json({ error: 'Este funcionário já tem login.' });
@@ -614,15 +734,29 @@ async function handleCriarAcesso(
   }
 
   const password = gerarSenha();
-  const { data: { user: newUser }, error: createErr } = await admin.auth.admin.createUser({
+  const { data: criado, error: createErr } = await admin.auth.admin.createUser({
     email: emailFinal, password, email_confirm: true,
   });
+  let newUser = criado?.user ?? null;
+
   if (createErr || !newUser) {
-    const msg = createErr?.message ?? 'Erro ao criar acesso.';
-    const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
-    log.warn('acesso.create_failed', { error: msg, funcionario_id: funcionarioId });
-    return res.status(400).json({ error: friendly });
+    // Mesma recuperação do `create`: conta que ficou no Auth sem perfil é o
+    // resto de uma tentativa que morreu na volta — segue com ela.
+    const orfa = await contaOrfaDoEmail(admin, emailFinal, log);
+    if (orfa) {
+      newUser = orfa as any;
+      await admin.auth.admin.updateUserById(orfa.id, { password, email_confirm: true });
+    } else if (ehFalhaDeConexao(createErr)) {
+      log.error('acesso.create_unavailable', createErr, { funcionario_id: funcionarioId, ...descreverErro(createErr) });
+      return res.status(503).json({ error: MSG_CONEXAO });
+    } else {
+      const msg = createErr?.message ?? 'Erro ao criar acesso.';
+      const friendly = msg.includes('already registered') ? 'E-mail já cadastrado.' : msg;
+      log.warn('acesso.create_failed', { funcionario_id: funcionarioId, ...descreverErro(createErr) });
+      return res.status(400).json({ error: friendly });
+    }
   }
+  if (!newUser) return res.status(500).json({ error: 'Erro ao criar acesso.' });
 
   const { error: profileErr } = await admin.from('user_profiles').insert({
     id: newUser.id, nome: nomeFinal, email: emailFinal,
@@ -631,9 +765,13 @@ async function handleCriarAcesso(
     filial: func.filial, criado_por: callerId,
   });
   if (profileErr) {
-    log.error('acesso.profile_insert_failed', profileErr, { new_user_id: newUser.id, rollback: 'deleting_auth_user' });
+    log.error('acesso.profile_insert_failed', profileErr, {
+      new_user_id: newUser.id, rollback: 'deleting_auth_user', ...descreverErro(profileErr),
+    });
     await admin.auth.admin.deleteUser(newUser.id);
-    return res.status(500).json({ error: 'Erro ao criar perfil. Acesso removido.' });
+    return ehFalhaDeConexao(profileErr)
+      ? res.status(503).json({ error: MSG_CONEXAO })
+      : res.status(500).json({ error: 'Erro ao criar perfil. Acesso removido.' });
   }
 
   await anotarSenha(admin, newUser.id, password, callerId, log);
@@ -664,11 +802,12 @@ async function handleAjustarAcessoCarreira(
     return res.status(400).json({ error: 'movimentacaoId obrigatório.' });
   }
 
-  const { data: mov } = await admin
+  const { data: mov, indisponivel } = await lerLinha<any>(log, 'movimentacao:carreira', () => admin
     .from('movimentacoes_carreira')
     .select('id, user_profile_id, filial_nova, role_nova, acesso_pendente, ativo')
     .eq('id', movimentacaoId)
-    .single();
+    .single());
+  if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada.' });
   if (!mov.acesso_pendente || mov.ativo === false) {
     return res.status(400).json({ error: 'Esta movimentação não tem acesso pendente.' });
@@ -677,8 +816,9 @@ async function handleAjustarAcessoCarreira(
     return res.status(400).json({ error: 'Esta movimentação não tem login vinculado.' });
   }
 
-  const { data: alvo } = await admin
-    .from('user_profiles').select('role').eq('id', mov.user_profile_id).single();
+  const { data: alvo, indisponivel: alvoIndisponivel } = await lerLinha<any>(log, 'target_profile:carreira', () => admin
+    .from('user_profiles').select('role').eq('id', mov.user_profile_id).single());
+  if (alvoIndisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!alvo) return res.status(404).json({ error: 'Usuário da movimentação não encontrado.' });
   if (alvo.role === 'admin') {
     return res.status(403).json({ error: 'Administradores não podem ser editados.' });
@@ -705,8 +845,10 @@ async function handleAjustarAcessoCarreira(
 
   const { error } = await admin.from('user_profiles').update(updates).eq('id', mov.user_profile_id);
   if (error) {
-    log.error('carreira.update_failed', error, { movimentacao_id: movimentacaoId });
-    return res.status(500).json({ error: 'Erro ao ajustar o acesso.' });
+    log.error('carreira.update_failed', error, { movimentacao_id: movimentacaoId, ...descreverErro(error) });
+    return ehFalhaDeConexao(error)
+      ? res.status(503).json({ error: MSG_CONEXAO })
+      : res.status(500).json({ error: 'Erro ao ajustar o acesso.' });
   }
 
   log.info('carreira.acesso_ajustado', {
@@ -734,8 +876,9 @@ async function handleDelete(
   if (!userId) return res.status(400).json({ error: 'userId obrigatório.' });
   if (userId === callerId) return res.status(400).json({ error: 'Não é possível excluir sua própria conta.' });
 
-  const { data: targetProfile } = await admin
-    .from('user_profiles').select('role, setor').eq('id', userId).single();
+  const { data: targetProfile, indisponivel } = await lerLinha<any>(log, 'target_profile:delete', () => admin
+    .from('user_profiles').select('role, setor').eq('id', userId).single());
+  if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
   if (!targetProfile) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
   if (targetProfile.role === 'admin') {
@@ -752,8 +895,10 @@ async function handleDelete(
 
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) {
-    log.error('auth.delete_failed', error, { target_id: userId });
-    return res.status(500).json({ error: error.message });
+    log.error('auth.delete_failed', error, { target_id: userId, ...descreverErro(error) });
+    return ehFalhaDeConexao(error)
+      ? res.status(503).json({ error: MSG_CONEXAO })
+      : res.status(500).json({ error: error.message });
   }
 
   log.info('user.deleted', { target_id: userId, target_role: targetProfile.role, caller_id: callerId });
