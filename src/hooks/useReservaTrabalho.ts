@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
+import { freshToken } from '../lib/authFetch';
 import { useTravaAtualizacao } from './useTravaAtualizacao';
 
 type Dono = { usuario_id: string; usuario_nome: string; minha: boolean } | null;
@@ -40,17 +41,23 @@ export function useReservaTrabalho(
     if (!supabase || !alvo) return;
     chaveAtiva.current = null;
     setDono(null);
+    // Sem sessão a RPC só colheria 401; o prazo de 3 minutos solta a vaga.
+    if (!(await freshToken())) return;
     await supabase.rpc('liberar_trabalho', { p_escopo: escopo, p_chave: alvo });
   }, [escopo]);
 
-  const reservar = useCallback(async () => {
-    if (!supabase || !chave || !filial) return;
+  // Devolve false quando não havia sessão — o efeito usa isso para refazer a
+  // reserva quando o login voltar.
+  const reservar = useCallback(async (): Promise<boolean> => {
+    if (!supabase || !chave || !filial) return true;
+    if (!(await freshToken())) return false;
     const { data, error } = await supabase.rpc('reservar_trabalho', {
       p_escopo: escopo, p_chave: chave, p_filial: filial,
     });
-    if (error) return;
+    if (error) return true;
     const linha = Array.isArray(data) ? data[0] : data;
     setDono(linha ?? null);
+    return true;
   }, [escopo, chave, filial]);
 
   useEffect(() => {
@@ -98,15 +105,32 @@ export function useReservaTrabalho(
     // A leitura depois da reserva dá ao acompanhamento o `id` e o prazo da
     // linha — sem eles a soltura forçada pelo professor (DELETE só traz o id)
     // e o vencimento passariam despercebidos.
-    void reservar().then(() => acompanhamento.reler());
+    // Sessão caiu no meio (reserva ou batimento sem token): na volta do login
+    // a reserva é refeita — se o prazo venceu enquanto isso, o colega que
+    // pegou a vaga aparece como dono, e não o aluno de volta.
+    let semSessao = false;
+    const tentarReservar = () => reservar().then(ok => {
+      semSessao = !ok;
+      if (ok) acompanhamento.reler();
+    });
+    void tentarReservar();
 
     const batimento = window.setInterval(() => {
-      if (!supabase || !chaveAtiva.current) return;
-      void supabase.rpc('renovar_trabalho', { p_escopo: escopo, p_chave: chaveAtiva.current });
+      const alvo = chaveAtiva.current;
+      if (!supabase || !alvo) return;
+      void freshToken().then(token => {
+        if (!token) { semSessao = true; return; }
+        void supabase!.rpc('renovar_trabalho', { p_escopo: escopo, p_chave: alvo });
+      });
     }, 60_000);
+
+    const auth = supabase?.auth.onAuthStateChange(evento => {
+      if ((evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED') && semSessao) void tentarReservar();
+    });
 
     return () => {
       window.clearInterval(batimento);
+      auth?.data.subscription.unsubscribe();
       acompanhamento.parar();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

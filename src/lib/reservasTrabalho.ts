@@ -22,6 +22,7 @@
 //     reserva mostrada já passou do prazo no relógio desta máquina.
 
 import { supabase } from './supabase';
+import { freshToken } from './authFetch';
 
 export type ReservaLinha = {
   id: string;
@@ -52,8 +53,18 @@ export function acompanharReservas<T extends ReservaLinha>(opts: {
   let parado = false;
   let conhecidas: T[] = [];
   let janela: ReturnType<typeof setTimeout> | null = null;
+  let semSessao = false;
 
   const lerAgora = async () => {
+    // Sem sessão não lê. Depois dos 504 de login de 15/09, máquinas com a tela
+    // aberta e a sessão perdida seguiam lendo como anon e colhendo 401. O
+    // cadeado que está na tela fica como está: apagar diria "livre" sem saber.
+    // Quando o login volta, o onAuthStateChange lá embaixo relê.
+    if (!(await freshToken())) {
+      semSessao = true;
+      return;
+    }
+    semSessao = false;
     const linhas = await opts.ler();
     if (parado || linhas === null) return;
     conhecidas = linhas;
@@ -90,6 +101,12 @@ export function acompanharReservas<T extends ReservaLinha>(opts: {
     })
     .subscribe();
 
+  // Só relê na volta se a sessão TINHA caído: TOKEN_REFRESHED chega de hora em
+  // hora em toda máquina, e SIGNED_IN também no foco da aba.
+  const auth = supabase?.auth.onAuthStateChange(evento => {
+    if ((evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED') && semSessao) void lerAgora();
+  });
+
   const conferencia = setInterval(() => {
     const agora = Date.now();
     if (conhecidas.some(r => Date.parse(r.expira_em) <= agora)) agendar();
@@ -100,6 +117,7 @@ export function acompanharReservas<T extends ReservaLinha>(opts: {
       parado = true;
       if (janela !== null) clearTimeout(janela);
       clearInterval(conferencia);
+      auth?.data.subscription.unsubscribe();
       if (ch) supabase?.removeChannel(ch);
     },
     reler: () => { void lerAgora(); },

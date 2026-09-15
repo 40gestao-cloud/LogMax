@@ -2,14 +2,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Canal falso: guarda o handler do postgres_changes para o teste disparar
 // eventos na mão, sem Supabase de verdade.
-const canal = vi.hoisted(() => ({ handler: null as null | ((p: any) => void), removido: false }));
+const canal = vi.hoisted(() => ({
+  handler: null as null | ((p: any) => void),
+  removido: false,
+  token: 'tok' as string | null,
+  aoAuth: null as null | ((evento: string) => void),
+}));
 
 vi.mock('../src/lib/supabase', () => {
   const ch: any = {
     on: (_t: string, _f: unknown, h: (p: any) => void) => { canal.handler = h; return ch; },
     subscribe: () => ch,
   };
-  return { supabase: { channel: () => ch, removeChannel: () => { canal.removido = true; } } };
+  return {
+    supabase: {
+      channel: () => ch,
+      removeChannel: () => { canal.removido = true; },
+      auth: {
+        getSession: async () => ({ data: { session: canal.token ? { access_token: canal.token } : null } }),
+        onAuthStateChange: (cb: (evento: string) => void) => {
+          canal.aoAuth = cb;
+          return { data: { subscription: { unsubscribe: () => {} } } };
+        },
+      },
+    },
+  };
 });
 
 import { acompanharReservas, type ReservaLinha } from '../src/lib/reservasTrabalho';
@@ -33,6 +50,8 @@ describe('acompanharReservas', () => {
     vi.useFakeTimers();
     canal.handler = null;
     canal.removido = false;
+    canal.token = 'tok';
+    canal.aoAuth = null;
     leituras = 0;
     banco = [linha()];
     ({ parar } = acompanharReservas({
@@ -85,6 +104,25 @@ describe('acompanharReservas', () => {
     await vi.advanceTimersByTimeAsync(181_000 + 15_000);
     expect(leituras).toBe(1);
     await vi.advanceTimersByTimeAsync(60_000);
+    expect(leituras).toBe(1);
+  });
+
+  it('refresh de rotina com a sessão intacta não relê', async () => {
+    canal.aoAuth!('TOKEN_REFRESHED');
+    canal.aoAuth!('SIGNED_IN');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(leituras).toBe(0);
+  });
+
+  it('sem sessão não vai à rede, e relê quando o login volta', async () => {
+    canal.token = null;
+    canal.handler!({ eventType: 'DELETE', old: { id: 'r1' } });
+    await esgotarJanela();
+    expect(leituras).toBe(0);
+
+    canal.token = 'tok';
+    canal.aoAuth!('SIGNED_IN');
+    await vi.advanceTimersByTimeAsync(0);
     expect(leituras).toBe(1);
   });
 
