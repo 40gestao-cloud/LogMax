@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 
 export type PedidoNovo = {
   id: string;
@@ -49,26 +50,16 @@ export function usePedidosNovos(ativo: boolean) {
 
   useEffect(() => { void carregar(); }, [carregar]);
 
+  // Recarrega em qualquer mudança da tabela: pedido novo entra na fila,
+  // confirmado ou cancelado sai. A janela do `assinarRealtime` agrupa a rajada
+  // de pedidos de uma dinâmica de aula e espalha as leituras entre as máquinas.
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !ativo) return;
-    const sb = supabase;
-
-    // Recarrega em qualquer mudança da tabela: pedido novo entra na fila,
-    // confirmado ou cancelado sai. Debounce porque uma dinâmica de aula produz
-    // rajada de pedidos, e cada um dispararia um fetch.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const channel = sb
-      .channel('rt-pedidos-novos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_online' }, () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { timer = null; loadRef.current(); }, 300);
-      })
-      .subscribe();
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      sb.removeChannel(channel);
-    };
+    if (!isSupabaseConfigured || !ativo) return;
+    return assinarRealtime({
+      nome: 'rt-pedidos-novos',
+      alvos: ['pedidos_online'],
+      aoMudar: () => { void loadRef.current(); },
+    });
   }, [ativo]);
 
   return { pendentes, recarregar: carregar };

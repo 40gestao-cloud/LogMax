@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import type { UserProfile } from './useUserProfile';
 
 export type ConviteVaga = {
@@ -61,12 +62,12 @@ export function useConvitesVaga(profile: UserProfile | null) {
 
   // Realtime: a convocação aparece sem F5, igual ao FAB de avisos.
   useEffect(() => {
-    if (!supabase || !profile?.id) return;
-    const canal = supabase
-      .channel('convites-vaga-fab')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vaga_convites' }, () => { carregar(); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    if (!profile?.id) return;
+    return assinarRealtime({
+      nome: 'convites-vaga-fab',
+      alvos: ['vaga_convites'],
+      aoMudar: () => { carregar(); },
+    });
   }, [carregar, profile?.id]);
 
   /**

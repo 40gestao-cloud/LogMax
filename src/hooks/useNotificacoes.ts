@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 
 export type Notificacao = {
   id: string;
@@ -61,31 +62,17 @@ export function useNotificacoes(setor: string | undefined | null, filial?: strin
     setLoading(false);
   }, [setor, filial]);
 
+  // A janela do `assinarRealtime` substitui o debounce de 250ms daqui: o
+  // sino também piscava, mas o problema maior era a turma inteira relendo a
+  // lista no mesmo instante a cada `notificar_setor()`.
   useEffect(() => {
     load();
-    if (!supabase || !setor) return;
-    const sb = supabase;
-    // crypto.randomUUID() pra ID único forte entre instâncias paralelas.
-    const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    // Debounce 250ms: bursts (vários setores notificados em sequência)
-    // viram um único fetch da lista — evita flicker no sino.
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const ch = sb
-      .channel(`notificacoes-${setor}-${channelId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notificacoes' }, () => {
-        if (debounceTimer !== null) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          debounceTimer = null;
-          load();
-        }, 250);
-      })
-      .subscribe();
-    return () => {
-      if (debounceTimer !== null) clearTimeout(debounceTimer);
-      sb.removeChannel(ch);
-    };
+    if (!setor) return;
+    return assinarRealtime({
+      nome: `notificacoes-${setor}`,
+      alvos: ['notificacoes'],
+      aoMudar: () => { load(); },
+    });
   }, [load, setor]);
 
   const unreadCount = useMemo(() => data.filter(n => !n.lido).length, [data]);

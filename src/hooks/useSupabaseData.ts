@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, ENDPOINT_TABLE_MAP, TABLES_WITH_ATIVO, isSupabaseConfigured } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { sanitizeUuidFks } from '../lib/viewUtils';
 
 export const PAGE_SIZE = 50;
@@ -170,35 +171,17 @@ export function useFetchData<T = any>(
   const loadRef = useRef(load);
   useEffect(() => { loadRef.current = load; }, [load]);
 
+  // A janela sorteada do `assinarRealtime` substitui o debounce de 250ms: o
+  // problema não era só a rajada de um import em massa, era a turma inteira
+  // relendo a MESMA tabela no mesmo instante. Este hook é o mais usado do app,
+  // então é aqui que a manada era maior.
   useEffect(() => {
-    if (!realtime || !supabase || !table) return;
-    const sb = supabase;
-    // crypto.randomUUID() em vez de Math.random — qualidade criptográfica,
-    // sem chance teórica de colisão entre instâncias paralelas do hook.
-    const channelId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    // Debounce: durante imports em massa ou bursts de UPDATE, agrupa
-    // eventos em janelas de 250ms para evitar fan-out de fetches.
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const channel = sb
-      .channel(`rt-${table}-${channelId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-        if (debounceTimer !== null) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          debounceTimer = null;
-          loadRef.current({ silent: true }); // não pisca a UI
-        }, 250);
-      })
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn(`[Realtime] Erro no canal ${table} — dados podem estar desatualizados.`);
-        }
-      });
-    return () => {
-      if (debounceTimer !== null) clearTimeout(debounceTimer);
-      sb.removeChannel(channel);
-    };
+    if (!realtime || !table) return;
+    return assinarRealtime({
+      nome: `rt-${table}`,
+      alvos: [table],
+      aoMudar: () => { void loadRef.current({ silent: true }); }, // não pisca a UI
+    });
   }, [table, realtime]);
 
   return { data, setData, isLoading, error, reload: load, totalCount };

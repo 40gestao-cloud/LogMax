@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import type { UserProfile } from './useUserProfile';
 
 export type Documento = {
@@ -186,23 +187,21 @@ export function useDocumentos(profile: UserProfile | null) {
   // postgres_changes callbacks after subscribe()" e o realtime morre calado.
   // Mesma armadilha já documentada em `useAulaConfig`.
   useEffect(() => {
-    if (!supabase || !profile) return;
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    const canal = supabase
-      .channel(`documentos-matriz-${canalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos' }, () => { carregar(); })
-      .subscribe(status => {
-        // Reconexão do websocket é ponto cego: o que mudou enquanto o socket
-        // esteve fora não é reenviado. Sem esta releitura, quem fechou a tampa
-        // do notebook volta com documento já excluído ainda na tela — e clica
-        // em Baixar num arquivo que não existe mais.
-        if (status === 'SUBSCRIBED') carregar();
-      });
+    if (!profile) return;
+    // A releitura na reconexão do websocket (ponto cego: o que mudou enquanto
+    // o socket esteve fora não é reenviado; sem ela, quem fechou a tampa do
+    // notebook volta com documento já excluído na tela e clica em Baixar num
+    // arquivo que não existe) agora mora no `assinarRealtime`, junto com a
+    // janela que impede a turma de reler tudo no mesmo instante.
+    const parar = assinarRealtime({
+      nome: 'documentos-matriz',
+      alvos: ['documentos'],
+      aoMudar: () => { carregar(); },
+    });
 
     // Mesma janela pelo lado do navegador: aba em segundo plano suspende o
     // socket sem avisar, e voltar pra aba não dispara reassinatura sozinho.
+    // Fica aqui porque é evento de UMA máquina — não forma manada.
     const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
     document.addEventListener('visibilitychange', aoVoltar);
     window.addEventListener('online', carregar);
@@ -210,7 +209,7 @@ export function useDocumentos(profile: UserProfile | null) {
     return () => {
       document.removeEventListener('visibilitychange', aoVoltar);
       window.removeEventListener('online', carregar);
-      supabase!.removeChannel(canal);
+      parar();
     };
   }, [carregar, profile]);
 

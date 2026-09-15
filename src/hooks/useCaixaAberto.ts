@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { todayBR } from '../lib/dates';
 import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
 
@@ -56,15 +57,12 @@ export function useCaixaAberto(filial: FilialOperacional | null) {
 
   useEffect(() => {
     refresh();
-    if (!supabase || !filial) return;
-    const sb = supabase;
-    const channel = sb
-      .channel(`caixa-aberto-${filial}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'controle_caixa', filter: `filial=eq.${filial}` },
-        () => refresh())
-      .subscribe();
-    return () => { sb.removeChannel(channel); };
+    if (!filial) return;
+    return assinarRealtime({
+      nome: `caixa-aberto-${filial}`,
+      alvos: [{ tabela: 'controle_caixa', filtro: `filial=eq.${filial}` }],
+      aoMudar: () => { refresh(); },
+    });
   }, [refresh, filial]);
 
   return { caixa, isLoading, refresh };
@@ -103,13 +101,11 @@ export function useCaixasDoDia() {
 
   useEffect(() => {
     refresh();
-    if (!supabase) return;
-    const sb = supabase;
-    const channel = sb
-      .channel('caixas-do-dia-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'controle_caixa' }, () => refresh())
-      .subscribe();
-    return () => { sb.removeChannel(channel); };
+    return assinarRealtime({
+      nome: 'caixas-do-dia-watch',
+      alvos: ['controle_caixa'],
+      aoMudar: () => { refresh(); },
+    });
   }, [refresh]);
 
   return { caixas, isLoading, refresh };

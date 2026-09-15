@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { normalizarRoteiro, type Atividade } from '../lib/aulaAtividade';
 import type { UserProfile } from './useUserProfile';
 
@@ -110,15 +111,14 @@ export function useAulaAtividades(profile: UserProfile | null) {
   // Realtime é o único canal: o Modo Aula esconde o sino do aluno, então sem
   // isto o professor publica e a turma só descobre recarregando a página.
   useEffect(() => {
-    if (!supabase || !ehDestinatario) return;
-    const canal = supabase
-      .channel('aula-atividades')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades' }, () => { carregar(); })
-      // A devolutiva do professor chega pelo mesmo caminho: ele marca a tarefa
-      // no painel e o aluno vê, sem F5, que aquela etapa foi dada por feita.
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_tarefas_realizadas' }, () => { carregar(); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    if (!ehDestinatario) return;
+    return assinarRealtime({
+      nome: 'aula-atividades',
+      // A devolutiva do professor chega pela segunda tabela: ele marca a
+      // tarefa no painel e o aluno vê, sem F5, que a etapa foi dada por feita.
+      alvos: ['aula_atividades', 'aula_tarefas_realizadas'],
+      aoMudar: () => { carregar(); },
+    });
   }, [carregar, ehDestinatario]);
 
   const darCiencia = useCallback(async (atividadeId: string) => {

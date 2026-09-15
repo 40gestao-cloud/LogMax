@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from './useUserProfile';
 
@@ -164,21 +165,12 @@ export function useRequisicoesAviso(profile: UserProfile | null, filialAtiva: st
   // Realtime: devolveu numa ponta, o modal sobe na outra sem F5. Nome de canal
   // único — dois componentes com o mesmo nome derrubam a inscrição um do outro.
   useEffect(() => {
-    if (!supabase || !profile?.id) return;
-    const sb = supabase;
-    const sufixo = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const debounced = () => {
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => { timer = null; carregar(); }, 400);
-    };
-    const canal = sb
-      .channel(`requisicoes-aviso-${sufixo}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requisicoes' }, debounced)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requisicoes_estoque' }, debounced)
-      .subscribe();
-    return () => { if (timer !== null) clearTimeout(timer); sb.removeChannel(canal); };
+    if (!profile?.id) return;
+    return assinarRealtime({
+      nome: 'requisicoes-aviso',
+      alvos: ['requisicoes', 'requisicoes_estoque'],
+      aoMudar: () => { carregar(); },
+    });
   }, [carregar, profile?.id]);
 
   const darCiencia = useCallback(async (item: RequisicaoAviso) => {

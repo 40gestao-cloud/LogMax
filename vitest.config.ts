@@ -31,6 +31,7 @@ const ESTATICOS = [
   'tests/perecivel.test.ts',
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',
+  'tests/realtimeAgrupado.test.ts',
   'tests/reservasTrabalho.test.ts',
   'tests/schemaDrift.test.ts',
   'tests/sectorAccess.test.ts',

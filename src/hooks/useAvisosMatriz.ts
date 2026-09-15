@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import type { UserProfile } from './useUserProfile';
 
 export type AvisoMatriz = {
@@ -64,14 +65,16 @@ export function useAvisosMatriz(profile: UserProfile | null) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  // Realtime: aviso publicado pela Matriz aparece sem F5.
+  // Realtime: aviso publicado pela Matriz aparece sem F5. Um aviso novo vale
+  // para a turma inteira ao mesmo tempo — sem a janela do `assinarRealtime`,
+  // é uma leitura por máquina no mesmo segundo.
   useEffect(() => {
-    if (!supabase || !ehDestinatario) return;
-    const canal = supabase
-      .channel('avisos-matriz-fab')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'avisos_matriz' }, () => { carregar(); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    if (!ehDestinatario) return;
+    return assinarRealtime({
+      nome: 'avisos-matriz-fab',
+      alvos: ['avisos_matriz'],
+      aoMudar: () => { carregar(); },
+    });
   }, [carregar, ehDestinatario]);
 
   const darCiencia = useCallback(async (avisoId: string) => {
