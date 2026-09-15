@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import {
   ACRE_HHMM, ALARME_AUDIO_URL,
   type AlarmeTipo, type AlarmeTurma,
@@ -39,17 +40,12 @@ function useRealtimeAlarmes(onChange: () => void, enabled = true) {
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
-    if (!supabase || !enabled) return;
-    const sb = supabase;
-    const sufixo = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    const ch = sb
-      .channel(`alarmes-turma-${sufixo}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alarmes_turma' },
-        () => onChangeRef.current())
-      .subscribe();
-    return () => { sb.removeChannel(ch); };
+    if (!enabled) return;
+    return assinarRealtime({
+      nome: 'alarmes-turma',
+      alvos: ['alarmes_turma'],
+      aoMudar: () => onChangeRef.current(),
+    });
   }, [enabled]);
 }
 

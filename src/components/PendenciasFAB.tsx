@@ -18,12 +18,13 @@
 // A primeira versão chamava os cinco hooks aqui também, só para somar. Dois
 // defeitos, os dois calados:
 //
-//   1. `useAvisosMatriz`, `usePedidosNovos` e `useConvitesVaga` abrem canal
-//      de realtime com nome FIXO. Montar o hook duas vezes faz
+//   1. `useAvisosMatriz`, `usePedidosNovos` e `useConvitesVaga` abriam canal
+//      de realtime com nome FIXO. Montar o hook duas vezes fazia
 //      `supabase.channel(nome)` devolver o canal já assinado, e o segundo
-//      `.on()` estoura "cannot add postgres_changes callbacks after
-//      subscribe()" — o realtime morre sem erro na tela. O próprio
-//      `useDocumentos` já documenta essa armadilha no comentário dele.
+//      `.on()` estourava "cannot add postgres_changes callbacks after
+//      subscribe()" — o realtime morria sem erro na tela. Os três passaram
+//      para `assinarRealtime`, que dá sufixo único a cada instância, então
+//      hoje esta armadilha em particular já não morde.
 //   2. Dar "Ciente" encolhe a fila da instância que foi chamada. A ciência
 //      grava em `*_ciencia`, tabela que nenhum desses canais escuta, então a
 //      segunda instância nunca saberia — a pílula continuaria contando o que

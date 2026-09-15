@@ -13,6 +13,7 @@ import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos
 import { ehContratado } from '../lib/naturezaServico';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import { podeVerModulo } from '../lib/sectorAccess';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -594,19 +595,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // Financeiro) e `supabase.channel(nome)` devolve o canal já assinado quando
   // o nome se repete — o segundo `.on()` estoura e o realtime morre calado.
   useEffect(() => {
-    if (!supabase) return;
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    const canal = supabase
-      .channel(`cotacoes-pedidos-${canalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' },
-        () => { carregarCotacoesComPedido(); })
-      // Reconexão do websocket é ponto cego: o que mudou com o socket fora não
-      // é reenviado. Sem esta releitura, quem fechou a tampa do notebook volta
-      // com o botão de um pedido que já existe.
-      .subscribe(status => { if (status === 'SUBSCRIBED') carregarCotacoesComPedido(); });
-    return () => { supabase?.removeChannel(canal); };
+    // A releitura na reconexão do websocket (ponto cego: o que mudou com o
+    // socket fora não é reenviado, e sem ela quem fechou a tampa do notebook
+    // volta com o botão de um pedido que já existe) agora vem do
+    // `assinarRealtime`, junto com a janela sorteada.
+    return assinarRealtime({
+      nome: 'cotacoes-pedidos',
+      alvos: ['pedidos'],
+      aoMudar: () => { carregarCotacoesComPedido(); },
+    });
   }, [carregarCotacoesComPedido]);
 
   const requisicoesAprovadas = useMemo(
